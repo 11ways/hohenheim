@@ -5,12 +5,12 @@ import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.hohenheim.server.auth.SiteAuthGate;
-import be.elevenways.hohenheim.server.proxy.auth.ProxyAuthKeys;
+import be.elevenways.hohenheim.server.proxy.auth.CredentialOwner;
 import be.elevenways.hohenheim.server.proxy.auth.ProxySessionSupport;
+import be.elevenways.hohenheim.server.proxy.auth.SessionAuthority;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.net.IpRanges;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.session.SessionStore;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
@@ -60,11 +60,23 @@ public final class AccessRuleTree {
     private final Node root;
     private final List<SiteAuthGate> gates;
     private final boolean needsBlockingEvaluation;
+    private final boolean ownsAuthorizationHeader;
+    private final boolean ownsPersistentCookie;
 
-    private AccessRuleTree(Node root, List<SiteAuthGate> gates, boolean needsBlockingEvaluation) {
+    private AccessRuleTree(Node root, List<SiteAuthGate> gates, CompileFacts facts) {
         this.root = root;
         this.gates = List.copyOf(gates);
-        this.needsBlockingEvaluation = needsBlockingEvaluation;
+        this.needsBlockingEvaluation = facts.blocking;
+        boolean authorization = facts.basicLeaf;
+        boolean persistentCookie = false;
+        for (SiteAuthGate gate : this.gates) {
+            if (gate instanceof CredentialOwner owner) {
+                authorization |= owner.ownsAuthorizationHeader();
+                persistentCookie |= owner.ownsPersistentCookie();
+            }
+        }
+        this.ownsAuthorizationHeader = authorization;
+        this.ownsPersistentCookie = persistentCookie;
     }
 
     /** Gates this tree built and therefore owns; the route table destroys them on reload. */
@@ -78,6 +90,19 @@ public final class AccessRuleTree {
      */
     public boolean needsBlockingEvaluation() {
         return this.needsBlockingEvaluation;
+    }
+
+    /**
+     * Whether a leaf of this tree reads the {@code Authorization} header as its own credential
+     * (a {@code basic_auth} leaf, or a provider gate that does), so it must not reach the upstream.
+     */
+    public boolean ownsAuthorizationHeader() {
+        return this.ownsAuthorizationHeader;
+    }
+
+    /** Whether a provider gate of this tree owns the persistent remember-me cookie on the site's host. */
+    public boolean ownsPersistentCookie() {
+        return this.ownsPersistentCookie;
     }
 
     /** Evaluate the tree for one request; see the class docs for the semantics. */
@@ -132,15 +157,15 @@ public final class AccessRuleTree {
         }
 
         List<SiteAuthGate> gates = new ArrayList<>();
-        boolean[] blocking = new boolean[1];
-        List<Node> children = build(rootRows, childrenByParent, context, gates, blocking);
+        CompileFacts facts = new CompileFacts();
+        List<Node> children = build(rootRows, childrenByParent, context, gates, facts);
         boolean all = AccessListModel.SATISFY_ALL.equals(satisfy);
-        return new AccessRuleTree(new GroupNode(all, children), gates, blocking[0]);
+        return new AccessRuleTree(new GroupNode(all, children), gates, facts);
     }
 
     /** A tree that refuses every request; the fail-closed answer to an unusable list. */
     static @NonNull AccessRuleTree denyAll() {
-        return new AccessRuleTree(new UnknownNode("(unusable rule set)"), List.of(), false);
+        return new AccessRuleTree(new UnknownNode("(unusable rule set)"), List.of(), new CompileFacts());
     }
 
     /** Build the enabled rows of one level; a disabled row is skipped with its subtree. */
@@ -148,13 +173,13 @@ public final class AccessRuleTree {
                                              @NonNull Map<Integer, List<Row>> childrenByParent,
                                              @NonNull LeafContext context,
                                              @NonNull List<SiteAuthGate> gates,
-                                             boolean @NonNull [] blocking) {
+                                             @NonNull CompileFacts facts) {
         List<Node> nodes = new ArrayList<>();
         for (Row row : rows) {
             if (!Boolean.TRUE.equals(row.get(AccessRuleModel.ENABLED))) {
                 continue;
             }
-            nodes.add(node(row, childrenByParent, context, gates, blocking));
+            nodes.add(node(row, childrenByParent, context, gates, facts));
         }
         return List.copyOf(nodes);
     }
@@ -163,7 +188,7 @@ public final class AccessRuleTree {
                                       @NonNull Map<Integer, List<Row>> childrenByParent,
                                       @NonNull LeafContext context,
                                       @NonNull List<SiteAuthGate> gates,
-                                      boolean @NonNull [] blocking) {
+                                      @NonNull CompileFacts facts) {
         String type = row.get(AccessRuleModel.TYPE);
         Map<String, Object> data = AccessRuleModel.dataOf(row);
 
@@ -176,7 +201,7 @@ public final class AccessRuleTree {
                 boolean all = AccessListModel.SATISFY_ALL.equals(
                     AccessRuleModel.text(data.get(AccessRuleModel.GROUP_SATISFY.getName())));
                 return new GroupNode(all,
-                    build(children, childrenByParent, context, gates, blocking));
+                    build(children, childrenByParent, context, gates, facts));
             }
             case AccessRuleModel.TYPE_IP_ALLOW -> {
                 return new NetworkNode(AccessRuleModel.parseNetwork(
@@ -187,14 +212,15 @@ public final class AccessRuleTree {
                     AccessRuleModel.text(data.get(AccessRuleModel.NETWORK.getName()))), false);
             }
             case AccessRuleModel.TYPE_BASIC_AUTH -> {
-                blocking[0] = true;
+                facts.blocking = true;
+                facts.basicLeaf = true;
                 return new BasicAuthNode(
                     AccessRuleModel.text(data.get(AccessRuleModel.BASIC_AUTH_USERNAME.getName())),
                     AccessRuleModel.text(data.get(AccessRuleModel.BASIC_AUTH_PASSWORD.getName())),
                     context.realm());
             }
             case AccessRuleModel.TYPE_AUTH_PROVIDER -> {
-                blocking[0] = true;
+                facts.blocking = true;
                 Integer providerId = data.get(AccessRuleModel.PROVIDER_ID.getName())
                     instanceof Number number ? number.intValue() : null;
                 SiteAuthGate gate = providerId == null ? null : context.gateFor(providerId,
@@ -206,13 +232,18 @@ public final class AccessRuleTree {
                     return new UnknownNode("auth_provider " + providerId);
                 }
                 gates.add(gate);
-                return new AuthProviderNode(gate, context.sessionStore(), context.siteId(),
-                    providerId);
+                return new AuthProviderNode(gate, context.sessionStore(), context.siteId());
             }
             default -> {
                 return new UnknownNode(type);
             }
         }
+    }
+
+    /** What the compile learned about the tree while building it. */
+    private static final class CompileFacts {
+        boolean blocking;
+        boolean basicLeaf;
     }
 
     /** What a leaf needs from the site it guards. */
@@ -372,27 +403,22 @@ public final class AccessRuleTree {
      * reimplements a login flow. Evaluation is side-effect free (it only reads the proxy
      * session); the gate itself runs only when this leaf is the one being challenged.
      *
-     * AIDEV-NOTE: a session records WHICH provider record established it, so two leaves
-     * pointing at different providers cannot satisfy each other. Two leaves on the SAME
-     * provider record with different required permissions still can: the permission is
-     * enforced at login and the session stores the identity, not the permission it was
-     * accepted under.
+     * AIDEV-NOTE: the leaf PASSES only when its own gate accepts the session (SessionAuthority):
+     * the provider RECORD that minted it, the configuration it was minted under, and THIS
+     * leaf's required permission re-checked against the claim the session stored at login.
+     * It used to pass on the provider id alone, so a session minted by a permission-less site
+     * gate satisfied a leaf on the same provider that demanded 'admin'. A gate that cannot
+     * judge sessions accepts none.
      */
     private record AuthProviderNode(@NonNull SiteAuthGate gate, @NonNull SessionStore store,
-                                    int siteId, int providerId) implements Node, CredentialNode {
+                                    int siteId) implements Node, CredentialNode {
 
         @Override
         public @NonNull Result evaluate(@NonNull Evaluation evaluation) {
-            // A request carrying no cookies at all cannot carry a session: answering that
-            // from the header skips cookie parsing on the anonymous path, which is most of
-            // the traffic an identity-gated site sees before anyone logs in.
-            if (evaluation.exchange().getRequestHeaders().getFirst(Headers.COOKIE) == null) {
-                return new Result(Verdict.PENDING, this);
-            }
-            Session session = ProxySessionSupport.authenticatedSession(
-                evaluation.exchange(), this.store, this.siteId);
-            Integer established = session != null ? session.get(ProxyAuthKeys.PROVIDER_ID) : null;
-            return established != null && established == this.providerId
+            boolean accepted = this.gate instanceof SessionAuthority authority
+                && ProxySessionSupport.acceptedSession(evaluation.exchange(), this.store, this.siteId,
+                    authority) != null;
+            return accepted
                 ? new Result(Verdict.PASS, null)
                 : new Result(Verdict.PENDING, this);
         }

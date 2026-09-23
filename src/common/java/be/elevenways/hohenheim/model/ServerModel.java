@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.net.IpLiterals;
-import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -249,7 +248,7 @@ public class ServerModel extends Model {
      *
      * AIDEV-NOTE: COLUMNS are the authority and the activity row is HISTORY, the same
      * split {@code HostPins} uses. The activity log cannot be the authority here:
-     * {@code CleanOldActivity} prunes at a hard-coded 90 days, so a gate reading it would
+     * zenit's activity retention prunes it (90 days by default, activity.retention_days), so a gate reading it would
      * silently reopen the host on day 91 with nothing to see. And like
      * {@link #QUARANTINED_AT}, no probe, sweep or preflight path writes these five
      * columns -- a trust verdict may only be moved by a trust act.
@@ -412,21 +411,22 @@ public class ServerModel extends Model {
     static {
         // The name is the human title (relation pickers, refusal messages), not "Server #id".
         SCHEMA.setDisplayFields(NAME);
-        // Removing a host we can no longer observe must never delete its port claims (a
-        // servers row vanishing frees nothing on the physical machine): they are parked
-        // in "releasing" instead. Via the before/after pairing because a remove context
-        // carries CRITERIA, not a row -- see PortLedger.captureDoomedOwners. There is no
-        // FK delete action on port_allocations.server_id, so this hook IS the enforcement.
+        // AIDEV-NOTE: refuseRemovalWhileOwned is THE rule "a host leaves the inventory only
+        // once nothing references it", and since 2026-09-23 the foreign keys ENFORCE it too:
+        // zenit opens SQLite with foreign_keys=on (zenit 8a86d3c2) and hohenheim keeps it on
+        // (HohenheimDatabase). stacks, managed_databases, database_engines, instances and
+        // port_allocations reference servers(id) with no delete action, so a DELETE with any
+        // such row fails as a raw "FOREIGN KEY constraint failed". The hook turns that into
+        // a refusal that names every referencing table with its count, before the statement,
+        // and detaches the one reference that is history rather than ownership: a trashed
+        // instance's server_id.
         //
-        // AIDEV-NOTE: refuseRemovalWhileOwned runs FIRST and is THE enforcement of
-        // "removal refuses while owned resources remain". The M051 FKs on
-        // stacks/managed_databases.server_id carry no delete action, and SQLite only
-        // enforces FKs per-connection via ?foreign_keys=on, which the production URL
-        // does not set -- so without this hook the FK is documentation, and a host
-        // delete silently orphans every stack, database and live instance on it.
+        // AIDEV-NOTE: the old parking lane (PortLedger.captureDoomedOwners before the delete,
+        // markDoomedServersReleasing after it) can no longer run: parking a claim keeps a row
+        // referencing the server, which is exactly what makes the delete fail. Port claims
+        // are therefore counted in the refusal like every other reference; the claims of a
+        // host whose owners are gone are released by the observer or by the operator first.
         SCHEMA.addBeforeRemoveHook(ServerModel::refuseRemovalWhileOwned);
-        SCHEMA.addBeforeRemoveHook(PortLedger::captureDoomedOwners);
-        SCHEMA.addAfterRemoveHook(PortLedger::markDoomedServersReleasing);
         // A declared server address must be an IP LITERAL: DNS generation serves the
         // stored string verbatim as an A/AAAA value, so a hostname or garbage here would
         // materialize as a record nothing can resolve -- refused on EVERY write path.
@@ -519,10 +519,16 @@ public class ServerModel extends Model {
     }
 
     /**
-     * Refuse deleting any server that live stacks, managed databases or live (not
-     * soft-deleted) instances still reference, or that an in-flight cold migration is
-     * moving a workload ONTO; runs on EVERY delete path (service, admin resource,
-     * criteria delete) because it is a schema hook.
+     * Refuse deleting any server that a stack, managed database, shared database engine,
+     * live instance or port claim still references, or that an in-flight cold migration is
+     * moving a workload ONTO, then detach the trashed instances that still name it; runs on
+     * EVERY delete path (service, admin resource, criteria delete) because it is a schema hook.
+     *
+     * AIDEV-NOTE: a TRASHED instance does not refuse the removal. It used to (trashed=N in
+     * server_in_use), which under enforced foreign keys made every host a destroyed workload
+     * ever ran on permanently unremovable: nothing purges a trashed row. Its server_id is
+     * history, so it is cleared (InstanceModel.detachTrashed) once every live reference
+     * passed -- the admin resource's dead delete already counted live workloads only.
      *
      * AIDEV-NOTE: the migration target is checked FIRST and by name. A workload mid-flight
      * is still attributed to its SOURCE host ({@code InstanceModel.SERVER_ID} stays the data
@@ -559,17 +565,25 @@ public class ServerModel extends Model {
                 .where(StackModel.SERVER_ID.eq(serverId)).count();
             long databases = Models.get(DatabaseModel.class).find()
                 .where(DatabaseModel.SERVER_ID.eq(serverId)).count();
+            long engines = Models.get(DatabaseEngineModel.class).find()
+                .where(DatabaseEngineModel.SERVER_ID.eq(serverId)).count();
             long instances = Models.get(InstanceModel.class).find()
                 .where(InstanceModel.SERVER_ID.eq(serverId))
                 .where(InstanceModel.DELETED_AT.isNull()).count();
-            if (stacks > 0 || databases > 0 || instances > 0) {
+            long ports = Models.get(PortAllocationModel.class).find()
+                .where(PortAllocationModel.SERVER_ID.eq(serverId)).count();
+            if (stacks > 0 || databases > 0 || engines > 0 || instances > 0 || ports > 0) {
                 throw Violations.ofForm(Microcopy.of("server_in_use")
                     .withFilter("scope", "violations")
                     .withArg("name", String.valueOf((Object) doomed.get(NAME)))
                     .withArg("stacks", stacks)
                     .withArg("databases", databases)
-                    .withArg("instances", instances));
+                    .withArg("engines", engines)
+                    .withArg("instances", instances)
+                    .withArg("ports", ports));
             }
+            InstanceModel.detachTrashed(InstanceModel.SERVER_ID,
+                InstanceModel.SERVER_ID.eq(serverId));
         }
     }
 

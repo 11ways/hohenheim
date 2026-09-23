@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ProjectModel;
@@ -117,7 +119,7 @@ public final class InstanceFromTemplatePage extends PanelPage {
         vars.put("projectId", rawValues.get("project_id") != null
             ? String.valueOf(rawValues.get("project_id")) : "");
         vars.put("formTarget", HohenheimEndpoints.INSTANCES_FROM_TEMPLATE);
-        vars.put("cancelTarget", CmsRoutes.list(panel, "instance-templates"));
+        vars.put("cancelTarget", CmsRoutes.list(panel, HohenheimSlugs.INSTANCE_TEMPLATES));
         vars.put("title", Microcopy.of("create_instance").withFilter("scope", "instance_template")
             .resolve(conduit.getLocales(), conduit.getMessageResolver()));
         vars.put("templateId", templateId);
@@ -152,20 +154,13 @@ public final class InstanceFromTemplatePage extends PanelPage {
 
     /** The hosting panel's instance-template list, for the two refusals above. */
     private static @NonNull RouteTarget templateListTarget(@NonNull Conduit conduit) {
-        return CmsRoutes.list(CmsSupport.panelSlug(conduit), "instance-templates");
+        return CmsRoutes.list(CmsSupport.panelSlug(conduit), HohenheimSlugs.INSTANCE_TEMPLATES);
     }
 
     /** The ?template= row, or null when absent/malformed/missing. */
     public static @Nullable Row templateFromQuery(@NonNull Conduit conduit) {
-        String raw = conduit.getQueryParam("template");
-        if (raw == null || raw.isEmpty()) {
-            return null;
-        }
-        try {
-            return Models.get(InstanceTemplateModel.class).findById(Integer.parseInt(raw));
-        } catch (NumberFormatException malformed) {
-            return null;
-        }
+        Integer templateId = CmsSupport.prefill(conduit, HohenheimParams.FROM_TEMPLATE_TEMPLATE);
+        return templateId == null ? null : Models.get(InstanceTemplateModel.class).findById(templateId);
     }
 
     private static @NonNull String formLevelText(@NonNull Conduit conduit,

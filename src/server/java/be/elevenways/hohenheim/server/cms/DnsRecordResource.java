@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -94,7 +95,10 @@ public class DnsRecordResource extends RowResource {
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dns_record"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "dns_record"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "dns_record"); }
-    @Override public @NonNull String slug() { return "dns-records"; }
+    /** The panel slug, which the zone's Records tab looks this resource up by. */
+    public static final String SLUG = "dns-records";
+
+    @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Model model() { return Models.get(DnsRecordModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
@@ -228,7 +232,7 @@ public class DnsRecordResource extends RowResource {
     /** @return the zone a request is scoped to through its {@code ?zone_id=} prefill, or null */
     private static @Nullable Integer prefilledZoneId(@NonNull Conduit conduit) {
         // Malformed prefill: no preselection, never a broken form.
-        return CmsSupport.parsedInt(conduit.getQueryParam(DnsRecordModel.ZONE_ID.getName()));
+        return CmsSupport.prefill(conduit, HohenheimParams.ZONE_ID_PREFILL);
     }
 
     @Override

@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.game.GameTemplateSeeder;
@@ -340,6 +341,8 @@ class GameDomainLiveTest {
         zone.set(DnsZoneModel.SOA_RETRY, 3600);
         zone.set(DnsZoneModel.SOA_EXPIRE, 1209600);
         zones.save(zone);
+        // GameDomains.zoneFor asks the store's PRIMARY view, so the new zone must be loaded.
+        DnsZoneStore.INSTANCE.reload();
     }
 
     private static int site() {

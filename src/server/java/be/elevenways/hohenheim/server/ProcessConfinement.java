@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.process.BoundedProcess;
 import be.elevenways.protoblast.common.Blast;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -262,18 +263,20 @@ public final class ProcessConfinement {
         command.add("-c");
         command.add("cat /sys/fs/cgroup$(cut -d: -f3 /proc/self/cgroup)/memory.max");
 
-        Process process = null;
         try {
             // The DAEMON's own environment on purpose: the bus address is what is being
-            // tested for, and this child is ours, not a site's.
-            process = new ProcessBuilder(command).redirectErrorStream(true).start();
-            String output = new String(process.getInputStream().readAllBytes()).trim();
-            if (!process.waitFor(PROBE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                process.destroyForcibly();
+            // tested for, and this child is ours, not a site's. Output is drained while the
+            // wait runs, so a scope that never finishes is abandoned at the deadline
+            // instead of pinning the probing thread on a pipe that never closes.
+            BoundedProcess.Result result = BoundedProcess.run(
+                new ProcessBuilder(command).redirectErrorStream(true),
+                TimeUnit.SECONDS.toMillis(PROBE_TIMEOUT_SECONDS), 8_192);
+            if (result.timedOut()) {
                 return "the probe scope did not finish within " + PROBE_TIMEOUT_SECONDS + "s";
             }
-            if (process.exitValue() != 0) {
-                return "exit " + process.exitValue()
+            String output = result.stdout().trim();
+            if (result.exitCode() != 0) {
+                return "exit " + result.exitCode()
                     + (output.isEmpty() ? "" : ": " + firstLine(output));
             }
             // NEVER trust the exit code alone: systemd-run exits 0 for a scope whose
@@ -285,9 +288,6 @@ public final class ProcessConfinement {
             }
             return null;
         } catch (Exception failure) {
-            if (process != null) {
-                process.destroyForcibly();
-            }
             return failure.getMessage() != null
                 ? failure.getMessage() : failure.getClass().getSimpleName();
         }

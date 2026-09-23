@@ -35,12 +35,16 @@ final class RouteResolver {
 
     private RouteResolver() {}
 
-    static RouteResolution resolve(HttpServerExchange exchange, String hostname, RouteTable rt) {
+    /**
+     * @param requestPath the request's canonical path ({@link RequestPath#canonical()}), the one
+     *                    form route selection and every protected-path guard agree on
+     */
+    static RouteResolution resolve(HttpServerExchange exchange, String hostname, String requestPath,
+                                   RouteTable rt) {
         if (hostname.isEmpty()) return new RouteResolution(null, false);
 
         String listenerIp = extractListenerAddress(exchange);
         String cacheKey = hostname + "|" + (listenerIp != null ? listenerIp : "");
-        String requestPath = exchange.getRelativePath();
 
         // Check negative cache
         Long cachedAt = rt.negativeCache.get(cacheKey);

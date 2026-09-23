@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.application.ApplicationUpstreams;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
@@ -127,9 +128,10 @@ public final class InstanceStatusReconciler {
      * Reconcile ONE record.
      *
      * Transitional records are skipped by three independent guards, each answering a
-     * different question: this controller's own in-flight mark
-     * ({@code InstanceService.hasOperationInFlight}) for a deploy/stop/destroy we are
-     * driving right now, the install lifecycle for a template whose install step has not
+     * different question: this controller's per-record operation lock
+     * ({@link InstanceOperationLock}) for any operation we are driving right now -- the
+     * correction itself runs holding that lock, so no operation can START inside it
+     * either -- the install lifecycle for a template whose install step has not
      * finished, and the borrowed HOST LEASE for a rival controller's work.
      */
     public @NonNull Outcome reconcile(int instanceId) {
@@ -152,20 +154,20 @@ public final class InstanceStatusReconciler {
         if (!installSettled(instance)) {
             return new Outcome(instanceId, Verdict.SKIPPED, stored, null);
         }
-        // Mid-deploy in THIS process: the record still carries its previous status while
-        // the container is being replaced, and the daemon honestly disagrees.
-        if (InstanceService.hasOperationInFlight(instanceId)) {
-            return new Outcome(instanceId, Verdict.SKIPPED, stored, null);
-        }
-
         int serverId = ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID));
         Outcome[] outcome = {new Outcome(instanceId, Verdict.SKIPPED, stored, null)};
-        // The lease is BORROWED, never seized (BootSettle's contract): a host a rival
+        boolean[] ran = {false};
+        // Mid-operation in THIS process (a deploy keeps the record's PREVIOUS status while
+        // the container is being replaced, and the daemon honestly disagrees): the record
+        // is busy and skipped, this thread's own operation included. An idle record is
+        // observed and corrected HOLDING its lock, so no deploy can start in between.
+        // The host lease is BORROWED, never seized (BootSettle's contract): a host a rival
         // controller holds is that controller's to reconcile, and one taken purely to
         // look is handed straight back.
-        boolean ran = BootSettle.underBorrowedHostLease(this.instances.leases(), serverId,
-            () -> outcome[0] = observeAndCorrect(instanceId, serverId, stored));
-        if (!ran) {
+        boolean idle = this.instances.operations().runIfIdle(instanceId, () ->
+            ran[0] = BootSettle.underBorrowedHostLease(this.instances.leases(), serverId,
+                () -> outcome[0] = observeAndCorrect(instanceId, serverId, stored)));
+        if (!idle || !ran[0]) {
             return new Outcome(instanceId, Verdict.SKIPPED, stored, null);
         }
         return outcome[0];
@@ -202,8 +204,7 @@ public final class InstanceStatusReconciler {
             .where(InstanceModel.ID.eq(instanceId))
             .where(InstanceModel.DELETED_AT.isNull())
             .first();
-        if (fresh == null || !stored.equals(fresh.get(InstanceModel.STATUS))
-                || InstanceService.hasOperationInFlight(instanceId)) {
+        if (fresh == null || !stored.equals(fresh.get(InstanceModel.STATUS))) {
             return new Outcome(instanceId, Verdict.SKIPPED, stored, state);
         }
 
@@ -216,7 +217,8 @@ public final class InstanceStatusReconciler {
         boolean restart = changed && InstanceModel.CRASH_RESTART
             .equals(fresh.get(InstanceModel.CRASH_POLICY));
         boolean flapping = restart && InstanceConsoles.flapExceeded(instanceId);
-        if (changed && (!restart || flapping)) {
+        boolean crashed = changed && (!restart || flapping);
+        if (crashed) {
             // AIDEV-NOTE: `error`, not `stopped` -- an operator stop and an unobserved
             // death must never render as the same pill, and the crashedInstances
             // attention item reads exactly this status. The console lane can additionally
@@ -230,12 +232,22 @@ public final class InstanceStatusReconciler {
         if (!changed) {
             return new Outcome(instanceId, Verdict.CONFIRMED, stored, state);
         }
+        if (crashed) {
+            // AIDEV-NOTE: the console lane's crash settle (InstanceConsoles) releases the
+            // OBSERVED claims exactly like this, for the same reason: the daemon just said the
+            // workload is not running, so its published port is free, and `error` is a
+            // SERVABLE status -- a claim left behind here is an address the proxy keeps
+            // forwarding to after the daemon may have handed it to somebody else. The
+            // restart branch keeps them: its redeploy re-records the claim in place.
+            PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
+        }
         // A CORRECTION is also a routing fact, and only a correction: this record just
         // stopped claiming a live workload, so every handler holding its address must ask
         // again ({@code InstanceModel.SERVABLE_STATUSES} is what the resolution reads). The
-        // stamp above is a hook-free updateAll, so nothing else would ever notice -- and the
-        // dead workload's OBSERVED port claim survives in the ledger, because only a settled
-        // stop releases one. A mere confirmation moves no address and must bump nothing.
+        // stamp above is a hook-free updateAll, so nothing else would ever notice -- and on
+        // the restart branch the dead workload's OBSERVED port claim still survives in the
+        // ledger until the redeploy re-records it. A mere confirmation moves no address and
+        // must bump nothing.
         ApplicationUpstreams.invalidateForInstance(instanceId);
         // A correction is accountability, not decoration: the record just contradicted
         // itself and the operator must be able to see when, and on whose evidence.

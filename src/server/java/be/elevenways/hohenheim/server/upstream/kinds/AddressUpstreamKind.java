@@ -5,7 +5,11 @@ import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimPaths;
 import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
+import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
+import be.elevenways.hohenheim.server.sitetype.WebSocketUpgrades;
+import be.elevenways.hohenheim.server.upstream.TenantUpstreams;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
 import be.elevenways.hohenheim.server.sitetype.UnixSocketBridgeConnection;
 import be.elevenways.hohenheim.server.sitetype.UpstreamForwarder;
@@ -15,11 +19,13 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import io.undertow.server.HttpServerExchange;
-import io.undertow.util.Headers;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -53,13 +59,7 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
         IntegerField.builder().name("forward_port").label(HohenheimFormCopy.label("forward_port"))
             .help(HohenheimFormCopy.help("forward_port")).build());
 
-    public static final EnumField UPSTREAM_PROTOCOL = SETTINGS_SCHEMA.addField(
-        EnumField.builder("upstream_protocol")
-            .value("http1", "HTTP/1.1", UpstreamCopy.protocol("http1"))
-            .value("h2", "HTTP/2 (gRPC)", UpstreamCopy.protocol("h2"))
-            .label(HohenheimFormCopy.label("upstream_protocol"))
-            .help(HohenheimFormCopy.help("upstream_protocol"))
-            .build());
+    public static final EnumField UPSTREAM_PROTOCOL = SETTINGS_SCHEMA.addField(protocolField());
 
     public static final IntegerField REQUEST_TIMEOUT = SETTINGS_SCHEMA.addField(
         UpstreamSettings.requestTimeout());
@@ -84,9 +84,7 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
             .label(HohenheimFormCopy.label("upstream_socket"))
             .help(HohenheimFormCopy.help("upstream_socket")).build());
 
-    public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("delay").suffix("ms").label(HohenheimFormCopy.label("delay"))
-            .help(HohenheimFormCopy.help("delay")).build());
+    public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(UpstreamSettings.delay());
 
     // The decision is WHERE to forward: scheme, host, port, or a unix socket instead.
     // How the hop behaves once that is answered has six defaults that are right almost
@@ -138,6 +136,18 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
         return port != null ? host + ":" + port : String.valueOf(host);
     }
 
+    /** The protocol choice, one option per {@link UpstreamProtocol} member, derived from its home. */
+    private static EnumField protocolField() {
+        EnumField.Builder builder = EnumField.builder("upstream_protocol");
+        for (UpstreamProtocol protocol : UpstreamProtocol.values()) {
+            builder.value(protocol.token(), protocol.title(), UpstreamCopy.protocol(protocol.token()));
+        }
+        return builder
+            .label(HohenheimFormCopy.label("upstream_protocol"))
+            .help(HohenheimFormCopy.help("upstream_protocol"))
+            .build();
+    }
+
     @Override
     public SiteRequestHandler createHandler(Row site, Map<String, Object> settings) {
         String socketSetting = (String) settings.get("socket");
@@ -154,6 +164,17 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
                 exchange.setStatusCode(502);
                 exchange.getResponseSender().send("No upstream configured");
             };
+        }
+
+        // AIDEV-NOTE: a tenant-owned site reaches the public internet only (TenantUpstreams).
+        // The socket check comes FIRST because socket OVERRIDES forward_host below: a tenant
+        // could pass the write-time forward_host check with a public name and still dial a
+        // unix socket through this setting.
+        boolean tenantOwned = TenantUpstreams.isTenantOwned(site);
+        Integer siteId = site.get(SiteModel.ID);
+        if (tenantOwned && socket != null) {
+            return new FaultedSiteHandler(siteId != null ? siteId : -1,
+                "a tenant-owned site may not forward to a unix socket");
         }
 
         // Socket mode takes precedence over url mode (matching the Node implementation). The unix
@@ -179,10 +200,18 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
             };
         }
 
+        if (tenantOwned) {
+            Boolean literalPublic = TenantUpstreams.literalIsPublic(host);
+            if (Boolean.FALSE.equals(literalPublic)) {
+                return new FaultedSiteHandler(siteId != null ? siteId : -1,
+                    "a tenant-owned site may only forward to a public address");
+            }
+            return new TenantAddressHandler(scheme, host, port, protocol, ignoreCertificates,
+                websocketEnabled, rewriteLocation);
+        }
+
         return (exchange, forwarder) -> {
-            if (refusesUpgrade(exchange, websocketEnabled)) {
-                exchange.setStatusCode(403);
-                exchange.getResponseSender().send("WebSocket upgrades disabled for this site");
+            if (WebSocketUpgrades.refuse(exchange, websocketEnabled)) {
                 return;
             }
             if (rewriteLocation) {
@@ -190,6 +219,79 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
             }
             forwarder.forwardTo(new UpstreamTarget(upstream, protocol, ignoreCertificates));
         };
+    }
+
+    /**
+     * Forwards a TENANT-owned site to a named host only after the name's addresses are vetted
+     * as public, per request (the verdict is cached briefly in {@link TenantUpstreams}).
+     *
+     * AIDEV-NOTE: a cleartext upstream is dialed at the VETTED address itself (the Host
+     * header is forwarded unchanged, the proxy never rewrites it), so a DNS answer that
+     * changes between the check and the dial cannot redirect it. A TLS upstream is dialed by
+     * NAME: Undertow's client resolves the URI host itself and offers no way to connect to a
+     * pinned address while keeping the name for SNI and certificate verification, so a
+     * rebinding answer inside the verdict window remains a residual gap there (reported as a
+     * framework limit, not papered over).
+     */
+    private static final class TenantAddressHandler implements SiteRequestHandler {
+
+        private final String scheme;
+        private final String host;
+        private final int port;
+        private final UpstreamProtocol protocol;
+        private final boolean ignoreCertificates;
+        private final boolean websocketEnabled;
+        private final boolean rewriteLocation;
+
+        TenantAddressHandler(String scheme, String host, int port, UpstreamProtocol protocol,
+                             boolean ignoreCertificates, boolean websocketEnabled,
+                             boolean rewriteLocation) {
+            this.scheme = scheme;
+            this.host = host;
+            this.port = port;
+            this.protocol = protocol;
+            this.ignoreCertificates = ignoreCertificates;
+            this.websocketEnabled = websocketEnabled;
+            this.rewriteLocation = rewriteLocation;
+        }
+
+        @Override
+        public void handleRequest(HttpServerExchange exchange, UpstreamForwarder forwarder) {
+            if (WebSocketUpgrades.refuse(exchange, websocketEnabled)) {
+                return;
+            }
+            // Vetting may resolve a name: never on the I/O thread.
+            if (exchange.isInIoThread()) {
+                exchange.dispatch(() -> handleRequest(exchange, forwarder));
+                return;
+            }
+            OutboundUrlGuard.Verdict verdict = TenantUpstreams.vet(scheme, host);
+            if (!(verdict instanceof OutboundUrlGuard.Allowed allowed) || allowed.addresses().isEmpty()) {
+                exchange.setStatusCode(502);
+                exchange.getResponseSender().send("Upstream refused: a tenant-owned site may only "
+                    + "forward to a public address");
+                return;
+            }
+            URI dial;
+            try {
+                dial = "https".equalsIgnoreCase(scheme)
+                    ? new URI(scheme, null, host, port, "/", null, null)
+                    : new URI(scheme, null, literalOf(allowed.addresses().get(0)), port, "/", null, null);
+            } catch (URISyntaxException e) {
+                exchange.setStatusCode(502);
+                exchange.getResponseSender().send("Invalid upstream");
+                return;
+            }
+            if (rewriteLocation) {
+                exchange.putAttachment(SiteDispatcher.REWRITE_LOCATION, Boolean.TRUE);
+            }
+            forwarder.forwardTo(new UpstreamTarget(dial, protocol, ignoreCertificates));
+        }
+
+        /** The address as a URI host; the URI constructor brackets an IPv6 literal itself. */
+        private static String literalOf(InetAddress address) {
+            return address.getHostAddress();
+        }
     }
 
     /**
@@ -220,9 +322,7 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
 
         @Override
         public void handleRequest(HttpServerExchange exchange, UpstreamForwarder forwarder) {
-            if (refusesUpgrade(exchange, websocketEnabled)) {
-                exchange.setStatusCode(403);
-                exchange.getResponseSender().send("WebSocket upgrades disabled for this site");
+            if (WebSocketUpgrades.refuse(exchange, websocketEnabled)) {
                 return;
             }
 
@@ -284,18 +384,6 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
             }
             bridges.clear();
         }
-    }
-
-    /**
-     * Whether a {@code websocket_upgrade=false} site must refuse this exchange. AIDEV-NOTE: this
-     * fires on ANY upgrade attempt (the mere presence of an Upgrade header), not just an exact
-     * {@code Upgrade: websocket} spelling -- a comma-list ({@code h2c, websocket}) or a duplicate
-     * whose first value is not "websocket" would otherwise slip past and let a 101 tunnel
-     * regardless of the setting, since the actual tunnel is established by Undertow on the 101,
-     * not by our string match.
-     */
-    static boolean refusesUpgrade(HttpServerExchange exchange, boolean websocketEnabled) {
-        return !websocketEnabled && exchange.getRequestHeaders().contains(Headers.UPGRADE);
     }
 
     /** {name} or {0} placeholders resolved against regex-host capture groups. */

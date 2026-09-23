@@ -262,7 +262,7 @@
       "scope": "field"
     },
     {
-      "text": "Eén Basic Auth-gebruikersnaam en wachtwoord per rij. Wachtwoorden worden als bewerkbare tekst opgeslagen en getoond.",
+      "text": "Eén Basic Auth-gebruikersnaam en wachtwoord per rij. Wachtwoorden worden gehasht opgeslagen en nooit getoond: laat een wachtwoord leeg om het te behouden, typ er een om het te vervangen.",
       "scope": "help"
     },
     {
@@ -277,7 +277,7 @@
   "key": [
     {
       "text": "Gebruikersnaam",
-      "scope": "form",
+      "scope": "forms",
       "field": "credentials"
     },
     {
@@ -288,7 +288,7 @@
   "value": [
     {
       "text": "Wachtwoord",
-      "scope": "form",
+      "scope": "forms",
       "field": "credentials"
     },
     {
@@ -902,10 +902,16 @@
     "text": "Certificaat verloopt binnenkort",
     "scope": "notification_event"
   },
-  "deploy_failed": {
-    "text": "Deployment mislukt",
-    "scope": "notification_event"
-  },
+  "deploy_failed": [
+    {
+      "text": "Deployment mislukt",
+      "scope": "notification_event"
+    },
+    {
+      "text": "De uitrol is mislukt; de reden staat op dit tabblad",
+      "scope": "deployments"
+    }
+  ],
   "backup_failed": {
     "text": "Back-up mislukt",
     "scope": "notification_event"
@@ -1726,10 +1732,6 @@
       "scope": "admin"
     },
     {
-      "text": "Instellingen",
-      "scope": "settings"
-    },
-    {
       "text": "Jouw diensten",
       "scope": "manage"
     },
@@ -1750,10 +1752,6 @@
       "scope": "instance_shell"
     }
   ],
-  "framework": {
-    "text": "Framework",
-    "scope": "settings_mount"
-  },
   "description": [
     {
       "text": "Kies hoe de applicatie draait, voeg een domein toe en vraag daarna een certificaat aan. Hohenheim begeleidt elke stap vanaf de sitepagina.",
@@ -4256,6 +4254,10 @@
     "text": "CSRF-fout",
     "scope": "security_event_type"
   },
+  "permission_denied": {
+    "text": "Toegang geweigerd",
+    "scope": "security_event_type"
+  },
   "ws_origin_refused": {
     "text": "WebSocket-origin geweigerd",
     "scope": "security_event_type"
@@ -5653,7 +5655,7 @@
     "scope": "violations"
   },
   "server_in_use": {
-    "text": "Host {$name} bezit nog {$stacks} stack(s), {$databases} database(s) en {$instances} instantie(s); verwijder of verplaats die eerst",
+    "text": "Host {$name} wordt nog gebruikt door {$stacks} stack(s), {$databases} database(s), {$engines} gedeelde database-engine(s), {$instances} instantie(s) en {$ports} poortclaim(s); verwijder of verplaats die eerst (geef de claims vrij)",
     "scope": "violations"
   },
   "preflight": {
@@ -6007,7 +6009,7 @@
     "scope": "violations"
   },
   "backup_target_in_use": {
-    "text": "Back-updoel {$name} bevat nog {$backups} back-up(s) en dient als doel voor {$instances} instantie(s); verwijder eerst die back-ups en wijs de instanties elders toe",
+    "text": "Back-updoel {$name} bevat nog {$backups} back-up(s) en dient als doel voor {$instances} instantie(s) en {$trashed} verwijderde instantie(s); verwijder eerst die back-ups en wijs de instanties elders toe of wis ze definitief",
     "scope": "violations"
   },
   "backup_target_control_plane": {
@@ -7394,6 +7396,14 @@
     "text": "Verzonden",
     "scope": "instance_stats"
   },
+  "files_upload_missing": {
+    "text": "Kies een bestand om te uploaden",
+    "scope": "violations"
+  },
+  "files_managed_ancestor": {
+    "text": "Die map bevat beheerde configuratiebestanden; bewerk ze op het tabblad Provisioning",
+    "scope": "violations"
+  },
   "files_path_refused": {
     "text": "Dat pad ligt niet binnen deze instance",
     "scope": "violations"
@@ -7530,6 +7540,10 @@
     {
       "text": "{$name} teruggedraaid",
       "scope": "instance"
+    },
+    {
+      "text": "Teruggedraaid naar de bewaarde release",
+      "scope": "deployments"
     }
   ],
   "release_probe_failed": {
@@ -12497,5 +12511,145 @@
   "move_shared_confirm_generic": {
     "text": "Deze database naar de gedeelde engine van de host verplaatsen? Elke gekoppelde workload wordt gestopt zolang de dump en de restore lopen, het record staat ondertussen op Wordt aangemaakt, en de dump blijft onder het back-uppad bewaard als terugvalweg.",
     "scope": "database"
+  },
+  "deploy_running": {
+    "text": "Uitrol gestart; de voortgang verschijnt op dit tabblad",
+    "scope": "deployments"
+  },
+  "deploy_done": {
+    "text": "Uitgerold",
+    "scope": "deployments"
+  },
+  "rollback_running": {
+    "text": "Terugrollen gestart; de voortgang verschijnt op dit tabblad",
+    "scope": "deployments"
+  },
+  "rollback_failed": {
+    "text": "Terugrollen is mislukt; de reden staat op dit tabblad",
+    "scope": "deployments"
+  },
+  "enrolment_incomplete": {
+    "text": "{$name} is opgeslagen maar niet ingeschreven: {$reason}. De host blijft geblokkeerd; sla hem op met een nieuw vertrouwenstoken, vernieuw zijn identiteit of peil hem opnieuw om het nog eens te proberen.",
+    "scope": "server"
+  },
+  "schedule_step_schedule_fixed": {
+    "text": "Een stap blijft in de planning waarin ze werd aangemaakt; voeg in de andere planning een nieuwe stap toe",
+    "scope": "violations"
+  },
+  "failure_withheld": {
+    "text": "Dit is mislukt. Een beheerder kan de reden inzien.",
+    "scope": "delegated"
+  },
+  "database_destroy_failed_tenant": {
+    "text": "'{$name}' kon nu niet verwijderd worden. De database en de inloggegevens blijven bewaard; probeer later opnieuw, of vraag je hostingbeheerder als het blijft mislukken.",
+    "scope": "violations"
+  },
+  "database_resize_failed_tenant": {
+    "text": "De nieuwe resourcelimieten konden nu niet toegepast worden. Er is niets gewijzigd.",
+    "scope": "violations"
+  },
+  "test_failed_generic": {
+    "text": "De provider was niet bereikbaar of weigerde de gegevens. Controleer de basis-URL en het token en test daarna opnieuw.",
+    "scope": "git_provider"
+  },
+  "instance_operation_in_progress": {
+    "text": "Er loopt nog een andere bewerking op instantie {$name}; probeer het opnieuw wanneer die klaar is",
+    "scope": "violations"
+  },
+  "repository_url_local_refused": {
+    "text": "Een repository op de Hohenheim-server zelf kan alleen door een bron van een beheerder gebruikt worden; gebruik een externe repository-URL (https, ssh of git)",
+    "scope": "violations"
+  },
+  "source_branch_invalid": {
+    "text": "De branch is geen naam die git aanvaardt",
+    "scope": "violations"
+  },
+  "source_build_directory_invalid": {
+    "text": "De buildmap moet een map binnen de repository zijn",
+    "scope": "violations"
+  },
+  "source_ref_invalid": {
+    "text": "De branch of ref is geen naam die git aanvaardt",
+    "scope": "violations"
+  },
+  "source_repository_local_refused": {
+    "text": "Deze bron mag geen pad op de Hohenheim-server klonen; gebruik een externe repository-URL (https, ssh of git)",
+    "scope": "violations"
+  },
+  "source_repository_url_refused": {
+    "text": "De repository-URL is geen externe bron die git kan klonen",
+    "scope": "violations"
+  },
+  "stack_volume_name_taken": {
+    "text": "Volume {$volume} wordt al gebruikt door stack {$stack}; kies een andere mountnaam",
+    "scope": "violations"
+  },
+  "media_url_not_public": {
+    "text": "De media-URL moet naar een publiek internetadres wijzen; upload een bestand vanaf een privaat netwerk in de plaats",
+    "scope": "violations"
+  },
+  "database_move_leftover_subject": {
+    "text": "Database {$name} is verhuisd, maar de oude engine draait nog",
+    "scope": "alert"
+  },
+  "database_move_leftover_body": {
+    "text": "Database {$name} staat nu op gedeelde engine {$engine}, maar de oude eigen engine kon niet worden verwijderd en houdt nog een poort, geheugen en een kopie van de data vast: {$reason}. Verwijder de oude engine-instantie met de hand.",
+    "scope": "alert"
+  },
+  "control_plane_backup_failed_subject": {
+    "text": "Back-up van het controlevlak mislukt",
+    "scope": "alert"
+  },
+  "control_plane_backup_failed_body": {
+    "text": "De geplande back-up van de controlevlakdatabase en de sleutelring is mislukt: {$reason}",
+    "scope": "alert"
+  },
+  "instance_backup_failed_subject": {
+    "text": "Back-up van instantie mislukt: {$name}",
+    "scope": "alert"
+  },
+  "instance_backup_failed_body": {
+    "text": "De geplande back-up van instantie {$name} is mislukt: {$reason}",
+    "scope": "alert"
+  },
+  "database_backup_failed_subject": {
+    "text": "Back-up van database mislukt: {$name}",
+    "scope": "alert"
+  },
+  "database_backup_failed_body": {
+    "text": "De geplande back-up van database {$name} is mislukt: {$reason}",
+    "scope": "alert"
+  },
+  "isolation_contained_subject": {
+    "text": "{$sweep}: {$count} workload(s) ingeperkt",
+    "scope": "alert"
+  },
+  "isolation_unconfirmed_subject": {
+    "text": "{$sweep}: isolatie onbevestigd voor {$count} onderwerp(en)",
+    "scope": "alert"
+  },
+  "data_integrity_subject": {
+    "text": "Verweesde rijen in de controlevlakdatabase ({$count} tabelkoppeling(en))",
+    "scope": "alert"
+  },
+  "data_integrity_body": {
+    "text": "Deze rijen verwijzen naar records die niet meer bestaan, en schrijfacties die ze raken mislukken: {$detail}. Toon en herstel ze offline met --foreign-key-orphans.",
+    "scope": "alert"
+  },
+  "database_move_leftover": {
+    "text": "Oude database-engine achtergebleven na een verhuizing",
+    "scope": "notification_event"
+  },
+  "data_integrity": {
+    "text": "Verweesde databaserijen",
+    "scope": "notification_event"
+  },
+  "setting_reclaim_min_age": {
+    "text": "Bewaar images minstens 1 uur",
+    "scope": "violations"
+  },
+  "setting_public_port_window": {
+    "text": "Het publieke poortvenster moet boven 1024 beginnen en op of onder {$max} eindigen",
+    "scope": "violations"
   }
 }

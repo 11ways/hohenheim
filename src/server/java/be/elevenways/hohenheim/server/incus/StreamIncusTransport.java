@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.incus;
 
 import be.elevenways.hohenheim.server.util.Http11;
+import be.elevenways.hohenheim.server.util.Watchdog;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -13,33 +14,33 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Locale;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 
 /**
  * The shared half of both Incus transports: one fresh channel per REST exchange
- * ({@code Connection: close}, read to EOF, {@link Http11} framing) and the RFC 6455
+ * ({@code Connection: close}, a bounded {@link Http11} head-then-body read) and the RFC 6455
  * client handshake for the websocket lane. Subclasses only open the byte channel --
  * a pinned+identified TLS socket, or the local unix socket.
  */
 abstract class StreamIncusTransport implements IncusTransport {
 
-    // The UnixSocketDockerTransport watchdog shape: blocking channels have no reliable
-    // read timeout, so a scheduled close is what bounds a wedged daemon.
-    private static final ScheduledExecutorService WATCHDOG =
-        Executors.newSingleThreadScheduledExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "incus-transport-watchdog");
-            thread.setDaemon(true);
-            return thread;
-        });
+    // The UnixSocketDockerTransport watchdog shape (the shared util.Watchdog): blocking
+    // channels have no reliable read timeout, so a scheduled close is what bounds a wedged
+    // daemon.
+
+    /**
+     * Cap on one REST answer held in memory. The REST lane carries envelopes, listings and
+     * the recorded output of an exec; payload-sized bodies ride
+     * {@link #exchangeDownload}, never this lane.
+     */
+    static final long MAX_RESPONSE_BYTES = 32L * 1024 * 1024;
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -59,19 +60,29 @@ abstract class StreamIncusTransport implements IncusTransport {
     public Http11.@NonNull Raw exchange(@NonNull String method, @NonNull String pathAndQuery,
                                         @Nullable String jsonBody, long timeoutMs)
             throws IOException {
+        return exchange(method, pathAndQuery, jsonBody, Map.of(), timeoutMs);
+    }
+
+    /**
+     * AIDEV-NOTE: the answer is read head-first and its body COPIED ONCE under
+     * {@link #MAX_RESPONSE_BYTES}, never read to EOF into an unbounded buffer and re-parsed
+     * as a string (which held the same bytes four or five times over, with no cap at all).
+     */
+    @Override
+    public Http11.@NonNull Raw exchange(@NonNull String method, @NonNull String pathAndQuery,
+                                        @Nullable String jsonBody,
+                                        @NonNull Map<String, String> headers, long timeoutMs)
+            throws IOException {
         byte[] body = jsonBody != null ? jsonBody.getBytes(StandardCharsets.UTF_8) : null;
         byte[] request = Http11.request(method, pathAndQuery, hostHeader(), body,
-            body != null ? "application/json" : null, null);
+            body != null ? "application/json" : null, headers);
         Channel channel = open(timeoutMs);
-        ScheduledFuture<?> watchdog = WATCHDOG.schedule(
-            () -> closeQuietly(channel), timeoutMs, TimeUnit.MILLISECONDS);
+        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> closeQuietly(channel), timeoutMs);
         try {
             OutputStream out = channel.out();
             out.write(request);
             out.flush();
-            ByteArrayOutputStream response = new ByteArrayOutputStream();
-            channel.in().transferTo(response);
-            return Http11.parse(response.toByteArray(), describe());
+            return readAnswer(channel.in(), MAX_RESPONSE_BYTES);
         } catch (IOException e) {
             if (watchdog.isDone()) {
                 throw new IOException("Incus request to " + describe() + " timed out after "
@@ -84,6 +95,15 @@ abstract class StreamIncusTransport implements IncusTransport {
         }
     }
 
+    /** One bounded answer: head, then the body copied once under the cap. */
+    private Http11.@NonNull Raw readAnswer(@NonNull InputStream in, long maxBytes)
+            throws IOException {
+        Http11.Head head = Http11.readHead(in, describe());
+        ByteArrayOutputStream answer = new ByteArrayOutputStream();
+        Http11.copyBody(in, head, answer, maxBytes, describe());
+        return new Http11.Raw(head.status(), head.headers(), answer.toByteArray());
+    }
+
     @Override
     public Http11.@NonNull Raw exchangeUpload(@NonNull String method,
                                               @NonNull String pathAndQuery,
@@ -92,31 +112,17 @@ abstract class StreamIncusTransport implements IncusTransport {
                                               @Nullable Map<String, String> extraHeaders,
                                               long timeoutMs) throws IOException {
         long length = Files.size(bodyFile);
-        StringBuilder head = new StringBuilder();
-        head.append(method).append(' ').append(pathAndQuery).append(" HTTP/1.1\r\n");
-        head.append("Host: ").append(hostHeader()).append("\r\n");
-        head.append("Accept: application/json\r\n");
-        if (extraHeaders != null) {
-            for (Map.Entry<String, String> header : extraHeaders.entrySet()) {
-                head.append(header.getKey()).append(": ").append(header.getValue())
-                    .append("\r\n");
-            }
-        }
-        head.append("Content-Type: ").append(contentType).append("\r\n");
-        head.append("Content-Length: ").append(length).append("\r\n");
-        head.append("Connection: close\r\n\r\n");
+        byte[] head = Http11.requestHead(method, pathAndQuery, hostHeader(), contentType,
+            length, extraHeaders);
 
         Channel channel = open(timeoutMs);
-        ScheduledFuture<?> watchdog = WATCHDOG.schedule(
-            () -> closeQuietly(channel), timeoutMs, TimeUnit.MILLISECONDS);
+        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> closeQuietly(channel), timeoutMs);
         try {
             OutputStream out = channel.out();
-            out.write(head.toString().getBytes(StandardCharsets.ISO_8859_1));
+            out.write(head);
             Files.copy(bodyFile, out);
             out.flush();
-            ByteArrayOutputStream response = new ByteArrayOutputStream();
-            channel.in().transferTo(response);
-            return Http11.parse(response.toByteArray(), describe());
+            return readAnswer(channel.in(), MAX_RESPONSE_BYTES);
         } catch (IOException e) {
             if (watchdog.isDone()) {
                 throw new IOException("Incus upload to " + describe() + " timed out after "
@@ -137,8 +143,7 @@ abstract class StreamIncusTransport implements IncusTransport {
             throws IOException {
         byte[] request = Http11.request(method, pathAndQuery, hostHeader(), null, null, null);
         Channel channel = open(timeoutMs);
-        ScheduledFuture<?> watchdog = WATCHDOG.schedule(
-            () -> closeQuietly(channel), timeoutMs, TimeUnit.MILLISECONDS);
+        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> closeQuietly(channel), timeoutMs);
         try {
             OutputStream out = channel.out();
             out.write(request);
@@ -177,21 +182,21 @@ abstract class StreamIncusTransport implements IncusTransport {
         byte[] nonce = new byte[16];
         RANDOM.nextBytes(nonce);
         String key = Base64.getEncoder().encodeToString(nonce);
-        String head = "GET " + pathAndQuery + " HTTP/1.1\r\n"
-            + "Host: " + hostHeader() + "\r\n"
-            + "Upgrade: websocket\r\n"
-            + "Connection: Upgrade\r\n"
-            + "Sec-WebSocket-Key: " + key + "\r\n"
-            + "Sec-WebSocket-Version: 13\r\n\r\n";
+        Map<String, String> headers = new LinkedHashMap<>();
+        headers.put("Upgrade", "websocket");
+        headers.put("Connection", "Upgrade");
+        headers.put("Sec-WebSocket-Key", key);
+        headers.put("Sec-WebSocket-Version", "13");
+        byte[] head = Http11.head("GET", pathAndQuery, hostHeader(), headers);
 
         Channel channel = open(connectTimeoutMs);
         // The watchdog covers connect + handshake ONLY: an established stream lives
         // until a side closes it.
-        ScheduledFuture<?> watchdog = WATCHDOG.schedule(
-            () -> closeQuietly(channel), connectTimeoutMs, TimeUnit.MILLISECONDS);
+        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> closeQuietly(channel),
+            connectTimeoutMs);
         try {
             OutputStream out = channel.out();
-            out.write(head.getBytes(StandardCharsets.ISO_8859_1));
+            out.write(head);
             out.flush();
             InputStream in = channel.in();
             String response = readHandshakeHead(in);

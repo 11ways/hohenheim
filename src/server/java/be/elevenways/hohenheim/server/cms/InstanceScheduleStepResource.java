@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -7,11 +8,13 @@ import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
+import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -27,7 +30,9 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Chain steps of an instance schedule (nav-hidden; reached through the schedule's
@@ -83,23 +88,67 @@ public class InstanceScheduleStepResource extends RowResource {
 
     @Override
     public @Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of("instance-schedules",
-            row -> row.get(RecordScheduleStepModel.SCHEDULE_ID)).tab("steps");
+        return ResourceParent.<Row>of(InstanceScheduleResource.SLUG,
+            row -> row.get(RecordScheduleStepModel.SCHEDULE_ID)).tab(InstanceScheduleStepsPage.SLUG);
+    }
+
+    /**
+     * A step belongs to the schedule it was created in: every capability it was checked
+     * against, and the run_as re-stamp, answered for THAT chain. The form renders the
+     * schedule read-only on an existing step and {@link #authorize} refuses a write that
+     * still tries to move it.
+     */
+    @Override
+    public @NonNull List<ResourceFieldBinding> fieldBindings() {
+        return List.of(ResourceFieldBinding.of(RecordScheduleStepModel.SCHEDULE_ID.getName(),
+            FieldAccess.customRecordAware((ctx, record) -> record == null
+                ? FieldAccess.Decision.EDITABLE : FieldAccess.Decision.READONLY)));
     }
 
     /** The schedule's Steps list links here with ?schedule_id= preset. */
     @Override
     public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
         Map<String, Object> values = new LinkedHashMap<>(formSpec().defaultValues());
-        String scheduleId = conduit.getQueryParam("schedule_id");
-        if (scheduleId != null && !scheduleId.isEmpty()) {
-            try {
-                values.put("schedule_id", Integer.parseInt(scheduleId));
-            } catch (NumberFormatException ignored) {
-                // Malformed prefill: render the bare form.
-            }
+        Integer scheduleId = CmsSupport.prefill(conduit, HohenheimParams.SCHEDULE_ID_PREFILL);
+        if (scheduleId != null) {
+            values.put(RecordScheduleStepModel.SCHEDULE_ID.getName(), scheduleId);
         }
         return Map.copyOf(values);
+    }
+
+    /**
+     * Adding a step shapes the chain, so the create affordance follows {@code CONFIG} on the
+     * schedule's instance -- the same floor {@link #writableBy} puts under edit and delete.
+     *
+     * AIDEV-NOTE: this is the AFFORDANCE face. Create is record-less, so the schedule is
+     * read off the request (the {@code ?schedule_id=} prefill, else the schedule whose Steps
+     * tab is rendering); where the request names none (a bare create submit) this answers
+     * true and {@link #authorize} is the enforced gate, because it demands CONFIG on the
+     * SUBMITTED schedule's instance before anything is written. A named schedule that does
+     * not exist, or is not an instance schedule, offers nothing.
+     */
+    @Override
+    public boolean creatableBy(@NonNull AccessContext accessContext) {
+        if (!super.creatableBy(accessContext)) {
+            return false;
+        }
+        Conduit conduit = accessContext.conduit();
+        if (conduit == null) {
+            return true;
+        }
+        Integer scheduleId = CmsSupport.scopedParentId(conduit,
+            HohenheimParams.SCHEDULE_ID_PREFILL.getName(), InstanceScheduleResource.SLUG);
+        if (scheduleId == null) {
+            return true;
+        }
+        Row schedule = scheduleForRender(accessContext, scheduleId);
+        if (schedule == null
+                || !InstanceModel.MODEL_ID.toString().equals(schedule.get(RecordScheduleModel.MODEL))) {
+            return false;
+        }
+        return HohenheimAccess.reachesRecord(accessContext, InstanceModel.MODEL_ID,
+            InstanceScheduleResource.parseInstanceId(schedule.get(RecordScheduleModel.RECORD_ID)),
+            HohenheimAccess.CONFIG);
     }
 
     /**
@@ -195,14 +244,21 @@ public class InstanceScheduleStepResource extends RowResource {
     }
 
     /**
-     * The edit-time half of per-step authorization: the schedule must exist and target
-     * an instance, and the EDITOR must hold the selected action's own capability on
-     * that instance now.
+     * The write-time half of per-step authorization: the schedule must exist and target
+     * an instance, a stored step stays in its schedule, and the EDITOR must hold
+     * {@code CONFIG} on that instance AND the selected action's own capability now.
      *
      * AIDEV-NOTE: both reads take the STORED value when the write does not carry the key.
      * The inline cell lane hands updateRow a map holding EXACTLY ONE entry, so reading
      * schedule_id straight off it refused every partial write with "unknown_schedule" --
      * naming a chain the operator never repointed.
+     *
+     * AIDEV-NOTE: CONFIG is demanded here on CREATE and EDIT, not only the action's own
+     * capability. A delegate holding just the action's verb (power) could otherwise add
+     * steps to a chain whose schedule they may not shape, and an edit could repoint a
+     * step at ANOTHER schedule -- the moved-to chain was never checked for CONFIG and
+     * inherited the step under its own run_as. The schedule is frozen on edit for the
+     * same reason (the field binding is the form face, this refusal the enforced one).
      *
      * @param existing the stored step, or null on a create
      */
@@ -211,6 +267,11 @@ public class InstanceScheduleStepResource extends RowResource {
                                    @NonNull AccessContext accessContext) {
         Object scheduleId = CmsSupport.valueOf(coerced, existing,
             RecordScheduleStepModel.SCHEDULE_ID);
+        if (existing != null
+                && !Objects.equals(scheduleId, existing.get(RecordScheduleStepModel.SCHEDULE_ID))) {
+            throw Violations.ofField("schedule_id", scheduleId,
+                CmsSupport.violationText("schedule_step_schedule_fixed"));
+        }
         Row schedule = scheduleId instanceof Integer id ? loadSchedule(id) : null;
 
         if (schedule == null
@@ -220,6 +281,8 @@ public class InstanceScheduleStepResource extends RowResource {
         }
 
         String recordId = schedule.get(RecordScheduleModel.RECORD_ID);
+        InstanceScheduleResource.requireManage(accessContext,
+            InstanceScheduleResource.parseInstanceId(recordId));
         Object action = CmsSupport.valueOf(coerced, existing, RecordScheduleStepModel.ACTION);
         String refusal = RecordScheduleActions.editRefusal(accessContext,
             InstanceModel.MODEL_ID, recordId,

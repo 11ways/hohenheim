@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.dns.DnsNames;
+import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
@@ -288,16 +289,26 @@ public final class GameDomains {
         Integer oldBackendId = stored != null
             ? stored.get(GameDomainModel.BACKEND_INSTANCE_ID) : null;
 
-        model.save(row);
+        // AIDEV-NOTE: ONE transaction around the save and every step that can refuse after
+        // it (game_link_failed, game_push_failed, game_materialize_failed). Saved first and
+        // materialized outside a transaction, a refused materialization left the mapping
+        // stored, and the operator's retry was then refused as game_domain_duplicate. The
+        // zenit-cms mutation transaction already wrapped the resource path; this makes the
+        // funnel atomic for EVERY caller (a nested call joins the caller's transaction).
+        // Daemon-side effects cannot roll back: a link network created before a later
+        // refusal is harmless and reused by the retry.
+        model.getResolvedDatasource().withTransaction(transaction -> {
+            model.save(row);
 
-        materializeMapping(row);
-        if (oldProxyId != null && oldProxyId != proxyId) {
-            materializeProxyConfig(oldProxyId, false);
-        }
-        if (oldProxyId != null && oldBackendId != null
-                && (oldProxyId != proxyId || oldBackendId != backendId)) {
-            maybeRemoveLink(oldProxyId, oldBackendId);
-        }
+            materializeMapping(row);
+            if (oldProxyId != null && oldProxyId != proxyId) {
+                materializeProxyConfig(oldProxyId, false);
+            }
+            if (oldProxyId != null && oldBackendId != null
+                    && (oldProxyId != proxyId || oldBackendId != backendId)) {
+                maybeRemoveLink(oldProxyId, oldBackendId);
+            }
+        });
         return row;
     }
 
@@ -859,20 +870,28 @@ public final class GameDomains {
         return domainId != null ? Models.get(SiteDomainModel.class).findById(domainId) : null;
     }
 
-    /** The deepest enabled zone containing the hostname, or null when none is hosted. */
-    /** The most specific enabled hosted zone containing {@code hostname}, or null. */
+    /**
+     * The most specific enabled zone this controller is PRIMARY for containing
+     * {@code hostname}, or null; the zone a generated record row may be written into.
+     *
+     * AIDEV-NOTE: a write path, so it asks {@link DnsZoneStore#findPrimaryZoneFor}, never
+     * the enabled-zone list: that list includes SECONDARY (replica) zones, and a row written
+     * there publishes nothing (the next AXFR overwrites it) while the serial bump inflates
+     * the replica's stored serial and suppresses genuine transfers. The snapshot's row is
+     * re-read so a zone disabled or flipped to secondary since the last reload fails closed.
+     */
     public static @Nullable Row zoneFor(@NonNull String hostname) {
-        Row best = null;
-        int bestLength = -1;
-        for (Row zone : Models.get(DnsZoneModel.class).findEnabled()) {
-            String origin = zone.get(DnsZoneModel.ORIGIN);
-            if (origin != null && DnsNames.zoneContains(origin, hostname)
-                    && origin.length() > bestLength) {
-                best = zone;
-                bestLength = origin.length();
-            }
+        DnsZoneSnapshot primary = DnsZoneStore.INSTANCE.findPrimaryZoneFor(hostname);
+        if (primary == null) {
+            return null;
         }
-        return best;
+        Row zone = Models.get(DnsZoneModel.class).findById(primary.getZoneId());
+        return zone != null && isEnabledPrimary(zone) ? zone : null;
+    }
+
+    private static boolean isEnabledPrimary(@NonNull Row zone) {
+        return Boolean.TRUE.equals(zone.get(DnsZoneModel.ENABLED))
+            && DnsZoneModel.ROLE_PRIMARY.equals(DnsZoneModel.roleOf(zone));
     }
 
     /** The proxy's observed published host port, or null when it is not deployed. */
@@ -979,9 +998,21 @@ public final class GameDomains {
             CmsSupport.violationText("game_domain_field_required"));
     }
 
+    /**
+     * Bump and reload every touched zone this controller is primary for.
+     *
+     * AIDEV-NOTE: a secondary is skipped even when a row was just swept out of it -- the
+     * rows an older version wrongly wrote into a replica come down on the next reconcile,
+     * and bumping the replica's serial for that would suppress its genuine transfers.
+     */
     private static void bumpZones(@NonNull Set<Integer> zoneIds) {
+        DnsZoneModel zones = Models.get(DnsZoneModel.class);
         for (Integer zoneId : zoneIds) {
-            if (zoneId != null) {
+            if (zoneId == null) {
+                continue;
+            }
+            Row zone = zones.findById(zoneId);
+            if (zone != null && DnsZoneModel.ROLE_PRIMARY.equals(DnsZoneModel.roleOf(zone))) {
                 DnsZoneStore.INSTANCE.bumpSerialAndReload(zoneId);
             }
         }

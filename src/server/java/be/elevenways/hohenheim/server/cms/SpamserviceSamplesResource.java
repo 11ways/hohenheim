@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.spamservice.client.PageResult;
@@ -95,7 +96,8 @@ public final class SpamserviceSamplesResource extends SpamserviceRemoteResource<
 
     @Override
     protected @NonNull PageResult<SampleSummary> fetchPage(@NonNull SpamserviceClient client,
-                                                            TableView.@NonNull Applied<SampleSummary> applied) {
+                                                            TableView.@NonNull Applied<SampleSummary> applied,
+                                                            @NonNull AccessContext accessContext) {
         return client.samples(applied.page(), applied.schema().pageSize(), textFilter(applied, "client_id"),
             booleanFilter(applied, "spam"), booleanFilter(applied, "confirmed"), textFilter(applied, "ip"));
     }
@@ -143,7 +145,7 @@ public final class SpamserviceSamplesResource extends SpamserviceRemoteResource<
     @Override
     public @NonNull String rowUrl(@NonNull SampleSummary row) {
         // Resource.rowUrl is a String contract; toUrl() is the boundary.
-        return CmsRoutes.subpage("admin", SLUG, row.id(), SpamserviceSampleAnalysisPage.SLUG).toUrl();
+        return CmsRoutes.subpage(HohenheimSlugs.ADMIN, SLUG, row.id(), SpamserviceSampleAnalysisPage.SLUG).toUrl();
     }
 
     @Override public @NonNull List<RecordScopedPage<SampleSummary>> subpages() {

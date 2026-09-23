@@ -1,18 +1,16 @@
 package be.elevenways.hohenheim.server.backup;
 
+import be.elevenways.zenit.server.io.DurableFiles;
 import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
@@ -57,9 +55,10 @@ public final class FilesystemBackupTarget implements BackupTarget {
                      StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
                 copyBounded(in, out);
             }
-            force(staging);
+            DurableFiles.forceFile(staging);
             Files.move(staging, committed,
                 StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            DurableFiles.forceDirectory(committed.getParent());
         } catch (IOException error) {
             try {
                 Files.deleteIfExists(staging);
@@ -76,15 +75,7 @@ public final class FilesystemBackupTarget implements BackupTarget {
         if (!Files.isRegularFile(committed)) {
             throw new IOException("Backup target holds no committed artifact at " + committed);
         }
-        MessageDigest digest = sha256();
-        byte[] buffer = new byte[64 * 1024];
-        try (InputStream in = Files.newInputStream(committed)) {
-            int read;
-            while ((read = in.read(buffer)) >= 0) {
-                digest.update(buffer, 0, read);
-            }
-        }
-        return SecureTokens.hex(digest.digest());
+        return SecureTokens.sha256Hex(committed);
     }
 
     @Override
@@ -146,17 +137,4 @@ public final class FilesystemBackupTarget implements BackupTarget {
         }
     }
 
-    private static void force(Path file) throws IOException {
-        try (FileChannel channel = FileChannel.open(file, StandardOpenOption.WRITE)) {
-            channel.force(true);
-        }
-    }
-
-    private static MessageDigest sha256() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException("SHA-256 unavailable", impossible);
-        }
-    }
 }

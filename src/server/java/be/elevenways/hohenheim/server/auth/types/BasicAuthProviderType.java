@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.auth.types;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.hohenheim.server.auth.SiteAuthContext;
 import be.elevenways.hohenheim.server.auth.SiteAuthGate;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviderTypeHandler;
@@ -12,14 +13,16 @@ import be.elevenways.zenit.server.security.SecureTokens;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * HTTP Basic Auth provider backed by an operator-visible username/password map.
+ * HTTP Basic Auth provider backed by an operator-editable username to argon2-hash map.
+ *
+ * AIDEV-NOTE: the passwords used to be stored and compared in PLAINTEXT, which contradicted
+ * BasicCredentials being THE argon2 home. They are hashed on save through BasicCredentials,
+ * M011 hashed every value stored before that, and verification refuses anything unhashed.
  *
  * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.1.0
@@ -35,13 +38,15 @@ public class BasicAuthProviderType implements SiteAuthProviderTypeHandler {
     public static final String USERNAME = "username";
     public static final String PASSWORD_HASH = "password_hash";
 
-    private static final String ARGON2_PREFIX = "$argon2";
-
     public static final Schema CONFIG_SCHEMA = new Schema();
     static {
+        // secret(): the form shows each username with a BLANK password (FormSecrets masks
+        // string-map values per key) and a blank submit restores the stored hash, so a
+        // password is write-only and the argon2 hash never leaves the server.
         CONFIG_SCHEMA.addField(StringMapField.builder(CREDENTIALS)
             .label(HohenheimFormCopy.label(CREDENTIALS))
             .help(HohenheimFormCopy.help(CREDENTIALS))
+            .secret()
             .build());
     }
 
@@ -79,11 +84,20 @@ public class BasicAuthProviderType implements SiteAuthProviderTypeHandler {
     }
 
     /**
-     * Normalize the submitted username -> password map into stable insertion order.
+     * Normalize the submitted username -> password map into stable insertion order, hashing
+     * every typed password.
+     *
+     * AIDEV-NOTE: the edit form never shows the stored hash (the field is secret, so the box is
+     * blank and the framework restores the hash on a blank submit); this method still keeps the
+     * stored hash on a blank value for any writer that bypasses the form, and
+     * {@code hashIfNeeded} leaves an already-argon2 value alone, so clearing the box never
+     * silently sets an empty password. A new user saved with a blank password stores a blank
+     * value, which never verifies.
      */
     @Override
     public Map<String, Object> normalizeConfigForSave(Map<String, Object> submitted,
                                                       @Nullable Map<String, Object> existing) {
+        Map<String, String> stored = credentials(existing);
         Map<String, String> out = new LinkedHashMap<>();
 
         Object rawSubmitted = submitted != null ? submitted.get(CREDENTIALS) : null;
@@ -94,7 +108,11 @@ public class BasicAuthProviderType implements SiteAuthProviderTypeHandler {
                     continue;
                 }
                 String password = str(entry.getValue());
-                out.put(username, password != null ? password : "");
+                if (password == null || password.isBlank()) {
+                    out.put(username, stored.getOrDefault(username, ""));
+                } else {
+                    out.put(username, BasicCredentials.hashIfNeeded(password));
+                }
             }
         }
 
@@ -106,35 +124,24 @@ public class BasicAuthProviderType implements SiteAuthProviderTypeHandler {
     /**
      * Verify a {@code Authorization: Basic} header against the stored credential map.
      *
+     * An unknown username (or one without a usable hash) still pays one argon2 verification, so
+     * the response time does not tell which usernames exist.
+     *
      * @return the matching username, or null if the header is absent/malformed or no credential matches
      */
     public static @Nullable String verify(@Nullable String authHeader, Map<String, String> credentials) {
-        if (authHeader == null || !authHeader.startsWith("Basic ")) {
+        BasicCredentials.Presented presented = BasicCredentials.parse(authHeader);
+        if (presented == null) {
             return null;
         }
 
-        String user;
-        String pass;
-        try {
-            String decoded = new String(Base64.getDecoder().decode(authHeader.substring(6)), StandardCharsets.UTF_8);
-            int colon = decoded.indexOf(':');
-            if (colon < 0) {
-                return null;
-            }
-            user = decoded.substring(0, colon);
-            pass = decoded.substring(colon + 1);
-        } catch (IllegalArgumentException e) {
+        String stored = credentials.get(presented.username());
+        if (stored == null || stored.isBlank()) {
+            PasswordHasher.verify(presented.password(), DummyHash.VALUE);
             return null;
         }
-
-        String stored = credentials.get(user);
-        boolean matches = stored != null && (stored.startsWith(ARGON2_PREFIX)
-            ? PasswordHasher.verify(pass, stored)
-            : SecureTokens.constantTimeEquals(pass, stored));
-        if (matches) {
-            return user;
-        }
-        return null;
+        return BasicCredentials.verifyPassword(presented.password(), stored, "basic auth provider")
+            ? presented.username() : null;
     }
 
     /**
@@ -171,5 +178,13 @@ public class BasicAuthProviderType implements SiteAuthProviderTypeHandler {
 
     static @Nullable String str(@Nullable Object value) {
         return value == null ? null : String.valueOf(value);
+    }
+
+    /**
+     * The hash an unknown username is verified against; lazily built, so class loading at
+     * provider discovery pays no argon2.
+     */
+    private static final class DummyHash {
+        static final String VALUE = PasswordHasher.hash(SecureTokens.randomToken());
     }
 }

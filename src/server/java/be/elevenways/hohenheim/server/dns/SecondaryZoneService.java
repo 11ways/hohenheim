@@ -128,13 +128,17 @@ public final class SecondaryZoneService {
         }
         String originString = question.getName().toString(true).toLowerCase(Locale.ROOT);
         boolean scheduled = false;
-        for (Row zone : Models.get(DnsZoneModel.class).findSecondaries()) {
-            if (!originString.equals(zone.get(DnsZoneModel.ORIGIN))) {
+        for (NotifyTarget target : this.notifyTargets()) {
+            if (!originString.equals(target.origin())) {
                 continue;
             }
-            int zoneId = zone.get(DnsZoneModel.ID);
-            Row peer = peerFor(zone);
-            TSIG key = peer != null ? DnsTsig.forPeer(peer) : null;
+            int zoneId = target.zoneId();
+            if (target.keyUnusable()) {
+                Blast.log("DNS: ignoring NOTIFY for", originString,
+                    "(the primary peer's TSIG algorithm is not supported)");
+                continue;
+            }
+            TSIG key = target.key();
             if (key != null
                     && (query.getTSIG() == null || key.verify(query, wire, null) != Rcode.NOERROR)) {
                 Blast.log("DNS: ignoring unauthenticated NOTIFY for", originString);
@@ -153,6 +157,62 @@ public final class SecondaryZoneService {
             scheduled = true;
         }
         return scheduled;
+    }
+
+    /**
+     * One secondary zone as a NOTIFY is judged against: its origin and its primary peer's key.
+     *
+     * @param keyUnusable true when the peer HAS a key whose stored algorithm is not supported;
+     *                    such a NOTIFY is ignored, never accepted as if the peer had no key
+     */
+    private record NotifyTarget(int zoneId, @NonNull String origin, @Nullable TSIG key,
+                                boolean keyUnusable) {
+    }
+
+    /** How long the NOTIFY targets are reused before the zone and peer tables are read again. */
+    private static final long NOTIFY_TARGETS_TTL_MS = 30_000;
+
+    private volatile @Nullable List<NotifyTarget> notifyTargets;
+    private volatile long notifyTargetsExpireAt;
+
+    /**
+     * The secondary zones a NOTIFY may name, re-read at most every {@link #NOTIFY_TARGETS_TTL_MS}.
+     *
+     * AIDEV-NOTE: a NOTIFY is one unauthenticated UDP packet, and this used to read the zone
+     * table plus a peer row PER PACKET -- a spoofed flood was a database load generator. A
+     * zone or key change is picked up within the TTL; the cost of that staleness is at most a
+     * NOTIFY ignored or honoured for half a minute, and a NOTIFY is only ever a hint (the
+     * SOA-timed refresh and the serial check stay authoritative).
+     */
+    private @NonNull List<NotifyTarget> notifyTargets() {
+        List<NotifyTarget> cached = this.notifyTargets;
+        long now = Now.millis();
+        if (cached != null && now < this.notifyTargetsExpireAt) {
+            return cached;
+        }
+        List<NotifyTarget> targets = new ArrayList<>();
+        for (Row zone : Models.get(DnsZoneModel.class).findSecondaries()) {
+            String origin = zone.get(DnsZoneModel.ORIGIN);
+            if (origin == null) {
+                continue;
+            }
+            Row peer = peerFor(zone);
+            TSIG key = null;
+            boolean unusable = false;
+            if (peer != null) {
+                try {
+                    key = DnsTsig.forPeer(peer);
+                }
+                catch (IllegalArgumentException badAlgorithm) {
+                    unusable = true;
+                }
+            }
+            targets.add(new NotifyTarget(zone.get(DnsZoneModel.ID), origin, key, unusable));
+        }
+        List<NotifyTarget> frozen = List.copyOf(targets);
+        this.notifyTargets = frozen;
+        this.notifyTargetsExpireAt = now + NOTIFY_TARGETS_TTL_MS;
+        return frozen;
     }
 
     private void refreshAllDue() {
@@ -190,7 +250,15 @@ public final class SecondaryZoneService {
             return false;
         }
         int port = valueOr(peer.get(DnsPeerModel.TRANSFER_PORT), 53);
-        TSIG tsig = DnsTsig.forPeer(peer);
+        TSIG tsig;
+        try {
+            tsig = DnsTsig.forPeer(peer);
+        }
+        catch (IllegalArgumentException badAlgorithm) {
+            // Never fall back to an unsigned transfer for a peer that asked for a key.
+            markError(zone, zs, "peer TSIG algorithm is not supported");
+            return false;
+        }
 
         try {
             Name origin = Name.fromString(originString + ".");

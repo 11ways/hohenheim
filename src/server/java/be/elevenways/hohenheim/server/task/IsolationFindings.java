@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.Blast;
@@ -99,15 +100,17 @@ public final class IsolationFindings {
         }
 
         if (!this.escalations.isEmpty()) {
-            alert(this.sweep + ": " + this.escalations.size() + " workload(s) contained",
+            alert(Microcopy.of("isolation_contained_subject").withFilter("scope", "alert")
+                    .withArg("sweep", this.sweep).withArg("count", this.escalations.size()),
                 String.join("\n", this.escalations));
         }
 
         String signature = String.join("\n", this.unconfirmed);
         if (!this.unconfirmed.isEmpty()
                 && !signature.equals(LAST_UNCONFIRMED.get(this.sweep))) {
-            alert(this.sweep + ": isolation UNCONFIRMED on " + this.unconfirmed.size()
-                + " subject(s)", signature);
+            alert(Microcopy.of("isolation_unconfirmed_subject").withFilter("scope", "alert")
+                    .withArg("sweep", this.sweep).withArg("count", this.unconfirmed.size()),
+                signature);
         }
         if (this.unconfirmed.isEmpty()) {
             LAST_UNCONFIRMED.remove(this.sweep);
@@ -122,13 +125,8 @@ public final class IsolationFindings {
     }
 
     /** An alerting failure must never swallow the isolation failure it was reporting. */
-    private void alert(@NonNull String subject, @NonNull String message) {
-        try {
-            Alerts.send(NotificationEvents.WORKLOAD_ISOLATION, subject, message);
-        } catch (RuntimeException notifyFailed) {
-            Blast.log("ISOLATION: could not send the isolation notification -",
-                notifyFailed.getMessage());
-        }
+    private void alert(@NonNull Microcopy subject, @NonNull String detail) {
+        Alerts.trySend(NotificationEvents.WORKLOAD_ISOLATION, subject, Microcopy.literal(detail));
     }
 
     /**

@@ -23,6 +23,7 @@ import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
@@ -43,6 +44,7 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.text.Slugs;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.security.SecureTokens;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
@@ -206,6 +208,13 @@ public final class PreviewDeployments {
             .where(PreviewDeploymentModel.REF.eq(ref))
             .where(PreviewDeploymentModel.DELETED_AT.isNull())
             .first();
+        if (preview != null) {
+            // A live preview minted under the legacy label keeps it (see legacyHostnameFor).
+            String legacy = legacyHostnameFor(str(site.get(SiteModel.SLUG)), ref, baseDomain);
+            if (legacy.equals(str(preview.get(PreviewDeploymentModel.HOSTNAME)))) {
+                hostname = legacy;
+            }
+        }
         if (preview == null) {
             // The quota hook charges the application's owner bucket on this save and refuses
             // over-cap creates atomically -- no separate count-then-create window.
@@ -278,7 +287,7 @@ public final class PreviewDeployments {
             if (port == null) {
                 throw Violations.ofForm(violation("preview_no_published_port"));
             }
-            ReleaseEngine.probe(port, healthPath(siteSettings));
+            ReleaseEngine.probe(port, ReleaseEngine.healthPathOf(siteSettings));
 
             // 4. Stamp running; route it.
             preview.set(PreviewDeploymentModel.STATUS, PreviewDeploymentModel.STATUS_RUNNING);
@@ -348,12 +357,23 @@ public final class PreviewDeployments {
      */
     public static void destroy(int previewId, @NonNull String reason) {
         PreviewDeploymentModel model = Models.get(PreviewDeploymentModel.class);
-        Row preview = model.findById(previewId);
-        if (preview == null || preview.get(PreviewDeploymentModel.DELETED_AT) != null) {
+        // Read ONLY to learn the lock key: (application, ref) never change on a row.
+        Row keyed = model.findById(previewId);
+        if (keyed == null || keyed.get(PreviewDeploymentModel.DELETED_AT) != null) {
             return;
         }
-        int applicationId = intOf(preview.get(PreviewDeploymentModel.APPLICATION_ID));
-        synchronized (lockFor(applicationId, str(preview.get(PreviewDeploymentModel.REF)))) {
+        int applicationId = intOf(keyed.get(PreviewDeploymentModel.APPLICATION_ID));
+        synchronized (lockFor(applicationId, str(keyed.get(PreviewDeploymentModel.REF)))) {
+            // AIDEV-NOTE: the row the teardown acts on is read UNDER the lock. It used to be
+            // the one read above, before the lock: a PR closed while its first build ran
+            // waited here holding a row with no instance_id, then -- once the build had
+            // created the container and re-armed the expiry -- destroyed nothing, deleted
+            // the expiry schedule and soft-deleted the row, orphaning a running container
+            // no reclaim would ever find.
+            Row preview = model.findById(previewId);
+            if (preview == null || preview.get(PreviewDeploymentModel.DELETED_AT) != null) {
+                return;
+            }
             try {
                 inScope(previewId, () -> {
                     Integer instanceId = preview.get(PreviewDeploymentModel.INSTANCE_ID);
@@ -463,6 +483,58 @@ public final class PreviewDeployments {
             expiresAt, PreviewExpireAction.ID, null, null);
     }
 
+    /**
+     * Boot backfill: move the plaintext environment an older controller copied into a
+     * preview instance's settings into that instance's SECRET variables, and strip it.
+     *
+     * AIDEV-NOTE: the counterpart of the deploy lane's detach (see {@link #converge}); the
+     * same boot reconcile shape StackServiceSecrets uses for stack services, and a boot
+     * reconcile rather than a migration for the same reason: {@code instances.settings} is a
+     * kind-discriminated field whose sub-schema lives in server code. Idempotent -- a sealed
+     * row carries no environment and is skipped -- and trashed rows are included, because
+     * their settings are credentials at rest too.
+     *
+     * @return how many preview instances were sealed in this pass
+     */
+    public static int sealPlaintextEnvironments() {
+        int sealed = 0;
+        for (Row instance : Models.get(InstanceModel.class).find()
+                .where(InstanceModel.GENERATED_FOR_MODEL.eq(
+                    PreviewDeploymentModel.MODEL_ID.toString()))
+                .all()) {
+            Map<String, Object> settings = new LinkedHashMap<>(
+                castMap(instance.get(InstanceModel.SETTINGS)));
+            Integer instanceId = instance.get(InstanceModel.ID);
+            Integer previewId = instance.get(InstanceModel.GENERATED_FOR_ID);
+            if (!settings.containsKey("environment_variables") || instanceId == null
+                    || previewId == null) {
+                continue;
+            }
+            try {
+                inScope(previewId, () -> {
+                    Map<String, String> environment = InstanceVariables.detachEnvironment(settings);
+                    new InstanceVariables().storeSecretEnvironment(instanceId, environment);
+                    // Re-read right before the whole-row save: a save writes every column.
+                    Row fresh = Models.get(InstanceModel.class).findById(instanceId);
+                    if (fresh != null) {
+                        fresh.set(InstanceModel.SETTINGS, settings);
+                        Models.get(InstanceModel.class).save(fresh);
+                    }
+                });
+                sealed++;
+            } catch (Exception failed) {
+                Blast.log("PREVIEW: could not move the plaintext environment of instance",
+                    instanceId, "into secret variables; retried at the next boot -",
+                    reasonOf(failed));
+            }
+        }
+        if (sealed > 0) {
+            Blast.log("PREVIEW: moved the plaintext environment of", sealed,
+                "preview instance(s) into encrypted secret variables");
+        }
+        return sealed;
+    }
+
     // -- routing support -------------------------------------------------------
 
     /** The proxy upstream of one preview, or null when it is not serving. */
@@ -549,9 +621,15 @@ public final class PreviewDeployments {
                 instance.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
                 instance.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_SERVING);
             }
-            instance.set(InstanceModel.SETTINGS, desired);
+            // The preview's environment is stored as SECRET variables of its instance,
+            // never as plaintext in instances.settings (a plain JSON column): the release
+            // lane's discipline, which the preview lane used to skip.
+            Map<String, Object> persisted = new LinkedHashMap<>(desired);
+            Map<String, String> environment = InstanceVariables.detachEnvironment(persisted);
+            instance.set(InstanceModel.SETTINGS, persisted);
             Models.get(InstanceModel.class).save(instance);
             int freshInstanceId = instance.get(InstanceModel.ID);
+            new InstanceVariables().storeSecretEnvironment(freshInstanceId, environment);
             preview.set(PreviewDeploymentModel.INSTANCE_ID, freshInstanceId);
             Models.get(PreviewDeploymentModel.class).save(preview);
 
@@ -695,7 +773,27 @@ public final class PreviewDeployments {
      */
     public static @NonNull String hostnameFor(@NonNull String siteSlug, @NonNull String ref,
                                               @NonNull String baseDomain) {
-        String label = labelOf(siteSlug) + "--" + labelOf(ref);
+        return composeHostname(labelOf(siteSlug) + "--" + labelOf(ref), baseDomain);
+    }
+
+    /**
+     * The hostname a preview row created before the shared slugifier was adopted derives:
+     * the same composition over the regex label, which does not fold diacritics.
+     *
+     * AIDEV-NOTE: kept ONLY so an existing preview keeps its hostname across a refresh
+     * ({@link #claimLocked}). The two derivations agree on every ASCII ref; they differ
+     * where a ref or slug carries a letter Slugs.slugify folds ("cafe" vs "caf"), and a
+     * refresh recomputing a different name would move a live preview's hostname, its
+     * generated domain row and its DNS rows under whoever is reviewing it.
+     */
+    static @NonNull String legacyHostnameFor(@NonNull String siteSlug, @NonNull String ref,
+                                             @NonNull String baseDomain) {
+        return composeHostname(legacyLabelOf(siteSlug) + "--" + legacyLabelOf(ref), baseDomain);
+    }
+
+    private static @NonNull String composeHostname(@NonNull String composed,
+                                                   @NonNull String baseDomain) {
+        String label = composed;
         if (label.length() > 63) {
             String digest = SecureTokens.sha256Hex(label).substring(0, 8);
             String prefix = label.substring(0, 63 - 1 - digest.length());
@@ -707,7 +805,14 @@ public final class PreviewDeployments {
         return label + "." + baseDomain.toLowerCase(Locale.ROOT);
     }
 
+    /** One DNS-safe label: THE shared slugifier, with a placeholder for an empty result. */
     private static @NonNull String labelOf(@NonNull String value) {
+        String label = Slugs.slugify(value);
+        return label.isEmpty() ? "x" : label;
+    }
+
+    /** The pre-Slugs label; see {@link #legacyHostnameFor}. */
+    private static @NonNull String legacyLabelOf(@NonNull String value) {
         String label = value.toLowerCase(Locale.ROOT)
             .replaceAll("[^a-z0-9]+", "-")
             .replaceAll("^-+|-+$", "");
@@ -720,12 +825,6 @@ public final class PreviewDeployments {
         long effective = minutes != null && minutes > 0 ? minutes : 1440;
         return Now.instant().plusSeconds(effective * 60);
     }
-
-    private static @NonNull String healthPath(@NonNull Map<String, Object> siteSettings) {
-        String path = str(siteSettings.get("health_path"));
-        return path.isEmpty() ? "/" : path;
-    }
-
 
     private static void reloadProxy() {
         ProxyServer proxy = ServerMain.getProxyServer();

@@ -200,7 +200,7 @@ class IncusDiskSignalLiveTest {
         AttentionCollector.instancesLowOnDisk(items);
         List<String> rendered = new ArrayList<>();
         for (AttentionItem item : items) {
-            rendered.add(item.severity() + " " + targetUrl(item));
+            rendered.add(item.severity().key() + " " + targetUrl(item));
         }
         return rendered;
     }

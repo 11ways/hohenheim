@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
@@ -116,7 +118,7 @@ public class InstanceVolumeResource extends RowResource {
 
     @Override
     public @Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of("instances",
+        return ResourceParent.<Row>of(HohenheimSlugs.INSTANCES,
             InstanceVolumeResource::instanceIdOf).tab(InstanceVolumesPage.SLUG);
     }
 
@@ -186,8 +188,8 @@ public class InstanceVolumeResource extends RowResource {
     @Override
     public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
         Map<String, Object> values = new LinkedHashMap<>(formSpec().defaultValues());
-        String instanceId = conduit.getQueryParam("instance_id");
-        if (instanceId != null && !instanceId.isEmpty()) {
+        Integer instanceId = CmsSupport.prefill(conduit, HohenheimParams.INSTANCE_ID_PREFILL);
+        if (instanceId != null) {
             values.put("instance_id", instanceId);
         }
         return Map.copyOf(values);
@@ -278,11 +280,8 @@ public class InstanceVolumeResource extends RowResource {
     }
 
     private static int parseId(@Nullable Object value) {
-        try {
-            return Integer.parseInt(String.valueOf(value));
-        } catch (NumberFormatException unparseable) {
-            return -1;
-        }
+        Integer parsed = CmsSupport.parsedInt(value);
+        return parsed != null ? parsed : -1;
     }
 
     /** The declared owner must exist, be live, and be of a kind that mounts volumes. */

@@ -2,12 +2,8 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimPaths;
-import be.elevenways.hohenheim.server.application.ApplicationDeploys;
-import be.elevenways.hohenheim.server.instance.DeployTrigger;
-import be.elevenways.protoblast.common.thread.JobRunner;
-import be.elevenways.zenit.common.orm.datasource.Datasource;
-import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.api.DnsZoneApi;
 import be.elevenways.hohenheim.server.api.HostApi;
 import be.elevenways.hohenheim.server.api.PaasApi;
@@ -19,9 +15,6 @@ import be.elevenways.hohenheim.server.instance.InstanceStatsHandler;
 import be.elevenways.hohenheim.server.instance.InstanceTemplateHandlers;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.protoblast.common.util.BlastString;
-import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
-import be.elevenways.zenit.common.conduit.ConduitAttributes;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.forms.server.path.FilesystemBrowserRegistry;
@@ -51,6 +44,7 @@ public final class HohenheimHandlers {
         CertificateHandlers.init();
         AccessRuleHandlers.init();
         DnsZoneHandlers.initZones();
+        GitProviderHandlers.init();
         DnsRecordApiHandlers.init();
         DnsPeerApiHandlers.init();
         DnsZoneHandlers.initRemoteRecords();
@@ -95,12 +89,11 @@ public final class HohenheimHandlers {
                     ? BlastString.lower(handler.getHealth().name()) : "unknown");
                 sites.add(entry);
             }
-            return HandlerSupport.jsonUntyped(Map.of("sites", sites));
+            return HandlerSupport.json(Map.of("sites", sites));
         });
 
         HohenheimEndpoints.API_SITES_DEPLOY.setHandler(conduit -> {
-            if (!(conduit.getAttribute(ConduitAttributes.PRINCIPAL) instanceof ApiKeyPrincipal)) {
-                conduit.forbidden();
+            if (ApiConduits.requireKey(conduit) == null) {
                 return null;
             }
             Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
@@ -110,10 +103,10 @@ public final class HohenheimHandlers {
                 conduit.notFound();
                 return null;
             }
-            Datasource datasource = Db.currentOrDefault();
-            JobRunner.startVirtualThread(() -> Db.run(datasource, () ->
-                ApplicationDeploys.deployQuietly(applicationId, null, DeployTrigger.API)));
-            return HandlerSupport.jsonUntyped(Map.of("status", "queued", "site", siteId));
+            // The legacy route keeps its answer shape; the gate and the hand-off are the
+            // v1 lane's own, so the two doors cannot drift apart on who may deploy.
+            return PaasApi.queueDeploy(conduit, applicationId,
+                Map.of("status", "queued", "site", siteId));
         });
     }
 
@@ -121,7 +114,7 @@ public final class HohenheimHandlers {
         // GET / is owned by zenit-cms's landing redirect (CmsPanels, installed by
         // HohenheimHostWiring): operators land on /admin, manage-only tenants on /manage.
         HohenheimEndpoints.HEALTH.setHandler(conduit ->
-            HandlerSupport.jsonUntyped(Map.of("status", "ok")));
+            HandlerSupport.json(Map.of("status", "ok")));
     }
 
     /**

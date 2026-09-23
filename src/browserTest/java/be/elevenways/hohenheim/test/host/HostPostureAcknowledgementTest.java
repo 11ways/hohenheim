@@ -189,7 +189,7 @@ class HostPostureAcknowledgementTest {
             Row activity = latestAcknowledgementActivity();
             assertThat(activity)
                 .as("step 4: the activity row is written BESIDE the columns, as history --"
-                    + " CleanOldActivity prunes at 90 days, so it can never be the"
+                    + " activity retention prunes at 90 days, so it can never be the"
                     + " authority a gate reads")
                 .isNotNull();
             assertThat(String.valueOf((Object) activity.get(ActivityModel.ACTOR)))

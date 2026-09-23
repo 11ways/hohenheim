@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -103,7 +105,7 @@ public class InstanceDeviceResource extends RowResource {
 
     @Override
     public @Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of("instances",
+        return ResourceParent.<Row>of(HohenheimSlugs.INSTANCES,
             InstanceDeviceResource::instanceIdOf).tab("devices");
     }
 
@@ -151,11 +153,11 @@ public class InstanceDeviceResource extends RowResource {
     @Override
     public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
         Map<String, Object> values = new LinkedHashMap<>(formSpec().defaultValues());
-        String instanceId = conduit.getQueryParam("instance_id");
-        if (instanceId != null && !instanceId.isEmpty()) {
+        Integer instanceId = CmsSupport.prefill(conduit, HohenheimParams.INSTANCE_ID_PREFILL);
+        if (instanceId != null) {
             values.put("instance_id", instanceId);
         }
-        String type = conduit.getQueryParam("type");
+        String type = CmsSupport.prefill(conduit, HohenheimParams.DEVICE_TYPE_PREFILL);
         if (InstanceDeviceModel.TYPE_DISK.equals(type)
                 || InstanceDeviceModel.TYPE_NIC.equals(type)
                 || InstanceDeviceModel.TYPE_CDROM.equals(type)) {
@@ -261,12 +263,8 @@ public class InstanceDeviceResource extends RowResource {
     }
 
     private static int requireInstance(@Nullable Object value) {
-        int instanceId;
-        try {
-            instanceId = Integer.parseInt(String.valueOf(value));
-        } catch (NumberFormatException unparseable) {
-            instanceId = -1;
-        }
+        Integer parsed = CmsSupport.parsedInt(value);
+        int instanceId = parsed != null ? parsed : -1;
         if (instanceId <= 0 || Models.get(InstanceModel.class).find()
                 .where(InstanceModel.ID.eq(instanceId))
                 .where(InstanceModel.DELETED_AT.isNull()).count() == 0) {
@@ -282,11 +280,8 @@ public class InstanceDeviceResource extends RowResource {
         if (size instanceof Number number) {
             return number.intValue();
         }
-        try {
-            return Integer.parseInt(String.valueOf(size));
-        } catch (NumberFormatException unparseable) {
-            // The model's own beforeValidate owns this refusal identity; 0 reaches it.
-            return 0;
-        }
+        // The model's own beforeValidate owns the refusal identity of a malformed size; 0 reaches it.
+        Integer parsed = CmsSupport.parsedInt(size);
+        return parsed != null ? parsed : 0;
     }
 }

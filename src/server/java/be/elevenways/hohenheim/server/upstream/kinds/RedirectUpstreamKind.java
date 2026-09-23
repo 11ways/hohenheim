@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.upstream.kinds;
 
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.server.proxy.RequestPath;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -40,10 +41,7 @@ public class RedirectUpstreamKind implements UpstreamKindHandler {
         BooleanField.builder("preserve_path").defaultValue(false)
             .label(HohenheimFormCopy.label("preserve_path")).help(HohenheimFormCopy.help("preserve_path")).build());
 
-    // Honored generically by SiteDispatcher's per-route delay scheduler.
-    public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("delay").suffix("ms").label(HohenheimFormCopy.label("delay"))
-            .help(HohenheimFormCopy.help("delay")).build());
+    public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(UpstreamSettings.delay());
 
     @Override
     public Identifier typeId() { return ID; }
@@ -115,7 +113,9 @@ public class RedirectUpstreamKind implements UpstreamKindHandler {
         return (exchange, forwarder) -> {
             String location = target;
             if (preservePath) {
-                String path = exchange.getRelativePath();
+                // The RAW path (strip_path already applied): the decoded one would turn an
+                // encoded %0a or %3F back into live syntax inside the Location header.
+                String path = RequestPath.rawPathOf(exchange);
                 String query = exchange.getQueryString();
                 location = target + path;
                 if (query != null && !query.isEmpty()) {

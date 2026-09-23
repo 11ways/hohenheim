@@ -2,9 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
-import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
@@ -16,9 +14,6 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
-import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -67,15 +62,7 @@ public final class ManageSiteResource extends SiteResource {
     /** Admins see every non-deleted site; everyone else only their granted ones. */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return ctx -> {
-            Criteria notDeleted = SiteModel.DELETED_AT.isNull();
-            Criteria scope = ManagePanel.siteScope(ctx);
-            if (scope == null) {
-                return AccessDecision.allow(QueryPredicate.of(notDeleted));
-            }
-            return AccessDecision.allow(QueryPredicate.of(
-                new CompositeCriteria(CompositeOperator.AND, notDeleted, scope)));
-        };
+        return TenantScopes.SITES.accessFunction();
     }
 
     @Override public boolean creatable() { return false; }
@@ -112,7 +99,7 @@ public final class ManageSiteResource extends SiteResource {
         // This override deliberately skips the admin normalizers. The enable
         // invariant is NOT one of them and is NOT re-checked here: a delegated tenant
         // flipping this checkbox goes live through model.save below, which the
-        // write-pipeline enable invariant (SiteResource.installEnableInvariant)
+        // write-pipeline enable invariant (SiteEnableInvariant.install)
         // funnels through exactly like every other writer.
         existing.set(SiteModel.NAME, name);
         existing.set(SiteModel.ENABLED,

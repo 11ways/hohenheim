@@ -110,6 +110,9 @@ public final class SystemUsers {
             result.add("-n");
             // ProcessBuilder has already reduced the environment to the explicit map below.
             // Preserving it carries secrets in envp, never in the inspectable argument vector.
+            // AIDEV-NOTE: --preserve-env needs a SETENV run-as grant for this uid and
+            // /usr/bin/prlimit; tools/install-host.sh writes it for the spamservice account
+            // (hohenheim-spamservice), and a missing one fails with sudo's own text.
             result.add("--preserve-env");
             result.add("-u");
             result.add("#" + runAs.uid());
@@ -169,6 +172,9 @@ public final class SystemUsers {
     }
 
     /**
+     * THE reading of "this controller runs as root", shared by the child-process lanes and
+     * {@code HostShell}'s local elevation check.
+     *
      * @return true when the Hohenheim daemon itself runs as root, so children of sites
      *         without a configured system user would inherit root
      */

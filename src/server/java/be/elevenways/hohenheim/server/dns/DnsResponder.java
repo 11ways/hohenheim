@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.dns;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.xbill.DNS.CNAMERecord;
+import org.xbill.DNS.DClass;
 import org.xbill.DNS.ExtendedFlags;
 import org.xbill.DNS.Flags;
 import org.xbill.DNS.Header;
@@ -71,35 +72,56 @@ public final class DnsResponder {
         return response.toWire(maxLength);
     }
 
+    /**
+     * A computed response plus the owner name its answer was drawn from.
+     *
+     * @param response the response message
+     * @param source   the node the answer came from: the qname itself, or the WILDCARD owner
+     *                 when the answer was synthesized; null when no node answered (errors,
+     *                 referrals, NXDOMAIN)
+     */
+    public record Answer(@NonNull Message response, @Nullable Name source) {
+    }
+
     /** @return the response message, or null when the query must be dropped */
     public @Nullable Message respond(@NonNull Message query) {
+        Answer answer = this.answer(query);
+        return answer != null ? answer.response() : null;
+    }
+
+    /**
+     * The response together with its answer's source owner, for the rate limiter's bucket.
+     *
+     * @return the answer, or null when the query must be dropped
+     */
+    public @Nullable Answer answer(@NonNull Message query) {
         Header header = query.getHeader();
         if (header.getFlag(Flags.QR)) {
             return null;
         }
 
         if (header.getOpcode() != Opcode.QUERY) {
-            return errorResponse(query, Rcode.NOTIMP);
+            return new Answer(errorResponse(query, Rcode.NOTIMP), null);
         }
 
         Record question = query.getQuestion();
         if (question == null) {
-            return errorResponse(query, Rcode.FORMERR);
+            return new Answer(errorResponse(query, Rcode.FORMERR), null);
         }
 
-        if (question.getDClass() != org.xbill.DNS.DClass.IN) {
-            return errorResponse(query, Rcode.REFUSED);
+        if (question.getDClass() != DClass.IN) {
+            return new Answer(errorResponse(query, Rcode.REFUSED), null);
         }
 
         int qtype = question.getType();
         if (qtype == Type.AXFR || qtype == Type.IXFR) {
-            return errorResponse(query, Rcode.REFUSED);
+            return new Answer(errorResponse(query, Rcode.REFUSED), null);
         }
 
         Name qname = question.getName();
         DnsZoneSnapshot zone = this.store.findZoneFor(qname);
         if (zone == null) {
-            return errorResponse(query, Rcode.REFUSED);
+            return new Answer(errorResponse(query, Rcode.REFUSED), null);
         }
 
         Message response = baseResponse(query);
@@ -113,18 +135,25 @@ public final class DnsResponder {
                 response.getHeader().setFlag(Flags.AA);
                 answerDelegationDs(response, zone, delegation, sign);
                 finishEdns(query, response);
-                return response;
+                return new Answer(response, delegation);
             }
             addReferral(response, zone, delegation, sign);
             finishEdns(query, response);
-            return response;
+            return new Answer(response, null);
         }
 
         response.getHeader().setFlag(Flags.AA);
         resolve(zone, qname, qtype, response, 0, new HashSet<>(), sign);
         addAdditionalData(response, zone);
         finishEdns(query, response);
-        return response;
+        Name source = zone.getNode(qname) != null ? qname : wildcardOwnerFor(zone, qname);
+        return new Answer(response, source);
+    }
+
+    /** @return the wildcard node that answers a name with no node of its own, or null */
+    private static @Nullable Name wildcardOwnerFor(@NonNull DnsZoneSnapshot zone, @NonNull Name qname) {
+        Name wildcardName = wildcardName(zone.closestEncloser(qname));
+        return wildcardName != null && zone.getNode(wildcardName) != null ? wildcardName : null;
     }
 
     private void resolve(@NonNull DnsZoneSnapshot zone,
@@ -142,15 +171,14 @@ public final class DnsResponder {
         Map<Integer, List<Record>> node = zone.getNode(qname);
 
         if (node == null) {
-            Name closestEncloser = zone.closestEncloser(qname);
-            Name wildcardName = wildcardName(closestEncloser);
-            Map<Integer, List<Record>> wildcard = wildcardName != null ? zone.getNode(wildcardName) : null;
-            if (wildcard == null) {
+            Name wildcardName = wildcardOwnerFor(zone, qname);
+            if (wildcardName == null) {
                 response.getHeader().setRcode(Rcode.NXDOMAIN);
                 addNxDomainProof(response, zone, qname, sign);
                 return;
             }
-            answerFromWildcard(zone, wildcard, wildcardName, qname, qtype, response, depth, visited, sign);
+            answerFromWildcard(zone, zone.getNode(wildcardName), wildcardName, qname, qtype,
+                response, depth, visited, sign);
             return;
         }
 

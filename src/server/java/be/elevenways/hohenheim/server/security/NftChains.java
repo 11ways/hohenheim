@@ -6,6 +6,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
 /**
@@ -32,6 +34,27 @@ import java.util.function.Supplier;
  */
 final class NftChains {
 
+    /**
+     * One lock per (kernel, table), shared by EVERY NftChains instance.
+     *
+     * AIDEV-NOTE: this is what makes {@link #removeTableIfEmpty} safe against a concurrent
+     * deploy. It lists the table, finds it empty and deletes it -- and a {@code delete table}
+     * takes whatever is in the table at that moment with it, so an apply that landed between
+     * the list and the delete lost its freshly verified chains and the workload ran
+     * unisolated until the next verifier sweep. nft has no conditional delete, so every
+     * mutation of one table (apply, chain removal, table removal) runs under this lock.
+     * Static and keyed by {@link NftRunner#kernel()}, because appliers are built per call
+     * ({@code WorkloadNetworkPolicy.forServer}) and two instances aimed at one host must still
+     * exclude each other. It serializes this JVM only; two controllers never share a table.
+     */
+    private static final ConcurrentHashMap<String, ReentrantLock> TABLE_LOCKS =
+        new ConcurrentHashMap<>();
+
+    /** One mutation of the table, run under its lock. */
+    interface TableMutation<T> {
+        T run() throws IOException;
+    }
+
     private final @NonNull NftRunner runner;
     private final @NonNull Supplier<String> table;
 
@@ -47,6 +70,21 @@ final class NftChains {
     NftChains(@NonNull NftRunner runner, @NonNull Supplier<String> table) {
         this.runner = runner;
         this.table = table;
+    }
+
+    /**
+     * Run one mutation of this table while no other mutation of the same table on the same
+     * kernel can interleave with it; reentrant, so a mutation may nest the ones below.
+     */
+    <T> T exclusively(@NonNull TableMutation<T> mutation) throws IOException {
+        ReentrantLock lock = TABLE_LOCKS.computeIfAbsent(
+            this.runner.kernel() + ' ' + this.table.get(), ignored -> new ReentrantLock());
+        lock.lock();
+        try {
+            return mutation.run();
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**
@@ -126,6 +164,13 @@ final class NftChains {
      * @throws IOException when nft refuses, or the chain survives the delete
      */
     void remove(@NonNull String chain) throws IOException {
+        exclusively(() -> {
+            removeLocked(chain);
+            return null;
+        });
+    }
+
+    private void removeLocked(@NonNull String chain) throws IOException {
         if (!exists(chain)) {
             return;
         }
@@ -166,6 +211,13 @@ final class NftChains {
      * @throws IOException when nft refuses the delete, or the table survives it
      */
     void removeTableIfEmpty() throws IOException {
+        exclusively(() -> {
+            removeTableIfEmptyLocked();
+            return null;
+        });
+    }
+
+    private void removeTableIfEmptyLocked() throws IOException {
 
         String table = this.table.get();
         NftRunner.Result listed = this.runner.run(

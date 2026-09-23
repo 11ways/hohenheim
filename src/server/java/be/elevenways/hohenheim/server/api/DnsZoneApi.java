@@ -47,7 +47,7 @@ public final class DnsZoneApi {
 
     public static void init() {
         HohenheimEndpoints.API_V1_DNS_ZONES.setHandler(conduit -> {
-            AccessContext ctx = SiteApi.requireAdminKey(conduit);
+            AccessContext ctx = ApiConduits.requireAdminKey(conduit);
             if (ctx == null) {
                 return null;
             }
@@ -60,7 +60,7 @@ public final class DnsZoneApi {
         });
 
         HohenheimEndpoints.API_V1_DNS_ZONE_CREATE.setHandler(conduit -> {
-            AccessContext ctx = SiteApi.requireAdminKey(conduit);
+            AccessContext ctx = ApiConduits.requireAdminKey(conduit);
             if (ctx == null) {
                 return null;
             }
@@ -81,7 +81,7 @@ public final class DnsZoneApi {
         });
 
         HohenheimEndpoints.API_V1_DNS_ZONE_IMPORT.setHandler(conduit -> {
-            AccessContext ctx = SiteApi.requireAdminKey(conduit);
+            AccessContext ctx = ApiConduits.requireAdminKey(conduit);
             if (ctx == null) {
                 return null;
             }

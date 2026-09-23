@@ -10,6 +10,10 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+
 /** Live server-name registry used by type-specific placement fields. */
 public final class ServerOptions {
 
@@ -17,6 +21,9 @@ public final class ServerOptions {
         new Registry.Simple<>(Identifier.of("hohenheim", "servers"));
 
     private static volatile boolean populated = false;
+
+    /** The ids the last refresh published: the only entries a refresh may prune. */
+    private static Set<Identifier> published = Set.of();
 
     private ServerOptions() {}
 
@@ -29,7 +36,7 @@ public final class ServerOptions {
     // getSchema() of a type-switched sub-form INSERTED the local host row mid-render. The
     // row is seeded at boot now (LocalServerSeeder); refreshing the registry only reads.
     public static synchronized void refresh() {
-        var entries = new java.util.LinkedHashMap<Identifier, TypeDefinition>();
+        Map<Identifier, TypeDefinition> entries = new LinkedHashMap<>();
         for (Row row : Models.get(ServerModel.class).find().all()) {
             String name = row.get(ServerModel.NAME);
             if (name != null && !name.isBlank()) {
@@ -39,8 +46,17 @@ public final class ServerOptions {
                     new ServerEntry(name, row.get(ServerModel.MODE)));
             }
         }
-        REGISTRY.clear();
+        // AIDEV-NOTE: overwrite, then prune; never clear first. A clear-then-refill left a
+        // window in which a concurrent form render read an EMPTY registry and offered no
+        // host at all. Readers now see either the old or the new entry for every live host,
+        // and a removed host disappears only once every current one is in place.
         entries.forEach(REGISTRY::add);
+        for (Identifier previous : published) {
+            if (!entries.containsKey(previous)) {
+                REGISTRY.remove(previous);
+            }
+        }
+        published = Set.copyOf(entries.keySet());
         populated = true;
     }
 

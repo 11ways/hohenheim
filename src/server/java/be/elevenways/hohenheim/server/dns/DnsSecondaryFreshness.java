@@ -70,14 +70,8 @@ public final class DnsSecondaryFreshness {
             return outcomes;
         }
         long ourSerial = valueOr(zone.get(DnsZoneModel.SERIAL), 0);
-        DnsPeerModel peerModel = Models.get(DnsPeerModel.class);
-        for (Row link : Models.get(DnsZonePeerModel.class).findByZoneId(zoneId)) {
-            Integer peerId = link.get(DnsZonePeerModel.PEER_ID);
-            Row peer = peerId != null ? peerModel.findById(peerId) : null;
-            if (peer == null || !Boolean.TRUE.equals(peer.get(DnsPeerModel.ENABLED))) {
-                continue;
-            }
-            outcomes.add(probeLink(originString, origin, ourSerial, link, peer));
+        for (DnsZonePeers.Linked linked : DnsZonePeers.enabled(zoneId)) {
+            outcomes.add(probeLink(originString, origin, ourSerial, linked.link(), linked.peer()));
         }
         return outcomes;
     }

@@ -37,6 +37,7 @@
             "StackInstancesTest",
             "StackNetworkIsolationTest",
             "StackRuntimeFlowTest",
+            "StreamingBackupTest",
             "VerifyWorkloadIsolationTest",
             "WorkloadNetworkPolicyTest"
         ]

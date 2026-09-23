@@ -7,9 +7,7 @@ import be.elevenways.hohenheim.server.database.TenantDatabases;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
-import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
@@ -19,7 +17,6 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.ui.Icon;
@@ -104,11 +101,7 @@ public final class ManageDatabaseResource extends DatabaseResource {
      */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return ctx -> {
-            Criteria scope = HohenheimAccess.databaseScope(ctx, HohenheimAccess.VIEW);
-            return scope == null ? AccessDecision.allowAll()
-                : AccessDecision.allow(QueryPredicate.of(scope));
-        };
+        return TenantScopes.DATABASES.accessFunction();
     }
 
     /**

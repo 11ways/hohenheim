@@ -101,6 +101,17 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         domainModel.save(foreignDomain);
         foreignDomainId = foreignDomain.get(SiteDomainModel.ID);
 
+        // The operator's DELEGATION of a namespace inside its own zone to the tenant: a
+        // leading-wildcard row on the tenant's site. Without one a tenant may not claim a
+        // new name under a hosted zone at all (HostnameAuthority.mayClaim), which is what
+        // every NEW binding in the journeys below relies on.
+        Row delegation = domainModel.createEmptyRow();
+        delegation.set(SiteDomainModel.SITE_ID, ownSiteId);
+        delegation.set(SiteDomainModel.HOSTNAME, "*.t.tenantscope.test");
+        delegation.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_WILDCARD);
+        delegation.set(SiteDomainModel.FORCE_SSL, false);
+        domainModel.save(delegation);
+
         var certModel = Models.get(CertificateModel.class);
         Row cert = certModel.createEmptyRow();
         cert.set(CertificateModel.NICE_NAME, "Foreign tenant certificate");
@@ -262,9 +273,9 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
 
         // 2. The legitimate path: bind a new hostname to the managed site.
         assertThat(tenantPost("/manage/domains/new",
-            "site_id=" + ownSiteId + "&hostname=new.tenantscope.test&force_ssl=true").statusCode())
+            "site_id=" + ownSiteId + "&hostname=new.t.tenantscope.test&force_ssl=true").statusCode())
             .as("a tenant may bind a hostname to a site it manages").isIn(302, 303);
-        Row bound = domainByHostname("new.tenantscope.test");
+        Row bound = domainByHostname("new.t.tenantscope.test");
         assertThat(bound).as("the bound hostname persisted").isNotNull();
         assertThat((Integer) bound.get(SiteDomainModel.SITE_ID)).isEqualTo(ownSiteId);
         assertThat((String) bound.get(SiteDomainModel.MATCH_TYPE))
@@ -276,10 +287,10 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
 
         // 3. Editing its own row works and keeps the frozen columns untouched.
         assertThat(tenantPost("/manage/domains/" + bound.get(SiteDomainModel.ID),
-            "site_id=" + ownSiteId + "&hostname=renamed.tenantscope.test&force_ssl=true")
+            "site_id=" + ownSiteId + "&hostname=renamed.t.tenantscope.test&force_ssl=true")
             .statusCode()).as("a tenant may edit its own binding").isIn(302, 303);
         Row renamed = Models.get(SiteDomainModel.class).findById(bound.get(SiteDomainModel.ID));
-        assertThat((String) renamed.get(SiteDomainModel.HOSTNAME)).isEqualTo("renamed.tenantscope.test");
+        assertThat((String) renamed.get(SiteDomainModel.HOSTNAME)).isEqualTo("renamed.t.tenantscope.test");
 
         // 4. And unbinding it works, while another tenant's row cannot even be reached.
         assertThat(tenantPost("/manage/domains/" + foreignDomainId + "/delete", "").statusCode())
@@ -289,7 +300,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         assertThat(tenantPost("/manage/domains/" + renamed.get(SiteDomainModel.ID) + "/delete",
             confirmed(""))
             .statusCode()).as("a tenant may unbind its own hostname").isIn(302, 303);
-        assertThat(domainByHostname("renamed.tenantscope.test"))
+        assertThat(domainByHostname("renamed.t.tenantscope.test"))
             .as("the unbound row is gone").isNull();
     }
 
@@ -337,11 +348,11 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
     void aForgedSubmitCannotSetFrozenColumnsOrClaimAnotherTenantsSite() throws Exception {
         // 1. Every frozen column at once, in one direct POST that never renders a form.
         assertThat(tenantPost("/manage/domains/new",
-            "site_id=" + ownSiteId + "&hostname=forged.tenantscope.test"
+            "site_id=" + ownSiteId + "&hostname=forged.t.tenantscope.test"
                 + "&match_type=wildcard&listen_on=127.0.0.1&path=/carve"
                 + "&strip_path=true&certificate_id=" + foreignCertificateId).statusCode())
             .isIn(302, 303, 422);
-        Row forged = domainByHostname("forged.tenantscope.test");
+        Row forged = domainByHostname("forged.t.tenantscope.test");
         assertThat(forged).as("the delegated columns still applied").isNotNull();
         assertThat((String) forged.get(SiteDomainModel.MATCH_TYPE))
             .as("a tenant wildcard would claim an unbounded hostname set")
@@ -365,7 +376,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
 
         // 3. Neither can it MOVE one of its own rows onto another tenant's site.
         assertThat(tenantPost("/manage/domains/" + forged.get(SiteDomainModel.ID),
-            "site_id=" + foreignSiteId + "&hostname=forged.tenantscope.test").statusCode())
+            "site_id=" + foreignSiteId + "&hostname=forged.t.tenantscope.test").statusCode())
             .isIn(200, 302, 303, 404, 422);
         assertThat((Integer) Models.get(SiteDomainModel.class)
             .findById(forged.get(SiteDomainModel.ID)).get(SiteDomainModel.SITE_ID))
@@ -789,12 +800,8 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
     @Test
     @Order(8)
     void theDomainScopeStaysWithinTheManagedSiteQueryBudget() throws Exception {
-        java.util.concurrent.atomic.AtomicInteger finds = new java.util.concurrent.atomic.AtomicInteger();
-        be.elevenways.zenit.auth.model.RecordGrantModel.SCHEMA
-            .addBeforeFindHook(ignored -> finds.incrementAndGet());
-
-        finds.set(0);
-        assertThat(tenantGet("/manage/domains").statusCode()).isEqualTo(200);
+        RecordGrantFinds.Result finds = RecordGrantFinds.during(() ->
+            assertThat(tenantGet("/manage/domains").statusCode()).isEqualTo(200));
         // AIDEV-NOTE: the cap moved 6 -> 12 when /manage grew the instance projection
         // (2026-08-04): the panel asks about six distinct capability sets per render
         // now, not three. Each is still enumerated ONCE per request; the number this
@@ -810,9 +817,22 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         // carry a manage grant surface now, so a render enumerates a SEVENTH distinct
         // set (access_list#manage) for the /manage access-list peer. Still ONE
         // enumeration per distinct set per request.
-        assertThat(finds.get())
+        System.out.println("record-grant finds during one scoped /manage/domains render:" + finds.describe());
+        assertThat(finds.repeats())
+            .as("no grant query runs twice in one render (the per-request memo), by caller:%s",
+                finds.describe())
+            .isEmpty();
+        // AIDEV-NOTE (2026-09-23): the MEMO PROPERTY is asserted directly above now, not only
+        // inferred from the total: no grant query may run twice in one request. The "7 distinct
+        // sets" in the older notes had gone stale -- a render now enumerates twelve distinct
+        // (model, capability) sets once each plus one walk confirmation, 13 in all, which still
+        // fits the cap. The count had reached 16 because HostnameAuthority.canManage asked the
+        // UN-memoized per-record walk once per rendered row (three identical site#manage reads);
+        // it answers off the request memo (reachesRecord) since. The per-set list is printed to
+        // the test's stdout on every run.
+        assertThat(finds.count())
             .as("record-grant finds during one scoped /manage/domains render "
-                + "(7 distinct capability sets + walk confirmations)")
+                + "(12 distinct capability sets + confirmations), by caller:%s", finds.describe())
             .isBetween(1, 15);
     }
 

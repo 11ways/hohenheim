@@ -151,10 +151,13 @@ class ApplicationBackupRecoveryTest {
                     ApplicationReleases.inScopeUnchecked(appId, () -> new InstanceService().deploy(servingId));
                     Row backup = Models.get(InstanceBackupModel.class).findById(backupId);
                     Path sourcePath = ArtifactDeploys.acceptedArtifact(appId);
-                    ApplicationReleases.destroyFor(appId);
+                    // The application is DESTROYED the way production destroys one: its
+                    // releases go and the record is trashed, never hard-deleted -- a trashed
+                    // row is what its backups, variables and artifact rows keep referencing
+                    // under the enforced foreign keys.
+                    new InstanceService().destroy(appId);
                     Files.deleteIfExists(sourcePath);
                     Files.delete(jar);
-                    Models.get(InstanceModel.class).delete(appId);
                     transport.hasImage = false;
                     InstanceBackups.Restored restored = backups.restoreToNew(backup, target,
                         "recovered-upload-app", ServerModel.localServerId());
@@ -273,6 +276,11 @@ class ApplicationBackupRecoveryTest {
         }
         public DockerStreamConnection openStream(byte[] request, long timeout) throws IOException {
             String text = new String(request, StandardCharsets.ISO_8859_1);
+            if (text.startsWith("POST /images/load?")) {
+                // The load lane STREAMS its tar as a chunked body (it used to be buffered
+                // into one roundTrip): the answer is only available once the body ends.
+                return new LoadConnection();
+            }
             if (!text.startsWith("GET /images/") || !text.contains("/get HTTP/") || !hasImage) {
                 throw new IOException("no exportable image");
             }
@@ -287,6 +295,85 @@ class ApplicationBackupRecoveryTest {
                 public String diagnostics() { return ""; }
             };
         }
+        /** Collects a chunked image-load body, verifies it, then answers like the daemon. */
+        private final class LoadConnection implements DockerStreamConnection {
+            private final java.io.ByteArrayOutputStream written = new java.io.ByteArrayOutputStream();
+            private ByteArrayInputStream answer;
+            private boolean closed;
+
+            public synchronized int read(byte[] buffer, int offset, int length) throws IOException {
+                while (answer == null && !closed) {
+                    try {
+                        wait();
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw new IOException("interrupted");
+                    }
+                }
+                if (answer == null) {
+                    throw new IOException("closed before the load body ended");
+                }
+                return answer.read(buffer, offset, length);
+            }
+
+            public synchronized void write(byte[] data) throws IOException {
+                written.writeBytes(data);
+                byte[] body = dechunked(written.toByteArray());
+                if (body == null) {
+                    return;
+                }
+                loaded = body;
+                if (!java.util.Arrays.equals(loaded, IMAGE_BYTES)) {
+                    closed = true;
+                    notifyAll();
+                    throw new IOException("wrong imported image bytes");
+                }
+                hasImage = true;
+                answer = new ByteArrayInputStream(response(200, "{}"));
+                notifyAll();
+            }
+
+            public synchronized void close() {
+                closed = true;
+                notifyAll();
+            }
+
+            public synchronized boolean isReleased() { return closed; }
+            public String diagnostics() { return ""; }
+        }
+
+        /** The body of a COMPLETE chunked stream, or null while the zero chunk is missing. */
+        private static byte[] dechunked(byte[] raw) {
+            java.io.ByteArrayOutputStream body = new java.io.ByteArrayOutputStream();
+            int position = 0;
+            while (true) {
+                int lineEnd = indexOfCrlf(raw, position);
+                if (lineEnd < 0) {
+                    return null;
+                }
+                int size = Integer.parseInt(new String(raw, position, lineEnd - position,
+                    StandardCharsets.ISO_8859_1).trim(), 16);
+                int start = lineEnd + 2;
+                if (size == 0) {
+                    return raw.length >= start + 2 ? body.toByteArray() : null;
+                }
+                if (raw.length < start + size + 2) {
+                    return null;
+                }
+                body.write(raw, start, size);
+                position = start + size + 2;
+            }
+        }
+
+        private static int indexOfCrlf(byte[] raw, int from) {
+            for (int i = from; i + 1 < raw.length; i++) {
+                if (raw[i] == '\r' && raw[i + 1] == '\n') {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
         private static byte[] response(int status, String body) {
             byte[] payload = body.getBytes(StandardCharsets.UTF_8);
             byte[] header = ("HTTP/1.1 " + status + " OK\r\nContent-Length: " + payload.length

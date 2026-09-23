@@ -134,7 +134,12 @@ public final class InstanceShell {
         /** No keystroke for {@link #IDLE_TIMEOUT_MS}. */
         IDLE,
         /** The capability was revoked while the session was live. */
-        REVOKED
+        REVOKED,
+        /**
+         * The workload behind the session was stopped, replaced by a redeploy, migrated or
+         * destroyed: the shell's process lived in a container that no longer runs.
+         */
+        WORKLOAD_ENDED
     }
 
     /** One live shell as its consumer sees it; every method is safe after close. */
@@ -269,7 +274,10 @@ public final class InstanceShell {
         return session;
     }
 
-    /** Close every live session of one instance (a stop, a redeploy, a destroy). */
+    /**
+     * Close every live session of one instance; InstanceService's stop, redeploy and
+     * destroy and the migration window call it before the container goes away.
+     */
     public static void closeSessionsOf(int instanceId, @NonNull EndReason reason) {
         List<Session> sessions = LIVE.remove(instanceId);
         if (sessions == null) {

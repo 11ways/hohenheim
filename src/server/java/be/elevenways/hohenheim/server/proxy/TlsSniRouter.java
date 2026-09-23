@@ -37,7 +37,8 @@ final class TlsSniRouter implements ConnectionRouter {
         TlsPassthroughTarget passthrough = decision.target();
         if (passthrough != null) {
             return new Decision(BackendChoice.external(passthrough.host(), passthrough.port(),
-                passthrough.proxyProtocolV2(), passthrough.connectTimeoutMillis()), hello.replayBytes());
+                passthrough.proxyProtocolV2(), passthrough.connectTimeoutMillis(),
+                passthrough.publicOnly()), hello.replayBytes());
         }
         if (decision.action() == TlsPassthroughRoutes.Action.REJECT) {
             return Decision.reject();

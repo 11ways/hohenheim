@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The Incus half of host preflight, stored through the SAME funnel as the Docker
@@ -67,6 +68,14 @@ public final class IncusPreflight {
         List.of(KERNEL_LANE_CHECK, USERNS_CHECK, SECCOMP_CHECK);
 
     /**
+     * Every check name the Incus battery can ever store; the Incus twin of
+     * {@link HostPreflight#DOCKER_BATTERY}, and a full run drops any stored entry outside it.
+     */
+    public static final Set<String> BATTERY = Set.of("daemon", "resources", "trusted",
+        "driver_lxc", "storage_pool", "managed_network", "network_acl",
+        KERNEL_LANE_CHECK, USERNS_CHECK, SECCOMP_CHECK, "lsm");
+
+    /**
      * Whether {@code checkName}'s required-ness on this host is decided by the posture
      * rather than by the flag frozen into the stored report.
      *
@@ -112,7 +121,7 @@ public final class IncusPreflight {
                 Map.of(), false, Now.instant(), outcome);
         }
         report = withKernelLaneCheck(server, report);
-        HostPreflight.store(String.valueOf((Object) server.get(ServerModel.NAME)), report);
+        HostPreflight.store(String.valueOf((Object) server.get(ServerModel.NAME)), report, BATTERY);
         return report;
     }
 

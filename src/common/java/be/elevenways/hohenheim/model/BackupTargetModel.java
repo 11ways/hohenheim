@@ -62,30 +62,26 @@ public class BackupTargetModel extends Model {
     }
 
     /**
-     * Refuse deleting a target that backup rows still point at, that a live instance
-     * declares as its destination, or that the control-plane backup setting names.
+     * Refuse deleting a target that backup rows still point at, that an instance (live or
+     * trashed) declares as its destination, or that the control-plane backup setting names.
      *
-     * AIDEV-NOTE: FAILED backup rows do NOT count. They are evidence rows whose error
+     * AIDEV-NOTE: FAILED backup rows do NOT block. They are evidence rows whose error
      * text already carries the possibly-surviving key; counting them would make a target
      * with only junk rows undeletable for nothing. UPLOADING and COMPLETE rows do count
-     * -- those are (or are becoming) restorable artifacts.
+     * -- those are (or are becoming) restorable artifacts. Since foreign keys are enforced
+     * (below), a FAILED row cannot keep pointing at a deleted target either, so once the
+     * refusal passed they are DETACHED (target_id cleared, the row and its error text kept).
      *
-     * AIDEV-NOTE: THIS HOOK IS THE ENFORCEMENT, and it has a KNOWN RACE. It is
-     * SELECT-count-then-DELETE, so a backup that starts between the count and the delete
-     * slips past it -- an inherent window no ordering of these two statements removes.
-     *
-     * The obvious answer, "the foreign key is the real guard", is NOT true here today, and
-     * writing it down as if it were would be worse than the race. {@code InitialMigration}
-     * does declare {@code instance_backups.target_id} and {@code instances.backup_target_id}
-     * as action-less references to {@code backup_targets(id)} -- but SQLite enforces
-     * foreign keys PER CONNECTION via {@code ?foreign_keys=on}, and hohenheim's control-plane
-     * URL (HohenheimDatabase.openDatasource) does not set it, so the constraint is
-     * documentation at runtime. This is the same finding ServerModel's
-     * refuseRemovalWhileOwned note records for the M051 host FKs; the two share one open
-     * decision (turn enforcement on control-plane-wide, which touches every delete path in
-     * the app), and this hook must not be weakened on the assumption that it was taken.
-     * MigrationIntegrityTest proves the DECLARATION is real and enforceable by switching the
-     * pragma on for its own connection.
+     * AIDEV-NOTE: the foreign keys are ENFORCED since 2026-09-23: zenit opens SQLite with
+     * foreign_keys=on (zenit 8a86d3c2) and hohenheim keeps it on (HohenheimDatabase).
+     * {@code instance_backups.target_id} and {@code instances.backup_target_id} reference
+     * {@code backup_targets(id)} with no delete action, so the DELETE itself now refuses a
+     * target anything still points at -- as a raw "FOREIGN KEY constraint failed". This hook
+     * stays THE readable refusal (it names the target and counts what holds it, at the point
+     * of decision) and counts every row the constraint would count, trashed instances
+     * included, so the raw error is never what an operator sees. The count-then-delete race
+     * this note used to describe is closed by the constraint: a backup that starts between
+     * the count and the delete makes the delete fail instead of orphaning the backup.
      *
      * Row locking is deliberately not used to close the window either: this hook runs on
      * delete paths with no ambient transaction to hold locks in, and on SQLite
@@ -137,13 +133,23 @@ public class BackupTargetModel extends Model {
                 .where(InstanceModel.BACKUP_TARGET_ID.eq(targetId))
                 .where(InstanceModel.DELETED_AT.isNull())
                 .count();
-            if (backups > 0 || instances > 0) {
+            long trashed = Models.get(InstanceModel.class).find()
+                .where(InstanceModel.BACKUP_TARGET_ID.eq(targetId))
+                .where(InstanceModel.DELETED_AT.isNotNull())
+                .count();
+            if (backups > 0 || instances > 0 || trashed > 0) {
                 throw Violations.ofForm(Microcopy.of("backup_target_in_use")
                     .withFilter("scope", "violations")
                     .withArg("name", name)
                     .withArg("backups", backups)
-                    .withArg("instances", instances));
+                    .withArg("instances", instances)
+                    .withArg("trashed", trashed));
             }
+            Models.get(InstanceBackupModel.class).find()
+                .where(InstanceBackupModel.TARGET_ID.eq(targetId))
+                .where(InstanceBackupModel.STATUS.eq(InstanceBackupModel.STATUS_FAILED))
+                .assign(InstanceBackupModel.TARGET_ID, null)
+                .updateAll();
         }
     }
 

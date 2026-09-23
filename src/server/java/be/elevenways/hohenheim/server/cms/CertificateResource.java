@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimFormCopy;
@@ -38,8 +40,6 @@ import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
-import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
 import be.elevenways.zenit.common.routing.RouteScope;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
@@ -175,7 +175,7 @@ public class CertificateResource extends RowResource {
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "certificate"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "certificate"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "certificate"); }
-    @Override public @NonNull String slug() { return "certificates"; }
+    @Override public @NonNull String slug() { return HohenheimSlugs.CERTIFICATES; }
     @Override public @NonNull Model model() { return Models.get(CertificateModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
@@ -310,9 +310,7 @@ public class CertificateResource extends RowResource {
     /** Scope out the internal ACME account row everywhere. */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return ctx -> AccessDecision.allow(QueryPredicate.of(new CompositeCriteria(CompositeOperator.OR,
-            CertificateModel.PROVIDER.isNull(),
-            CertificateModel.PROVIDER.ne(CertificateModel.PROVIDER_ACME_ACCOUNT))));
+        return ctx -> AccessDecision.allow(QueryPredicate.of(HohenheimSources.notTheAcmeAccountRow()));
     }
 
     @Override
@@ -390,7 +388,7 @@ public class CertificateResource extends RowResource {
         actions.add(RowAction.Url.<Row>builder(Identifier.of("hohenheim", "reissue_certificate"))
             .label(Microcopy.of("reissue").withFilter("scope", "certificate"))
             .icon(Icon.of("rotate"))
-            .url(row -> new Uri(CmsRoutes.list("admin", "certificates-request")
+            .url(row -> new Uri(CmsRoutes.list(HohenheimSlugs.ADMIN, HohenheimSlugs.CERTIFICATES_REQUEST)
                 .with(HohenheimParams.CERTIFICATE_REISSUE, row.get(CertificateModel.ID)).toUrl()))
             // A manual upload has no order to repeat, and the ACME account row is not a
             // certificate at all. The page and the handler refuse them again -- this only

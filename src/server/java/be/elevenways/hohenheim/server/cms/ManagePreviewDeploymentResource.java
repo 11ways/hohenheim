@@ -3,15 +3,14 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
-import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -37,15 +36,10 @@ public final class ManagePreviewDeploymentResource extends PreviewDeploymentReso
     // Deploy section unique (AdminNavigationJourneyTest step 7).
     @Override public int navOrder() { return 25; }
 
-    /** Admins see everything; everyone else only previews of their granted applications. */
+    /** Admins see every live preview; everyone else only previews of their granted applications. */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return ctx -> {
-            Criteria scope = ManagePanel.previewScope(ctx);
-            return scope == null
-                ? AccessDecision.allowAll()
-                : AccessDecision.allow(QueryPredicate.of(scope));
-        };
+        return TenantScopes.PREVIEWS.accessFunction();
     }
 
     /**
@@ -70,5 +64,15 @@ public final class ManagePreviewDeploymentResource extends PreviewDeploymentReso
     @Override
     public boolean hasInScopeRecords(@NonNull AccessContext access) {
         return ManagePanel.hasManageScope(access);
+    }
+
+    /**
+     * The contributed pages only (the generic access matrix, which gates itself per record).
+     * Deliberately NOT frameworkSubpages(): the admin activity/revision history stays off the
+     * delegated surface, and dropping the page here also 404s its routes.
+     */
+    @Override
+    public @NonNull List<RecordScopedPage<Row>> subpages() {
+        return this.contributedSubpages();
     }
 }

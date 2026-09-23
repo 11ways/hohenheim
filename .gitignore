@@ -57,3 +57,6 @@ settings/field-encryption.keys.lock
 # OS
 .DS_Store
 public/hohenheim.css.map
+
+# Session scratch space (agent tools); never committed.
+/scratchpad/

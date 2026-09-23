@@ -4,11 +4,11 @@ import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.auth.GrantSubjects;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -27,6 +27,7 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.text.Slugs;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -66,7 +67,7 @@ public final class Projects {
             throw new IllegalStateException("Project " + project.get(ProjectModel.ID)
                 + " carries no owner group; the ProjectGuards write hook did not run");
         }
-        return "group:" + groupId;
+        return GrantSubjects.token(GrantSubjectType.GROUP, groupId);
     }
 
     /** The owner subject SET a record owned by this project answers with. */
@@ -83,18 +84,12 @@ public final class Projects {
         if (subjects == null || subjects.size() != 1) {
             return null;
         }
-        String token = subjects.iterator().next();
-        if (!token.startsWith("group:")) {
-            return null;
-        }
-        int groupId;
-        try {
-            groupId = Integer.parseInt(token.substring("group:".length()));
-        } catch (NumberFormatException malformed) {
+        GrantSubjects.Subject subject = GrantSubjects.parse(subjects.iterator().next());
+        if (subject == null || subject.type() != GrantSubjectType.GROUP) {
             return null;
         }
         return Models.get(ProjectModel.class).find()
-            .where(ProjectModel.GROUP_ID.eq(groupId)).first();
+            .where(ProjectModel.GROUP_ID.eq(subject.id())).first();
     }
 
     /** The project owning a record, derived from its manage-grant subject set. */
@@ -423,8 +418,16 @@ public final class Projects {
             .where(EnvironmentModel.PROJECT_ID.eq(projectId)).count();
     }
 
+    /**
+     * The name half of a NEW project group's slug.
+     *
+     * AIDEV-NOTE: zenit's Slugs.slugify, the one fold every slug uses. It folds a few letters
+     * the old BlastString.slug dropped (a German sharp s becomes "ss"), which is safe only
+     * because a group slug is minted ONCE at creation and never recomputed (a rename keeps
+     * it, see syncGroupTitle): every existing project keeps the slug it was created with.
+     */
     private static @NonNull String safeSlug(@NonNull String name) {
-        String slug = BlastString.slug(name);
+        String slug = Slugs.slugify(name);
         return slug.isEmpty() ? "unnamed" : slug;
     }
 

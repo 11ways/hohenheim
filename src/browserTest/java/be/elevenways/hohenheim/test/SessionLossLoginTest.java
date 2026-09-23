@@ -25,6 +25,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class SessionLossLoginTest extends HohenheimTestBase {
 
+    /**
+     * The login card's form. A PREFIX match on purpose: when the visitor was blocked on a page,
+     * zenit-auth binds the sanitized return target onto the POST target, so the action reads
+     * {@code /login?_return=...} and an exact {@code action='/login'} never matches.
+     */
+    private static final String LOGIN_FORM = "form[action^='/login']";
+
     @Test
     void sessionLossRecoversThroughTheInPlaceLoginForm() {
         // Give the seeded admin a real password to log back in with.
@@ -55,13 +62,13 @@ class SessionLossLoginTest extends HohenheimTestBase {
         // a FULL page load since hawkeye af7ac3ec -- so the admin sidebar is gone,
         // deliberately, instead of hosting a foreign shell's content.
         page.locator("pl-app-sidebar a[href='/admin/sites']").click();
-        page.waitForSelector("form[action='/login']");
+        page.waitForSelector(LOGIN_FORM);
 
         // Submitting that form used to ALWAYS fail with CSRF_INVALID: the
         // client posted the dead boot-time token from the stale shell meta.
-        page.fill("form[action='/login'] input[name='email']", "test@hohenheim.local");
-        page.fill("form[action='/login'] input[name='password']", "hunter2-session-test");
-        page.locator("form[action='/login'] pl-button button").click();
+        page.fill(LOGIN_FORM + " input[name='email']", "test@hohenheim.local");
+        page.fill(LOGIN_FORM + " input[name='password']", "hunter2-session-test");
+        page.locator(LOGIN_FORM + " pl-button button").click();
 
         // Login succeeds AND returns to the page the user was headed to.
         page.waitForURL("**/admin/sites");

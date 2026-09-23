@@ -178,13 +178,18 @@ public final class ProcessNetworkPolicy {
                 .append(' ').append(rule).append('\n');
         }
 
-        NftRunner.Result applied = this.runner.run(List.of("-f", "-"), ruleset.toString());
-        if (!applied.ok()) {
-            throw new IOException("REFUSED to start site '" + site + "': nft rejected the"
-                + " per-process network policy for uid " + uid + " (exit " + applied.exitCode()
-                + "): " + applied.failureText());
-        }
-        this.chains.verify("REFUSED to start site '" + site + "'", chain, "output", rules);
+        // Apply and read-back under the table lock: a concurrent removeTableIfEmpty must
+        // never delete the table between our write and our verify (see NftChains).
+        this.chains.exclusively(() -> {
+            NftRunner.Result applied = this.runner.run(List.of("-f", "-"), ruleset.toString());
+            if (!applied.ok()) {
+                throw new IOException("REFUSED to start site '" + site + "': nft rejected the"
+                    + " per-process network policy for uid " + uid + " (exit "
+                    + applied.exitCode() + "): " + applied.failureText());
+            }
+            this.chains.verify("REFUSED to start site '" + site + "'", chain, "output", rules);
+            return null;
+        });
     }
 
     /**
@@ -208,12 +213,15 @@ public final class ProcessNetworkPolicy {
      */
     public void remove(int uid, @NonNull String site) throws IOException {
         requireEnabled(site);
-        this.chains.remove(outputChain(uid));
-        // The same completeness the network-keyed owner needs, and the same table: a host
-        // that only ever ran PROCESS sites leaked the table exactly as one that only ever
-        // ran containers did. Emptiness is what keeps the two owners from removing each
-        // other's table.
-        this.chains.removeTableIfEmpty();
+        this.chains.exclusively(() -> {
+            this.chains.remove(outputChain(uid));
+            // The same completeness the network-keyed owner needs, and the same table: a
+            // host that only ever ran PROCESS sites leaked the table exactly as one that only
+            // ever ran containers did. Emptiness is what keeps the two owners from removing
+            // each other's table.
+            this.chains.removeTableIfEmpty();
+            return null;
+        });
     }
 
     /** @return the nft chain carrying one run-as uid's denies */

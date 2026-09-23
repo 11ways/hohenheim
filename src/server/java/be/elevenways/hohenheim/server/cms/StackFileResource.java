@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -7,7 +8,6 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
-import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -17,7 +17,6 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -32,7 +31,7 @@ import java.util.Map;
  * through a stack's Services tab. Content is encrypted at rest but visible to
  * editors (encryption is not secrecy).
  */
-public class StackFileResource extends RowResource {
+public class StackFileResource extends ValidatedRowResource {
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(RelationPick.of(StackFileModel.STACK_SERVICE_ID, StackServiceModel.MODEL_ID).build())
@@ -72,7 +71,7 @@ public class StackFileResource extends RowResource {
 
     @Override
     public @Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of("stacks", row -> {
+        return ResourceParent.<Row>of(StackResource.SLUG, row -> {
             Object serviceId = row.get(StackFileModel.STACK_SERVICE_ID);
             if (!(serviceId instanceof Integer id)) {
                 return null;
@@ -80,43 +79,24 @@ public class StackFileResource extends RowResource {
             Row service = Models.get(StackServiceModel.class).find()
                 .where(StackServiceModel.ID.eq(id)).first();
             return service != null ? service.get(StackServiceModel.STACK_ID) : null;
-        }).tab("services");
+        }).tab(StackServicesPage.SLUG);
     }
 
     /** The Services tab links here with ?stack_service_id= so the pick is preselected. */
     @Override
     public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
         Map<String, Object> values = new LinkedHashMap<>(formSpec().defaultValues());
-        String serviceId = conduit.getQueryParam("stack_service_id");
-        if (serviceId != null && !serviceId.isEmpty()) {
-            try {
-                values.put("stack_service_id", Integer.parseInt(serviceId));
-            } catch (NumberFormatException ignored) {
-                // Malformed prefill: render the bare form.
-            }
+        Integer serviceId = CmsSupport.prefill(conduit, HohenheimParams.STACK_SERVICE_ID_PREFILL);
+        if (serviceId != null) {
+            values.put(StackFileModel.STACK_SERVICE_ID.getName(), serviceId);
         }
         return Map.copyOf(values);
     }
 
-    @Override
-    public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
-                                      @NonNull AccessContext accessContext) {
-        Map<String, Object> values = CmsSupport.mutable(coerced);
-        validate(values, null);
-        return super.persistRow(values, accessContext);
-    }
-
-    @Override
-    public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
-                          @NonNull AccessContext accessContext) {
-        Map<String, Object> values = CmsSupport.mutable(coerced);
-        validate(values, existing);
-        super.updateRow(existing, values, accessContext);
-    }
-
     /** Paths must be absolute, traversal-free, unshadowed and unique; modes must be octal.
      *  The trimmed path is written BACK so the validated value is the stored value. */
-    private void validate(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
+    @Override
+    protected void validate(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
         Object pathValue = coerced.get("container_path");
         String path = pathValue != null ? String.valueOf(pathValue).trim() : "";
         if (!path.startsWith("/") || path.contains("..")) {

@@ -6,6 +6,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -203,17 +204,67 @@ public final class DnsZoneFiles {
             }
         }
 
-        model.find()
-            .where(DnsRecordModel.ZONE_ID.eq(zoneId))
-            .where(DnsRecordModel.MANAGED_BY.isNull())
-            .delete();
-
-        for (Row row : parsed) {
-            model.save(row);
+        // AIDEV-NOTE: ALL-OR-NOTHING, in two halves. Every parsed row is judged by the SAME
+        // codec that serves it (a row that converts is a row that serves) BEFORE anything is
+        // touched, and every refusal is reported at once; the replace then runs inside ONE
+        // transaction. Until 2026-09-23 the import deleted the old rows first and saved the
+        // new ones unvalidated and untransacted: a bad value was stored and silently skipped
+        // at serve time, and a save failing halfway left the zone with the old rows gone and
+        // only part of the new ones written.
+        Violations invalid = invalidRows(originName, zoneTtl, parsed);
+        if (!invalid.isEmpty()) {
+            throw invalid;
         }
 
-        DnsZoneStore.INSTANCE.bumpSerialAndReload(zoneId);
+        model.getResolvedDatasource().withTransaction(transaction -> {
+            model.find()
+                .where(DnsRecordModel.ZONE_ID.eq(zoneId))
+                .where(DnsRecordModel.MANAGED_BY.isNull())
+                .delete();
+
+            for (Row row : parsed) {
+                model.save(row);
+            }
+
+            // Inside the transaction: the serving view and the NOTIFY both wait for the commit
+            // (DnsZoneStore.reload / bumpSerialAndReload), so a rolled-back import publishes
+            // nothing.
+            DnsZoneStore.INSTANCE.bumpSerialAndReload(zoneId);
+        });
         return new ImportResult(parsed.size(), skipped, notes, nameservers);
+    }
+
+    /**
+     * Judge every row an import would write through {@link DnsRecordCodec}, the converter
+     * the serving snapshot uses.
+     *
+     * @return one violation per refused row, anchored on {@code zone_text}; empty when all serve
+     */
+    private static @NonNull Violations invalidRows(@NonNull Name originName, long zoneTtl,
+                                                   @NonNull List<Row> rows) {
+        Violations invalid = new Violations();
+        for (Row row : rows) {
+            String owner = row.get(DnsRecordModel.NAME);
+            String type = row.get(DnsRecordModel.TYPE);
+            String value = row.get(DnsRecordModel.VALUE);
+            String line = owner + " " + type + " " + value;
+            try {
+                long ttl = DnsRecordCodec.resolveTtl(row.get(DnsRecordModel.TTL), (int) zoneTtl);
+                DnsRecordCodec.toRecord(originName,
+                    owner != null ? owner : DnsNames.APEX,
+                    type != null ? type : "",
+                    ttl,
+                    value != null ? value : "",
+                    DnsRecordModel.priorityOf(row),
+                    DnsRecordModel.weightOf(row),
+                    DnsRecordModel.portOf(row));
+            }
+            catch (DnsValueException refused) {
+                invalid.add(new Violation("zone_text", "zone_text", line,
+                    importText(refused.getMicrocopyKey())));
+            }
+        }
+        return invalid;
     }
 
     /** An import refusal, keyed in the violations scope so the API and the panel name it alike. */
@@ -332,10 +383,6 @@ public final class DnsZoneFiles {
     }
 
     private static @NonNull String stripDot(@NonNull Name name) {
-        String value = name.toString().toLowerCase(Locale.ROOT);
-        while (value.endsWith(".")) {
-            value = value.substring(0, value.length() - 1);
-        }
-        return value;
+        return DnsNames.canonicalName(name.toString());
     }
 }

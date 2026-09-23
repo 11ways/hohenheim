@@ -12,7 +12,7 @@ import java.net.InetSocketAddress;
  * Undertow owns that socket's protocol from the first byte.
  */
 record BackendChoice(@Nullable InetSocketAddress internalAddress, @Nullable String host, int port,
-                     boolean sendProxyProtocolV2, int connectTimeoutMillis) {
+                     boolean sendProxyProtocolV2, int connectTimeoutMillis, boolean publicOnly) {
 
     BackendChoice {
         if ((internalAddress == null) == (host == null)) {
@@ -30,12 +30,13 @@ record BackendChoice(@Nullable InetSocketAddress internalAddress, @Nullable Stri
     }
 
     static BackendChoice internal(InetSocketAddress address, int connectTimeoutMillis) {
-        return new BackendChoice(address, null, 0, false, connectTimeoutMillis);
+        return new BackendChoice(address, null, 0, false, connectTimeoutMillis, false);
     }
 
+    /** @param publicOnly dial only addresses zenit classifies as public (a tenant-owned route) */
     static BackendChoice external(String host, int port, boolean sendProxyProtocolV2,
-                                  int connectTimeoutMillis) {
-        return new BackendChoice(null, host, port, sendProxyProtocolV2, connectTimeoutMillis);
+                                  int connectTimeoutMillis, boolean publicOnly) {
+        return new BackendChoice(null, host, port, sendProxyProtocolV2, connectTimeoutMillis, publicOnly);
     }
 
     boolean isInternal() {

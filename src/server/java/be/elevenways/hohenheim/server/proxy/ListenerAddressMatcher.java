@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 
 /** Matches a domain's optional listener-address restriction against an accepted connection. */
 public final class ListenerAddressMatcher {
@@ -84,7 +85,7 @@ public final class ListenerAddressMatcher {
     }
 
     private static String normalize(String value) {
-        String normalized = value.trim().toLowerCase(java.util.Locale.ROOT);
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
         if (normalized.startsWith("::ffff:")) {
             normalized = normalized.substring("::ffff:".length());
         }

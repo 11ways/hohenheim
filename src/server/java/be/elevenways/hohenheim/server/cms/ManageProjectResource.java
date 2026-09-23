@@ -2,15 +2,12 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
-import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RelatedPage;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -70,11 +67,7 @@ public final class ManageProjectResource extends ProjectResource {
      */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return ctx -> {
-            Criteria scope = Projects.visibleScope(ctx);
-            return scope == null ? AccessDecision.allowAll()
-                : AccessDecision.allow(QueryPredicate.of(scope));
-        };
+        return TenantScopes.PROJECTS.accessFunction();
     }
 
     /** NAV-ONLY (a principal in no project hides the empty list); the route stays scoped. */

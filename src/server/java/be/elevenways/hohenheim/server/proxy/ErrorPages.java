@@ -74,7 +74,13 @@ public final class ErrorPages {
         exchange.getResponseSender().send(html);
     }
 
-    static void send502(HttpServerExchange exchange, String message) {
+    /**
+     * 502 for an upstream the proxy could not reach. The cause is deliberately NOT a
+     * parameter: it is an internal exception text (a backend address, a socket path) that an
+     * anonymous visitor must never read, so the caller logs it and the page says only what
+     * the operator configured or the localized default.
+     */
+    static void send502(HttpServerExchange exchange) {
         LocaleChain locales = localesOf(exchange);
         String html = render(locales, "502", text(locales, "bad_gateway_title"),
             override(HohenheimSettings.Proxy.UNREACHABLE_MESSAGE, locales,

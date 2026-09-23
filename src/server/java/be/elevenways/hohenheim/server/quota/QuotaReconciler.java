@@ -1,12 +1,21 @@
 package be.elevenways.hohenheim.server.quota;
 
+import be.elevenways.hohenheim.instance.DeviceType;
+import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
+import be.elevenways.hohenheim.server.instance.InstanceDeviceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
+import be.elevenways.hohenheim.server.instance.RootDisk;
+import be.elevenways.hohenheim.server.preview.PreviewQuota;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.quota.QuotaLedgerModel;
 import be.elevenways.zenit.common.orm.quota.Quotas;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -19,8 +28,21 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * THE drift correction for the instance tier's three reservation buckets: what the LIVE
- * rows say each bucket holds is the truth, and the ledger is moved to it.
+ * THE drift correction for every per-owner quota dimension -- the instance tier's slot,
+ * owner-memory and host-memory buckets, and the site, database, preview, extra-NIC and disk
+ * (device plus root disk) buckets: what the rows say each bucket holds is the truth, and the
+ * ledger is moved to it.
+ *
+ * AIDEV-NOTE: widened from the instance tier alone on 2026-09-23. A managed-database slot
+ * leaked forever when two concurrent creates of one name both reserved and the loser's
+ * insert failed (DatabaseService.insertRecord now runs in one transaction, so that shape
+ * rolls back), and nothing could ever repair a leak in any dimension but the instance
+ * one. Each dimension's truth is computed from the very stamps its release path hands back
+ * ({@code quota_bucket}, {@code root_disk_bucket}, a stampless row falling to the operator
+ * bucket of the same dimension exactly as the releases do), so a correction can never
+ * disagree with what a later delete will release. Besides the buckets rows name, every
+ * LEDGER row under a dimension's prefix is a candidate, so a leaked bucket no row names --
+ * an owner whose only create was the one that failed -- is corrected to zero too.
  *
  * AIDEV-NOTE: this exists because a before-write hook cannot compensate a sibling hook's
  * refusal. Three hooks spend against a single instance write -- {@link InstanceQuota} (the
@@ -71,20 +93,17 @@ public final class QuotaReconciler {
     public record Result(@NonNull List<Correction> corrections, boolean abstained) {}
 
     /**
-     * Recompute the owner-slot, owner-memory and host-memory buckets from the live instance
-     * rows and correct every one that disagrees.
+     * Recompute every quota bucket from the rows and correct every one that disagrees.
      *
-     * AIDEV-NOTE: the DEVICE and ROOT-DISK buckets ({@code InstanceDeviceQuota},
-     * {@code InstanceRootDiskQuota}) are deliberately NOT reconciled here. They are charged
-     * from a different model's write and share one owner disk bucket across two of them, so
-     * their truth is a different computation with its own failure modes -- and no drift has
-     * been measured in them. Add them as their own scan when one is, never by widening this
-     * one until it means "some buckets".
+     * AIDEV-NOTE: the device and root-disk halves of the DISK bucket are one sum: both
+     * {@code InstanceDeviceQuota} (a disk device's size, on any device row) and
+     * {@code InstanceRootDiskQuota} (a LIVE instance's declared root GB) charge the same
+     * owner bucket, so reconciling either alone would "correct" the other half away.
      */
     public static @NonNull Result reconcile() {
         Map<String, Long> expected = expectedBuckets();
         if (!expected.equals(expectedBuckets())) {
-            Blast.log("QUOTA: reconcile abstained -- the instance rows moved under the scan;"
+            Blast.log("QUOTA: reconcile abstained -- the rows moved under the scan;"
                 + " the next boot reconciles");
             return new Result(List.of(), true);
         }
@@ -103,19 +122,16 @@ public final class QuotaReconciler {
             }
             corrections.add(new Correction(bucket, used, truth));
             Blast.log("QUOTA: reconciled bucket", bucket, "from", used, "to", truth,
-                "- the ledger disagreed with the live instance rows");
+                "- the ledger disagreed with the rows");
         }
         return new Result(corrections, false);
     }
 
-    /**
-     * What every reachable instance-tier bucket SHOULD hold: summed over live rows, and
-     * explicitly zero for a bucket only trashed rows or hostless servers can name.
-     */
+    /** What every reachable bucket of every dimension SHOULD hold. */
     private static @NonNull Map<String, Long> expectedBuckets() {
         Map<String, Long> expected = new LinkedHashMap<>();
         for (String bucket : candidateBuckets()) {
-            expected.put(bucket, 0L);
+            candidate(expected, bucket);
         }
         for (Row row : Models.get(InstanceModel.class).find()
                 .where(InstanceModel.DELETED_AT.isNull()).all()) {
@@ -127,13 +143,78 @@ public final class QuotaReconciler {
             if (serverId != null) {
                 add(expected, InstanceCapacity.bucketOf(serverId), hostMemoryOf(row));
             }
+            Integer rootGb = RootDisk.declaredGb(settingsOf(row));
+            if (rootGb != null && rootGb > 0) {
+                add(expected, stampedOr(row.get(InstanceModel.ROOT_DISK_BUCKET), diskOperatorBucket()),
+                    rootGb);
+            }
         }
+        siteBuckets(expected);
+        databaseBuckets(expected);
+        previewBuckets(expected);
+        deviceBuckets(expected);
         return expected;
     }
 
+    /** One slot per LIVE site, in the bucket its stamp names. */
+    private static void siteBuckets(@NonNull Map<String, Long> expected) {
+        for (Row row : Models.get(SiteModel.class).find().all()) {
+            String bucket = stampedOr(row.get(SiteModel.QUOTA_BUCKET), SiteQuota.bucketKeyOf(""));
+            candidate(expected, bucket);
+            if (row.get(SiteModel.DELETED_AT) == null) {
+                add(expected, bucket, 1);
+            }
+        }
+    }
+
+    /** One slot per managed database record: databases have no soft delete. */
+    private static void databaseBuckets(@NonNull Map<String, Long> expected) {
+        for (Row row : Models.get(DatabaseModel.class).find().all()) {
+            add(expected, stampedOr(row.get(DatabaseModel.QUOTA_BUCKET), DatabaseQuota.bucketKeyOf("")), 1);
+        }
+    }
+
+    /** One slot per LIVE preview deployment, in the bucket its stamp names. */
+    private static void previewBuckets(@NonNull Map<String, Long> expected) {
+        for (Row row : Models.get(PreviewDeploymentModel.class).find().all()) {
+            String bucket = stampedOr(row.get(PreviewDeploymentModel.QUOTA_BUCKET),
+                PreviewQuota.bucketKeyOf(""));
+            candidate(expected, bucket);
+            if (row.get(PreviewDeploymentModel.DELETED_AT) == null) {
+                add(expected, bucket, 1);
+            }
+        }
+    }
+
     /**
-     * Every bucket this tier could have charged: from ALL instance rows (a trashed row
-     * names the bucket its own release landed in) and from every host record.
+     * Every device row's charge, by its type's DECLARED charge: a disk device its size in
+     * the disk bucket, an extra NIC one slot. Devices are hard-deleted, so every row counts;
+     * a token no type declares was charged nothing at create and counts nothing here.
+     */
+    private static void deviceBuckets(@NonNull Map<String, Long> expected) {
+        for (Row row : Models.get(InstanceDeviceModel.class).find().all()) {
+            DeviceType type = DeviceType.parse(row.get(InstanceDeviceModel.TYPE));
+            if (type == null) {
+                continue;
+            }
+            String stamp = row.get(InstanceDeviceModel.QUOTA_BUCKET);
+            switch (type.charge()) {
+                case DISK_GIGABYTES -> {
+                    Integer size = row.get(InstanceDeviceModel.SIZE_GB);
+                    add(expected, stampedOr(stamp, diskOperatorBucket()), size == null ? 0 : size);
+                }
+                case NIC_SLOT -> add(expected, stampedOr(stamp, InstanceDeviceQuota.nicBucketOf("")), 1);
+                case NONE -> {
+                    // shared operator media: charged nothing at create
+                }
+            }
+        }
+    }
+
+    /**
+     * Every bucket the reconciled dimensions could have charged: from ALL instance rows (a
+     * trashed row names the bucket its own release landed in), from every host record, and
+     * from every LEDGER row under a per-owner dimension's prefix.
      */
     private static @NonNull Set<String> candidateBuckets() {
         Set<String> buckets = new LinkedHashSet<>();
@@ -152,7 +233,46 @@ public final class QuotaReconciler {
                 buckets.add(InstanceCapacity.bucketOf(serverId));
             }
         }
+        // The operator bucket of a dimension folds to exactly its prefix ("" packs to "").
+        List<String> prefixes = List.of(SiteQuota.bucketKeyOf(""), DatabaseQuota.bucketKeyOf(""),
+            PreviewQuota.bucketKeyOf(""), diskOperatorBucket(), InstanceDeviceQuota.nicBucketOf(""));
+        for (Row ledger : Models.get(QuotaLedgerModel.class).find().all()) {
+            String key = ledger.get(QuotaLedgerModel.BUCKET_KEY);
+            if (key == null) {
+                continue;
+            }
+            for (String prefix : prefixes) {
+                if (key.startsWith(prefix)) {
+                    buckets.add(key);
+                    break;
+                }
+            }
+        }
         return buckets;
+    }
+
+    /** The disk dimension's operator bucket, shared by devices and root disks. */
+    private static @NonNull String diskOperatorBucket() {
+        return InstanceDeviceQuota.diskBucketOf("");
+    }
+
+    /**
+     * The bucket a row's stamp names, else the dimension's operator bucket -- the fallback
+     * every release path applies to a row stamped before its quota existed.
+     */
+    private static @NonNull String stampedOr(@Nullable String stamp, @NonNull String operatorBucket) {
+        return stamp != null && !stamp.isBlank() ? stamp : operatorBucket;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static @NonNull Map<String, Object> settingsOf(@NonNull Row instance) {
+        return instance.get(InstanceModel.SETTINGS) instanceof Map<?, ?> map
+            ? (Map<String, Object>) map : Map.of();
+    }
+
+    /** Declare a bucket as reachable, holding zero unless a row adds to it. */
+    private static void candidate(@NonNull Map<String, Long> expected, @NonNull String bucket) {
+        expected.putIfAbsent(bucket, 0L);
     }
 
     /**

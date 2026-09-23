@@ -23,6 +23,7 @@ import be.elevenways.hohenheim.server.quota.DatabaseQuota;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.InstanceRowCleanup;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -151,7 +152,7 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
             GeneratedRows.sweeping("database", () -> {
                 for (Row instance : instances.find()
                         .where(InstanceModel.SERVER_ID.eq(admittedHostId)).all()) {
-                    instances.delete(instance.get(InstanceModel.ID));
+                    InstanceRowCleanup.delete(instance.get(InstanceModel.ID));
                 }
             });
             InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);

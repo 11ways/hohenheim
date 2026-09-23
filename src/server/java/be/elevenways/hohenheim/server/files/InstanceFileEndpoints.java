@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.files;
 
 import be.elevenways.domino.common.DominoFile;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -18,6 +19,7 @@ import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.ErrorResponse;
 import be.elevenways.zenit.common.result.ErrorResult;
 import be.elevenways.zenit.common.result.JsonResult;
+import be.elevenways.zenit.common.routing.RouteLocation;
 import be.elevenways.zenit.server.http.RedirectResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violation;
@@ -28,7 +30,6 @@ import be.elevenways.zenit.server.http.body.FormSubmissionRawValues;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -199,7 +200,8 @@ public final class InstanceFileEndpoints {
                                 @NonNull Map<String, Object> form, @NonNull String path) {
         InstanceFiles files = new InstanceFiles();
         switch (action) {
-            case "save", "upload" -> files.write(instanceId, path, contentOf(form));
+            case "save" -> files.write(instanceId, path, contentOf(form));
+            case "upload" -> files.write(instanceId, path, uploadOf(form));
             case "mkdir" -> files.makeDirectory(instanceId, path);
             case "rename" -> files.rename(instanceId, path, string(form, "target"));
             case "delete" -> files.delete(instanceId, path);
@@ -210,7 +212,8 @@ public final class InstanceFileEndpoints {
 
     /**
      * The bytes a write carries: an uploaded multipart part when there is one, else the
-     * submitted text.
+     * submitted text -- the "save" action and the automation API's write route, which
+     * accept both shapes.
      *
      * AIDEV-NOTE: the SIZE cap is NOT applied here. The framework's HTTP layer already
      * refuses an over-limit body during the read (readNBytes + an explicit over-read probe,
@@ -219,15 +222,48 @@ public final class InstanceFileEndpoints {
      * third check here that ran AFTER the body was buffered would be the shape this
      * codebase hunts: a bound that looks enforced and is actually a post-hoc measurement.
      */
-    private static byte @NonNull [] contentOf(@NonNull Map<String, Object> form) {
+    static byte @NonNull [] contentOf(@NonNull Map<String, Object> form) {
+        DominoFile uploaded = uploadedFile(form);
+        if (uploaded != null && uploaded.getSize() > 0) {
+            return uploaded.getBytes();
+        }
+        return string(form, "content").getBytes(StandardCharsets.UTF_8);
+    }
+
+    /**
+     * The "upload" lane: the selected file's bytes, or a REFUSAL when no file was chosen.
+     *
+     * AIDEV-NOTE: the upload form never sends a {@code content} field, so the old shared
+     * fallback turned "Upload" pressed with no file selected into a write of ZERO bytes
+     * over whatever lived at that path. A browser submits an unselected file input as a
+     * part with an empty filename; a chosen empty file keeps its name and is a legitimate
+     * (empty) upload.
+     *
+     * Package-private so the lane's own test can drive it without an HTTP stack.
+     *
+     * @throws Violations {@code files_upload_missing} when no file part was chosen
+     */
+    static byte @NonNull [] uploadOf(@NonNull Map<String, Object> form) {
+        DominoFile uploaded = uploadedFile(form);
+        if (uploaded == null) {
+            throw Violations.ofForm(
+                Microcopy.of("files_upload_missing").withFilter("scope", "violations"));
+        }
+        return uploaded.getBytes();
+    }
+
+    /** The submitted {@code file} part, or null when none was chosen. */
+    private static @Nullable DominoFile uploadedFile(@NonNull Map<String, Object> form) {
         Object file = form.get("file");
         if (file instanceof List<?> list && !list.isEmpty()) {
             file = list.get(0);
         }
-        if (file instanceof DominoFile uploaded && uploaded.getSize() > 0) {
-            return uploaded.getBytes();
+        if (!(file instanceof DominoFile uploaded)) {
+            return null;
         }
-        return string(form, "content").getBytes(StandardCharsets.UTF_8);
+        String name = uploaded.getName();
+        boolean chosen = (name != null && !name.isBlank()) || uploaded.getSize() > 0;
+        return chosen ? uploaded : null;
     }
 
     // -- plumbing -------------------------------------------------------------
@@ -272,10 +308,12 @@ public final class InstanceFileEndpoints {
      * The Files tab URL for a directory, stashing any refusal as a flash toast first.
      *
      * AIDEV-NOTE: the destination is USUALLY the submitted _return, which ReturnTarget
-     * hands back as an already-sanitized String -- there is no endpoint left to bind
-     * path= onto, hence the append. The FALLBACK is built from the typed route. The
-     * refusal does NOT ride the URL: it is a notification, so it rides the session
-     * flash (the seven query parameters that used to carry outcomes are deleted).
+     * hands back as an already-sanitized String; the FALLBACK is built from the typed
+     * route. Either way the directory is set through {@link RouteLocation#with} on the
+     * declared {@link HohenheimParams#FILES_PATH}, which REPLACES a {@code path=} the
+     * captured page already carried -- appending used to put the parameter in the URL
+     * twice, and which one a reader honoured was up to the reader. The refusal does NOT
+     * ride the URL: it is a notification, so it rides the session flash.
      */
     private static @NonNull String filesUrl(@NonNull Conduit conduit, int instanceId,
                                             @NonNull String directory,
@@ -286,7 +324,8 @@ public final class InstanceFileEndpoints {
         String base = ReturnTarget.or(ReturnTarget.read(conduit),
             CmsRoutes.subpage("admin", "instances", instanceId,
                 InstanceFilesPage.SLUG).toUrl());
-        return base + (base.contains("?") ? '&' : '?') + "path=" + encode(directory);
+        return RouteLocation.with(base, HohenheimParams.FILES_PATH,
+            directory.isEmpty() ? null : directory);
     }
 
     /** The refusal's own message, so it keeps its localized text. */
@@ -324,10 +363,6 @@ public final class InstanceFileEndpoints {
             value = list.isEmpty() ? null : list.get(0);
         }
         return value == null ? "" : String.valueOf(value);
-    }
-
-    private static @NonNull String encode(@NonNull String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
     /** Stream a binary body as a downloadable attachment with a sanitized filename. */

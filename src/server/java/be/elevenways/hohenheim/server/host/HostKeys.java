@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.security.NftRunner;
+import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -355,7 +356,8 @@ public final class HostKeys {
             throw Violations.ofForm(violation("identity_generation_failed")
                 .withArg("detail", String.valueOf(e.getMessage())));
         } finally {
-            deleteRecursively(directory);
+            // Best effort: a temp directory that survives holds a key we already replaced.
+            FileTrees.deleteQuietly(directory);
         }
     }
 
@@ -442,20 +444,6 @@ public final class HostKeys {
             Files.setPosixFilePermissions(path, PosixFilePermissions.fromString(permissions));
         } catch (IOException | UnsupportedOperationException ignored) {
             // Non-POSIX filesystem; the content is still authoritative.
-        }
-    }
-
-    private static void deleteRecursively(@Nullable Path directory) {
-        if (directory == null) {
-            return;
-        }
-        try (var entries = Files.list(directory)) {
-            for (Path entry : entries.toList()) {
-                Files.deleteIfExists(entry);
-            }
-            Files.deleteIfExists(directory);
-        } catch (IOException ignored) {
-            // Best effort: a temp directory that survives holds a key we already replaced.
         }
     }
 

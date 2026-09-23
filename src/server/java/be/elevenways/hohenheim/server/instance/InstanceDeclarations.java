@@ -1,7 +1,10 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.source.GitRepository;
+import be.elevenways.hohenheim.server.source.SourceOwnership;
+import be.elevenways.hohenheim.source.GitRefNames;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -110,7 +113,8 @@ public final class InstanceDeclarations {
     }
 
     /**
-     * A raw repository URL must be something git can clone, and may not carry a credential.
+     * A raw repository URL must be something git can clone, and may not carry a credential;
+     * the source's branch and build directory must be what git and the build lane accept.
      *
      * AIDEV-NOTE: the provider lane hands its token to git through the exec ENVIRONMENT
      * and nothing else, so nothing is written down; a hand-typed
@@ -129,6 +133,20 @@ public final class InstanceDeclarations {
             return;
         }
 
+        // The branch reaches git's argv whichever lane names the repository (a raw URL or a
+        // provider binding); one git would read as an option, or that is no ref at all, is
+        // refused where it is typed rather than at the next checkout.
+        Object branch = settingsOf(row).get(GitSourceSchema.BRANCH);
+        String named = branch == null ? "" : branch.toString().trim();
+        if (!named.isEmpty() && !GitRefNames.isValid(named)) {
+            throw Violations.ofField(GitSourceSchema.BRANCH, named,
+                violation("source_branch_invalid"));
+        }
+
+        // The build command runs in this directory under the checkout; one that climbs out
+        // is refused where it is typed, and again where the build runs.
+        SourceBuildDetail.requireContainedDirectory(settingsOf(row));
+
         Object declared = settingsOf(row).get(GitSourceSchema.REPOSITORY_URL);
         String url = declared == null ? "" : declared.toString().trim();
 
@@ -146,6 +164,21 @@ public final class InstanceDeclarations {
         if (!GitRepository.isSupportedCloneUrl(url)) {
             throw Violations.ofField(GitSourceSchema.REPOSITORY_URL, url,
                 violation("repository_url_invalid"));
+        }
+
+        // AIDEV-NOTE: a LOCAL source (a path or file:// URL on the controller) is an operator
+        // facility: a tenant naming one would clone ANOTHER tenant's checkout directory. The
+        // write gate refuses it for a tenant write and for a record a tenant holds manage on;
+        // the checkout re-asks at use time (GitCheckout via SourceOwnership), because a record
+        // granted to a tenant later must lose the reach then, not at its next edit.
+        if (!GitRepository.isRemoteCloneUrl(url)) {
+            Integer id = row.get(InstanceModel.ID);
+            boolean operatorOwned = !TenantWrites.isTenantOriginated()
+                && (id == null || SourceOwnership.localSourcesAllowed(InstanceModel.MODEL_ID, id));
+            if (!operatorOwned) {
+                throw Violations.ofField(GitSourceSchema.REPOSITORY_URL, url,
+                    violation("repository_url_local_refused"));
+            }
         }
     }
 

@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.instance.DeviceType;
+import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
@@ -391,17 +393,24 @@ public final class InstanceApi {
             String name = InstanceTemplates.submittedString(form, "name");
             String type = InstanceTemplates.submittedString(form, "type");
             try {
-                if (InstanceDeviceModel.TYPE_DISK.equals(type)) {
-                    Integer sizeGb = InstanceTemplates.submittedInteger(form, "size_gb");
-                    // Null (absent or unparseable) reaches the model's own size invariant
-                    // as 0, so "no size" and "size 0" answer with the same named refusal.
-                    new InstanceDevices().attachDisk(instanceId, name,
-                        sizeGb != null ? sizeGb : 0);
-                } else if (InstanceDeviceModel.TYPE_NIC.equals(type)) {
-                    new InstanceDevices().attachNic(instanceId, name);
-                } else {
-                    return ApiConduits.refusal(conduit, Violations.ofField("type", type,
-                        ApiConduits.violationText("device_type_unknown")));
+                DeviceType parsed = DeviceType.parse(type);
+                if (parsed == null) {
+                    return unknownDeviceType(conduit, type);
+                }
+                switch (parsed) {
+                    case DISK -> {
+                        Integer sizeGb = InstanceTemplates.submittedInteger(form, "size_gb");
+                        // Null (absent or unparseable) reaches the model's own size invariant
+                        // as 0, so "no size" and "size 0" answer with the same named refusal.
+                        new InstanceDevices().attachDisk(instanceId, name,
+                            sizeGb != null ? sizeGb : 0);
+                    }
+                    case NIC -> new InstanceDevices().attachNic(instanceId, name);
+                    // Install media is an operator device with its own lane; the automation
+                    // API offers it no more than it offers a type that does not exist.
+                    case CDROM -> {
+                        return unknownDeviceType(conduit, type);
+                    }
                 }
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
@@ -587,12 +596,11 @@ public final class InstanceApi {
         List<Map<String, Object>> variables = new ArrayList<>();
         for (Row row : rows) {
             Map<String, Object> entry = new LinkedHashMap<>();
-            boolean secret = InstanceVariableModel.KIND_SECRET
-                .equals(row.get(InstanceVariableModel.KIND));
+            // Fail closed: a kind nobody recognizes projects as a SECRET, value withheld.
+            VariableKind kind = VariableKind.of(row.get(InstanceVariableModel.KIND));
             entry.put("key", row.get(InstanceVariableModel.KEY));
-            entry.put("kind", secret
-                ? InstanceVariableModel.KIND_SECRET : InstanceVariableModel.KIND_PLAIN);
-            if (secret) {
+            entry.put("kind", kind.token());
+            if (kind.isSecret()) {
                 String stored = row.get(InstanceVariableModel.SECRET_VALUE);
                 entry.put("has_value", stored != null && !stored.isEmpty());
             } else {
@@ -605,7 +613,14 @@ public final class InstanceApi {
 
     /** Unspecified kind means plain -- the model's own default, restated for the form lane. */
     public static @NonNull String kindOrDefault(@NonNull String kind) {
-        return kind.isEmpty() ? InstanceVariableModel.KIND_PLAIN : kind;
+        return kind.isEmpty() ? VariableKind.PLAIN.token() : kind;
+    }
+
+    /** The automation API's refusal of a device type it does not offer, naming the token. */
+    private static @NonNull ActionResult<Object> unknownDeviceType(@NonNull Conduit conduit,
+                                                                  @NonNull String type) {
+        return ApiConduits.refusal(conduit, Violations.ofField("type", type,
+            ApiConduits.violationText("device_type_unknown").withArg("type", type)));
     }
 
     /** The requested tail length, clamped to a sane window (default 200, max 2000). */

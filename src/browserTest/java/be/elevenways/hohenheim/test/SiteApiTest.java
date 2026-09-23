@@ -229,7 +229,7 @@ class SiteApiTest extends HohenheimTestBase {
         assertThat(stranger.statusCode()).as("step 4: a stranger key is a typed refusal")
             .isEqualTo(422);
         assertThat(codeOf(stranger.body())).as("step 4: named as an unknown field")
-            .isEqualTo("zenit.coercion.unknown_field");
+            .isEqualTo("unknown_field");
         // The refusal must say WHICH field: "an unknown field" over a twenty-field form
         // is not actionable, and the envelope used to carry only the code and the sentence.
         assertThat(fieldOf(stranger.body())).as("step 4: and the envelope names its path")
@@ -239,7 +239,7 @@ class SiteApiTest extends HohenheimTestBase {
             "settings.root_paht", "/tmp/x"));
         assertThat(misspelled.statusCode()).as("step 4: a misspelled setting is refused too")
             .isEqualTo(422);
-        assertThat(codeOf(misspelled.body())).isEqualTo("zenit.coercion.unknown_field");
+        assertThat(codeOf(misspelled.body())).isEqualTo("unknown_field");
         assertThat(fieldOf(misspelled.body()))
             .as("step 4: a nested setting is named by its DOTTED path")
             .isEqualTo("settings.root_paht");

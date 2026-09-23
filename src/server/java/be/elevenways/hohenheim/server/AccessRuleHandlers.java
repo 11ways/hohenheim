@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.server.auth.AccessRuleNodes;
@@ -13,6 +14,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.server.http.ReturnTarget;
 
 import java.util.Map;
 
@@ -47,10 +49,10 @@ final class AccessRuleHandlers {
         // Absence and out-of-scope are ONE answer, like the resource's 404.
         if (list == null || !HohenheimAccess.reachesRecord(AccessContext.of(conduit),
                 AccessListModel.MODEL_ID, listId, HohenheimAccess.MANAGE)) {
-            return HandlerSupport.redirect(CmsRoutes.list(panel, "access-lists"));
+            return HandlerSupport.redirect(CmsRoutes.list(panel, HohenheimSlugs.ACCESS_LISTS));
         }
 
-        var target = CmsRoutes.subpage(panel, "access-lists", listId, "rules");
+        var target = CmsRoutes.subpage(panel, HohenheimSlugs.ACCESS_LISTS, listId, "rules");
         Map<String, String> form = HandlerSupport.formMap(conduit);
         String type = form.getOrDefault("type", "").trim();
         if (!AccessRuleModel.ALL_TYPES.contains(type)) {
@@ -67,7 +69,7 @@ final class AccessRuleHandlers {
             HohenheimFlash.success(conduit, ruleText("added_group"));
             return HandlerSupport.redirect(target);
         }
-        return HandlerSupport.redirect(be.elevenways.zenit.server.http.ReturnTarget.bind(
+        return HandlerSupport.redirect(ReturnTarget.bind(
             CmsRoutes.detail(panel, "access-rules", rule.get(AccessRuleModel.ID)),
             target.toUrl()));
     }

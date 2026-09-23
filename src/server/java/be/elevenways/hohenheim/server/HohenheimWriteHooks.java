@@ -1,7 +1,8 @@
 package be.elevenways.hohenheim.server;
 
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.SiteDomainResource;
-import be.elevenways.hohenheim.server.cms.SiteResource;
+import be.elevenways.hohenheim.server.cms.SiteEnableInvariant;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviderGuards;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.dns.DnsPeerCascades;
@@ -51,7 +52,7 @@ public final class HohenheimWriteHooks implements ZenitModule {
     public void init() {
         // No disabled site can go live on a hostname an enabled site already
         // owns (form, toggle, delegated save, revision restore).
-        SiteResource.installEnableInvariant();
+        SiteEnableInvariant.install();
         // No git provider row can store an undeclared kind, an unusable base URL, or a
         // blank one on a kind that has no public host (form, delegated form, restore).
         be.elevenways.hohenheim.server.source.GitProviders.installKindInvariant();
@@ -78,6 +79,10 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // A delegated tenant may set only the delegated domain columns, and may author only
         // the allow-listed DNS record types -- on every writer, not just the /manage forms.
         TenantWrites.install();
+        // A site's upstream kind and its instance link agree, and a TLS passthrough site
+        // carries no HTTP gate -- AFTER TenantWrites so a tenant writing one of those frozen
+        // operator columns is refused as frozen, not by the shape rule.
+        SiteModel.installUpstreamInvariants();
         // A dyndns credential dies with its record, on every delete lane -- AFTER
         // TenantWrites so an unauthorized record delete refuses first.
         DynamicDnsService.installCredentialCascade();

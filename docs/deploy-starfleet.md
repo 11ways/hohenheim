@@ -784,7 +784,7 @@ rehearsal JVM from the previous lane (root, cwd `/root/hohenheim-rehearsal
 (deleted)`, `*:13999`, 318 MB) was still running and was killed; check
 `ps -eo pid,user,args | grep java` for anything that is not the service user's
 absolute-path jar before every rehearsal. The comms coupling (settings/comms.dry)
-survived the restart. Live pass and cleanup ledger: `visual-qa-20260829-final.md`;
+survived the restart. Live pass and cleanup ledger: `docs/visual-qa/visual-qa-20260829-final.md`;
 one high finding (F1: a tenant cannot save its own exact domain row under the
 operator's wildcard) is open there.
 

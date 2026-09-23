@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -168,7 +170,7 @@ public class SiteDomainResource extends RowResource {
 
     @Override
     public @org.checkerframework.checker.nullness.qual.Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of("sites", row -> row.get(SiteDomainModel.SITE_ID)).tab("domains");
+        return ResourceParent.<Row>of(HohenheimSlugs.SITES, row -> row.get(SiteDomainModel.SITE_ID)).tab("domains");
     }
 
 
@@ -196,19 +198,14 @@ public class SiteDomainResource extends RowResource {
     @Override
     public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
         Map<String, Object> values = new LinkedHashMap<>(formSpec().defaultValues());
-        String siteId = conduit.getQueryParam("site_id");
-        if (siteId != null && !siteId.isEmpty()) {
-            try {
-                int parsedSiteId = Integer.parseInt(siteId);
-                values.put("site_id", parsedSiteId);
-                Row site = Models.get(SiteModel.class).findById(parsedSiteId);
-                if (site != null && TlsPassthroughUpstreamKind.ID.toString()
-                        .equals(site.get(SiteModel.UPSTREAM_KIND))) {
-                    values.put("force_ssl", false);
-                    values.put("exclude_from_letsencrypt", true);
-                }
-            } catch (NumberFormatException ignored) {
-                // Malformed prefill: render the bare form.
+        Integer siteId = CmsSupport.prefill(conduit, HohenheimParams.SITE_ID_PREFILL);
+        if (siteId != null) {
+            values.put("site_id", siteId);
+            Row site = Models.get(SiteModel.class).findById(siteId);
+            if (site != null && TlsPassthroughUpstreamKind.ID.toString()
+                    .equals(site.get(SiteModel.UPSTREAM_KIND))) {
+                values.put("force_ssl", false);
+                values.put("exclude_from_letsencrypt", true);
             }
         }
         return Map.copyOf(values);
@@ -237,7 +234,7 @@ public class SiteDomainResource extends RowResource {
             return Map.of();
         }
         Integer siteId = CmsSupport.scopedParentId(conduit, SiteDomainModel.SITE_ID.getName(),
-            "sites");
+            HohenheimSlugs.SITES);
         return siteId != null ? Map.of(SiteDomainModel.SITE_ID.getName(), siteId) : Map.of();
     }
 
@@ -270,7 +267,7 @@ public class SiteDomainResource extends RowResource {
      * for every writer, not just for a CMS form submit.
      *
      * AIDEV-NOTE: this MUST live in the write pipeline, never in the resource layer --
-     * the same reasoning as SiteResource.installEnableInvariant, which this mirrors.
+     * the same reasoning as SiteEnableInvariant.install, which this mirrors.
      * These checks used to sit in persistRow/updateRow, where the ONLY thing keeping a
      * bypass hypothetical was that SiteDomainModel happens not to be revisionable today:
      * making it revisionable, or adding any second writer (a seeder, an import, an API

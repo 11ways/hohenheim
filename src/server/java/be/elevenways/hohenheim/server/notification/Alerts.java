@@ -3,10 +3,12 @@ package be.elevenways.hohenheim.server.notification;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.server.PermissionHolders;
 import be.elevenways.zenit.comms.AdHocRecipient;
 import be.elevenways.zenit.comms.CommsChannel;
 import be.elevenways.zenit.comms.CommsRecipient;
+import be.elevenways.zenit.comms.CommsTexts;
 import be.elevenways.zenit.comms.server.Comms;
 import be.elevenways.zenit.comms.server.CommsInboxOwners;
 import be.elevenways.zenit.comms.server.NotifyOutcome;
@@ -49,8 +51,8 @@ public final class Alerts {
      *
      * @return the number of deliveries the alert was queued for, inbox included
      */
-    public static int send(@NonNull NotificationEvents event, @NonNull String subject,
-                           @Nullable String message) {
+    public static int send(@NonNull NotificationEvents event, @NonNull Microcopy subject,
+                           @Nullable Microcopy message) {
         AlertNotification notification = new AlertNotification(event.token(), subject, message);
         int queued = 0;
 
@@ -78,10 +80,43 @@ public final class Alerts {
             // can otherwise believe alerting works while receiving nothing.
             Blast.slog("hohenheim.notification.undelivered", Map.of(
                 "event", event.token(),
-                "subject", subject,
+                "subject", String.valueOf(CommsTexts.plain(subject)),
                 "reason", "no_recipients"));
         }
         return queued;
+    }
+
+    /**
+     * {@link #send(NotificationEvents, Microcopy, Microcopy)} for text that is already
+     * final: wrapped as never-resolving literals.
+     *
+     * AIDEV-NOTE: the bridge for call sites still composing English sentences; a new call
+     * site passes catalog Microcopy instead, so the inbox re-resolves it per viewer.
+     */
+    public static int send(@NonNull NotificationEvents event, @NonNull String subject,
+                           @Nullable String message) {
+        return send(event, Microcopy.literal(subject),
+            message == null ? null : Microcopy.literal(message));
+    }
+
+    /**
+     * {@link #send(NotificationEvents, Microcopy, Microcopy)} that never throws.
+     *
+     * AIDEV-NOTE: THE shape for alerting from inside a failure path. Every such caller
+     * used to wrap send in its own try/catch so a comms failure could not swallow the
+     * failure it was reporting; that is this method's whole job, done once.
+     *
+     * @return the number of deliveries queued, or -1 when queueing itself failed (logged)
+     */
+    public static int trySend(@NonNull NotificationEvents event, @NonNull Microcopy subject,
+                              @Nullable Microcopy message) {
+        try {
+            return send(event, subject, message);
+        } catch (RuntimeException failed) {
+            Blast.log("ALERT: could not queue the", event.token(), "notification -",
+                failed.getMessage());
+            return -1;
+        }
     }
 
     /**
@@ -129,7 +164,8 @@ public final class Alerts {
         if (recipient == null) {
             return NotifyOutcome.failed("Channel row has no usable url or format");
         }
-        return Comms.notifyNowWithReason(new AlertNotification("test", subject, message), recipient);
+        return Comms.notifyNowWithReason(new AlertNotification("test", Microcopy.literal(subject),
+            message == null ? null : Microcopy.literal(message)), recipient);
     }
 
     private static boolean subscribes(@NonNull Row channel, @NonNull String event) {

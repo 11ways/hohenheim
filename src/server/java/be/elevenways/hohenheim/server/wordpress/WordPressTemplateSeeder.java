@@ -68,9 +68,24 @@ public final class WordPressTemplateSeeder implements Seeder {
     public void seed(@NonNull SeedContext ctx) {
         ctx.once(LEDGER_KEY, () -> {
             for (WordPressPhp php : WordPressPhp.values()) {
-                seedTemplate(php);
+                if (php.original()) {
+                    seedTemplate(php);
+                }
             }
         });
+        for (WordPressPhp php : WordPressPhp.values()) {
+            if (!php.original()) {
+                ctx.once(ledgerKeyOf(php), () -> seedTemplate(php));
+            }
+        }
+    }
+
+    /**
+     * The ledger key one member's template is seeded under: the original wave's shared key,
+     * or a key of its own for a member added after that wave had already run somewhere.
+     */
+    public static @NonNull String ledgerKeyOf(@NonNull WordPressPhp php) {
+        return php.original() ? LEDGER_KEY : LEDGER_KEY + ".php" + php.version();
     }
 
     /** The template name a member seeds under. */
@@ -92,6 +107,11 @@ public final class WordPressTemplateSeeder implements Seeder {
 
     private static void seedTemplate(WordPressPhp php) {
         var model = Models.get(InstanceTemplateModel.class);
+        // An operator who already made a template under this name keeps it: starter content
+        // never duplicates or replaces what a person authored.
+        if (model.find().where(InstanceTemplateModel.NAME.eq(templateName(php))).first() != null) {
+            return;
+        }
         Row row = model.createEmptyRow();
         row.set(InstanceTemplateModel.NAME, templateName(php));
         row.set(InstanceTemplateModel.DESCRIPTION, php.frozen()

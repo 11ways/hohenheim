@@ -22,15 +22,7 @@
                 <pl-table-row>
                     <pl-table-cell><a use:Zenit.route={% workload.target %}>{{ workload.name }}</a></pl-table-cell>
                     <pl-table-cell>
-                        {% if workload.tier == "instance" %}
-                        {{ t("tier_instance", scope: "server_overview") }}
-                        {% elseif workload.tier == "stack" %}
-                        {{ t("tier_stack", scope: "server_overview") }}
-                        {% elseif workload.tier == "database_engine" %}
-                        {{ t("tier_database_engine", scope: "server_overview") }}
-                        {% else %}
-                        {{ t("tier_database", scope: "server_overview") }}
-                        {% /if %}
+                        {{ WorkloadTiers.of(workload.tier).label }}
                     </pl-table-cell>
                     <pl-table-cell>
                         {% if workload.status != null %}

@@ -1,17 +1,12 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.model.InstanceDatabaseModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
-import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
-import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import org.checkerframework.checker.nullness.qual.NonNull;
+
+import java.util.List;
 
 /**
  * The /manage view over instance-database attachments: the same editor, narrowed to the
@@ -33,21 +28,16 @@ public final class ManageInstanceDatabaseResource extends InstanceDatabaseResour
 
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return ManageInstanceDatabaseResource::decide;
+        return TenantScopes.INSTANCE_DATABASES.accessFunction();
     }
 
     /**
-     * The walk's tri-state through {@code grantScope}, never a hand-rolled
-     * isAdmin-plus-id-set prefix: an id set cannot express a whole-model row, and the
-     * enumeration THROWS on one the moment instances grow a type-level permission.
+     * The contributed pages only (the generic access matrix, which gates itself per record).
+     * Deliberately NOT frameworkSubpages(): the admin activity/revision history stays off the
+     * delegated surface, and dropping the page here also 404s its routes.
      */
-    static @NonNull AccessDecision decide(@NonNull AccessContext ctx) {
-        Criteria scope = HohenheimAccess.grantScope(ctx, Models.get(InstanceDatabaseModel.class),
-            InstanceModel.MODEL_ID, HohenheimAccess.VIEW, InstanceDatabaseModel.INSTANCE_ID::in);
-        if (scope == null) {
-            return AccessDecision.allow(QueryPredicate.of(
-                InstanceDatabaseModel.INSTANCE_ID.isNotNull()));
-        }
-        return AccessDecision.allow(QueryPredicate.of(scope));
+    @Override
+    public @NonNull List<RecordScopedPage<Row>> subpages() {
+        return this.contributedSubpages();
     }
 }

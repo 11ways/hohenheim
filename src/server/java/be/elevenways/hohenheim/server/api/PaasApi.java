@@ -7,10 +7,8 @@ import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
-import be.elevenways.zenit.common.orm.datasource.Datasource;
-import be.elevenways.zenit.common.orm.datasource.Db;
-import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -22,6 +20,7 @@ import be.elevenways.hohenheim.server.application.ArtifactDeploys;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceApi;
+import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
@@ -32,6 +31,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
+import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.routing.RequestBodyTooLargeException;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -171,11 +171,7 @@ public final class PaasApi {
                 return ApiConduits.refusal(conduit, Violations.ofForm(
                     ApiConduits.violationText("deploy_not_available")));
             }
-            // The build takes minutes; an API caller expects an answer in seconds.
-            Datasource datasource = Db.currentOrDefault();
-            JobRunner.startVirtualThread(() -> Db.run(datasource, () ->
-                ApplicationDeploys.deployQuietly(applicationId, null, DeployTrigger.API)));
-            return ApiConduits.json(Map.of("id", siteId, "status", "queued"));
+            return queueDeploy(conduit, applicationId, Map.of("id", siteId, "status", "queued"));
         });
 
         HohenheimEndpoints.API_V1_SITE_ARTIFACT.setHandler(conduit -> {
@@ -210,9 +206,8 @@ public final class PaasApi {
                 operation = ArtifactDeploys.accept(site.get(SiteModel.ID), applicationId, upload);
                 int operationId = operation.get(ArtifactOperationModel.ID);
                 Path acceptedUpload = upload;
-                Datasource datasource = Db.currentOrDefault();
-                JobRunner.startVirtualThread(() -> Db.run(datasource, () ->
-                    ArtifactDeploys.run(operationId, acceptedUpload, DeployTrigger.API)));
+                HandlerSupport.inBackground(() ->
+                    ArtifactDeploys.run(operationId, acceptedUpload, DeployTrigger.API));
                 handedOff = true;
                 conduit.setResponseStatus(202);
                 return ApiConduits.json(Map.of("operation_id", operationId, "status", "pending",
@@ -275,6 +270,7 @@ public final class PaasApi {
                     ApiConduits.violationText("rollback_not_available")));
             }
             try {
+                requireReleaseAuthority(applicationId);
                 ReleaseEngine.rollback(applicationId);
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
@@ -283,6 +279,40 @@ public final class PaasApi {
             // origin column already says "api", so a second record would double-count.
             return ApiConduits.json(Map.of("id", siteId, "status", "rolled_back"));
         });
+    }
+
+    /**
+     * THE deploy hand-off of both API lanes: the application layer admits the deploy on this
+     * request's thread and only then queues it; a refusal is answered as a typed 422.
+     *
+     * AIDEV-NOTE: the order is load-bearing and lives in
+     * {@link ApplicationDeploys#deployInBackground}. The build takes minutes, so the deploy
+     * runs on a virtual thread -- and there the request scope is gone, so every tenant gate
+     * reads "system work" and passes. The old lane queued first and let a tenant holding
+     * only the SITE's manage grant deploy the application behind it.
+     *
+     * @param accepted the body answered once the deploy is queued (each lane keeps its shape)
+     */
+    public static @NonNull ActionResult<Object> queueDeploy(@NonNull Conduit conduit, int applicationId,
+                                                            @NonNull Map<String, Object> accepted) {
+        try {
+            ApplicationDeploys.deployInBackground(applicationId, null, DeployTrigger.API);
+        } catch (Violations refused) {
+            return ApiConduits.refusal(conduit, refused);
+        }
+        return ApiConduits.json(accepted);
+    }
+
+    /**
+     * The admission a release verb needs on the APPLICATION, asked on the request thread:
+     * {@code power} (the gate the panel's instance row actions ride) and every attached
+     * database ready. The site's {@code manage} grant only makes the site visible; it never
+     * implies power over the workload the site routes to.
+     *
+     * @throws Violations {@code instance_not_permitted} or {@code database_not_ready}
+     */
+    private static void requireReleaseAuthority(int applicationId) {
+        InstanceService.requireDeployAdmitted(applicationId);
     }
 
     /** Executable bytes require application CONFIG as well as the site's independent manage grant. */
@@ -385,25 +415,12 @@ public final class PaasApi {
     // -- operation records: git deployments, releases, builds ------------------
 
     private static void initOperations() {
-        HohenheimEndpoints.API_V1_SITE_DEPLOYMENTS.setHandler(conduit -> {
-            Row site = requireVisibleSite(conduit);
-            if (site == null) {
-                return null;
-            }
-            // AIDEV-NOTE: deployments and releases are the SAME record now (the deleted
-            // `deployments` table was the host-slot lane's private history). The endpoint
-            // stays for its consumers and answers from release_operations.
-            int siteId = site.get(SiteModel.ID);
-            Integer applicationId = applicationIdOf(site);
-            List<Map<String, Object>> deployments = new ArrayList<>();
-            if (applicationId != null) {
-                for (Row row : Models.get(ReleaseOperationModel.class)
-                        .findForOwner(InstanceModel.MODEL_ID.toString(), applicationId, 50)) {
-                    deployments.add(releaseProjection(row, false));
-                }
-            }
-            return ApiConduits.json(Map.of("id", siteId, "deployments", deployments));
-        });
+        // AIDEV-NOTE: deployments and releases are the SAME record now (the deleted
+        // `deployments` table was the host-slot lane's private history). Both routes stay
+        // for their consumers and answer from release_operations through ONE listing; only
+        // the envelope key differs.
+        HohenheimEndpoints.API_V1_SITE_DEPLOYMENTS.setHandler(conduit ->
+            releaseListing(conduit, "deployments"));
 
         HohenheimEndpoints.API_V1_SITE_DEPLOYMENT_LOG.setHandler(conduit -> {
             Row site = requireVisibleSite(conduit);
@@ -426,22 +443,8 @@ public final class PaasApi {
                 "log", stringOrEmpty(deployment.get(ReleaseOperationModel.STEP_LOG))));
         });
 
-        HohenheimEndpoints.API_V1_SITE_RELEASES.setHandler(conduit -> {
-            Row site = requireVisibleSite(conduit);
-            if (site == null) {
-                return null;
-            }
-            int siteId = site.get(SiteModel.ID);
-            Integer applicationId = applicationIdOf(site);
-            List<Map<String, Object>> releases = new ArrayList<>();
-            if (applicationId != null) {
-                for (Row row : Models.get(ReleaseOperationModel.class)
-                        .findForOwner(InstanceModel.MODEL_ID.toString(), applicationId, 50)) {
-                    releases.add(releaseProjection(row, false));
-                }
-            }
-            return ApiConduits.json(Map.of("id", siteId, "releases", releases));
-        });
+        HohenheimEndpoints.API_V1_SITE_RELEASES.setHandler(conduit ->
+            releaseListing(conduit, "releases"));
 
         HohenheimEndpoints.API_V1_SITE_RELEASE.setHandler(conduit -> {
             Row site = requireVisibleSite(conduit);
@@ -495,6 +498,29 @@ public final class PaasApi {
             return ApiConduits.json(Map.of("id", build.get(BuildOperationModel.ID),
                 "log", stringOrEmpty(build.get(BuildOperationModel.LOG))));
         });
+    }
+
+    /**
+     * The newest release operations of a visible site's application, under {@code key}.
+     *
+     * @return the answer, or null when the response has already been ended
+     */
+    private static @Nullable ActionResult<Object> releaseListing(@NonNull Conduit conduit,
+                                                                 @NonNull String key) {
+        Row site = requireVisibleSite(conduit);
+        if (site == null) {
+            return null;
+        }
+        int siteId = site.get(SiteModel.ID);
+        Integer applicationId = applicationIdOf(site);
+        List<Map<String, Object>> operations = new ArrayList<>();
+        if (applicationId != null) {
+            for (Row row : Models.get(ReleaseOperationModel.class)
+                    .findForOwner(InstanceModel.MODEL_ID.toString(), applicationId, 50)) {
+                operations.add(releaseProjection(row, false));
+            }
+        }
+        return ApiConduits.json(Map.of("id", siteId, key, operations));
     }
 
     /** requireKey + visibleSite in one step for the operation-record reads. */

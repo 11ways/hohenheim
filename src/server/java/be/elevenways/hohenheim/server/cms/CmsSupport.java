@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -7,10 +8,12 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
+import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.Field;
+import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.zenit.common.routing.RouteScope;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -230,16 +233,34 @@ public final class CmsSupport {
         return parsedInt(conduit.getParameter(CmsEndpoints.RESOURCE_ID_PARAM));
     }
 
-    /** @return the parsed integer, or null for an absent, empty or malformed value */
-    public static @Nullable Integer parsedInt(@Nullable String raw) {
-        if (raw == null || raw.isEmpty()) {
+    /**
+     * One raw request value as an Integer, riding zenit's {@link PrimitiveCoercion}.
+     *
+     * @return the parsed integer, or null for an absent, blank or malformed value
+     */
+    public static @Nullable Integer parsedInt(@Nullable Object raw) {
+        PrimitiveCoercion.Result<Integer> coerced = PrimitiveCoercion.toInteger(raw,
+            PrimitiveCoercion.NumberRule.INTEGRAL_SOURCES, PrimitiveCoercion.TextRule.TRIMMED_BLANK_IS_NULL);
+        return coerced.ok() ? coerced.value() : null;
+    }
+
+    /**
+     * THE read of a declared create-form prefill parameter off the request's query string.
+     *
+     * AIDEV-NOTE: {@code Conduit.getParameter(definition)} only answers parameters DECLARED on
+     * the matched route, and a prefill rides the generic CMS create route, which declares none
+     * of Hohenheim's -- so this reads the query value by the definition's own name and resolves
+     * it through the definition's own resolver. The name and the parse therefore have ONE home
+     * (HohenheimParams), shared with the links that compose the same parameter.
+     *
+     * @return the resolved value, or null when the parameter is absent, blank or malformed
+     */
+    public static <T> @Nullable T prefill(@NonNull Conduit conduit, @NonNull ParameterDefinition<T> param) {
+        String raw = conduit.getQueryParam(param.getName());
+        if (raw == null || raw.isBlank()) {
             return null;
         }
-        try {
-            return Integer.parseInt(raw);
-        } catch (NumberFormatException malformed) {
-            return null;
-        }
+        return param.parse(raw.trim());
     }
 
     /**
@@ -253,7 +274,7 @@ public final class CmsSupport {
      */
     public static @NonNull String panelSlug(@NonNull Conduit conduit) {
         String slug = conduit.getParameter(CmsEndpoints.PANEL_PARAM);
-        return slug != null && !slug.isBlank() ? slug : "admin";
+        return slug != null && !slug.isBlank() ? slug : HohenheimSlugs.ADMIN;
     }
 
     /**

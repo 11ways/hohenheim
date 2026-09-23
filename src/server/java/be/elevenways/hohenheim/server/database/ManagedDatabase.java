@@ -7,8 +7,11 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
 import be.elevenways.hohenheim.server.util.Http11;
+import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.server.io.DurableFiles;
+import be.elevenways.zenit.server.security.SecureTokens;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -16,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -315,10 +319,19 @@ public class ManagedDatabase {
             return this == REDIS ? "redis-server --requirepass {{REDIS_PASSWORD}}" : null;
         }
 
-        /** The tool + args that dump this engine to stdout as text (SQL). */
+        /**
+         * The tool + args that dump this engine to stdout as text (SQL).
+         *
+         * AIDEV-NOTE: pg_dump runs with --no-owner --no-acl. A managed database's objects
+         * belong to exactly ONE role (the record's user), and roles are engine-global, so an
+         * owner or GRANT line naming a role is only correct on the engine it came from. A
+         * dump restored onto a shared engine whose user had to be renamed used to hand every
+         * object to ANOTHER record's role while the move reported success. The restore
+         * decides the owner instead ({@link #restoreFromStdinCommand}'s role).
+         */
         List<String> dumpCommand(String user, String database) {
             return switch (this) {
-                case POSTGRES -> List.of("pg_dump", "-U", user, "-d", database);
+                case POSTGRES -> List.of("pg_dump", "--no-owner", "--no-acl", "-U", user, "-d", database);
                 // --no-tablespaces: MySQL 8 otherwise needs the global PROCESS privilege, which a
                 // per-database app user lacks. --single-transaction: consistent InnoDB dump, no locks.
                 case MYSQL -> List.of("mysqldump", "--no-tablespaces", "--single-transaction",
@@ -328,14 +341,44 @@ public class ManagedDatabase {
             };
         }
 
-        /** Env for {@link #dumpCommand}/{@link #restoreCommand} so the password never appears
-         *  in argv or captured stdout. */
+        /** Env for {@link #dumpCommand}/{@link #restoreFromStdinCommand} so the password never
+         *  appears in argv or captured stdout. */
         List<String> dumpEnv(String password) {
             return switch (this) {
                 case POSTGRES -> List.of("PGPASSWORD=" + password);
                 case MYSQL -> List.of("MYSQL_PWD=" + password);
-                case REDIS, MONGO -> List.of();
+                case REDIS -> List.of();
+                case MONGO -> List.of(DUMP_PASSWORD + "=" + password);
             };
+        }
+
+        /** The env var the mongo dump and restore scripts read the password from. */
+        static final String DUMP_PASSWORD = "HOHENHEIM_DUMP_PASSWORD";
+
+        /**
+         * The shell fragment writing {@code $d/auth.yaml}, a mongo-tools {@code --config}
+         * file carrying the password from {@link #DUMP_PASSWORD}; {@code $d} names a private
+         * (0700) directory the surrounding script owns.
+         *
+         * AIDEV-NOTE: {@code --password} on the command line is readable by every process
+         * in the container through /proc/PID/cmdline for as long as the dump runs, which is
+         * exactly what the env lane exists to avoid. The YAML value is single-quoted, where
+         * the only escape is a doubled quote.
+         */
+        static final String MONGO_AUTH_FILE = "umask 077;"
+            + " pw=$(printf '%s' \"$" + DUMP_PASSWORD + "\" | sed \"s/'/''/g\");"
+            + " printf \"password: '%s'\\n\" \"$pw\" > \"$d/auth.yaml\";";
+
+        /**
+         * The command dumping one Mongo database into {@code <directory>/dump.archive}: sh -c
+         * body, $1 the private directory (already created), $2 user, $3 database; the
+         * password via {@link #dumpEnv}.
+         */
+        List<String> mongoDumpCommand(String directory, String user, String database) {
+            return List.of("sh", "-c", "set -e; d=\"$1\"; " + MONGO_AUTH_FILE
+                + " exec mongodump --config=\"$d/auth.yaml\" --username \"$2\""
+                + " --authenticationDatabase admin --db \"$3\" --archive=\"$d/dump.archive\"",
+                "hohenheim-dump", directory, user, database);
         }
 
         /** File extension for this engine's dump artifact. */
@@ -355,41 +398,54 @@ public class ManagedDatabase {
             };
         }
 
-        /** The env var the stdin restore script reads the password from (mongo only). */
-        static final String RESTORE_PASSWORD = "HOHENHEIM_RESTORE_PASSWORD";
-
         /**
          * The client that loads a dump arriving on STDIN, handed EXACTLY {@code bytes}
          * bytes: the exec pipe has no half-close, so {@code head -c} is what gives the
-         * client its EOF and lets it exit. User and database travel as positional
-         * arguments (never interpolated into the body); the password rides
+         * client its EOF and lets it exit. User, database and owner role travel as
+         * positional arguments (never interpolated into the body); the password rides
          * {@link #restoreEnv}. Consumed by {@code DockerClient.execWithStdin}.
          *
+         * AIDEV-NOTE: {@code ownerRole} is how a restore run with the engine's ROOT
+         * credentials still leaves every object owned by the record's own role: Postgres
+         * restores under {@code SET ROLE}, so what the dump creates belongs to that role
+         * (dumps carry no owner lines, see {@link #dumpCommand}). Null restores as the
+         * connecting user, which is right for a dedicated engine whose root IS the
+         * record's user. MySQL has no object owner and Mongo's archive restore is
+         * namespace-scoped, so both ignore it.
+         *
+         * @param ownerRole the role that must own what the restore creates, or null
          * @throws UnsupportedOperationException for redis, whose restore is an RDB swap
+         * @throws IllegalArgumentException when the role fails {@link #isLogicalIdentifier}
          */
-        List<String> restoreFromStdinCommand(String user, String database, long bytes) {
+        List<String> restoreFromStdinCommand(String user, String database, long bytes,
+                                             @Nullable String ownerRole) {
+            if (ownerRole != null && !isLogicalIdentifier(ownerRole)) {
+                throw new IllegalArgumentException("Not a restorable owner role: '" + ownerRole + "'");
+            }
             String body = switch (this) {
-                // ON_ERROR_STOP makes a failed statement abort with non-zero (no silent half-restore).
-                case POSTGRES -> "head -c \"$1\" | psql -v ON_ERROR_STOP=1 -U \"$2\" -d \"$3\"";
+                // ON_ERROR_STOP makes a failed statement abort with non-zero (no silent
+                // half-restore); the SET ROLE line goes FIRST on the same session.
+                case POSTGRES -> "{ if [ -n \"$4\" ]; then printf 'SET ROLE \"%s\";\\n' \"$4\"; fi;"
+                    + " head -c \"$1\"; } | psql -v ON_ERROR_STOP=1 -U \"$2\" -d \"$3\"";
                 case MYSQL -> "head -c \"$1\" | mysql -u \"$2\" \"$3\"";
                 // --drop replaces existing collections; the archive carries its own db name,
                 // and --nsInclude keeps a restore on a SHARED engine inside this one
                 // database whatever else an uploaded archive may carry. A bare --archive
-                // reads stdin.
-                case MONGO -> "head -c \"$1\" | mongorestore --username \"$2\" --password \"$"
-                    + RESTORE_PASSWORD + "\" --authenticationDatabase admin --drop"
-                    + " --nsInclude=\"$3.*\" --archive";
+                // reads stdin. The password reaches mongorestore through a --config file
+                // in a private directory removed on exit, never through its argv.
+                case MONGO -> "set -e; d=$(mktemp -d); trap 'rm -rf \"$d\"' EXIT; "
+                    + MONGO_AUTH_FILE
+                    + " head -c \"$1\" | mongorestore --config=\"$d/auth.yaml\" --username \"$2\""
+                    + " --authenticationDatabase admin --drop --nsInclude=\"$3.*\" --archive";
                 case REDIS -> throw new UnsupportedOperationException(
                     "redis restore goes through restoreFromFile (RDB swap + restart), not a client command");
             };
-            return List.of("sh", "-c", body, "hohenheim-restore", Long.toString(bytes), user, database);
+            return List.of("sh", "-c", body, "hohenheim-restore", Long.toString(bytes), user, database,
+                ownerRole == null ? "" : ownerRole);
         }
 
         /** Env for {@link #restoreFromStdinCommand}: the password, never in argv of the exec. */
         List<String> restoreEnv(String password) {
-            if (this == MONGO) {
-                return List.of(RESTORE_PASSWORD + "=" + password);
-            }
             return dumpEnv(password);
         }
 
@@ -483,7 +539,7 @@ public class ManagedDatabase {
                 case MONGO -> List.of("sh", "-c", MONGO_CREATE_SCRIPT, "hohenheim-create",
                     String.valueOf(port), rootUser, database, user);
                 case MYSQL -> List.of("sh", "-c", MYSQL_CREATE_SCRIPT, "hohenheim-create",
-                    rootUser, database, user);
+                    rootUser, database, user, mysqlGrantPattern(database));
                 case POSTGRES -> List.of("sh", "-c", POSTGRES_CREATE_SCRIPT, "hohenheim-create",
                     rootUser, database, user);
                 case REDIS -> throw noLogical();
@@ -531,6 +587,60 @@ public class ManagedDatabase {
                     "hohenheim-fingerprint", rootUser, database);
                 case REDIS -> throw noLogical();
             };
+        }
+
+        /**
+         * The command that re-asserts a logical database's TENANT ISOLATION on a shared
+         * engine, as root. Idempotent; safe on every run.
+         *
+         * Postgres revokes PUBLIC's connect engine-wide ({@link #POSTGRES_ISOLATE_SCRIPT}),
+         * which covers this database too; MySQL re-grants the user on the escaped database
+         * pattern and revokes a wildcard grant left from before ({@link #MYSQL_GRANT_SCRIPT}).
+         *
+         * @return null for an engine whose logical databases need no repair: a Mongo user
+         *         lives in its own database with dbOwner on exactly it and nothing else
+         * @throws UnsupportedOperationException for an engine without logical databases
+         */
+        public @Nullable List<String> isolationCommand(String rootUser, String database, String user) {
+            requireLogical(rootUser, database, user);
+            return switch (this) {
+                case POSTGRES -> List.of("sh", "-c", POSTGRES_ISOLATE_SCRIPT, "hohenheim-isolate",
+                    rootUser);
+                case MYSQL -> List.of("sh", "-c", MYSQL_GRANT_SCRIPT, "hohenheim-isolate",
+                    rootUser, database, user, mysqlGrantPattern(database));
+                case MONGO -> null;
+                case REDIS -> throw noLogical();
+            };
+        }
+
+        /**
+         * The command printing how many objects of the database are NOT owned by (Postgres)
+         * or not defined by (MySQL) {@code user}: "0" is the only clean answer. The content
+         * fingerprint cannot see this, because two databases holding equal rows under
+         * different owners fingerprint the same.
+         *
+         * @return null for an engine with no per-object owner (Mongo)
+         * @throws UnsupportedOperationException for an engine without logical databases
+         */
+        public @Nullable List<String> foreignOwnershipCommand(String rootUser, String database,
+                                                              String user) {
+            requireLogical(rootUser, database, user);
+            return switch (this) {
+                case POSTGRES -> List.of("sh", "-c", POSTGRES_FOREIGN_OWNER_SCRIPT,
+                    "hohenheim-ownership", rootUser, database, user);
+                case MYSQL -> List.of("sh", "-c", MYSQL_FOREIGN_DEFINER_SCRIPT,
+                    "hohenheim-ownership", rootUser, database, user);
+                case MONGO -> null;
+                case REDIS -> throw noLogical();
+            };
+        }
+
+        /**
+         * A database name as a MySQL GRANT pattern: {@code _} escaped, since GRANT reads it
+         * as a single-character wildcard ({@code %} is outside the logical-identifier set).
+         */
+        static String mysqlGrantPattern(String database) {
+            return database.replace("_", "\\_");
         }
 
         /**
@@ -594,12 +704,34 @@ public class ManagedDatabase {
             + " for (var i = 0; i < names.length; i++) { out.push(names[i] + '='"
             + " + r.collections[names[i]]); } print(out.join(' ') + ' md5=' + r.md5);\"";
 
-        /** sh -c body; $1 root user, $2 database, $3 user; MYSQL_PWD + LOGICAL_PASSWORD via env. */
-        static final String MYSQL_CREATE_SCRIPT = "exec mysql -u \"$1\" -e"
-            + " \"CREATE DATABASE IF NOT EXISTS \\`$2\\`;"
-            + " CREATE USER IF NOT EXISTS '$3'@'%' IDENTIFIED BY '$" + LOGICAL_PASSWORD + "';"
-            + " ALTER USER '$3'@'%' IDENTIFIED BY '$" + LOGICAL_PASSWORD + "';"
-            + " GRANT ALL PRIVILEGES ON \\`$2\\`.* TO '$3'@'%'; FLUSH PRIVILEGES;\"";
+        /**
+         * sh -c body; $1 root user, $2 database, $3 user, $4 the GRANT pattern of the
+         * database ({@link #mysqlGrantPattern}); passwords via env. Exits 0 without
+         * granting when the user does not exist.
+         *
+         * AIDEV-NOTE: {@code _} is a WILDCARD in a MySQL GRANT's database name, so
+         * {@code GRANT ... ON `shop_db`.*} also reached a database named {@code shopXdb}
+         * on the same shared engine. The grant names the escaped pattern, and a grant
+         * that still stands on the unescaped spelling (every database created before
+         * 2026-09-23) is revoked AFTER it, so the tenant never loses its own database in
+         * between: this script IS the repair {@code DatabaseEngines.reconcileIsolation}
+         * runs against existing grants.
+         */
+        static final String MYSQL_GRANT_SCRIPT = "if [ \"$(mysql -u \"$1\" -N -B -e \"SELECT COUNT(*) FROM"
+            + " mysql.user WHERE User = '$3'"
+            + " AND Host = '%'\")\" = 0 ]; then exit 0; fi; mysql -u \"$1\" -e \"GRANT ALL PRIVILEGES"
+            + " ON \\`$4\\`.* TO '$3'@'%'\" || exit 1; if [ \"$2\" != \"$4\" ] && [ \"$(mysql -u \"$1\""
+            + " -N -B -e \"SELECT COUNT(*) FROM mysql.db WHERE User = '$3' AND Host = '%' AND Db ="
+            + " '$2'\")\" != 0 ]; then exec mysql -u \"$1\" -e \"REVOKE ALL PRIVILEGES ON \\`$2\\`.*"
+            + " FROM '$3'@'%'\"; fi";
+
+        /** sh -c body; $1 root user, $2 database, $3 user, $4 grant pattern; MYSQL_PWD + LOGICAL_PASSWORD via env. */
+        static final String MYSQL_CREATE_SCRIPT = "set -e; mysql -u \"$1\" -e \"CREATE DATABASE IF NOT EXISTS"
+            + " \\`$2\\`; CREATE USER IF NOT"
+            + " EXISTS '$3'@'%' IDENTIFIED BY '$" + LOGICAL_PASSWORD
+            + "'; ALTER USER '$3'@'%' IDENTIFIED BY '$" + LOGICAL_PASSWORD
+            + "';\"; "
+            + MYSQL_GRANT_SCRIPT;
 
         /** sh -c body; $1 root user, $2 database, $3 user, $4 drop data (1/0). */
         static final String MYSQL_DROP_SCRIPT = "mysql -u \"$1\" -e"
@@ -607,12 +739,34 @@ public class ManagedDatabase {
             + " if [ \"$4\" = 1 ]; then exec mysql -u \"$1\" -e"
             + " \"DROP DATABASE IF EXISTS \\`$2\\`;\"; fi";
 
-        /** sh -c body; $1 root user, $2 database. One CHECKSUM TABLE line per table. */
-        static final String MYSQL_FINGERPRINT_SCRIPT = "set -e;"
-            + " tables=$(mysql -u \"$1\" -N -e \"SELECT table_name FROM information_schema.tables"
-            + " WHERE table_schema='$2' ORDER BY table_name\");"
-            + " for t in $tables; do mysql -u \"$1\" -N -e \"CHECKSUM TABLE \\`$2\\`.\\`$t\\`\";"
-            + " done";
+        /**
+         * sh -c body; $1 root user, $2 database. One CHECKSUM TABLE line per base table.
+         *
+         * AIDEV-NOTE: the table names are TENANT-CONTROLLED and this runs as root. They
+         * never pass through the shell: SQL builds the CHECKSUM statements with every
+         * identifier backtick-quoted (embedded backticks doubled), and the statements reach
+         * the second client as DATA on stdin. The old loop pasted each name into a shell
+         * word and then into the SQL text, so a table name was a root-level injection, and
+         * a name with a space broke the fingerprint.
+         */
+        static final String MYSQL_FINGERPRINT_SCRIPT = "set -e; stmts=$(mysql -u \"$1\" -N -B -r -e \"SELECT"
+            + " CONCAT('CHECKSUM TABLE \\`',"
+            + " REPLACE(table_schema, '\\`', '\\`\\`'), '\\`.\\`', REPLACE(table_name, '\\`',"
+            + " '\\`\\`'), '\\`;') FROM information_schema.tables WHERE table_schema = '$2' AND"
+            + " table_type = 'BASE TABLE' ORDER BY table_name\"); printf '%s\\n' \"$stmts\" | mysql -u"
+            + " \"$1\" -N -B";
+
+        /**
+         * sh -c body; $1 root user, $2 database, $3 user. Prints how many views, routines,
+         * triggers and events of the database carry a DEFINER other than the user.
+         */
+        static final String MYSQL_FOREIGN_DEFINER_SCRIPT = "exec mysql -u \"$1\" -N -B -e \"SELECT (SELECT COUNT(*)"
+            + " FROM information_schema.views"
+            + " WHERE table_schema = '$2' AND definer <> '$3@%') + (SELECT COUNT(*) FROM"
+            + " information_schema.routines WHERE routine_schema = '$2' AND definer <> '$3@%') +"
+            + " (SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema = '$2' AND"
+            + " definer <> '$3@%') + (SELECT COUNT(*) FROM information_schema.events WHERE event_schema"
+            + " = '$2' AND definer <> '$3@%')\"";
 
         /** sh -c body; $1 root user, $2 database, $3 user; PGPASSWORD + LOGICAL_PASSWORD via env. */
         static final String POSTGRES_CREATE_SCRIPT = "set -e;"
@@ -624,7 +778,51 @@ public class ManagedDatabase {
             + " if [ \"$(psql -v ON_ERROR_STOP=1 -U \"$1\" -d postgres -tAc"
             + " \"SELECT 1 FROM pg_database WHERE datname = '$2'\")\" != 1 ]; then"
             + " psql -v ON_ERROR_STOP=1 -U \"$1\" -d postgres -c"
-            + " \"CREATE DATABASE \\\"$2\\\" OWNER \\\"$3\\\"\"; fi";
+            + " \"CREATE DATABASE \\\"$2\\\" OWNER \\\"$3\\\"\"; fi;"
+            + " psql -v ON_ERROR_STOP=1 -U \"$1\" -d postgres -c \"REVOKE ALL ON DATABASE \\\"$2\\\""
+            + " FROM PUBLIC\"";
+
+        /**
+         * sh -c body; $1 root user. Revokes PUBLIC's CONNECT and TEMPORARY on every database
+         * of the engine but template0 and the {@code postgres} maintenance database, and
+         * PUBLIC's CREATE on that maintenance database's public schema.
+         *
+         * AIDEV-NOTE: CONNECT is granted to PUBLIC on every new Postgres database, so on a
+         * SHARED engine every tenant role could log into every other tenant's database
+         * (and into template1, where an old image's public-schema CREATE would plant
+         * objects in every FUTURE database). The owner keeps its implicit rights and the
+         * superuser needs none. Idempotent, and engine-wide on purpose: it is the repair for
+         * every database created before 2026-09-23 as much as the guard for new ones.
+         *
+         * AIDEV-NOTE: {@code postgres} stays connectable ON PURPOSE: client tooling (a
+         * framework's "does my database exist" probe) dials the maintenance database, and it
+         * holds no tenant data. What made it dangerous on a pre-15 image is PUBLIC's CREATE
+         * on its public schema, and that is what is revoked there instead.
+         */
+        static final String POSTGRES_ISOLATE_SCRIPT = "set -e; stmts=$(psql -v ON_ERROR_STOP=1 -U \"$1\" -d postgres"
+            + " -tAc \"SELECT"
+            + " format('REVOKE ALL ON DATABASE %I FROM PUBLIC;', datname) FROM pg_database WHERE"
+            + " datname NOT IN ('template0', 'postgres') ORDER BY datname\"); printf '%s\\n' \"$stmts\""
+            + " | psql -v ON_ERROR_STOP=1 -q -U \"$1\" -d postgres; psql -v ON_ERROR_STOP=1 -q -U"
+            + " \"$1\" -d postgres -c \"REVOKE CREATE ON SCHEMA public FROM PUBLIC\"";
+
+        /**
+         * sh -c body; $1 root user, $2 database, $3 user. Prints how many relations,
+         * functions, types and schemas of the database the user does NOT own; prints
+         * nothing when the role does not exist.
+         */
+        static final String POSTGRES_FOREIGN_OWNER_SCRIPT = "exec psql -v ON_ERROR_STOP=1 -U \"$1\" -d \"$2\" -tAc"
+            + " \"SELECT (SELECT count(*) FROM"
+            + " pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname NOT IN"
+            + " ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg\\_%' AND c.relowner <>"
+            + " r.oid) + (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace"
+            + " WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE"
+            + " 'pg\\_%' AND p.proowner <> r.oid) + (SELECT count(*) FROM pg_type t JOIN pg_namespace n"
+            + " ON n.oid = t.typnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')"
+            + " AND n.nspname NOT LIKE 'pg\\_%' AND t.typowner <> r.oid) + (SELECT count(*) FROM"
+            + " pg_namespace n WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'public')"
+            + " AND n.nspname NOT LIKE 'pg\\_%' AND n.nspowner <> r.oid) FROM pg_roles r WHERE"
+            + " r.rolname = '$3'\"";
 
         /** sh -c body; $1 root user, $2 database, $3 user, $4 drop data (1/0). */
         static final String POSTGRES_DROP_SCRIPT = "set -e;"
@@ -793,15 +991,17 @@ public class ManagedDatabase {
      * Back up any engine to a file, STREAMED end to end: SQL text dumps go exec-stdout to
      * disk, binary dumps (Redis RDB, mongodump archive) go archive-API to disk -- controller
      * heap never holds a dump (the 2026-08-31 nightly OOM class). The write lands in a
-     * {@code .part} sibling moved into place on success, so a failed or over-cap dump never
-     * leaves a file that could pass for a backup.
+     * {@code .part} sibling that is fsynced and then moved into place on success, so a
+     * failed or over-cap dump never leaves a file that could pass for a backup, and a crash
+     * right after the move never leaves a committed name over unwritten blocks.
      *
      * @throws IOException naming {@code database.max_dump_mb} when the dump exceeds the cap
      */
     // AIDEV-NOTE: Binary dumps must land in the container's writable layer (/tmp), not on a
     // mount: the Docker archive API (getArchiveFileTo) cannot read files inside a tmpfs (or
-    // volume) mount. So redis dumps via `--rdb /tmp/...` (not SAVE, which writes to the /data
-    // mount) and mongodump targets /tmp.
+    // volume) mount. So redis dumps via `--rdb` (not SAVE, which writes to the /data mount)
+    // and mongodump targets /tmp -- each into a PRIVATE directory of its own, see
+    // privateDumpDirectory.
     public void backupToFile(String handle, Engine engine, String user, String password,
                              String database, Path target) throws IOException {
         Path partial = target.resolveSibling(target.getFileName() + ".part");
@@ -819,15 +1019,20 @@ public class ManagedDatabase {
                     }
                 }
                 case REDIS -> {
-                    String rdbPath = "/tmp/hohenheim-dump.rdb";
-                    DockerClient.ExecResult save = docker.exec(handle,
-                        List.of("redis-cli", "--rdb", rdbPath), engine.readyEnv(password));
-                    if (save.exitCode() != 0) {
-                        throw new IOException("redis dump failed for '" + handle + "': "
-                            + save.stderr().trim());
+                    String directory = privateDumpDirectory(handle);
+                    try {
+                        String rdbPath = directory + "/dump.rdb";
+                        DockerClient.ExecResult save = docker.exec(handle,
+                            List.of("redis-cli", "--rdb", rdbPath), engine.readyEnv(password));
+                        if (save.exitCode() != 0) {
+                            throw new IOException("redis dump failed for '" + handle + "': "
+                                + save.stderr().trim());
+                        }
+                        requireUnderCap(handle, rdbPath);
+                        docker.getArchiveFileTo(handle, rdbPath, partial, maxDumpBytes());
+                    } finally {
+                        removeDumpDirectory(handle, directory);
                     }
-                    requireUnderCap(handle, rdbPath);
-                    docker.getArchiveFileTo(handle, rdbPath, partial, maxDumpBytes());
                     // The exit code alone is a liar: redis-cli has shipped exit 0 while
                     // writing an error line (NOAUTH) into the dump file. The restore path
                     // checks the RDB magic; a backup that would fail that check is not a
@@ -837,23 +1042,79 @@ public class ManagedDatabase {
                         + " NOAUTH may have landed in the dump file)");
                 }
                 case MONGO -> {
-                    String archivePath = "/tmp/hohenheim-dump.archive";
-                    DockerClient.ExecResult dump = docker.exec(handle, List.of("mongodump",
-                        "--username", user, "--password", password, "--authenticationDatabase", "admin",
-                        "--db", database, "--archive=" + archivePath));
-                    if (dump.exitCode() != 0) {
-                        throw new IOException("mongodump failed for '" + handle + "': "
-                            + dump.stderr().trim());
+                    String directory = privateDumpDirectory(handle);
+                    try {
+                        String archivePath = directory + "/dump.archive";
+                        DockerClient.ExecResult dump = docker.exec(handle,
+                            engine.mongoDumpCommand(directory, user, database), engine.dumpEnv(password));
+                        if (dump.exitCode() != 0) {
+                            throw new IOException("mongodump failed for '" + handle + "': "
+                                + dump.stderr().trim());
+                        }
+                        requireUnderCap(handle, archivePath);
+                        docker.getArchiveFileTo(handle, archivePath, partial, maxDumpBytes());
+                    } finally {
+                        removeDumpDirectory(handle, directory);
                     }
-                    requireUnderCap(handle, archivePath);
-                    docker.getArchiveFileTo(handle, archivePath, partial, maxDumpBytes());
                 }
             }
-            Files.move(partial, target, StandardCopyOption.REPLACE_EXISTING);
+            DurableFiles.forceFile(partial);
+            Files.move(partial, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            DurableFiles.forceDirectory(target.getParent());
         } catch (Http11.BodyCapExceededException overCap) {
             throw capRefusal(handle, overCap);
         } finally {
             Files.deleteIfExists(partial);
+        }
+    }
+
+    /**
+     * Create a fresh 0700 directory under the container's /tmp for ONE binary dump.
+     *
+     * AIDEV-NOTE: the dump used to go to one FIXED path per engine
+     * ({@code /tmp/hohenheim-dump.rdb}, {@code /tmp/hohenheim-dump.archive}) and was never
+     * removed. On a shared engine two overlapping dumps -- the nightly run and a tenant's
+     * download -- then wrote the same file, and the later fetch handed tenant A the archive
+     * of tenant B; the last dump also sat in /tmp until the container was replaced. A
+     * random name makes the paths disjoint, mkdir refuses a name that already exists, and
+     * the caller removes the directory in a finally block.
+     *
+     * @return the directory's absolute path inside the container
+     */
+    private String privateDumpDirectory(String handle) throws IOException {
+        String directory = "/tmp/hohenheim-dump-" + SecureTokens.randomToken(12);
+        DockerClient.ExecResult made = docker.exec(handle, List.of("mkdir", "-m", "700", directory));
+        if (made.exitCode() != 0) {
+            throw new IOException("Could not create a private dump directory in '" + handle + "': "
+                + made.stderr().trim());
+        }
+        return directory;
+    }
+
+    /**
+     * The fixed paths dumps used before they got a private directory each: a production
+     * engine container may still hold the last tenant dump there.
+     */
+    private static final List<String> LEGACY_DUMP_PATHS =
+        List.of("/tmp/hohenheim-dump.rdb", "/tmp/hohenheim-dump.archive");
+
+    /**
+     * Best-effort removal of a dump directory, and of the legacy fixed dump paths an
+     * engine may still carry from before: the dump's own outcome is what the caller
+     * reports, and a leftover is logged by name rather than masking it.
+     */
+    private void removeDumpDirectory(String handle, String directory) {
+        List<String> command = new ArrayList<>(List.of("rm", "-rf", directory));
+        command.addAll(LEGACY_DUMP_PATHS);
+        try {
+            DockerClient.ExecResult removed = docker.exec(handle, command);
+            if (removed.exitCode() != 0) {
+                Blast.log("DB: could not remove dump directory", directory, "in", handle, "-",
+                    removed.stderr().trim());
+            }
+        } catch (IOException | RuntimeException failed) {
+            Blast.log("DB: could not remove dump directory", directory, "in", handle, "-",
+                failed.getMessage());
         }
     }
 
@@ -869,7 +1130,7 @@ public class ManagedDatabase {
         Path tempFile = Files.createTempFile("hohenheim-restore", "." + engine.dumpExtension());
         try {
             Files.writeString(tempFile, dump, StandardCharsets.UTF_8);
-            restoreFromFile(handle, engine, user, password, database, tempFile);
+            restoreFromFile(handle, engine, user, password, database, tempFile, null);
         } finally {
             Files.deleteIfExists(tempFile);
         }
@@ -883,17 +1144,22 @@ public class ManagedDatabase {
      * and restarting the container -- that lane still pushes the file through the archive
      * API and buffers it, which an RDB's size has never made a problem.
      *
+     * @param ownerRole the role that must own what the restore creates (a shared record's
+     *                  user), or null to restore as {@code user}; see
+     *                  {@link Engine#restoreFromStdinCommand}
      * @throws UnsupportedOperationException for an ephemeral Redis (its tmpfs data dir is wiped
      *                                       by the restart the restore requires)
      */
     public void restoreFromFile(String handle, Engine engine, String user, String password,
-                                String database, Path source) throws IOException {
+                                String database, Path source, @Nullable String ownerRole)
+            throws IOException {
         if (engine == Engine.REDIS) {
             restoreRedis(handle, user, password, database, source);
             return;
         }
         // Resolve the command first so an unsupported engine fails before any byte moves.
-        List<String> command = engine.restoreFromStdinCommand(user, database, Files.size(source));
+        List<String> command = engine.restoreFromStdinCommand(user, database, Files.size(source),
+            ownerRole);
         DockerClient.ExecResult result;
         try (InputStream in = Files.newInputStream(source)) {
             result = docker.execWithStdin(handle, command, engine.restoreEnv(password), in);

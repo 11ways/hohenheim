@@ -1,34 +1,22 @@
 package be.elevenways.hohenheim.server.proxy;
 
-import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.auth.SiteAuthDecision;
-import be.elevenways.hohenheim.model.AccessListModel;
-import be.elevenways.hohenheim.model.AccessRuleModel;
-import be.elevenways.hohenheim.model.ProtectedPathModel;
-import be.elevenways.hohenheim.model.SiteAuthProviderModel;
-import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.net.Hostnames;
-import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.auth.SiteAuthGate;
 import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.hohenheim.server.security.HohenheimSecurity;
 import be.elevenways.hohenheim.server.security.IpLiterals;
 import be.elevenways.hohenheim.server.security.ReputationBanPolicy;
 import be.elevenways.hohenheim.server.security.ThreatScorer;
-import be.elevenways.zenit.common.security.SecurityEventTypes;
-import be.elevenways.zenit.server.security.SecurityEvents;
-import be.elevenways.hohenheim.server.auth.SiteAuthGate;
-import be.elevenways.hohenheim.server.auth.SiteAuthGates;
-import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
-import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
-import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
-import be.elevenways.hohenheim.server.sitetype.TlsPassthroughProvider;
+import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.hohenheim.server.tls.AcmeService;
+import be.elevenways.hohenheim.server.tls.SniKeyManager;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.security.SecurityEventTypes;
 import be.elevenways.zenit.common.session.SessionStore;
+import be.elevenways.zenit.server.security.SecurityEvents;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.server.handlers.proxy.ProxyHandler;
@@ -40,14 +28,8 @@ import io.undertow.util.StatusCodes;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -59,7 +41,6 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.regex.Pattern;
 
 import javax.net.ssl.SSLContext;
 
@@ -70,10 +51,11 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * Handles loop detection, request header injection, HSTS, force-SSL, custom headers,
  * path-based routing, default site fallback, and IP reputation tracking.
  *
- * The pipeline's stages live in package collaborators: {@link RouteResolver} selects the
- * route, {@link AccessListGate} enforces the access list, {@link ForwardingHeaders} rewrites
- * the upstream request, {@link ResponseMutations} rewrites the response and
- * {@link UpstreamProxyClient} dials the backend.
+ * The pipeline's stages live in package collaborators: {@link RouteTableBuilder} builds a
+ * route generation, {@link RequestPath} reads the path every later stage agrees on,
+ * {@link RouteResolver} selects the route, {@link AccessListGate} enforces the access list,
+ * {@link ForwardingHeaders} rewrites the upstream request, {@link ResponseMutations} rewrites
+ * the response and {@link UpstreamProxyClient} dials the backend.
  */
 public class SiteDispatcher implements HttpHandler {
 
@@ -114,8 +96,7 @@ public class SiteDispatcher implements HttpHandler {
 
     private final TlsPassthroughRoutes tlsPassthroughRoutes = new TlsPassthroughRoutes();
     private final Object generationLock = new Object();
-    private volatile RouteTable routes = new RouteTable(
-        Map.of(), List.of(), List.of(), TlsPassthroughRoutes.emptySnapshot(), Set.of(), Set.of());
+    private volatile RouteTable routes = RouteTable.empty();
 
     private static final HttpString HOST = Headers.HOST;
 
@@ -125,11 +106,6 @@ public class SiteDispatcher implements HttpHandler {
     private final AccessLog accessLog = new AccessLog();
 
     private static final String ACME_CHALLENGE_PREFIX = "/.well-known/acme-challenge/";
-
-    // Used when a site's configured auth provider can't be resolved/built: deny everything rather
-    // than silently exposing an upstream that was meant to be protected.
-    private static final SiteAuthGate FAIL_CLOSED_GATE =
-        exchange -> SiteAuthDecision.deny(503, "Authentication unavailable");
 
     // Proxy handlers per request-timeout value (ProxyHandler fixes maxRequestTime at build
     // time). Sites share one client; a handful of distinct timeouts at most.
@@ -180,316 +156,13 @@ public class SiteDispatcher implements HttpHandler {
 
     /**
      * Reload all routes from the database, creating handlers via the site type system.
+     *
+     * The new generation is built completely before it is swapped in, and a build that throws
+     * leaves the serving generation untouched (the builder has already destroyed whatever it
+     * created).
      */
     public synchronized void reloadRoutes() {
-        var siteModel = Models.get(SiteModel.class);
-        var domainModel = Models.get(SiteDomainModel.class);
-        var accessListModel = Models.get(AccessListModel.class);
-        var authProviderModel = Models.get(SiteAuthProviderModel.class);
-
-        // Build new route maps first, then swap atomically
-        Map<String, List<RouteEntry>> newExact = new HashMap<>();
-        List<WildcardRoute> newWildcard = new ArrayList<>();
-        List<RegexRoute> newRegex = new ArrayList<>();
-        Set<SiteRequestHandler> ownedHandlers = Collections.newSetFromMap(new IdentityHashMap<>());
-        Set<SiteAuthGate> ownedGates = Collections.newSetFromMap(new IdentityHashMap<>());
-
-        // RouteClaims.keyOf -> owning site; duplicates are refused loudly with
-        // deterministic first-wins (sites load in name order).
-        Map<String, String> claimedRoutes = new HashMap<>();
-
-        List<Row> sites = siteModel.findEnabled();
-        Map<Integer, List<Row>> domainsBySite = new HashMap<>();
-        for (Row domain : domainModel.find().all()) {
-            Integer siteId = domain.get(SiteDomainModel.SITE_ID);
-            if (siteId != null) {
-                domainsBySite.computeIfAbsent(siteId, ignored -> new ArrayList<>()).add(domain);
-            }
-        }
-        Map<Integer, Row> accessLists = new HashMap<>();
-        for (Row accessList : accessListModel.find().all()) {
-            accessLists.put(accessList.get(AccessListModel.ID), accessList);
-        }
-        // One query for every rule in the system, bucketed per list: a route load must not
-        // grow a query per guarded site.
-        Map<Integer, List<Row>> rulesByList = new HashMap<>();
-        for (Row rule : Models.get(AccessRuleModel.class).find()
-                .orderBy(AccessRuleModel.SORT, SortOrder.ASC)
-                .orderBy(AccessRuleModel.ID, SortOrder.ASC).all()) {
-            Integer listId = rule.get(AccessRuleModel.ACCESS_LIST_ID);
-            if (listId != null) {
-                rulesByList.computeIfAbsent(listId, ignored -> new ArrayList<>()).add(rule);
-            }
-        }
-        Map<Integer, Row> authProviders = new HashMap<>();
-        for (Row provider : authProviderModel.find().all()) {
-            authProviders.put(provider.get(SiteAuthProviderModel.ID), provider);
-        }
-        // Protected paths bucketed per site, same one-query discipline as the rules above.
-        Map<Integer, List<Row>> protectedPathsBySite = new HashMap<>();
-        for (Row guarded : Models.get(ProtectedPathModel.class).find()
-                .orderBy(ProtectedPathModel.PATH, SortOrder.ASC).all()) {
-            Integer guardedSiteId = guarded.get(ProtectedPathModel.SITE_ID);
-            if (guardedSiteId != null) {
-                protectedPathsBySite.computeIfAbsent(guardedSiteId, ignored -> new ArrayList<>())
-                    .add(guarded);
-            }
-        }
-
-        for (Row site : sites) {
-            String siteTypeStr = site.get(SiteModel.UPSTREAM_KIND);
-            Integer siteId = site.get(SiteModel.ID);
-            String siteName = site.get(SiteModel.NAME);
-
-            UpstreamKindHandler typeHandler = UpstreamKindHandlers.getHandler(siteTypeStr);
-            if (typeHandler == null) {
-                Blast.log("SiteDispatcher: unknown site type", siteTypeStr, "for site", siteName);
-                continue;
-            }
-            if (typeHandler instanceof TlsPassthroughProvider) {
-                continue;
-            }
-
-            @SuppressWarnings("unchecked")
-            Map<String, Object> settings = (Map<String, Object>) site.get(SiteModel.SETTINGS);
-            if (settings == null) settings = Map.of();
-
-            List<Row> domains = domainsBySite.getOrDefault(siteId, List.of());
-            boolean hasRoutableDomain = domains.stream().anyMatch(domain -> {
-                String hostname = domain.get(SiteDomainModel.HOSTNAME);
-                return hostname != null && !hostname.isEmpty();
-            });
-            if (!hasRoutableDomain) {
-                Blast.log("SiteDispatcher: site", siteName, "has no routable domain; skipping");
-                continue;
-            }
-
-            // Load access list if assigned
-            Integer accessListId = site.get(SiteModel.ACCESS_LIST_ID);
-            Row accessList = accessListId != null ? accessLists.get(accessListId) : null;
-
-            // Build the per-site auth gate (shared across all of this site's domains). Built once
-            // here, not per-domain, since auth_provider_id is a site-level concern.
-            SiteAuthGate authGate = null;
-            String authProviderName = null;
-            Integer authProviderId = site.get(SiteModel.AUTH_PROVIDER_ID);
-            if (authProviderId != null) {
-                Row providerRow = authProviders.get(authProviderId);
-                SiteAuthGates.Built built = SiteAuthGates.build(providerRow,
-                    providerRow != null ? providerRow.get(SiteAuthProviderModel.REQUIRED_PERMISSION) : null,
-                    proxySessionStore, siteId, authProviderId);
-                if (built.gate() == null) {
-                    // Site wants auth but the provider cannot be built: fail closed, never expose.
-                    Blast.log("SiteDispatcher: auth provider", authProviderId, "for site", siteName,
-                        "is unusable -", built.refusal(), built.detail());
-                    authGate = FAIL_CLOSED_GATE;
-                    authProviderName = "(" + built.refusal() + ")";
-                } else {
-                    authGate = built.gate();
-                    authProviderName = providerRow.get(SiteAuthProviderModel.NAME);
-                }
-            }
-            if (authGate != null) ownedGates.add(authGate);
-
-            // Compile the access list's rule tree ONCE per site: the leaves that need an
-            // identity build their own gate from the same provider records, narrowed by
-            // the leaf's required permission, and the route table owns them from here on.
-            AccessRuleTree accessTree = accessList == null ? null : AccessRuleTree.compile(
-                accessList.get(AccessListModel.SATISFY),
-                rulesByList.getOrDefault(accessListId, List.of()),
-                new SiteLeafContext(siteName, siteId, proxySessionStore, authProviders));
-            List<SiteAuthGate> treeGates = new ArrayList<>(
-                accessTree != null ? accessTree.gates() : List.of());
-
-            // Protected-path guards: one compiled tree per DISTINCT list this site guards
-            // with, longest prefix first so the tab and the enforcement agree on order.
-            // A dangling list id fails CLOSED -- a folder the operator believes guarded
-            // must refuse, never silently open.
-            List<RouteEntry.PathGuard> pathGuards = List.of();
-            List<Row> guardedRows = protectedPathsBySite.get(siteId);
-            if (guardedRows != null) {
-                List<RouteEntry.PathGuard> compiledGuards = new ArrayList<>();
-                Map<Integer, AccessRuleTree> guardTreesByList = new HashMap<>();
-                for (Row guarded : guardedRows) {
-                    String guardPath = normalizeRoutePath(guarded.get(ProtectedPathModel.PATH));
-                    if (guardPath == null) {
-                        // "/" folds to null (= everything); that policy belongs on the
-                        // site's own access list, and validation refuses storing it.
-                        Blast.log("SiteDispatcher: protected path without a usable prefix on site",
-                            siteName, "- skipped");
-                        continue;
-                    }
-                    Integer guardListId = guarded.get(ProtectedPathModel.ACCESS_LIST_ID);
-                    AccessRuleTree guardTree = guardListId == null ? null
-                        : guardTreesByList.get(guardListId);
-                    if (guardTree == null) {
-                        Row guardList = guardListId != null ? accessLists.get(guardListId) : null;
-                        if (guardList == null) {
-                            Blast.log("SiteDispatcher: protected path", guardPath, "on site",
-                                siteName, "names a missing access list - failing closed");
-                            guardTree = AccessRuleTree.denyAll();
-                        } else {
-                            guardTree = AccessRuleTree.compile(
-                                guardList.get(AccessListModel.SATISFY),
-                                rulesByList.getOrDefault(guardListId, List.of()),
-                                new SiteLeafContext(siteName, siteId, proxySessionStore,
-                                    authProviders));
-                            treeGates.addAll(guardTree.gates());
-                        }
-                        if (guardListId != null) {
-                            guardTreesByList.put(guardListId, guardTree);
-                        }
-                    }
-                    compiledGuards.add(new RouteEntry.PathGuard(guardPath, guardTree));
-                }
-                compiledGuards.sort(Comparator.comparingInt(
-                    (RouteEntry.PathGuard guard) -> guard.path().length()).reversed());
-                pathGuards = List.copyOf(compiledGuards);
-            }
-            ownedGates.addAll(treeGates);
-
-            // Isolate per-site handler creation so one misconfigured site is skipped with
-            // a log line instead of aborting the whole load.
-            //
-            // AIDEV-NOTE: the git-provisioned branch is GONE with sites.source (phase-0
-            // design section 3): a checkout no longer lives beside the site, it lives in
-            // the workspace volume or the build context of the instance the site exposes.
-            // GitProvisioner's site-directory layout dies with the host-user lane.
-            SiteRequestHandler requestHandler;
-            try {
-                requestHandler = typeHandler.createHandler(site, settings);
-            } catch (Exception e) {
-                Blast.log("SiteDispatcher: failed to create handler for site", siteName, "-", e.getMessage());
-                continue;
-            }
-            ownedHandlers.add(requestHandler);
-
-            boolean siteRouteAdded = false;
-            for (Row domain : domains) {
-                String hostname = domain.get(SiteDomainModel.HOSTNAME);
-                String matchType = domain.get(SiteDomainModel.MATCH_TYPE);
-                if (hostname == null || hostname.isEmpty()) continue;
-
-                // A preview's GENERATED hostname routes to the preview's own instance,
-                // never to the site's production handler; access list and auth gate are
-                // inherited (protection follows the site, traffic does not).
-                SiteRequestHandler domainHandler = requestHandler;
-                if (be.elevenways.hohenheim.server.preview.PreviewDomains.SOURCE.equals(
-                        domain.get(SiteDomainModel.GENERATED_BY))
-                        && domain.get(SiteDomainModel.GENERATED_FOR_ID) != null) {
-                    var previewHandler =
-                        new be.elevenways.hohenheim.server.preview.PreviewRequestHandler(
-                            siteId, domain.get(SiteDomainModel.GENERATED_FOR_ID));
-                    ownedHandlers.add(previewHandler);
-                    domainHandler = previewHandler;
-                }
-
-                RouteEntry entry = new RouteEntry(domainHandler, siteName, domain, accessTree,
-                    pathGuards, settings, authGate, authProviderName);
-
-                // HostnamePatterns.effectiveKind is THE tier decision, shared with the
-                // write-time overlap scan: a hostname carrying glob characters routes as a
-                // wildcard whatever match_type says, and the scan must judge the same tier.
-                String kind = HostnamePatterns.effectiveKind(hostname, matchType);
-
-                // AIDEV-NOTE: route identity is RouteClaims.keyOf, THE single spelling
-                // shared with the write-time claim registry -- do not re-derive it here.
-                // Match type is deliberately NOT part of the key: the tier only decides
-                // who WINS a contested route, not whether two rows contest it, so an
-                // exact and a wildcard row spelling the same literal hostname are ONE
-                // route (a kind-prefixed key once let an unclaimed exact row silently
-                // take such a host from the wildcard row that held the claim). Regex
-                // matching is case-INSENSITIVE (HostnameRegex), so keyOf folds a regex
-                // source to lowercase: "^App\." and "^app\." match the same hosts and
-                // are ONE claim, first-wins here and refused by the unique index at
-                // write time.
-                String claimKey = RouteClaims.keyOf(domain);
-                String owner = claimedRoutes.putIfAbsent(claimKey, siteName);
-                if (owner != null && !owner.equals(siteName)) {
-                    Blast.log("SiteDispatcher: DUPLICATE route", hostname,
-                        (entry.path != null ? entry.path : "(all paths)"),
-                        "on site", siteName, "-- already claimed by site", owner, "; IGNORING");
-                    continue;
-                }
-
-                switch (kind) {
-                    case SiteDomainModel.MATCH_REGEX -> {
-                        Pattern pattern = RouteResolver.compileHostnameRegex(hostname);
-                        if (pattern != null) {
-                            newRegex.add(new RegexRoute(hostname, pattern,
-                                RouteResolver.extractNamedGroups(hostname), entry));
-                            siteRouteAdded = true;
-                        }
-                    }
-                    case SiteDomainModel.MATCH_WILDCARD -> {
-                        String glob = hostname.toLowerCase(Locale.ROOT);
-                        newWildcard.add(new WildcardRoute(WildcardHostname.compile(glob), entry));
-                        siteRouteAdded = true;
-                    }
-                    default -> {
-                        newExact.computeIfAbsent(hostname.toLowerCase(Locale.ROOT), k -> new ArrayList<>())
-                            .add(entry);
-                        siteRouteAdded = true;
-                    }
-                }
-            }
-            if (!siteRouteAdded) {
-                ownedHandlers.remove(requestHandler);
-                try {
-                    requestHandler.destroy();
-                } catch (RuntimeException failure) {
-                    Blast.log("SiteDispatcher: unused handler teardown failed -", failure.getMessage());
-                }
-                if (authGate != null && ownedGates.remove(authGate)) {
-                    try {
-                        authGate.destroy();
-                    } catch (RuntimeException failure) {
-                        Blast.log("SiteDispatcher: unused auth gate teardown failed -", failure.getMessage());
-                    }
-                }
-                for (SiteAuthGate treeGate : treeGates) {
-                    if (ownedGates.remove(treeGate)) {
-                        try {
-                            treeGate.destroy();
-                        } catch (RuntimeException failure) {
-                            Blast.log("SiteDispatcher: unused access-rule gate teardown failed -",
-                                failure.getMessage());
-                        }
-                    }
-                }
-            }
-        }
-
-        // Longest path first inside each hostname bucket, so selection can take the first match.
-        for (List<RouteEntry> bucket : newExact.values()) {
-            bucket.sort((a, b) -> Integer.compare(b.pathLength(), a.pathLength()));
-        }
-
-        // Most-specific glob first (the SAME measure the TLS/SNI table sorts by): selection
-        // keeps the FIRST entry on a path-length tie, so an unsorted list -- built in
-        // site-name order -- let a broader pattern (*.com) shadow a narrower one
-        // (*.example.com) and made renaming a site change production routing. Pattern-text
-        // tie-break keeps equal-specificity ordering deterministic.
-        newWildcard.sort(Comparator
-            .comparingInt((WildcardRoute route) ->
-                WildcardHostname.literalSpecificity(route.entry().hostPattern)).reversed()
-            .thenComparing(route -> route.pattern().pattern()));
-
-        Map<String, List<RouteEntry>> frozenExact = new HashMap<>();
-        for (Map.Entry<String, List<RouteEntry>> e : newExact.entrySet()) {
-            frozenExact.put(e.getKey(), List.copyOf(e.getValue()));
-        }
-        RouteTable nextHttp = new RouteTable(Map.copyOf(frozenExact), List.copyOf(newWildcard),
-            List.copyOf(newRegex), TlsPassthroughRoutes.emptySnapshot(), ownedHandlers, ownedGates);
-        TlsPassthroughRoutes.Snapshot tlsSnapshot;
-        try {
-            tlsSnapshot = tlsPassthroughRoutes.buildSnapshot(sites, domainsBySite);
-        } catch (RuntimeException | Error failure) {
-            destroyHandlers(nextHttp);
-            throw failure;
-        }
-        RouteTable next = new RouteTable(nextHttp.exactRoutes, nextHttp.wildcardRoutes,
-            nextHttp.regexRoutes, tlsSnapshot, ownedHandlers, ownedGates);
+        RouteTable next = new RouteTableBuilder(proxySessionStore, tlsPassthroughRoutes).build();
         RouteTable previous;
         synchronized (generationLock) {
             previous = this.routes;
@@ -497,9 +170,14 @@ public class SiteDispatcher implements HttpHandler {
             previous.retired = true;
         }
         destroyIfUnused(previous, false);
+    }
 
-        Blast.log("SiteDispatcher: loaded", newExact.size(), "exact routes,",
-                  newWildcard.size(), "wildcard routes,", newRegex.size(), "regex routes");
+    /**
+     * The enabled sites the last route load could not route as configured, in load order. An
+     * attention surface reads this; each problem was also logged when it was recorded.
+     */
+    public List<RoutingProblem> routingProblems() {
+        return this.routes.problems;
     }
 
     @Override
@@ -532,10 +210,21 @@ public class SiteDispatcher implements HttpHandler {
         // for such a request, so the check was unreachable. Proven by a counterfactual test that
         // passed against the un-patched tree; do not re-add without evidence Undertow forwards it.
 
+        // --- The ONE reading of the path: refused when it carries a control character or a
+        //     dot-segment, otherwise every later stage (ACME, routing, guards, strip_path)
+        //     judges its canonical form and the upstream receives its raw form. ---
+        RequestPath path = RequestPath.attach(exchange);
+        if (path == null) {
+            exchange.setStatusCode(StatusCodes.BAD_REQUEST);
+            exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain");
+            exchange.getResponseSender().send("Bad Request");
+            return;
+        }
+
         // --- ACME HTTP-01 challenge: BEFORE ban enforcement, so certificate
         //     renewal survives a mistaken ban (serving a pending challenge
         //     response is harmless). ---
-        String acmePath = exchange.getRelativePath();
+        String acmePath = path.canonical();
         if (acmePath.startsWith(ACME_CHALLENGE_PREFIX) && acmeService != null) {
             String token = acmePath.substring(ACME_CHALLENGE_PREFIX.length());
             String challengeHost = extractHostname(exchange);
@@ -568,9 +257,8 @@ public class SiteDispatcher implements HttpHandler {
             return;
         }
 
-        // --- Loop detection ---
-        String existingProxiedBy = exchange.getRequestHeaders().getFirst(ForwardingHeaders.X_PROXIED_BY);
-        if (existingProxiedBy != null && existingProxiedBy.contains(instanceId)) {
+        // --- Loop detection: this dispatcher anywhere in the hop chain ---
+        if (ForwardingHeaders.isLoop(exchange.getRequestHeaders(), instanceId)) {
             exchange.setStatusCode(508);
             exchange.getResponseSender().send("Loop Detected");
             return;
@@ -598,7 +286,8 @@ public class SiteDispatcher implements HttpHandler {
             }
             next.proceed();
         });
-        RouteResolution resolution = RouteResolver.resolve(exchange, hostname, generation);
+        RouteResolution resolution = RouteResolver.resolve(exchange, hostname, path.canonical(),
+            generation);
         RouteMatch match = resolution.match();
         RouteEntry entry = match != null ? match.entry() : null;
 
@@ -612,6 +301,10 @@ public class SiteDispatcher implements HttpHandler {
         // --- Threat scoring: a known hostname with a wrong path is a plain 404,
         //     not a domain-scanning signal. ---
         String clientIp = getClientIp(exchange);
+        // Attached BEFORE any gate runs: an auth gate or access tree reading the client (a
+        // rate limit, an identity provider's audit field) must see the trusted-proxy-resolved
+        // address, never the socket peer.
+        ResolvedClientIp.attach(exchange, clientIp);
         if (entry != null || resolution.hostnameKnown()) {
             threatScorer.recordHit(clientIp);
         } else {
@@ -625,7 +318,7 @@ public class SiteDispatcher implements HttpHandler {
                 String userAgent = exchange.getRequestHeaders().getFirst(Headers.USER_AGENT);
                 Map<String, String> detail = new LinkedHashMap<>();
                 detail.put("domain", hostname);
-                detail.put("path", exchange.getRelativePath());
+                detail.put("path", path.raw());
                 if (userAgent != null) {
                     detail.put("ua", userAgent);
                 }
@@ -711,8 +404,6 @@ public class SiteDispatcher implements HttpHandler {
     private void continueAfterAuth(RouteEntry entry, HttpServerExchange exchange,
                                    String hostname, String clientIp) {
 
-        ResolvedClientIp.attach(exchange, clientIp);
-
         // An access list whose tree carries a credential leaf blocks while evaluating it
         // (argon2 verification, an identity provider's HTTP round trip), so it may not run
         // on the I/O thread. Address-only lists keep the zero-overhead inline path.
@@ -728,34 +419,43 @@ public class SiteDispatcher implements HttpHandler {
 
         // --- Protected-path enforcement: ADDITIVE, so every guard whose prefix covers the
         //     request must also pass. Runs before strip_path on purpose -- guards are
-        //     declared against the path the browser sees, exactly like route paths. ---
-        if (!entry.pathGuards.isEmpty()) {
-            String guardedPath = exchange.getRelativePath();
-            for (RouteEntry.PathGuard guard : entry.pathGuards) {
-                if (guard.covers(guardedPath)
-                        && !AccessListGate.allows(exchange, guard.tree(), clientIp)) {
-                    return;
-                }
+        //     declared against the path the browser sees, exactly like route paths, and they
+        //     judge the SAME canonical form route selection did (RequestPath), so no spelling
+        //     of a path can pick one route and dodge that route's guard. ---
+        RequestPath path = RequestPath.of(exchange);
+        String canonicalPath = path != null ? path.canonical() : exchange.getRelativePath();
+        for (RouteEntry.PathGuard guard : entry.pathGuards) {
+            if (guard.covers(canonicalPath)
+                    && !AccessListGate.allows(exchange, guard.tree(), clientIp)) {
+                return;
             }
         }
 
         // --- Path matching (selection already guaranteed a match; kept as a safety net) ---
         if (entry.path != null) {
-            String requestPath = exchange.getRelativePath();
-            if (!entry.matchesPath(requestPath)) {
+            if (!entry.matchesPath(canonicalPath)) {
                 exchange.setStatusCode(404);
                 exchange.getResponseSender().send("Not Found");
                 return;
             }
             if (entry.stripPath) {
-                String stripped = requestPath.substring(entry.path.length());
+                // AIDEV-NOTE: ProxyHandler writes requestURI VERBATIM into the upstream request
+                // line, so the stripped URI is cut from the RAW path and keeps the client's own
+                // encoding. It used to be the DECODED remainder: %0d%0a became a header break
+                // (request smuggling), %20 split the request line, %3F moved the query boundary
+                // and %2525 was decoded twice. The decoded view handlers read (static files, a
+                // redirect's path) is the canonical remainder.
+                String rawRemainder = path != null ? path.rawRemainderAfter(entry.path) : null;
+                if (rawRemainder == null) {
+                    exchange.setStatusCode(StatusCodes.BAD_REQUEST);
+                    exchange.getResponseSender().send("Bad Request");
+                    return;
+                }
+                String stripped = canonicalPath.substring(entry.path.length());
                 if (stripped.isEmpty()) stripped = "/";
                 exchange.setRelativePath(stripped);
                 exchange.setRequestPath(stripped);
-                // AIDEV-NOTE: ProxyHandler builds the upstream request from requestURI,
-                // not requestPath -- without this line strip_path silently forwards the
-                // unstripped path.
-                exchange.setRequestURI(stripped);
+                exchange.setRequestURI(rawRemainder, false);
             }
         }
 
@@ -839,7 +539,8 @@ public class SiteDispatcher implements HttpHandler {
             try {
                 timedProxyHandler.handleRequest(exchange);
             } catch (Exception e) {
-                ErrorPages.send502(exchange, e.getMessage());
+                Blast.log("SiteDispatcher: proxying failed for site", entry.siteName, "-", e.getMessage());
+                ErrorPages.send502(exchange);
             }
         });
 
@@ -880,18 +581,9 @@ public class SiteDispatcher implements HttpHandler {
      * that REFUSE plain HTTP while HTTPS termination is unavailable.
      */
     public List<String> forceSslSiteNames() {
-        RouteTable rt = this.routes;
         Set<String> names = new TreeSet<>();
-        for (List<RouteEntry> bucket : rt.exactRoutes.values()) {
-            for (RouteEntry entry : bucket) {
-                if (entry.forceSsl) names.add(entry.siteName);
-            }
-        }
-        for (WildcardRoute route : rt.wildcardRoutes) {
-            if (route.entry().forceSsl) names.add(route.entry().siteName);
-        }
-        for (RegexRoute route : rt.regexRoutes) {
-            if (route.entry().forceSsl) names.add(route.entry().siteName);
+        for (RouteEntry entry : this.routes.entries()) {
+            if (entry.forceSsl) names.add(entry.siteName);
         }
         return List.copyOf(names);
     }
@@ -914,7 +606,11 @@ public class SiteDispatcher implements HttpHandler {
             authority = authority + ":" + httpsPort;
         }
 
-        String redirectUrl = "https://" + authority + exchange.getRelativePath();
+        // The RAW path: the decoded one would turn an encoded %3F or %0a into live syntax
+        // inside the Location header.
+        RequestPath path = RequestPath.of(exchange);
+        String redirectUrl = "https://" + authority
+            + (path != null ? path.raw() : RequestPath.rawPathOf(exchange));
         String query = exchange.getQueryString();
         if (query != null && !query.isEmpty()) {
             redirectUrl += "?" + query;
@@ -926,20 +622,7 @@ public class SiteDispatcher implements HttpHandler {
     }
 
     private static void destroyHandlers(RouteTable rt) {
-        for (SiteRequestHandler handler : rt.ownedHandlers) {
-            try {
-                handler.destroy();
-            } catch (RuntimeException failure) {
-                Blast.log("SiteDispatcher: handler teardown failed -", failure.getMessage());
-            }
-        }
-        for (SiteAuthGate gate : rt.ownedGates) {
-            try {
-                gate.destroy();
-            } catch (RuntimeException failure) {
-                Blast.log("SiteDispatcher: auth gate teardown failed -", failure.getMessage());
-            }
-        }
+        RouteTableBuilder.destroy(rt.ownedHandlers, rt.ownedGates);
     }
 
     private RouteTable acquireRoutes() {
@@ -1002,8 +685,7 @@ public class SiteDispatcher implements HttpHandler {
      * enforcement truth (the scorer is purely a trigger that CREATES rows via
      * BanService.autoBan), so every refused IP has an auditable, liftable ban
      * row. Used both at the HTTP stage and, for HTTPS, at the TLS handshake
-     * stage (via {@link be.elevenways.hohenheim.server.tls.SniKeyManager}) to
-     * drop bad IPs before a certificate is served.
+     * stage (via {@link SniKeyManager}) to drop bad IPs before a certificate is served.
      */
     public boolean isBanned(String ip) {
         return BanService.INSTANCE.isBanned(ip);
@@ -1049,20 +731,9 @@ public class SiteDispatcher implements HttpHandler {
      * Returns null if the site is not currently loaded.
      */
     public SiteRequestHandler findHandlerBySiteId(int siteId) {
-        RouteTable rt = this.routes;
-
-        for (List<RouteEntry> bucket : rt.exactRoutes.values()) {
-            for (RouteEntry entry : bucket) {
-                if (entry.handler.getSiteId() == siteId) return entry.handler;
-            }
+        for (RouteEntry entry : this.routes.entries()) {
+            if (entry.handler.getSiteId() == siteId) return entry.handler;
         }
-        for (WildcardRoute route : rt.wildcardRoutes) {
-            if (route.entry().handler.getSiteId() == siteId) return route.entry().handler;
-        }
-        for (RegexRoute route : rt.regexRoutes) {
-            if (route.entry().handler.getSiteId() == siteId) return route.entry().handler;
-        }
-
         return null;
     }
 
@@ -1074,8 +745,7 @@ public class SiteDispatcher implements HttpHandler {
         RouteTable previous;
         synchronized (generationLock) {
             previous = routes;
-            routes = new RouteTable(Map.of(), List.of(), List.of(), TlsPassthroughRoutes.emptySnapshot(),
-                Set.of(), Set.of());
+            routes = RouteTable.empty();
             previous.retired = true;
         }
         destroyIfUnused(previous, false);
@@ -1088,32 +758,5 @@ public class SiteDispatcher implements HttpHandler {
             Thread.currentThread().interrupt();
         }
         delayScheduler.shutdownNow();
-    }
-
-    /**
-     * What an access-rule leaf may ask of the site it guards. Provider leaves build their
-     * gate through the SHARED factory, so a leaf and a site-level provider agree on what
-     * "unbuildable" means -- and a leaf that cannot build one denies rather than degrading
-     * into "no identity required".
-     */
-    private record SiteLeafContext(String siteName, int siteId, SessionStore sessionStore,
-                                   Map<Integer, Row> providers) implements AccessRuleTree.LeafContext {
-
-        @Override
-        public String realm() {
-            return siteName != null && !siteName.isBlank() ? siteName : "Restricted";
-        }
-
-        @Override
-        public SiteAuthGate gateFor(int providerId, String requiredPermission) {
-            SiteAuthGates.Built built = SiteAuthGates.build(providers.get(providerId),
-                requiredPermission, sessionStore, siteId, providerId);
-            if (built.gate() == null) {
-                Blast.log("SiteDispatcher: access rule on site", siteName,
-                    "names auth provider", providerId, "which is unusable -",
-                    built.refusal(), built.detail());
-            }
-            return built.gate();
-        }
     }
 }

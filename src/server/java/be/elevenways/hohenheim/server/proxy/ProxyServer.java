@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.CertificateStore;
 import be.elevenways.hohenheim.server.tls.SniKeyManager;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.common.session.InMemorySessionStore;
 import be.elevenways.zenit.common.session.SessionStore;
@@ -85,7 +86,7 @@ public class ProxyServer {
     private volatile long httpsNextRestartAttemptAt;
     private volatile boolean httpDownAlertSent;
     private volatile boolean httpsDownAlertSent;
-    private volatile LongSupplier clock = System::currentTimeMillis;
+    private volatile LongSupplier clock = Now::millis;
 
     private static final int IO_THREADS = Math.max(2, Runtime.getRuntime().availableProcessors());
 

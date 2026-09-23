@@ -77,10 +77,16 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
 
         // A second host that is enrolled but NOT admitted: the eligible-set refusal this
         // page must name out loud instead of hiding.
+        //
+        // AIDEV-NOTE: the host is ADDRESSABLE (it declares its transport) so the only thing
+        // wrong with it is admission. It used to be written with no mode at all, which the
+        // transport read silently took for the local daemon; HostMode now refuses a missing
+        // mode, so that fixture reached the unreachable refusal before admission was asked.
+        // Every production write path stamps a mode (ServerResource, ServerService.add).
         var servers = Models.get(ServerModel.class);
         Row stranger = servers.createEmptyRow();
         stranger.set(ServerModel.NAME, "migrate-stranger");
-        stranger.set(ServerModel.SSH_TARGET, "nobody@migrate-stranger.invalid");
+        stranger.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
         servers.save(stranger);
         strangerHostId = servers.findByName("migrate-stranger").get(ServerModel.ID);
 

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -59,7 +60,7 @@ public final class InstanceDevices {
 
         Row row = Models.get(InstanceDeviceModel.class).createEmptyRow();
         row.set(InstanceDeviceModel.INSTANCE_ID, instanceId);
-        row.set(InstanceDeviceModel.TYPE, InstanceDeviceModel.TYPE_DISK);
+        row.set(InstanceDeviceModel.TYPE, DeviceType.DISK.token());
         row.set(InstanceDeviceModel.NAME, name);
         row.set(InstanceDeviceModel.SIZE_GB, sizeGb);
         // The reservation fires HERE (beforeWrite, adjacent to the write): a full
@@ -93,7 +94,7 @@ public final class InstanceDevices {
         this.instances.leases().requireFence(resolved.serverId());
 
         Row row = rowOf(instanceId, name);
-        if (row == null || !InstanceDeviceModel.TYPE_DISK.equals(row.get(InstanceDeviceModel.TYPE))) {
+        if (row == null || DeviceType.parse(row.get(InstanceDeviceModel.TYPE)) != DeviceType.DISK) {
             throw Violations.ofField("name", name, violationText("device_not_found")
                 .withArg("device", name));
         }
@@ -135,7 +136,7 @@ public final class InstanceDevices {
 
         Row row = Models.get(InstanceDeviceModel.class).createEmptyRow();
         row.set(InstanceDeviceModel.INSTANCE_ID, instanceId);
-        row.set(InstanceDeviceModel.TYPE, InstanceDeviceModel.TYPE_NIC);
+        row.set(InstanceDeviceModel.TYPE, DeviceType.NIC.token());
         row.set(InstanceDeviceModel.NAME, name);
         Models.get(InstanceDeviceModel.class).save(row);
 
@@ -171,7 +172,7 @@ public final class InstanceDevices {
 
         Row row = Models.get(InstanceDeviceModel.class).createEmptyRow();
         row.set(InstanceDeviceModel.INSTANCE_ID, instanceId);
-        row.set(InstanceDeviceModel.TYPE, InstanceDeviceModel.TYPE_CDROM);
+        row.set(InstanceDeviceModel.TYPE, DeviceType.CDROM.token());
         row.set(InstanceDeviceModel.NAME, name);
         row.set(InstanceDeviceModel.SOURCE_MEDIA, mediaVolume);
         Models.get(InstanceDeviceModel.class).save(row);
@@ -210,12 +211,15 @@ public final class InstanceDevices {
         // end, so a CONFIG-holding tenant must not be able to eject it either
         // (mid-install, say). The refusal is the tier's uniform one -- checked
         // AFTER the row load so the funnel stays the authority, not the form.
-        if (InstanceDeviceModel.TYPE_CDROM.equals(row.get(InstanceDeviceModel.TYPE))) {
+        // A row whose type is no member stays DETACHABLE (it is what an operator removes
+        // when reconcile refuses it), but only by an operator, and no volume is deleted
+        // for it: there is no member to say it owns one.
+        DeviceType type = DeviceType.parse(row.get(InstanceDeviceModel.TYPE));
+        if (type == null || type.operatorOnly()) {
             HohenheimAccess.requireOperatorOperation();
         }
-        boolean disk = InstanceDeviceModel.TYPE_DISK.equals(row.get(InstanceDeviceModel.TYPE));
         try {
-            support.removeDevice(resolved.spec(), name, disk);
+            support.removeDevice(resolved.spec(), name, type != null && type.ownsVolume());
         } catch (IOException e) {
             throw refusal("device_detach_failed", resolved.row(), name, e);
         }
@@ -238,7 +242,8 @@ public final class InstanceDevices {
      * @throws IOException when the daemon refuses; the deploy's own failure lane
      *         handles it
      * @throws Violations {@code devices_unsupported} when rows exist on a driver
-     *         without the capability
+     *         without the capability; {@code device_type_unknown} for a row whose type
+     *         is no {@link DeviceType} member
      */
     void reconcile(@NonNull Resolved resolved, int instanceId) throws IOException {
         List<Row> rows = rowsFor(instanceId);
@@ -248,17 +253,28 @@ public final class InstanceDevices {
         DeviceAttachSupport support = requireSupport(resolved);
         for (Row row : rows) {
             String name = row.get(InstanceDeviceModel.NAME);
-            String type = row.get(InstanceDeviceModel.TYPE);
-            if (InstanceDeviceModel.TYPE_DISK.equals(type)) {
-                Integer size = row.get(InstanceDeviceModel.SIZE_GB);
-                support.ensureDisk(resolved.spec(), name, size == null ? 1 : size);
-            } else if (InstanceDeviceModel.TYPE_CDROM.equals(type)) {
-                String media = row.get(InstanceDeviceModel.SOURCE_MEDIA);
-                support.ensureCdrom(resolved.spec(), name, media == null ? "" : media);
-            } else {
-                support.ensureNic(resolved.spec(), name);
-            }
+            // Exhaustive over the vocabulary, and a token that is no member REFUSES the
+            // deploy by name: the old else-branch ensured a NIC for anything it did not
+            // recognize, so a mistyped row came back as a network interface.
+            DaemonStep ensure = switch (DeviceType.require(row.get(InstanceDeviceModel.TYPE))) {
+                case DISK -> () -> {
+                    Integer size = row.get(InstanceDeviceModel.SIZE_GB);
+                    support.ensureDisk(resolved.spec(), name, size == null ? 1 : size);
+                };
+                case NIC -> () -> support.ensureNic(resolved.spec(), name);
+                case CDROM -> () -> {
+                    String media = row.get(InstanceDeviceModel.SOURCE_MEDIA);
+                    support.ensureCdrom(resolved.spec(), name, media == null ? "" : media);
+                };
+            };
+            ensure.run();
         }
+    }
+
+    /** One daemon call a reconcile step makes; the switch above picks it per member. */
+    @FunctionalInterface
+    private interface DaemonStep {
+        void run() throws IOException;
     }
 
     /**
@@ -278,7 +294,9 @@ public final class InstanceDevices {
         if (resolved.runtime() instanceof DeviceAttachSupport support) {
             List<String> diskNames = new ArrayList<>();
             for (Row row : rows) {
-                if (InstanceDeviceModel.TYPE_DISK.equals(row.get(InstanceDeviceModel.TYPE))) {
+                // An unknown token owns no volume we can name; its row still goes below.
+                DeviceType type = DeviceType.parse(row.get(InstanceDeviceModel.TYPE));
+                if (type != null && type.ownsVolume()) {
                     diskNames.add(row.get(InstanceDeviceModel.NAME));
                 }
             }

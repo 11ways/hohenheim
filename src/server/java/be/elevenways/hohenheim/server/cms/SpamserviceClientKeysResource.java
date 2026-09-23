@@ -27,6 +27,7 @@ import be.elevenways.zenit.common.orm.field.UuidField;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.flash.Flash;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -44,11 +45,11 @@ public final class SpamserviceClientKeysResource extends SpamserviceRemoteResour
     public static final String SLUG = "spamservice-keys";
 
     /**
-     * The client scoping query parameter, typed so links BIND it.
+     * The client scoping query parameter, typed so links BIND it and reads resolve it.
      *
-     * AIDEV-NOTE: the reads below still use getQueryParam("client_id") -- the name
-     * here is the single spelling both sides share, and binding it through a
-     * ParameterDefinition is what keeps "?client_id=" out of the link builders.
+     * AIDEV-NOTE: {@link #scopedClientId} reads it through {@code CmsSupport.prefill}, so the
+     * name and the parse have this one home; binding it here is what keeps "?client_id=" out
+     * of the link builders.
      */
     static final ParameterDefinition<String> CLIENT_ID_QUERY = ParameterDefinition
         .builder(String.class).name("client_id").stringResolver(value -> value).build();
@@ -68,9 +69,11 @@ public final class SpamserviceClientKeysResource extends SpamserviceRemoteResour
     private static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder("created_at")
         .label(Microcopy.of("created_at").withFilter("scope", "spamservice_key")).build());
 
+    /** The largest page the management API serves ({@code ManagementService.MAX_PAGE_SIZE}). */
+    private static final int REMOTE_PAGE_SIZE = 200;
+
     private final FormSpec formSpec = FormSpec.builder()
         .add(CLIENT_ID).add(NAME).add(RAW_KEY).add(ACTIVE).add(LAST_USED).add(CREATED_AT).build();
-    private final ThreadLocal<String> listedClientId = new ThreadLocal<>();
 
     public SpamserviceClientKeysResource() {}
 
@@ -104,27 +107,33 @@ public final class SpamserviceClientKeysResource extends SpamserviceRemoteResour
             .build();
     }
 
+    /**
+     * The keys of the client this list is scoped to; no scope, or a malformed one, lists nothing
+     * and asks the service nothing.
+     */
     @Override
     protected @NonNull PageResult<ManagedClientKey> fetchPage(
-            @NonNull SpamserviceClient client, TableView.@NonNull Applied<ManagedClientKey> applied) {
-        String clientId = accessClientId();
+            @NonNull SpamserviceClient client, TableView.@NonNull Applied<ManagedClientKey> applied,
+            @NonNull AccessContext accessContext) {
+        Conduit conduit = accessContext.conduit();
+        UUID clientId = conduit != null ? scopedClientId(conduit) : null;
         return clientId != null
-            ? client.keys(clientId, applied.page(), applied.schema().pageSize())
+            ? client.keys(clientId.toString(), applied.page(), applied.schema().pageSize())
             : new PageResult<>(List.of(), applied.page(), applied.schema().pageSize(), 0);
     }
 
-    @Override
-    public @NonNull List<ManagedClientKey> listRows(TableView.@NonNull Applied<ManagedClientKey> applied,
-                                                    @NonNull AccessContext context) {
-        this.listedClientId.set(trimmed(context.conduit().getQueryParam("client_id")));
-        try {
-            return super.listRows(applied, context);
-        } finally {
-            this.listedClientId.remove();
-        }
+    /**
+     * The {@code ?client_id=} scope of this request as a UUID.
+     *
+     * AIDEV-NOTE: a malformed value is ABSENCE, never an exception: it used to reach
+     * {@code UUID.fromString} in createValues unguarded and answer a 500 for a typo in a URL.
+     *
+     * @return the client id, or null when absent, blank or not a UUID
+     */
+    static @Nullable UUID scopedClientId(@NonNull Conduit conduit) {
+        String raw = CmsSupport.prefill(conduit, CLIENT_ID_QUERY);
+        return raw == null ? null : uuidOrNull(raw);
     }
-
-    private @Nullable String accessClientId() { return this.listedClientId.get(); }
 
     @Override public @NonNull String rowKey(@NonNull ManagedClientKey row) { return row.clientId() + "~" + row.id(); }
     @Override public @Nullable Object parsePrimaryKey(@NonNull String raw) {
@@ -132,16 +141,34 @@ public final class SpamserviceClientKeysResource extends SpamserviceRemoteResour
         return separator > 0 && separator < raw.length() - 1
             ? keyRef(raw.substring(0, separator), raw.substring(separator + 1)) : null;
     }
+    /**
+     * One key of one client, found by walking that client's key pages.
+     *
+     * AIDEV-NOTE: the management API has no single-key read, and this used to look at the
+     * FIRST page of 200 only -- so a client's 201st key listed fine and then 404ed on edit,
+     * enable and revoke. The walk is bounded by the total the service reports.
+     */
     @Override public @Nullable ManagedClientKey loadRow(@NonNull Object key, @NonNull AccessContext context) {
         if (!(key instanceof KeyRef ref)) return null;
-        return this.requireClient().keys(ref.clientId().toString(), 1, 200).items().stream()
-            .filter(item -> item.id().equals(ref.keyId().toString())).findFirst().orElse(null);
+        SpamserviceClient client = this.requireClient();
+        String keyId = ref.keyId().toString();
+        for (int page = 1; ; page++) {
+            PageResult<ManagedClientKey> keys = client.keys(ref.clientId().toString(), page, REMOTE_PAGE_SIZE);
+            for (ManagedClientKey item : keys.items()) {
+                if (item.id().equals(keyId)) {
+                    return item;
+                }
+            }
+            if (keys.items().isEmpty() || (long) page * REMOTE_PAGE_SIZE >= keys.total()) {
+                return null;
+            }
+        }
     }
 
     @Override
     public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
-        String clientId = trimmed(conduit.getQueryParam("client_id"));
-        return clientId != null ? Map.of("client_id", UUID.fromString(clientId), "active", true) : Map.of("active", true);
+        UUID clientId = scopedClientId(conduit);
+        return clientId != null ? Map.of("client_id", clientId, "active", true) : Map.of("active", true);
     }
 
     @Override
@@ -154,7 +181,7 @@ public final class SpamserviceClientKeysResource extends SpamserviceRemoteResour
     public @NonNull Object persistRow(@NonNull Map<String, Object> values, @NonNull AccessContext context) {
         String clientId = requiredText(values, "client_id", "");
         String name = requiredText(values, "name", "key");
-        String raw = trimmed(values.get("key"));
+        String raw = Texts.trimmedOrNull(values.get("key"));
         CreatedClientKey created = this.requireClient().createKey(clientId, name, raw);
         Microcopy message = created.generated()
             ? Microcopy.of("key_created").withFilter("scope", "spamservice_key").withArg("key", created.key())
@@ -235,16 +262,17 @@ public final class SpamserviceClientKeysResource extends SpamserviceRemoteResour
 
     @Override public @Nullable String recordTitle(@NonNull ManagedClientKey row) { return row.name(); }
 
-    private static @Nullable String trimmed(@Nullable Object value) {
-        if (value == null || String.valueOf(value).isBlank()) return null;
-        return String.valueOf(value).trim();
-    }
-
     private static Object value(@Nullable Object value) { return value != null ? value : ""; }
 
     private static @Nullable KeyRef keyRef(String clientId, String keyId) {
+        UUID client = uuidOrNull(clientId);
+        UUID key = uuidOrNull(keyId);
+        return client != null && key != null ? new KeyRef(client, key) : null;
+    }
+
+    private static @Nullable UUID uuidOrNull(@NonNull String raw) {
         try {
-            return new KeyRef(UUID.fromString(clientId), UUID.fromString(keyId));
+            return UUID.fromString(raw.trim());
         } catch (IllegalArgumentException invalid) {
             return null;
         }

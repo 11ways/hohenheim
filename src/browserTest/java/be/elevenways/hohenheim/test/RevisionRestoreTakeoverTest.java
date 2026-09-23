@@ -417,10 +417,15 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
                 .as("step 7: the admin restore really did rewind the access list")
                 .isNull();
 
+            // The gate is gone, so the request is no longer challenged; it reaches the
+            // dial stage, where this site's manage grant makes it TENANT-owned and its
+            // loopback backend is refused (TenantUpstreams) -- 503 rather than 200 is that
+            // refusal, not the gate.
             proxy.reload();
             assertThat(proxyStatus(proxyPort, GATED_HOST))
-                .as("step 7: with the gate rewound by an admin, the hostname serves openly")
-                .isEqualTo(200);
+                .as("step 7: with the gate rewound by an admin, the hostname is no longer "
+                    + "challenged and meets the tenant dial refusal instead")
+                .isEqualTo(503);
         } finally {
             proxy.stop();
             upstream.stop(0);

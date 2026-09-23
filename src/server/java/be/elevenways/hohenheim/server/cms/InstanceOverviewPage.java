@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.InstanceEndpointsWidget;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.instance.InstanceBlockerView;
 import be.elevenways.hohenheim.instance.InstanceDiskView;
 import be.elevenways.hohenheim.instance.InstanceEndpointView;
@@ -174,7 +175,7 @@ public final class InstanceOverviewPage extends RecordDashboardPage<Row> {
                 Map.of("label", HohenheimWidgetCopy.localized("disk", "instance_overview")))
                 .withData(diskUsage(instance, serverId, locales, resolver))))));
         bands.add(band(new WidgetTree(List.of(
-            new WidgetInstance(InstanceEndpointsWidget.ID, Map.of())
+            new WidgetInstance(HohenheimWidgets.INSTANCE_ENDPOINTS.id(), Map.of())
                 .withData(endpointsOf(instanceId))))));
 
         // Exposed by: the sites whose hostname serves THIS instance (the sites.instance_id
@@ -194,7 +195,7 @@ public final class InstanceOverviewPage extends RecordDashboardPage<Row> {
             } else {
                 exposedBy.add(new WidgetInstance(FactWidget.ID, Map.of())
                     .withData(WidgetFact.link(label.resolve(locales, resolver), siteName,
-                        CmsRoutes.detail(panelSlug, "sites",
+                        CmsRoutes.detail(panelSlug, HohenheimSlugs.SITES,
                             site.get(SiteModel.ID)).toUrl())));
             }
         }

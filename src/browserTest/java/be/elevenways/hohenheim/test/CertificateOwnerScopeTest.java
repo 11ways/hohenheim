@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The certificate read scope answers through the WALK ALONE -- the falsifier for the
- * removed hand-written owner disjunct in {@code ManagePanel.certificateScope}.
+ * removed hand-written owner disjunct in {@code ManagePanel.certificateScope} (now {@code TenantScopes.CERTIFICATES}).
  *
  * That disjunct ({@code REQUESTED_BY_USER_ID.eq(principalId)}) was a second, WIDER
  * spelling of the walk's owner row: it consulted no credential scope, so an API key

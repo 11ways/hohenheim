@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -62,11 +63,18 @@ import java.util.Set;
  *    and combined with (2) that path is provably inside the volume root.
  *
  * AIDEV-NOTE: layer 3 has an inherent TOCTOU against code running INSIDE the container
- * (swap a directory for a symlink between the walk and the operation). That is deliberate
- * and it is not a privilege boundary: the only party who can win that race is the tenant
- * themselves, who already has unrestricted access to every file in their own container
- * from inside it, and layer 1 means the race cannot reach the host or another tenant. Do
- * not "fix" it by weakening layer 3 into a single leaf stat.
+ * (swap a directory for a symlink between the walk and the operation). It is NOT harmless
+ * in general, and an earlier version of this note claimed it was. The archive API and the
+ * file scripts act with the DAEMON's (or the container's configured user's) authority,
+ * which for most images is container root; a workload whose processes run as a NON-ROOT
+ * uid can therefore win the race to make the file manager read or write a path that uid
+ * itself could not (/etc/shadow of its own container, a root-owned binary) -- a privilege
+ * escalation INSIDE the container. What bounds it is layer 1: the race can never reach the
+ * host or another tenant, and every host-side read of what comes back is a strict tar parse
+ * that refuses links ({@code util.Tar}). The file scripts narrow it further ({@code chown
+ * -h}, {@code mv --}/{@code rm --} on quoted variables). Do not "fix" it by weakening layer 3
+ * into a single leaf stat; closing it for real needs the operations to run as the
+ * workload's own uid, which the archive API cannot do.
  */
 public final class InstanceFiles {
 
@@ -116,8 +124,7 @@ public final class InstanceFiles {
 
     /** The declared volume roots of an instance, the only places this service will look. */
     public @NonNull List<String> volumeRoots(int instanceId) {
-        HohenheimAccess.requireOperationCapability(instanceId, READ);
-        return sortedRoots(this.instances.resolve(instanceId));
+        return open(instanceId, READ).roots();
     }
 
     /**
@@ -126,19 +133,14 @@ public final class InstanceFiles {
      * @throws Violations naming the refusal; never a partial or empty-on-failure listing
      */
     public @NonNull Listing list(int instanceId, @Nullable String requestedPath) {
-        HohenheimAccess.requireOperationCapability(instanceId, READ);
-        InstanceService.Resolved resolved = this.instances.resolve(instanceId);
-        List<String> roots = sortedRoots(resolved);
-        if (roots.isEmpty()) {
+        Opened opened = open(instanceId, READ);
+        if (opened.roots().isEmpty()) {
             throw refusal("files_no_volumes");
         }
-        String path = requestedPath == null || requestedPath.isEmpty() ? roots.get(0) : requestedPath;
-        InstanceFilePath target = InstanceFilePath.parse(roots, path);
-        InstanceFileSupport files = filesOf(resolved);
-        String handle = resolved.spec().handle();
-
-        requireContainedParents(files, handle, target);
-        InstanceFileSupport.Entry leaf = statOrNull(files, handle, target.absolute());
+        String path = requestedPath == null || requestedPath.isEmpty()
+            ? opened.roots().get(0) : requestedPath;
+        InstanceFilePath target = opened.parse(path);
+        InstanceFileSupport.Entry leaf = opened.walk(target);
         if (leaf == null) {
             throw refusal("files_not_found");
         }
@@ -149,8 +151,8 @@ public final class InstanceFiles {
         Set<String> managed = managedPaths(instanceId);
         List<Entry> entries = new ArrayList<>();
         try {
-            for (InstanceFileSupport.Entry entry : files.listDirectory(handle, target.absolute(),
-                    maxEntries())) {
+            for (InstanceFileSupport.Entry entry : opened.files().listDirectory(opened.handle(),
+                    target.absolute(), maxEntries())) {
                 String childPath = target.absolute().equals("/")
                     ? "/" + entry.name() : target.absolute() + "/" + entry.name();
                 entries.add(new Entry(entry.name(), childPath, entry.kind().name(), entry.size(),
@@ -162,7 +164,7 @@ public final class InstanceFiles {
         entries.sort(Comparator
             .comparing((Entry entry) -> "DIRECTORY".equals(entry.kind()) ? 0 : 1)
             .thenComparing(Entry::name));
-        return new Listing(target.absolute(), entries, roots);
+        return new Listing(target.absolute(), entries, opened.roots());
     }
 
     /**
@@ -173,15 +175,9 @@ public final class InstanceFiles {
      *         mistaken for the file
      */
     public byte @NonNull [] read(int instanceId, @NonNull String requestedPath) {
-        HohenheimAccess.requireOperationCapability(instanceId, READ);
-        InstanceService.Resolved resolved = this.instances.resolve(instanceId);
-        List<String> roots = sortedRoots(resolved);
-        InstanceFilePath target = InstanceFilePath.parse(roots, requestedPath);
-        InstanceFileSupport files = filesOf(resolved);
-        String handle = resolved.spec().handle();
-
-        requireContainedParents(files, handle, target);
-        InstanceFileSupport.Entry leaf = statOrNull(files, handle, target.absolute());
+        Opened opened = open(instanceId, READ);
+        InstanceFilePath target = opened.parse(requestedPath);
+        InstanceFileSupport.Entry leaf = opened.walk(target);
         if (leaf == null) {
             throw refusal("files_not_found");
         }
@@ -195,7 +191,7 @@ public final class InstanceFiles {
             throw tooLarge(cap);
         }
         try {
-            return files.readFile(handle, target.absolute(), cap);
+            return opened.files().readFile(opened.handle(), target.absolute(), cap);
         } catch (IOException e) {
             throw failure(e);
         }
@@ -210,15 +206,10 @@ public final class InstanceFiles {
         if (content.length > cap) {
             throw tooLarge(cap);
         }
-        InstanceService.Resolved resolved = this.instances.resolve(instanceId);
-        List<String> roots = sortedRoots(resolved);
-        InstanceFilePath target = InstanceFilePath.parse(roots, requestedPath);
+        Opened opened = resolveOpened(instanceId);
+        InstanceFilePath target = opened.parse(requestedPath);
         requireNotManaged(instanceId, target);
-        InstanceFileSupport files = filesOf(resolved);
-        String handle = resolved.spec().handle();
-
-        requireContainedParents(files, handle, target);
-        InstanceFileSupport.Entry leaf = statOrNull(files, handle, target.absolute());
+        InstanceFileSupport.Entry leaf = opened.walk(target);
         String mode = "0644";
         if (leaf != null) {
             if (leaf.kind() != InstanceFileSupport.Kind.FILE) {
@@ -227,7 +218,8 @@ public final class InstanceFiles {
             mode = leaf.mode();
         }
         try {
-            files.writeFile(handle, target.absolute(), content, mode, resolved.spec().ownerLabels());
+            opened.files().writeFile(opened.handle(), target.absolute(), content, mode,
+                opened.ownerLabels());
         } catch (IOException e) {
             throw failure(e);
         }
@@ -235,19 +227,16 @@ public final class InstanceFiles {
 
     /** Create one directory; an existing path is a refusal, never a silent success. */
     public void makeDirectory(int instanceId, @NonNull String requestedPath) {
-        HohenheimAccess.requireOperationCapability(instanceId, WRITE);
-        InstanceService.Resolved resolved = this.instances.resolve(instanceId);
-        List<String> roots = sortedRoots(resolved);
-        InstanceFilePath target = InstanceFilePath.parse(roots, requestedPath);
-        InstanceFileSupport files = filesOf(resolved);
-        String handle = resolved.spec().handle();
-
-        requireContainedParents(files, handle, target);
-        if (statOrNull(files, handle, target.absolute()) != null) {
+        Opened opened = open(instanceId, WRITE);
+        InstanceFilePath target = opened.parse(requestedPath);
+        // A directory where a declared config file is staged would make the next deploy's
+        // staging fail (or land INSIDE it): the managed boundary covers mkdir too.
+        requireNotManaged(instanceId, target);
+        if (opened.walk(target) != null) {
             throw refusal("files_exists");
         }
         try {
-            files.makeDirectory(handle, target.absolute(), resolved.spec().ownerLabels());
+            opened.files().makeDirectory(opened.handle(), target.absolute(), opened.ownerLabels());
         } catch (IOException e) {
             throw failure(e);
         }
@@ -255,29 +244,23 @@ public final class InstanceFiles {
 
     /** Rename inside the instance's volumes; both ends are contained independently. */
     public void rename(int instanceId, @NonNull String fromPath, @NonNull String toPath) {
-        HohenheimAccess.requireOperationCapability(instanceId, WRITE);
-        InstanceService.Resolved resolved = this.instances.resolve(instanceId);
-        List<String> roots = sortedRoots(resolved);
-        InstanceFilePath from = InstanceFilePath.parse(roots, fromPath);
-        InstanceFilePath to = InstanceFilePath.parse(roots, toPath);
+        Opened opened = open(instanceId, WRITE);
+        InstanceFilePath from = opened.parse(fromPath);
+        InstanceFilePath to = opened.parse(toPath);
         requireNotManaged(instanceId, from);
         requireNotManaged(instanceId, to);
         if (from.isVolumeRoot() || to.isVolumeRoot()) {
             throw refusal("files_volume_root");
         }
-        InstanceFileSupport files = filesOf(resolved);
-        String handle = resolved.spec().handle();
-
-        requireContainedParents(files, handle, from);
-        requireContainedParents(files, handle, to);
-        if (statOrNull(files, handle, from.absolute()) == null) {
+        if (opened.walk(from) == null) {
             throw refusal("files_not_found");
         }
-        if (statOrNull(files, handle, to.absolute()) != null) {
+        if (opened.walk(to) != null) {
             throw refusal("files_exists");
         }
         try {
-            files.rename(handle, from.absolute(), to.absolute());
+            opened.files().rename(opened.handle(), from.absolute(), to.absolute(),
+                opened.ownerLabels());
         } catch (IOException e) {
             throw failure(e);
         }
@@ -285,28 +268,73 @@ public final class InstanceFiles {
 
     /** Delete a file, a symlink, or a directory tree; never the volume root itself. */
     public void delete(int instanceId, @NonNull String requestedPath) {
-        HohenheimAccess.requireOperationCapability(instanceId, WRITE);
-        InstanceService.Resolved resolved = this.instances.resolve(instanceId);
-        List<String> roots = sortedRoots(resolved);
-        InstanceFilePath target = InstanceFilePath.parse(roots, requestedPath);
+        Opened opened = open(instanceId, WRITE);
+        InstanceFilePath target = opened.parse(requestedPath);
         requireNotManaged(instanceId, target);
         if (target.isVolumeRoot()) {
             throw refusal("files_volume_root");
         }
-        InstanceFileSupport files = filesOf(resolved);
-        String handle = resolved.spec().handle();
-
-        requireContainedParents(files, handle, target);
-        InstanceFileSupport.Entry leaf = statOrNull(files, handle, target.absolute());
+        InstanceFileSupport.Entry leaf = opened.walk(target);
         if (leaf == null) {
             throw refusal("files_not_found");
         }
         try {
-            files.delete(handle, target.absolute(),
-                leaf.kind() == InstanceFileSupport.Kind.DIRECTORY);
+            opened.files().delete(opened.handle(), target.absolute(),
+                leaf.kind() == InstanceFileSupport.Kind.DIRECTORY, opened.ownerLabels());
         } catch (IOException e) {
             throw failure(e);
         }
+    }
+
+    // -- the shared preamble --------------------------------------------------
+
+    /**
+     * One verb's resolved instance: the capability already asked, the roots computed. The
+     * driver lane and the containment walk are reached through it, so no verb can take the
+     * one without the other.
+     */
+    private record Opened(InstanceService.@NonNull Resolved resolved,
+                          @NonNull List<String> roots) {
+
+        @NonNull InstanceFilePath parse(@NonNull String path) {
+            return InstanceFilePath.parse(this.roots, path);
+        }
+
+        /** @throws Violations {@code files_unsupported} when the driver cannot browse */
+        @NonNull InstanceFileSupport files() {
+            return filesOf(this.resolved);
+        }
+
+        @NonNull String handle() {
+            return this.resolved.spec().handle();
+        }
+
+        @NonNull Map<String, String> ownerLabels() {
+            return this.resolved.spec().ownerLabels();
+        }
+
+        /**
+         * Layer 3 of the containment argument for {@code target}, then lstat its leaf.
+         *
+         * @return the leaf, or null when nothing is there
+         */
+        InstanceFileSupport.@Nullable Entry walk(@NonNull InstanceFilePath target) {
+            InstanceFileSupport files = files();
+            requireContainedParents(files, handle(), target);
+            return statOrNull(files, handle(), target.absolute());
+        }
+    }
+
+    /** Ask {@code capability} on the SERVICE, then resolve the instance and its browse roots. */
+    private @NonNull Opened open(int instanceId, @NonNull String capability) {
+        HohenheimAccess.requireOperationCapability(instanceId, capability);
+        return resolveOpened(instanceId);
+    }
+
+    /** The resolve half of {@link #open}, for a verb that asked its capability itself. */
+    private @NonNull Opened resolveOpened(int instanceId) {
+        InstanceService.Resolved resolved = this.instances.resolve(instanceId);
+        return new Opened(resolved, sortedRoots(resolved));
     }
 
     // -- containment ----------------------------------------------------------
@@ -363,9 +391,25 @@ public final class InstanceFiles {
         return paths;
     }
 
+    /**
+     * Refuse a mutation that would touch a managed path: the path itself, or a DIRECTORY
+     * above one (renaming or deleting {@code /data} takes {@code /data/app.conf} with it).
+     *
+     * AIDEV-NOTE: the ancestor half is its own key ({@code files_managed_ancestor}) because
+     * "that file is managed" would be untrue about a directory. Comparing on a trailing
+     * {@code /} keeps {@code /data/app} from claiming {@code /data/app.conf}.
+     */
     private static void requireNotManaged(int instanceId, @NonNull InstanceFilePath target) {
-        if (managedPaths(instanceId).contains(target.absolute())) {
+        Set<String> managed = managedPaths(instanceId);
+        if (managed.contains(target.absolute())) {
             throw refusal("files_managed_config");
+        }
+        String prefix = target.absolute().endsWith("/")
+            ? target.absolute() : target.absolute() + "/";
+        for (String path : managed) {
+            if (path.startsWith(prefix)) {
+                throw refusal("files_managed_ancestor");
+            }
         }
     }
 

@@ -147,7 +147,7 @@ public final class HohenheimSources implements ZenitModule {
 
         // The admin dashboard's recent-activity records widget: the shared
         // zenit-cms factory registers "zenit.activity" over the /admin panel.
-        ActivitySources.register("admin", ADMIN_ACCESS);
+        ActivitySources.register(HohenheimSlugs.ADMIN, ADMIN_ACCESS);
 
         // Sites carry field-level deltas in the activity log (the CMS history
         // tab renders them); every other model stays on the default tier.

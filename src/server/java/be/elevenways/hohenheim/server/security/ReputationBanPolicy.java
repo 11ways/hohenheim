@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.security;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.spamservice.client.Reputation;
 import be.elevenways.spamservice.client.SpamserviceClient;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -90,7 +91,7 @@ public final class ReputationBanPolicy {
     private volatile long lastDropLogMs = 0;
 
     private ReputationBanPolicy() {
-        this.clock = System::currentTimeMillis;
+        this.clock = Now::millis;
         this.availabilitySource = () -> SpamserviceManager.get().client() != null;
         this.clientSource = () -> SpamserviceManager.get().client();
         this.categoriesSource = () -> HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.REPUTATION_BAN_CATEGORIES);

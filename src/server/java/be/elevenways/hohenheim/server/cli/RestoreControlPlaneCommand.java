@@ -19,13 +19,13 @@ import java.nio.file.Path;
  *
  * AIDEV-NOTE: restore is OFFLINE BY DESIGN -- it REPLACES the SQLite file, so it must never
  * run while a server has it open, and the archive is fully checksum-verified before either
- * half is touched. That is why the local-path branch closes the datasource FIRST: the
- * offline lane opens one for every command, and letting a pool's close() checkpoint a WAL
- * onto a freshly restored file is exactly the corruption this ordering exists to prevent.
- * The target-key branch cannot do the same, and says so: resolving a target reads the
- * backup_targets row and its host record, so that lane NEEDS a readable database -- the
- * limitation ControlPlaneBackups.restoreFromTarget already states. Total loss is covered by
- * copying the artifact down by hand and restoring it by PATH.
+ * half is touched. The offline lane opens a datasource for every command, and letting a
+ * pool's close() checkpoint a WAL onto a freshly restored file is exactly the corruption
+ * this ordering exists to prevent -- so the datasource is CLOSED before the file is
+ * replaced, on BOTH branches. The target-key branch needs the database only to resolve the
+ * target (the backup_targets row and its host record), so it FETCHES first, closes, and
+ * then restores the local copy; until 2026-09-23 it restored with the pool still open.
+ * Total loss is covered by copying the artifact down by hand and restoring it by PATH.
  *
  * @author Jelle De Loecker
  * @since 0.7.0
@@ -56,14 +56,24 @@ public final class RestoreControlPlaneCommand implements OfflineCommand {
             return;
         }
 
-        RecoveryArchive.Manifest manifest;
+        Path fetched;
         try {
-            manifest = ControlPlaneBackups.restoreFromTarget(pointer);
+            fetched = ControlPlaneBackups.fetchFromTarget(pointer);
         } catch (IOException error) {
             throw new OfflineCommandException(
                 "Control-plane restore from target failed: " + error.getMessage());
         }
-        report(context, manifest);
+        try {
+            HohenheimDatabase.closeDatasource();
+            report(context, ControlPlaneBackups.restore(fetched));
+        } finally {
+            try {
+                ControlPlaneBackups.deleteFetched(fetched);
+            } catch (IOException leftover) {
+                context.print("Could not remove the fetched archive " + fetched + ": "
+                    + leftover.getMessage());
+            }
+        }
     }
 
     /** A pointer that is not a readable local file is treated as a key on the target. */

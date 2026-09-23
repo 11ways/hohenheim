@@ -32,7 +32,9 @@ public final class StackDeploymentsPage implements RecordScopedPage<Row> {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "stack_deployments"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("deployments").withFilter("scope", "stack"); }
-    @Override public @NonNull String slug() { return "deployments"; }
+    public static final String SLUG = "deployments";
+
+    @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("rocket"); }
 
     @Override

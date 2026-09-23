@@ -1,14 +1,12 @@
 package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
+import be.elevenways.hohenheim.server.util.Watchdog;
 import be.elevenways.protoblast.common.time.Now;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -27,14 +25,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * does exactly that.
  */
 public final class ContainerStream implements ConsoleStream {
-
-    /** Bounds the header wait at open time; a stalled daemon must not pin the opener. */
-    private static final ScheduledExecutorService WATCHDOG =
-        Executors.newSingleThreadScheduledExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "docker-stream-watchdog");
-            thread.setDaemon(true);
-            return thread;
-        });
 
     /** Cap on an error-response body read at open time (protects the heap, not UX). */
     private static final int MAX_ERROR_BODY = 64 * 1024;
@@ -109,8 +99,8 @@ public final class ContainerStream implements ConsoleStream {
                                          byte @NonNull [] request, long headerTimeoutMs,
                                          boolean stdinOpen, boolean rawStream) throws IOException {
         DockerStreamConnection connection = transport.openStream(request, headerTimeoutMs);
-        ScheduledFuture<?> watchdog = WATCHDOG.schedule(
-            connection::close, headerTimeoutMs, TimeUnit.MILLISECONDS);
+        // Bounds the header wait at open time; a stalled daemon must not pin the opener.
+        ScheduledFuture<?> watchdog = Watchdog.schedule(connection::close, headerTimeoutMs);
         try {
             return new ContainerStream(connection, stdinOpen, rawStream, headerTimeoutMs);
         } catch (IOException e) {

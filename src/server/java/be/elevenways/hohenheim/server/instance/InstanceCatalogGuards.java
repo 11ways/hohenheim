@@ -30,6 +30,12 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * without their template and the files carry encrypted credential material, so they die
  * with it rather than lingering in tables no surface reaches.
  *
+ * AIDEV-NOTE: only LIVE instances refuse. A trashed instance still names its template and
+ * image, and under enforced foreign keys (zenit 8a86d3c2) that made the DELETE fail as a raw
+ * constraint error after the refusal had already passed, so a template or image any
+ * destroyed workload ever used could never go. Its pointer is history and is cleared
+ * (InstanceModel.detachTrashed) once the refusal passed, the same shape ServerModel uses.
+ *
  * AIDEV-NOTE: {@code InstanceTemplateResource.deleteRow} used to carry the template
  * refusal alone, reachable from that one button; it now declares the same fact as a dead
  * delete WITH the reason, and this hook is the enforcement for every other writer.
@@ -50,6 +56,8 @@ public final class InstanceCatalogGuards {
 
         InstanceTemplateModel.SCHEMA.addBeforeRemoveHook(context -> {
             refuseTemplateInUse(context);
+            InstanceModel.detachTrashed(InstanceModel.TEMPLATE_ID,
+                PendingDeletes.dependents(InstanceModel.TEMPLATE, context));
             PendingDeletes.deleteDependents(Models.get(InstanceTemplateVariableModel.class),
                 InstanceTemplateVariableModel.TEMPLATE, context);
             PendingDeletes.deleteDependents(Models.get(InstanceTemplateFileModel.class),
@@ -60,7 +68,11 @@ public final class InstanceCatalogGuards {
                 InstanceTemplateDatabaseModel.TEMPLATE, context);
         });
 
-        RuntimeImageModel.SCHEMA.addBeforeRemoveHook(InstanceCatalogGuards::refuseImageInUse);
+        RuntimeImageModel.SCHEMA.addBeforeRemoveHook(context -> {
+            refuseImageInUse(context);
+            InstanceModel.detachTrashed(InstanceModel.RUNTIME_IMAGE_ID,
+                PendingDeletes.dependents(InstanceModel.RUNTIME_IMAGE, context));
+        });
     }
 
     /** @throws Violations {@code template_in_use} naming the template and its live instance count */

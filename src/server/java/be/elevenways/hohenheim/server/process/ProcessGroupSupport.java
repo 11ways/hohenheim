@@ -165,29 +165,15 @@ public final class ProcessGroupSupport {
                                           List<String> command) {
         Map<String, String> environment = SystemUsers.safeEnvironment(
             runAs != null ? runAs.home() : System.getProperty("user.home"));
-        Process process = null;
-        OutputCapture capture = null;
         try {
-            process = SystemUsers.executionBuilder(runAs, environment, command, false)
-                .redirectErrorStream(true)
-                .start();
-            capture = drain(process.getInputStream(), "process-group-helper-" + process.pid(), 8_192);
-            if (!process.waitFor(HELPER_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                process.destroyForcibly();
-                capture.finish();
+            BoundedProcess.Result result = BoundedProcess.run(
+                SystemUsers.executionBuilder(runAs, environment, command, false)
+                    .redirectErrorStream(true),
+                TimeUnit.SECONDS.toMillis(HELPER_TIMEOUT_SECONDS), 8_192);
+            if (result.timedOut()) {
                 return new HelperResult(-1, "helper timed out");
             }
-            capture.finish();
-            return new HelperResult(process.exitValue(), capture.output().trim());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            if (process != null) {
-                process.destroyForcibly();
-            }
-            if (capture != null) {
-                capture.finish();
-            }
-            return new HelperResult(-1, "helper interrupted");
+            return new HelperResult(result.exitCode(), result.stdout().trim());
         } catch (Exception e) {
             return new HelperResult(-1,
                 e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());

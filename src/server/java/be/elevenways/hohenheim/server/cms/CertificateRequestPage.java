@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -36,7 +37,7 @@ public final class CertificateRequestPage extends PanelPage {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "certificates_request"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("request_le").withFilter("scope", "certificate"); }
-    @Override public @NonNull String slug() { return "certificates-request"; }
+    @Override public @NonNull String slug() { return HohenheimSlugs.CERTIFICATES_REQUEST; }
     @Override public @NonNull Icon icon() { return Icon.of("lock"); }
     @Override public boolean showInNav() { return false; }
 
@@ -60,9 +61,9 @@ public final class CertificateRequestPage extends PanelPage {
         vars.put("manualToken", "");
         vars.put("dnsRecords", List.of());
         // Both are admin-panel routes; the page is an operator-only peer.
-        vars.put("startOverTarget", CmsRoutes.list("admin", this.slug()));
-        vars.put("certificatesTarget", CmsRoutes.list("admin", "certificates"));
-        String manualToken = conduit.getQueryParam("manual");
+        vars.put("startOverTarget", CmsRoutes.list(HohenheimSlugs.ADMIN, this.slug()));
+        vars.put("certificatesTarget", CmsRoutes.list(HohenheimSlugs.ADMIN, HohenheimSlugs.CERTIFICATES));
+        String manualToken = conduit.getQueryParam(HohenheimParams.MANUAL_CHALLENGE.getName());
         var proxy = ServerMain.getProxyServer();
         if (manualToken != null && proxy != null) {
             AcmeService.ManualDnsRequest manual = proxy.getAcmeService().manualDnsRequest(manualToken);
@@ -101,17 +102,8 @@ public final class CertificateRequestPage extends PanelPage {
     private static @NonNull List<String> prefillFromCertificate(@NonNull Conduit conduit,
                                                                 @NonNull AccessContext accessContext,
                                                                 @NonNull Map<String, Object> vars) {
-        String raw = conduit.getQueryParam(HohenheimParams.CERTIFICATE_REISSUE_NAME);
-        if (raw == null || raw.isEmpty()) {
-            return List.of();
-        }
-        int certId;
-        try {
-            certId = Integer.parseInt(raw);
-        } catch (NumberFormatException invalid) {
-            return List.of();
-        }
-        if (certId <= 0) {
+        Integer certId = CmsSupport.prefill(conduit, HohenheimParams.CERTIFICATE_REISSUE);
+        if (certId == null || certId <= 0) {
             return List.of();
         }
         Row cert = HohenheimAccess.isAdmin(accessContext)
@@ -163,14 +155,8 @@ public final class CertificateRequestPage extends PanelPage {
                                                          @NonNull AccessContext accessContext,
                                                          @NonNull Map<String, Object> vars) {
         vars.put("niceName", "");
-        String siteParam = conduit.getQueryParam("site");
-        if (siteParam == null || siteParam.isEmpty()) {
-            return List.of();
-        }
-        int siteId;
-        try {
-            siteId = Integer.parseInt(siteParam);
-        } catch (NumberFormatException invalid) {
+        Integer siteId = CmsSupport.prefill(conduit, HohenheimParams.CERTIFICATE_REQUEST_SITE);
+        if (siteId == null) {
             return List.of();
         }
         if (!HohenheimAccess.isAdmin(accessContext)

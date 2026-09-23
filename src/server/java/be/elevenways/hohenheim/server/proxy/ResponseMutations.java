@@ -38,7 +38,8 @@ final class ResponseMutations {
         if (upstream != null && Boolean.TRUE.equals(exchange.getAttachment(SiteDispatcher.REWRITE_LOCATION))) {
             String location = headers.getFirst(Headers.LOCATION);
             if (location != null) {
-                String rewritten = rewriteLocation(location, upstream.uri(), exchange);
+                String rewritten = rewriteLocation(location, upstream.uri(), exchange,
+                    entry.stripPath ? entry.path : null);
                 if (rewritten != null) {
                     headers.put(Headers.LOCATION, rewritten);
                 }
@@ -53,15 +54,24 @@ final class ResponseMutations {
 
     /**
      * Rewrite an upstream redirect to the public scheme + authority so backend host:port never
-     * leaks. Only absolute Locations whose host:port match the upstream are touched.
+     * leaks. Only absolute Locations whose host:port match the upstream are touched, plus, on a
+     * strip_path route, origin-relative ones.
      *
      * AIDEV-NOTE: The public authority comes from the live request's Host header, NOT the route's
      * configured hostname -- wildcard/regex routes match many hostnames and the pattern itself
      * would produce a broken URL.
      *
+     * AIDEV-NOTE: a strip_path upstream believes it is mounted at the root, so every path it
+     * redirects to lacks the prefix the proxy removed: http://backend/login must become
+     * /api/login on the public side, not /login (which is another route, or a 404). The prefix
+     * is re-added to the backend-absolute AND the origin-relative spelling; a protocol-relative
+     * or document-relative Location is left alone.
+     *
+     * @param strippedPrefix the route prefix strip_path removed, or null
      * @return the rewritten Location, or null when no rewrite applies
      */
-    private static String rewriteLocation(String location, URI upstream, HttpServerExchange exchange) {
+    static String rewriteLocation(String location, URI upstream, HttpServerExchange exchange,
+                                  String strippedPrefix) {
         URI parsed;
         try {
             parsed = new URI(location);
@@ -69,9 +79,13 @@ final class ResponseMutations {
             return null;
         }
 
-        // Relative redirects never leak the backend.
+        // Relative redirects never leak the backend; only a strip_path prefix concerns them.
         if (!parsed.isAbsolute() || parsed.getHost() == null) {
-            return null;
+            if (strippedPrefix == null || parsed.isAbsolute() || parsed.getRawAuthority() != null
+                    || parsed.getRawPath() == null || !parsed.getRawPath().startsWith("/")) {
+                return null;
+            }
+            return strippedPrefix + location;
         }
         if (!parsed.getHost().equalsIgnoreCase(upstream.getHost())
                 || effectivePort(parsed) != effectivePort(upstream)) {
@@ -85,6 +99,9 @@ final class ResponseMutations {
 
         StringBuilder rewritten = new StringBuilder(ProxyScheme.effectiveScheme(exchange))
             .append("://").append(authority);
+        if (strippedPrefix != null) {
+            rewritten.append(strippedPrefix);
+        }
         if (parsed.getRawPath() != null) {
             rewritten.append(parsed.getRawPath());
         }

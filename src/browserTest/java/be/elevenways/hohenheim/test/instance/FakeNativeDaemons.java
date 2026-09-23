@@ -181,6 +181,13 @@ final class FakeNativeDaemons {
      */
     static final AtomicReference<Runnable> DURING_SNAPSHOT = new AtomicReference<>();
 
+    /**
+     * Consumed by the next {@code restoreSnapshot}: whatever the daemon's rollback does in
+     * the middle of the restore window, on the caller's thread -- a named refusal thrown
+     * from here is what must never leave the record {@code restoring}.
+     */
+    static final AtomicReference<Runnable> DURING_RESTORE = new AtomicReference<>();
+
     // -- the install lane -----------------------------------------------------
 
     /**
@@ -384,6 +391,10 @@ final class FakeNativeDaemons {
 
         @Override
         public void restoreSnapshot(@NonNull InstanceSpec spec, @NonNull String name) {
+            Runnable during = DURING_RESTORE.getAndSet(null);
+            if (during != null) {
+                during.run();
+            }
         }
 
         @Override

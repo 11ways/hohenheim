@@ -207,7 +207,7 @@ public class HohenheimEndpoints {
     public static final Endpoint<Object> CERTIFICATES_REQUEST = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "certificates_request"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("admin").addDelimiter().addStatic("certificates-request").build())
+            .addStatic(HohenheimSlugs.ADMIN).addDelimiter().addStatic(HohenheimSlugs.CERTIFICATES_REQUEST).build())
         .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .rateLimit(LE_REQUEST_LIMIT)
         .build();
@@ -230,7 +230,7 @@ public class HohenheimEndpoints {
     public static final Endpoint<Object> INSTANCE_TEMPLATES_EXPORT = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "instance_templates_export"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
-            .addStatic("admin").addDelimiter().addStatic("instance-templates").addDelimiter()
+            .addStatic(HohenheimSlugs.ADMIN).addDelimiter().addStatic(HohenheimSlugs.INSTANCE_TEMPLATES).addDelimiter()
             .addParameter(TEMPLATE_ID).addDelimiter().addStatic("export").build())
         .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .build();
@@ -238,7 +238,7 @@ public class HohenheimEndpoints {
     public static final Endpoint<Object> INSTANCE_TEMPLATES_IMPORT = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "instance_templates_import"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("admin").addDelimiter().addStatic("instance-templates-import").build())
+            .addStatic(HohenheimSlugs.ADMIN).addDelimiter().addStatic(HohenheimSlugs.INSTANCE_TEMPLATES_IMPORT).build())
         .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .build();
 
@@ -290,7 +290,7 @@ public class HohenheimEndpoints {
     public static final Endpoint<DataPage> GIT_PROVIDER_REPOSITORIES = Endpoint.<DataPage>builder()
         .identifier(Identifier.of("hohenheim", "git_provider_repositories"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
-            .addStatic("admin").addDelimiter().addStatic("git-providers").addDelimiter()
+            .addStatic(HohenheimSlugs.ADMIN).addDelimiter().addStatic(HohenheimSlugs.GIT_PROVIDERS).addDelimiter()
             .addParameter(PROVIDER_ID).addDelimiter().addStatic("repositories").build())
         .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .rateLimit(PROVIDER_BROWSE_LIMIT)
@@ -299,7 +299,7 @@ public class HohenheimEndpoints {
     public static final Endpoint<DataPage> GIT_PROVIDER_BRANCHES = Endpoint.<DataPage>builder()
         .identifier(Identifier.of("hohenheim", "git_provider_branches"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
-            .addStatic("admin").addDelimiter().addStatic("git-providers").addDelimiter()
+            .addStatic(HohenheimSlugs.ADMIN).addDelimiter().addStatic(HohenheimSlugs.GIT_PROVIDERS).addDelimiter()
             .addParameter(PROVIDER_ID).addDelimiter().addStatic("branches").build())
         .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .rateLimit(PROVIDER_BROWSE_LIMIT)
@@ -321,7 +321,7 @@ public class HohenheimEndpoints {
     public static final Endpoint<Object> ACCESS_RULES_ADD = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "access_rules_add"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("admin").addDelimiter().addStatic("access-lists").addDelimiter()
+            .addStatic(HohenheimSlugs.ADMIN).addDelimiter().addStatic(HohenheimSlugs.ACCESS_LISTS).addDelimiter()
             .addParameter(ACCESS_LIST_ID).addDelimiter().addStatic("rules").build())
         .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .build();
@@ -334,7 +334,7 @@ public class HohenheimEndpoints {
     public static final Endpoint<Object> MANAGE_ACCESS_RULES_ADD = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "manage_access_rules_add"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("manage").addDelimiter().addStatic("access-lists").addDelimiter()
+            .addStatic(HohenheimSlugs.MANAGE).addDelimiter().addStatic(HohenheimSlugs.ACCESS_LISTS).addDelimiter()
             .addParameter(ACCESS_LIST_ID).addDelimiter().addStatic("rules").build())
         .requiresPermission(HohenheimSources.MANAGE_ACCESS)
         .build();
@@ -343,7 +343,7 @@ public class HohenheimEndpoints {
     public static final Endpoint<Object> DNS_ZONE_IMPORT = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "dns_zone_import"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("admin").addDelimiter().addStatic("dns-zones").addDelimiter()
+            .addStatic(HohenheimSlugs.ADMIN).addDelimiter().addStatic(HohenheimSlugs.DNS_ZONES).addDelimiter()
             .addParameter(ZONE_ID).addDelimiter().addStatic("zonefile").build())
         .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .build();
@@ -360,7 +360,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("dns").addDelimiter().addStatic("zones").build())
-        .requiresLogin()
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .rateLimit(PAAS_READ_LIMIT)
         .build();
 
@@ -370,7 +370,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("dns").addDelimiter().addStatic("zones").build())
-        .requiresLogin()
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .csrfExempt()
         .rateLimit(ROUTE_WRITE_LIMIT)
         .build();
@@ -382,7 +382,7 @@ public class HohenheimEndpoints {
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("dns").addDelimiter().addStatic("zones").addDelimiter()
             .addParameter(ZONE_ID).addDelimiter().addStatic("import").build())
-        .requiresLogin()
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .csrfExempt()
         .rateLimit(ROUTE_WRITE_LIMIT)
         .build();
@@ -485,6 +485,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
             .addDelimiter().addStatic("deploy").build())
+        .requiresLogin()
         .rateLimit(DEPLOY_LIMIT)
         .build();
 
@@ -493,6 +494,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
             .addDelimiter().addStatic("rollback").build())
+        .requiresLogin()
         .rateLimit(DEPLOY_LIMIT)
         .build();
 
@@ -801,7 +803,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("sites").build())
-        .requiresLogin()
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .csrfExempt()
         .rateLimit(ROUTE_WRITE_LIMIT)
         .build();
@@ -813,7 +815,7 @@ public class HohenheimEndpoints {
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("sites").addDelimiter().addParameter(SITE_ID)
             .addDelimiter().addStatic("delete").build())
-        .requiresLogin()
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .csrfExempt()
         .rateLimit(ROUTE_WRITE_LIMIT)
         .build();
@@ -1141,7 +1143,7 @@ public class HohenheimEndpoints {
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("databases").addDelimiter().addParameter(DATABASE_ID)
             .addDelimiter().addStatic("move-shared").build())
-        .requiresLogin()
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .csrfExempt()
         .rateLimit(DATABASE_IO_LIMIT)
         .build();
@@ -1173,7 +1175,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("engines").build())
-        .requiresLogin()
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .rateLimit(PAAS_READ_LIMIT)
         .build();
 
@@ -1183,7 +1185,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("engines").addDelimiter().addParameter(DB_ENGINE_ID).build())
-        .requiresLogin()
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .rateLimit(PAAS_READ_LIMIT)
         .build();
 
@@ -1199,7 +1201,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("hosts").build())
-        .requiresLogin()
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .rateLimit(PAAS_READ_LIMIT)
         .build();
 
@@ -1208,7 +1210,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("hosts").addDelimiter().addParameter(SERVER_ID).build())
-        .requiresLogin()
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .rateLimit(PAAS_READ_LIMIT)
         .build();
 
@@ -1299,7 +1301,7 @@ public class HohenheimEndpoints {
     public static final Endpoint<Object> DNS_REMOTE_RECORD = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "dns_remote_record"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("admin").addDelimiter().addStatic("dns-zones").addDelimiter()
+            .addStatic(HohenheimSlugs.ADMIN).addDelimiter().addStatic(HohenheimSlugs.DNS_ZONES).addDelimiter()
             .addParameter(ZONE_ID).addDelimiter().addStatic("remote-records").build())
         .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .build();
@@ -1400,9 +1402,10 @@ public class HohenheimEndpoints {
     /**
      * One console command line to a running instance (the console tab's form). The
      * handler demands per-record CONSOLE; requiresLogin is declared EXPLICITLY even
-     * though the baseline("/") catch-all already implies it -- every other endpoint in
-     * this file states its handshake requirement, and relying on the catch-all made
-     * this the one declaration a reader could not audit in place.
+     * though ServerMain's baseline("/") catch-all already implies it, so the declaration
+     * can be audited in place. The rule for this file: every endpoint states its own
+     * requirement -- a permission, requiresLogin, or a public stance with its reason
+     * (DYNDNS_UPDATE, HEALTH, DEV_TUNNEL) -- and never leans on the catch-all.
      */
     public static final Endpoint<Object> INSTANCE_CONSOLE_COMMAND = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "instance_console_command"))

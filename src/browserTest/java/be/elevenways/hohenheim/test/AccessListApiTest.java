@@ -165,7 +165,7 @@ class AccessListApiTest extends HohenheimTestBase {
             form("name", PREFIX + "stranger", "colour", "red"));
         assertThat(stranger.statusCode()).as("step 5: a stranger key is a typed refusal")
             .isEqualTo(422);
-        assertThat(codeOf(stranger.body())).isEqualTo("zenit.coercion.unknown_field");
+        assertThat(codeOf(stranger.body())).isEqualTo("unknown_field");
         assertThat(Models.get(AccessListModel.class).find()
                 .where(AccessListModel.NAME.eq(PREFIX + "stranger")).first())
             .as("step 5: and wrote no row").isNull();
@@ -184,7 +184,7 @@ class AccessListApiTest extends HohenheimTestBase {
             "/api/v1/access-lists/" + adminListId + "/rules",
             form("type", AccessRuleModel.TYPE_IP_DENY, "data.netwerk", "10.0.0.1"));
         assertThat(misspelled.statusCode()).isEqualTo(422);
-        assertThat(codeOf(misspelled.body())).isEqualTo("zenit.coercion.unknown_field");
+        assertThat(codeOf(misspelled.body())).isEqualTo("unknown_field");
         List<Row> afterRefusal = rulesOf(adminListId);
         assertThat(afterRefusal).as("step 6: the unconfigured node is there").hasSize(4);
         assertThat(afterRefusal.stream()
@@ -213,7 +213,7 @@ class AccessListApiTest extends HohenheimTestBase {
             form("name", PREFIX + "tenant-shared", "shared", "true"));
         assertThat(shared.statusCode()).as("step 2: publishing is the operator's declaration")
             .isEqualTo(422);
-        assertThat(codeOf(shared.body())).isEqualTo("zenit.coercion.unknown_field");
+        assertThat(codeOf(shared.body())).isEqualTo("unknown_field");
 
         // 3. Someone else's list is a uniform 404 on every verb, never an oracle.
         assertThat(keyGet(keyTenant, "/api/v1/access-lists/" + adminListId).statusCode())

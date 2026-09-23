@@ -2,11 +2,13 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.host.VolumeBackend;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.InstanceRowCleanup;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -93,21 +95,24 @@ class InstanceVolumesTest {
         Db.run(datasource, () -> {
             String local = ServerModel.nameOf(ServerModel.localServerId());
             setBackend(VolumeBackend.NONE);
+            // A REAL owner: instance_volumes.instance_id is an enforced foreign key, so a
+            // declaration can only ever be made for an instance that exists.
+            int owner = ownerRecord();
 
             // 1. Nothing declared: no host contact, no refusal, an empty mount set.
-            assertThat(InstanceVolumes.mountsFor(4242, local))
+            assertThat(InstanceVolumes.mountsFor(owner, local))
                 .as("step 1: an owner with no volumes mounts nothing and asks nothing")
                 .isEqualTo(Map.of());
-            assertThat(InstanceVolumes.snapshotAll(4242, local, "predeploy"))
+            assertThat(InstanceVolumes.snapshotAll(owner, local, "predeploy"))
                 .as("step 1: and has nothing to snapshot, on any backend").isEmpty();
-            assertThat(InstanceVolumes.hasExclusive(4242))
+            assertThat(InstanceVolumes.hasExclusive(owner))
                 .as("step 1: and declares no exclusive volume").isFalse();
 
             // 2. Declared on a backend that cannot create one: refused BY NAME. A degrading
             //    mkdir here would hand the workload a directory with no quota and no
             //    snapshot, which looks identical until it fills the host's disk.
-            InstanceVolumes.declare(4242, "data", "/var/lib/app", 1024L, false);
-            assertThatThrownBy(() -> InstanceVolumes.mountsFor(4242, local))
+            InstanceVolumes.declare(owner, "data", "/var/lib/app", 1024L, false);
+            assertThatThrownBy(() -> InstanceVolumes.mountsFor(owner, local))
                 .as("step 2: a NONE backend refuses to deliver a declared volume")
                 .isInstanceOf(Violations.class)
                 .hasMessageContaining("volume_backend_unimplemented");
@@ -117,34 +122,44 @@ class InstanceVolumesTest {
             //    backend can lose them independently (a filesystem that caps but does not
             //    snapshot, or one this build simply has no operations for).
             setBackend(VolumeBackend.XFS_PRJQUOTA);
-            assertThatThrownBy(() -> InstanceVolumes.snapshotAll(4242, local, "predeploy"))
+            assertThatThrownBy(() -> InstanceVolumes.snapshotAll(owner, local, "predeploy"))
                 .as("step 3: a quota-capable backend that cannot snapshot refuses the"
                     + " pre-deploy copy by name")
                 .isInstanceOf(Violations.class)
                 .hasMessageContaining("volume_no_snapshot_support");
 
             // 4. An unknown host is its own refusal, never a silent skip.
-            assertThatThrownBy(() -> InstanceVolumes.mountsFor(4242, "no-such-host"))
+            assertThatThrownBy(() -> InstanceVolumes.mountsFor(owner, "no-such-host"))
                 .as("step 4: an uninventoried host refuses by name")
                 .isInstanceOf(Violations.class)
                 .hasMessageContaining("volume_host_unknown");
 
             // 5. The declaration itself is stored with its evidence and its exclusivity.
-            Row stored = InstanceVolumes.declaredFor(4242).get(0);
+            Row stored = InstanceVolumes.declaredFor(owner).get(0);
             assertThat(stored.get(InstanceVolumeModel.HOST_PATH))
                 .as("step 5: the row records the directory a reclaim would remove")
-                .isEqualTo("/srv/hoh-test/volumes/4242/data");
-            InstanceVolumes.declare(4242, "data", "/var/lib/app", 1024L, true);
-            assertThat(InstanceVolumes.hasExclusive(4242))
+                .isEqualTo("/srv/hoh-test/volumes/" + owner + "/data");
+            InstanceVolumes.declare(owner, "data", "/var/lib/app", 1024L, true);
+            assertThat(InstanceVolumes.hasExclusive(owner))
                 .as("step 5: re-declaring updates in place and the exclusivity is visible")
                 .isTrue();
-            assertThat(InstanceVolumes.declaredFor(4242))
+            assertThat(InstanceVolumes.declaredFor(owner))
                 .as("step 5: without minting a second row").hasSize(1);
 
             setBackend(VolumeBackend.NONE);
             Models.get(InstanceVolumeModel.class).find()
-                .where(InstanceVolumeModel.INSTANCE_ID.eq(4242)).delete();
+                .where(InstanceVolumeModel.INSTANCE_ID.eq(owner)).delete();
+            InstanceRowCleanup.delete(owner);
         });
+    }
+
+    /** A bare instance row that owns the volume declarations; nothing is deployed. */
+    private static int ownerRecord() {
+        Row row = Models.get(InstanceModel.class).createEmptyRow();
+        row.set(InstanceModel.NAME, "volume-owner");
+        row.set(InstanceModel.KIND, "hohenheim:docker_container");
+        Models.get(InstanceModel.class).save(row);
+        return row.get(InstanceModel.ID);
     }
 
     private static void setBackend(VolumeBackend backend) {

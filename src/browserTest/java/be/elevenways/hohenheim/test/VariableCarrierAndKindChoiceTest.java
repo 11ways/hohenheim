@@ -208,9 +208,11 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
         //    names the kind and not the name. That staging is the framework's
         //    coerce-then-validate pipeline, not this form's declaration; step 4 proves
         //    the name requirement is enforced too.
+        //    The field's own tag is matched, not a fixed attribute run: zenit-forms marks a
+        //    required entry `required` between data-path and invalid (abcc211).
         assertThat(empty.body())
             .as("the kind field is marked invalid")
-            .contains("data-path=\"kind\" invalid");
+            .containsPattern("<pl-field data-path=\"kind\"[^>]*\\sinvalid[\\s>=]");
         assertThat(empty.body())
             .as("the missing kind is reported in words")
             .contains("Choose one of the offered options");
@@ -230,8 +232,12 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
             "name=&kind=hohenheim%3Agithub&base_url=", sessionToken, csrfToken);
         assertThat(namelessButTyped.statusCode()).isEqualTo(200);
         assertThat(namelessButTyped.body())
+            .as("the name field is marked invalid")
+            .containsPattern("<pl-field data-path=\"name\"[^>]*\\sinvalid[\\s>=]");
+        // zenit's required copy leads with the field's own label ("{field} is required").
+        assertThat(namelessButTyped.body())
             .as("the missing name is reported")
-            .contains("name is required");
+            .contains("Name is required");
 
         // 5. Nothing was stored by either refusal.
         assertThat(Models.get(GitProviderModel.class).find().count())

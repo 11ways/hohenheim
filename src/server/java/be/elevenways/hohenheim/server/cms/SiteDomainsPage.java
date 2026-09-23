@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.CertCoverage;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -120,9 +122,9 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
         // an ungated target would put "certificates-request" in the page source of a
         // /manage render -- which is exactly what ManagePanelTest forbids. The certificate
         // request page is installation administration and lives only on the admin panel,
-        // so the panel slug is deliberately the literal "admin".
+        // so the panel slug is deliberately the operator panel's.
         vars.put("requestCertTarget", canRequestCert ? CmsEndpoints.LIST
-            .with(CmsEndpoints.PANEL_PARAM, "admin")
+            .with(CmsEndpoints.PANEL_PARAM, HohenheimSlugs.ADMIN)
             .with(CmsEndpoints.RESOURCE_PARAM, "certificates-request")
             .with(HohenheimParams.CERTIFICATE_REQUEST_SITE, siteId) : null);
         vars.put("recordTabs", recordTabs(conduit));
@@ -160,11 +162,14 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
             return;
         }
         Row cert = CertificateCoverage.coveringCertificate(domain.get(SiteDomainModel.HOSTNAME));
+        CertCoverage coverage = CertCoverage.ofCertificateStatus(
+            cert == null ? null : cert.get(CertificateModel.STATUS));
+        entry.put("certStatus", coverage.key());
+        entry.put("certBadge", coverage.badgeVariant());
+        entry.put("certLabel", coverage.label());
         if (cert == null) {
-            entry.put("certStatus", "none");
             return;
         }
-        entry.put("certStatus", String.valueOf(cert.get(CertificateModel.STATUS)));
         Instant expiresOn = cert.get(CertificateModel.EXPIRES_ON);
         entry.put("certHasExpiry", expiresOn != null);
         entry.put("certExpiresIso", expiresOn != null ? expiresOn.toString() : "");
@@ -176,7 +181,7 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
             entry.put("certName", String.valueOf(cert.get(CertificateModel.NICE_NAME)));
             // The panel this tab renders under carries a certificates peer on both faces
             // (CertificateResource and its /manage projection share the slug).
-            entry.put("certTarget", CmsRoutes.detail(panel, "certificates", certId));
+            entry.put("certTarget", CmsRoutes.detail(panel, HohenheimSlugs.CERTIFICATES, certId));
         }
     }
 }

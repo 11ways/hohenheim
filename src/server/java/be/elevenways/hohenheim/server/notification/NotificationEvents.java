@@ -47,7 +47,17 @@ public enum NotificationEvents {
     /** DnsSecondaryFreshness raises this ONCE per lag, when a secondary has been behind for the stale window. */
     DNS_SECONDARY_STALE("dns_secondary_stale"),
     /** DnsDelegationHealth raises this when a zone's delegation verdict CHANGES into a defect, never per tick. */
-    DNS_DELEGATION_BROKEN("dns_delegation_broken");
+    DNS_DELEGATION_BROKEN("dns_delegation_broken"),
+    /**
+     * A database move switched to its shared engine but could not tear the old dedicated
+     * engine down: that container still runs, holds its port and memory, and keeps a copy.
+     */
+    DATABASE_MOVE_LEFTOVER("database_move_leftover"),
+    /**
+     * The control-plane database holds rows that violate its declared foreign keys
+     * (HohenheimDatabase's boot check); writes touching them fail until repaired.
+     */
+    DATA_INTEGRITY("data_integrity");
 
     /** Every declared event token, in declaration order; DERIVED, never hand-listed. */
     public static final List<String> ALL =

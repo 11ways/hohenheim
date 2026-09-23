@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.WorkspaceBuilds;
 import be.elevenways.hohenheim.server.instance.WorkspaceKind;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
+import be.elevenways.hohenheim.source.GitRefNames;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.dry.Dry;
 import be.elevenways.protoblast.common.thread.JobRunner;
@@ -20,6 +21,7 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.security.SecureTokens;
+import io.undertow.io.Receiver;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 import io.undertow.util.HttpString;
@@ -63,8 +65,8 @@ public class GitWebhookHandler {
     /** One constant refusal for everything short of a verified signature. */
     private static final String REFUSAL_BODY = "{\"error\":\"not found\"}";
 
-    /** Payloads larger than this are refused before the body is read. */
-    private static final long MAX_BODY_BYTES = 2 * 1024 * 1024;
+    /** Payloads larger than this are refused, whether or not they announce their length. */
+    private static final int MAX_BODY_BYTES = 2 * 1024 * 1024;
 
     private static final RateLimiter LIMITER = new RateLimiter();
     private static final int ATTEMPTS_PER_MINUTE = 60;
@@ -96,11 +98,24 @@ public class GitWebhookHandler {
         }
         long contentLength = exchange.getRequestContentLength();
         if (contentLength > MAX_BODY_BYTES) {
+            exchange.setPersistent(false);
             sendJson(exchange, 413, "{\"error\":\"payload too large\"}");
             return;
         }
 
-        // Read full body, then dispatch to a worker thread for the DB work
+        // AIDEV-NOTE: the cap is enforced WHILE the body streams in, not only against
+        // Content-Length: a chunked request announces no length, and receiveFullString
+        // without a buffer limit used to hold ALL of it in memory before the size check
+        // could run -- a multi-gigabyte POST from anyone who can reach the proxy port. The
+        // receiver aborts the read the moment the buffer passes the cap and hands the
+        // failure to the callback below, which answers 413.
+        //
+        // AIDEV-NOTE: deliberately NOT exchange.setMaxEntitySize as well. That transport cap
+        // fires inside Undertow's body conduit, which closes the whole CONNECTION before it
+        // throws, so no refusal can be written at all: the client sees a connection reset
+        // instead of a 413. Its exception also reaches an async receiver wrapped in an
+        // IOException, so the check below could not have recognised it as too large anyway.
+        exchange.getRequestReceiver().setMaxBufferSize(MAX_BODY_BYTES);
         exchange.getRequestReceiver().receiveFullString((ex, body) -> {
             ex.dispatch(() -> {
                 try {
@@ -110,6 +125,18 @@ public class GitWebhookHandler {
                     sendJson(ex, 500, "{\"error\":\"internal error\"}");
                 }
             });
+        }, (ex, failure) -> {
+            // Never keep the connection: Undertow would otherwise DRAIN the rest of an
+            // oversized body before it lets the refusal go out.
+            ex.setPersistent(false);
+            if (failure instanceof Receiver.RequestToLargeException) {
+                sendJson(ex, 413, "{\"error\":\"payload too large\"}");
+                return;
+            }
+            Blast.log("GIT WEBHOOK: could not read the body for slug", slug, "-",
+                failure.getMessage());
+            ex.setStatusCode(400);
+            ex.endExchange();
         }, StandardCharsets.UTF_8);
     }
 
@@ -215,6 +242,14 @@ public class GitWebhookHandler {
             }
             WebhookDeliveries.stampAction(claimed, "ignored_deleted_ref");
             sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"deleted ref\"}");
+            return;
+        }
+
+        // A pushed branch name is the forge's text; one git could read as an option (or
+        // that is no ref at all) never reaches a checkout.
+        if (!production && !branch.isEmpty() && !GitRefNames.isValid(branch)) {
+            WebhookDeliveries.stampAction(claimed, "ignored_invalid_ref");
+            sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"invalid ref\"}");
             return;
         }
 
@@ -356,6 +391,12 @@ public class GitWebhookHandler {
 
         int applicationId = application.get(InstanceModel.ID);
         String ref = previewEvent.ref();
+        // A teardown runs no git and must still reach a preview whatever its ref says.
+        if (previewEvent.intent() == PreviewIntent.DEPLOY && !GitRefNames.isValid(ref)) {
+            WebhookDeliveries.stampAction(claimed, "ignored_invalid_ref");
+            sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"invalid ref\"}");
+            return;
+        }
         Datasource datasource = Db.currentOrDefault();
         switch (previewEvent.intent()) {
             case DEPLOY -> {

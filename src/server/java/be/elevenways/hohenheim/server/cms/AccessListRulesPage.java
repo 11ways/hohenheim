@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.access.AccessRuleOption;
 import be.elevenways.hohenheim.access.AccessRuleView;
@@ -56,7 +57,7 @@ public final class AccessListRulesPage implements RecordScopedPage<Row> {
                                            @NonNull Row list) {
         Integer listId = list.get(AccessListModel.ID);
         String panel = CmsSupport.panelSlug(conduit);
-        String pageUrl = CmsRoutes.subpage(panel, "access-lists", listId, this.slug()).toUrl();
+        String pageUrl = CmsRoutes.subpage(panel, HohenheimSlugs.ACCESS_LISTS, listId, this.slug()).toUrl();
 
         List<Row> rules = Models.get(AccessRuleModel.class).findForAccessList(listId);
         Map<Integer, List<Row>> childrenByParent = new LinkedHashMap<>();
@@ -85,7 +86,7 @@ public final class AccessListRulesPage implements RecordScopedPage<Row> {
         // The add form posts to the lane of the panel it renders under: the admin lane is
         // admin-gated, the /manage lane is manage-gated plus the handler's per-list check.
         // The panel slug literal is the SiteDomainsPage precedent.
-        vars.put("addTarget", ("admin".equals(panel)
+        vars.put("addTarget", (HohenheimSlugs.ADMIN.equals(panel)
             ? HohenheimEndpoints.ACCESS_RULES_ADD
             : HohenheimEndpoints.MANAGE_ACCESS_RULES_ADD)
             .with(HohenheimEndpoints.ACCESS_LIST_ID, listId));

@@ -1,0 +1,35 @@
+{#- The detail row under one deploy in a deploy history table (an instance's Deploys tab,
+    a stack's Deployments tab): its failure reason and its captured log.
+
+    ONE partial for both histories: the stack copy had drifted into a hand-written
+    <pre> with no height limit while the instance copy moved to pl-log-view. The CALLER
+    decides whether a row has detail and which text a reader of this panel may see (a
+    delegated panel gets a tenant-safe reason, never the daemon's own text); this only
+    draws it. The trigger is the collapsible's own ghost register, never a pl-button
+    nested inside it -- that was a button inside a button. -#}
+{% declare deploy: Map<String, Object> %}
+{% declare colspan: Integer %}
+{% declare logLabel: Microcopy %}
+<pl-table-row data-detail>
+    <pl-table-cell colspan={% colspan %} class="hh-deploy-detail">
+        {% if deploy.get("error") != "" %}
+        <div class="hh-deploy-error">
+            <pl-icon name="triangle-exclamation"></pl-icon>
+            <span>{{ deploy.get("error") }}</span>
+        </div>
+        {% /if %}
+        {% if deploy.get("hasLog") == true %}
+        <pl-collapsible>
+            <pl-collapsible-trigger variant={% "ghost" %} caret={% true %}>{{ logLabel }}</pl-collapsible-trigger>
+            <pl-collapsible-content>
+                {#- pl-log-view, never a hand-rolled <pre>: it is the follow-tail pane, it
+                    names its own scroll region for assistive technology, and it bounds its
+                    own height. -#}
+                <pl-log-view class="hh-deploy-log"
+                             text={% deploy.get("log") %}
+                             label={% logLabel %}></pl-log-view>
+            </pl-collapsible-content>
+        </pl-collapsible>
+        {% /if %}
+    </pl-table-cell>
+</pl-table-row>

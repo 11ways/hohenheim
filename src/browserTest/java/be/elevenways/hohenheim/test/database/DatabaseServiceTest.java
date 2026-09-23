@@ -108,9 +108,12 @@ class DatabaseServiceTest {
                 List.of("psql", "-U", "appuser", "-d", "appdb", "-c", "CREATE TABLE t (id int);"),
                 List.of("PGPASSWORD=secret123"));
             assertThat(seed.exitCode()).withFailMessage("seed failed: %s", seed.stderr()).isZero();
-            DatabaseService.BackupDownload download = service.backupDownload(name);
-            assertThat(new String(download.content(), StandardCharsets.UTF_8))
-                .contains("CREATE TABLE");
+            try (DatabaseService.BackupStream download = service.backupStream(name)) {
+                String sql = new String(download.content().readAllBytes(), StandardCharsets.UTF_8);
+                assertThat(sql).contains("CREATE TABLE");
+                // Dumps carry no owner and no ACL: the restore decides who owns the objects.
+                assertThat(sql).doesNotContain("OWNER TO");
+            }
 
             service.destroy(name, true);
             assertThat(service.list()).isEmpty();              // record gone
@@ -144,16 +147,16 @@ class DatabaseServiceTest {
                 "appuser", "secret123", "appdb", true);
 
             // The call returned without blocking on the pull: the record is already "provisioning".
-            assertThat(service.detail(name).status()).isEqualTo(DatabaseService.STATUS_PROVISIONING);
+            assertThat(service.detail(name).status()).isEqualTo(DatabaseModel.STATUS_PROVISIONING);
 
             // The background job flips it to "active" once the container is up and ready.
             long deadline = Now.millis() + 60_000;
             String status = service.detail(name).status();
-            while (!DatabaseService.STATUS_ACTIVE.equals(status) && Now.millis() < deadline) {
+            while (!DatabaseModel.STATUS_ACTIVE.equals(status) && Now.millis() < deadline) {
                 Thread.sleep(500);
                 status = service.detail(name).status();
             }
-            assertThat(status).isEqualTo(DatabaseService.STATUS_ACTIVE);
+            assertThat(status).isEqualTo(DatabaseModel.STATUS_ACTIVE);
             assertThat(service.detail(name).running()).isTrue();
         } finally {
             service.destroy(name, true);
@@ -189,13 +192,13 @@ class DatabaseServiceTest {
                     PG_IMAGE, "appuser", "secret123", "appdb", true);
                 assertThat((String) created.get(DatabaseModel.STATUS))
                     .as("step 1: the record is born provisioning")
-                    .isEqualTo(DatabaseService.STATUS_PROVISIONING);
+                    .isEqualTo(DatabaseModel.STATUS_PROVISIONING);
                 pause(2_000);
                 assertThat(service.detail(name).status())
                     .as("step 1: nothing flipped the status while the create was"
                         + " uncommitted (a pool thread that could not find the row"
                         + " used to leave it here for ever)")
-                    .isEqualTo(DatabaseService.STATUS_PROVISIONING);
+                    .isEqualTo(DatabaseModel.STATUS_PROVISIONING);
                 // No engine instance row and no container: the record owns nothing
                 // yet, so the live status is ABSENT (EngineHandles.of would refuse to
                 // even name a handle here).
@@ -208,9 +211,9 @@ class DatabaseServiceTest {
             }));
 
             // 2. After the commit the pool provisions: active, running, a real container.
-            assertThat(awaitStatus(service, name, DatabaseService.STATUS_ACTIVE, 120_000))
+            assertThat(awaitStatus(service, name, DatabaseModel.STATUS_ACTIVE, 120_000))
                 .as("step 2: the record turns active once the caller committed")
-                .isEqualTo(DatabaseService.STATUS_ACTIVE);
+                .isEqualTo(DatabaseModel.STATUS_ACTIVE);
             DatabaseService.Detail active = service.detail(name);
             assertThat(active.running()).as("step 2: the engine runs").isTrue();
             assertThat(active.failureReason()).as("step 2: a success carries no reason").isNull();
@@ -222,9 +225,9 @@ class DatabaseServiceTest {
             //    with the daemon's own words on the record -- never "provisioning".
             service.createAsync(doomed, ManagedDatabase.Engine.POSTGRES,
                 "hohenheim-test/does-not-exist:never", "appuser", "secret123", "appdb", true);
-            assertThat(awaitStatus(service, doomed, DatabaseService.STATUS_FAILED, 120_000))
+            assertThat(awaitStatus(service, doomed, DatabaseModel.STATUS_FAILED, 120_000))
                 .as("step 3: an unpullable image is a terminal failure")
-                .isEqualTo(DatabaseService.STATUS_FAILED);
+                .isEqualTo(DatabaseModel.STATUS_FAILED);
             DatabaseService.Detail failed = service.detail(doomed);
             assertThat(failed.failureReason())
                 .as("step 3: the record carries WHY")

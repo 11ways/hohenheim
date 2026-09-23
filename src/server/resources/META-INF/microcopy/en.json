@@ -262,7 +262,7 @@
       "scope": "field"
     },
     {
-      "text": "One Basic Auth username and password per row. Passwords are stored and shown as editable text.",
+      "text": "One Basic Auth username and password per row. Passwords are stored hashed and never shown: leave a password blank to keep it, type one to replace it.",
       "scope": "help"
     },
     {
@@ -277,7 +277,7 @@
   "key": [
     {
       "text": "Username",
-      "scope": "form",
+      "scope": "forms",
       "field": "credentials"
     },
     {
@@ -288,7 +288,7 @@
   "value": [
     {
       "text": "Password",
-      "scope": "form",
+      "scope": "forms",
       "field": "credentials"
     },
     {
@@ -902,10 +902,16 @@
     "text": "Certificate expiring",
     "scope": "notification_event"
   },
-  "deploy_failed": {
-    "text": "Deployment failed",
-    "scope": "notification_event"
-  },
+  "deploy_failed": [
+    {
+      "text": "Deployment failed",
+      "scope": "notification_event"
+    },
+    {
+      "text": "The deploy failed; the reason is recorded on this tab",
+      "scope": "deployments"
+    }
+  ],
   "backup_failed": {
     "text": "Backup failed",
     "scope": "notification_event"
@@ -1726,10 +1732,6 @@
       "scope": "admin"
     },
     {
-      "text": "Settings",
-      "scope": "settings"
-    },
-    {
       "text": "Your services",
       "scope": "manage"
     },
@@ -1750,10 +1752,6 @@
       "scope": "instance_shell"
     }
   ],
-  "framework": {
-    "text": "Framework",
-    "scope": "settings_mount"
-  },
   "description": [
     {
       "text": "Choose how the application runs, add a domain, then request a certificate. Hohenheim guides each step from the site page.",
@@ -4256,6 +4254,10 @@
     "text": "CSRF failure",
     "scope": "security_event_type"
   },
+  "permission_denied": {
+    "text": "Permission denied",
+    "scope": "security_event_type"
+  },
   "ws_origin_refused": {
     "text": "WebSocket origin refused",
     "scope": "security_event_type"
@@ -5653,7 +5655,7 @@
     "scope": "violations"
   },
   "server_in_use": {
-    "text": "Host {$name} still owns {$stacks} stack(s), {$databases} database(s) and {$instances} instance(s); remove or move them first",
+    "text": "Host {$name} is still referenced by {$stacks} stack(s), {$databases} database(s), {$engines} shared database engine(s), {$instances} instance(s) and {$ports} port claim(s); remove or move them (release the claims) first",
     "scope": "violations"
   },
   "preflight": {
@@ -6007,7 +6009,7 @@
     "scope": "violations"
   },
   "backup_target_in_use": {
-    "text": "Backup target {$name} still holds {$backups} backup(s) and backs {$instances} instance(s); delete those backups and repoint the instances first",
+    "text": "Backup target {$name} still holds {$backups} backup(s) and backs {$instances} instance(s) and {$trashed} trashed instance(s); delete those backups and repoint or purge the instances first",
     "scope": "violations"
   },
   "backup_target_control_plane": {
@@ -7394,6 +7396,14 @@
     "text": "Transmitted",
     "scope": "instance_stats"
   },
+  "files_upload_missing": {
+    "text": "Choose a file to upload",
+    "scope": "violations"
+  },
+  "files_managed_ancestor": {
+    "text": "That directory holds managed configuration files; edit them on the Provisioning tab",
+    "scope": "violations"
+  },
   "files_path_refused": {
     "text": "That path is not inside this instance",
     "scope": "violations"
@@ -7530,6 +7540,10 @@
     {
       "text": "Rolled back {$name}",
       "scope": "instance"
+    },
+    {
+      "text": "Rolled back to the retained release",
+      "scope": "deployments"
     }
   ],
   "release_probe_failed": {
@@ -12497,5 +12511,145 @@
   "move_shared_confirm_generic": {
     "text": "Move this database onto the host's shared engine? Every attached workload is stopped while the dump and the restore run, the record reads Provisioning meanwhile, and the dump is kept under the backup path as a rollback.",
     "scope": "database"
+  },
+  "deploy_running": {
+    "text": "Deploy started; its progress appears on this tab",
+    "scope": "deployments"
+  },
+  "deploy_done": {
+    "text": "Deployed",
+    "scope": "deployments"
+  },
+  "rollback_running": {
+    "text": "Rollback started; its progress appears on this tab",
+    "scope": "deployments"
+  },
+  "rollback_failed": {
+    "text": "The rollback failed; the reason is recorded on this tab",
+    "scope": "deployments"
+  },
+  "enrolment_incomplete": {
+    "text": "{$name} is saved but not enrolled: {$reason}. The host stays blocked; save it with a fresh trust token, rotate its identity or probe it to retry.",
+    "scope": "server"
+  },
+  "schedule_step_schedule_fixed": {
+    "text": "A step stays in the schedule it was created in; add a new step to the other schedule instead",
+    "scope": "violations"
+  },
+  "failure_withheld": {
+    "text": "It failed. An administrator can read the reason.",
+    "scope": "delegated"
+  },
+  "database_destroy_failed_tenant": {
+    "text": "'{$name}' could not be deleted right now. The database and its credentials are kept; try again later, or ask your hosting operator if it keeps failing.",
+    "scope": "violations"
+  },
+  "database_resize_failed_tenant": {
+    "text": "The new resource ceilings could not be applied right now. Nothing was changed.",
+    "scope": "violations"
+  },
+  "test_failed_generic": {
+    "text": "The provider could not be reached, or it refused the credentials. Check the base URL and the token, then test again.",
+    "scope": "git_provider"
+  },
+  "instance_operation_in_progress": {
+    "text": "Another operation on instance {$name} is still running; try again when it has finished",
+    "scope": "violations"
+  },
+  "repository_url_local_refused": {
+    "text": "A repository on the Hohenheim server itself can only be used by an operator's source; use a remote repository URL (https, ssh or git)",
+    "scope": "violations"
+  },
+  "source_branch_invalid": {
+    "text": "The branch is not a name git accepts",
+    "scope": "violations"
+  },
+  "source_build_directory_invalid": {
+    "text": "The build directory must be a folder inside the repository",
+    "scope": "violations"
+  },
+  "source_ref_invalid": {
+    "text": "The branch or ref is not a name git accepts",
+    "scope": "violations"
+  },
+  "source_repository_local_refused": {
+    "text": "This source may not clone a path on the Hohenheim server; use a remote repository URL (https, ssh or git)",
+    "scope": "violations"
+  },
+  "source_repository_url_refused": {
+    "text": "The repository URL is not a remote source git may clone",
+    "scope": "violations"
+  },
+  "stack_volume_name_taken": {
+    "text": "Volume {$volume} is already used by stack {$stack}; choose another mount name",
+    "scope": "violations"
+  },
+  "media_url_not_public": {
+    "text": "The media URL must point at a public internet address; upload a file from a private network instead",
+    "scope": "violations"
+  },
+  "database_move_leftover_subject": {
+    "text": "Database {$name} moved, but its old engine is still running",
+    "scope": "alert"
+  },
+  "database_move_leftover_body": {
+    "text": "Database {$name} now lives on shared engine {$engine}, but its old dedicated engine could not be removed and still holds its port, memory and a copy of the data: {$reason}. Remove the old engine instance by hand.",
+    "scope": "alert"
+  },
+  "control_plane_backup_failed_subject": {
+    "text": "Control-plane backup failed",
+    "scope": "alert"
+  },
+  "control_plane_backup_failed_body": {
+    "text": "The scheduled backup of the control-plane database and keyring failed: {$reason}",
+    "scope": "alert"
+  },
+  "instance_backup_failed_subject": {
+    "text": "Instance backup failed: {$name}",
+    "scope": "alert"
+  },
+  "instance_backup_failed_body": {
+    "text": "The scheduled backup of instance {$name} failed: {$reason}",
+    "scope": "alert"
+  },
+  "database_backup_failed_subject": {
+    "text": "Database backup failed: {$name}",
+    "scope": "alert"
+  },
+  "database_backup_failed_body": {
+    "text": "The scheduled backup of database {$name} failed: {$reason}",
+    "scope": "alert"
+  },
+  "isolation_contained_subject": {
+    "text": "{$sweep}: {$count} workload(s) contained",
+    "scope": "alert"
+  },
+  "isolation_unconfirmed_subject": {
+    "text": "{$sweep}: isolation unconfirmed on {$count} subject(s)",
+    "scope": "alert"
+  },
+  "data_integrity_subject": {
+    "text": "Orphaned rows in the control-plane database ({$count} table link(s))",
+    "scope": "alert"
+  },
+  "data_integrity_body": {
+    "text": "These rows point at records that no longer exist, and writes touching them fail: {$detail}. List and repair them offline with --foreign-key-orphans.",
+    "scope": "alert"
+  },
+  "database_move_leftover": {
+    "text": "Old database engine left after a move",
+    "scope": "notification_event"
+  },
+  "data_integrity": {
+    "text": "Orphaned database rows",
+    "scope": "notification_event"
+  },
+  "setting_reclaim_min_age": {
+    "text": "Keep images for at least 1 hour",
+    "scope": "violations"
+  },
+  "setting_public_port_window": {
+    "text": "The public port window must start above 1024 and end at or below {$max}",
+    "scope": "violations"
   }
 }

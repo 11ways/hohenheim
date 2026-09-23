@@ -286,8 +286,15 @@ class IsolationVisibilityTest {
             return instance;
         }
 
+        /** The re-apply's conditional read (IncusClient.editInstance) sees the same definition, with no ETag. */
         @Override
-        public void updateInstance(String name, Map<String, Object> definition) {
+        public Versioned instanceVersioned(String name) {
+            return new Versioned(instance(name), null);
+        }
+
+        /** The ETag-carrying write every definition edit ends in; the plain overload delegates here. */
+        @Override
+        public void updateInstance(String name, Map<String, Object> definition, String etag) {
             this.reloads++;
             if (this.tapAfterReload != null) {
                 this.tap = this.tapAfterReload;

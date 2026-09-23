@@ -62,13 +62,10 @@ public final class DnsFederationTrace {
 
     /** @return the zone's link to the enabled peer holding the TSIG key, or null */
     private static @Nullable Row linkFor(int zoneId, @NonNull String keyName) {
-        DnsPeerModel peerModel = Models.get(DnsPeerModel.class);
-        for (Row link : Models.get(DnsZonePeerModel.class).findByZoneId(zoneId)) {
-            Integer peerId = link.get(DnsZonePeerModel.PEER_ID);
-            Row peer = peerId != null ? peerModel.findById(peerId) : null;
-            String peerKey = peer != null ? peer.get(DnsPeerModel.TSIG_KEY_NAME) : null;
+        for (DnsZonePeers.Linked linked : DnsZonePeers.linked(zoneId)) {
+            String peerKey = linked.peer().get(DnsPeerModel.TSIG_KEY_NAME);
             if (peerKey != null && plain(DnsTsig.canonicalKeyName(peerKey)).equals(keyName)) {
-                return link;
+                return linked.link();
             }
         }
         return null;

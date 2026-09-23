@@ -150,6 +150,106 @@ class PathRoutingTest {
         assertThat(seenPath.get()).isEqualTo("/");
     }
 
+    /**
+     * strip_path forwards the client's OWN encoding of the remainder and never a decoded one:
+     * a decoded remainder written into the upstream request line let %0d%0a inject headers,
+     * %20 split the line, %3F move the query boundary and %2525 decode twice.
+     */
+    @Test
+    void stripPathForwardsTheRawEncodingAndRefusesControlCharacters() throws Exception {
+        resetDatabase();
+
+        AtomicReference<String> seenRawPath = new AtomicReference<>();
+        AtomicReference<String> seenRawQuery = new AtomicReference<>();
+        AtomicReference<String> injected = new AtomicReference<>();
+        List<String> hits = new ArrayList<>();
+        HttpServer upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        upstream.createContext("/", ex -> {
+            synchronized (hits) {
+                hits.add(ex.getRequestURI().getRawPath());
+            }
+            seenRawPath.set(ex.getRequestURI().getRawPath());
+            seenRawQuery.set(ex.getRequestURI().getRawQuery());
+            injected.set(ex.getRequestHeaders().getFirst("X-Injected"));
+            byte[] body = "raw-upstream".getBytes(StandardCharsets.UTF_8);
+            ex.sendResponseHeaders(200, body.length);
+            ex.getResponseBody().write(body);
+            ex.close();
+        });
+        upstream.start();
+        upstreams.add(upstream);
+
+        Row site = setupSite("hohenheim:address", "Raw Strip Site", "raw-strip-site",
+            proxySettings(upstream.getAddress().getPort()));
+        addDomain(site, "rawstrip.test", "exact", "/service", true);
+        proxy = startProxy();
+        int port = httpPort(proxy);
+
+        // Step 1: every encoded byte of the remainder reaches the upstream exactly as sent.
+        assertThat(rawRequest(port, "rawstrip.test", "/service/a%20b%3Fc%2525d/e?q=1"))
+            .as("step 1: the stripped request is served").contains("raw-upstream");
+        assertThat(seenRawPath.get())
+            .as("step 1: %20, %3F and %2525 stay encoded; the prefix alone is gone")
+            .isEqualTo("/a%20b%3Fc%2525d/e");
+        assertThat(seenRawQuery.get())
+            .as("step 1: the real query is the only query").isEqualTo("q=1");
+
+        // Step 2: an encoded CR/LF is refused before any upstream is dialed.
+        int before = hits.size();
+        assertThat(rawRequest(port, "rawstrip.test", "/service/a%0d%0aX-Injected:%20yes"))
+            .as("step 2: a decoded control character in the path is a 400").contains("400");
+        assertThat(rawRequest(port, "rawstrip.test", "/service/a%00b"))
+            .as("step 2: so is NUL").contains("400");
+        assertThat(hits.size()).as("step 2: nothing reached the upstream").isEqualTo(before);
+        assertThat(injected.get()).as("step 2: no header was ever injected").isNull();
+
+        // Step 3: the prefix match is on the canonical path, the cut on the raw one, so an
+        // encoded or doubled separator inside the prefix still strips exactly the prefix.
+        assertThat(rawRequest(port, "rawstrip.test", "//service/x%2Fy"))
+            .as("step 3: a doubled separator still selects the stripped route")
+            .contains("raw-upstream");
+        assertThat(seenRawPath.get())
+            .as("step 3: the remainder keeps its own spelling").isEqualTo("/x%2Fy");
+    }
+
+    /**
+     * A strip_path upstream thinks it lives at the root, so its redirects lack the prefix; the
+     * rewritten Location must put the prefix back instead of sending the browser elsewhere.
+     */
+    @Test
+    void stripPathRedirectsKeepThePrefix() throws Exception {
+        resetDatabase();
+
+        HttpServer upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        int upstreamPort = upstream.getAddress().getPort();
+        upstream.createContext("/", ex -> {
+            String location = ex.getRequestURI().getPath().equals("/absolute")
+                ? "http://127.0.0.1:" + upstreamPort + "/login?next=1"
+                : "/login";
+            ex.getResponseHeaders().add("Location", location);
+            ex.sendResponseHeaders(302, -1);
+            ex.close();
+        });
+        upstream.start();
+        upstreams.add(upstream);
+
+        Row site = setupSite("hohenheim:address", "Prefix Redirect Site", "prefix-redirect-site",
+            proxySettings(upstreamPort));
+        addDomain(site, "prefix.test", "exact", "/api", true);
+        proxy = startProxy();
+        int port = httpPort(proxy);
+
+        // Step 1: a backend-absolute redirect becomes the public host WITH the prefix.
+        assertThat(rawRequest(port, "prefix.test", "/api/absolute"))
+            .as("step 1: http://backend/login is /api/login on the public side")
+            .contains("Location: http://prefix.test/api/login?next=1");
+
+        // Step 2: an origin-relative redirect gets the prefix too.
+        assertThat(rawRequest(port, "prefix.test", "/api/relative"))
+            .as("step 2: /login is /api/login on the public side")
+            .contains("Location: /api/login");
+    }
+
     @Test
     void aSecondLiveSiteCannotTakeAnAlreadyClaimedRoute() throws Exception {
         resetDatabase();

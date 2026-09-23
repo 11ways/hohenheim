@@ -8,6 +8,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -60,14 +61,15 @@ public final class GithubProviderKind implements GitProviderKind {
     @Override public boolean requiresBaseUrl() { return false; }
 
     @Override
-    public @NonNull GitProviderClient clientFor(@NonNull Row provider, @Nullable String baseUrl) {
+    public @NonNull GitProviderClient clientFor(@NonNull Row provider, @Nullable String baseUrl,
+                                                @NonNull OutboundUrlGuard guard) {
         Integer id = provider.get(GitProviderModel.ID);
         Map<String, Object> settings = GitProviders.settingsOf(provider);
         return new GithubProviderClient(id != null ? id : -1, baseUrl,
             provider.get(GitProviderModel.ACCESS_TOKEN),
             text(settings.get(APP_ID.getName())),
             text(settings.get(APP_INSTALLATION_ID.getName())),
-            provider.get(GitProviderModel.APP_PRIVATE_KEY_PEM));
+            provider.get(GitProviderModel.APP_PRIVATE_KEY_PEM), guard);
     }
 
     private static @Nullable String text(@Nullable Object value) {

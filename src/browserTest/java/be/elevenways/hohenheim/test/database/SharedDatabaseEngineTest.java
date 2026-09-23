@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.EngineHost;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
+import be.elevenways.hohenheim.server.database.TenantDatabases;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
@@ -128,7 +129,7 @@ class SharedDatabaseEngineTest {
         // 1. A mongo record created with the default placement lands SHARED and bound.
         Row first = service.insertRecord("shareda", ManagedDatabase.Engine.MONGO, null,
             "usera", "passworda", "dba", false, ServerService.LOCAL, ResourceLimits.none(),
-            DatabaseService.STATUS_PROVISIONING);
+            DatabaseModel.STATUS_PROVISIONING);
         Db.run(datasource, () -> {
             Row stored = Models.get(DatabaseModel.class).findByName("shareda");
             assertThat((String) stored.get(DatabaseModel.PLACEMENT))
@@ -191,7 +192,7 @@ class SharedDatabaseEngineTest {
         //    engine row and no second container. That is the entire saving.
         service.insertRecord("sharedb", ManagedDatabase.Engine.MONGO, null,
             "userb", "passwordb", "dbb", false, ServerService.LOCAL, ResourceLimits.none(),
-            DatabaseService.STATUS_PROVISIONING);
+            DatabaseModel.STATUS_PROVISIONING);
         Db.run(datasource, () -> {
             Integer engineA = Models.get(DatabaseModel.class).findByName("shareda")
                 .get(DatabaseModel.ENGINE_ID);
@@ -221,13 +222,13 @@ class SharedDatabaseEngineTest {
             assertThat(refusalOf(() -> service.insertRecord("sharedc",
                     ManagedDatabase.Engine.MONGO, null, "userc", "passwordc", "dba", false,
                     ServerService.LOCAL, ResourceLimits.none(),
-                    DatabaseService.STATUS_PROVISIONING)))
+                    DatabaseModel.STATUS_PROVISIONING)))
                 .as("step 4b: a taken logical database name is refused by name")
                 .isEqualTo("database_logical_name_taken");
             assertThat(refusalOf(() -> service.insertRecord("sharedc",
                     ManagedDatabase.Engine.MONGO, null, "usera", "passwordc", "dbc", false,
                     ServerService.LOCAL, ResourceLimits.none(),
-                    DatabaseService.STATUS_PROVISIONING)))
+                    DatabaseModel.STATUS_PROVISIONING)))
                 .as("step 4b: a taken logical user is refused by name")
                 .isEqualTo("database_logical_user_taken");
             assertThat(Models.get(DatabaseModel.class).findByName("sharedc"))
@@ -239,7 +240,7 @@ class SharedDatabaseEngineTest {
             //    engine and the engine's own instance is still the only one.
             service.insertRecord("dedicatedc", ManagedDatabase.Engine.MONGO, null,
                 "userc", "passwordc", "dbc", false, ServerService.LOCAL,
-                ResourceLimits.of(256, null), DatabaseService.STATUS_PROVISIONING,
+                ResourceLimits.of(256, null), DatabaseModel.STATUS_PROVISIONING,
                 DatabaseModel.PLACEMENT_DEDICATED, null);
             Row dedicated = Models.get(DatabaseModel.class).findByName("dedicatedc");
             assertThat((String) dedicated.get(DatabaseModel.PLACEMENT))
@@ -274,7 +275,7 @@ class SharedDatabaseEngineTest {
         assertThat(refusalOf(() -> service.insertRecord("refuseredis",
                 ManagedDatabase.Engine.REDIS, null, "user", "password", "db0", false,
                 REFUSAL_HOST, ResourceLimits.none(),
-                DatabaseService.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED, null)))
+                DatabaseModel.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED, null)))
             .as("step 1: redis cannot host a logical database")
             .isEqualTo("database_placement_unsupported");
 
@@ -283,7 +284,7 @@ class SharedDatabaseEngineTest {
         assertThat(refusalOf(() -> service.insertRecord("refuselimits",
                 ManagedDatabase.Engine.MONGO, null, "user", "password", "dbl", false,
                 REFUSAL_HOST, ResourceLimits.of(512, null),
-                DatabaseService.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED, null)))
+                DatabaseModel.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED, null)))
             .as("step 2: ceilings belong to the engine, not to a logical database")
             .isEqualTo("database_shared_limits");
 
@@ -292,13 +293,13 @@ class SharedDatabaseEngineTest {
         assertThat(refusalOf(() -> service.insertRecord("refusequote",
                 ManagedDatabase.Engine.MONGO, null, "user", "pass'word", "dbq", false,
                 REFUSAL_HOST, ResourceLimits.none(),
-                DatabaseService.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED, null)))
+                DatabaseModel.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED, null)))
             .as("step 3: a quote in the password cannot ride a shell script")
             .isEqualTo("database_logical_identifier");
         assertThat(refusalOf(() -> service.insertRecord("refusespace",
                 ManagedDatabase.Engine.MONGO, null, "us er", "password", "dbs", false,
                 REFUSAL_HOST, ResourceLimits.none(),
-                DatabaseService.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED, null)))
+                DatabaseModel.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED, null)))
             .as("step 3: nor a space in the user")
             .isEqualTo("database_logical_identifier");
 
@@ -306,7 +307,7 @@ class SharedDatabaseEngineTest {
         assertThat(refusalOf(() -> service.insertRecord("refuseplacement",
                 ManagedDatabase.Engine.MONGO, null, "user", "password", "dbp", false,
                 REFUSAL_HOST, ResourceLimits.none(),
-                DatabaseService.STATUS_PROVISIONING, "somewhere-else", null)))
+                DatabaseModel.STATUS_PROVISIONING, "somewhere-else", null)))
             .as("step 4: a placement nobody declared is refused")
             .isEqualTo("database_placement_unknown");
 
@@ -314,7 +315,7 @@ class SharedDatabaseEngineTest {
         //    mints the engine -- so the refusals above are about what they name.
         Row ok = service.insertRecord("refuseanchor", ManagedDatabase.Engine.MONGO, null,
             "user", "password", "dbok", false, REFUSAL_HOST, ResourceLimits.none(),
-            DatabaseService.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED, null);
+            DatabaseModel.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED, null);
         int mongoEngineId = ok.get(DatabaseModel.ENGINE_ID);
         assertThat(mongoEngineId).as("step 5: the corrected create is bound to an engine")
             .isPositive();
@@ -325,7 +326,7 @@ class SharedDatabaseEngineTest {
             assertThat(refusalOf(() -> service.insertRecord("refusekind",
                     ManagedDatabase.Engine.MYSQL, null, "user", "password", "dbk", false,
                     REFUSAL_HOST, ResourceLimits.none(),
-                    DatabaseService.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED,
+                    DatabaseModel.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED,
                     mongoEngineId)))
                 .as("step 6: an engine of another kind is refused")
                 .isEqualTo("database_engine_kind_mismatch");
@@ -344,7 +345,7 @@ class SharedDatabaseEngineTest {
             assertThat(refusalOf(() -> service.insertRecord("refusehost",
                     ManagedDatabase.Engine.MONGO, null, "user", "password", "dbh", false,
                     REFUSAL_HOST, ResourceLimits.none(),
-                    DatabaseService.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED,
+                    DatabaseModel.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED,
                     (Integer) remote.get(DatabaseEngineModel.ID))))
                 .as("step 7: an engine on another host is refused")
                 .isEqualTo("database_engine_host_mismatch");
@@ -355,7 +356,7 @@ class SharedDatabaseEngineTest {
             assertThat(refusalOf(() -> service.insertRecord("refuseimage",
                     ManagedDatabase.Engine.MONGO, "mongo:4.4", "user", "password", "dbi",
                     false, REFUSAL_HOST, ResourceLimits.none(),
-                    DatabaseService.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED,
+                    DatabaseModel.STATUS_PROVISIONING, DatabaseModel.PLACEMENT_SHARED,
                     null)))
                 .as("step 8: a differing image is refused")
                 .isEqualTo("database_image_engine_mismatch");
@@ -364,7 +365,7 @@ class SharedDatabaseEngineTest {
             Row matching = service.insertRecord("matchingimage",
                 ManagedDatabase.Engine.MONGO, MONGO_DEFAULT_IMAGE,
                 "usermatch", "password", "dbm", false, REFUSAL_HOST,
-                ResourceLimits.none(), DatabaseService.STATUS_PROVISIONING,
+                ResourceLimits.none(), DatabaseModel.STATUS_PROVISIONING,
                 DatabaseModel.PLACEMENT_SHARED, null);
             assertThat((Integer) matching.get(DatabaseModel.ENGINE_ID))
                 .as("step 8 anchor: the engine's OWN image is accepted")
@@ -528,6 +529,89 @@ class SharedDatabaseEngineTest {
                 true))
             .as("step 5: nor a quoted user")
             .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    /**
+     * TENANT ISOLATION on a shared engine, as the commands spell it: Postgres revokes
+     * PUBLIC's connect (on create and engine-wide as the repair), MySQL grants on the ESCAPED
+     * database pattern ({@code _} is a GRANT wildcard) and revokes a wildcard grant left from
+     * before, dumps carry no owner, a shared restore runs under the record's own role, and
+     * the ownership check exists wherever objects have owners. Live proof is
+     * {@code SharedDatabaseEngineLiveTest}; this pins the spelling daemon-free.
+     */
+    @Test
+    void sharedEngineCommandsIsolateTenantsAndKeepOwnershipWithTheRecord() {
+        ManagedDatabase.Engine postgres = ManagedDatabase.Engine.POSTGRES;
+        ManagedDatabase.Engine mysql = ManagedDatabase.Engine.MYSQL;
+        ManagedDatabase.Engine mongo = ManagedDatabase.Engine.MONGO;
+
+        // 1. Postgres: a new logical database is closed to PUBLIC the moment it exists, and
+        //    the repair command closes every database of the engine (existing ones too).
+        assertThat(String.join(" ", postgres.createLogicalCommand("root", "shop_db", "shop_user")))
+            .as("step 1: the create script revokes PUBLIC on the new database")
+            .contains("REVOKE ALL ON DATABASE");
+        List<String> pgIsolate = postgres.isolationCommand("root", "shop_db", "shop_user");
+        assertThat(pgIsolate)
+            .as("step 1: the repair is a shell body run as root")
+            .startsWith("sh", "-c");
+        assertThat(pgIsolate.get(2))
+            .as("step 1: engine-wide, template0 and the maintenance database aside")
+            .contains("REVOKE ALL ON DATABASE %I FROM PUBLIC")
+            .contains("datname NOT IN ('template0', 'postgres')")
+            .contains("REVOKE CREATE ON SCHEMA public FROM PUBLIC");
+
+        // 2. MySQL: the grant names the ESCAPED pattern, and the create/repair script revokes
+        //    a grant on the unescaped (wildcard) spelling first.
+        List<String> myCreate = mysql.createLogicalCommand("root", "shop_db", "shop_user");
+        assertThat(myCreate)
+            .as("step 2: the escaped grant pattern is its own positional argument")
+            .endsWith("root", "shop_db", "shop_user", "shop\\_db");
+        assertThat(myCreate.get(2))
+            .as("step 2: the grant targets the pattern, the revoke the old wildcard spelling")
+            .contains("GRANT ALL PRIVILEGES ON \\`$4\\`.*")
+            .contains("REVOKE ALL PRIVILEGES ON \\`$2\\`.*");
+        assertThat(mysql.isolationCommand("root", "plain", "u1"))
+            .as("step 2: a name without underscore grants on itself")
+            .endsWith("root", "plain", "u1", "plain");
+
+        // 3. MySQL's fingerprint never pastes a table name into the shell: the statements
+        //    are built in SQL with backtick-quoted identifiers and piped as data.
+        String fingerprint = mysql.fingerprintCommand("root", "shop_db").get(2);
+        assertThat(fingerprint)
+            .as("step 3: no shell loop over tenant-controlled table names")
+            .doesNotContain("for t in")
+            .contains("REPLACE(table_name");
+
+        // 4. Mongo needs no isolation repair and has no object owner.
+        assertThat(mongo.isolationCommand("root", "shop_db", "shop_user"))
+            .as("step 4: a mongo user lives in its own database; nothing to repair").isNull();
+        assertThat(mongo.foreignOwnershipCommand("root", "shop_db", "shop_user"))
+            .as("step 4: and nothing to own").isNull();
+        assertThat(postgres.foreignOwnershipCommand("root", "shop_db", "shop_user"))
+            .as("step 4: postgres and mysql both answer the ownership question")
+            .isNotNull();
+        assertThat(mysql.foreignOwnershipCommand("root", "shop_db", "shop_user")).isNotNull();
+
+        // 5. The redis engine cannot share and refuses the two new commands too.
+        assertThatThrownBy(() -> ManagedDatabase.Engine.REDIS.isolationCommand("root", "d", "u"))
+            .as("step 5: redis has no logical databases to isolate")
+            .isInstanceOf(UnsupportedOperationException.class);
+
+        // 6. A tenant's namespaced name can reach 42 characters and MySQL refuses a user name
+        //    over 32: the derived user fits, stays deterministic, and a short name is kept.
+        String longName = "o1a2b3c4d-" + "l".repeat(32);
+        String user = TenantDatabases.userNameFor(longName);
+        assertThat(user.length())
+            .as("step 6: the derived user fits MySQL's limit")
+            .isLessThanOrEqualTo(TenantDatabases.MAX_USER_LENGTH);
+        assertThat(TenantDatabases.userNameFor(longName))
+            .as("step 6: and is the same every time").isEqualTo(user);
+        assertThat(TenantDatabases.userNameFor(longName.substring(0, 41) + "m"))
+            .as("step 6: two long names differing in their tail still differ").isNotEqualTo(user);
+        assertThat(ManagedDatabase.Engine.isLogicalIdentifier(user))
+            .as("step 6: and it is still a logical identifier").isTrue();
+        assertThat(TenantDatabases.userNameFor("u7-blog"))
+            .as("step 6: a short name is used unchanged").isEqualTo("u7_blog");
     }
 
     // -- helpers ------------------------------------------------------------------

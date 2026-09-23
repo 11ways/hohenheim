@@ -4,7 +4,10 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.server.ServerZenitRuntime;
+import be.elevenways.zenit.server.cli.HostConsole;
+import be.elevenways.zenit.server.cli.OfflineCommandException;
 import be.elevenways.zenit.server.cli.OfflineCommands;
+import be.elevenways.zenit.server.cli.ServerCli;
 import be.elevenways.zenit.server.setting.ServerSettings;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -44,19 +47,43 @@ public final class OfflineBoot {
      * Discovery is a full ClassGraph pass over the fat jar, and a normal boot passes no
      * options at all, so paying for the scan (plus a settings load and a pool) on every
      * start would be a real regression for a lane that runs by hand a few times a year.
-     * An option we do not recognise still falls through to a normal boot; it costs one
-     * discarded SQLite pool, which is why the guard tests for options and nothing finer.
+     * An option this build does not declare is REFUSED by the framework's argv gate
+     * before anything opens; only declared framework options fall through to a boot.
      *
      * @return true when a command (or {@code --offline-help}) ran
      */
     public static boolean runIfRequested(String[] args) {
-        return runIfRequested(args, System.out::println);
+        return runIfRequested(args, HostConsole.SYSTEM);
     }
 
-    /** The output-capturing variant, mirroring {@link OfflineCommands}; tests capture here. */
+    /**
+     * The host face over a console: a refusal (an undeclared option, a typo) is printed on
+     * the console's stderr and exits it with 1, instead of escaping as a stack trace.
+     *
+     * @return true when {@code main} must stop, a refusal included
+     */
+    public static boolean runIfRequested(String[] args, @NonNull HostConsole console) {
+        return console.answer(out -> runIfRequested(args, out));
+    }
+
+    /**
+     * The output-capturing variant, mirroring {@link OfflineCommands}; tests capture here.
+     *
+     * AIDEV-NOTE: the argv gate ({@link ServerCli#answerProbeArguments}) runs FIRST, before
+     * the settings load and before any datasource exists. A mistyped break-glass flag
+     * ({@code --restore-control-plan}) must be refused having touched nothing -- the
+     * operator typed it precisely because they meant to replace this database -- and an
+     * undeclared option must never fall through to a normal boot.
+     *
+     * @throws OfflineCommandException when the invocation names an option or token this
+     *         build does not understand, or when the selected command refuses
+     */
     public static boolean runIfRequested(String[] args, @NonNull Consumer<String> out) {
         if (args == null || !namesAnOption(args)) {
             return false;
+        }
+        if (ServerCli.answerProbeArguments(args, out)) {
+            return true;
         }
 
         HohenheimSettingsFiles.load();

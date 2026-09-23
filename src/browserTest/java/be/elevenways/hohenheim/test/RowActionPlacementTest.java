@@ -56,11 +56,17 @@ class RowActionPlacementTest extends HohenheimTestBase {
             .as("step 2b: hidden for a manual upload").isFalse();
 
         // 3. FALSIFICATION: an action that IS a per-row affordance keeps the row, so this
-        //    is a per-action declaration and not a blanket demotion.
+        //    is a per-action declaration and not a blanket demotion. Probing a zone's
+        //    delegation is that affordance; the Records link is not (since 1cbc83a1) because
+        //    the zone's own title link already opens the records workspace.
         Map<String, RowAction<Row>> zones = byPath(new DnsZoneResource().rowActions());
+        assertThat(zones.get("check_dns_health")).as("step 3: the health probe exists").isNotNull();
+        assertThat(zones.get("check_dns_health").inlineInRow())
+            .as("step 3: probing a zone's health stays inline").isTrue();
         assertThat(zones.get("dns_records")).as("step 3: the records link exists").isNotNull();
         assertThat(zones.get("dns_records").inlineInRow())
-            .as("step 3: opening a zone's records stays inline").isTrue();
+            .as("step 3: the records link overflows, the title already opens the records")
+            .isFalse();
     }
 
     private static Row certificateRow(String provider) {

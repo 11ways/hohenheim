@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
@@ -302,16 +303,23 @@ class AdminPagesTest extends HohenheimTestBase {
         // server-rendered and nothing here asserts a client re-render, so the browser round
         // trip bought only latency (~1.6s). What the list proves for hohenheim is that the
         // zenit-cms ActivityResource is MOUNTED here; the row's content is asserted straight
-        // off the model below, which is stronger than a substring of the whole body.
-        assertThat(get("/admin/activity").body())
-            .as("the activity resource is mounted in the hohenheim panel")
-            .contains("hohenheim:site");
+        // off the model, which is stronger than a substring of the whole body.
+        // AIDEV-NOTE: the list is narrowed to this site's history and asserted to carry the
+        // logged ENTRY's own detail link. It used to assert the raw "hohenheim:site" token,
+        // which the model column stopped rendering when it was humanized ("Site"); that
+        // substring only kept passing when some unrelated row elsewhere in the shared
+        // browser-test database happened to carry it.
+        Integer siteId = site.get(SiteModel.ID);
         Row logged = Models.get(ActivityModel.class).find()
             .where(ActivityModel.MODEL.eq("hohenheim:site"))
+            .where(ActivityModel.RECORD_ID.eq(String.valueOf(siteId)))
             .orderBy(ActivityModel.ID, SortOrder.DESC)
             .first();
         assertThat(logged).as("the site creation was logged").isNotNull();
         assertThat((String) logged.get(ActivityModel.ACTION)).isEqualTo("create");
+        assertThat(get("/admin/activity?filter.record_id=" + siteId).body())
+            .as("the activity resource is mounted in the hohenheim panel and lists the creation")
+            .contains("/admin/activity/" + logged.get(ActivityModel.ID));
 
         navigateToApp("/admin/dashboard");
         waitForHydration();
@@ -800,7 +808,7 @@ class AdminPagesTest extends HohenheimTestBase {
             assertThat(blocked)
                 .as("step 1: a blocked host raises exactly one attention item")
                 .hasSize(1);
-            assertThat(blocked.get(0).severity()).as("step 1: as a warning").isEqualTo("warning");
+            assertThat(blocked.get(0).severity()).as("step 1: as a warning").isEqualTo(AttentionSeverity.WARNING);
 
             navigateToApp("/admin/dashboard");
             waitForHydration();

@@ -5,7 +5,8 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.hohenheim.server.task.BackupControlPlane;
 import be.elevenways.hohenheim.server.task.BackupDatabases;
-import be.elevenways.hohenheim.server.task.CleanOldActivity;
+import be.elevenways.hohenheim.server.task.ReconcileEngineIsolation;
+import be.elevenways.hohenheim.server.task.CheckForeignKeys;
 import be.elevenways.hohenheim.server.task.CleanOldInstanceLogs;
 import be.elevenways.hohenheim.server.task.CleanOrphanCertificates;
 import be.elevenways.hohenheim.server.task.MonitorStacks;
@@ -69,7 +70,7 @@ class HohenheimTaskBootstrapTest {
         BackupControlPlane.class,
         BackupDatabases.class,
         CheckDnsDelegations.class,
-        CleanOldActivity.class,
+        CheckForeignKeys.class,
         CleanOldInstanceLogs.class,
         CleanOrphanCertificates.class,
         MonitorStacks.class,
@@ -78,6 +79,7 @@ class HohenheimTaskBootstrapTest {
         ReapIncusControllers.class,
         ReclaimDockerImages.class,
         ReconcileDockerResources.class,
+        ReconcileEngineIsolation.class,
         ReconcileInstanceStatus.class,
         ResignDnssecZones.class,
         SecuritySweep.class,

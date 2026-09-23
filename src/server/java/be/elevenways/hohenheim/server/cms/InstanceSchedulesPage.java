@@ -63,9 +63,9 @@ public final class InstanceSchedulesPage implements RecordScopedPage<Row> {
             // saving; a null next fire is the framework's "at the next sweep".
             Instant nextFireAt = schedule.get(RecordScheduleModel.NEXT_FIRE_AT);
             entry.put("nextFireAtIso", nextFireAt != null ? nextFireAt.toString() : "");
-            entry.put("editTarget", CmsRoutes.detail(panel, "instance-schedules",
+            entry.put("editTarget", CmsRoutes.detail(panel, InstanceScheduleResource.SLUG,
                 schedule.get(RecordScheduleModel.ID)));
-            entry.put("stepsTarget", CmsRoutes.subpage(panel, "instance-schedules",
+            entry.put("stepsTarget", CmsRoutes.subpage(panel, InstanceScheduleResource.SLUG,
                 schedule.get(RecordScheduleModel.ID), "steps"));
             schedules.add(entry);
         }
@@ -88,7 +88,7 @@ public final class InstanceSchedulesPage implements RecordScopedPage<Row> {
         // viewer who may not edit (the certificates-request leak SiteDomainsPage hit).
         vars.put("addScheduleTarget", canEdit ? CmsEndpoints.CREATE_FORM
             .with(CmsEndpoints.PANEL_PARAM, panel)
-            .with(CmsEndpoints.RESOURCE_PARAM, "instance-schedules")
+            .with(CmsEndpoints.RESOURCE_PARAM, InstanceScheduleResource.SLUG)
             .with(HohenheimParams.RECORD_ID_PREFILL, instanceId) : null);
         vars.put("recordTabs", recordTabs(conduit));
         vars.put("timeWording", RelativeTimeWording.resolve(

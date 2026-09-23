@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.server.instance.variable.SecretVariableType;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
@@ -116,16 +117,49 @@ public final class InstanceTemplates {
         return builder.build();
     }
 
-    /** Render-time prefills: each variable's declared default under its key. */
+    /**
+     * Render-time prefills: each variable's declared default under its key, SECRET types
+     * excepted.
+     *
+     * AIDEV-NOTE: a secret's default is never a prefill, because a prefill is rendered into
+     * the page every viewer of the create form receives. It is not lost: a blank secret
+     * falls back to it server-side ({@link #withSecretDefaults}), exactly as
+     * {@code InstanceVariables.writeForInstance} always did at write time.
+     */
     public @NonNull Map<String, Object> variableDefaults(int templateId) {
         Map<String, Object> defaults = new LinkedHashMap<>();
         for (Row declared : declaredVariables(templateId)) {
             String fallback = declared.get(InstanceTemplateVariableModel.DEFAULT_VALUE);
-            if (fallback != null && !fallback.isEmpty()) {
+            if (fallback != null && !fallback.isEmpty()
+                    && !InstanceVariables.handlerOf(declared).isSecretValue()) {
                 defaults.put(declared.get(InstanceTemplateVariableModel.KEY), fallback);
             }
         }
         return defaults;
+    }
+
+    /**
+     * The submitted values with every BLANK secret replaced by its declared default, so a
+     * required secret whose default the form no longer prefills still validates.
+     */
+    private @NonNull Map<String, Object> withSecretDefaults(int templateId,
+                                                           @NonNull Map<String, Object> raw) {
+        Map<String, Object> values = new LinkedHashMap<>(raw);
+        for (Row declared : declaredVariables(templateId)) {
+            String key = declared.get(InstanceTemplateVariableModel.KEY);
+            String fallback = declared.get(InstanceTemplateVariableModel.DEFAULT_VALUE);
+            Object submitted = values.get(key);
+            boolean blank = submitted == null || submitted.toString().isEmpty();
+            // A generating secret is filled too: the declared default beats generation
+            // (InstanceVariables.writeForInstance keeps the same order). Until the prefill
+            // was withheld the form submitted the default, so an untouched create stored it;
+            // skipping generating secrets here would have minted a random value instead.
+            if (blank && fallback != null && !fallback.isEmpty()
+                    && InstanceVariables.handlerOf(declared).isSecretValue()) {
+                values.put(key, fallback);
+            }
+        }
+        return values;
     }
 
     public @NonNull List<Row> declaredVariables(int templateId) {
@@ -241,7 +275,8 @@ public final class InstanceTemplates {
         int templateId = template.get(InstanceTemplateModel.ID);
 
         FormSpec spec = variableFormSpec(templateId);
-        Map<String, Object> coerced = SubmittedValueCoercion.coerceFormOrThrow(spec, rawVariableValues);
+        Map<String, Object> coerced = SubmittedValueCoercion.coerceFormOrThrow(spec,
+            withSecretDefaults(templateId, rawVariableValues));
         FormValidator.validateCoercedFormOrThrow(spec, coerced);
         // The declared databases' cheap refusals (engine, injectability, label taken)
         // come BEFORE the instance row exists, so the common failures never need the

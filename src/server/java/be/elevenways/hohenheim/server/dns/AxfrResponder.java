@@ -1,10 +1,7 @@
 package be.elevenways.hohenheim.server.dns;
 
 import be.elevenways.hohenheim.model.DnsPeerModel;
-import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.xbill.DNS.Flags;
@@ -139,21 +136,20 @@ public final class AxfrResponder {
         return messages;
     }
 
-    /** Default authorization: a peer linked to the zone whose TSIG key name matches. */
+    /**
+     * Default authorization: an enabled peer linked to the zone whose TSIG key name matches.
+     * A peer whose stored algorithm is unusable authorizes nothing (fail closed).
+     */
     private static @Nullable TSIG resolveFromLinkedPeers(int zoneId, @NonNull Name requestedKeyName) {
-        DnsPeerModel peerModel = Models.get(DnsPeerModel.class);
-        for (Row link : Models.get(DnsZonePeerModel.class).findByZoneId(zoneId)) {
-            Integer peerId = link.get(DnsZonePeerModel.PEER_ID);
-            if (peerId == null) {
-                continue;
-            }
-            Row peer = peerModel.findById(peerId);
-            if (peer == null || !Boolean.TRUE.equals(peer.get(DnsPeerModel.ENABLED))) {
-                continue;
-            }
-            String peerKeyName = peer.get(DnsPeerModel.TSIG_KEY_NAME);
+        for (DnsZonePeers.Linked linked : DnsZonePeers.enabled(zoneId)) {
+            String peerKeyName = linked.peer().get(DnsPeerModel.TSIG_KEY_NAME);
             if (peerKeyName != null && DnsTsig.canonicalKeyName(peerKeyName).equals(requestedKeyName)) {
-                return DnsTsig.forPeer(peer);
+                try {
+                    return DnsTsig.forPeer(linked.peer());
+                }
+                catch (IllegalArgumentException unusable) {
+                    return null;
+                }
             }
         }
         return null;

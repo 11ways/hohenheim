@@ -175,11 +175,18 @@ class InstanceBackupsTest {
             InstanceBackups backups = new InstanceBackups();
             int instanceId = instanceRecord("backup-gate-order", hostId);
             service.deploy(instanceId);
-            // A DANGLING target pointer: resolving it throws a violation that NAMES the
-            // configuration problem, which is operator information.
+            // A MISCONFIGURED target (no directory): resolving it throws a violation that
+            // NAMES the target and its configuration problem, which is operator information.
+            // (A dangling pointer used to stand in here; backup_target_id is an enforced
+            // foreign key now, so the reachable broken target is a real, unusable one.)
+            Row broken = Models.get(BackupTargetModel.class).createEmptyRow();
+            broken.set(BackupTargetModel.NAME, "backup-gate-misconfigured");
+            broken.set(BackupTargetModel.KIND, "hohenheim:filesystem");
+            broken.set(BackupTargetModel.SETTINGS, Map.of());
+            Models.get(BackupTargetModel.class).save(broken);
             Models.get(InstanceModel.class).find()
                 .where(InstanceModel.ID.eq(instanceId))
-                .assign(InstanceModel.BACKUP_TARGET_ID, 999_999)
+                .assign(InstanceModel.BACKUP_TARGET_ID, broken.get(BackupTargetModel.ID))
                 .updateAll();
             int viewerId = tenant("viewer@backup-gate.test", "Viewer");
             RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceId,
@@ -209,8 +216,8 @@ class InstanceBackupsTest {
             //    hoisting the gate must not swallow the configuration diagnosis for the
             //    caller entitled to it.
             assertThat(violationKeys(catchThrowable(() -> backups.backupNow(instanceId))))
-                .as("step 3: the operator's refusal still names the missing target")
-                .isEqualTo("backup_target_missing ");
+                .as("step 3: the operator's refusal still names the broken target")
+                .isEqualTo("backup_target_invalid ");
 
             service.destroy(instanceId);
         });

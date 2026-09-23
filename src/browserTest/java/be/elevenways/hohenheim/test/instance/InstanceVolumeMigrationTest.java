@@ -89,14 +89,6 @@ class InstanceVolumeMigrationTest {
             (serverId, bytes) -> {});
     }
 
-    private static InstanceMigrations migrationsCrashingAt(String crashStep) {
-        return new InstanceMigrations(new InstanceService(), step -> {
-            if (crashStep.equals(step)) {
-                throw new IllegalStateException("controller killed at " + step);
-            }
-        }, (serverId, bytes) -> {});
-    }
-
     private static FakeNativeDaemons.FakeVolume volumeOn(int serverId, int instanceId,
                                                          String logical) {
         return FakeNativeDaemons.volumesOf(serverId)
@@ -288,9 +280,9 @@ class InstanceVolumeMigrationTest {
             // 1. Controller dies right after the destination restore: BOTH daemons
             //    hold the container and the volumes.
             assertThat(catchThrowable(
-                    () -> migrationsCrashingAt("imported").migrateTo(id, dst)))
+                    () -> KilledController.migrationsCrashingAt("imported").migrateTo(id, dst)))
                 .as("step 1: the simulated kill escapes the failure net")
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(KilledController.Killed.class);
             assertThat(FakeNativeDaemons.daemonOf(src).containsKey(handle))
                 .as("step 1: source container present").isTrue();
             assertThat(FakeNativeDaemons.daemonOf(dst).containsKey(handle))
@@ -321,9 +313,9 @@ class InstanceVolumeMigrationTest {
             // 3. Second window: killed AFTER the source copy (container + volumes) is
             //    removed -- the destination holds the only copy.
             assertThat(catchThrowable(
-                    () -> migrationsCrashingAt("source_removed").migrateTo(id, dst)))
+                    () -> KilledController.migrationsCrashingAt("source_removed").migrateTo(id, dst)))
                 .as("step 3: killed after source removal")
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(KilledController.Killed.class);
             assertThat(FakeNativeDaemons.daemonOf(src).containsKey(handle))
                 .as("step 3: source container already gone").isFalse();
             assertThat(volumeOn(src, id, "data"))

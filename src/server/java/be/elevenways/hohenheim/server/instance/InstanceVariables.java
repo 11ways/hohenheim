@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
@@ -7,6 +8,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.variable.SecretVariableType;
 import be.elevenways.hohenheim.server.instance.variable.VariableTypeHandler;
 import be.elevenways.hohenheim.server.instance.variable.VariableTypes;
+import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -43,12 +45,16 @@ public final class InstanceVariables {
             Map<String, Object> settings = settingsOf(declared);
             String value = handler.toStoredString(coercedValues.get(key));
 
+            // AIDEV-NOTE: a declared default beats generation. The template author's own
+            // value is the more specific instruction; generation only fills a secret that
+            // declares none. InstanceTemplates.withSecretDefaults applies the same order
+            // before validation, since the create form no longer prefills a secret default.
+            if (value == null || value.isEmpty()) {
+                value = declared.get(InstanceTemplateVariableModel.DEFAULT_VALUE);
+            }
             if (handler.isSecretValue() && (value == null || value.isEmpty())
                     && SecretVariableType.generates(settings)) {
                 value = SecureTokens.randomToken(SecretVariableType.generateBytes(settings));
-            }
-            if (value == null || value.isEmpty()) {
-                value = declared.get(InstanceTemplateVariableModel.DEFAULT_VALUE);
             }
 
             for (Row existing : model.find()
@@ -92,12 +98,13 @@ public final class InstanceVariables {
             throw Violations.ofField("environment_id", environmentId,
                 Microcopy.of("variable_one_owner").withFilter("scope", "violations"));
         }
-        boolean secret = InstanceVariableModel.KIND_SECRET.equals(kind);
-        if (!secret && !InstanceVariableModel.KIND_PLAIN.equals(kind)) {
+        VariableKind parsed = VariableKind.parse(kind);
+        if (parsed == null) {
             throw Violations.ofField("kind", kind,
                 Microcopy.of("variable_kind_unknown").withFilter("scope", "violations")
                     .withArg("kind", kind));
         }
+        boolean secret = parsed.isSecret();
         InstanceVariableModel model = Models.get(InstanceVariableModel.class);
         for (Row existing : rowsForKey(model, instanceId, environmentId, key)) {
             model.delete(existing.get(InstanceVariableModel.ID));
@@ -106,8 +113,7 @@ public final class InstanceVariables {
         row.set(InstanceVariableModel.INSTANCE_ID, instanceId);
         row.set(InstanceVariableModel.ENVIRONMENT_ID, environmentId);
         row.set(InstanceVariableModel.KEY, key);
-        row.set(InstanceVariableModel.KIND, secret
-            ? InstanceVariableModel.KIND_SECRET : InstanceVariableModel.KIND_PLAIN);
+        row.set(InstanceVariableModel.KIND, parsed.token());
         if (secret) {
             row.set(InstanceVariableModel.SECRET_VALUE, value);
             if (instanceId != null) {
@@ -118,6 +124,42 @@ public final class InstanceVariables {
             row.set(InstanceVariableModel.PLAIN_VALUE, value);
         }
         model.save(row);
+    }
+
+    /**
+     * Take a generated record's {@code environment_variables} out of its settings map.
+     *
+     * AIDEV-NOTE: the half of the secret-environment lane that runs BEFORE the row is
+     * saved: {@code instances.settings} is a plain JSON column, so an environment left in
+     * it is a stored plaintext copy of values whose author (a stack service, a preview's
+     * source, a release's application) keeps them encrypted. Pair it with
+     * {@link #storeSecretEnvironment} once the row has an id.
+     *
+     * @return the removed environment, empty when the settings carried none
+     */
+    public static @NonNull Map<String, String> detachEnvironment(@NonNull Map<String, Object> settings) {
+        return EnvVars.toMap(settings.remove("environment_variables"));
+    }
+
+    /**
+     * Make {@code environment} the WHOLE set of the generated instance's own variable rows,
+     * every value SECRET: rows for keys it no longer names are removed, so a key dropped
+     * from the source stops reaching the workload. What {@link #valuesFor} merges back at
+     * deploy time.
+     *
+     * AIDEV-NOTE: only for GENERATED records (a release, a stack service, a preview), whose
+     * variables are a derived copy of their author's environment. An authored instance's
+     * variable rows are the operator's, and this would delete them.
+     */
+    public void storeSecretEnvironment(int instanceId, @NonNull Map<String, String> environment) {
+        InstanceVariableModel model = Models.get(InstanceVariableModel.class);
+        for (Row existing : model.findByInstanceId(instanceId)) {
+            if (!environment.containsKey(String.valueOf((Object) existing.get(InstanceVariableModel.KEY)))) {
+                removeValue(instanceId, null, existing.get(InstanceVariableModel.KEY));
+            }
+        }
+        environment.forEach((key, value) ->
+            setValue(instanceId, null, key, VariableKind.SECRET.token(), value));
     }
 
     /**
@@ -219,8 +261,9 @@ public final class InstanceVariables {
     private static void collect(@NonNull Map<String, String> into, @NonNull Iterable<Row> rows) {
         for (Row row : rows) {
             String key = row.get(InstanceVariableModel.KEY);
-            boolean secret = InstanceVariableModel.KIND_SECRET
-                .equals(row.get(InstanceVariableModel.KIND));
+            // Fail closed: a kind nobody recognizes reads the ENCRYPTED carrier, never a
+            // plaintext column that a drifted row might have filled.
+            boolean secret = VariableKind.of(row.get(InstanceVariableModel.KIND)).isSecret();
             String value = secret
                 ? row.get(InstanceVariableModel.SECRET_VALUE)
                 : row.get(InstanceVariableModel.PLAIN_VALUE);

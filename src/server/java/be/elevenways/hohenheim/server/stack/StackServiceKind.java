@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.stack;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
@@ -110,17 +111,23 @@ public final class StackServiceKind implements InstanceKindHandler {
         ListField.builder(StringField.builder().name("path").build()).name("tmpfs_paths")
             .build());
 
+    /**
+     * One {@code ports} entry. AIDEV-NOTE: the names are the SERVICE record's port columns,
+     * because the entries are written by {@code StackSpec.PortSpec.toMap} -- one shape for
+     * the snapshot and this setting, read back here by these same fields.
+     */
     public static final Schema PORT_SCHEMA = new Schema();
     public static final IntegerField PORT_CONTAINER = PORT_SCHEMA.addField(
-        IntegerField.builder().name("container_port")
+        IntegerField.builder().name(StackServiceModel.PORT_CONTAINER.getName())
             .label(HohenheimFormCopy.label("container_port")).build());
     public static final IntegerField PORT_HOST = PORT_SCHEMA.addField(
-        IntegerField.builder().name("host_port")
+        IntegerField.builder().name(StackServiceModel.PORT_HOST.getName())
             .label(HohenheimFormCopy.label("host_port")).build());
     public static final StringField PORT_PROTOCOL = PORT_SCHEMA.addField(
-        StringField.builder().name("protocol").build());
+        StringField.builder().name(StackServiceModel.PORT_PROTOCOL.getName()).build());
     public static final StringField PORT_HOST_IP = PORT_SCHEMA.addField(
-        StringField.builder().name("host_ip").label(HohenheimFormCopy.label("host_ip")).build());
+        StringField.builder().name(StackServiceModel.PORT_HOST_IP.getName())
+            .label(HohenheimFormCopy.label("host_ip")).build());
 
     public static final SchemaField PORTS = SETTINGS_SCHEMA.addField(
         SchemaField.builder("ports").subSchema(PORT_SCHEMA).list()
@@ -160,6 +167,10 @@ public final class StackServiceKind implements InstanceKindHandler {
     /** The compose service name -- this workload's DNS alias on the shared stack network. */
     public static final StringField SERVICE_NAME = SETTINGS_SCHEMA.addField(
         StringField.builder().name("service_name").filterable(false).build());
+
+    /** The owning stack record's id; the shared network's owner labels name it. */
+    public static final IntegerField STACK_ID = SETTINGS_SCHEMA.addField(
+        IntegerField.builder().name("stack_id").filterable(false).build());
 
     /**
      * A service's admitted memory when it declares no {@code memory_limit_mb}. Charge ==
@@ -223,7 +234,7 @@ public final class StackServiceKind implements InstanceKindHandler {
             List.of(TMPFS_PATHS.getName(), CAPABILITIES.getName(),
                 MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName())));
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.MANAGED,
-            List.of(STACK_NETWORK.getName(), SERVICE_NAME.getName())));
+            List.of(STACK_NETWORK.getName(), SERVICE_NAME.getName(), STACK_ID.getName())));
     }
 
     @Override
@@ -267,38 +278,41 @@ public final class StackServiceKind implements InstanceKindHandler {
     @Override
     public @NonNull InstanceSpec specFor(int instanceId, @NonNull Map<String, Object> settings) {
         String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
-        String name = str(settings.get("service_name"));
+        String name = str(settings.get(SERVICE_NAME.getName()));
 
-        List<String> command = stringList(settings.get("command"));
-        List<String> capabilities = stringList(settings.get("capabilities"));
+        List<String> command = stringList(settings.get(COMMAND.getName()));
+        List<String> capabilities = stringList(settings.get(CAPABILITIES.getName()));
 
         Map<String, String> volumes = new LinkedHashMap<>();
-        EnvVars.toMap(settings.get("volumes")).forEach((volume, path) -> {
+        EnvVars.toMap(settings.get(VOLUMES.getName())).forEach((volume, path) -> {
             if (path != null && !path.isBlank()) {
                 volumes.put(volume, path);
             }
         });
 
         Map<String, Long> tmpfs = new LinkedHashMap<>();
-        for (String path : stringList(settings.get("tmpfs_paths"))) {
+        for (String path : stringList(settings.get(TMPFS_PATHS.getName()))) {
             if (!path.isBlank()) {
                 tmpfs.put(path, TMPFS_SIZE_BYTES);
             }
         }
 
-        String healthCmd = str(settings.get("health_cmd"));
+        String healthCmd = str(settings.get(HEALTH_CMD.getName()));
         HealthCheck health = healthCmd.isEmpty() ? null : new HealthCheck(healthCmd,
-            intOr(settings.get("health_interval_seconds"), 10),
-            intOr(settings.get("health_timeout_seconds"), 5),
-            intOr(settings.get("health_retries"), 5),
-            intOr(settings.get("health_start_period_seconds"), 0));
+            intOr(settings.get(HEALTH_INTERVAL_SECONDS.getName()), 10),
+            intOr(settings.get(HEALTH_TIMEOUT_SECONDS.getName()), 5),
+            intOr(settings.get(HEALTH_RETRIES.getName()), 5),
+            intOr(settings.get(HEALTH_START_PERIOD_SECONDS.getName()), 0));
 
-        return InstanceSpec.builder(handle, str(settings.get("image")),
+        // The environment arrives through the RESOLVED settings: InstanceService.resolve
+        // folds the instance's secret variable rows (where the stack's env now lives) into
+        // this key, on top of whatever a pre-upgrade row still carries in plaintext.
+        return InstanceSpec.builder(handle, str(settings.get(IMAGE.getName())),
                 ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)),
                 resolvedHardening(name, capabilities),
                 OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
             .command(command.isEmpty() ? null : command)
-            .env(EnvVars.toMap(settings.get("environment_variables")))
+            .env(EnvVars.toMap(settings.get(ENVIRONMENT_VARIABLES.getName())))
             .volumes(volumes)
             .publications(publicationsOf(settings, name))
             .tmpfs(tmpfs)
@@ -320,16 +334,16 @@ public final class StackServiceKind implements InstanceKindHandler {
     private static @NonNull List<PortPublication> publicationsOf(@NonNull Map<String, Object> settings,
                                                                  @NonNull String service) {
         List<PortPublication> publications = new ArrayList<>();
-        for (Object entry : listOf(settings.get("ports"))) {
+        for (Object entry : listOf(settings.get(PORTS.getName()))) {
             if (!(entry instanceof Map<?, ?> port)) {
                 continue;
             }
-            int containerPort = intOr(port.get("container_port"), 0);
-            int hostPort = intOr(port.get("host_port"), 0);
+            int containerPort = intOr(port.get(PORT_CONTAINER.getName()), 0);
+            int hostPort = intOr(port.get(PORT_HOST.getName()), 0);
             if (containerPort <= 0 || hostPort <= 0) {
                 continue;
             }
-            String hostIp = str(port.get("host_ip"));
+            String hostIp = str(port.get(PORT_HOST_IP.getName()));
             boolean publicExposure;
             if (hostIp.isEmpty() || "0.0.0.0".equals(hostIp) || "::".equals(hostIp)) {
                 publicExposure = true;
@@ -340,7 +354,7 @@ public final class StackServiceKind implements InstanceKindHandler {
                     Microcopy.of("stack_port_bind_unsupported").withFilter("scope", "violations")
                         .withArg("service", service).withArg("address", hostIp));
             }
-            String protocol = str(port.get("protocol"));
+            String protocol = str(port.get(PORT_PROTOCOL.getName()));
             publications.add(new PortPublication(containerPort,
                 PortPublication.UDP.equals(protocol) ? PortPublication.UDP : PortPublication.TCP,
                 publicExposure, hostPort, null));

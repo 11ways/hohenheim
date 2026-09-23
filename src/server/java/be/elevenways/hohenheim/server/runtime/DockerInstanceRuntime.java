@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.docker.DockerPtyExec;
 import be.elevenways.hohenheim.server.docker.DockerTransport;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
+import be.elevenways.hohenheim.server.util.FileTrees;
 
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
@@ -14,9 +15,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -116,49 +120,20 @@ public final class DockerInstanceRuntime
         return this.egress;
     }
 
+    /**
+     * The optional spec capabilities this driver DELIVERS; every other requested one is
+     * refused by name before anything is created (see {@link SpecFeature}).
+     */
+    public static final Set<SpecFeature> FEATURES = Collections.unmodifiableSet(EnumSet.of(
+        SpecFeature.PSEUDO_TERMINAL, SpecFeature.TMPFS_MOUNTS, SpecFeature.HEALTH_CHECK,
+        SpecFeature.WORKDIR, SpecFeature.RUN_USER));
+
     @Override
     public @NonNull String create(@NonNull InstanceSpec spec) throws IOException {
-        if (spec.cloudInitUserData() != null && !spec.cloudInitUserData().isBlank()) {
-            // The honest refusal, never a silent drop: Docker has no cloud-init lane,
-            // and a spec carrying provisioning that would not run must not start.
-            throw new IOException("The docker driver cannot deliver cloud-init user-data"
-                + " declared for '" + spec.handle() + "'; cloud-init provisioning is an"
-                + " incus capability");
-        }
-        if (spec.rootDiskGb() != null) {
-            // The honest refusal, the cloud-init shape again -- and the one this whole
-            // knob exists to make impossible to get wrong. MEASURED on daystrom
-            // 2026-08-07: Docker's overlayfs on ext4 ACCEPTS --storage-opt size=2G with
-            // exit 0 and then lets 2.5GB be written into the "2G" root. A per-container
-            // root quota needs an xfs-with-pquota (or devicemapper/btrfs) backing this
-            // driver cannot require, so it declares the gap instead of shipping a number
-            // that reports success while enforcing nothing.
-            throw new IOException("The docker driver cannot deliver the "
-                + spec.rootDiskGb() + "GB root disk declared for '" + spec.handle()
-                + "'; a per-container root-disk quota is an incus capability. Docker"
-                + " would accept the size and enforce nothing.");
-        }
-        if (spec.networkLimitMbit() != null) {
-            // The honest refusal, the root-disk shape exactly. Docker's API has no
-            // bandwidth key at all: shaping a container's traffic means a tc qdisc on the
-            // veth the daemon created, on an interface the daemon re-makes on every
-            // restart and re-attach, so hohenheim would be maintaining a limit it does
-            // not own against a party that does. Accepting the number and shaping nothing
-            // is the paper limit the whole knob exists to avoid.
-            throw new IOException("The docker driver cannot deliver the "
-                + spec.networkLimitMbit() + " Mbit/s network limit declared for '"
-                + spec.handle() + "'; a per-workload bandwidth ceiling is an incus"
-                + " capability. Docker has no such control and would shape nothing.");
-        }
-        if (spec.imageOrigin() == ImageOrigin.PREPARED) {
-            // The honest refusal, same shape as the cloud-init one: Docker has no image
-            // store of the prepared kind, so treating the alias as a docker image
-            // reference would silently pull the WRONG thing instead of the operator's
-            // prepared image.
-            throw new IOException("The docker driver has no prepared-template image store;"
-                + " '" + spec.handle() + "' declares image_origin=prepared, which is an"
-                + " incus capability");
-        }
+        // The honest refusal, never a silent drop: a spec carrying a capability this driver
+        // cannot deliver (cloud-init, a root quota, a bandwidth ceiling, a prepared image)
+        // must not start as if it had been honoured.
+        SpecFeature.requireSupported(spec, FEATURES, "docker");
         // Replace only a leftover container the daemon attributes to THIS record; a
         // same-named foreign container is a loud refusal, never a force-remove.
         OwnerLabels.Owner owner = OwnerLabels.parse(spec.ownerLabels());
@@ -383,9 +358,7 @@ public final class DockerInstanceRuntime
         OwnerLabels.Owner held = OwnerLabels.parse(
             config instanceof Map<?, ?> c && c.get("Labels") instanceof Map<?, ?> labels
                 ? labels : null);
-        boolean ours = OwnerLabels.isOurs(held)
-            && held.model().equals(mine.model()) && held.id().equals(mine.id());
-        return ours ? WorkloadClaim.OURS : WorkloadClaim.FOREIGN;
+        return OwnerLabels.matches(held, mine) ? WorkloadClaim.OURS : WorkloadClaim.FOREIGN;
     }
 
     // -- VolumeSnapshotSupport ------------------------------------------------
@@ -456,13 +429,12 @@ public final class DockerInstanceRuntime
             }
             OwnerLabels.Owner volumeOwner = inspect.get("Labels") instanceof Map<?, ?> labels
                 ? OwnerLabels.parse(labels) : null;
-            boolean ours = volumeOwner != null && volumeOwner.model().equals(owner.model())
-                && volumeOwner.id().equals(owner.id());
-            if (!ours) {
+            if (!OwnerLabels.matches(volumeOwner, owner)) {
                 throw new IOException("REFUSED to remove volume '" + materialized + "' for a"
                     + " restore: the daemon does not attribute it to this record ("
                     + (volumeOwner != null
                         ? "owned by " + volumeOwner.model() + " #" + volumeOwner.id()
+                            + " of controller " + volumeOwner.controller()
                         : "no hohenheim owner labels")
                     + "). A same-named foreign volume is a name collision, not restore debris.");
             }
@@ -511,14 +483,16 @@ public final class DockerInstanceRuntime
                 java.nio.file.Files.createDirectories(target.getParent());
                 java.nio.file.Files.writeString(target, file.content());
                 applyMode(target, file.mode());
-                relativeFiles.add(relative);
+                // The NORMALIZED name ("etc//a.conf" -> "etc/a.conf"): the archive lane
+                // refuses a name with empty or dot segments rather than guessing.
+                relativeFiles.add(staging.relativize(target).toString());
             }
             // File entries ONLY: a tar that carries the intermediate directories re-owns
             // an EXISTING container directory to root at extraction, which bricks any
             // non-root image whose config lives in its own writable volume (Velocity).
             this.docker.putArchiveFiles(handle, "/", staging, relativeFiles);
         } finally {
-            deleteRecursively(staging);
+            FileTrees.deleteQuietly(staging);
         }
     }
 
@@ -536,20 +510,6 @@ public final class DockerInstanceRuntime
             throw new IOException("Bad file mode '" + mode + "' (expected octal like 0644)");
         } catch (UnsupportedOperationException unsupported) {
             // Non-POSIX staging filesystem: the tar carries default modes instead.
-        }
-    }
-
-    private static void deleteRecursively(java.nio.file.Path root) {
-        try (var walk = java.nio.file.Files.walk(root)) {
-            walk.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
-                try {
-                    java.nio.file.Files.deleteIfExists(path);
-                } catch (IOException ignored) {
-                    // best-effort temp cleanup
-                }
-            });
-        } catch (IOException ignored) {
-            // best-effort temp cleanup
         }
     }
 
@@ -580,7 +540,13 @@ public final class DockerInstanceRuntime
     private static final String DELETE_TREE_SCRIPT = "rm -rf -- \"$HH_FM_PATH\"";
     /** uid:gid of a path, used to keep a rewritten file owned by whoever owned its directory. */
     private static final String OWNER_SCRIPT = "stat -c '%u:%g' \"$HH_FM_PATH\"";
-    private static final String CHOWN_SCRIPT = "chown \"$HH_FM_OWNER\" \"$HH_FM_PATH\"";
+    /**
+     * {@code -h}: re-own the ENTRY, never what it points at. Between the write and this
+     * chown the workload can swap the file for a symlink; a following chown run as the
+     * container's root would then hand an arbitrary container file (its /etc/shadow) to
+     * the directory's owner.
+     */
+    private static final String CHOWN_SCRIPT = "chown -h \"$HH_FM_OWNER\" \"$HH_FM_PATH\"";
 
     @Override
     public @NonNull List<Entry> listDirectory(@NonNull String handle, @NonNull String path,
@@ -688,10 +654,12 @@ public final class DockerInstanceRuntime
             // directory re-owns it to root at extraction.
             this.docker.putArchiveFiles(handle, directory, staging, List.of(name));
         } finally {
-            deleteRecursively(staging);
+            FileTrees.deleteQuietly(staging);
         }
-        // The extraction landed the file root-owned. Hand it back to whoever owns the
-        // directory it lives in, so a non-root workload can still write its own file --
+        // The extraction landed the file owned by the CONTROLLER's uid (the tar entry
+        // carries the staging file's owner: root on a root controller). Hand it back to
+        // whoever owns the directory it lives in, so a non-root workload can still write
+        // its own file --
         // the same lesson the directory-entry rule above encodes, one level down. A
         // stopped container has no exec, so the ownership fix waits for the next start;
         // that is stated rather than silently skipped.
@@ -714,14 +682,16 @@ public final class DockerInstanceRuntime
     }
 
     @Override
-    public void rename(@NonNull String handle, @NonNull String from, @NonNull String to)
-            throws IOException {
+    public void rename(@NonNull String handle, @NonNull String from, @NonNull String to,
+                       @NonNull Map<String, String> ownerLabels) throws IOException {
+        requireOurs(handle, ownerLabels, "rename a file in");
         runFileScript(handle, RENAME_SCRIPT, Map.of("HH_FM_PATH", from, "HH_FM_TARGET", to));
     }
 
     @Override
-    public void delete(@NonNull String handle, @NonNull String path, boolean recursive)
-            throws IOException {
+    public void delete(@NonNull String handle, @NonNull String path, boolean recursive,
+                       @NonNull Map<String, String> ownerLabels) throws IOException {
+        requireOurs(handle, ownerLabels, "delete a file in");
         runFileScript(handle, recursive ? DELETE_TREE_SCRIPT : DELETE_SCRIPT,
             Map.of("HH_FM_PATH", path));
     }
@@ -771,7 +741,7 @@ public final class DockerInstanceRuntime
             ? config.get("Labels") : null;
         OwnerLabels.Owner expected = OwnerLabels.parse(ownerLabels);
         OwnerLabels.Owner actual = OwnerLabels.parse(labels instanceof Map<?, ?> map ? map : null);
-        if (expected == null || actual == null || !expected.equals(actual)) {
+        if (!OwnerLabels.matches(actual, expected)) {
             throw new IOException("REFUSED to " + what + " '" + handle
                 + "': the container is not attributably ours (labels: " + labels + ")");
         }

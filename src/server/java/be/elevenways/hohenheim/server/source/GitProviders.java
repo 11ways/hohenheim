@@ -60,10 +60,16 @@ public final class GitProviders {
         return clientFor(provider);
     }
 
+    /**
+     * The client of one provider row, its API calls held to the row's reach: public
+     * addresses only unless the provider is operator-owned ({@link SourceOwnership}).
+     *
+     * @throws Violations naming the refusal (undeclared kind, unusable or missing base URL)
+     */
     public static @NonNull GitProviderClient clientFor(@NonNull Row provider) {
         GitProviderKind kind = requireKind(provider.get(GitProviderModel.KIND));
         return kind.clientFor(provider, validatedBaseUrl(kind,
-            provider.get(GitProviderModel.BASE_URL)));
+            provider.get(GitProviderModel.BASE_URL)), SourceOwnership.providerGuard(provider));
     }
 
     /**

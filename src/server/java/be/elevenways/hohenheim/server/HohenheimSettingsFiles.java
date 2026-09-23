@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.setting.SettingGroup;
 import be.elevenways.zenit.server.setting.DryFileSource;
 import be.elevenways.zenit.server.setting.EnvSettingsSource;
@@ -38,9 +40,30 @@ public final class HohenheimSettingsFiles {
         HohenheimSettings.VALUES.loadFrom(
             new DryFileSource(settingsFile()),
             new EnvSettingsSource("HOHENHEIM"));
+        applyFrameworkDefaults();
         // The settings just became real: this is THE role-snapshot moment.
         // Every roles.* gate reads the snapshot, never the live setting.
         HohenheimRoles.capture();
+    }
+
+    /** Hohenheim's own default for activity retention, in days. */
+    public static final int ACTIVITY_RETENTION_DAYS = 90;
+
+    /**
+     * Hohenheim's defaults for FRAMEWORK settings it depends on, applied only where nothing
+     * set the key yet.
+     *
+     * AIDEV-NOTE: activity pruning is zenit's own ActivityPruneTask reading
+     * activity.retention_days, whose framework default is 0 (keep forever). Hohenheim kept
+     * 90 days through a task of its own (CleanOldActivity, deleted 2026-09-23), so the
+     * behaviour must not change on upgrade: this seeds 90. It runs BEFORE the framework
+     * chain loads at boot (ServerMain loads this file first), so settings/local.dry or
+     * ZENIT__ACTIVITY__RETENTION_DAYS still override it; a value already loaded is kept.
+     */
+    static void applyFrameworkDefaults() {
+        if (!Zenit.SETTINGS_VALUES.hasValue(ActivityLog.RETENTION_DAYS)) {
+            Zenit.SETTINGS_VALUES.setValue(ActivityLog.RETENTION_DAYS, ACTIVITY_RETENTION_DAYS);
+        }
     }
 
     /**

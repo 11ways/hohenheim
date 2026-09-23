@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.DeployStartPolicy;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
+import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -93,12 +94,18 @@ public final class ArtifactDeploys {
             return;
         }
         int applicationId = operation.get(ArtifactOperationModel.APPLICATION_ID);
-        synchronized (ConvergenceLocks.forApplication(applicationId)) {
+        InstanceOperationLock.production().exclusive(applicationId,
+                InstanceOperationLock.Contention.QUEUE, () -> {
             boolean completed = false;
             try {
                 operation.set(ArtifactOperationModel.STATUS, ArtifactOperationModel.RUNNING);
                 Models.get(ArtifactOperationModel.class).save(operation);
                 Row application = ApplicationReleases.requireApplication(applicationId);
+                // The admission every deploy lane shares; on this background thread its power
+                // half passes (the API asked CONFIG on the request thread), and the
+                // databases-ready half is what keeps a release from booting without its
+                // credentials.
+                InstanceService.requireDeployAdmitted(applicationId);
                 Microcopy declined = DeployStartPolicy.declineToStartStored(trigger,
                     ApplicationReleases.ownedServing(applicationId), application);
                 if (declined != null) throw Violations.ofForm(declined);
@@ -137,7 +144,7 @@ public final class ArtifactDeploys {
                     finish(operation, ArtifactOperationModel.FAILED, "artifact_release_failed");
                 }
             }
-        }
+        });
     }
 
     public static void handoffFailed(Row operation) {
@@ -190,34 +197,49 @@ public final class ArtifactDeploys {
 
     /** The rollback-aware backup source: identity from the serving spec, never the forward pointer. */
     public static @Nullable Path servingArtifact(int applicationId) {
-        synchronized (ConvergenceLocks.forApplication(applicationId)) {
+        return InstanceOperationLock.production().exclusive(applicationId,
+                InstanceOperationLock.Contention.QUEUE, () -> {
             Row serving = ApplicationReleases.ownedServing(applicationId);
             if (serving == null) return null;
             Map<String, Object> settings = ApplicationReleases.storedSettings(serving);
             if (settings.get("artifact_path") == null) return null;
             return artifactPath(directoryFor(applicationId).toPath(), (String) settings.get("commit_sha"));
-        }
+        });
     }
 
     /** Operator-only encrypted backup restoration, never a deployment or fabricated success receipt. */
     public static void restoreSource(int newAppId, Path artifact) throws IOException {
-        synchronized (ConvergenceLocks.forApplication(newAppId)) {
-            ApplicationReleases.requireApplication(newAppId);
-            if (acceptedArtifact(newAppId) != null || !ApplicationReleases.ownedInstances(newAppId).isEmpty()
-                    || Models.get(ArtifactOperationModel.class).find()
-                        .where(ArtifactOperationModel.APPLICATION_ID.eq(newAppId)).first() != null) {
-                throw new IllegalStateException("Artifact restore requires a new application");
-            }
-            validateJar(artifact);
-            Path upload = uploadPathFor(newAppId);
+        IOException[] failed = new IOException[1];
+        InstanceOperationLock.production().exclusive(newAppId,
+                InstanceOperationLock.Contention.QUEUE, () -> {
             try {
-                Files.copy(artifact, upload, StandardCopyOption.REPLACE_EXISTING);
-                String digest = digestOf(upload);
-                own(upload, directoryFor(newAppId).toPath(), digest);
-                saveSource(newAppId, digest);
-            } finally {
-                deleteUpload(upload);
+                restoreSourceLocked(newAppId, artifact);
+            } catch (IOException unreadable) {
+                failed[0] = unreadable;
             }
+        });
+        if (failed[0] != null) {
+            throw failed[0];
+        }
+    }
+
+    /** {@link #restoreSource}'s body; the caller holds the application's operation lock. */
+    private static void restoreSourceLocked(int newAppId, Path artifact) throws IOException {
+        ApplicationReleases.requireApplication(newAppId);
+        if (acceptedArtifact(newAppId) != null || !ApplicationReleases.ownedInstances(newAppId).isEmpty()
+                || Models.get(ArtifactOperationModel.class).find()
+                    .where(ArtifactOperationModel.APPLICATION_ID.eq(newAppId)).first() != null) {
+            throw new IllegalStateException("Artifact restore requires a new application");
+        }
+        validateJar(artifact);
+        Path upload = uploadPathFor(newAppId);
+        try {
+            Files.copy(artifact, upload, StandardCopyOption.REPLACE_EXISTING);
+            String digest = digestOf(upload);
+            own(upload, directoryFor(newAppId).toPath(), digest);
+            saveSource(newAppId, digest);
+        } finally {
+            deleteUpload(upload);
         }
     }
 
@@ -247,7 +269,8 @@ public final class ArtifactDeploys {
 
     /** Report serving release identity, not the newest upload (which may have failed or been rolled back). */
     public static Map<String, Object> current(int applicationId) {
-        synchronized (ConvergenceLocks.forApplication(applicationId)) {
+        return InstanceOperationLock.production().exclusive(applicationId,
+                InstanceOperationLock.Contention.QUEUE, () -> {
             Row serving = ApplicationReleases.ownedServing(applicationId);
             Map<String, Object> settings = serving == null ? Map.of() : ApplicationReleases.storedSettings(serving);
             String digest = settings.get("artifact_path") == null ? null : (String) settings.get("commit_sha");
@@ -259,7 +282,7 @@ public final class ArtifactDeploys {
             result.put("image_id", digest == null ? null : settings.get("image"));
             result.put("stamps", digest == null ? null : readStamp(artifactPath(directoryFor(applicationId).toPath(), digest)));
             return result;
-        }
+        });
     }
 
     public static void recoverInterrupted() {
@@ -276,10 +299,11 @@ public final class ArtifactDeploys {
             }
             BootSettle.underBorrowedHostLease(HostLeases.production(),
                 ServerModel.canonicalServerId(application.get(InstanceModel.SERVER_ID)), () -> {
-                    synchronized (ConvergenceLocks.forApplication(applicationId)) {
+                    InstanceOperationLock.production().exclusive(applicationId,
+                            InstanceOperationLock.Contention.QUEUE, () -> {
                         finish(operation, ArtifactOperationModel.INTERRUPTED, "artifact_interrupted");
                         cleanupUploads(directoryFor(applicationId).toPath().resolve("uploads"), BootSettle.processStart());
-                    }
+                    });
                 });
         }
         // A killed HTTP upload has no receipt yet. Reclaim those too, under the same host fence.

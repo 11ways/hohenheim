@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
@@ -401,7 +402,7 @@ class DockerReconcilerTest {
             assertThat(items).hasSize(3);
             assertThat(items).allSatisfy(item ->
                 assertThat(item.severity()).as("report-only findings warn, never error")
-                    .isEqualTo("warning"));
+                    .isEqualTo(AttentionSeverity.WARNING));
             assertThat(items.stream().map(i -> i.title().key()))
                 .containsExactlyInAnyOrder("docker_orphans", "docker_orphans", "docker_colliding");
 
@@ -412,7 +413,7 @@ class DockerReconcilerTest {
             List<AttentionItem> foreign = new ArrayList<>();
             AttentionCollector.dockerForeignResources(foreign);
             assertThat(foreign).as("one informational row per host with foreign resources").hasSize(1);
-            assertThat(foreign.get(0).severity()).as("foreign resources inform, never warn").isEqualTo("info");
+            assertThat(foreign.get(0).severity()).as("foreign resources inform, never warn").isEqualTo(AttentionSeverity.INFO);
             assertThat(foreign.get(0).title().key()).isEqualTo("docker_foreign");
             assertThat(foreign.get(0).target()).as("the row leads to the findings list").isNotNull();
 
@@ -517,7 +518,7 @@ class DockerReconcilerTest {
                 .as("step 4: local and edge each raise one stuck-releasing warning")
                 .hasSize(2);
             assertThat(items).allSatisfy(item -> {
-                assertThat(item.severity()).isEqualTo("warning");
+                assertThat(item.severity()).isEqualTo(AttentionSeverity.WARNING);
                 assertThat(item.title().key()).isEqualTo("ports_releasing");
             });
 

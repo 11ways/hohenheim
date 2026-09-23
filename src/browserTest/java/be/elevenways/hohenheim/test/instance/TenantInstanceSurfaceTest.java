@@ -73,9 +73,22 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
     private static Integer unapprovedTemplateId;
     private static Integer admittedHostId;
     private static Integer previousLimit;
+    private static HostFixtures.LocalHostState localBefore;
 
+    /**
+     * Seed two tenants, their instances and templates, and BLOCK the local host.
+     *
+     * AIDEV-NOTE: the ordered journeys prove the placement refusals (step 1 of the
+     * revocation journey, step 3 of the creation journey) against a fleet with no admitted
+     * host, so this class ESTABLISHES that state instead of inheriting it: the local host is
+     * one row shared by every class in the fork, and a class that admitted it earlier made
+     * the deploy pass placement and the create land on it (2026-09-24).
+     */
     @BeforeAll
     static void seed() {
+        localBefore = HostFixtures.captureLocal();
+        HostFixtures.blockLocal();
+
         tenantAId = tenant("tenant-a@surface.test", "Tenant A");
         tenantBId = tenant("tenant-b@surface.test", "Tenant B");
         principalA = new UserPrincipal(tenantAId, "Tenant A");
@@ -119,6 +132,9 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         }
         if (admittedHostId != null) {
             Models.get(ServerModel.class).delete(admittedHostId);
+        }
+        if (localBefore != null) {
+            localBefore.restore();
         }
     }
 
@@ -533,12 +549,26 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER, 0);
 
         // 8. An UNAPPROVED template stays unusable even by direct id: the catalog's
-        //    omission is UX, the funnel is the gate.
+        //    omission is UX, the funnel is the gate. The refusal is answered exactly
+        //    like a missing template (back to the catalog), BEFORE any form renders:
+        //    a re-rendered form would hand a guessed id the template's name,
+        //    description, variable keys and defaults.
         HttpResponse<String> unapproved = tenantPost(createUrl,
             "template_id=" + unapprovedTemplateId + "&name=" + PREFIX + "sneaky");
+        assertThat(unapproved.statusCode())
+            .as("step 8: an unapproved template redirects back to the catalog")
+            .isIn(302, 303);
+        assertThat(unapproved.headers().firstValue("Location").orElse(""))
+            .as("step 8: the redirect lands on the tenant's own template catalog")
+            .contains("/manage/instance-templates");
         assertThat(unapproved.body())
-            .as("step 8: an unapproved template is refused, named")
-            .contains("is not approved for use yet");
+            .as("step 8: and nothing about the unapproved template is rendered")
+            .doesNotContain(PREFIX + "unapproved");
+        HttpResponse<String> missing = tenantPost(createUrl,
+            "template_id=999999999&name=" + PREFIX + "sneaky");
+        assertThat(missing.headers().firstValue("Location").orElse(""))
+            .as("step 8: an unapproved id answers exactly like an id that does not exist")
+            .isEqualTo(unapproved.headers().firstValue("Location").orElse(""));
         assertThat(Models.get(InstanceModel.class).find()
                 .where(InstanceModel.NAME.eq(PREFIX + "sneaky")).count())
             .as("step 8: nothing landed").isZero();

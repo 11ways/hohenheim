@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -74,7 +75,7 @@ public class AccessListResource extends RowResource {
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "access_list"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "access_list"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "access_list"); }
-    @Override public @NonNull String slug() { return "access-lists"; }
+    @Override public @NonNull String slug() { return HohenheimSlugs.ACCESS_LISTS; }
     @Override public @NonNull Model model() { return Models.get(AccessListModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.NETWORK_GROUP; }

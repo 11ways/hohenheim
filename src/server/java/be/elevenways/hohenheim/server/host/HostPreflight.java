@@ -8,6 +8,8 @@ import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.server.build.BuildStamp;
+import be.elevenways.protoblast.server.build.BuildStamps;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -20,6 +22,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Verification, not declaration: every probe here reads KERNEL truth (a running
@@ -51,10 +54,26 @@ public final class HostPreflight {
     public static final String MEM_TOTAL_FACT = "mem_total";
 
     /** Oldest daemon API we accept: 1.41 = Docker 20.10, the floor our request shapes assume. */
-    static final double MIN_API_VERSION = 1.41;
+    static final String MIN_API_VERSION = "1.41";
 
     /** User-defined network count beyond which the default address pool nears exhaustion. */
     static final int NETWORK_HEADROOM_WARN = 25;
+
+    /** The stored check carrying whether the kernel probe container ran and answered at all. */
+    public static final String CONTAINER_KERNEL_CHECK = "container_kernel";
+
+    /**
+     * Every check name the Docker battery can ever store: a stored entry outside this set
+     * was written by another battery (a runtime flip) or by a retired check, and a full run
+     * of this battery drops it (see {@link #store(String, Report, Set)}).
+     *
+     * AIDEV-NOTE: {@code HostPreflightBatteryTest} runs the battery against a scripted
+     * daemon and asserts every check it produces is declared here, so a new check that is
+     * not listed fails the build instead of being dropped on the next partial run.
+     */
+    public static final Set<String> DOCKER_BATTERY = Set.of("daemon", "api_version",
+        CONTAINER_KERNEL_CHECK, "cgroup_pids_controller", "pids_limit_enforced", "seccomp",
+        "no_new_privs", "userns_remap", "lsm", "network_headroom", "nftables");
 
     /** One named probe. Only {@code required} checks decide the verdict. */
     public record Check(@NonNull String name, @NonNull String status, boolean required,
@@ -122,7 +141,7 @@ public final class HostPreflight {
                 outcome.kind().token + ": " + outcome.detail())),
                 Map.of(), false, Now.instant(), outcome);
         }
-        store(serverName, report);
+        store(serverName, report, DOCKER_BATTERY);
         return report;
     }
 
@@ -188,17 +207,64 @@ public final class HostPreflight {
     }
 
     private static void checkApiVersion(Map<String, Object> facts, List<Check> checks) {
-        String api = String.valueOf(facts.get("api_version"));
-        double parsed;
-        try {
-            parsed = Double.parseDouble(api);
-        } catch (NumberFormatException e) {
-            checks.add(new Check("api_version", STATUS_FAIL, true,
-                "unparseable daemon API version '" + api + "'"));
-            return;
+        checks.add(apiVersionCheck(String.valueOf(facts.get("api_version"))));
+    }
+
+    /**
+     * The api_version verdict for one daemon-reported version string.
+     *
+     * AIDEV-NOTE: compared per dotted component as integers, never as a double: "1.100"
+     * parses to 1.1 and "1.9" to 1.9, so a double comparison refused a newer daemon and
+     * admitted an older one.
+     */
+    static @NonNull Check apiVersionCheck(@NonNull String api) {
+        Integer order = compareVersions(api, MIN_API_VERSION);
+        if (order == null) {
+            return new Check("api_version", STATUS_FAIL, true,
+                "unparseable daemon API version '" + api + "'");
         }
-        checks.add(new Check("api_version", parsed >= MIN_API_VERSION ? STATUS_PASS : STATUS_FAIL,
-            true, "daemon API " + api + " (minimum " + MIN_API_VERSION + ")"));
+        return new Check("api_version", order >= 0 ? STATUS_PASS : STATUS_FAIL,
+            true, "daemon API " + api + " (minimum " + MIN_API_VERSION + ")");
+    }
+
+    /**
+     * Compare two dotted numeric versions component by component, a missing component
+     * reading as zero.
+     *
+     * @return negative, zero or positive like a comparator; null when either side is not a
+     *         dotted sequence of non-negative integers
+     */
+    static @Nullable Integer compareVersions(@NonNull String left, @NonNull String right) {
+        int[] a = versionComponents(left);
+        int[] b = versionComponents(right);
+        if (a == null || b == null) {
+            return null;
+        }
+        for (int i = 0; i < Math.max(a.length, b.length); i++) {
+            int x = i < a.length ? a[i] : 0;
+            int y = i < b.length ? b[i] : 0;
+            if (x != y) {
+                return Integer.compare(x, y);
+            }
+        }
+        return 0;
+    }
+
+    private static int @Nullable [] versionComponents(@NonNull String version) {
+        String trimmed = version.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        String[] parts = trimmed.split("\\.", -1);
+        int[] components = new int[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            String part = parts[i];
+            if (part.isEmpty() || part.length() > 9 || !part.chars().allMatch(Character::isDigit)) {
+                return null;
+            }
+            components[i] = Integer.parseInt(part);
+        }
+        return components;
     }
 
     /**
@@ -236,11 +302,17 @@ public final class HostPreflight {
                     // EINVAL, and the LAST command decides sh's exit code -- without it
                     // the whole probe reads as "the exec failed" on every LSM-less host.
                     + " cat /proc/1/attr/current 2>/dev/null || true"));
+            // AIDEV-NOTE: container_kernel is written on EVERY outcome, the pass included.
+            // store() merges, so a check written only when it failed stayed FAILED on the
+            // record after the host was fixed, and failedRequirementNow refused every
+            // placement on that host forever.
             if (result.exitCode() != 0) {
-                checks.add(new Check("container_kernel", STATUS_FAIL, true,
+                checks.add(new Check(CONTAINER_KERNEL_CHECK, STATUS_FAIL, true,
                     "kernel probe exec failed: " + result.output()));
                 return;
             }
+            checks.add(new Check(CONTAINER_KERNEL_CHECK, STATUS_PASS, true,
+                "a hardened probe container ran and answered the kernel reads"));
             String[] sections = result.output().split("---");
             String controllers = sections.length > 0 ? sections[0].trim() : "";
             String pidsMax = sections.length > 1 ? sections[1].trim() : "";
@@ -274,7 +346,7 @@ public final class HostPreflight {
             checks.add(new Check("no_new_privs", nnp ? STATUS_PASS : STATUS_FAIL, true,
                 nnp ? "no_new_privs set on pid 1" : "no_new_privs NOT set: " + status));
         } catch (Exception error) {
-            checks.add(new Check("container_kernel", STATUS_FAIL, true,
+            checks.add(new Check(CONTAINER_KERNEL_CHECK, STATUS_FAIL, true,
                 "probe container failed: " + error.getMessage()));
         } finally {
             try {
@@ -576,12 +648,34 @@ public final class HostPreflight {
      * rather than inherited from {@code probed_at}.
      */
     public static void store(@NonNull String serverName, @NonNull Report report) {
+        store(serverName, report, null);
+    }
+
+    /**
+     * {@link #store(String, Report)} for a report a real battery produced, which also
+     * drops every stored check that battery can never produce.
+     *
+     * AIDEV-NOTE: the merge keeps a check this run did not ask, which is right for a check
+     * the battery skipped this time and WRONG for one it will never ask again: a Docker
+     * check left on a host whose runtime flipped to Incus, or a retired check name, kept
+     * its last FAIL forever and {@link #failedRequirementNow} refused every placement on
+     * that host with no run able to clear it. The drop happens on every battery run,
+     * reachable daemon or not, because an out-of-battery entry is stale either way.
+     *
+     * @param battery every check name the producing battery can store; null keeps the plain
+     *                merge (fixtures storing a partial hand-made report)
+     */
+    public static void store(@NonNull String serverName, @NonNull Report report,
+                             @Nullable Set<String> battery) {
         Row server = Models.get(ServerModel.class).findByName(serverName);
         if (server == null) {
             return;
         }
         Map<String, Object> capabilities = new LinkedHashMap<>(storedMap(server, null));
         Map<String, Object> checkMap = new LinkedHashMap<>(storedMap(server, CHECKS_KEY));
+        if (battery != null) {
+            checkMap.keySet().retainAll(battery);
+        }
         Map<String, Object> factsAt = new LinkedHashMap<>(storedMap(server, FACTS_AT_KEY));
         String at = report.at().toString();
         for (Map.Entry<String, Object> fact : report.facts().entrySet()) {
@@ -641,11 +735,64 @@ public final class HostPreflight {
         return copy;
     }
 
-    /** This controller build's version string; "dev" when running from classes. */
+    /** The repo name the protoblast build stamp carries for this controller's own modules. */
+    static final String BUILD_REPO = "hohenheim";
+
+    /** Computed once: the classpath does not change under a running controller. */
+    private static volatile @Nullable String controllerVersion;
+
+    /**
+     * This controller build's version string: the manifest version plus the git commit the
+     * build stamp names ({@code 0.1.0-SNAPSHOT+c134b22f}, {@code +c134b22f.dirty} for an
+     * undiffable tree, {@code +mixed} for a classpath mixing builds), or the bare manifest
+     * version ("dev" when running from classes) when no stamp is on the classpath.
+     */
     public static @NonNull String controllerVersion() {
+        String cached = controllerVersion;
+        if (cached == null) {
+            cached = composeControllerVersion(manifestVersion(), buildStamps());
+            controllerVersion = cached;
+        }
+        return cached;
+    }
+
+    /**
+     * Fold the manifest version and the classpath's build stamps into one version string.
+     *
+     * AIDEV-NOTE: the manifest version alone read 0.1.0-SNAPSHOT on every build ever
+     * deployed, so the host records and backup manifests it was stored on could not tell
+     * two controllers apart. A dirty stamp is marked, never shown as a plain sha: the sha
+     * does not identify that tree (capability map, "Build provenance").
+     */
+    static @NonNull String composeControllerVersion(@NonNull String manifest,
+                                                    @Nullable BuildStamps stamps) {
+        if (stamps == null) {
+            return manifest;
+        }
+        List<BuildStamp> own = stamps.byRepo().get(BUILD_REPO);
+        if (own == null || own.isEmpty()) {
+            return manifest;
+        }
+        if (stamps.inconsistentRepos().contains(BUILD_REPO)) {
+            return manifest + "+mixed";
+        }
+        BuildStamp stamp = own.get(0);
+        return manifest + "+" + stamp.shortSha() + (stamp.dirty() ? ".dirty" : "");
+    }
+
+    private static @NonNull String manifestVersion() {
         String version = HostPreflight.class.getPackage() != null
             ? HostPreflight.class.getPackage().getImplementationVersion() : null;
         return version != null ? version : "dev";
+    }
+
+    /** The classpath's stamps, or null when they cannot be read: a version never fails a preflight. */
+    private static @Nullable BuildStamps buildStamps() {
+        try {
+            return BuildStamps.onClasspath();
+        } catch (RuntimeException unreadable) {
+            return null;
+        }
     }
 
     private static String stringOf(@Nullable Object value) {

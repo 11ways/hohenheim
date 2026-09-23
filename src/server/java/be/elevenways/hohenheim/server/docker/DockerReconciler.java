@@ -536,7 +536,16 @@ public final class DockerReconciler {
             return new ReleasingSweep(0, 0);
         }
         Integer serverId = server.get(ServerModel.ID);
-        boolean local = ServerModel.MODE_LOCAL.equals(server.get(ServerModel.MODE));
+        HostMode mode;
+        try {
+            mode = HostMode.of(server);
+        } catch (IllegalArgumentException unknown) {
+            // Fail closed: without knowing which evidence counts, no claim is released.
+            Blast.log("DOCKER RECONCILE:", serverName, "- releasing claims kept:",
+                unknown.getMessage());
+            return new ReleasingSweep(0, 0);
+        }
+        boolean local = !mode.remote();
         List<PublishedPort> published = publishedPorts(containers);
         int released = 0;
         int retained = 0;

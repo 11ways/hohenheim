@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.server.tls;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -57,6 +56,10 @@ public class CertificateStore {
 
     private volatile Snapshot snapshot;
 
+    // Bumped on every snapshot swap, so a consumer caching a resolution (SniKeyManager) can
+    // tell a stale answer from a current one without anybody remembering to notify it.
+    private volatile long generation;
+
     public CertificateStore() {
         this.snapshot = new Snapshot(null, Map.of(), Map.of(), 0);
     }
@@ -66,7 +69,6 @@ public class CertificateStore {
      * Builds a complete new snapshot and swaps it in atomically.
      */
     public synchronized void loadFromDatabase() {
-        var ds = HohenheimDatabase.datasource();
         var certModel = Models.get(CertificateModel.class);
         var domainModel = Models.get(SiteDomainModel.class);
 
@@ -83,6 +85,7 @@ public class CertificateStore {
         try {
             Snapshot newSnapshot = buildSnapshot(certs, domains);
             this.snapshot = newSnapshot;
+            this.generation++;
             Blast.log("CertificateStore: loaded", newSnapshot.count, "certificates,",
                       newSnapshot.hostnameToAlias.size(), "hostname mappings,",
                       newSnapshot.preferredHostnameToAlias.size(), "preferred mappings");
@@ -131,6 +134,11 @@ public class CertificateStore {
         }
 
         return null;
+    }
+
+    /** The number of snapshot swaps so far; a resolution cached under an older value is stale. */
+    public long generation() {
+        return generation;
     }
 
     public X509ExtendedKeyManager getDelegateKeyManager() {

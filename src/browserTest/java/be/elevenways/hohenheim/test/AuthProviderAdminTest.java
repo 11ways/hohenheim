@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
+import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -16,6 +17,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -94,7 +96,7 @@ class AuthProviderAdminTest extends HohenheimTestBase {
             .isEqualTo("custom.special.permission");
     }
 
-    /** A created Basic provider shows up in the list and its edit form keeps credentials editable. */
+    /** A created Basic provider shows up in the list; its passwords are stored hashed and edited write-only. */
     @Test
     @Order(2)
     void basicProviderRoundTripsThroughListAndEditForm() throws Exception {
@@ -114,7 +116,8 @@ class AuthProviderAdminTest extends HohenheimTestBase {
         Map<String, Object> config = (Map<String, Object>) row.get(SiteAuthProviderModel.CONFIG);
         Map<String, String> credentials = BasicAuthProviderType.credentials(config);
         assertThat(credentials).hasSize(1).containsKey("alice");
-        assertThat(credentials.get("alice")).isEqualTo("secret123");
+        assertThat(BasicCredentials.isHashed(credentials.get("alice")))
+            .as("the typed password is stored as its argon2 hash").isTrue();
 
         navigateToApp("/admin/auth-providers");
         waitForHydration();
@@ -151,9 +154,55 @@ class AuthProviderAdminTest extends HohenheimTestBase {
         assertThat(page.locator("form").count()).isGreaterThan(0);
         assertThat(page.content()).contains("placeholder=\"Username\"")
             .contains("placeholder=\"Password\"");
+        // The password is WRITE-ONLY: the username row is there, its box is blank, and
+        // neither the plaintext nor the stored argon2 hash reaches the page.
+        String storedHash = credentials.get("alice");
+        var username = page.locator("pl-input[name='config.credentials.0.key'] input");
+        assertThat(username.inputValue()).as("the username stays visible").isEqualTo("alice");
         var password = page.locator("pl-input[name='config.credentials.0.value'] input");
-        assertThat(password.inputValue()).isEqualTo("secret123");
-        assertThat(password.getAttribute("type")).isNotEqualTo("password");
+        assertThat(password.inputValue()).as("the password box is blank").isEmpty();
+        assertThat(page.content()).as("the stored hash is never rendered")
+            .doesNotContain(storedHash)
+            .doesNotContain("secret123");
+
+        // A blank password on save KEEPS the stored hash, which still verifies.
+        String path = "/admin/auth-providers/" + row.get(SiteAuthProviderModel.ID);
+        var kept = postForm(path, "name=Staff+Gate&provider_type=hohenheim%3Abasic"
+            + "&config.credentials.0.key=alice&config.credentials.0.value=");
+        assertThat(kept.statusCode()).as("a blank-password save succeeds: " + kept.body())
+            .isIn(200, 302, 303);
+        Map<String, String> afterKeep = storedCredentials();
+        assertThat(afterKeep.get("alice")).as("a blank password keeps the stored hash")
+            .isEqualTo(storedHash);
+        assertThat(BasicAuthProviderType.verify(basicHeader("alice", "secret123"), afterKeep))
+            .as("and the kept password still verifies").isEqualTo("alice");
+
+        // A typed password REPLACES it, hashed again.
+        var replaced = postForm(path, "name=Staff+Gate&provider_type=hohenheim%3Abasic"
+            + "&config.credentials.0.key=alice&config.credentials.0.value=newpass456");
+        assertThat(replaced.statusCode()).as("a new-password save succeeds: " + replaced.body())
+            .isIn(200, 302, 303);
+        Map<String, String> afterReplace = storedCredentials();
+        assertThat(BasicCredentials.isHashed(afterReplace.get("alice")))
+            .as("the replacement is stored hashed").isTrue();
+        assertThat(BasicAuthProviderType.verify(basicHeader("alice", "newpass456"), afterReplace))
+            .as("the new password verifies").isEqualTo("alice");
+        assertThat(BasicAuthProviderType.verify(basicHeader("alice", "secret123"), afterReplace))
+            .as("and the old one no longer does").isNull();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, String> storedCredentials() {
+        Row row = Models.get(SiteAuthProviderModel.class).find()
+            .where(SiteAuthProviderModel.NAME.eq("Staff Gate")).first();
+        assertThat(row).isNotNull();
+        return BasicAuthProviderType.credentials(
+            (Map<String, Object>) row.get(SiteAuthProviderModel.CONFIG));
+    }
+
+    private static String basicHeader(String username, String password) {
+        return "Basic " + Base64.getEncoder()
+            .encodeToString((username + ":" + password).getBytes(StandardCharsets.UTF_8));
     }
 
     /** A Proteus provider merges its realm's vocabulary into the suggestions; sites can pick providers. */

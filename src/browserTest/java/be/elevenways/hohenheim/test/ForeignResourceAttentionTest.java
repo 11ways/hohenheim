@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
@@ -74,7 +75,7 @@ class ForeignResourceAttentionTest extends HohenheimTestBase {
             AttentionItem row = itemFor(items, HOST);
             assertThat(row).as("step 2: the host with foreign resources gets a row").isNotNull();
             assertThat(row.severity()).as("step 2: foreign resources inform, never warn")
-                .isEqualTo("info");
+                .isEqualTo(AttentionSeverity.INFO);
             assertThat(row.detail()).isNotNull();
             assertThat(row.detail().args().get("count"))
                 .as("step 2: the count is the two foreign rows, not all five findings")

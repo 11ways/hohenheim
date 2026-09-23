@@ -298,41 +298,35 @@ public final class IncusKernelIsolation {
      */
     public void reapply(@NonNull String handle) throws IOException {
         Map<String, Object> instance = this.incus.instance(handle);
-        if (!(instance.get("devices") instanceof Map<?, ?> devices)) {
+        if (!(instance.get("devices") instanceof Map<?, ?>)) {
             throw new IOException("Cannot re-apply isolation for '" + handle
                 + "': the daemon reports no devices on it.");
         }
-        Map<String, Object> rewritten = new LinkedHashMap<>();
-        int toggled = 0;
-        for (Map.Entry<?, ?> entry : devices.entrySet()) {
-            String name = String.valueOf(entry.getKey());
-            if (!(entry.getValue() instanceof Map<?, ?> device)) {
-                continue;
-            }
-            Map<String, Object> copy = new LinkedHashMap<>();
-            device.forEach((key, value) -> copy.put(String.valueOf(key), value));
-            if ("nic".equals(String.valueOf(copy.get("type")))) {
-                // Present -> absent -> present: either direction is a real config change
-                // to the daemon and neither changes a single generated rule.
-                if (copy.remove(REAPPLY_KEY) == null) {
-                    copy.put(REAPPLY_KEY, "false");
+        // The conditional read-modify-write (IncusClient.editInstance): a NIC edit racing
+        // this toggle is re-read and kept, never reverted by a stale body.
+        this.incus.editInstance(handle, (config, devices) -> {
+            int toggled = 0;
+            for (Map.Entry<String, Object> entry : devices.entrySet()) {
+                if (!(entry.getValue() instanceof Map<?, ?> device)) {
+                    continue;
                 }
-                toggled++;
+                Map<String, Object> copy = new LinkedHashMap<>();
+                device.forEach((key, value) -> copy.put(String.valueOf(key), value));
+                if ("nic".equals(String.valueOf(copy.get("type")))) {
+                    // Present -> absent -> present: either direction is a real config change
+                    // to the daemon and neither changes a single generated rule.
+                    if (copy.remove(REAPPLY_KEY) == null) {
+                        copy.put(REAPPLY_KEY, "false");
+                    }
+                    toggled++;
+                }
+                entry.setValue(copy);
             }
-            rewritten.put(name, copy);
-        }
-        if (toggled == 0) {
-            throw new IOException("Cannot re-apply isolation for '" + handle
-                + "': it has no NIC device to re-apply.");
-        }
-        Map<String, Object> definition = new LinkedHashMap<>();
-        definition.put("architecture", instance.get("architecture"));
-        definition.put("config", instance.get("config"));
-        definition.put("devices", rewritten);
-        definition.put("ephemeral", instance.get("ephemeral"));
-        definition.put("profiles", instance.get("profiles"));
-        definition.put("description", instance.get("description"));
-        this.incus.updateInstance(handle, definition);
+            if (toggled == 0) {
+                throw new IOException("Cannot re-apply isolation for '" + handle
+                    + "': it has no NIC device to re-apply.");
+            }
+        });
     }
 
     /** The host interface names the daemon currently has bound to this workload's NICs. */

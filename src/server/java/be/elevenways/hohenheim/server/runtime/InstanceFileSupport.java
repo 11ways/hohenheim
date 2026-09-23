@@ -78,11 +78,17 @@ public interface InstanceFileSupport {
     void makeDirectory(@NonNull String handle, @NonNull String path,
                        @NonNull Map<String, String> ownerLabels) throws IOException;
 
-    /** Rename within the same volume; an existing destination is a refusal. */
-    void rename(@NonNull String handle, @NonNull String from, @NonNull String to)
-        throws IOException;
+    /**
+     * Rename within the same volume; an existing destination is a refusal. The workload
+     * must carry {@code ownerLabels}, exactly as for {@link #writeFile}.
+     */
+    void rename(@NonNull String handle, @NonNull String from, @NonNull String to,
+                @NonNull Map<String, String> ownerLabels) throws IOException;
 
-    /** Delete a file, a symlink, or a directory recursively. */
-    void delete(@NonNull String handle, @NonNull String path, boolean recursive)
-        throws IOException;
+    /**
+     * Delete a file, a symlink, or a directory recursively. The workload must carry
+     * {@code ownerLabels}, exactly as for {@link #writeFile}.
+     */
+    void delete(@NonNull String handle, @NonNull String path, boolean recursive,
+                @NonNull Map<String, String> ownerLabels) throws IOException;
 }

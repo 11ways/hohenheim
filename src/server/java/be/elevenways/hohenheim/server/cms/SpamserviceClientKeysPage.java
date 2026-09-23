@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.spamservice.client.ManagedClient;
@@ -29,7 +30,7 @@ final class SpamserviceClientKeysPage implements RecordScopedPage<ManagedClient>
         // off CmsEndpoints rather than CmsRoutes.list because CmsRoutes returns the
         // RouteTarget interface, which has no with(...) to chain the query onto.
         return conduit.softRedirect(CmsEndpoints.LIST
-            .with(CmsEndpoints.PANEL_PARAM, "admin")
+            .with(CmsEndpoints.PANEL_PARAM, HohenheimSlugs.ADMIN)
             .with(CmsEndpoints.RESOURCE_PARAM, SpamserviceClientKeysResource.SLUG)
             .with(SpamserviceClientKeysResource.CLIENT_ID_QUERY, String.valueOf(client.id())));
     }

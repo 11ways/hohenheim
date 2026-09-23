@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -107,7 +108,8 @@ public final class SpamserviceClientsResource extends SpamserviceRemoteResource<
 
     @Override
     protected @NonNull PageResult<ManagedClient> fetchPage(@NonNull SpamserviceClient client,
-                                                            TableView.@NonNull Applied<ManagedClient> applied) {
+                                                            TableView.@NonNull Applied<ManagedClient> applied,
+                                                            @NonNull AccessContext accessContext) {
         return client.clients(applied.page(), applied.schema().pageSize(), textFilter(applied, "q"),
             booleanFilter(applied, "enabled"));
     }
@@ -174,7 +176,7 @@ public final class SpamserviceClientsResource extends SpamserviceRemoteResource<
             // AIDEV-NOTE: RowAction.Url is Uri-typed, so toUrl() is the boundary; the
             // path shape still comes from CmsRoutes, never concatenation.
             .url(row -> new Uri(CmsRoutes
-                .subpage("admin", SLUG, row.id(), SpamserviceClientKeysPage.SLUG).toUrl()))
+                .subpage(HohenheimSlugs.ADMIN, SLUG, row.id(), SpamserviceClientKeysPage.SLUG).toUrl()))
             .build());
     }
 

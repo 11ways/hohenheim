@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.InstanceRowCleanup;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -67,7 +68,7 @@ class DatabaseResizeTest extends HohenheimTestBase {
         GeneratedRows.sweeping("test", () -> {
             for (Row row : instances.find().where(InstanceModel.NAME.startsWith("db-" + PREFIX))
                     .all()) {
-                instances.delete(row.get(InstanceModel.ID));
+                InstanceRowCleanup.delete(row.get(InstanceModel.ID));
             }
         });
         Model databases = Models.get(DatabaseModel.class);

@@ -582,13 +582,9 @@ class ManagePanelTest extends HohenheimTestBase {
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteAId,
             HohenheimAccess.MANAGE, true);
         try {
-            java.util.concurrent.atomic.AtomicInteger finds = new java.util.concurrent.atomic.AtomicInteger();
-            be.elevenways.zenit.auth.model.RecordGrantModel.SCHEMA
-                .addBeforeFindHook(ignored -> finds.incrementAndGet());
-
-            finds.set(0);
-            assertThat(get("/manage/sites", session.token().secret()).statusCode()).isEqualTo(200);
-            int perRequest = finds.get();
+            RecordGrantFinds.Result finds = RecordGrantFinds.during(() ->
+                assertThat(get("/manage/sites", session.token().secret()).statusCode()).isEqualTo(200));
+            int perRequest = finds.count();
 
             // Memoized: each distinct set's enumeration (1 candidate fetch + 1
             // walk confirmation) runs ONCE per request. Without the memo every
@@ -615,9 +611,22 @@ class ManagePanelTest extends HohenheimTestBase {
             // distinct set (access_list#manage) for the /manage access-list peer. Still
             // ONE enumeration per distinct set per request; the un-memoized shape this
             // pins against is per CALLER and an order of magnitude outside this range.
+            System.out.println("record-grant finds during one /manage/sites request:" + finds.describe());
+            assertThat(finds.repeats())
+                .as("no grant query runs twice in one request (the per-request memo), by caller:%s",
+                    finds.describe())
+                .isEmpty();
+            // AIDEV-NOTE (2026-09-23): the MEMO PROPERTY is asserted directly above now, not only
+            // inferred from the total: no grant query may run twice in one request. The "7 distinct
+            // sets" in the older notes had gone stale -- a render now enumerates twelve distinct
+            // (model, capability) sets once each plus one walk confirmation, 13 in all, which still
+            // fits the cap. The count had reached 16 because HostnameAuthority.canManage asked the
+            // UN-memoized per-record walk once per rendered row (three identical site#manage reads);
+            // it answers off the request memo (reachesRecord) since. The per-set list is printed to
+            // the test's stdout on every run.
             assertThat(perRequest)
                 .as("record-grant finds during one /manage/sites request "
-                    + "(7 distinct capability sets + walk confirmations)")
+                    + "(12 distinct capability sets + confirmations), by caller:%s", finds.describe())
                 .isBetween(1, 15);
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteAId,

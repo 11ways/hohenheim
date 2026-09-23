@@ -6,6 +6,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -41,7 +42,8 @@ public final class GitlabProviderKind implements GitProviderKind {
     @Override public boolean requiresBaseUrl() { return false; }
 
     @Override
-    public @NonNull GitProviderClient clientFor(@NonNull Row provider, @Nullable String baseUrl) {
-        return new GitlabProviderClient(baseUrl, provider.get(GitProviderModel.ACCESS_TOKEN));
+    public @NonNull GitProviderClient clientFor(@NonNull Row provider, @Nullable String baseUrl,
+                                                @NonNull OutboundUrlGuard guard) {
+        return new GitlabProviderClient(baseUrl, provider.get(GitProviderModel.ACCESS_TOKEN), guard);
     }
 }

@@ -135,12 +135,13 @@ class EncryptedSecretsAtRestTest {
             sites.save(site);
 
             // The singleton stub is SEEDED (SpamserviceInstallationSeeder), and a bare
-            // migrate never runs the SEED boot stage -- so create it the way the seeder does.
+            // migrate never runs the SEED boot stage -- so create it the way the seeder does,
+            // WITHOUT a system user: system_user_id is a real foreign key to system_users, so
+            // the invented id this used to carry is refused now that SQLite enforces keys.
             Model spamservice = Models.get(SpamserviceInstallationModel.class);
             Row installation = spamservice.createEmptyRow();
             installation.set(SpamserviceInstallationModel.ID,
                 SpamserviceInstallationModel.SINGLETON_ID);
-            installation.set(SpamserviceInstallationModel.SYSTEM_USER_ID, 1000);
             installation.set(SpamserviceInstallationModel.CONTROLLER_KEY, CONTROLLER);
             spamservice.save(installation);
 

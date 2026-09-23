@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.dns.DelegationVerdict;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
@@ -144,7 +145,7 @@ public final class DnsZoneResource extends RowResource {
         .build();
 
     /** The panel slug, referenced by the record resource's zone-scoped preset. */
-    public static final String SLUG = "dns-zones";
+    public static final String SLUG = HohenheimSlugs.DNS_ZONES;
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dns_zone"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "dns_zone"); }
@@ -246,8 +247,8 @@ public final class DnsZoneResource extends RowResource {
     private static @NonNull String recordsUrl(@NonNull Row row) {
         // rowUrl / RowAction.Url are String- and Uri-typed boundaries, so the typed
         // target is rendered here rather than concatenated.
-        return CmsRoutes.subpage("admin", "dns-zones", row.get(DnsZoneModel.ID),
-            "records").toUrl();
+        return CmsRoutes.subpage(HohenheimSlugs.ADMIN, SLUG, row.get(DnsZoneModel.ID),
+            DnsZoneRecordsPage.SLUG).toUrl();
     }
 
     /**
@@ -652,41 +653,57 @@ public final class DnsZoneResource extends RowResource {
         return builder.build();
     }
 
+    /**
+     * Normalizes and checks the zone fields THIS write carries.
+     *
+     * AIDEV-NOTE: the coerced map is PARTIAL (the inline cell lane carries one entry, a
+     * form omits what the browser did not submit): an absent field is LEFT ALONE on an
+     * update, never normalized to a blank and written back. This used to put "" for an
+     * unsubmitted soa_primary_ns/soa_contact, which blanked the stored SOA on every edit
+     * that did not carry them. On a create absence really is blank, so the create lane
+     * still normalizes every field.
+     */
     private static void validate(@NonNull Map<String, Object> coerced, @Nullable Row existing,
                                  @NonNull Model model) {
-        Object originValue = coerced.get("origin");
-        String rawOrigin = originValue != null ? String.valueOf(originValue)
-            : existing != null ? existing.get(DnsZoneModel.ORIGIN) : "";
-        String origin = DnsNames.normalizeOrigin(rawOrigin);
-        if (origin == null) {
-            throw Violations.ofField("origin", rawOrigin, CmsSupport.violationText("dns_origin_format"));
-        }
-        coerced.put("origin", origin);
+        boolean creating = existing == null;
+        if (creating || coerced.containsKey(DnsZoneModel.ORIGIN.getName())) {
+            Object originValue = CmsSupport.valueOf(coerced, existing, DnsZoneModel.ORIGIN);
+            String rawOrigin = originValue != null ? String.valueOf(originValue) : "";
+            String origin = DnsNames.normalizeOrigin(rawOrigin);
+            if (origin == null) {
+                throw Violations.ofField("origin", rawOrigin, CmsSupport.violationText("dns_origin_format"));
+            }
+            coerced.put(DnsZoneModel.ORIGIN.getName(), origin);
 
-        Row duplicate = model.find().where(DnsZoneModel.ORIGIN.eq(origin)).first();
-        if (duplicate != null
-            && (existing == null || !duplicate.get(DnsZoneModel.ID).equals(existing.get(DnsZoneModel.ID)))) {
-            throw Violations.ofField("origin", origin, CmsSupport.violationText("dns_origin_taken"));
+            Row duplicate = model.find().where(DnsZoneModel.ORIGIN.eq(origin)).first();
+            if (duplicate != null
+                && (existing == null || !duplicate.get(DnsZoneModel.ID).equals(existing.get(DnsZoneModel.ID)))) {
+                throw Violations.ofField("origin", origin, CmsSupport.violationText("dns_origin_taken"));
+            }
         }
 
-        Object nsValue = coerced.get("soa_primary_ns");
-        String primaryNs = nsValue != null ? String.valueOf(nsValue).trim().toLowerCase(Locale.ROOT) : "";
-        while (primaryNs.endsWith(".")) {
-            primaryNs = primaryNs.substring(0, primaryNs.length() - 1);
+        if (creating || coerced.containsKey(DnsZoneModel.SOA_PRIMARY_NS.getName())) {
+            Object nsValue = coerced.get(DnsZoneModel.SOA_PRIMARY_NS.getName());
+            String primaryNs = nsValue != null ? String.valueOf(nsValue).trim().toLowerCase(Locale.ROOT) : "";
+            while (primaryNs.endsWith(".")) {
+                primaryNs = primaryNs.substring(0, primaryNs.length() - 1);
+            }
+            if (!primaryNs.isEmpty() && DnsNames.normalizeOrigin(primaryNs) == null) {
+                throw Violations.ofField("soa_primary_ns", primaryNs,
+                    CmsSupport.violationText("dns_target_format"));
+            }
+            coerced.put(DnsZoneModel.SOA_PRIMARY_NS.getName(), primaryNs);
         }
-        if (!primaryNs.isEmpty() && DnsNames.normalizeOrigin(primaryNs) == null) {
-            throw Violations.ofField("soa_primary_ns", primaryNs,
-                CmsSupport.violationText("dns_target_format"));
-        }
-        coerced.put("soa_primary_ns", primaryNs);
 
-        Object contactValue = coerced.get("soa_contact");
-        String contact = contactValue != null ? String.valueOf(contactValue).trim() : "";
-        if (!contact.isEmpty() && !contact.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
-            throw Violations.ofField("soa_contact", contact,
-                CmsSupport.violationText("dns_contact_format"));
+        if (creating || coerced.containsKey(DnsZoneModel.SOA_CONTACT.getName())) {
+            Object contactValue = coerced.get(DnsZoneModel.SOA_CONTACT.getName());
+            String contact = contactValue != null ? String.valueOf(contactValue).trim() : "";
+            if (!contact.isEmpty() && !contact.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
+                throw Violations.ofField("soa_contact", contact,
+                    CmsSupport.violationText("dns_contact_format"));
+            }
+            coerced.put(DnsZoneModel.SOA_CONTACT.getName(), contact);
         }
-        coerced.put("soa_contact", contact);
 
         checkDuration(coerced, "default_ttl", MAX_TTL, "dns_ttl_range");
         checkDuration(coerced, "negative_ttl", MAX_TTL, "dns_ttl_range");

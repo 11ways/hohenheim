@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.dns;
 
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.net.Hostnames;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
@@ -226,19 +227,26 @@ public final class DnsZoneStore {
     }
 
     /**
-     * @return the most specific enabled zone containing the fqdn (no trailing dot needed), or null
+     * @return the most specific SERVED zone (primary or replica) containing the fqdn (no
+     *         trailing dot needed), or null
      *
      * AIDEV-NOTE: this answers over the SERVING view, which merges primaries AND
-     * secondaries, so it is a READ-path lookup only. A WRITE path must use
-     * {@link #findPrimaryZoneFor}: writing a record row against a secondary's zone id
-     * publishes nothing (reloadNow skips secondaries, the next AXFR overwrites it) while
-     * inflating the replica's stored serial, which then suppresses genuine transfers.
+     * secondaries, so it is a READ-path lookup only (deciding whether a name is hosted at
+     * all, and whose replica it is). A WRITE path must use {@link #findPrimaryZoneFor}:
+     * writing a record row against a secondary's zone id publishes nothing (reloadNow skips
+     * secondaries, the next AXFR overwrites it) while inflating the replica's stored
+     * serial, which then suppresses genuine transfers. Renamed from {@code findZoneFor} on
+     * 2026-09-23 so the two faces can no longer be mistaken for each other; the record
+     * model itself now refuses a row in a secondary zone (DnsZoneCascades).
      */
-    public @Nullable DnsZoneSnapshot findZoneFor(@NonNull String fqdn) {
+    public @Nullable DnsZoneSnapshot findServingZoneFor(@NonNull String fqdn) {
         return mostSpecific(this.serving, fqdn);
     }
 
-    /** @return the most specific enabled zone this controller is PRIMARY for containing the fqdn, or null */
+    /**
+     * THE write-path zone lookup: the most specific enabled zone this controller is PRIMARY
+     * for containing the fqdn, or null. Every writer of a record row finds its zone here.
+     */
     public @Nullable DnsZoneSnapshot findPrimaryZoneFor(@NonNull String fqdn) {
         return mostSpecific(this.primaryByOrigin, fqdn);
     }
@@ -397,11 +405,7 @@ public final class DnsZoneStore {
         if (value == null || value.isBlank()) {
             return new Name("ns1", origin);
         }
-        String name = value.trim().toLowerCase(Locale.ROOT);
-        while (name.endsWith(".")) {
-            name = name.substring(0, name.length() - 1);
-        }
-        return Name.fromString(name + ".");
+        return Name.fromString(DnsNames.canonicalName(value) + ".");
     }
 
     /** Turns an email contact into SOA RNAME form (dots in the local part escaped). */
@@ -415,10 +419,7 @@ public final class DnsZoneStore {
             String local = contact.substring(0, at).replace(".", "\\.");
             contact = local + "." + contact.substring(at + 1);
         }
-        while (contact.endsWith(".")) {
-            contact = contact.substring(0, contact.length() - 1);
-        }
-        return Name.fromString(contact + ".");
+        return Name.fromString(Hostnames.stripTrailingDots(contact) + ".");
     }
 
     private static int valueOr(@Nullable Integer value, int fallback) {

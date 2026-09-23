@@ -195,6 +195,19 @@ public final class FakeDockerDaemon implements DockerTransport {
         return count;
     }
 
+    /**
+     * Place a named volume with the given labels, as a controller (or an older build, or a
+     * colliding stack) left it; what a purge must tell apart by those labels.
+     */
+    public void seedVolume(@NonNull String name, @NonNull Map<String, String> labels) {
+        this.volumes.put(name, Map.copyOf(labels));
+    }
+
+    /** Whether the daemon still holds a volume under this name. */
+    public boolean hasVolume(@NonNull String name) {
+        return this.volumes.containsKey(name);
+    }
+
     /** Whether the daemon still holds a container under this handle. */
     public boolean exists(@NonNull String handle) {
         return this.workloads.containsKey(handle);
@@ -573,21 +586,22 @@ public final class FakeDockerDaemon implements DockerTransport {
 
         // -- volumes ---------------------------------------------------------
         if ("POST".equals(method) && "/volumes/create".equals(path)) {
-            String name = String.valueOf(parse(body).get("Name"));
-            this.volumes.put(name, Map.of());
+            Map<String, Object> request = parse(body);
+            String name = String.valueOf(request.get("Name"));
+            this.volumes.put(name, stringLabels(request.get("Labels")));
             return json(200, Map.of("Name", name, "Mountpoint", "/fake/volumes/" + name));
         }
         if ("GET".equals(method) && "/volumes".equals(path)) {
             List<Object> listed = new ArrayList<>();
-            for (String name : this.volumes.keySet()) {
-                listed.add(Map.of("Name", name));
-            }
+            this.volumes.forEach((name, labels) ->
+                listed.add(Map.of("Name", name, "Labels", labels)));
             return json(200, Map.of("Volumes", listed));
         }
         if ("GET".equals(method) && path.startsWith("/volumes/")) {
             String name = path.substring("/volumes/".length());
             return this.volumes.containsKey(name)
-                ? json(200, Map.of("Name", name, "Mountpoint", "/fake/volumes/" + name))
+                ? json(200, Map.of("Name", name, "Mountpoint", "/fake/volumes/" + name,
+                    "Labels", this.volumes.get(name)))
                 : json(404, Map.of("message", "no such volume: " + name));
         }
         if ("DELETE".equals(method) && path.startsWith("/volumes/")) {
@@ -692,6 +706,14 @@ public final class FakeDockerDaemon implements DockerTransport {
     }
 
     @SuppressWarnings("unchecked")
+    private static @NonNull Map<String, String> stringLabels(@Nullable Object labels) {
+        Map<String, String> copy = new LinkedHashMap<>();
+        if (labels instanceof Map<?, ?> map) {
+            map.forEach((key, value) -> copy.put(String.valueOf(key), String.valueOf(value)));
+        }
+        return copy;
+    }
+
     private static @NonNull Map<String, Object> parse(@NonNull String json) throws IOException {
         try {
             return (Map<String, Object>) new Dry().parse(json);

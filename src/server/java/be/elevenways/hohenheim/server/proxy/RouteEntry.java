@@ -2,7 +2,9 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.auth.SiteAuthGate;
+import be.elevenways.hohenheim.server.proxy.auth.CredentialOwner;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
+import be.elevenways.hohenheim.server.upstream.kinds.UpstreamSettings;
 import be.elevenways.zenit.common.orm.datasource.Row;
 
 import java.util.ArrayList;
@@ -45,6 +47,11 @@ final class RouteEntry {
     // ProtectedPathModel.
     final List<PathGuard> pathGuards;
 
+    // Credential carriers a Hohenheim gate on this route consumes itself; the forwarding stage
+    // strips them so the upstream never receives Hohenheim's own authentication material.
+    final boolean ownsAuthorizationHeader;
+    final boolean ownsPersistentCookie;
+
     /** One guarded prefix and the tree it enforces. */
     record PathGuard(String path, AccessRuleTree tree) {
 
@@ -67,9 +74,10 @@ final class RouteEntry {
             domain != null ? domain.get(SiteDomainModel.PATH) : null);
         this.stripPath = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.STRIP_PATH));
         this.forceSsl = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL));
-        this.requestDelayMs = parsePositiveInt(siteSettings != null ? siteSettings.get("delay") : null);
+        this.requestDelayMs = parsePositiveInt(
+            siteSettings != null ? siteSettings.get(UpstreamSettings.DELAY) : null);
         this.requestTimeoutMs = parseRequestTimeout(
-            siteSettings != null ? siteSettings.get("request_timeout") : null);
+            siteSettings != null ? siteSettings.get(UpstreamSettings.REQUEST_TIMEOUT) : null);
         this.hstsEnabled = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.HSTS_ENABLED));
         this.hstsSubdomains = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.HSTS_SUBDOMAINS));
         this.customHeaders = parseHeaderRules(domain != null ? domain.get(SiteDomainModel.CUSTOM_HEADERS) : null);
@@ -83,6 +91,19 @@ final class RouteEntry {
         // this site is guarded; the compile folds an absent satisfy to the default.
         this.accessTree = accessTree;
         this.pathGuards = pathGuards;
+
+        boolean authorization = authGate instanceof CredentialOwner owner && owner.ownsAuthorizationHeader();
+        boolean persistent = authGate instanceof CredentialOwner holder && holder.ownsPersistentCookie();
+        if (accessTree != null) {
+            authorization |= accessTree.ownsAuthorizationHeader();
+            persistent |= accessTree.ownsPersistentCookie();
+        }
+        for (PathGuard guard : pathGuards) {
+            authorization |= guard.tree().ownsAuthorizationHeader();
+            persistent |= guard.tree().ownsPersistentCookie();
+        }
+        this.ownsAuthorizationHeader = authorization;
+        this.ownsPersistentCookie = persistent;
     }
 
     boolean hasAccessList() {

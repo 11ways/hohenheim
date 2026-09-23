@@ -57,11 +57,11 @@ returned). Say so when delegating; the grant UI does not.
   ```json
   {
     "status": 422,
-    "code": "zenit.coercion.unknown_field",
+    "code": "unknown_field",
     "message": "This field is not part of the form",
     "field": "settings.root_paht",
     "violations": [
-      { "code": "zenit.coercion.unknown_field",
+      { "code": "unknown_field",
         "message": "This field is not part of the form",
         "field": "settings.root_paht" }
     ]
@@ -69,7 +69,11 @@ returned). Say so when delegating; the grant UI does not.
   ```
 
   `code` is the same microcopy key the HTML surface renders for the same act, and
-  `message` is resolved in the caller's locale chain. `field` is the path of the
+  `message` is resolved in the caller's locale chain. Framework refusals carry
+  zenit's SHORT keys (`unknown_field`, `max`, `required`, `invalid_integer`, ...);
+  the `zenit.coercion.*` / `zenit.validation.*` spellings were retired upstream
+  (zenit 383bcc89, 2026-09-04) and no deployed build has answered them since
+  hohenheim 91191333. `field` is the path of the
   refused value -- dotted for nested settings, indexed for rows -- and is ABSENT
   when the refusal is about the submission rather than one value. `code`,
   `message` and `field` restate the FIRST entry of `violations`, which lists every
@@ -243,7 +247,7 @@ to the delegated columns by the write pipeline (`hostname`, `force_ssl`,
 | `instance_id` | integer | Required by `hohenheim:instance` (refused on every other kind, `upstream_instance_unexpected`) |
 | `auth_provider_id` | integer | An existing site auth provider; refused on `tls_passthrough` |
 | `access_list_id` | integer | An existing access list; refused on `tls_passthrough` |
-| `settings.*` | per kind | The kind's own schema; an undeclared setting is refused (`zenit.coercion.unknown_field`) |
+| `settings.*` | per kind | The kind's own schema; an undeclared setting is refused (`unknown_field`) |
 
 Settings per kind (every key optional unless said otherwise):
 
@@ -263,7 +267,7 @@ Settings per kind (every key optional unless said otherwise):
 Answer: the site detail projection (as `GET /api/v1/sites/{id}`), which now
 carries `domains` (the rows below, empty for a fresh site). A refusal is the usual
 422 whose `code` is the violation key: `name_required`,
-`zenit.coercion.unknown_field` (a stranger key, top-level or inside `settings`),
+`unknown_field` (a stranger key, top-level or inside `settings`),
 `upstream_instance_required`, and the coercion keys of the form.
 
 ### `POST /api/v1/sites/{id}/domains`
@@ -341,7 +345,7 @@ not an editing right).
 | --- | --- | --- |
 | `name` | string, required | |
 | `satisfy` | enum | `any` (default) or `all`; this IS the implicit root group's mode |
-| `shared` | boolean | Offer the list to every picker. ADMIN keys only -- a delegated key submitting it is refused `zenit.coercion.unknown_field`, because the /manage form has no such entry |
+| `shared` | boolean | Offer the list to every picker. ADMIN keys only -- a delegated key submitting it is refused `unknown_field`, because the /manage form has no such entry |
 
 Answer: the list detail (as `GET /api/v1/access-lists/{id}`), whose `rules` array is
 empty for a fresh list.
@@ -356,7 +360,7 @@ configure) in one request.
 | `type` | enum, required | `group`, `basic_auth`, `ip_allow`, `ip_deny`, `auth_provider` |
 | `parent_id` | integer | An enclosing GROUP of THIS list; absent, blank, or anything else means the implicit root |
 | `enabled` | boolean | Absent keeps the birth default: a group is born ON, every leaf OFF |
-| `data.*` | per type | The type's own schema; an undeclared key is refused (`zenit.coercion.unknown_field`) |
+| `data.*` | per type | The type's own schema; an undeclared key is refused (`unknown_field`) |
 
 Settings per type:
 
@@ -377,7 +381,7 @@ Answer, and each element of a list's `rules`:
 
 The stored password is absent BY NAME, hash included: it is credential material, and
 a value written as a credential has no representation over this API afterwards.
-Refusals: `unknown_type`, `zenit.coercion.unknown_field`,
+Refusals: `unknown_type`, `unknown_field`,
 `access_rule_network_invalid`, `access_rule_username_invalid`,
 `access_rule_provider_invalid`, and -- only once a rule is switched ON --
 `access_rule_credential_incomplete`, `access_rule_provider_missing`. A refusal at the
@@ -410,7 +414,7 @@ refused `unknown_template` rather than falling into the other lane):
 | `environment_id` | integer | Grouping only; the environment's project must have the same owner set (`environment_project_mismatch`) |
 | `crash_policy` | enum | `none` (default) or `restart` |
 | `backup_target_id` | integer | |
-| `settings.*` | per kind | The kind's own schema; an undeclared setting is refused (`zenit.coercion.unknown_field`) |
+| `settings.*` | per kind | The kind's own schema; an undeclared setting is refused (`unknown_field`) |
 
 Settings per kind (every key optional unless said otherwise):
 
@@ -456,7 +460,7 @@ hoh instance create microcopy docker_container \
 
 A row scope that is not an integer (`settings.volumes.app=/home/site`), a row that is
 not a key/value pair, or a stranger sub-key inside one is refused
-`zenit.coercion.unknown_field` naming the offending key, and nothing is written. Until
+`unknown_field` naming the offending key, and nothing is written. Until
 2026-08-30 the dotted spelling answered **200 with the record created and the map
 EMPTY**, which is why the wire shape is documented here now. A submitted empty string
 CLEARS the map; omitting the key entirely leaves the stored map alone.
@@ -666,7 +670,7 @@ The zone form's fields, form-encoded:
 | `dnssec_enabled` | boolean | default false |
 
 Answer: the zone element above, `nameservers` carrying the declared set. A stranger
-key is `zenit.coercion.unknown_field`.
+key is `unknown_field`.
 
 ### `POST /api/v1/dns/zones/{id}/import`
 

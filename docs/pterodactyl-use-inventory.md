@@ -172,7 +172,7 @@ Wired at `server/instance/InstanceTemplates.java:101` (`variableFormSpec`),
 
 - Test: `src/browserTest/java/be/elevenways/hohenheim/test/instance/InstanceTemplatePolicyTest.java:224`
   -- the refusal carries the FRAMEWORK's typed violation key
-  (`SERVER_PORT=zenit.validation.max`, `:252-254`), not a home-rolled message;
+  (`SERVER_PORT=max`, `:252-254`), not a home-rolled message;
   the refused create persisted nothing (`:244-246`); the good value stored
   (`:271-272`); the secret is a `zenc$` envelope AT REST (`:279-282`). Hermetic. **[test]**
 

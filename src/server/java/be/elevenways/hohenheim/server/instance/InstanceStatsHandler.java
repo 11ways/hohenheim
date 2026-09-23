@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimChannels;
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.channel.ChannelException;
 import be.elevenways.zenit.common.channel.ChannelHandler;
 import be.elevenways.zenit.common.channel.ChannelLink;
@@ -81,8 +83,22 @@ public final class InstanceStatsHandler implements ChannelHandler<Object, Object
         } catch (IOException noStream) {
             // A stopped or unreachable workload has nothing to stream. Named, not silent:
             // the client's ready future fails and the page renders the empty state.
-            throw new ChannelException("No live stats: " + noStream.getMessage());
+            // AIDEV-NOTE: the reason is the DAEMON's or transport's own text (socket
+            // paths, host names, ssh failures), which is operator inventory -- the
+            // InstanceOverviewPage install_error rule. A delegated viewer is told there
+            // is nothing to stream; the operator gets the reason, and the log keeps it.
+            Blast.log("STATS: no live stats for instance", instanceId, "-", noStream.getMessage());
+            throw new ChannelException(this.isOperator()
+                ? "No live stats: " + noStream.getMessage()
+                : "No live stats");
         }
+    }
+
+    /** Whether the viewer is an operator, who may read the daemon's own failure text. */
+    private boolean isOperator() {
+        Principal principal = this.link.getPrincipal();
+        return principal != null && Zenit.getWebSocketAuthenticator()
+            .hasPermission(principal, HohenheimSources.ADMIN_ACCESS);
     }
 
     @Override
@@ -106,8 +122,9 @@ public final class InstanceStatsHandler implements ChannelHandler<Object, Object
      * same capability the page carrying the chart is scoped by.
      */
     private boolean permitted(int instanceId) {
-        WebSocketSession session = this.link.getSession();
-        Principal principal = session == null ? null : session.getPrincipal();
+        // The link's own face: the session's principal with an anonymous one folded to
+        // null, and the seam a socketless FakeChannelLink answers too.
+        Principal principal = this.link.getPrincipal();
         return principal != null && HohenheimAccess.hasInstanceCapability(
             principal, instanceId, HohenheimAccess.VIEW);
     }

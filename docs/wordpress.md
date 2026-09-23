@@ -17,8 +17,20 @@ vocabulary; the seeder derives the templates from it and nothing else spells an 
 
 | Template | Image | Status |
 | --- | --- | --- |
-| WordPress (PHP 8.1) | `wordpress:php8.1-apache` | maintained upstream (WordPress 6.9 at seed time) |
+| WordPress (PHP 8.5) | `wordpress:php8.5-apache` | maintained upstream |
+| WordPress (PHP 8.4) | `wordpress:php8.4-apache` | maintained upstream; THE recommended start for a new site (`WordPressPhp.recommended()`) |
+| WordPress (PHP 8.3) | `wordpress:php8.3-apache` | maintained upstream |
+| WordPress (PHP 8.2) | `wordpress:php8.2-apache` | maintained upstream |
+| WordPress (PHP 8.1) | `wordpress:php8.1-apache` | FROZEN: left the upstream matrix at PHP 8.1's end of life (2025-12-31); import-only |
 | WordPress (PHP 7.4) | `wordpress:php7.4-apache` | FROZEN at WordPress 6.1.1 (2022-11-16); import-only |
+
+The upstream matrix (docker-library/wordpress `versions.json`) read PHP 8.2, 8.3, 8.4 and
+8.5 on 2026-09-23. The 8.1 and 7.4 templates were the ORIGINAL seed wave, ledgered under
+`hohenheim.wordpress-templates`; every later member seeds under a ledger key of its own
+(`hohenheim.wordpress-templates.php<version>`), so an installation that already ran the
+first wave still gains the new templates at its next boot. A template an operator already
+created under the same name is left alone, and an existing template or instance keeps the
+tag it was stored with: nothing re-tags a running site.
 
 What every template carries:
 
@@ -130,10 +142,11 @@ runs `wp search-replace old.example new.example --all-tables` (wp-cli inside the
 container, or the equivalent SQL on the two options) before it goes live.
 
 PHP version rule: an import lands on the template whose PHP the site's plugins and theme
-were running (`7.4` for the di-ax sites, `8.1` for Anymedia/ConnectedPrint). The 7.4
-image's bundled WordPress is irrelevant to an import (the docroot brings its own), so the
-frozen tag is only a PHP runtime; move the site to 8.1 by re-creating from that template
-with the same dump and docroot once its plugins allow it. Never start a NEW site on 7.4.
+were running (`7.4` for the di-ax sites, `8.1` for Anymedia/ConnectedPrint). A frozen
+image's bundled WordPress is irrelevant to an import (the docroot brings its own), so a
+frozen tag is only a PHP runtime; move the site to a maintained PHP by re-creating from
+that template with the same dump and docroot once its plugins allow it. Never start a NEW
+site on a frozen tag: a new site starts on PHP 8.4.
 
 ## Not built, on purpose
 

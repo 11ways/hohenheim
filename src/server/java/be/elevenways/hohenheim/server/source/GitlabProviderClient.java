@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.source;
 
 import be.elevenways.hohenheim.server.util.Json;
+import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -28,7 +29,9 @@ public class GitlabProviderClient extends ApiProviderClient {
     private final @NonNull String apiBase;
     private final @Nullable String accessToken;
 
-    GitlabProviderClient(@Nullable String baseUrl, @Nullable String accessToken) {
+    GitlabProviderClient(@Nullable String baseUrl, @Nullable String accessToken,
+                         @NonNull OutboundUrlGuard guard) {
+        super(guard);
         String base = baseUrl == null || baseUrl.isBlank()
             ? "https://gitlab.com" : trimSlash(baseUrl.trim());
         this.webBase = base;

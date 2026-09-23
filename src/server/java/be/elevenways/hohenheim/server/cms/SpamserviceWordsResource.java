@@ -67,7 +67,8 @@ public final class SpamserviceWordsResource extends SpamserviceRemoteResource<Sp
 
     @Override
     protected @NonNull PageResult<SpamWordEntry> fetchPage(@NonNull SpamserviceClient client,
-                                                            TableView.@NonNull Applied<SpamWordEntry> applied) {
+                                                            TableView.@NonNull Applied<SpamWordEntry> applied,
+                                                            @NonNull AccessContext accessContext) {
         return client.spamWords(applied.page(), applied.schema().pageSize(), textFilter(applied, "q"));
     }
 

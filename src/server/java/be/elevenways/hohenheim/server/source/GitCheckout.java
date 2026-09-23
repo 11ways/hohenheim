@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.source;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.source.GitRefNames;
+import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -45,10 +47,17 @@ public final class GitCheckout {
     /**
      * Materialize {@code ref} of the source into {@code checkout}.
      *
+     * AIDEV-NOTE: the URL and the ref are judged HERE, before git runs, with named
+     * refusals: a stored value predates every write gate, and a ref may come straight off
+     * a forge payload. A LOCAL source (a controller path) is honoured only for an
+     * operator-owned owner ({@link SourceOwnership#localSourcesAllowed}); otherwise one
+     * tenant's repository URL could name another tenant's checkout directory.
+     *
      * @param  sourceSettings the {@code GitSourceSchema} settings of the owning record
      * @return the commit SHA the checkout landed on
-     * @throws Violations when no repository is declared, when the clone or fetch fails, or
-     *         when the checkout has no commit identity to build from
+     * @throws Violations when no repository is declared, when the URL or the ref may not be
+     *         cloned, when the clone or fetch fails, or when the checkout has no commit
+     *         identity to build from
      */
     public static @NonNull String materialize(@NonNull Identifier ownerModel, int ownerId,
                                               @NonNull String ref,
@@ -62,8 +71,30 @@ public final class GitCheckout {
             throw Violations.ofForm(violation("source_no_repository"));
         }
 
-        GitRepository repo = new GitRepository(repoUrl, ref, true,
-            Boolean.TRUE.equals(sourceSettings.get("submodules")), null);
+        if (!GitRefNames.isValid(ref)) {
+            throw Violations.ofForm(violation("source_ref_invalid"));
+        }
+
+        if (GitRepository.embeddedCredential(repoUrl) != null) {
+            throw Violations.ofForm(violation("repository_url_credential"));
+        }
+
+        boolean localAllowed = SourceOwnership.localSourcesAllowed(ownerModel, ownerId);
+
+        if (!GitRepository.isRemoteCloneUrl(repoUrl)
+                && !(localAllowed && GitRepository.isLocalCloneUrl(repoUrl))) {
+            if (GitRepository.isLocalCloneUrl(repoUrl)) {
+                throw Violations.ofForm(violation("source_repository_local_refused"));
+            }
+            throw Violations.ofForm(violation("source_repository_url_refused"));
+        }
+
+        // shallow_clone defaults to true (the field's declared default): only an explicit
+        // false asks for the whole history.
+        GitRepository repo = new GitRepository(repoUrl, ref,
+            !Boolean.FALSE.equals(sourceSettings.get(GitSourceSchema.SHALLOW_CLONE)),
+            Boolean.TRUE.equals(sourceSettings.get(GitSourceSchema.SUBMODULES)), null,
+            localAllowed);
 
         if (boundUrl != null) {
             repo.setCredentialEnv(() -> {

@@ -5,9 +5,16 @@ import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import javax.crypto.AEADBadTagException;
+import org.bouncycastle.crypto.InvalidCipherTextException;
+import org.bouncycastle.crypto.engines.AESEngine;
+import org.bouncycastle.crypto.modes.GCMBlockCipher;
+import org.bouncycastle.crypto.modes.GCMModeCipher;
+import org.bouncycastle.crypto.params.AEADParameters;
+import org.bouncycastle.crypto.params.KeyParameter;
+
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
+import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -17,7 +24,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -42,6 +48,16 @@ import java.util.zip.ZipOutputStream;
  * the plaintext zip -- a partially-decrypted stream must never feed a restore, which
  * is why this class decrypts to a staging file instead of handing out a
  * CipherInputStream.
+ *
+ * AIDEV-NOTE: decryption STREAMS through BouncyCastle's GCM, never the JDK Cipher. The
+ * JDK's AES/GCM decrypt holds back ALL ciphertext until doFinal (it may not release
+ * plaintext before the tag is checked), so an archive larger than the heap was written
+ * fine and could never be restored. BouncyCastle releases plaintext as it goes and checks
+ * the tag at the end; the plaintext lands in the staging file, which openVerified deletes
+ * when the tag fails, so the "nothing unauthenticated reaches a restore" rule is kept by
+ * the staging file rather than by the cipher. The FORMAT is unchanged (standard
+ * AES-256-GCM, 128-bit tag, the same AAD), so every archive written before this still
+ * opens; encryption keeps the JDK cipher, which streams on that side.
  */
 public final class BackupArchive {
 
@@ -224,17 +240,9 @@ public final class BackupArchive {
         return files;
     }
 
-    /** Stream a local file through SHA-256. */
+    /** Stream a local file through SHA-256 (zenit's {@link SecureTokens#sha256Hex(Path)}). */
     public static @NonNull String sha256Of(@NonNull Path file) throws IOException {
-        MessageDigest digest = sha256();
-        byte[] buffer = new byte[64 * 1024];
-        try (InputStream in = Files.newInputStream(file)) {
-            int read;
-            while ((read = in.read(buffer)) >= 0) {
-                digest.update(buffer, 0, read);
-            }
-        }
-        return SecureTokens.hex(digest.digest());
+        return SecureTokens.sha256Hex(file);
     }
 
     // -- encryption -----------------------------------------------------------
@@ -296,26 +304,34 @@ public final class BackupArchive {
                     + "', which this controller's keyring does not contain; restore needs"
                     + " the keyring the backup was written under");
             }
-            Cipher cipher = gcm(Cipher.DECRYPT_MODE, keyring.keyById(keyId), iv, keyIdBytes);
+            GCMModeCipher cipher = GCMBlockCipher.newInstance(AESEngine.newInstance());
+            cipher.init(false, new AEADParameters(
+                new KeyParameter(keyring.keyById(keyId).getEncoded()), GCM_TAG_BITS, iv));
+            cipher.processAADBytes(MAGIC, 0, MAGIC.length);
+            cipher.processAADBytes(keyIdBytes, 0, keyIdBytes.length);
             try (OutputStream out = Files.newOutputStream(plainOut,
                     StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
                 byte[] buffer = new byte[64 * 1024];
+                byte[] chunk = new byte[cipher.getUpdateOutputSize(buffer.length)];
                 int read;
                 while ((read = in.read(buffer)) >= 0) {
-                    byte[] chunk = cipher.update(buffer, 0, read);
-                    if (chunk != null && chunk.length > 0) {
-                        out.write(chunk);
+                    int needed = cipher.getUpdateOutputSize(read);
+                    if (chunk.length < needed) {
+                        chunk = new byte[needed];
                     }
+                    int produced = cipher.processBytes(buffer, 0, read, chunk, 0);
+                    out.write(chunk, 0, produced);
                 }
+                byte[] tail = new byte[cipher.getOutputSize(0)];
+                int produced;
                 try {
-                    out.write(cipher.doFinal());
-                } catch (AEADBadTagException tampered) {
+                    produced = cipher.doFinal(tail, 0);
+                } catch (InvalidCipherTextException tampered) {
                     throw new IOException("Backup archive fails authentication: the ciphertext"
                         + " does not match its GCM tag. The backup is corrupt or tampered with"
                         + " and is refused whole -- nothing was restored from it", tampered);
-                } catch (GeneralSecurityException error) {
-                    throw new IOException("Backup archive decryption failed", error);
                 }
+                out.write(tail, 0, produced);
             }
         }
     }
@@ -335,25 +351,31 @@ public final class BackupArchive {
 
     private record Hashed(@NonNull String sha256, long size) {}
 
+    /** The sha256 and the byte count of what the entry actually streams, not its header. */
     private static Hashed hashEntry(ZipFile zip, ZipEntry entry) throws IOException {
-        MessageDigest digest = sha256();
-        long size = 0;
-        byte[] buffer = new byte[64 * 1024];
-        try (InputStream in = zip.getInputStream(entry)) {
-            int read;
-            while ((read = in.read(buffer)) >= 0) {
-                digest.update(buffer, 0, read);
-                size += read;
+        long[] size = new long[1];
+        String sha;
+        try (InputStream in = new FilterInputStream(zip.getInputStream(entry)) {
+            @Override
+            public int read() throws IOException {
+                int read = super.read();
+                if (read >= 0) {
+                    size[0]++;
+                }
+                return read;
             }
-        }
-        return new Hashed(SecureTokens.hex(digest.digest()), size);
-    }
 
-    private static MessageDigest sha256() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException("SHA-256 unavailable", impossible);
+            @Override
+            public int read(byte @NonNull [] buffer, int offset, int length) throws IOException {
+                int read = super.read(buffer, offset, length);
+                if (read > 0) {
+                    size[0] += read;
+                }
+                return read;
+            }
+        }) {
+            sha = SecureTokens.sha256Hex(in);
         }
+        return new Hashed(sha, size[0]);
     }
 }

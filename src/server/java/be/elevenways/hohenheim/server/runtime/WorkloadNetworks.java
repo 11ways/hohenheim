@@ -153,13 +153,21 @@ public final class WorkloadNetworks {
         }
         OwnerLabels.Owner owner = OwnerLabels.parse(
             existing.get("Labels") instanceof Map<?, ?> labels ? labels : null);
-        if (!OwnerLabels.isOurs(owner)) {
+        // The network must belong to the SAME record as the container being started, not
+        // merely to this controller: ensure() stamped both with one label set, so anything
+        // else is another record's network under this name.
+        Map<String, Object> container = docker.inspectContainer(handle);
+        OwnerLabels.Owner workload = OwnerLabels.parse(
+            container.get("Config") instanceof Map<?, ?> config
+                && config.get("Labels") instanceof Map<?, ?> labels ? labels : null);
+        if (!OwnerLabels.isOurs(workload) || !OwnerLabels.matches(owner, workload)) {
             throw new IOException("REFUSED to start '" + handle + "': the network '" + name
                 + "' is not attributably ours (" + (owner == null
                     ? "no hohenheim owner labels"
-                    : "owned by controller '" + owner.controller() + "'")
-                + "), and we will not enforce a tenant policy onto another controller's or a"
-                + " stranger's network.");
+                    : "owned by " + owner.model() + " #" + owner.id() + " of controller '"
+                        + owner.controller() + "'")
+                + "), and we will not enforce a tenant policy onto another record's, another"
+                + " controller's or a stranger's network.");
         }
         policy.apply(WorkloadNetwork.fromInspect(docker.inspectNetwork(name)), egress);
     }
@@ -187,9 +195,7 @@ public final class WorkloadNetworks {
     private static void requireOwnedBy(String name, Object labels, Map<String, String> expected)
             throws IOException {
         Map<?, ?> map = labels instanceof Map<?, ?> found ? found : Map.of();
-        boolean ours = expected.entrySet().stream()
-            .allMatch(entry -> entry.getValue().equals(map.get(entry.getKey())));
-        if (!ours) {
+        if (!OwnerLabels.matches(OwnerLabels.parse(map), OwnerLabels.parse(expected))) {
             throw new IOException("REFUSED to use network '" + name + "': it exists but is not"
                 + " attributably ours (labels: " + map + "). A same-named foreign network is a"
                 + " name collision, not an isolation boundary we may enforce policy onto;"

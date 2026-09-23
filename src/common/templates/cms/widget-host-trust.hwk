@@ -10,11 +10,7 @@
 <pl-card class="widget hh-overview-card" data-trust-lane={% lane.laneId %}>
     <pl-card-header>
         <pl-card-title>
-            {% if lane.laneId == "incus_cert" %}
-            {{ t("trust_incus", scope: "server_overview") }}
-            {% else %}
-            {{ t("trust_ssh", scope: "server_overview") }}
-            {% /if %}
+            {{ HostTrustLanes.of(lane.laneId).title }}
         </pl-card-title>
     </pl-card-header>
     <pl-card-content>
@@ -45,15 +41,11 @@
         {% /if %}
         <div class="hh-trust-client">
             <span class="hh-trust-label">
-                {% if lane.laneId == "incus_cert" %}
-                {{ t("client_cert", scope: "server_overview") }}
-                {% else %}
-                {{ t("client_key", scope: "server_overview") }}
-                {% /if %}
+                {{ HostTrustLanes.of(lane.laneId).clientLabel }}
             </span>
             {% if lane.clientMaterial != "" %}
-            <pre class="hh-trust-material">{{ lane.clientMaterial }}</pre>
-            <pl-copy-button value={% lane.clientMaterial %} ariaLabel={% t("copy", scope: "server_overview") %}></pl-copy-button>
+            <pl-code value={% lane.clientMaterial %} wrap="wrap" size="sm"
+                     copy={% true %} copyLabel={% t("copy", scope: "server_overview") %}></pl-code>
             {% else %}
             <span>{{ t("client_missing", scope: "server_overview") }}</span>
             {% /if %}

@@ -168,4 +168,40 @@ class DnsRateLimiterTest {
             assertThat(disabled.check(client, KEY)).isEqualTo(Verdict.ALLOW);
         }
     }
+
+    @Test
+    void aFullTrackingTableFailsClosedToTruncatedAnswers() throws Exception {
+        DnsRateLimiter limiter = new DnsRateLimiter(() -> 100, 2);
+        InetAddress first = InetAddress.getByName("203.0.113.5");
+        InetAddress second = InetAddress.getByName("198.51.100.5");
+        InetAddress spoofed = InetAddress.getByName("192.0.2.77");
+
+        // 1. Below the cap every key is tracked and answered normally.
+        assertThat(limiter.check(first, KEY)).as("step 1: first tracked key").isEqualTo(Verdict.ALLOW);
+        assertThat(limiter.check(second, KEY)).as("step 1: second tracked key").isEqualTo(Verdict.ALLOW);
+
+        // 2. A key the full table cannot track is answered truncated -- an answerless TC that
+        //    amplifies nothing and sends a real client to TCP -- never waved through.
+        assertThat(limiter.check(spoofed, KEY))
+            .as("step 2: a diversified key past the cap is not an amplifier")
+            .isEqualTo(Verdict.SLIP);
+
+        // 3. Keys already tracked keep their ordinary verdicts.
+        assertThat(limiter.check(first, KEY)).as("step 3: a tracked key is unaffected")
+            .isEqualTo(Verdict.ALLOW);
+    }
+
+    @Test
+    void anAnswerKeysOnItsSourceOwnerWhenOneIsGiven() throws Exception {
+        // A wildcard answer carries the qname, so only the SOURCE can unite random labels.
+        Message q1 = query("r1.example.com", Type.A);
+        Message q2 = query("r2.example.com", Type.A);
+        Name wildcard = Name.fromString("*.example.com.");
+        assertThat(DnsRateLimiter.keyFor(q1, noerrorFor(q1), wildcard))
+            .as("two labels under one wildcard share a bucket")
+            .isEqualTo(DnsRateLimiter.keyFor(q2, noerrorFor(q2), wildcard));
+        assertThat(DnsRateLimiter.keyFor(q1, noerrorFor(q1)))
+            .as("without a source the qname still keys the bucket")
+            .isNotEqualTo(DnsRateLimiter.keyFor(q2, noerrorFor(q2)));
+    }
 }

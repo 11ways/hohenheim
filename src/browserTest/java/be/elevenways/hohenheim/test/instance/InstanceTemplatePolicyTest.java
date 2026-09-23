@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceImagePolicy;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
+import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.TemplatePortability;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
@@ -24,6 +25,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.common.validation.validator.Max;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -315,6 +317,45 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
             Models.get(InstanceTemplateModel.class).findById(importedId), null);
     }
 
+    /**
+     * A secret's declared default is never a form prefill (a prefill is rendered to every
+     * viewer of the create form), and a blank secret still receives it server-side.
+     */
+    @Test
+    void aSecretDefaultIsNeverPrefilledButStillApplies() {
+        int templateId = template(PREFIX + "secret-default", true, alpineSettings());
+        variable(templateId, "SERVER_PORT", "hohenheim:integer", true, "25565",
+            Map.of("min", 1024, "max", 65535));
+        variable(templateId, "ADMIN_PASSWORD", "hohenheim:secret", true, "hunter2-default",
+            Map.of());
+        InstanceTemplates templates = new InstanceTemplates();
+
+        // 1. The render-time prefills carry the plain default and NOT the secret one.
+        Map<String, Object> prefills = templates.variableDefaults(templateId);
+        assertThat(prefills)
+            .as("step 1: a plain variable's default is prefilled")
+            .containsEntry("SERVER_PORT", "25565");
+        assertThat(prefills)
+            .as("step 1: a secret's default is never rendered into the form")
+            .doesNotContainKey("ADMIN_PASSWORD");
+
+        // 2. A create that leaves the secret blank (what the form now submits) still
+        //    validates -- it is required -- and stores the declared default.
+        Row template = Models.get(InstanceTemplateModel.class).findById(templateId);
+        int instanceId = templates.createFromTemplate(template, PREFIX + "secret-default-i",
+            null, Map.of("SERVER_PORT", "25565"), null);
+        Map<String, String> values = new InstanceVariables().valuesFor(instanceId);
+        assertThat(values.get("ADMIN_PASSWORD"))
+            .as("step 2: the blank secret received its declared default server-side")
+            .isEqualTo("hunter2-default");
+
+        // 3. A value the operator typed wins over the default.
+        int typedId = templates.createFromTemplate(template, PREFIX + "secret-typed-i",
+            null, Map.of("SERVER_PORT", "25565", "ADMIN_PASSWORD", "typed-secret"), null);
+        assertThat(new InstanceVariables().valuesFor(typedId).get("ADMIN_PASSWORD"))
+            .as("step 3: a typed secret is kept").isEqualTo("typed-secret");
+    }
+
     @Test
     void typedVariableValidationRefusesBadValuesAndSecretsAreEncryptedAtRest() {
         int templateId = template(PREFIX + "typed", true, alpineSettings());
@@ -346,7 +387,7 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
             Map.of("SERVER_PORT", "70000", "MODE", "survival"), null));
         assertThat(violationKeys(outOfRange))
             .as("step 2: 70000 violates the declared max=65535, as a typed Max violation")
-            .contains("SERVER_PORT=zenit.validation.max");
+            .contains("SERVER_PORT=" + Max.DEFAULT_MESSAGE_KEY + " ");
 
         // 3. A value outside the select's closed set is refused.
         Throwable badChoice = catchThrowable(() -> templates.createFromTemplate(

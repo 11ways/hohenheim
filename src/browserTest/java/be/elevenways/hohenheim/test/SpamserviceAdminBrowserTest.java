@@ -7,9 +7,11 @@ import be.elevenways.zenit.common.session.SessionToken;
 import be.elevenways.zenit.common.flash.FlashEncoding;
 import be.elevenways.zenit.common.flash.FlashLevel;
 import be.elevenways.zenit.server.flash.Flash;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -72,10 +74,29 @@ class SpamserviceAdminBrowserTest extends HohenheimTestBase {
         assertThat(response.body())
             .as("the app-owned page must render the centrally injected flash")
             .contains("data-flash-toast");
-        Session consumed = Zenit.getSessionStore().get(SessionToken.of(sessionToken));
-        assertThat(consumed).isNotNull();
-        assertThat(consumed.get(Flash.PENDING_BY_TAB))
+        assertThat(awaitPendingFlash())
             .as("rendering consumes the one-shot flash")
             .isNull();
+    }
+
+    /**
+     * The session's pending flash once the server had its chance to spend it.
+     *
+     * AIDEV-NOTE: zenit spends a flash in the render's responseWritten stage, which runs AFTER
+     * the body was written and closed -- so the client holds the whole page before the
+     * acknowledgement's session write, and reading the store at once races it. Polling with a
+     * bound keeps the assertion meaning "spent by that render" without a fixed sleep.
+     */
+    private static @Nullable Map<String, String> awaitPendingFlash() throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (true) {
+            Session session = Zenit.getSessionStore().get(SessionToken.of(sessionToken));
+            assertThat(session).as("the session survives the render").isNotNull();
+            Map<String, String> pending = session.get(Flash.PENDING_BY_TAB);
+            if (pending == null || System.nanoTime() >= deadline) {
+                return pending;
+            }
+            Thread.sleep(20);
+        }
     }
 }

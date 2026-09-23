@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -79,7 +81,7 @@ public class ProtectedPathResource extends RowResource {
 
     @Override
     public @Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of("sites",
+        return ResourceParent.<Row>of(HohenheimSlugs.SITES,
             row -> row.get(ProtectedPathModel.SITE_ID)).tab("protected-paths");
     }
 
@@ -94,7 +96,7 @@ public class ProtectedPathResource extends RowResource {
     @Override
     public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
         Map<String, Object> values = new LinkedHashMap<>(formSpec().defaultValues());
-        Integer siteId = CmsSupport.parsedInt(conduit.getQueryParam("site_id"));
+        Integer siteId = CmsSupport.prefill(conduit, HohenheimParams.SITE_ID_PREFILL);
         if (siteId != null) {
             values.put(ProtectedPathModel.SITE_ID.getName(), siteId);
         }

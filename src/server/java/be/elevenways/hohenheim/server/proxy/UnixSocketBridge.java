@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.proxy;
 
+import be.elevenways.hohenheim.server.util.LoopbackPeers;
 import be.elevenways.protoblast.common.Blast;
 
 import java.io.IOException;
@@ -11,6 +12,9 @@ import java.nio.channels.Channel;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BinaryOperator;
+
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Loopback TCP-to-AF_UNIX bridge: binds {@code 127.0.0.1:0} and splices each accepted TCP connection
@@ -21,6 +25,17 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * support (the JNI xnio-native provider is absent), so there is no clean ClientProvider path. Undertow
  * stays fully async on its side; the raw byte-copy splice runs on virtual threads where blocking I/O
  * is cheap. Reuses the AF_UNIX {@code SocketChannel.open(UNIX)} idiom proven by UnixSocketDockerTransport.
+ *
+ * AIDEV-NOTE: ONLY THIS PROCESS'S OWN UID MAY USE THE BRIDGE. The loopback port is reachable by
+ * every local account, and splicing any of them onto the AF_UNIX socket bypassed both the socket's
+ * file permissions and the site's gates (the bypass class the socket front closed in ProxyScheme).
+ * Each accepted connection's owning uid is read from the kernel's socket tables
+ * ({@link LoopbackPeers}) and a peer that is not this process's uid, or cannot be identified, is
+ * closed before a single byte reaches the upstream. A same-uid process already holds everything
+ * the bridge could give it (the socket permissions hohenheim itself dials with), so this closes
+ * the bypass without a handshake the TCP-only proxy client could not perform. A claim-by-port
+ * scheme was considered and rejected: Undertow completes a TLS/ALPN dial only after the handshake,
+ * which a bridge waiting for the claim would deadlock.
  */
 public final class UnixSocketBridge {
 
@@ -36,6 +51,8 @@ public final class UnixSocketBridge {
     private final ServerSocketChannel server;
     private final int port;
     private final AtomicBoolean closed = new AtomicBoolean(false);
+    private final BinaryOperator<Integer> peerOwner;
+    private final @Nullable Integer selfUid;
 
     public UnixSocketBridge(String socketPath) throws IOException {
         this(socketPath, false);
@@ -51,6 +68,18 @@ public final class UnixSocketBridge {
      *        not fail the spawn.
      */
     public UnixSocketBridge(String socketPath, boolean verifyReachable) throws IOException {
+        this(socketPath, verifyReachable, LoopbackPeers::ownerOf, LoopbackPeers.selfUid());
+    }
+
+    /**
+     * @param peerOwner (peer port, bridge port) to the uid owning the connecting socket, null
+     *                  when unknown
+     * @param selfUid   the uid a peer must own its socket as; null refuses every peer
+     */
+    UnixSocketBridge(String socketPath, boolean verifyReachable, BinaryOperator<Integer> peerOwner,
+                     @Nullable Integer selfUid) throws IOException {
+        this.peerOwner = peerOwner;
+        this.selfUid = selfUid;
         this.upstream = UnixDomainSocketAddress.of(socketPath);
         this.server = ServerSocketChannel.open();
         this.server.bind(new InetSocketAddress("127.0.0.1", 0));
@@ -84,8 +113,33 @@ public final class UnixSocketBridge {
                 }
                 return;
             }
-            spliceToUpstream(tcp);
+            Thread.ofVirtual().start(() -> {
+                if (admits(tcp)) {
+                    spliceToUpstream(tcp);
+                } else {
+                    closeQuietly(tcp);
+                }
+            });
         }
+    }
+
+    /** Whether the connecting socket belongs to this process's own uid. */
+    private boolean admits(SocketChannel tcp) {
+        Integer owner;
+        try {
+            if (!(tcp.getRemoteAddress() instanceof InetSocketAddress peer)) {
+                return false;
+            }
+            owner = this.selfUid == null ? null : this.peerOwner.apply(peer.getPort(), this.port);
+        } catch (IOException | RuntimeException unknown) {
+            owner = null;
+        }
+        if (owner != null && owner.equals(this.selfUid)) {
+            return true;
+        }
+        Blast.log("UnixSocketBridge: refused a loopback peer on port", this.port,
+            "owned by uid", owner, "- only this process's uid may use the bridge to", upstream.getPath());
+        return false;
     }
 
     private void spliceToUpstream(SocketChannel tcp) {

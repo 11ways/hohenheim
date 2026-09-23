@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.source;
 import be.elevenways.hohenheim.source.GitProviderKindInfo;
 import be.elevenways.protoblast.common.annotation.BlastDiscoverable;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -18,6 +19,9 @@ public interface GitProviderKind extends GitProviderKindInfo {
     /**
      * @param baseUrl the row's validated base URL (never blank when
      *        {@link #requiresBaseUrl()}), null or blank meaning the kind's public host
+     * @param guard   the reach the client's API calls are held to
+     *        ({@link SourceOwnership#providerGuard})
      */
-    @NonNull GitProviderClient clientFor(@NonNull Row provider, @Nullable String baseUrl);
+    @NonNull GitProviderClient clientFor(@NonNull Row provider, @Nullable String baseUrl,
+                                         @NonNull OutboundUrlGuard guard);
 }

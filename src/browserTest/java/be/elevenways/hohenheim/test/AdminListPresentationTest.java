@@ -19,11 +19,15 @@ import be.elevenways.zenit.common.orm.field.TextSearchable;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -62,6 +66,13 @@ class AdminListPresentationTest extends HohenheimTestBase {
     /** The peers this wave gave an explicit spec where the derived one used to serve. */
     private static final List<String> NEW_TABLE_SPEC_SLUGS =
         List.of("access-lists", "auth-providers", "notifications", "bans");
+
+    /** An active ?q= expression: an active narrowing is what forces the folded filter bar open. */
+    private static final String FORCING_QUERY =
+        URLEncoder.encode("name contains \"wavea\"", StandardCharsets.UTF_8);
+
+    /** The class plumage's pl-select puts on the create dialog it hosts, only when it offers one. */
+    private static final String CREATE_DIALOG = "pl-select-create-dialog";
 
     @Test
     void everyResourceDeclarationSurvivesRegistration() throws Exception {
@@ -246,8 +257,11 @@ class AdminListPresentationTest extends HohenheimTestBase {
         seed();
 
         // 1. Hosts: the ruling that started this wave. A handful of servers never needs a
-        //    rule builder, saved views or a column gear.
-        String hosts = adminGet("/admin/servers").body();
+        //    rule builder, saved views or a column gear. The advanced disclosure lives in
+        //    the FOLDED filter bar (zenit-cms 155b9bc), which a pristine server render
+        //    leaves out entirely; an active ?q= narrowing forces the bar open, so both this
+        //    step and the positive control in step 4 read a render where it COULD appear.
+        String hosts = adminGet("/admin/servers?q=" + FORCING_QUERY).body();
         assertThat(hosts).as("step 1: the hosts list renders").contains("cms-list-card");
         assertThat(hosts).as("step 1: hosts offer no advanced filter")
             .doesNotContain("data-cms-advanced-toggle");
@@ -270,7 +284,9 @@ class AdminListPresentationTest extends HohenheimTestBase {
 
         // 4. The positive control: sites keep all four, so steps 1 and 3 are proving a
         //    per-resource DECLARATION and not that the framework stopped rendering chrome.
-        String sites = adminGet("/admin/sites").body();
+        String sites = adminGet("/admin/sites?q=" + FORCING_QUERY).body();
+        assertThat(sites).as("step 4: the forced filter bar renders on sites")
+            .contains("id=\"cms-list-filter-bar\"");
         assertThat(sites).as("step 4: sites keep the advanced filter")
             .contains("data-cms-advanced-toggle");
         assertThat(sites).as("step 4: sites keep saved views")
@@ -279,17 +295,28 @@ class AdminListPresentationTest extends HohenheimTestBase {
             .contains("data-cms-columns-toggle");
 
         // 5. The instance create form's HOST pick offers no inline create: a host is
-        //    admitted, preflighted and trusted, never minted from inside another form.
+        //    admitted, preflighted and trusted, never minted from inside another form. The
+        //    picker HOSTS its own create dialog since zenit-forms 66fa5ed, so each pick is
+        //    read off its own pl-select element.
         String instanceForm = adminGet("/admin/instances/new").body();
-        assertThat(instanceForm).as("step 5: the instance create form renders its host pick")
-            .contains("name=\"server_id\"");
-        assertThat(instanceForm).as("step 5: and that pick has no create dialog")
-            .doesNotContain("data-zf-chooser-dialog=\"server_id\"");
+        String hostPick = pickMarkup(instanceForm, "server_id");
+        assertThat(hostPick).as("step 5: the instance create form renders its host pick")
+            .isNotEmpty();
+        assertThat(hostPick).as("step 5: and that pick has no create dialog")
+            .doesNotContain(CREATE_DIALOG);
 
         // 6. A pick left alone in the SAME form still offers it, so step 5 proves the
         //    per-entry off-switch rather than a form that lost inline create wholesale.
-        assertThat(instanceForm).as("step 6: the environment pick keeps inline create")
-            .contains("data-zf-chooser-dialog=\"environment_id\"");
+        assertThat(pickMarkup(instanceForm, "environment_id"))
+            .as("step 6: the environment pick keeps inline create")
+            .contains(CREATE_DIALOG);
+    }
+
+    /** @return the server-rendered pl-select for the named pick, empty when there is none */
+    private static String pickMarkup(String html, String name) {
+        Matcher match = Pattern.compile("<pl-select\\b[^>]*\\sname=\"" + Pattern.quote(name)
+            + "\"[^>]*>.*?</pl-select>", Pattern.DOTALL).matcher(html);
+        return match.find() ? match.group() : "";
     }
 
     /** Idempotent fixtures: this class shares its server, so every seed is find-or-create. */

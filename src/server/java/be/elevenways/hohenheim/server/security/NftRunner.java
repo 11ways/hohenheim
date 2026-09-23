@@ -6,12 +6,8 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 /**
  * THE {@code nft} invocation seam of the application: one interface, one production
@@ -40,6 +36,14 @@ public interface NftRunner {
      */
     @NonNull Result run(@NonNull List<String> nftArgs, @Nullable String stdin);
 
+    /**
+     * Which kernel this runner programs; two runners with the same answer mutate the same
+     * nftables tables, which is what {@link NftChains} serializes on.
+     */
+    default @NonNull String kernel() {
+        return "local";
+    }
+
     /** Longer budget for the ssh lane: connection setup rides the same clock. */
     long SSH_TIMEOUT_SECONDS = 15;
 
@@ -59,11 +63,20 @@ public interface NftRunner {
         // is MODE local by construction (incus_url is its transport) and still runs its
         // workloads on a machine whose kernel we must be able to read.
         if (ServerModel.hasSshLane(server)) {
-            return (args, stdin) -> {
-                List<String> argv = new ArrayList<>(HostKeys.sshArgv(server,
-                    List.of("sudo", "-n", "--", "nft")));
-                argv.addAll(args);
-                return Sudo.execute(argv, stdin, SSH_TIMEOUT_SECONDS);
+            String kernel = "server:" + server.get(ServerModel.ID);
+            return new NftRunner() {
+                @Override
+                public @NonNull Result run(@NonNull List<String> args, @Nullable String stdin) {
+                    List<String> argv = new ArrayList<>(HostKeys.sshArgv(server,
+                        List.of("sudo", "-n", "--", "nft")));
+                    argv.addAll(args);
+                    return BoundedCommand.run(argv, stdin, SSH_TIMEOUT_SECONDS);
+                }
+
+                @Override
+                public @NonNull String kernel() {
+                    return kernel;
+                }
             };
         }
         return new Sudo();
@@ -94,38 +107,19 @@ public interface NftRunner {
         public @NonNull Result run(@NonNull List<String> nftArgs, @Nullable String stdin) {
             List<String> argv = new ArrayList<>(List.of("/usr/bin/sudo", "-n", "--", "nft"));
             argv.addAll(nftArgs);
-            return execute(argv, stdin, COMMAND_TIMEOUT_SECONDS);
+            return BoundedCommand.run(argv, stdin, COMMAND_TIMEOUT_SECONDS);
         }
 
-        /** Run an argv with an optional stdin body, never blocking longer than the timeout. */
+        /**
+         * Run an arbitrary argv, WITHOUT sudo, never blocking longer than the timeout.
+         *
+         * @deprecated the name lied (it runs ssh-keygen, ssh-keyscan and openssl without
+         *             sudo) and it could hang forever; call {@link BoundedCommand#run}
+         */
+        @Deprecated
         public static @NonNull Result execute(@NonNull List<String> argv, @Nullable String stdin,
                                               long timeoutSeconds) {
-            try {
-                Process process = new ProcessBuilder(argv).start();
-                if (stdin != null) {
-                    try (OutputStream out = process.getOutputStream()) {
-                        out.write(stdin.getBytes(StandardCharsets.UTF_8));
-                    }
-                } else {
-                    process.getOutputStream().close();
-                }
-                // Read both pipes BEFORE waiting: a full pipe buffer deadlocks the child,
-                // which on a 10s timeout looks exactly like "nft hung".
-                String out = new String(process.getInputStream().readAllBytes(),
-                    StandardCharsets.UTF_8);
-                String err = new String(process.getErrorStream().readAllBytes(),
-                    StandardCharsets.UTF_8);
-                if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
-                    process.destroyForcibly();
-                    return new Result(-1, out, "timed out after " + timeoutSeconds + "s");
-                }
-                return new Result(process.exitValue(), out, err);
-            } catch (IOException e) {
-                return new Result(-1, "", String.valueOf(e.getMessage()));
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return new Result(-1, "", "interrupted");
-            }
+            return BoundedCommand.run(argv, stdin, timeoutSeconds);
         }
     }
 }

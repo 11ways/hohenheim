@@ -4,12 +4,11 @@ import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.auth.HostnameAuthority;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
-import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RecordSubpageRegistry;
@@ -22,7 +21,6 @@ import be.elevenways.zenit.common.edit.Nested;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -93,12 +91,7 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
     /** Admins see every record; everyone else only the names they answer for. */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return ctx -> {
-            Criteria scope = ManagePanel.dnsRecordScope(ctx);
-            return scope == null
-                ? AccessDecision.allowAll()
-                : AccessDecision.allow(QueryPredicate.of(scope));
-        };
+        return TenantScopes.DNS_RECORDS.accessFunction();
     }
 
     /**
@@ -219,13 +212,13 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
-        return super.persistRow(resolveZone(coerced, null), accessContext);
+        return super.persistRow(resolveZone(coerced, null, accessContext), accessContext);
     }
 
     @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
-        super.updateRow(existing, resolveZone(coerced, existing), accessContext);
+        super.updateRow(existing, resolveZone(coerced, existing, accessContext), accessContext);
     }
 
     /**
@@ -237,27 +230,40 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
      * commits exactly ONE) resolved an empty name and refused with "no hosted zone contains
      * this name", which is a message about a field the operator never touched.
      *
+     * AIDEV-NOTE: a tenant gets ONE answer for "no hosted zone contains this name" and "a
+     * hosted zone does, but the name is not yours": the write pipeline's own authority
+     * refusal ({@code tenant_record_not_authorized}, on the same field). Answering the
+     * first with its own sentence told a tenant which zones this installation hosts --
+     * type a name, read which refusal came back. The zone-move refusal follows the same
+     * rule: it is only worded as such for a name the principal could author anyway. An
+     * operator on /manage keeps the precise wording; it can list every zone regardless.
+     *
      * @throws Violations when no hosted zone contains the name, or when an edit would move
      *         the row into a different zone (a re-home is a takeover primitive the write
      *         pipeline refuses anyway; refusing it here keeps the row and its owner label
      *         from ever disagreeing)
      */
     private @NonNull Map<String, Object> resolveZone(@NonNull Map<String, Object> coerced,
-                                                     @Nullable Row existing) {
+                                                     @Nullable Row existing,
+                                                     @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
         Object raw = values.get(DnsRecordModel.NAME.getName());
         String fqdn = raw != null ? String.valueOf(raw).trim()
             : existing != null ? absoluteName(existing) : "";
 
+        boolean operator = HohenheimAccess.isAdmin(accessContext);
         ZoneMatch match = hostingZone(fqdn);
         if (match == null) {
             throw Violations.ofField(DnsRecordModel.NAME.getName(), fqdn,
-                CmsSupport.violationText("tenant_record_no_zone"));
+                CmsSupport.violationText(operator ? "tenant_record_no_zone"
+                    : "tenant_record_not_authorized"));
         }
         Integer zoneId = match.zone().get(DnsZoneModel.ID);
         if (existing != null && !zoneId.equals(existing.get(DnsRecordModel.ZONE_ID))) {
+            boolean authorable = HostnameAuthority.canManage(accessContext, fqdn);
             throw Violations.ofField(DnsRecordModel.NAME.getName(), fqdn,
-                CmsSupport.violationText("tenant_zone_frozen"));
+                CmsSupport.violationText(authorable ? "tenant_zone_frozen"
+                    : "tenant_record_not_authorized"));
         }
 
         values.put(DnsRecordModel.NAME.getName(), match.owner());

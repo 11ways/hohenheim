@@ -1,0 +1,10 @@
+Presence of this file opts the project into the protoblast plugin's checkNativeNumberInputs
+and checkNativeNumberInputTemplates compile gates (no Java source and no .hwk template may
+produce a native numeric input -- that control reads the BROWSER's UI locale for its decimal
+separator rather than the page's, so it refuses or misreads what a localized page told the
+reader to type, and nothing objects; render pl-number-input or pl-money-input instead, see
+CheckNativeNumberInputsTask).
+
+Opted in 2026-09-23, when the last native numeric control (the TTL of a secondary zone's
+remote record form) moved to pl-number-input. The guard sees only its declared literal
+shapes; a type reached through a constant or a variable still has to be checked by eye.

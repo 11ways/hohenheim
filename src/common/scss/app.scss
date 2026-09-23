@@ -12,6 +12,7 @@
 // and loses silently regardless of specificity.
 @use 'sass:meta';
 @use 'plumage/responsive' as bp;
+@use 'plumage/mixins' as m;
 
 @layer components {
     @include meta.load-css('hawkeye');
@@ -42,7 +43,7 @@
 
     .hh-rule-path {
         font-variant-numeric: tabular-nums;
-        color: var(--pl-color-muted-foreground);
+        color: var(--pl-color-text-muted);
         min-width: 3ch;
     }
 
@@ -78,10 +79,6 @@
         gap: var(--pl-space-2xs);
     }
 
-    .hh-stack-add-file {
-        text-decoration: none;
-    }
-
     .hh-deploy-error {
         display: flex;
         align-items: baseline;
@@ -105,7 +102,7 @@
         --pl-log-view-max-height: 24rem;
     }
 
-    // Dashboard attention panel
+    // Dashboard onboarding checklist
     .hh-onboarding-lead {
         margin: 0 0 var(--pl-space-md);
         color: var(--pl-color-text-muted);
@@ -143,6 +140,7 @@
         }
     }
 
+    // The data-state values are OnboardingState.key() (bound by DashboardVocabularyDriftTest).
     .hh-onboarding-step[data-state="done"] {
         color: var(--pl-color-text-muted);
         border-color: transparent;
@@ -203,7 +201,8 @@
         margin: 0;
     }
 
-        .hh-attention-list {
+    // Dashboard attention panel
+    .hh-attention-list {
         list-style: none;
         margin: 0;
         padding: 0;
@@ -216,7 +215,7 @@
         border: 1px solid var(--pl-color-border);
         border-left-width: 3px;
         border-radius: var(--pl-radius-md);
-        background: var(--pl-color-surface-muted, var(--pl-color-surface));
+        background: var(--pl-color-surface);
 
         // A round icon chip, tinted by severity, so the state reads at a glance.
         .hh-attention-icon {
@@ -231,20 +230,23 @@
             background: color-mix(in srgb, currentColor 14%, transparent);
         }
 
+        // AIDEV-NOTE: the data-severity values are AttentionSeverity.key(), the one home of the
+        // vocabulary; DashboardVocabularyDriftTest fails a member without a rule here and a rule
+        // without a member.
         &[data-severity="error"] {
             border-left-color: var(--pl-color-destructive);
             .hh-attention-icon { color: var(--pl-color-destructive); }
         }
 
         &[data-severity="warning"] {
-            border-left-color: var(--pl-color-warning, var(--pl-color-primary));
-            .hh-attention-icon { color: var(--pl-color-warning, var(--pl-color-primary)); }
+            border-left-color: var(--pl-color-warning);
+            .hh-attention-icon { color: var(--pl-color-warning); }
         }
 
         // Information, not a fault: the muted chip stays, only the edge says "note".
         &[data-severity="info"] {
-            border-left-color: var(--pl-color-info, var(--pl-color-primary));
-            .hh-attention-icon { color: var(--pl-color-info, var(--pl-color-primary)); }
+            border-left-color: var(--pl-color-info);
+            .hh-attention-icon { color: var(--pl-color-info); }
         }
     }
 
@@ -262,19 +264,18 @@
         border-radius: inherit;
 
         &:hover {
-            background: var(--pl-color-surface-hover, color-mix(in srgb, currentColor 5%, transparent));
+            background: color-mix(in srgb, currentColor 5%, transparent);
         }
 
         &:focus-visible {
-            outline: 2px solid var(--pl-color-focus, var(--pl-color-primary));
-            outline-offset: 2px;
+            @include m.focus-ring(2px);
         }
     }
 
     .hh-attention-body {
         display: flex;
         flex-direction: column;
-        gap: var(--pl-space-3xs, 0.125rem);
+        gap: var(--pl-space-2xs);
         min-width: 0;
         flex: 1;
     }
@@ -337,21 +338,13 @@
 
             code {
                 font-size: var(--pl-font-size-xs);
-                background: var(--pl-color-surface-muted, var(--pl-color-surface));
+                background: var(--pl-color-surface);
                 border: 1px solid var(--pl-color-border);
                 border-radius: var(--pl-radius-sm);
                 padding: var(--pl-space-2xs, 0.125rem) var(--pl-space-xs);
                 overflow-wrap: anywhere;
             }
         }
-    }
-
-    // Persisted process log viewer (site Processes tab)
-    .hh-proclog-content {
-        font-family: var(--pl-font-family-mono, monospace);
-        font-size: var(--pl-font-size-xs);
-        white-space: pre-wrap;
-        overflow-x: auto;
     }
 
     // Host Overview tab (server records), instance Overview and instance Migrate:
@@ -390,7 +383,6 @@
         }
     }
 
-    .hh-overview-host,
     .hh-migrate-source {
         margin: var(--pl-space-xs) 0 0;
     }
@@ -398,7 +390,7 @@
     .hh-disk-unmeasured,
     .hh-migrate-refusal,
     .hh-endpoint-noaddress {
-        color: var(--pl-color-muted-foreground);
+        color: var(--pl-color-text-muted);
         font-size: var(--pl-font-size-sm);
     }
 
@@ -407,27 +399,6 @@
         flex-wrap: wrap;
         align-items: baseline;
         gap: var(--pl-space-xs);
-    }
-
-    .hh-quarantine-banner {
-        display: flex;
-        align-items: flex-start;
-        gap: var(--pl-space-md);
-        border: 2px solid var(--pl-color-destructive);
-        border-radius: var(--pl-radius-md);
-        background: color-mix(in srgb, var(--pl-color-destructive) 8%, transparent);
-        color: var(--pl-color-destructive);
-        padding: var(--pl-space-md);
-        margin-bottom: var(--pl-space-md);
-
-        .hh-quarantine-body p {
-            margin: var(--pl-space-2xs, 0.125rem) 0 0;
-        }
-
-        .hh-quarantine-actions {
-            margin-left: auto;
-            flex: none;
-        }
     }
 
     .hh-host-state {
@@ -464,16 +435,7 @@
         font-size: var(--pl-font-size-xs);
     }
 
-    .hh-state-badges {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: var(--pl-space-sm);
-        margin-bottom: var(--pl-space-sm);
-    }
-
-    .hh-state-actions,
-    .hh-trust-actions {
+    .hh-state-actions {
         display: flex;
         flex-wrap: wrap;
         gap: var(--pl-space-xs);
@@ -507,27 +469,12 @@
         margin-top: var(--pl-space-sm);
     }
 
-    .hh-trust-material {
-        font-family: var(--pl-font-family-mono, monospace);
-        font-size: var(--pl-font-size-xs);
-        background: var(--pl-color-surface-muted, var(--pl-color-surface));
-        border: 1px solid var(--pl-color-border);
-        border-radius: var(--pl-radius-md);
-        padding: var(--pl-space-sm);
-        overflow-x: auto;
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
-        max-height: 12rem;
-        overflow-y: auto;
-    }
-
     .hh-check-detail {
         overflow-wrap: anywhere;
         max-width: 32rem;
     }
 
-    .hh-kernel-state,
-    .hh-posture-ack {
+    .hh-kernel-state {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
@@ -541,49 +488,4 @@
         font-weight: var(--pl-font-weight-medium);
     }
 
-    .hh-capacity-numbers {
-        display: grid;
-        grid-template-columns: auto 1fr;
-        gap: var(--pl-space-2xs, 0.125rem) var(--pl-space-md);
-        margin: var(--pl-space-sm) 0 0;
-
-        dt {
-            font-weight: var(--pl-font-weight-medium);
-            font-size: var(--pl-font-size-sm);
-        }
-
-        dd {
-            margin: 0;
-        }
-    }
-
-    .hh-capacity-unmeasured,
-    .hh-capacity-when,
-    .hh-quarantine-when {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: var(--pl-space-xs);
-    }
-
-    .hh-last-error {
-        display: flex;
-        align-items: baseline;
-        gap: var(--pl-space-xs);
-        color: var(--pl-color-destructive);
-        font-size: var(--pl-font-size-sm);
-    }
-
-    // Zone-file export (DNS zone Zone-file tab)
-    .hh-zone-file {
-        font-family: var(--pl-font-family-mono, monospace);
-        font-size: var(--pl-font-size-xs);
-        background: var(--pl-color-surface-muted, var(--pl-color-surface));
-        border: 1px solid var(--pl-color-border);
-        border-radius: var(--pl-radius-md);
-        padding: var(--pl-space-md);
-        overflow-x: auto;
-        max-height: 24rem;
-        overflow-y: auto;
-    }
 }

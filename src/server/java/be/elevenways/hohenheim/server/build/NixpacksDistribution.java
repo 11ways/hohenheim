@@ -1,10 +1,15 @@
 package be.elevenways.hohenheim.server.build;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.util.FileTrees;
+import be.elevenways.hohenheim.server.util.Tar;
 import be.elevenways.zenit.common.setting.SettingDefinition;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -12,12 +17,13 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.HexFormat;
 import java.util.Locale;
-import java.util.concurrent.TimeUnit;
+import java.util.zip.GZIPInputStream;
 
 /**
  * The control plane's cache of the PINNED nixpacks CLI binary the detection phase runs.
@@ -81,7 +87,7 @@ public final class NixpacksDistribution {
             }
             Files.move(extracted, binary, StandardCopyOption.REPLACE_EXISTING);
         } finally {
-            deleteRecursively(tmpDir);
+            FileTrees.deleteQuietly(tmpDir);
         }
         return dir;
     }
@@ -122,48 +128,30 @@ public final class NixpacksDistribution {
         }
     }
 
-    // Extraction via the system `tar`, the same primitive DockerClient's archive
-    // handling already standardizes on.
+    /**
+     * Pull the one {@code nixpacks} binary out of the (already sha256-verified) release
+     * archive with the in-Java tar reader: only a REGULAR entry of that name counts.
+     */
     private static @NonNull Path extractBinary(byte[] archive, @NonNull Path tmpDir)
             throws IOException {
-        Path tarFile = tmpDir.resolve("archive.tar.gz");
-        Files.write(tarFile, archive);
-        try {
-            Process process = new ProcessBuilder("tar", "-xzf", tarFile.toString(),
-                "-C", tmpDir.toString()).start();
-            if (!process.waitFor(60, TimeUnit.SECONDS)) {
-                process.destroyForcibly();
-                throw new IOException("Extracting the nixpacks archive timed out");
-            }
-            if (process.exitValue() != 0) {
-                throw new IOException("Extracting the nixpacks archive failed (tar exit "
-                    + process.exitValue() + ")");
-            }
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Extracting the nixpacks archive was interrupted");
-        }
-        try (var walk = Files.walk(tmpDir)) {
-            return walk.filter(file -> BINARY_NAME.equals(file.getFileName().toString())
-                    && Files.isRegularFile(file))
-                .findFirst()
-                .orElseThrow(() -> new IOException(
-                    "The nixpacks release archive contains no '" + BINARY_NAME + "' binary"));
-        }
-    }
-
-    private static void deleteRecursively(@NonNull Path root) {
-        try (var walk = Files.walk(root)) {
-            walk.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
-                try {
-                    Files.deleteIfExists(path);
-                } catch (IOException ignored) {
-                    // best-effort temp cleanup
+        Path target = tmpDir.resolve(BINARY_NAME);
+        try (InputStream in = new GZIPInputStream(new ByteArrayInputStream(archive))) {
+            Tar.Reader reader = new Tar.Reader(in);
+            Tar.Entry entry;
+            while ((entry = reader.next()) != null) {
+                String name = entry.name();
+                String base = name.substring(name.lastIndexOf('/') + 1);
+                if (entry.kind() == Tar.Kind.FILE && BINARY_NAME.equals(base)) {
+                    try (OutputStream out = Files.newOutputStream(target,
+                            StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+                        reader.body().transferTo(out);
+                    }
+                    return target;
                 }
-            });
-        } catch (IOException ignored) {
-            // best-effort temp cleanup
+            }
         }
+        throw new IOException("The nixpacks release archive contains no '" + BINARY_NAME
+            + "' binary");
     }
 
     private static @NonNull String sha256Hex(byte[] data) throws IOException {

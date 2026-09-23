@@ -270,6 +270,14 @@ class RuntimeCascadeTest {
                 .as("step 3: and the file").isNull();
             assertThat(Models.get(InstanceTemplateVolumeModel.class).findById(volumeId))
                 .as("step 3: and the volume declaration").isNull();
+
+            // 4. The TRASHED instance is history, not an owner: it outlives the template
+            //    (its backups hang off it) with only the pointer the foreign key forbids
+            //    cleared, so the delete above never reached the constraint.
+            Row trashed = Models.get(InstanceModel.class).findById(instanceId);
+            assertThat(trashed).as("step 4: the trashed instance row is kept").isNotNull();
+            assertThat((Object) trashed.get(InstanceModel.TEMPLATE_ID))
+                .as("step 4: with its template pointer detached").isNull();
         });
     }
 
@@ -308,6 +316,11 @@ class RuntimeCascadeTest {
                 Models.get(InstanceTemplateModel.class).findById(templateId));
             images.delete(images.findById(imageId));
             assertThat(images.findById(imageId)).as("step 4: the image is gone").isNull();
+            Row trashed = Models.get(InstanceModel.class).findById(instanceId);
+            assertThat(trashed).as("step 4: the trashed instance that used it is kept")
+                .isNotNull();
+            assertThat((Object) trashed.get(InstanceModel.RUNTIME_IMAGE_ID))
+                .as("step 4: with only its image pointer detached").isNull();
         });
     }
 

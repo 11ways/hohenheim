@@ -11,7 +11,6 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -19,8 +18,6 @@ import java.util.Map;
  * record-to-target resolution every backup operation funnels through.
  */
 public final class BackupTargetKinds {
-
-    private static final Map<Identifier, BackupTargetKindHandler> HANDLERS = new HashMap<>();
 
     /**
      * Entries arrive via the generated BlastAutoLoadInit; force it so lookups work
@@ -34,17 +31,23 @@ public final class BackupTargetKinds {
 
     /** Compile-time discovery hook (BlastAutoLoadInit). */
     public static void register(BackupTargetKindHandler handler) {
-        Identifier id = handler.typeId();
-        BackupTargetRegistry.REGISTRY.add(id, handler);
-        HANDLERS.put(id, handler);
+        BackupTargetRegistry.REGISTRY.add(handler.typeId(), handler);
     }
 
+    /**
+     * The server half of a stored kind token, read out of THE registry.
+     *
+     * AIDEV-NOTE: there used to be a private handler map beside the registry, filled by the
+     * same register call: two homes for one vocabulary. A registry entry that is not a
+     * server handler (a common-only info) fails closed as "unknown kind".
+     */
     public static @Nullable BackupTargetKindHandler getHandler(@Nullable String typeIdentifier) {
         if (typeIdentifier == null) {
             return null;
         }
         Identifier id = Identifier.tryParse(typeIdentifier);
-        return id != null ? HANDLERS.get(id) : null;
+        return id != null && BackupTargetRegistry.REGISTRY.get(id) instanceof BackupTargetKindHandler handler
+            ? handler : null;
     }
 
     /**

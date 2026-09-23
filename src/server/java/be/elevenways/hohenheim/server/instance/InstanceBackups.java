@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
@@ -17,7 +18,6 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ArtifactDeploys;
-import be.elevenways.hohenheim.server.application.ConvergenceLocks;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ServerService;
@@ -117,31 +117,40 @@ public final class InstanceBackups {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.BACKUPS);
         Row owner = requireRow(instanceId);
         if (InstanceKinds.isReleaseManaged(owner.get(InstanceModel.KIND))) {
-            synchronized (ConvergenceLocks.forApplication(instanceId)) {
-                owner = requireRow(instanceId);
-                Map<String, Object> sourceSettings = owner.get(InstanceModel.SETTINGS)
-                    instanceof Map<?, ?> map ? castSettings(map) : Map.of();
-                if (SiteSources.hasRepository(sourceSettings)
-                        || sourceSettings.containsKey("build_context")) {
-                    throw refusal("instance_backup_failed", owner,
-                        new IOException("Git/build-context application backups cannot reproduce source;"
-                            + " only immutable uploaded artifacts are supported"));
-                }
-                Row serving = ApplicationReleases.ownedServing(instanceId);
-                if (serving == null) {
-                    throw refusal("instance_backup_failed", owner,
-                        new IOException("Application has no serving release to capture"));
-                }
-                final Row authored = owner;
-                int[] result = new int[1];
-                ApplicationReleases.inScopeUnchecked(instanceId, () -> result[0] =
-                    backupResolved(instanceId, targetId, target, authored,
-                        this.instances.resolve(serving.get(InstanceModel.ID)), true));
-                return result[0];
-            }
+            // QUEUED behind a running deploy, as the converge lock it replaces did: the
+            // serving release a backup captures must be the one a finished converge left.
+            return this.instances.operations().exclusive(instanceId,
+                InstanceOperationLock.Contention.QUEUE,
+                () -> backupApplication(instanceId, targetId, target));
         }
-        return backupResolved(instanceId, targetId, target, owner,
-            this.instances.resolve(instanceId), false);
+        return this.instances.operations().exclusive(instanceId,
+            InstanceOperationLock.Contention.REFUSE,
+            () -> backupResolved(instanceId, targetId, target, requireRow(instanceId),
+                this.instances.resolve(instanceId), false));
+    }
+
+    /** The application lane of {@link #backupNow}; the caller holds the application's lock. */
+    private int backupApplication(int instanceId, @Nullable Integer targetId,
+                                  @NonNull BackupTarget target) {
+        Row owner = requireRow(instanceId);
+        Map<String, Object> sourceSettings = owner.get(InstanceModel.SETTINGS)
+            instanceof Map<?, ?> map ? castSettings(map) : Map.of();
+        if (SiteSources.hasRepository(sourceSettings)
+                || sourceSettings.containsKey("build_context")) {
+            throw refusal("instance_backup_failed", owner,
+                new IOException("Git/build-context application backups cannot reproduce source;"
+                    + " only immutable uploaded artifacts are supported"));
+        }
+        Row serving = ApplicationReleases.ownedServing(instanceId);
+        if (serving == null) {
+            throw refusal("instance_backup_failed", owner,
+                new IOException("Application has no serving release to capture"));
+        }
+        int[] result = new int[1];
+        ApplicationReleases.inScopeUnchecked(instanceId, () -> result[0] =
+            backupResolved(instanceId, targetId, target, owner,
+                this.instances.resolve(serving.get(InstanceModel.ID)), true));
+        return result[0];
     }
 
     private int backupResolved(int instanceId, @Nullable Integer targetId,
@@ -172,9 +181,6 @@ public final class InstanceBackups {
 
         String stamp = STAMP.format(Now.instant());
         Path staging = stagingRoot().resolve("backup-" + instanceId + "-" + stamp);
-        List<VolumeSnapshotSupport.CapturedVolume> captured;
-        ImageIdentity image;
-        String payload;
         BackupManifest.ApplicationEntry applicationEntry = null;
         ImageIdentity applicationImage = null;
         Map<String, Path> applicationFiles = new LinkedHashMap<>();
@@ -192,72 +198,79 @@ public final class InstanceBackups {
             }
         }
 
+        // What the capture produced, filled in by the window's work.
+        List<List<VolumeSnapshotSupport.CapturedVolume>> capturedHolder = new ArrayList<>(1);
+        List<ImageIdentity> imageHolder = new ArrayList<>(1);
+        String payload;
         if (nativeSupport != null) {
             // -- capture phase (native lane: LIVE, crash-consistent) ------------
             // The daemon's own atomic export stands in for the stop; the CAPTURING
-            // stamp still gates rival power actions for the operation's duration.
+            // stamp still gates rival power actions for the operation's duration, and a
+            // capture changes no data, so a failed one hands the record back as it was.
             String prior = wasRunning ? InstanceModel.STATUS_RUNNING
                 : InstanceModel.STATUS_STOPPED;
-            long fence = this.instances.leases().requireFence(resolved.serverId());
-            InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
-                resolved.serverId(), fence, InstanceModel.STATUS_CAPTURING,
-                resolved.row().get(InstanceModel.NAME));
+            payload = BackupManifest.PAYLOAD_INSTANCE_EXPORT;
             try {
-                Files.createDirectories(staging);
-                image = nativeSupport.imageIdentity(resolved.spec());
-                Path export = staging.resolve("instance.tar");
-                long size = nativeSupport.exportBackup(resolved.spec(), export,
-                    InstanceSnapshots.maxArchiveBytes(), false);
-                captured = List.of(new VolumeSnapshotSupport.CapturedVolume(
-                    "instance", "/", export, size));
-                payload = BackupManifest.PAYLOAD_INSTANCE_EXPORT;
-            } catch (IOException error) {
+                InstanceMaintenanceWindow.run(this.instances, resolved,
+                    new InstanceMaintenanceWindow.Plan(InstanceModel.STATUS_CAPTURING, false,
+                        prior, false, InstanceMaintenanceWindow.Failure.HAND_BACK),
+                    () -> {
+                        Files.createDirectories(staging);
+                        imageHolder.add(nativeSupport.imageIdentity(resolved.spec()));
+                        Path export = staging.resolve("instance.tar");
+                        long size = nativeSupport.exportBackup(resolved.spec(), export,
+                            InstanceSnapshots.maxArchiveBytes(), false);
+                        capturedHolder.add(List.of(new VolumeSnapshotSupport.CapturedVolume(
+                            "instance", "/", export, size)));
+                    });
+            } catch (IOException | RuntimeException error) {
                 InstanceSnapshots.deleteRecursively(staging);
-                InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
-                    resolved.serverId(), fence, prior,
-                    resolved.row().get(InstanceModel.NAME));
                 failedRow(instanceId, targetId, null, InstanceSnapshots.describe(error));
+                if (error instanceof Violations refused) {
+                    throw refused;
+                }
                 throw refusal("instance_backup_failed", resolved.row(), error);
             }
-            InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
-                resolved.serverId(), fence, prior, resolved.row().get(InstanceModel.NAME));
         } else {
             // -- capture phase (volume lane: COLD) ------------------------------
+            // AIDEV-NOTE: the stop and the restart stay HERE rather than in the window's
+            // plan: an application's serving release that cannot be started again is
+            // stamped error on the APPLICATION record, a policy only this lane has. The
+            // window still owns the protected status, so it can never outlive a failure.
             payload = BackupManifest.PAYLOAD_VOLUME_TARS;
             boolean stopped = false;
-            boolean capturing = false;
             Exception captureFailure = null;
             long fence = this.instances.leases().requireFence(resolved.serverId());
+            ImageIdentity knownImage = applicationImage;
             try {
                 if (wasRunning) {
                     TenantWrites.inAuthorizedOperation(() -> this.instances.stop(runtimeId));
                     stopped = true;
                 }
-                InstanceOperationGuard.stamp(this.instances.leases(), runtimeId,
-                    resolved.serverId(), fence, InstanceModel.STATUS_CAPTURING,
-                    resolved.row().get(InstanceModel.NAME));
-                capturing = true;
-                Files.createDirectories(staging);
-                image = application ? Objects.requireNonNull(applicationImage)
-                    : support.imageIdentity(resolved.spec());
-                captured = support.captureVolumes(resolved.spec(), volumes, staging,
-                    InstanceSnapshots.maxArchiveBytes());
-                if (application && !volumes.keySet().equals(captured.stream()
-                        .map(VolumeSnapshotSupport.CapturedVolume::name)
-                        .collect(java.util.stream.Collectors.toSet()))) {
-                    throw new IOException("Application volume capture is incomplete");
-                }
+                InstanceMaintenanceWindow.run(this.instances, resolved,
+                    new InstanceMaintenanceWindow.Plan(InstanceModel.STATUS_CAPTURING, false,
+                        InstanceModel.STATUS_STOPPED, false,
+                        InstanceMaintenanceWindow.Failure.HAND_BACK),
+                    () -> {
+                        Files.createDirectories(staging);
+                        imageHolder.add(application ? Objects.requireNonNull(knownImage)
+                            : support.imageIdentity(resolved.spec()));
+                        List<VolumeSnapshotSupport.CapturedVolume> volumeTars =
+                            support.captureVolumes(resolved.spec(), volumes, staging,
+                                InstanceSnapshots.maxArchiveBytes());
+                        if (application && !volumes.keySet().equals(volumeTars.stream()
+                                .map(VolumeSnapshotSupport.CapturedVolume::name)
+                                .collect(java.util.stream.Collectors.toSet()))) {
+                            throw new IOException("Application volume capture is incomplete");
+                        }
+                        capturedHolder.add(volumeTars);
+                    });
             } catch (IOException | RuntimeException error) {
                 captureFailure = error;
                 throw refusal("instance_backup_failed", owner,
                     new IOException("Volume capture failed; no complete backup was stored", error));
             } finally {
                 try {
-                    if (capturing) {
-                        InstanceOperationGuard.stamp(this.instances.leases(), runtimeId,
-                            resolved.serverId(), fence, InstanceModel.STATUS_STOPPED,
-                            resolved.row().get(InstanceModel.NAME));
-                    }
                     if (stopped) {
                         TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(runtimeId));
                     }
@@ -284,6 +297,8 @@ public final class InstanceBackups {
                 }
             }
         }
+        List<VolumeSnapshotSupport.CapturedVolume> captured = capturedHolder.get(0);
+        ImageIdentity image = imageHolder.get(0);
 
         // -- archive + upload phase (workload already back up) ------------------
         // AIDEV-NOTE: the controller token leads the object key because a backup TARGET is
@@ -574,49 +589,19 @@ public final class InstanceBackups {
             }
 
             Resolved resolved = this.instances.resolve(newId);
-            long fence = this.instances.leases().requireFence(resolved.serverId());
-            InstanceOperationGuard.stamp(this.instances.leases(), newId, resolved.serverId(),
-                fence, InstanceModel.STATUS_RESTORING, record.get(InstanceModel.NAME));
+            BackupArchive.Opened verified = opened;
             try {
-                // Count what the DATABASE now holds, before a single byte of payload
-                // moves: a re-materialization that wrote less than the manifest declares
-                // must stop the restore, never deploy a workload whose config files or
-                // variables silently did not come back.
-                requireRematerialized(profile, newId);
-                if (BackupManifest.PAYLOAD_INSTANCE_EXPORT.equals(manifest.payload())) {
-                    // Native lane: the daemon rebuilds the whole instance from its own
-                    // export; the deploy below CONVERGES onto it (the incus driver
-                    // never replaces an owned instance from its image).
-                    if (!(resolved.runtime() instanceof NativeSnapshotSupport nativeSupport)) {
-                        throw Violations.ofForm(violationText("backup_payload_mismatch")
-                            .withArg("payload", manifest.payload())
-                            .withArg("kind", manifest.kind()));
-                    }
-                    Map<String, Path> tars = BackupArchive.extractVolumes(opened,
-                        staging.resolve("volumes"));
-                    Path export = tars.get("instance");
-                    if (export == null) {
-                        throw new IOException("Backup archive carries no 'instance'"
-                            + " payload entry for its instance_export manifest");
-                    }
-                    nativeSupport.importBackup(resolved.spec(), export);
-                } else {
-                    VolumeSnapshotSupport support = InstanceSnapshots.requireSupport(resolved);
-                    Map<String, String> volumes = InstanceSnapshots.logicalVolumes(resolved);
-                    resolved.runtime().create(resolved.spec());
-                    Map<String, Path> tars = BackupArchive.extractVolumes(opened,
-                        staging.resolve("volumes"));
-                    support.restoreVolumes(resolved.spec(), volumes, tars);
-                }
+                // A new record has nothing running: the window restores into it, and a
+                // failure holds it in error (a named refusal like backup_payload_mismatch
+                // included), while success starts it through the ordinary deploy funnel.
+                InstanceMaintenanceWindow.run(this.instances, resolved,
+                    new InstanceMaintenanceWindow.Plan(InstanceModel.STATUS_RESTORING, false,
+                        InstanceModel.STATUS_STOPPED, true,
+                        InstanceMaintenanceWindow.Failure.HOLD_ERROR),
+                    () -> restorePayload(profile, newId, manifest, resolved, verified, staging));
             } catch (IOException error) {
-                InstanceOperationGuard.stamp(this.instances.leases(), newId,
-                    resolved.serverId(), fence, InstanceModel.STATUS_ERROR,
-                    record.get(InstanceModel.NAME));
                 throw refusal("instance_restore_failed", record, error);
             }
-            InstanceOperationGuard.stamp(this.instances.leases(), newId, resolved.serverId(),
-                fence, InstanceModel.STATUS_STOPPED, record.get(InstanceModel.NAME));
-            TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(newId));
             Restored restored = new Restored(newId, List.copyOf(notRestored));
             recordRestore(newId, backup.get(InstanceBackupModel.ID), restored);
             Blast.log("BACKUP: restored backup", backup.get(InstanceBackupModel.ID),
@@ -632,6 +617,48 @@ public final class InstanceBackups {
                 }
             }
             InstanceSnapshots.deleteRecursively(staging);
+        }
+    }
+
+    /**
+     * Land a verified archive's payload in a freshly created record: count what the
+     * database re-materialized, then rebuild the workload from the export (native lane)
+     * or create it and restore its volume tars.
+     */
+    private static void restorePayload(@Nullable InstanceProfile profile, int newId,
+                                       @NonNull BackupManifest manifest,
+                                       @NonNull Resolved resolved,
+                                       BackupArchive.@NonNull Opened opened,
+                                       @NonNull Path staging) throws IOException {
+        // Count what the DATABASE now holds, before a single byte of payload moves: a
+        // re-materialization that wrote less than the manifest declares must stop the
+        // restore, never deploy a workload whose config files or variables silently did
+        // not come back.
+        requireRematerialized(profile, newId);
+        if (BackupManifest.PAYLOAD_INSTANCE_EXPORT.equals(manifest.payload())) {
+            // Native lane: the daemon rebuilds the whole instance from its own export;
+            // the deploy after the window CONVERGES onto it (the incus driver never
+            // replaces an owned instance from its image).
+            if (!(resolved.runtime() instanceof NativeSnapshotSupport nativeSupport)) {
+                throw Violations.ofForm(violationText("backup_payload_mismatch")
+                    .withArg("payload", manifest.payload())
+                    .withArg("kind", manifest.kind()));
+            }
+            Map<String, Path> tars = BackupArchive.extractVolumes(opened,
+                staging.resolve("volumes"));
+            Path export = tars.get("instance");
+            if (export == null) {
+                throw new IOException("Backup archive carries no 'instance'"
+                    + " payload entry for its instance_export manifest");
+            }
+            nativeSupport.importBackup(resolved.spec(), export);
+        } else {
+            VolumeSnapshotSupport support = InstanceSnapshots.requireSupport(resolved);
+            Map<String, String> volumes = InstanceSnapshots.logicalVolumes(resolved);
+            resolved.runtime().create(resolved.spec());
+            Map<String, Path> tars = BackupArchive.extractVolumes(opened,
+                staging.resolve("volumes"));
+            support.restoreVolumes(resolved.spec(), volumes, tars);
         }
     }
 
@@ -1000,14 +1027,12 @@ public final class InstanceBackups {
             if (key == null || key.isBlank()) {
                 continue;
             }
-            boolean secret = InstanceVariableModel.KIND_SECRET
-                .equals(variable.get(InstanceVariableModel.KIND));
-            String value = secret
+            // Fail closed: a kind nobody recognizes is carried as a SECRET, never as plain.
+            VariableKind kind = VariableKind.of(variable.get(InstanceVariableModel.KIND));
+            String value = kind.isSecret()
                 ? variable.get(InstanceVariableModel.SECRET_VALUE)
                 : variable.get(InstanceVariableModel.PLAIN_VALUE);
-            variables.add(new VariableEntry(key, secret
-                ? InstanceVariableModel.KIND_SECRET : InstanceVariableModel.KIND_PLAIN,
-                value == null ? "" : value));
+            variables.add(new VariableEntry(key, kind.token(), value == null ? "" : value));
         }
 
         List<FileEntry> files = new ArrayList<>();

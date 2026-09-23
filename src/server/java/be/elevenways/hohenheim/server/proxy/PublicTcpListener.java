@@ -233,7 +233,7 @@ public final class PublicTcpListener implements AutoCloseable {
                 backend.connect(choice.internalAddress(), choice.connectTimeoutMillis());
             } else {
                 backend = BackendConnector.connect(choice.host(), choice.port(),
-                    choice.connectTimeoutMillis(), listener.getLocalPort());
+                    choice.connectTimeoutMillis(), listener.getLocalPort(), choice.publicOnly());
             }
             configure(backend);
             activeSockets.add(backend);

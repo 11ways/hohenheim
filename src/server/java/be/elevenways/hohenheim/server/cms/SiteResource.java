@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimPickRules;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.AccessListModel;
@@ -10,8 +12,6 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
-import be.elevenways.hohenheim.server.proxy.RouteClaims.ClaimConflict;
-import be.elevenways.hohenheim.server.proxy.RouteClaims;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.hohenheim.server.upstream.kinds.DevNamespaceUpstreamKind;
@@ -57,6 +57,8 @@ import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.text.Slugs;
+import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.security.SecureTokens;
@@ -67,7 +69,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -186,18 +187,14 @@ public class SiteResource extends RowResource {
     @Override
     public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
         Map<String, Object> values = new LinkedHashMap<>(formSpec().defaultValues());
-        String kind = conduit.getQueryParam("upstream_kind");
-        if (kind != null && !kind.isEmpty()
-                && UpstreamKinds.REGISTRY.get(Identifier.tryParse(kind)) != null) {
+        String kind = CmsSupport.prefill(conduit, HohenheimParams.UPSTREAM_KIND_PREFILL);
+        if (kind != null && UpstreamKinds.REGISTRY.get(Identifier.tryParse(kind)) != null) {
             values.put(SiteModel.UPSTREAM_KIND.getName(), kind);
         }
-        String instanceId = conduit.getQueryParam("instance_id");
-        if (instanceId != null && !instanceId.isEmpty()) {
-            try {
-                values.put(SiteModel.INSTANCE_ID.getName(), Integer.parseInt(instanceId));
-            } catch (NumberFormatException ignored) {
-                // Malformed prefill: render the bare form.
-            }
+        // A malformed prefill reads as absent: the bare form renders.
+        Integer instanceId = CmsSupport.prefill(conduit, HohenheimParams.INSTANCE_ID_PREFILL);
+        if (instanceId != null) {
+            values.put(SiteModel.INSTANCE_ID.getName(), instanceId);
         }
         return Map.copyOf(values);
     }
@@ -229,7 +226,7 @@ public class SiteResource extends RowResource {
         if (id == null) {
             return null;
         }
-        return CmsRoutes.subpage("admin", slug(), id, new SiteDomainsPage().slug()).toUrl();
+        return CmsRoutes.subpage(HohenheimPanel.SLUG, slug(), id, new SiteDomainsPage().slug()).toUrl();
     }
 
     // AIDEV-NOTE: STATUS is deliberately absent. SiteModel.STATUS declares exactly ONE
@@ -331,7 +328,7 @@ public class SiteResource extends RowResource {
             Row instance = Models.get(InstanceModel.class).findById(instanceId);
             if (instance != null) {
                 instanceName = Models.get(InstanceModel.class).getDisplayTitle(instance);
-                instanceUrl = CmsRoutes.detail("admin", "instances", instanceId).toUrl();
+                instanceUrl = CmsRoutes.detail(HohenheimPanel.SLUG, HohenheimSlugs.INSTANCES, instanceId).toUrl();
             }
         }
 
@@ -350,7 +347,7 @@ public class SiteResource extends RowResource {
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "site"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "site"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "site"); }
-    @Override public @NonNull String slug() { return "sites"; }
+    @Override public @NonNull String slug() { return HohenheimSlugs.SITES; }
     @Override public @NonNull Model model() { return Models.get(SiteModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
@@ -427,16 +424,21 @@ public class SiteResource extends RowResource {
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
-        String hostname = trimmed(values.remove(CREATE_HOSTNAME.getName()));
-        String name = trimmed(values.get("name"));
-        if (name.isEmpty()) {
-            throw Violations.ofField("name", name, CmsSupport.violationText("name_required"));
+        String hostname = Texts.trimmedOrNull(values.remove(CREATE_HOSTNAME.getName()));
+        String name = Texts.trimmedOrNull(values.get("name"));
+        if (name == null) {
+            throw Violations.ofField("name", "", CmsSupport.violationText("name_required"));
         }
-        values.put("slug", slugify(name));
+        // AIDEV-NOTE: zenit's Slugs.slugify replaced a private regex here (2026-09). For an
+        // ASCII name the two are identical; they differ only on a non-ASCII letter, which the
+        // regex DROPPED ("Cafe" with an accent became "caf") and Slugs folds ("cafe"). The slug
+        // is derived once, at create (and clone), and STORED -- nothing re-derives it from the
+        // name -- so every existing site keeps the slug its paths and containers were named by.
+        values.put("slug", Slugs.slugify(name));
         values.put("status", SiteModel.STATUS_ACTIVE);
         normalizeDevNamespace(values, null);
         Object primaryKey = super.persistRow(values, accessContext);
-        if (!hostname.isEmpty() && primaryKey instanceof Integer siteId) {
+        if (hostname != null && primaryKey instanceof Integer siteId) {
             createFirstDomain(siteId, hostname);
         }
         return primaryKey;
@@ -469,7 +471,7 @@ public class SiteResource extends RowResource {
         }
         normalizeDevNamespace(values, existing);
         // The enable invariant is NOT re-checked here: it runs in the SiteModel
-        // write pipeline (installEnableInvariant), which super.updateRow's save
+        // write pipeline (SiteEnableInvariant), which super.updateRow's save
         // funnels through -- one enforcement point for every writer.
         // AIDEV-NOTE: the tls-passthrough refusals are enforced there too, by the
         // SiteModel beforeValidate hook, which reads through partial rows (effective())
@@ -478,123 +480,6 @@ public class SiteResource extends RowResource {
         // a one-entry map it PASSED a combination the row already held -- a duplicate
         // vocabulary that was also the weaker of the two. Do not reintroduce it.
         super.updateRow(existing, values, accessContext);
-    }
-
-    private static volatile boolean enableInvariantInstalled;
-
-    /**
-     * Install THE enable invariant on the SiteModel write pipeline so every writer
-     * of a live transition passes through exactly one check: the admin form, the
-     * toggle action, the delegated /manage save, the generic revision-restore
-     * endpoint, seeds, and any future writer.
-     *
-     * AIDEV-NOTE: this MUST live in the write pipeline, never in the resource layer.
-     * The framework's RESTORE_REVISION endpoint is registered for EVERY revisionable
-     * RowResource -- callable even when the resource hides its revision subpage --
-     * and it restores a snapshot via RevisionableBehaviour.restore -> model.save
-     * DIRECTLY, running no resource-layer hook. A delegated tenant could restore a
-     * formerly-enabled revision after another site took the hostname and silently
-     * seize the route (SiteDispatcher resolves first-wins). A before-write hook is
-     * the one seam every save funnels through. Do NOT move this back into updateRow
-     * / toggleAction as a per-path check -- that is the very bypass this closes.
-     */
-    public static synchronized void installEnableInvariant() {
-        if (enableInvariantInstalled) {
-            return;
-        }
-        enableInvariantInstalled = true;
-        // The scan: produces the specific, localized refusal an operator can act on. It
-        // runs inside the one write transaction SiteModel.save declares, so on the
-        // serialized SQLite engine it cannot go stale and is the authoritative refusal
-        // for overlapping listener sets (see RouteClaims); the claim stamp below feeds
-        // the unique index that backstops identical keys.
-        //
-        // AIDEV-NOTE: beforeVALIDATE, not beforeWrite. Both tiers run inside the same
-        // Schema.beforeWrite pass on EVERY save path (there is no way to reach the
-        // datasource past one but not the other), so the bypass argument above is
-        // unchanged; the split exists so the diagnosis runs before the row is judged and
-        // the authoritative claim runs last, immediately before the datasource write.
-        SiteModel.SCHEMA.addBeforeValidateHook(context -> {
-            Row stored = storedSiteOf(context.getRow());
-            if (stored != null && willBeLive(context.getRow(), stored) && !RouteClaims.isLive(stored)) {
-                refuseConflictingEnable(stored, true);
-            }
-        });
-        // The AUTHORITATIVE claim: rewrites this site's live_route_key column, whose UNIQUE
-        // index is the only thing that can refuse a route to the loser of a simultaneous
-        // enable. Runs on every site write, not just a transition, so a route edited while
-        // the site is live re-claims under its new key.
-        SiteModel.SCHEMA.addBeforeWriteHook(context -> {
-            Row row = context.getRow();
-            Row stored = storedSiteOf(row);
-            if (stored == null) {
-                return;
-            }
-            try {
-                RouteClaims.restamp(stored.get(SiteModel.ID), willBeLive(row, stored));
-            } catch (ClaimConflict conflict) {
-                throw refusalFor(conflict);
-            }
-        });
-    }
-
-    /**
-     * The stored site a write targets, or null for a create -- a site with no id has no
-     * domain rows yet and therefore claims nothing.
-     */
-    private static @Nullable Row storedSiteOf(@Nullable Row row) {
-        if (row == null || !row.has(SiteModel.ID.getName()) || row.get(SiteModel.ID) == null) {
-            return null;
-        }
-        return Models.get(SiteModel.class).findById(row.get(SiteModel.ID));
-    }
-
-    /** Whether the site will route traffic AFTER this write, reading through partial rows. */
-    private static boolean willBeLive(@NonNull Row row, @NonNull Row stored) {
-        Object enabled = row.has(SiteModel.ENABLED.getName())
-            ? row.get(SiteModel.ENABLED) : stored.get(SiteModel.ENABLED);
-        Object deletedAt = row.has(SiteModel.DELETED_AT.getName())
-            ? row.get(SiteModel.DELETED_AT) : stored.get(SiteModel.DELETED_AT);
-        return Boolean.TRUE.equals(enabled) && deletedAt == null;
-    }
-
-    /**
-     * Translate the unique-index refusal into the SAME violation the advisory scan
-     * produces, so a tenant who lost the race is told what happened instead of seeing a
-     * driver error -- the whole point of the constraint is that the loser is TOLD.
-     */
-    private static @NonNull Violations refusalFor(@NonNull ClaimConflict conflict) {
-        Row holder = RouteClaims.holderSiteOf(conflict.getKey());
-        Integer holderId = holder != null ? holder.get(SiteModel.ID) : null;
-        String hostname = RouteClaims.hostnameOf(conflict.getKey());
-        return Violations.ofField("enabled", true,
-            ClaimRefusals.heldBy(holderId, holder,
-                site -> CmsSupport.violationText("enable_route_conflict")
-                    .withArg("hostname", hostname)
-                    .withArg("site", holder != null ? site : "?"),
-                CmsSupport.violationText(ClaimRefusals.ENABLE_HOSTNAME_UNAVAILABLE)
-                    .withArg("hostname", hostname)));
-    }
-
-    /**
-     * THE enable invariant, invoked only from the write-pipeline hook above.
-     *
-     * AIDEV-NOTE: enabling puts a site's domain rows into the global route table, and
-     * sites that do not route are EXEMPT from the cross-site route-identity check -- so a
-     * site staged on someone else's hostname seizes it the moment it goes live. Skips a
-     * site that ALREADY routes so an already-live re-save never self-conflicts; only the
-     * routeless->live transition is validated. Routeless is RouteClaims.isLive, not a
-     * bare enabled check: a soft-deleted site keeps enabled=true, so restoring one is a
-     * transition into the route table exactly like an enable, and an enabled-only guard
-     * would wave it through unchecked.
-     *
-     * @throws Violations when going live would collide with a live site's route
-     */
-    protected static void refuseConflictingEnable(@NonNull Row existing, boolean willBeEnabled) {
-        if (!willBeEnabled || RouteClaims.isLive(existing)) {
-            return;
-        }
-        SiteDomainResource.refuseEnableRouteConflicts(existing.get(SiteModel.ID));
     }
 
     /**
@@ -620,7 +505,7 @@ public class SiteResource extends RowResource {
             CmsSupport.valueOf(coerced, existing, SiteModel.SETTINGS) instanceof Map<?, ?> map
                 ? new HashMap<>((Map<String, Object>) map)
                 : new HashMap<>();
-        if (isBlank(settings.get(DevNamespaceUpstreamKind.REGISTRATION_TOKEN_KEY))) {
+        if (Texts.trimmedOrNull(settings.get(DevNamespaceUpstreamKind.REGISTRATION_TOKEN_KEY)) == null) {
             settings.put(DevNamespaceUpstreamKind.REGISTRATION_TOKEN_KEY,
                 "zdev_" + SecureTokens.randomToken(24));
         }
@@ -820,7 +705,7 @@ public class SiteResource extends RowResource {
             .unavailableWhen(SiteResource::panelLockoutReason)
             .handler((row, ctx) -> {
                 boolean current = Boolean.TRUE.equals(row.get(SiteModel.ENABLED));
-                // No pre-check: the write-pipeline enable invariant (installEnableInvariant)
+                // No pre-check: the write-pipeline enable invariant (SiteEnableInvariant)
                 // runs inside model.save below and throws the enable_route_conflict Violations,
                 // which the row-action handler surfaces as a refusal toast.
                 row.set(SiteModel.ENABLED, !current);
@@ -858,7 +743,7 @@ public class SiteResource extends RowResource {
         String name = site.get(SiteModel.NAME) + " (copy)";
         Row clone = siteModel.createEmptyRow();
         clone.set(SiteModel.NAME, name);
-        clone.set(SiteModel.SLUG, slugify(name));
+        clone.set(SiteModel.SLUG, Slugs.slugify(name));
         clone.set(SiteModel.UPSTREAM_KIND, site.get(SiteModel.UPSTREAM_KIND));
         @SuppressWarnings("unchecked")
         Map<String, Object> clonedSettings = site.get(SiteModel.SETTINGS) != null
@@ -897,7 +782,7 @@ public class SiteResource extends RowResource {
 
         // CmsActionResult.redirect is Uri-typed, so the typed target renders here.
         return CmsActionResult.redirect(new be.elevenways.protoblast.common.http.Uri(
-            CmsRoutes.detail("admin", "sites", newSiteId).toUrl()));
+            CmsRoutes.detail(HohenheimPanel.SLUG, this.slug(), newSiteId).toUrl()));
     }
 
     @Override
@@ -912,18 +797,6 @@ public class SiteResource extends RowResource {
                 new SiteDevSessionsPage()));
         pages.addAll(this.frameworkSubpages());
         return pages;
-    }
-
-    private static @NonNull String slugify(@NonNull String name) {
-        return name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
-    }
-
-    private static @NonNull String trimmed(@Nullable Object value) {
-        return value != null ? String.valueOf(value).trim() : "";
-    }
-
-    private static boolean isBlank(@Nullable Object value) {
-        return value == null || String.valueOf(value).isBlank();
     }
 
     /**

@@ -1,16 +1,24 @@
 package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.net.IpRanges;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
-import be.elevenways.hohenheim.security.IpAddressSyntax;
 
 /**
- * Strict literal IPv4/IPv6 parsing and CIDR matching with NO DNS resolution:
- * untrusted "ip" strings reach the ban paths, and {@code InetAddress.getByName}
- * on a hostname would trigger a lookup, so everything here works on characters only.
+ * Hohenheim's ban-and-allowlist vocabulary over zenit's {@link IpRanges}: the actor key of an
+ * address, allowlist matching and the canonical text of an address or range, with NO DNS
+ * resolution anywhere.
+ *
+ * AIDEV-NOTE: the parsing and the CIDR math are zenit's ({@link IpRanges#parseLiteral},
+ * {@link IpRanges.Range}); this class only adds what bans need on top. Two strictness rules are
+ * kept from the parser this replaced, because untrusted "ip" strings reach the ban paths: the
+ * value is trimmed, and a zone id ({@code fe80::1%eth0}) is REFUSED rather than stripped. One
+ * rule changed on purpose: an IPv4-mapped literal ({@code ::ffff:203.0.113.5}) now folds to its
+ * IPv4 address, where it used to key as the IPv6 network {@code ::/64} and be refused as
+ * loopback, so a mapped client is banned as the IPv4 actor it is.
  */
 public final class IpLiterals {
 
@@ -26,20 +34,27 @@ public final class IpLiterals {
     }
 
     /**
-     * @return the address bytes (4 for IPv4, 16 for IPv6), or null when the
-     *         value is not a strict literal
+     * @return the address bytes (4 for IPv4, 16 for IPv6), or null when the value is not a
+     *         strict literal
      */
     public static byte @Nullable [] parse(@Nullable String value) {
-        return IpAddressSyntax.parse(value);
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty() || trimmed.indexOf('%') >= 0) {
+            return null;
+        }
+        return IpRanges.parseLiteral(trimmed);
     }
 
     /** The IPv6 actor identity: the whole /64 network a single actor controls. */
     public static final int V6_SUBNET_PREFIX = 64;
 
     /**
-     * The ban/scoring key of a literal address: IPv4 stays the exact
-     * (canonical) address, IPv6 collapses to its /64 network in
-     * {@code <network>/64} CIDR form (one v6 actor controls the whole /64).
+     * The ban/scoring key of a literal address: IPv4 stays the exact (canonical) address,
+     * IPv6 collapses to its /64 network in {@code <network>/64} CIDR form (one v6 actor
+     * controls the whole /64).
      *
      * @return the key, or null when the value is not a literal address
      */
@@ -61,9 +76,13 @@ public final class IpLiterals {
     }
 
     /**
-     * The {@code <network>/64} CIDR string of a v6 address's /64: the four head
-     * groups in unpadded lowercase hex followed by {@code ::} (the host half is
-     * zero by construction, so the trailing {@code ::} is always valid).
+     * The {@code <network>/64} CIDR string of a v6 address's /64: the four head groups in
+     * unpadded lowercase hex followed by {@code ::} (the host half is zero by construction,
+     * so the trailing {@code ::} is always valid).
+     *
+     * AIDEV-NOTE: this spelling is the STORED key of every v6 ban row, so it must never
+     * change -- it is deliberately not the RFC 5952 form {@link #format} produces (which would
+     * compress an inner zero run differently, e.g. {@code 2001:0:0:1::/64}).
      */
     public static @NonNull String formatV6Subnet(byte @NonNull [] bytes) {
         StringBuilder out = new StringBuilder();
@@ -82,6 +101,55 @@ public final class IpLiterals {
             return "::/" + V6_SUBNET_PREFIX;
         }
         return out.append("::/").append(V6_SUBNET_PREFIX).toString();
+    }
+
+    /**
+     * The canonical text of an address: dotted quad for IPv4, RFC 5952 for IPv6 (lowercase,
+     * unpadded groups, the longest run of two or more zero groups compressed, the first on a
+     * tie) -- the spelling nft and Incus render back, which a read-back comparison needs.
+     */
+    public static @NonNull String format(byte @NonNull [] bytes) {
+        if (bytes.length == 4) {
+            return formatV4(bytes);
+        }
+        int[] groups = new int[8];
+        for (int i = 0; i < 8; i++) {
+            groups[i] = ((bytes[i * 2] & 0xFF) << 8) | (bytes[i * 2 + 1] & 0xFF);
+        }
+        int bestStart = -1;
+        int bestLength = 1;
+        for (int i = 0; i < 8; ) {
+            if (groups[i] != 0) {
+                i++;
+                continue;
+            }
+            int start = i;
+            while (i < 8 && groups[i] == 0) {
+                i++;
+            }
+            if (i - start > bestLength) {
+                bestStart = start;
+                bestLength = i - start;
+            }
+        }
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < 8; i++) {
+            if (i == bestStart) {
+                out.append("::");
+                i += bestLength - 1;
+                continue;
+            }
+            if (out.length() > 0 && out.charAt(out.length() - 1) != ':') {
+                out.append(':');
+            }
+            out.append(Integer.toHexString(groups[i]));
+        }
+        return out.toString();
+    }
+
+    /** The {@code <address>/<prefix>} text of a range, in the {@link #format} spelling. */
+    public static @NonNull String cidr(IpRanges.@NonNull Range range) {
+        return format(range.network()) + "/" + range.prefixLength();
     }
 
     /**
@@ -105,9 +173,9 @@ public final class IpLiterals {
     }
 
     /**
-     * Whether any v6 entry of the list overlaps the given /64 network: an
-     * address inside it, a wider range containing it, or a narrower range
-     * within it (a protected address inside the /64 vetoes the whole range).
+     * Whether any v6 entry of the list overlaps the given /64 network: an address inside it,
+     * a wider range containing it, or a narrower range within it (a protected address inside
+     * the /64 vetoes the whole range).
      */
     public static boolean listOverlapsV6Subnet(byte @NonNull [] network,
                                                 @Nullable List<String> list) {
@@ -134,7 +202,9 @@ public final class IpLiterals {
             if (ruleBytes == null || ruleBytes.length != 16 || prefix < 0 || prefix > 128) {
                 continue;
             }
-            if (prefixMatches(network, ruleBytes, Math.min(prefix, V6_SUBNET_PREFIX))) {
+            // Both directions of overlap reduce to one test: the entry, cut to at most /64,
+            // contains the /64's network address.
+            if (new IpRanges.Range(ruleBytes, Math.min(prefix, V6_SUBNET_PREFIX)).matches(network)) {
                 return true;
             }
         }
@@ -160,8 +230,8 @@ public final class IpLiterals {
             if (slash >= 0) {
                 warnMalformed(entry, rawList);
             }
-            // No slash and not a literal: a hostname entry, handled by the
-            // background resolver (NeverBanHostnames), never matched here.
+            // No slash and not a literal: a hostname entry, handled by the background
+            // resolver (NeverBanHostnames), never matched here.
             return false;
         }
         int bits = ruleBytes.length * 8;
@@ -172,25 +242,7 @@ public final class IpLiterals {
             warnMalformed(entry, rawList);
             return false;
         }
-        if (ruleBytes.length != address.length) {
-            return false;
-        }
-        return prefixMatches(address, ruleBytes, prefix);
-    }
-
-    private static boolean prefixMatches(byte[] address, byte[] rule, int prefix) {
-        int fullBytes = prefix / 8;
-        for (int i = 0; i < fullBytes; i++) {
-            if (address[i] != rule[i]) {
-                return false;
-            }
-        }
-        int remainder = prefix % 8;
-        if (remainder == 0) {
-            return true;
-        }
-        int mask = (0xFF00 >> remainder) & 0xFF;
-        return (address[fullBytes] & mask) == (rule[fullBytes] & mask);
+        return new IpRanges.Range(ruleBytes, prefix).matches(address);
     }
 
     private static void warnMalformed(@NonNull String entry, @NonNull String rawList) {

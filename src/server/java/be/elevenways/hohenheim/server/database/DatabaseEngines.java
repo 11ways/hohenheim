@@ -5,8 +5,10 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.Secrets;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
+import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
+import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -15,8 +17,11 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -169,6 +174,70 @@ public final class DatabaseEngines {
                     InstanceDatabaseNetworks.reattachForDatabase(databaseId);
                 }
             }
+            reconcileIsolationLogged(engineId);
+        }
+    }
+
+    /**
+     * Re-assert the TENANT ISOLATION of every logical database on one serving shared
+     * engine, as root, through {@link ManagedDatabase.Engine#isolationCommand}.
+     *
+     * AIDEV-NOTE: this is how databases created BEFORE the isolation fixes of 2026-09-23
+     * get repaired, since a migration cannot reach an engine: Postgres engines granted
+     * CONNECT to PUBLIC on every database, and MySQL grants named the database with its
+     * {@code _} unescaped (a wildcard). Every command is idempotent. It runs after each
+     * engine (re)deploy and from the boot-and-hourly {@code ReconcileEngineIsolation}
+     * task, which is what makes a failure reach an operator. An engine-wide command
+     * (Postgres) runs once per call however many records share it.
+     *
+     * @return one line per database whose repair did not take; empty when all held
+     * @throws IOException when the engine is not serving, so nothing could be confirmed
+     */
+    public static @NonNull List<String> reconcileIsolation(int engineId) throws IOException {
+        Row row = require(engineId);
+        EngineHost host = EngineHost.ofEngine(row);
+        ManagedDatabase.LiveStatus live = DatabaseInstances.liveStatus(host);
+        String handle = DatabaseInstances.handleOf(host);
+        if (!live.running() || handle == null) {
+            throw new IOException("Shared engine '" + host.name() + "' is " + live.state()
+                + "; its tenant isolation cannot be confirmed until it serves");
+        }
+        DockerClient docker = new ServerService().clientFor(ServerModel.nameOf(host.serverId()));
+        List<String> failures = new ArrayList<>();
+        Set<List<String>> ran = new HashSet<>();
+        for (Row database : databasesOn(engineId)) {
+            String name = String.valueOf((Object) database.get(DatabaseModel.NAME));
+            String logical = database.get(DatabaseModel.DB_NAME);
+            String user = database.get(DatabaseModel.DB_USER);
+            if (!ManagedDatabase.Engine.isLogicalIdentifier(logical)
+                    || !ManagedDatabase.Engine.isLogicalIdentifier(user)) {
+                failures.add(name + ": its database or user name cannot be carried by the"
+                    + " isolation script");
+                continue;
+            }
+            List<String> command = host.engine().isolationCommand(host.rootUser(), logical, user);
+            if (command == null || !ran.add(command)) {
+                continue;
+            }
+            DockerClient.ExecResult result = docker.exec(handle, command,
+                host.engine().logicalEnv(host.rootPassword(), null));
+            if (result.exitCode() != 0) {
+                failures.add(name + ": exit " + result.exitCode() + ": "
+                    + (result.stderr() + " " + result.stdout()).trim());
+            }
+        }
+        return failures;
+    }
+
+    /** {@link #reconcileIsolation} after a (re)deploy: the task run is what alerts. */
+    private static void reconcileIsolationLogged(int engineId) {
+        try {
+            List<String> failures = reconcileIsolation(engineId);
+            if (!failures.isEmpty()) {
+                Blast.log("DB-ENGINE: isolation repair failed on engine", engineId, "-", failures);
+            }
+        } catch (IOException | RuntimeException e) {
+            Blast.log("DB-ENGINE: isolation of engine", engineId, "not confirmed -", e.getMessage());
         }
     }
 
@@ -193,6 +262,7 @@ public final class DatabaseEngines {
                     InstanceDatabaseNetworks.reattachForDatabase(databaseId);
                 }
             }
+            reconcileIsolationLogged(engineId);
         }
     }
 

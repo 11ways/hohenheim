@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.security.ReputationScore;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
@@ -54,7 +55,7 @@ public final class SpamserviceReputationPage extends PanelPage {
         Map<String, Object> vars = new LinkedHashMap<>();
         vars.put("title", Microcopy.of("reputation").withFilter("scope", "spamservice")
             .resolve(conduit.getLocales(), conduit.getMessageResolver()));
-        vars.put("pageTarget", CmsRoutes.list("admin", SLUG));
+        vars.put("pageTarget", CmsRoutes.list(HohenheimSlugs.ADMIN, SLUG));
         vars.put("ip", ip != null ? ip : "");
         vars.put("error", "");
         vars.put("result", Map.of());

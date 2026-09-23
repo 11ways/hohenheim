@@ -19,7 +19,6 @@ import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
-import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
@@ -47,7 +46,7 @@ import java.util.regex.Pattern;
  * Managed Docker stacks: the record edits desired state only; deploys, stops and
  * rollbacks are explicit row actions so saving a form never restarts containers.
  */
-public class StackResource extends RowResource {
+public class StackResource extends ValidatedRowResource {
 
     /** The list's quick-add entry; the host rides along as a preset. */
     private static final QuickCreateSpec QUICK_CREATE = QuickCreateSpec
@@ -97,7 +96,10 @@ public class StackResource extends RowResource {
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "stack"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "stack"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "stack"); }
-    @Override public @NonNull String slug() { return "stacks"; }
+    /** The peer slug; the service and file resources name it as their parent. */
+    public static final String SLUG = "stacks";
+
+    @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Model model() { return Models.get(StackModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
@@ -168,31 +170,17 @@ public class StackResource extends RowResource {
         return List.of(StackModel.DESCRIPTION);
     }
 
-    @Override
-    public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
-                                      @NonNull AccessContext accessContext) {
-        Map<String, Object> values = CmsSupport.mutable(coerced);
-        validate(values, null);
-        return super.persistRow(values, accessContext);
-    }
-
-    @Override
-    public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
-                          @NonNull AccessContext accessContext) {
-        Map<String, Object> values = CmsSupport.mutable(coerced);
-        validate(values, existing);
-        // AIDEV-NOTE: moving a stack to another host no longer re-keys port claims at
-        // SAVE time -- since the tier lowered, the claims belong to each service's owned
-        // instance and are re-keyed by the next DEPLOY on the new host, which is the only
-        // moment the move is real. A contested port there is a named deploy refusal.
-        super.updateRow(existing, values, accessContext);
-    }
+    // AIDEV-NOTE: moving a stack to another host no longer re-keys port claims at
+    // SAVE time -- since the tier lowered, the claims belong to each service's owned
+    // instance and are re-keyed by the next DEPLOY on the new host, which is the only
+    // moment the move is real. A contested port there is a named deploy refusal.
 
     /** Names become Docker resource names: enforce the safe shape and uniqueness.
      *  Canonical (trimmed) values are written BACK so the stored value is the
      *  validated one -- "web " passing the pattern on its trimmed copy but being
      *  stored raw is how invalid Docker names ship. */
-    private void validate(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
+    @Override
+    protected void validate(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
         String name = trimmedValue(coerced.containsKey("name") ? coerced.get("name")
             : existing != null ? existing.get(StackModel.NAME) : null);
         if (!NAME_PATTERN.matcher(name).matches()) {

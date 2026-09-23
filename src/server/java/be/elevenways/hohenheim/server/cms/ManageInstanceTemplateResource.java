@@ -1,14 +1,13 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
-import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
@@ -76,9 +75,7 @@ public final class ManageInstanceTemplateResource extends InstanceTemplateResour
     /** Admins see the whole catalog; everyone else only what an operator approved. */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return ctx -> HohenheimAccess.isAdmin(ctx)
-            ? AccessDecision.allowAll()
-            : AccessDecision.allow(QueryPredicate.of(InstanceTemplateModel.APPROVED_AT.isNotNull()));
+        return TenantScopes.INSTANCE_TEMPLATES.accessFunction();
     }
 
     @Override public @NonNull List<RelatedPage> relatedPages() { return List.of(); }
@@ -99,7 +96,7 @@ public final class ManageInstanceTemplateResource extends InstanceTemplateResour
             // A CMS route PLUS a query parameter: composed off CmsEndpoints, since
             // CmsRoutes returns the RouteTarget interface (no with(...)).
             .url(row -> new Uri(CmsEndpoints.LIST
-                .with(CmsEndpoints.PANEL_PARAM, "manage")
+                .with(CmsEndpoints.PANEL_PARAM, HohenheimSlugs.MANAGE)
                 .with(CmsEndpoints.RESOURCE_PARAM, "instances-from-template")
                 .with(HohenheimParams.FROM_TEMPLATE_TEMPLATE,
                     row.get(InstanceTemplateModel.ID)).toUrl()))

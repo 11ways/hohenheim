@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -98,13 +99,11 @@ public class BackupDatabases extends ScheduledTask {
             } catch (Exception e) {
                 failures.add(db.name() + ": " + e.getMessage());
                 Blast.log("TASK: BackupDatabases failed for", db.name(), ":", e.getMessage());
-                try {
-                    Alerts.send(NotificationEvents.BACKUP_FAILED,
-                        "Database backup failed: " + db.name(),
-                        "The scheduled backup of '" + db.name() + "' failed: " + e.getMessage());
-                } catch (Exception notifyError) {
-                    Blast.log("TASK: could not send backup-failure notification -", notifyError.getMessage());
-                }
+                Alerts.trySend(NotificationEvents.BACKUP_FAILED,
+                    Microcopy.of("database_backup_failed_subject").withFilter("scope", "alert")
+                        .withArg("name", db.name()),
+                    Microcopy.of("database_backup_failed_body").withFilter("scope", "alert")
+                        .withArg("name", db.name()).withArg("reason", String.valueOf(e.getMessage())));
             }
         }
         Blast.log("TASK: BackupDatabases backed up", backedUp, "databases");

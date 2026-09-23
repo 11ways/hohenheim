@@ -1,13 +1,15 @@
 package be.elevenways.hohenheim.server.host;
 
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.SystemUsers;
+import be.elevenways.hohenheim.server.process.BoundedProcess;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.io.InterruptedIOException;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -56,12 +58,13 @@ public interface HostShell {
      * Whether snippets already run as root on the host, so a privileged command needs no
      * {@code sudo} in front of it.
      *
-     * AIDEV-NOTE: the controller runs UNPRIVILEGED by design (deploy-native.md: one sudoers
-     * line per privileged binary, never a root service), and the local lane is a plain
+     * AIDEV-NOTE: the controller runs UNPRIVILEGED by design (deploy-native.md: narrow
+     * sudoers grants, never a root service), and the local lane is a plain
      * {@code sh -c} as the service user. The btrfs volume lane, however, is root work by
      * nature -- chown to a workspace's foreign uid, qgroup limits, subvolume delete and
      * snapshot all refuse to an ordinary user -- so a consumer that must act as root asks
-     * this and prefixes {@code sudo -n} itself (see {@code BtrfsVolumeOperations.sudo}).
+     * this and goes through {@link PrivilegedHelper} (legacy: {@code sudo -n} per binary,
+     * see {@code BtrfsVolumeOperations.privileged}).
      * A denied {@code sudo -n} fails loudly with sudo's own text, never silently, which
      * is what turned the starfleet {@code volume_own_failed} into a named sudoers gap.
      * The ssh lane counts as root only when the pinned target logs in as root.
@@ -94,6 +97,9 @@ public interface HostShell {
     /** The process-backed implementation; local argv or the pinned ssh argv. */
     final class ProcessHostShell implements HostShell {
 
+        /** Cap on the captured output of one snippet; the rest is read and discarded. */
+        private static final int MAX_OUTPUT_CHARS = 1024 * 1024;
+
         private final @Nullable Row server;
 
         ProcessHostShell(@Nullable Row server) {
@@ -106,7 +112,7 @@ public interface HostShell {
                 String target = String.valueOf((Object) this.server.get(ServerModel.SSH_TARGET));
                 return target.startsWith("root@");
             }
-            return "root".equals(System.getProperty("user.name"));
+            return SystemUsers.daemonRunsAsRoot();
         }
 
         @Override
@@ -120,38 +126,20 @@ public interface HostShell {
                 return new Result(1, "no ssh lane could be built for this host");
             }
 
+            // AIDEV-NOTE: BoundedProcess drains the output on its own thread and enforces
+            // the deadline with the wait, never a read. Reading inline made the timeout
+            // decorative -- readAllBytes blocks until the pipe closes, so a snippet that never
+            // finished was waited on forever; a runtime-image build runs for minutes through
+            // here, which is where that would have shown up as a thread nobody can free.
             try {
-                Process process = new ProcessBuilder(argv).redirectErrorStream(true).start();
-                // AIDEV-NOTE: the output is drained on its OWN thread. Reading it inline
-                // made the timeout decorative -- readAllBytes blocks until the pipe closes,
-                // so a snippet that never finishes was waited on forever and the
-                // waitFor(...) below was only ever reached by a process that had already
-                // exited. A runtime-image build runs for minutes through here, which is
-                // where that would have shown up as a controller thread nobody can free.
-                StringBuilder collected = new StringBuilder();
-                Thread drain = new Thread(() -> {
-                    try {
-                        collected.append(new String(process.getInputStream().readAllBytes(),
-                            StandardCharsets.UTF_8));
-                    } catch (IOException closed) {
-                        // the stream died with the process; whatever arrived is the output
-                    }
-                }, "host-shell-output");
-                drain.setDaemon(true);
-                drain.start();
-                try {
-                    if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
-                        process.destroyForcibly();
-                        return new Result(1, "the host command timed out");
-                    }
-                    drain.join(TimeUnit.SECONDS.toMillis(2));
-                    return new Result(process.exitValue(),
-                        collected.toString().trim());
-                } finally {
-                    process.destroyForcibly();
+                BoundedProcess.Result result = BoundedProcess.run(
+                    new ProcessBuilder(argv).redirectErrorStream(true),
+                    TimeUnit.SECONDS.toMillis(timeoutSeconds), MAX_OUTPUT_CHARS);
+                if (result.timedOut()) {
+                    return new Result(1, "the host command timed out");
                 }
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
+                return new Result(result.exitCode(), result.stdout().trim());
+            } catch (InterruptedIOException interrupted) {
                 return new Result(1, "the host command was interrupted");
             } catch (IOException failed) {
                 return new Result(1, String.valueOf(failed.getMessage()));
