@@ -209,7 +209,7 @@ class DynamicDnsTest extends HohenheimTestBase {
     /**
      * The mint action's hint names THIS installation's update URL, in every locale.
      *
-     * AIDEV-NOTE: it used to read "point a dyndns2 client at &lt;host&gt;/nic/update", a
+     * AIDEV-NOTE: it used to read "point a dyndns2 client at <host>/nic/update", a
      * literal placeholder the operator was expected to translate into their own hostname.
      * The URL is now an argument resolved from {@code network.main_url} -- the declared
      * home of this installation's public URL -- and the path from the endpoint itself.

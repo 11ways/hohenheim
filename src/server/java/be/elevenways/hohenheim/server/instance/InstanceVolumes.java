@@ -220,7 +220,7 @@ public final class InstanceVolumes {
      * which is precisely what the workspace kind's hardcoded single-entry bind map made
      * them until 2026-08-23 (declared, quota'd, listed in the Volumes tab, never mounted).
      *
-     * @return host path -&gt; container path, in declaration order
+     * @return host path -> container path, in declaration order
      */
     public static @NonNull Map<String, String> declaredMounts(int ownerInstanceId) {
         Map<String, String> mounts = new LinkedHashMap<>();
@@ -261,7 +261,7 @@ public final class InstanceVolumes {
      * Create every declared volume of an owner on its host, apply the quotas, and hand back
      * the bind mounts a spec carries.
      *
-     * @return host path -&gt; container path, in declaration order
+     * @return host path -> container path, in declaration order
      * @throws Violations naming the backend when the host cannot deliver a volume
      */
     public static @NonNull Map<String, String> mountsFor(int ownerInstanceId,

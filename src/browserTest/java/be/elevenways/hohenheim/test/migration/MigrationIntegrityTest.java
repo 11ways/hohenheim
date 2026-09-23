@@ -56,7 +56,7 @@ class MigrationIntegrityTest {
      */
     private static final String DEPLOYED_THROUGH = "010";
 
-    /** Classpath resource holding one {@code <class>&lt;TAB&gt;<digest>} line per pinned migration. */
+    /** Classpath resource holding one {@code <class><TAB><digest>} line per pinned migration. */
     private static final String PIN_RESOURCE = "migration-pins.txt";
 
     @Test

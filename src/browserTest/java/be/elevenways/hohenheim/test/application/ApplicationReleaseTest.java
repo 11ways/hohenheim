@@ -43,13 +43,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * record, each deploy generates a release, a site serves whichever release is serving, a
  * second deploy flips traffic and retires the old one, and a rollback flips back.
  *
- * <p>This is the journey the re-keying exists for. {@code ApplicationReleaseContractTest}
+ * This is the journey the re-keying exists for. {@code ApplicationReleaseContractTest}
  * proves the engine's STATE MACHINE (probe outcomes, drain, retention, boot recovery);
  * this proves the SHAPE the phase-0 design asked for -- that the thing an operator edits
  * and the thing that runs are two records, and that a site is a hostname pointing at the
  * first of them.
  *
- * <p>WHAT THIS CANNOT PROVE, and what the live lane remains the only proof of: real bytes
+ * WHAT THIS CANNOT PROVE, and what the live lane remains the only proof of: real bytes
  * in a real volume. The daemon here is a fake, so a bind mount is a mount SPEC and nothing
  * writes through it. What is asserted below is the property that makes survival possible --
  * that every release of an application mounts the SAME host directory, derived from the

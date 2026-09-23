@@ -6,7 +6,7 @@ import java.util.Map;
 
 /**
  * Parses the {@code {name, value}} environment-variable list stored in site settings (as emitted by
- * the key-value editor) into an ordered name-&gt;value map.
+ * the key-value editor) into an ordered name->value map.
  *
  * @author  Jelle De Loecker
  * @since   0.1.0
@@ -17,7 +17,7 @@ public final class EnvVars {
     }
 
     /**
-     * Ordered name-&gt;value map from the stored value: the canonical map shape, or the
+     * Ordered name->value map from the stored value: the canonical map shape, or the
      * legacy pre-migration {@code List<Map{name,value}>} shape. Blank names are skipped.
      */
     public static Map<String, String> toMap(Object rawList) {

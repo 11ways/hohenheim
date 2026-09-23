@@ -61,10 +61,10 @@ public final class DeployStartPolicy {
     /**
      * The refusal for a lane that must read the STORED status, or null when it may proceed.
      *
-     * <p>Used where the record the operator stopped is not the record that owns a
+     * Used where the record the operator stopped is not the record that owns a
      * container: an application's stop settles on its serving release, and the status that
      * stop wrote is the only evidence of an INTENTION -- a daemon that merely reports the
-     * container down cannot tell a stop from a crash.</p>
+     * container down cannot tell a stop from a crash.
      *
      * @param record the workload record whose stored status the operator's stop wrote,
      *        or null when nothing has ever been deployed (never a refusal: nobody stopped

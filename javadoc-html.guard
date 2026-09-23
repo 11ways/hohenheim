@@ -1,0 +1,4 @@
+Presence of this file opts the project into the protoblast plugin's checkJavadocHtml compile
+gate (an HTML tag or character reference in doc-comment prose is noise in the source, where
+doc comments are read; a paragraph is a blank line, code and element names are {@code ...};
+see CheckJavadocHtmlTask). A deliberate site carries a "javadoc-html: <why>" comment.

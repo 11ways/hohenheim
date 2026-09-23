@@ -14,7 +14,7 @@ import java.util.Set;
  * passes, or it aborts with the missing capability NAMED in the abort message so
  * {@link LiveLaneReport} can report the run's skips instead of letting them read as green.
  *
- * <p>Why a vocabulary rather than a {@code live-required} / {@code live-optional} tag pair:
+ * Why a vocabulary rather than a {@code live-required} / {@code live-optional} tag pair:
  * whether a skip is a DEFECT is a property of the HOST, not of the test. Of the 24 classes
  * that gate in {@code @BeforeAll} (so the whole class skips silently), 17 need an enrolled
  * Incus or remote host that no ordinary machine has -- a hard "required" tag on them would
@@ -23,7 +23,7 @@ import java.util.Set;
  * {@code -Dhohenheim.live.require=docker-socket,netns} fails the run on any skip for those
  * needs, and unset (the default) reports every skip without failing.
  *
- * <p>The pre-pulled-image category is removed rather than reported: a host with a working
+ * The pre-pulled-image category is removed rather than reported: a host with a working
  * daemon and a cold image cache is one command away from running the test, so
  * {@link #requireImage} PULLS. Only a pull that fails is a skip.
  *

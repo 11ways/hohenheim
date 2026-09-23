@@ -70,10 +70,10 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * that it lands as the workload's own uid and not root, that a resize reaches the tty, and
  * that teardown happens exactly once however the session ends.
  *
- * <p>The gates are proved without a daemon in {@code InstanceShellGateTest}; what only
+ * The gates are proved without a daemon in {@code InstanceShellGateTest}; what only
  * this half can say is that the thing behind the gates works, and works as the right
  * identity. The uid claim is asserted from INSIDE the container ({@code id -u}), never
- * from the spec we handed the daemon -- a spec is an intention, not evidence.</p>
+ * from the spec we handed the daemon -- a spec is an intention, not evidence.
  *
  * AIDEV-NOTE: the workload is a purpose-built test KIND rather than the real workspace
  * kind, because a workspace demands a btrfs volume root and a built runtime image (a

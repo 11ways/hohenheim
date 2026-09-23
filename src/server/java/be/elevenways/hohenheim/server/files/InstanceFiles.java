@@ -36,7 +36,7 @@ import java.util.Set;
  * every mutating path asks only for write, so a read-capable tenant is structurally unable
  * to modify anything.
  *
- * <h2>The containment argument</h2>
+ * The containment argument
  *
  * A tenant path reaches a real file through the daemon's archive/exec API, and that route
  * confines NOTHING on its own -- measured against Docker 29.6, not assumed:

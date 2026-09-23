@@ -42,8 +42,8 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * the next deploy, with the UI still showing a quota'd volume. The application tier never
  * had it: its releases carry {@code mountsFor}'s own result.
  *
- * <p>The live halves ({@code WorkspaceDockerLiveTest}, {@code WorkspaceIncusLiveTest})
- * prove the same mounts against real daemons; neither half replaces the other.</p>
+ * The live halves ({@code WorkspaceDockerLiveTest}, {@code WorkspaceIncusLiveTest})
+ * prove the same mounts against real daemons; neither half replaces the other.
  */
 class WorkspaceVolumeMountTest {
 
@@ -218,7 +218,7 @@ class WorkspaceVolumeMountTest {
         return diskSourcesOf(incus);
     }
 
-    /** The disk devices of the last Incus create body, as host source -&gt; container path. */
+    /** The disk devices of the last Incus create body, as host source -> container path. */
     @SuppressWarnings("unchecked")
     private static Map<String, String> diskSourcesOf(FakeIncusTransport incus) {
         Map<String, String> sources = new LinkedHashMap<>();

@@ -26,13 +26,13 @@ import java.util.Map;
  * The operator's own notification inbox: the shipped zenit-comms surface mounted
  * under this panel's route and gate.
  *
- * <p>AIDEV-NOTE: this is where a platform alert becomes VISIBLE with nothing
+ * AIDEV-NOTE: this is where a platform alert becomes VISIBLE with nothing
  * configured. Every alert fans out to the inbox of every administrator
  * ({@code Alerts.administrators}), so the page needs no channel row, no transport
  * and no credential -- which is the whole point, because zero configured channels
  * is exactly the state every production installation was in.
  *
- * <p>Ownership is the module's: {@code CommsInbox} scopes every read to the
+ * Ownership is the module's: {@code CommsInbox} scopes every read to the
  * requesting principal, so this page shows the reader their OWN items and the
  * panel permission is the only gate it needs.
  */

@@ -17,11 +17,11 @@ import java.util.function.Consumer;
  * and resize frames back to it, the deleted process-terminal shape over the driver's
  * attach.
  *
- * <p>A PLAIN console stays OUTPUT ONLY by design: a non-TTY container never echoes, so raw
+ * A PLAIN console stays OUTPUT ONLY by design: a non-TTY container never echoes, so raw
  * keystrokes would be invisible typing -- commands ride the console form's POST endpoint,
  * which also funnels stop-command observation through the hub. Which of the two a viewer
  * gets is the session's fact ({@link InstanceConsoles.Viewer#interactive()}), never a
- * client choice.</p>
+ * client choice.
  */
 public final class InstanceConsoleHandler implements WebSocketHandler {
 

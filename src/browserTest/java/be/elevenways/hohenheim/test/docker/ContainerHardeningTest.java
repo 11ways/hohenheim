@@ -66,8 +66,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * for why that is an image-shape statement and not a trust statement), so 0xcb is what
  * every running container here must show and 0xa80425fb is what none of them may.
  *
- * <h2>How to run it</h2>
- * <pre>zenit-dev test --class ContainerHardeningTest --no-fail-fast</pre>
+ * How to run it
+ *
+ * {@codezenit-dev test --class ContainerHardeningTest --no-fail-fast}
  * ONE command, and the verdict is only half of it: a {@code --class} filter disables the
  * slow-tag exclusion so this class really runs, but on a host with no daemon every method
  * ABORTS and the run is still green. The gate is the SKIP COUNT -- {@code zd_test} returns
@@ -82,13 +83,13 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * declared-need step stayed a skip instead of failing. Until zenit-dev forwards the
  * property, read the count; do not believe a green run that ran nothing.
  *
- * <p>It runs against the LOCAL Docker socket by design -- the boundary under test is
+ * It runs against the LOCAL Docker socket by design -- the boundary under test is
  * {@code ContainerHardening} plus a kernel, and both are the same on any Linux, so an ssh
  * hop to a remote host would add a transport this class does not test and a host that gets
  * reinstalled. A remote daemon is a {@code DockerClient} transport concern with its own
  * live classes.
  *
- * <p>The class stays declared non-hermetic in {@code .zenit-dev.json}: a green receipt
+ * The class stays declared non-hermetic in {@code .zenit-dev.json}: a green receipt
  * here describes a DAEMON, not a source tree, so it must never be reused across a run
  * whose host state changed. Non-hermetic means "never reuse the receipt", not "never
  * run" -- the command above is the lane, and {@code zenit-dev test --all} includes it.

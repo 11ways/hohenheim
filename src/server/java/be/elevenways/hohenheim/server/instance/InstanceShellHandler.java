@@ -17,10 +17,10 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * One interactive shell over the terminal WebSocket: keystrokes up, terminal output down,
  * and the {@code pl-terminal} resize control frame in between.
  *
- * <p>Unlike {@code InstanceConsoleHandler} this is bidirectional by design -- a
+ * Unlike {@code InstanceConsoleHandler} this is bidirectional by design -- a
  * pseudo-terminal echoes, so typing is visible and a POST-per-line form would be the wrong
  * shape. It answers to {@code shell}, never {@code console}: the console reaches the
- * workload's own primary process, this starts a new program.</p>
+ * workload's own primary process, this starts a new program.
  *
  * AIDEV-NOTE: teardown rides the framework. {@code WebSocketTeardown} guarantees
  * {@link #onClose} runs EXACTLY once and ALWAYS -- including a server-initiated close the

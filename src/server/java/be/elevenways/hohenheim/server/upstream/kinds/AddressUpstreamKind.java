@@ -304,7 +304,7 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
     /**
      * Resolve socket-path placeholders from regex-host capture groups.
      *
-     * <p>AIDEV-NOTE: capture-group values originate in the untrusted Host header
+     * AIDEV-NOTE: capture-group values originate in the untrusted Host header
      * ({@code Hostnames.fromHostHeader} does no charset validation), so a substituted value is
      * validated at the tier it is trusted -- here, where it becomes part of a filesystem path.
      * A value carrying a path separator, {@code ..}, NUL or any control character is rejected,

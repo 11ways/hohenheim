@@ -44,19 +44,20 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * WHAT THIS CANNOT PROVE, so nothing reads it as total coverage:
  *
- * <ul>
- *   <li>that a REAL CA accepts our requests. A fake directory cannot discover that Let's
- *       Encrypt tightened a validation, changed a rate limit, or requires a field we omit;
- *       only a staging order against the real service can, and that is deliberately not a
- *       test.</li>
- *   <li>that the CA can REACH us. The HTTP-01 validator calls the challenge responder
- *       in-process, so DNS resolution, port 80 reachability and the proxy's
- *       {@code .well-known} route are not exercised here.</li>
- *   <li>that a DNS-01 value is really queryable on the internet: the publisher is faked, so
- *       the authoritative-DNS serving path and propagation are the DNS tier's own tests.</li>
- *   <li>certificate TRUST. The chain is signed by a throwaway CA nothing trusts; what is
- *       proven is that the product stores, parses and dates a real X.509 chain.</li>
- * </ul>
+ * that a REAL CA accepts our requests. A fake directory cannot discover that Let's
+ * Encrypt tightened a validation, changed a rate limit, or requires a field we omit;
+ * only a staging order against the real service can, and that is deliberately not a
+ * test.
+ *
+ * that the CA can REACH us. The HTTP-01 validator calls the challenge responder
+ * in-process, so DNS resolution, port 80 reachability and the proxy's
+ * {@code .well-known} route are not exercised here.
+ *
+ * that a DNS-01 value is really queryable on the internet: the publisher is faked, so
+ * the authoritative-DNS serving path and propagation are the DNS tier's own tests.
+ *
+ * certificate TRUST. The chain is signed by a throwaway CA nothing trusts; what is
+ * proven is that the product stores, parses and dates a real X.509 chain.
  */
 class AcmeIssuanceContractTest {
 

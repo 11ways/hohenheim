@@ -52,8 +52,8 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * filesystem. Every case here is either a derivation or a refusal that must land BEFORE
  * anything is created, which is the only moment at which a refusal is still worth having.
  *
- * <p>The live halves ({@code WorkspaceDockerLiveTest}, {@code WorkspaceIncusLiveTest})
- * prove the same declarations against real daemons; neither half replaces the other.</p>
+ * The live halves ({@code WorkspaceDockerLiveTest}, {@code WorkspaceIncusLiveTest})
+ * prove the same declarations against real daemons; neither half replaces the other.
  */
 class WorkspaceKindTest {
 

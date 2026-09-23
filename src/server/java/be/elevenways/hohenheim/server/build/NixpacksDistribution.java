@@ -22,10 +22,10 @@ import java.util.concurrent.TimeUnit;
 /**
  * The control plane's cache of the PINNED nixpacks CLI binary the detection phase runs.
  *
- * <p>The binary is the {@code x86_64-unknown-linux-musl} release build: STATIC, so it
+ * The binary is the {@code x86_64-unknown-linux-musl} release build: STATIC, so it
  * runs in any detector image without a libc contract. It is downloaded once per pinned
  * version, verified against the pinned sha256 BEFORE anything is extracted, and cached
- * under the data directory; a hash mismatch is a refusal, never a warning.</p>
+ * under the data directory; a hash mismatch is a refusal, never a warning.
  *
  * AIDEV-NOTE: version and hash are pinned TOGETHER in settings -- bumping the version
  * without the matching hash refuses every nixpacks build rather than trusting whatever

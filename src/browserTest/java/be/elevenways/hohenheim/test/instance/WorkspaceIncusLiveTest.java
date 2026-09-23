@@ -46,11 +46,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * btrfs subvolume with a real quota, an in-container checkout and build, a restart the data
  * survives, and the two delete verbs telling data from container.
  *
- * <p>What only this test can say: that the namespace-id-to-host-uid translation the
+ * What only this test can say: that the namespace-id-to-host-uid translation the
  * controller chowns by is the one the kernel actually enforces, that a file written inside
  * lands on the host owned by that mapped number, and that the image's
  * {@code hohenheim-init} really becomes PID 1. Every one of those is a kernel and daemon
- * behaviour the hermetic {@code WorkspaceKindTest} structurally cannot reach.</p>
+ * behaviour the hermetic {@code WorkspaceKindTest} structurally cannot reach.
  *
  * AIDEV-NOTE: it runs on the SECONDARY live host (nightstrom) so the Docker half of this
  * pair can hold daystrom without the two waves fighting over one machine's 3.9 GiB.

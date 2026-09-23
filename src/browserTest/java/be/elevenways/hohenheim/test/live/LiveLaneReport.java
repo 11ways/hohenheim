@@ -25,12 +25,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * a report that depended on each test remembering to enrol would be exactly the kind of
  * "does less than it claims" it exists to catch.
  *
- * <p>It reports EVERY abort, not only {@link LiveLane}'s: an abort with no
+ * It reports EVERY abort, not only {@link LiveLane}'s: an abort with no
  * {@code [live:...]} marker is listed as UNCLASSIFIED, so a gate that was never migrated
  * still shows up rather than vanishing. Completeness here does not depend on the migration
  * being exhaustive.
  *
- * <p>It also makes a TRUNCATED run unmistakable: a Gradle task timeout kills the worker
+ * It also makes a TRUNCATED run unmistakable: a Gradle task timeout kills the worker
  * JVM mid-flight, Gradle then reports the killed test as SKIPPED with no message, its
  * {@code finally} never runs (live-host credentials leak), and no JUnit event ever fires
  * for it -- so the skip report above is structurally blind to it. This listener therefore
@@ -38,7 +38,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * it only when the test plan finishes, and prints a truncation banner from a shutdown
  * hook when the JVM dies with tests still unaccounted for.
  *
- * <p>Being the one thing that observes a forked JVM's whole lifetime also makes it the
+ * Being the one thing that observes a forked JVM's whole lifetime also makes it the
  * home of the Docker namespace reap ({@link LiveNamespaces}): abandoned namespaces at
  * plan start, this JVM's own at plan finish. The two are the same story from two ends --
  * a run that was killed left both an unsettled test and a network eating address-pool

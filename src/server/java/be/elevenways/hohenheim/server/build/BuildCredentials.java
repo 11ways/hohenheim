@@ -18,17 +18,19 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * The four properties this mechanism actually enforces, none of which is a promise about
  * someone else's system:
- * <ol>
- *   <li>A leased secret is never written to a table, never onto the build operation and
- *       never into a settings map -- it lives only here, in the controller's memory, and
- *       dies with the process. A crashed controller therefore REVOKES by construction.</li>
- *   <li>{@link #resolve} refuses after {@link Lease#revoke()} and after the TTL, so a
- *       token that escapes (a log line, a layer, a leaked env) buys nothing later.</li>
- *   <li>The sandbox materializes a secret at container-create time ONLY, from a token --
- *       there is no path that hands a build a value it did not lease.</li>
- *   <li>{@link BuildLog} redacts every leased VALUE from build output, so the credential
- *       cannot leave through the one channel the tenant reads.</li>
- * </ol>
+ *
+ * A leased secret is never written to a table, never onto the build operation and
+ * never into a settings map -- it lives only here, in the controller's memory, and
+ * dies with the process. A crashed controller therefore REVOKES by construction.
+ *
+ * {@link #resolve} refuses after {@link Lease#revoke()} and after the TTL, so a
+ * token that escapes (a log line, a layer, a leaked env) buys nothing later.
+ *
+ * The sandbox materializes a secret at container-create time ONLY, from a token --
+ * there is no path that hands a build a value it did not lease.
+ *
+ * {@link BuildLog} redacts every leased VALUE from build output, so the credential
+ * cannot leave through the one channel the tenant reads.
  *
  * AIDEV-NOTE: what this does NOT do, stated so nobody reads more into it. Hohenheim
  * shortens the life of ITS LEASE, not of an upstream provider's credential: a Docker Hub

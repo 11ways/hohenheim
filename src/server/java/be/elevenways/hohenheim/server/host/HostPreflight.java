@@ -498,7 +498,7 @@ public final class HostPreflight {
     /**
      * When the stored verdict of one named check was actually PRODUCED.
      *
-     * <p>Since {@link #store} merges rather than replaces, a stored verdict can be older
+     * Since {@link #store} merges rather than replaces, a stored verdict can be older
      * than {@code probed_at}: the last run may never have asked that question. The stamp is
      * what makes that difference visible instead of silently reading as current.
      *

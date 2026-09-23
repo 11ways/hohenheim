@@ -29,34 +29,37 @@ import java.util.stream.Stream;
  * THE sandbox a tenant build runs in -- the most hostile execution surface in the
  * product, and the one place its isolation is argued.
  *
- * <p>Why each thing is unreachable from inside a build:</p>
- * <ul>
- *   <li><b>The Docker daemon.</b> Nothing mounts its socket, and nothing CAN: the socket
- *       is a host path, {@link ContainerHardening} refuses every bind mount structurally
- *       at the single {@code createContainer} funnel, and the builder is daemonless by
- *       requirement ({@code builds.builder_image}) so it never asks for one. The daemon
- *       also listens on that unix socket only; there is no TCP endpoint to reach. And if
- *       an operator gave it one, the network policy's input chain drops packets from the
- *       build's subnet to the host anyway. Three independent reasons, none of which is a
- *       promise the build has to keep.</li>
- *   <li><b>The control plane.</b> Its database and its HTTP surface live on the host or on
- *       a private address. The build sits on its OWN network whose forward chain drops
- *       every RFC1918 destination except its own subnet, and whose input chain drops the
- *       host entirely -- both applied to the kernel and READ BACK before the container
- *       exists.</li>
- *   <li><b>The host.</b> Same input chain, plus drop-ALL capabilities,
- *       no-new-privileges, no host namespaces, no devices, no sysctls, no {@code /proc}
- *       unmasking -- all structural refusals at the funnel, none of them a setting.</li>
- *   <li><b>Other tenants.</b> Every other workload is on some other private network in
- *       RFC1918 space, which the forward chain drops. A {@code container:<id>} namespace
- *       join, the one string that would defeat this, is refused at the funnel.</li>
- *   <li><b>Cloud metadata.</b> {@code 169.254.0.0/16} is denied explicitly by the same
- *       policy, which is why it is a named range and not an afterthought.</li>
- * </ul>
+ * Why each thing is unreachable from inside a build:
  *
- * <p>What a build CAN reach is the public internet, deliberately: fetching base images
+ * The Docker daemon. Nothing mounts its socket, and nothing CAN: the socket
+ * is a host path, {@link ContainerHardening} refuses every bind mount structurally
+ * at the single {@code createContainer} funnel, and the builder is daemonless by
+ * requirement ({@code builds.builder_image}) so it never asks for one. The daemon
+ * also listens on that unix socket only; there is no TCP endpoint to reach. And if
+ * an operator gave it one, the network policy's input chain drops packets from the
+ * build's subnet to the host anyway. Three independent reasons, none of which is a
+ * promise the build has to keep.
+ *
+ * The control plane. Its database and its HTTP surface live on the host or on
+ * a private address. The build sits on its OWN network whose forward chain drops
+ * every RFC1918 destination except its own subnet, and whose input chain drops the
+ * host entirely -- both applied to the kernel and READ BACK before the container
+ * exists.
+ *
+ * The host. Same input chain, plus drop-ALL capabilities,
+ * no-new-privileges, no host namespaces, no devices, no sysctls, no {@code /proc}
+ * unmasking -- all structural refusals at the funnel, none of them a setting.
+ *
+ * Other tenants. Every other workload is on some other private network in
+ * RFC1918 space, which the forward chain drops. A {@code container:<id>} namespace
+ * join, the one string that would defeat this, is refused at the funnel.
+ *
+ * Cloud metadata. {@code 169.254.0.0/16} is denied explicitly by the same
+ * policy, which is why it is a named range and not an afterthought.
+ *
+ * What a build CAN reach is the public internet, deliberately: fetching base images
  * and dependencies is what a build is. The policy is egress-RESTRICTIVE, not
- * egress-closed, and a per-build egress allowlist is a named future tightening.</p>
+ * egress-closed, and a per-build egress allowlist is a named future tightening.
  *
  * AIDEV-NOTE: the network is established and VERIFIED IN THE KERNEL before the container
  * exists, and an unenforceable host REFUSES the build. That is inherited from

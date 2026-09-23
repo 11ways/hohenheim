@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * literal brace, e.g. a doc string mentioning template placeholders) throws
  * {@link MessageParseException} at render time and takes the WHOLE page's form template
  * down with it -- the VM instance form was unrenderable over three help texts that
- * contained a literal <code>{{KEY}}</code>. Literal braces are spelled {@code \{}.
+ * contained a literal {@code {{KEY}}}. Literal braces are spelled {@code \{}.
  */
 class MicrocopyCatalogParsesTest {
 

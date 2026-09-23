@@ -122,8 +122,8 @@ public final class RuntimeImages {
     /**
      * Make this runtime image present on a host, building it there if it is not.
      *
-     * <p>Idempotent and cheap on the common path: an image the host already has costs one
-     * inspect (Docker) or one {@code incus image info} (Incus).</p>
+     * Idempotent and cheap on the common path: an image the host already has costs one
+     * inspect (Docker) or one {@code incus image info} (Incus).
      *
      * @throws Violations naming the failure; a workspace must never start from an image
      *         nobody built
