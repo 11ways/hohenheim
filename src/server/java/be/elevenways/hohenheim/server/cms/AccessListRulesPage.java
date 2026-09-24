@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.access.AccessRuleOption;
 import be.elevenways.hohenheim.access.AccessRuleView;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
-import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -147,9 +146,8 @@ public final class AccessListRulesPage implements RecordScopedPage<Row> {
                                                         @NonNull String pageUrl) {
         ActionStateTranslator.RowActionPresentation presentation =
             this.actions.translateRowActionsForList(this.resource.rowActions(), rule,
-                (actionId, row) -> new Uri(ReturnTarget.bind(
-                    CmsRoutes.invokeRow(panel, this.resource.slug(), ruleId, actionId),
-                    pageUrl).toUrl()),
+                (actionId, row) -> ReturnTarget.bind(
+                    CmsRoutes.invokeRow(panel, this.resource.slug(), ruleId, actionId), pageUrl),
                 accessContext);
         List<InvokeActionState> invokes = new ArrayList<>(presentation.inlineInvokes());
         invokes.addAll(presentation.overflowInvokes());
