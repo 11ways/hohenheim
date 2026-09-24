@@ -7,10 +7,10 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
-import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -55,9 +55,7 @@ class VmFramebufferConsoleLiveTest extends HohenheimTestBase {
 
     @Test
     void framebufferConsoleAgainstARealVmAndRevocationClosesIt1008() throws Exception {
-        LiveIncusHost remote = LiveIncusHost.configured();
-        LiveLane.require(LiveLane.Need.INCUS_HOST, remote != null,
-            "no live incus host enrolled at " + LiveIncusHost.CONFIG);
+        LiveIncusHost remote = LiveIncusHost.requirePrimary();
 
         String enrolledFingerprint = remote.enrollThroughProduct(HOST, "hohenheim-live-fb");
         Row host = Models.get(ServerModel.class).findByName(HOST);
@@ -122,7 +120,7 @@ class VmFramebufferConsoleLiveTest extends HohenheimTestBase {
             remote.forceDelete(handle);
             RecordGrants.revoke(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
                 HohenheimAccess.MANAGE);
-            Models.get(InstanceModel.class).delete(instanceId);
+            HardDeletes.byId(Models.get(InstanceModel.class), instanceId);
             AuthModels.users().delete(userId);
             try {
                 System.out.println("=== cleanup: shared objects -> "

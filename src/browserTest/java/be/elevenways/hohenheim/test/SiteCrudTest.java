@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.*;
@@ -77,7 +78,7 @@ class SiteCrudTest extends HohenheimTestBase {
         response = adminPostForm("/admin/sites/" + siteId + "/delete", confirmed(""));
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
-        Row after = Models.get(SiteModel.class).findById(siteId);
+        Row after = StoredRows.byId(Models.get(SiteModel.class), siteId);
         assertThat(after).isNotNull();
         assertThat((Object) after.get(SiteModel.DELETED_AT))
             .as("delete must soft-delete, not remove the row")

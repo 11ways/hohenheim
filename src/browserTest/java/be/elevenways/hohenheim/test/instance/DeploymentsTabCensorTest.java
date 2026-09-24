@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.InstanceDeploymentsPage;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -73,7 +74,7 @@ class DeploymentsTabCensorTest extends HohenheimTestBase {
             Models.get(ReleaseOperationModel.class).delete(id);
         }
         if (applicationId != null) {
-            Models.get(InstanceModel.class).delete(applicationId);
+            HardDeletes.byId(Models.get(InstanceModel.class), applicationId);
         }
     }
 

@@ -74,8 +74,7 @@ public final class HohenheimHandlers {
         HohenheimEndpoints.API_SITES.setHandler(conduit -> {
             List<Map<String, Object>> sites = new ArrayList<>();
             var proxy = ServerMain.getProxyServer();
-            for (Row site : Models.get(SiteModel.class).find()
-                    .where(SiteModel.DELETED_AT.isNull()).all()) {
+            for (Row site : Models.get(SiteModel.class).find().all()) {
                 Integer siteId = site.get(SiteModel.ID);
                 Map<String, Object> entry = new LinkedHashMap<>();
                 entry.put("id", siteId);

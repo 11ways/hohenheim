@@ -131,6 +131,24 @@ class HostPreflightBatteryTest {
                 .as("step 4: a check outside the Docker battery is dropped").isNull();
             assertThat(HostPreflight.failedRequirementNow(healed))
                 .as("step 4: and nothing stale refuses the host any more").isNull();
+
+            // 5. AN AIR-GAPPED HOST: the pinned digest is not preloaded and the registry is
+            //    unreachable. container_kernel fails before any container is created, and
+            //    its detail names the exact reference the operator must preload.
+            docker.pullRefused = true;
+            int createdBefore = docker.createdImages.size();
+            HostPreflight.Report airGapped = HostPreflight.run(docker, new EchoNft());
+            HostPreflight.Check unobtainable = airGapped.check(HostPreflight.CONTAINER_KERNEL_CHECK);
+            assertThat(unobtainable.status())
+                .as("step 5: an unobtainable probe image fails container_kernel")
+                .isEqualTo(HostPreflight.STATUS_FAIL);
+            assertThat(unobtainable.detail())
+                .as("step 5: naming the exact tag+digest reference to preload")
+                .contains(PinnedImages.ALPINE)
+                .contains("preloaded");
+            assertThat(docker.createdImages)
+                .as("step 5: and no probe container was attempted without its image")
+                .hasSize(createdBefore);
         });
     }
 
@@ -197,6 +215,7 @@ class HostPreflightBatteryTest {
     private static final class ScriptedDocker extends DockerClient {
 
         int execExit = 0;
+        boolean pullRefused;
         String apiVersion = "1.47";
         final List<String> ensuredImages = new ArrayList<>();
         final List<Object> createdImages = new ArrayList<>();
@@ -225,8 +244,12 @@ class HostPreflightBatteryTest {
         }
 
         @Override
-        public void ensureImage(String image, String tag) {
+        public void ensureImage(String image, String tag) throws IOException {
             this.ensuredImages.add(image);
+            if (this.pullRefused) {
+                throw new IOException("Docker image pull for alpine: dial tcp:"
+                    + " lookup registry-1.docker.io: no such host");
+            }
         }
 
         @Override

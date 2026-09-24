@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
@@ -116,8 +117,8 @@ class ProjectOwnershipTest extends HohenheimTestBase {
             variables.delete(row.get(InstanceVariableModel.ID));
         }
         Model instances = Models.get(InstanceModel.class);
-        for (Row row : instances.find().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
-            instances.delete(row.get(InstanceModel.ID));
+        for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
+            HardDeletes.byId(instances, row.get(InstanceModel.ID));
         }
         Model environments = Models.get(EnvironmentModel.class);
         for (Row row : environments.find()

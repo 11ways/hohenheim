@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
@@ -67,8 +68,8 @@ class InstanceQuotaTest extends HohenheimTestBase {
         // Hard delete: the remove-hook pairing releases whatever is still reserved, so
         // this class leaves the shared server's operator bucket exactly as it found it.
         Model instances = Models.get(InstanceModel.class);
-        for (Row row : instances.find().where(InstanceModel.NAME.startsWith(NAME_PREFIX)).all()) {
-            instances.delete(row.get(InstanceModel.ID));
+        for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(NAME_PREFIX)).all()) {
+            HardDeletes.byId(instances, row.get(InstanceModel.ID));
         }
         this.createdIds.clear();
         HohenheimSettings.VALUES.setValue(

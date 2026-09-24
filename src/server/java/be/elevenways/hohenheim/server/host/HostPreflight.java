@@ -290,7 +290,19 @@ public final class HostPreflight {
         int expectedPids = ContainerHardening.pidsLimit();
         try {
             // Pinned by digest: the verdict this probe feeds must not move with a floating tag.
-            docker.ensureImage(PinnedImages.ALPINE, null);
+            try {
+                docker.ensureImage(PinnedImages.ALPINE, null);
+            } catch (IOException | RuntimeException unobtainable) {
+                // AIDEV-NOTE: named, because a host without registry access that only has
+                // some OTHER alpine (alpine:latest) preloaded fails exactly here, and the
+                // operator must learn the one reference to preload (docs/deploy-native.md).
+                checks.add(new Check(CONTAINER_KERNEL_CHECK, STATUS_FAIL, true,
+                    "the probe image " + PinnedImages.ALPINE + " is not on this host and could"
+                        + " not be pulled (" + unobtainable.getMessage() + "); a host without"
+                        + " registry access must have exactly this digest preloaded, see"
+                        + " docs/deploy-native.md"));
+                return;
+            }
             docker.createContainer(name, Map.of(
                 "Image", PinnedImages.ALPINE,
                 "Cmd", List.of("sleep", "60")), ContainerHardening.STRICT);

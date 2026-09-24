@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.test.host.LiveRemoteHost;
-import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -61,14 +61,16 @@ class LiveControlPlaneOffHostBackupTest {
     private static int remoteServerId;
     private static Path workspace;
     private static SqliteDatasource datasource;
+    /** The control-plane database that is OPEN right now, or null inside the total-loss window. */
+    private static SqliteDatasource controlPlane;
+    /** The JVM's default registration before this class replaced it, handed back in tearDown. */
+    private static Datasource previousDefault;
     private static Path dbFile;
     private static Path keyringFile;
 
     @BeforeAll
     static void setUp() throws Exception {
-        remote = LiveRemoteHost.configured();
-        LiveLane.require(LiveLane.Need.REMOTE_HOST, remote != null,
-            "no live remote host enrolled at " + LiveRemoteHost.CONFIG);
+        remote = LiveRemoteHost.requireAvailable();
 
         workspace = Files.createTempDirectory("hh-offhost-control-plane");
         dbFile = workspace.resolve("live/hohenheim.db");
@@ -78,7 +80,9 @@ class LiveControlPlaneOffHostBackupTest {
         FieldEncryption.installKeyring(EncryptionKeyring.loadOrCreate(keyringFile));
         datasource = new SqliteDatasource("jdbc:sqlite:" + dbFile.toAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
+        previousDefault = Datasources.getDefault();
         Datasources.register(Datasources.DEFAULT, datasource);
+        controlPlane = datasource;
 
         // A per-run remote directory, so a crashed run can never make a later one pass on
         // somebody else's artifact.
@@ -102,16 +106,53 @@ class LiveControlPlaneOffHostBackupTest {
         });
     }
 
+    /**
+     * Remove the remote run directory, close what this class opened, and hand the JVM its
+     * default datasource back.
+     *
+     * AIDEV-NOTE: the remote cleanup runs INSIDE the open control-plane database. The pinned
+     * ssh seam keys its known_hosts store on the controller identity, which is a row in that
+     * database; this class used to leave the restored database CLOSED and registered as the
+     * JVM default, so the cleanup resolved the identity through a closed datasource. That only
+     * ever worked while a closed SQLite datasource silently reopened (zenit refuses that now).
+     */
     @AfterAll
     static void tearDown() throws IOException {
-        if (remote != null && remoteBase != null) {
-            remoteExec("rm -rf " + shellQuoted(remoteBase));
+        try {
+            if (remote != null && remoteBase != null) {
+                if (controlPlane != null) {
+                    IOException[] failed = new IOException[1];
+                    Db.run(controlPlane, () -> {
+                        try {
+                            remoteExec("rm -rf " + shellQuoted(remoteBase));
+                        } catch (IOException e) {
+                            failed[0] = e;
+                        }
+                    });
+                    if (failed[0] != null) {
+                        throw failed[0];
+                    }
+                } else {
+                    System.out.println("=== cleanup: the run died between the total loss and the"
+                        + " restore, so no controller identity can pin the remote; "
+                        + remoteBase + " is left on " + remote.target());
+                }
+            }
+        } finally {
+            if (controlPlane != null) {
+                controlPlane.close();
+            }
+            if (datasource != null && datasource != controlPlane) {
+                datasource.close();
+            }
+            if (previousDefault != null) {
+                Datasources.register(Datasources.DEFAULT, previousDefault);
+            } else {
+                Datasources.unregister(Datasources.DEFAULT);
+            }
+            FieldEncryption.installKeyring(null);
+            deleteTree(workspace);
         }
-        if (datasource != null) {
-            datasource.close();
-        }
-        FieldEncryption.installKeyring(null);
-        deleteTree(workspace);
     }
 
     @Test
@@ -188,6 +229,7 @@ class LiveControlPlaneOffHostBackupTest {
 
         // 6. Total loss of the controller: database, sidecars and keyring.
         datasource.close();
+        controlPlane = null;
         Files.deleteIfExists(dbFile);
         Files.deleteIfExists(Path.of(dbFile + "-wal"));
         Files.deleteIfExists(Path.of(dbFile + "-shm"));
@@ -225,21 +267,20 @@ class LiveControlPlaneOffHostBackupTest {
         }
 
         FieldEncryption.installKeyring(EncryptionKeyring.loadOrCreate(keyringFile));
+        // The restored database IS the controller now (its identity row came back with it),
+        // and it stays open until tearDown has cleaned the remote through it.
         SqliteDatasource restored = new SqliteDatasource("jdbc:sqlite:" + dbFile.toAbsolutePath());
         Datasources.register(Datasources.DEFAULT, restored);
-        try {
-            Db.run(restored, () -> {
-                KeyringGuard.runPerRegisteredModels();
-                List<Row> rows = Models.get(NotificationChannelModel.class).find().all();
-                assertThat(rows).as("step 7: the restored database holds the channel").hasSize(1);
-                assertThat((String) rows.get(0).get(NotificationChannelModel.URL))
-                    .as("step 7: and its encrypted webhook URL decrypts to its exact plaintext,"
-                        + " from bytes that only ever existed on the other machine")
-                    .isEqualTo(HOOK_URL);
-            });
-        } finally {
-            restored.close();
-        }
+        controlPlane = restored;
+        Db.run(restored, () -> {
+            KeyringGuard.runPerRegisteredModels();
+            List<Row> rows = Models.get(NotificationChannelModel.class).find().all();
+            assertThat(rows).as("step 7: the restored database holds the channel").hasSize(1);
+            assertThat((String) rows.get(0).get(NotificationChannelModel.URL))
+                .as("step 7: and its encrypted webhook URL decrypts to its exact plaintext,"
+                    + " from bytes that only ever existed on the other machine")
+                .isEqualTo(HOOK_URL);
+        });
     }
 
     // -- plumbing -------------------------------------------------------------

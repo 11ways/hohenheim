@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -18,7 +19,6 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -315,8 +315,9 @@ public final class DatabaseInstances {
 
     /**
      * Abandon the owned engine instance WITHOUT touching the daemon: the operator's
-     * force-destroy decision. The row is SOFT-deleted through save() so the capacity and
-     * quota releases riding the {@code deleted_at} transition fire, and the port claim is
+     * force-destroy decision. The row is SOFT-deleted through the model's delete (its
+     * SoftDeleteBehaviour stamps deleted_at through save()) so the capacity and quota
+     * releases riding the {@code deleted_at} transition fire, and the port claim is
      * PARKED rather than deleted -- a container nobody could confirm may still hold it.
      */
     public static void abandonInstance(@NonNull EngineHost host) {
@@ -327,11 +328,7 @@ public final class DatabaseInstances {
         int instanceId = instance.get(InstanceModel.ID);
         OwnedInstances.inScopeUnchecked(SOURCE, host.ownerModel(), host.ownerId(), () -> {
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
-            Row row = Models.get(InstanceModel.class).findById(instanceId);
-            if (row != null) {
-                row.set(InstanceModel.DELETED_AT, Now.instant());
-                Models.get(InstanceModel.class).save(row);
-            }
+            Models.get(InstanceModel.class).delete(instanceId);
         });
         Blast.log("DB-RUNTIME: abandoned the engine instance of", host.ownerModel(),
             host.ownerId(), "- its container may survive on the host and will surface in"
@@ -505,7 +502,7 @@ public final class DatabaseInstances {
      */
     public static int sealPlaintextEnvironments() {
         int sealed = 0;
-        for (Row instance : Models.get(InstanceModel.class).find()
+        for (Row instance : Models.get(InstanceModel.class).find().withTrashed()
                 .where(InstanceModel.KIND.eq(DatabaseContainerKind.ID.toString())).all()) {
             Map<String, Object> settings = new LinkedHashMap<>();
             if (instance.get(InstanceModel.SETTINGS) instanceof Map<?, ?> stored) {
@@ -532,7 +529,7 @@ public final class DatabaseInstances {
                     environment.putAll(variables.valuesFor(instanceId));
                     variables.storeSecretEnvironment(instanceId, environment);
                     // Re-read right before the whole-row save: a save writes every column.
-                    Row fresh = Models.get(InstanceModel.class).findById(instanceId);
+                    Row fresh = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
                     if (fresh != null) {
                         fresh.set(InstanceModel.SETTINGS, settings);
                         Models.get(InstanceModel.class).save(fresh);

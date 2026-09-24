@@ -58,15 +58,15 @@ final class HohenheimGrantPolicy {
      * delegation path can never see different policies.
      */
     static void declareGrantableModels() {
-        // AIDEV-NOTE: liveWhen is NOT optional here. Sites soft-delete by hand -- the
-        // resource stamps deleted_at through save() without SoftDeleteBehaviour attached --
-        // so a trashed site's row is still physically present. Without this predicate the
-        // framework's presence-only default counted it as alive: its grants survived the
-        // orphan sweep and came straight back the moment the site was restored, handing an
-        // operator authority the delete had already withdrawn. The SAME predicate also
-        // stops a new grant being planted on a trashed site.
-        RecordGrants.declareGrantable(GrantableModel.of(SiteModel.MODEL_ID)
-            .liveWhen(row -> row.get(SiteModel.DELETED_AT) == null));
+        // AIDEV-NOTE: a trashed site must NOT count as alive, or its grants survive the
+        // orphan sweep and come straight back the moment the site is restored, handing an
+        // operator authority the delete had already withdrawn (and a new grant could be
+        // planted on a trashed site). Sites used to soft-delete by hand, which needed a
+        // liveWhen(deleted_at == null) predicate here; they now carry SoftDeleteBehaviour,
+        // whose find hook hides a trashed row from the presence-only default both the
+        // grant path and the sweep read -- so the default IS the liveness rule. Instances
+        // (below) follow the same reasoning.
+        RecordGrants.declareGrantable(GrantableModel.of(SiteModel.MODEL_ID));
         KnownCapabilities.register(SiteModel.MODEL_ID,
             KnownCapability.of(MANAGE)
                 .label(Microcopy.of("manage").withFilter("scope", "capability"))
@@ -142,8 +142,7 @@ final class HohenheimGrantPolicy {
         // exec cannot be listed as an implier at all: it is ADMIN, and KnownCapability
         // refuses ADMIN + impliedBy structurally. "manage does not imply exec" is thus an
         // invariant of the mechanism, not a line someone could edit here by accident.
-        RecordGrants.declareGrantable(GrantableModel.of(InstanceModel.MODEL_ID)
-            .liveWhen(row -> row.get(InstanceModel.DELETED_AT) == null));
+        RecordGrants.declareGrantable(GrantableModel.of(InstanceModel.MODEL_ID));
         KnownCapabilities.register(InstanceModel.MODEL_ID,
             KnownCapability.of(MANAGE)
                 .label(Microcopy.of("manage").withFilter("scope", "capability"))

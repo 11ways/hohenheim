@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.behaviour.RevisionableBehaviour;
+import be.elevenways.zenit.common.orm.behaviour.SoftDeleteBehaviour;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.datasource.context.SaveToDatasource;
@@ -133,6 +134,17 @@ public class SiteModel extends Model {
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
     public static final DateTimeField DELETED_AT = SCHEMA.addField(DateTimeField.builder().name("deleted_at").build());
 
+    /**
+     * Sites are soft-deleted: every delete path stamps {@link #DELETED_AT} (the behaviour adopts
+     * that very field) and every default find, count and updateAll hides trashed rows.
+     *
+     * AIDEV-NOTE: a read that must see a trashed site says so ({@code withTrashed()},
+     * {@code onlyTrashed()}, {@link StoredRows}); a physical removal is {@code forceDelete}. A
+     * {@code Criteria.related} hop INTO sites is NOT filtered by the behaviour (relation
+     * subqueries run no find hooks), so it spells {@code SOFT_DELETE.isNotTrashed()}.
+     */
+    public static final SoftDeleteBehaviour SOFT_DELETE = SCHEMA.addBehaviour(SoftDeleteBehaviour.create());
+
     /** The site-level login gate; the provider's delete refuses while a live site names it. */
     public static final BelongsTo<SiteAuthProviderModel> AUTH_PROVIDER = SCHEMA.addRelation(
         BelongsTo.to(SiteAuthProviderModel.class)
@@ -147,13 +159,11 @@ public class SiteModel extends Model {
         SCHEMA.addBehaviour(RevisionableBehaviour.create(50));
 
     static {
-        // AIDEV-NOTE: Sites are trashed by hand (SiteResource stamps deleted_at through
-        // save(), there is no SoftDeleteBehaviour here), so nothing declares deleted_at
-        // as lifecycle state for us. Without this the CMS revision-restore endpoint
-        // would replay a snapshot taken while the site was live -- deleted_at = null
-        // included -- and silently bring a deleted site, its routes and its
-        // certificates back.
-        SCHEMA.addLifecycleField(DELETED_AT);
+        // AIDEV-NOTE: deleted_at is lifecycle state, declared by SOFT_DELETE (it used to be a
+        // hand-rolled soft delete with an explicit addLifecycleField here). Without that
+        // declaration the CMS revision-restore endpoint would replay a snapshot taken while
+        // the site was live -- deleted_at = null included -- and silently bring a deleted
+        // site, its routes and its certificates back.
 
         // The upstream-shape refusals (instance link, TLS passthrough gates) are NOT
         // registered here: see installUpstreamInvariants.
@@ -238,7 +248,8 @@ public class SiteModel extends Model {
      */
     private static void refuseInstanceLinkMismatch(@NonNull SaveToDatasource context) {
         Row row = context.getRow();
-        if (row == null) return;
+        // A shape rule: a site an older release accepted in this shape must stay deletable.
+        if (row == null || SoftDeleteWrites.onlyTrashes(context)) return;
         Object kind = effective(row, UPSTREAM_KIND);
         if (kind == null) return;
         UpstreamKindInfo info = UpstreamKinds.REGISTRY.get(Identifier.tryParse(kind.toString()));
@@ -261,7 +272,8 @@ public class SiteModel extends Model {
      */
     private static void refuseHttpGatesOnPassthrough(@NonNull SaveToDatasource context) {
         Row row = context.getRow();
-        if (row == null || !UPSTREAM_TLS_PASSTHROUGH.equals(effective(row, UPSTREAM_KIND))) return;
+        if (row == null || SoftDeleteWrites.onlyTrashes(context)
+                || !UPSTREAM_TLS_PASSTHROUGH.equals(effective(row, UPSTREAM_KIND))) return;
         Object authProvider = effective(row, AUTH_PROVIDER_ID);
         if (authProvider != null) {
             throw violation("auth_provider_id", authProvider, "tls_passthrough_no_http_auth");
@@ -281,7 +293,7 @@ public class SiteModel extends Model {
     private static Object effective(Row row, Field<?, ?> field) {
         if (row.has(field.getName())) return row.get(field.getName());
         if (!row.has(ID.getName())) return null;
-        Row stored = Models.get(SiteModel.class).findById(row.get(ID));
+        Row stored = StoredRows.byId(Models.get(SiteModel.class), row.get(ID));
         return stored != null ? stored.get(field.getName()) : null;
     }
 
@@ -310,14 +322,12 @@ public class SiteModel extends Model {
     public List<Row> findEnabled() {
         return find()
             .where(ENABLED.eq(true))
-            .where(DELETED_AT.isNull())
             .orderBy(NAME, SortOrder.ASC)
             .all();
     }
 
     public List<Row> findActive() {
         return find()
-            .where(DELETED_AT.isNull())
             .orderBy(CREATED_AT, SortOrder.DESC)
             .all();
     }

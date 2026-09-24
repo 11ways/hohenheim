@@ -188,7 +188,15 @@ exists on the workstation:
 
 Image id `da4ccc5030d9`, 853 MB disk / 213 MB content, identical to the
 workstation's. `alpine:latest` and `hello-world:latest` are also present:
-the preflight probe pulls alpine, and hello-world was the Docker smoke test.
+the preflight probe pulled alpine, and hello-world was the Docker smoke test.
+
+2026-09-24: the preflight probe no longer runs `alpine:latest`. It runs the
+digest-pinned `alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b`
+(`server/docker/PinnedImages.ALPINE`) and recognizes it only by that digest, so the
+`alpine:latest` above does not satisfy it even when it is the same build. This box
+pulls from Docker Hub, so the next Preflight fetches the pinned digest itself; a
+host without registry access must preload exactly that reference (recipe in
+`deploy-native.md`, "Preflight probe images").
 
 2026-08-30: `hohenheim/node-16:1` and `hohenheim/node-12:1` were loaded the same
 way (`docker save <tag> | gzip -1 | ssh ... 'gunzip | sudo docker load'`, one

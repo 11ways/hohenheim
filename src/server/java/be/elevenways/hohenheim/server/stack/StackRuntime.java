@@ -669,7 +669,7 @@ public class StackRuntime {
         }
         for (Row instance : Models.get(InstanceModel.class).find()
                 .where(InstanceModel.GENERATED_FOR_MODEL.eq(StackServiceModel.MODEL_ID.toString()))
-                .where(InstanceModel.DELETED_AT.isNull()).all()) {
+                .all()) {
             Integer serviceId = instance.get(InstanceModel.GENERATED_FOR_ID);
             if (serviceId == null
                     || Models.get(StackServiceModel.class).findById(serviceId) != null) {

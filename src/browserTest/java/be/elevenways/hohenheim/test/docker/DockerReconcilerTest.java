@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.AttentionSeverity;
@@ -362,7 +363,7 @@ class DockerReconcilerTest {
                 .as("step 3: an unlabelled instance-named container is FOREIGN_COLLIDING")
                 .isEqualTo(Bucket.FOREIGN_COLLIDING);
 
-            Models.get(InstanceModel.class).delete(id);
+            HardDeletes.byId(Models.get(InstanceModel.class), id);
         });
     }
 

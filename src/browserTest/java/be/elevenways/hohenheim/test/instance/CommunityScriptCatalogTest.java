@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
@@ -185,7 +186,7 @@ class CommunityScriptCatalogTest {
                     .as("step 3: and nothing ran -- the install state never left pending")
                     .isEqualTo(InstanceModel.INSTALL_PENDING);
             } finally {
-                Models.get(InstanceModel.class).delete(instanceId);
+                HardDeletes.byId(Models.get(InstanceModel.class), instanceId);
                 Models.get(InstanceTemplateModel.class)
                     .delete(template.get(InstanceTemplateModel.ID));
             }

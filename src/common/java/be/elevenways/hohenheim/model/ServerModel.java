@@ -623,8 +623,7 @@ public class ServerModel extends Model {
             Models.get(DatabaseEngineModel.class).find()
                 .where(DatabaseEngineModel.SERVER_ID.eq(serverId)).count(),
             Models.get(InstanceModel.class).find()
-                .where(InstanceModel.SERVER_ID.eq(serverId))
-                .where(InstanceModel.DELETED_AT.isNull()).count(),
+                .where(InstanceModel.SERVER_ID.eq(serverId)).count(),
             Models.get(PortAllocationModel.class).find()
                 .where(PortAllocationModel.SERVER_ID.eq(serverId)).count());
     }
@@ -635,8 +634,7 @@ public class ServerModel extends Model {
      */
     public static @NonNull QueryBuilder<Row> migratingOnto(int serverId) {
         return Models.get(InstanceModel.class).find()
-            .where(InstanceModel.MIGRATE_TARGET_ID.eq(serverId))
-            .where(InstanceModel.DELETED_AT.isNull());
+            .where(InstanceModel.MIGRATE_TARGET_ID.eq(serverId));
     }
 
     /** The server with this unique name, or null if none. */

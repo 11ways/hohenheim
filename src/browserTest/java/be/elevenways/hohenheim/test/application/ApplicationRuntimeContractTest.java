@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -53,9 +54,9 @@ class ApplicationRuntimeContractTest {
         // outside it); the remove-hook pairing releases any spent quota slot.
         Model instances = Models.get(InstanceModel.class);
         GeneratedRows.sweeping(ApplicationReleases.SOURCE, () -> {
-            for (Row row : instances.find()
+            for (Row row : instances.find().withTrashed()
                     .where(InstanceModel.NAME.startsWith("contract-")).all()) {
-                instances.delete(row.get(InstanceModel.ID));
+                HardDeletes.byId(instances, row.get(InstanceModel.ID));
             }
         });
     }

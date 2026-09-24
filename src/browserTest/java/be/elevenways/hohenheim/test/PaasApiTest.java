@@ -165,11 +165,11 @@ class PaasApiTest extends HohenheimTestBase {
                 .where(BuildOperationModel.FOR_ID.eq(siteAId)).all(),
             BuildOperationModel.ID.getName());
         deleteWhere(Models.get(InstanceModel.class),
-            Models.get(InstanceModel.class).find()
+            Models.get(InstanceModel.class).find().withTrashed()
                 .where(InstanceModel.NAME.startsWith(PREFIX)).all(),
             InstanceModel.ID.getName());
         deleteWhere(Models.get(SiteModel.class),
-            Models.get(SiteModel.class).find()
+            Models.get(SiteModel.class).find().withTrashed()
                 .where(SiteModel.NAME.startsWith(PREFIX)).all(),
             SiteModel.ID.getName());
         deleteWhere(Models.get(EnvironmentModel.class),
@@ -182,9 +182,10 @@ class PaasApiTest extends HohenheimTestBase {
             ProjectModel.ID.getName());
     }
 
+    /** Cleanup means GONE: a soft-deleted model's rows are purged, trashed ones included. */
     private static void deleteWhere(Model model, List<Row> rows, String idField) {
         for (Row row : rows) {
-            model.delete(row.get(idField));
+            HardDeletes.byId(model, row.get(idField));
         }
     }
 

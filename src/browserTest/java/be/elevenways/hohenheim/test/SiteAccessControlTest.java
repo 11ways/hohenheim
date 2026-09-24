@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -182,22 +181,24 @@ class SiteAccessControlTest extends HohenheimTestBase {
         assertThat(HohenheimAccess.canManageSite(principal, siteBId))
             .describedAs("step 7: site B is not").isFalse();
 
-        // AIDEV-NOTE: from here the journey turns to trashing. Sites soft-delete by HAND
-        // (SiteResource stamps deleted_at without SoftDeleteBehaviour), so the row stays
-        // physically present. The framework's presence-only liveness therefore counted a
-        // trashed site as a live grant target: its grants survived the orphan sweep and came
-        // back on restore. The declaration's liveWhen predicate is what makes deleted_at mean
-        // dead to zenit-auth as well.
+        // AIDEV-NOTE: from here the journey turns to trashing. A trashed site's row stays
+        // physically present, and when sites soft-deleted by HAND the framework's
+        // presence-only liveness counted it as a live grant target: its grants survived the
+        // orphan sweep and came back on restore (a liveWhen predicate fixed that). Sites now
+        // carry SoftDeleteBehaviour, whose find hook hides the trashed row from the very read
+        // zenit-auth's liveness makes, so deleted_at means dead there by construction.
         var siteModel = Models.get(SiteModel.class);
 
-        // 9. Trash site A the way the admin resource does it.
+        // 9. Trash site A the way the admin resource does it: the model's (soft) delete.
         Row siteA = siteModel.find().where(SiteModel.ID.eq(siteAId)).first();
-        siteA.set(SiteModel.DELETED_AT, Now.instant());
-        siteModel.save(siteA);
+        siteModel.delete(siteA);
 
-        assertThat(siteModel.find().where(SiteModel.ID.eq(siteAId)).count())
+        assertThat(siteModel.find().withTrashed().where(SiteModel.ID.eq(siteAId)).count())
             .describedAs("step 9: the trashed row must still be physically present")
             .isEqualTo(1);
+        assertThat(siteModel.find().where(SiteModel.ID.eq(siteAId)).count())
+            .describedAs("step 9: and invisible to a default find")
+            .isZero();
         assertThat(HohenheimAccess.canManageSite(principal, siteAId))
             .describedAs("step 9: a trashed site must hold no authority")
             .isFalse();
@@ -209,10 +210,9 @@ class SiteAccessControlTest extends HohenheimTestBase {
             .describedAs("step 10: a trashed site is not a grant target")
             .isInstanceOf(IllegalArgumentException.class);
 
-        // 11. RESTORE: clearing deleted_at must not resurrect the withdrawn authority.
-        Row restored = siteModel.find().where(SiteModel.ID.eq(siteAId)).first();
-        restored.set(SiteModel.DELETED_AT, null);
-        siteModel.save(restored);
+        // 11. RESTORE (the behaviour's own restore) must not resurrect the withdrawn authority.
+        Row restored = siteModel.find().onlyTrashed().where(SiteModel.ID.eq(siteAId)).first();
+        SiteModel.SOFT_DELETE.restore(restored);
 
         assertThat(HohenheimAccess.canManageSite(principal, siteAId))
             .describedAs("step 11: restoring a site must not revive the grants its delete withdrew")

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.preview;
 
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DnsRecordModel;
@@ -287,7 +288,7 @@ class PreviewDeploymentLiveTest {
             .as("step 6: stamped EXPIRED").isEqualTo(PreviewDeploymentModel.STATUS_EXPIRED);
         assertThat((Object) dead.get(PreviewDeploymentModel.DELETED_AT))
             .as("the reached preview is soft-deleted").isNotNull();
-        Row deadInstance = Models.get(InstanceModel.class).findById(instanceId);
+        Row deadInstance = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
         assertThat((Object) deadInstance.get(InstanceModel.DELETED_AT))
             .as("step 6: the instance record is soft-deleted").isNotNull();
         assertThat(containerExists(docker, handle))
@@ -326,7 +327,7 @@ class PreviewDeploymentLiveTest {
     private static Row awaitDeleted(int previewId) {
         return Poll.value("preview " + previewId + " is soft-deleted", Duration.ofSeconds(10),
             Duration.ofMillis(100), () -> {
-                Row row = Models.get(PreviewDeploymentModel.class).findById(previewId);
+                Row row = StoredRows.byId(Models.get(PreviewDeploymentModel.class), previewId);
                 return row != null && row.get(PreviewDeploymentModel.DELETED_AT) != null ? row : null;
             });
     }

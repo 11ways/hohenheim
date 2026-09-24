@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.build.BuildQuota;
@@ -206,7 +207,6 @@ public final class PreviewDeployments {
         Row preview = model.find()
             .where(PreviewDeploymentModel.APPLICATION_ID.eq(applicationId))
             .where(PreviewDeploymentModel.REF.eq(ref))
-            .where(PreviewDeploymentModel.DELETED_AT.isNull())
             .first();
         if (preview != null) {
             // A live preview minted under the legacy label keeps it (see legacyHostnameFor).
@@ -333,7 +333,6 @@ public final class PreviewDeployments {
             Row preview = Models.get(PreviewDeploymentModel.class).find()
                 .where(PreviewDeploymentModel.APPLICATION_ID.eq(applicationId))
                 .where(PreviewDeploymentModel.REF.eq(ref))
-                .where(PreviewDeploymentModel.DELETED_AT.isNull())
                 .first();
             if (preview != null) {
                 destroy(preview.get(PreviewDeploymentModel.ID), reason);
@@ -359,7 +358,7 @@ public final class PreviewDeployments {
         PreviewDeploymentModel model = Models.get(PreviewDeploymentModel.class);
         // Read ONLY to learn the lock key: (application, ref) never change on a row.
         Row keyed = model.findById(previewId);
-        if (keyed == null || keyed.get(PreviewDeploymentModel.DELETED_AT) != null) {
+        if (keyed == null) {
             return;
         }
         int applicationId = intOf(keyed.get(PreviewDeploymentModel.APPLICATION_ID));
@@ -371,16 +370,14 @@ public final class PreviewDeployments {
             // the expiry schedule and soft-deleted the row, orphaning a running container
             // no reclaim would ever find.
             Row preview = model.findById(previewId);
-            if (preview == null || preview.get(PreviewDeploymentModel.DELETED_AT) != null) {
+            if (preview == null) {
                 return;
             }
             try {
                 inScope(previewId, () -> {
                     Integer instanceId = preview.get(PreviewDeploymentModel.INSTANCE_ID);
                     if (instanceId != null) {
-                        Row instance = Models.get(InstanceModel.class).findById(instanceId);
-                        if (instance != null
-                                && instance.get(InstanceModel.DELETED_AT) == null) {
+                        if (Models.get(InstanceModel.class).findById(instanceId) != null) {
                             new InstanceService().destroy(instanceId);
                         }
                     }
@@ -414,8 +411,10 @@ public final class PreviewDeployments {
             preview.set(PreviewDeploymentModel.STATUS,
                 "expired".equals(reason) ? PreviewDeploymentModel.STATUS_EXPIRED
                                          : PreviewDeploymentModel.STATUS_DESTROYED);
-            preview.set(PreviewDeploymentModel.DELETED_AT, Now.instant());
             model.save(preview);
+            // The soft delete is the behaviour's: it stamps deleted_at through save(), so the
+            // quota release and the claim release ride the same transition they always did.
+            model.delete(preview);
             // AIDEV-NOTE: soft delete fires no remove hooks, so the one-shot expiry
             // schedule must die here explicitly (the InstanceService.destroy
             // precedent). When THIS destroy was itself fired by that schedule, the
@@ -438,8 +437,7 @@ public final class PreviewDeployments {
      * were reachable through it.
      */
     public static void destroyForSite(int siteId) {
-        for (Row preview : Models.get(PreviewDeploymentModel.class).find()
-                .where(PreviewDeploymentModel.DELETED_AT.isNull()).all()) {
+        for (Row preview : Models.get(PreviewDeploymentModel.class).find().all()) {
             int previewId = preview.get(PreviewDeploymentModel.ID);
             for (Row domain : generatedDomainsOf(previewId)) {
                 if (Integer.valueOf(siteId).equals(domain.get(SiteDomainModel.SITE_ID))) {
@@ -465,7 +463,6 @@ public final class PreviewDeployments {
     public static @Nullable Row exposingSite(int applicationId) {
         return Models.get(SiteModel.class).find()
             .where(SiteModel.INSTANCE_ID.eq(applicationId))
-            .where(SiteModel.DELETED_AT.isNull())
             .orderBy(SiteModel.ID, SortOrder.ASC)
             .first();
     }
@@ -498,7 +495,7 @@ public final class PreviewDeployments {
      */
     public static int sealPlaintextEnvironments() {
         int sealed = 0;
-        for (Row instance : Models.get(InstanceModel.class).find()
+        for (Row instance : Models.get(InstanceModel.class).find().withTrashed()
                 .where(InstanceModel.GENERATED_FOR_MODEL.eq(
                     PreviewDeploymentModel.MODEL_ID.toString()))
                 .all()) {
@@ -515,7 +512,7 @@ public final class PreviewDeployments {
                     Map<String, String> environment = InstanceVariables.detachEnvironment(settings);
                     new InstanceVariables().storeSecretEnvironment(instanceId, environment);
                     // Re-read right before the whole-row save: a save writes every column.
-                    Row fresh = Models.get(InstanceModel.class).findById(instanceId);
+                    Row fresh = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
                     if (fresh != null) {
                         fresh.set(InstanceModel.SETTINGS, settings);
                         Models.get(InstanceModel.class).save(fresh);
@@ -540,7 +537,7 @@ public final class PreviewDeployments {
     /** The proxy upstream of one preview, or null when it is not serving. */
     public static @Nullable URI upstreamOf(int previewId) {
         Row preview = Models.get(PreviewDeploymentModel.class).findById(previewId);
-        if (preview == null || preview.get(PreviewDeploymentModel.DELETED_AT) != null
+        if (preview == null
                 || !PreviewDeploymentModel.STATUS_RUNNING.equals(
                     preview.get(PreviewDeploymentModel.STATUS))) {
             return null;
@@ -613,7 +610,7 @@ public final class PreviewDeployments {
             Integer instanceId = preview.get(PreviewDeploymentModel.INSTANCE_ID);
             Row instance = instanceId != null
                 ? Models.get(InstanceModel.class).findById(instanceId) : null;
-            if (instance == null || instance.get(InstanceModel.DELETED_AT) != null) {
+            if (instance == null) {
                 instance = Models.get(InstanceModel.class).createEmptyRow();
                 instance.set(InstanceModel.NAME, "preview-" + hostname);
                 instance.set(InstanceModel.KIND,

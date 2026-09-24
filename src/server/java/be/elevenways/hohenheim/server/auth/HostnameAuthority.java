@@ -65,6 +65,7 @@ public final class HostnameAuthority {
         public static @NonNull Snapshot load() {
             List<Row> domains = Models.get(SiteDomainModel.class).find().all();
             Map<Integer, Row> sitesById = new HashMap<>();
+            // LIVE sites only (the soft-delete find hook): a trashed site owns no hostname.
             for (Row site : Models.get(SiteModel.class).find().all()) {
                 sitesById.put(site.get(SiteModel.ID), site);
             }
@@ -104,7 +105,7 @@ public final class HostnameAuthority {
             return snapshot;
         }
 
-        /** @return the site a domain row hangs off, or null when it is gone */
+        /** @return the site a domain row hangs off, or null when it is gone or trashed */
         public @Nullable Row siteOf(@NonNull Row domain) {
             Integer siteId = domain.get(SiteDomainModel.SITE_ID);
             return siteId != null ? this.sitesById.get(siteId) : null;
@@ -123,7 +124,7 @@ public final class HostnameAuthority {
             }
             for (Row domain : this.domains) {
                 Row site = this.siteOf(domain);
-                if (site == null || site.get(SiteModel.DELETED_AT) != null) {
+                if (site == null) {
                     continue;
                 }
                 if (HostnamePatterns.covers(domain.get(SiteDomainModel.HOSTNAME),
@@ -174,7 +175,7 @@ public final class HostnameAuthority {
             List<Row> rows = new ArrayList<>();
             for (Row domain : this.domains) {
                 Row site = this.siteOf(domain);
-                if (site == null || site.get(SiteModel.DELETED_AT) != null) {
+                if (site == null) {
                     continue;
                 }
                 String hostname = domain.get(SiteDomainModel.HOSTNAME);

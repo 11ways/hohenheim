@@ -8,13 +8,16 @@ import be.elevenways.hohenheim.server.application.ApplicationUpstreams;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -104,7 +107,6 @@ public final class InstanceStatusReconciler {
     public @NonNull List<Outcome> sweep() {
         List<Outcome> outcomes = new ArrayList<>();
         for (Row instance : Models.get(InstanceModel.class).find()
-                .where(InstanceModel.DELETED_AT.isNull())
                 .where(claimsALiveWorkload())
                 .all()) {
             Integer id = instance.get(InstanceModel.ID);
@@ -137,7 +139,6 @@ public final class InstanceStatusReconciler {
     public @NonNull Outcome reconcile(int instanceId) {
         Row instance = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
-            .where(InstanceModel.DELETED_AT.isNull())
             .first();
         if (instance == null) {
             return new Outcome(instanceId, Verdict.SKIPPED, "", null);
@@ -202,7 +203,6 @@ public final class InstanceStatusReconciler {
         // a fresh outcome with a stale observation.
         Row fresh = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
-            .where(InstanceModel.DELETED_AT.isNull())
             .first();
         if (fresh == null || !stored.equals(fresh.get(InstanceModel.STATUS))) {
             return new Outcome(instanceId, Verdict.SKIPPED, stored, state);
@@ -226,9 +226,16 @@ public final class InstanceStatusReconciler {
             // seam exposes no exit code, so this lane names what it actually knows.
             settled = InstanceModel.STATUS_ERROR;
         }
+        Instant storedKill = fresh.get(InstanceModel.WORKLOAD_KILLED_AT);
+        Instant killedAt = workloadKilledAt(live, storedKill);
         long fence = this.instances.leases().requireFence(serverId);
         InstanceOperationGuard.stampObserved(this.instances.leases(), instanceId, serverId,
-            fence, settled, changed, String.valueOf((Object) fresh.get(InstanceModel.NAME)));
+            fence, settled, changed, killedAt,
+            String.valueOf((Object) fresh.get(InstanceModel.NAME)));
+        if (storedKill == null && killedAt != null) {
+            Blast.log("INSTANCE RECONCILE:", fresh.get(InstanceModel.NAME),
+                "runs, but the daemon reports its workload killed for out-of-memory");
+        }
         if (!changed) {
             return new Outcome(instanceId, Verdict.CONFIRMED, stored, state);
         }
@@ -311,6 +318,29 @@ public final class InstanceStatusReconciler {
                 ? InstanceModel.STATUS_RUNNING : null;
         }
         return InstanceModel.STATUS_STOPPED;
+    }
+
+    /**
+     * The {@code workload_killed_at} value one daemon answer settles to.
+     *
+     * AIDEV-NOTE: the first observation's moment is KEPT while the kill persists, so the
+     * column says since when. A driver that cannot say ({@code UNKNOWN} on a running
+     * container) keeps whatever is stored, the same "could not ask writes nothing" rule as
+     * {@link ContainerState#UNREACHABLE}; a container that is not running has no workload to
+     * be killed inside it, and its corrected status speaks for it instead.
+     *
+     * @return the moment to store, or null for "no kill known"
+     */
+    private static @Nullable Instant workloadKilledAt(@NonNull InstanceStatus live,
+                                                      @Nullable Instant stored) {
+        if (live.state() != ContainerState.RUNNING) {
+            return null;
+        }
+        return switch (live.liveness()) {
+            case WORKLOAD_DEAD -> stored != null ? stored : Now.instant();
+            case SERVING -> null;
+            case UNKNOWN -> stored;
+        };
     }
 
     /** Whether the template install lifecycle is between steps right now. */

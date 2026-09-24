@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.application;
 
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -83,7 +84,9 @@ public final class ApplicationUpstreams {
      */
     public static void invalidateForInstance(int instanceId) {
         invalidate(instanceId);
-        Row instance = Models.get(InstanceModel.class).findById(instanceId);
+        // Trashed included: destroy's operation funnel invalidates AFTER the record is
+        // trashed, and a destroyed release must still bump its application's generation.
+        Row instance = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
         if (instance == null) {
             return;
         }
@@ -154,7 +157,7 @@ public final class ApplicationUpstreams {
      */
     private static boolean isServable(int instanceId) {
         Row instance = Models.get(InstanceModel.class).findById(instanceId);
-        return instance != null && instance.get(InstanceModel.DELETED_AT) == null
+        return instance != null
             && InstanceModel.SERVABLE_STATUSES.contains(instance.get(InstanceModel.STATUS));
     }
 

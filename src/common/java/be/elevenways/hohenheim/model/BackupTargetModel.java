@@ -131,7 +131,6 @@ public class BackupTargetModel extends Model {
                 .count();
             long instances = Models.get(InstanceModel.class).find()
                 .where(InstanceModel.BACKUP_TARGET_ID.eq(targetId))
-                .where(InstanceModel.DELETED_AT.isNull())
                 .count();
             if (backups > 0 || instances > 0) {
                 throw Violations.ofForm(Microcopy.of("backup_target_in_use")

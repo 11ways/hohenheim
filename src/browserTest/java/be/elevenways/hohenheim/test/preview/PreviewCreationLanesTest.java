@@ -220,6 +220,38 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
     }
 
     /**
+     * A preview leaves only through destroy_preview: the generic resource delete would drop
+     * the row and strand its container, generated domain and DNS rows.
+     */
+    @Test
+    void aPreviewIsNeverRemovedByTheGenericDelete() throws Exception {
+        int operatorId = ApiSupport.user("preview-delete@test");
+        Map<String, Object> coerced = new LinkedHashMap<>();
+        coerced.put(PreviewDeploymentModel.APPLICATION_ID.getName(), applicationId);
+        coerced.put(PreviewDeploymentModel.REF.getName(), "delete-ref");
+        int previewId = ((Number) new PreviewDeploymentResource()
+            .persistRow(coerced, contextOf(operatorId, "Operator"))).intValue();
+
+        // 1. Neither surface declares the generic delete.
+        assertThat(new PreviewDeploymentResource().deletable())
+            .as("step 1: the admin preview resource offers no generic delete").isFalse();
+        assertThat(new ManagePreviewDeploymentResource().deletable())
+            .as("step 1: nor does the delegated one").isFalse();
+
+        // 2. A confirmed delete POST is refused and the preview stays live.
+        var response = adminPostForm("/admin/previews/" + previewId + "/delete", confirmed(""));
+        assertThat(response.statusCode())
+            .as("step 2: the generic delete is not a successful redirect").isNotIn(302, 303);
+        assertThat(Models.get(PreviewDeploymentModel.class).findById(previewId))
+            .as("step 2: the preview row is still live").isNotNull();
+
+        // 3. The destroy lane is the one way out.
+        PreviewDeployments.destroy(previewId, "operator");
+        assertThat(Models.get(PreviewDeploymentModel.class).findById(previewId))
+            .as("step 3: destroy_preview takes it").isNull();
+    }
+
+    /**
      * A preview is built from the APPLICATION but must be REACHABLE, and a hostname only
      * routes when some site's domain table carries it -- so an application no site exposes
      * is refused BY NAME rather than building an environment nobody can open.

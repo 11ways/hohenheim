@@ -1074,6 +1074,10 @@
     "text": "Attached database {$name} failed: its engine stopped unexpectedly or its last operation did not complete",
     "scope": "attention_detail"
   },
+  "database_workload_dead": {
+    "text": "Attached database {$name} runs, but its engine was killed for running out of memory",
+    "scope": "attention_detail"
+  },
   "site_unrouted": {
     "text": "Site {$name} is missing from routing",
     "scope": "attention_title"

@@ -357,7 +357,6 @@ public final class DockerReconciler {
             if (SiteModel.MODEL_ID.equals(model)) {
                 return Models.get(SiteModel.class).find()
                     .where(SiteModel.ID.eq(key))
-                    .where(SiteModel.DELETED_AT.isNull())
                     .first() != null;
             }
             if (DatabaseModel.MODEL_ID.equals(model)) {
@@ -371,7 +370,6 @@ public final class DockerReconciler {
             if (InstanceModel.MODEL_ID.equals(model)) {
                 return Models.get(InstanceModel.class).find()
                     .where(InstanceModel.ID.eq(key))
-                    .where(InstanceModel.DELETED_AT.isNull())
                     .first() != null;
             }
             // Site-database link networks are owned by their ATTACHMENT row: the row's

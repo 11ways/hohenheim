@@ -60,7 +60,6 @@ public final class InstanceAttention {
      */
     public static void crashedInstances(List<AttentionItem> items) {
         for (Row instance : Models.get(InstanceModel.class).find()
-                .where(InstanceModel.DELETED_AT.isNull())
                 .where(InstanceModel.STATUS.eq(InstanceModel.STATUS_ERROR))
                 .all()) {
             items.add(item(AttentionSeverity.ERROR, "box",
@@ -79,7 +78,6 @@ public final class InstanceAttention {
     public static void failedInstanceBackups(List<AttentionItem> items) {
         var backups = Models.get(InstanceBackupModel.class);
         for (Row instance : Models.get(InstanceModel.class).find()
-                .where(InstanceModel.DELETED_AT.isNull())
                 .all()) {
             Integer id = instance.get(InstanceModel.ID);
             if (id == null) {
@@ -120,7 +118,6 @@ public final class InstanceAttention {
         Instant threshold = Now.instant().minus(Duration.ofDays(days));
         var backups = Models.get(InstanceBackupModel.class);
         for (Row instance : Models.get(InstanceModel.class).find()
-                .where(InstanceModel.DELETED_AT.isNull())
                 .where(InstanceModel.BACKUP_TARGET_ID.isNotNull())
                 .all()) {
             Integer id = instance.get(InstanceModel.ID);
@@ -164,7 +161,6 @@ public final class InstanceAttention {
      */
     public static void instancesLowOnDisk(List<AttentionItem> items) {
         for (Row instance : Models.get(InstanceModel.class).find()
-                .where(InstanceModel.DELETED_AT.isNull())
                 .where(InstanceModel.DISK_OBSERVED_AT.isNotNull())
                 .all()) {
             Long used = instance.get(InstanceModel.DISK_USED_BYTES);
@@ -203,7 +199,6 @@ public final class InstanceAttention {
         }
         for (Row application : instanceModel.find()
                 .where(InstanceModel.KIND.eq(ApplicationKind.ID.toString()))
-                .where(InstanceModel.DELETED_AT.isNull())
                 .all()) {
             Integer applicationId = application.get(InstanceModel.ID);
             if (applicationId == null) {

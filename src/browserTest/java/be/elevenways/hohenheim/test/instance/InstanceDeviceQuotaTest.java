@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.server.instance.InstanceDeviceQuota;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -52,7 +53,7 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
             devices.delete(row.get(InstanceDeviceModel.ID));
         }
         if (this.instanceId != null) {
-            Models.get(InstanceModel.class).delete(this.instanceId);
+            HardDeletes.byId(Models.get(InstanceModel.class), this.instanceId);
             this.instanceId = null;
         }
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER,

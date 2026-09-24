@@ -99,10 +99,10 @@ public final class DatabaseAttention {
      * ({@code DatabaseService.detailOf} ends in {@code InstanceService.liveStatus}, an SSH or
      * HTTPS round trip for a remote host) -- the per-render probe the attention surface
      * forbids. {@code InstanceStatusReconciler} stores what the daemon answered on its own
-     * cadence, so the engine instance's status column is the observation to read. What the
-     * stored state CANNOT carry is the OOM-killed engine inside a running container
-     * ({@code WorkloadLiveness.WORKLOAD_DEAD}): nothing persists it, so this item no longer
-     * names that shape; the database's own detail page still asks the daemon on open.
+     * cadence, so the engine instance's status column is the observation to read. The
+     * OOM-killed engine inside a still-running container ({@code WorkloadLiveness.WORKLOAD_DEAD})
+     * is stored by that same sweep as {@code instances.workload_killed_at}, so it keeps its own
+     * sentence here without a daemon call.
      */
     public static void unavailableAttachedDatabases(List<AttentionItem> items) {
         var linkModel = Models.get(InstanceDatabaseModel.class);
@@ -118,7 +118,6 @@ public final class DatabaseAttention {
         for (Row link : links) {
             Row instance = instanceModel.find()
                 .where(InstanceModel.ID.eq(link.get(InstanceDatabaseModel.INSTANCE_ID)))
-                .where(InstanceModel.DELETED_AT.isNull())
                 .first();
             if (instance == null) {
                 continue;
@@ -172,7 +171,12 @@ public final class DatabaseAttention {
             return copy("database_not_running", "attention_detail", "name", name);
         }
         return switch (stored) {
-            case STARTING, RUNNING, CAPTURING, RESTORING, MIGRATING -> null;
+            // The container runs, but the sweep saw the kernel kill the engine inside it:
+            // "runs" is exactly what the status alone would wrongly vouch for.
+            case STARTING, RUNNING, CAPTURING, RESTORING, MIGRATING ->
+                engine.get(InstanceModel.WORKLOAD_KILLED_AT) != null
+                    ? copy("database_workload_dead", "attention_detail", "name", name)
+                    : null;
             case ERROR -> copy("database_failed", "attention_detail", "name", name);
             case CREATED, STOPPED -> copy("database_not_running", "attention_detail", "name", name);
         };

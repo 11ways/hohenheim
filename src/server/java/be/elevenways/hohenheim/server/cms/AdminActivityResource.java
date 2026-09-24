@@ -194,7 +194,7 @@ public final class AdminActivityResource extends ActivityResource {
         String label = title != null && !title.isBlank() ? title : recordId;
         // The admin-panel walk (AdminRecordLinks): this list lives in /admin, so the record
         // links into /admin -- never into the /manage narrowing of the same model, which the
-        // framework's panel-blind CmsRecordLinks picked by hash order.
+        // framework's panel-aware walk would fall back to when /admin serves no such model.
         BoundEndpoint<?> target = AdminRecordLinks.detailForToken(
             row.get(ActivityModel.MODEL), recordId);
         return new ActivityRecordCell(label, target != null ? target.toUrl() : null);

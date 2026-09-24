@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.stack;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.protoblast.common.Blast;
@@ -161,9 +162,9 @@ public final class StackVolumes {
         if (instanceId == null) {
             return false;
         }
-        // findById, not a live-only query: by purge time the service instances are
-        // already soft-deleted, and their rows are exactly the evidence asked for.
-        Row instance = Models.get(InstanceModel.class).findById(instanceId);
+        // Trashed included, never a live-only query: by purge time the service instances
+        // are already soft-deleted, and their rows are exactly the evidence asked for.
+        Row instance = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
         return instance != null
             && StackServiceModel.MODEL_ID.toString().equals(instance.get(InstanceModel.GENERATED_FOR_MODEL))
             && StackInstances.settingsOf(instance).get(StackServiceKind.STACK_ID.getName())

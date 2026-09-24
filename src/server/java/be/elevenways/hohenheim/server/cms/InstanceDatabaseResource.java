@@ -242,7 +242,6 @@ public class InstanceDatabaseResource extends RowResource {
         }
         Row instance = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
-            .where(InstanceModel.DELETED_AT.isNull())
             .first();
         if (instance == null) {
             throw Violations.ofField("instance_id", instanceId,

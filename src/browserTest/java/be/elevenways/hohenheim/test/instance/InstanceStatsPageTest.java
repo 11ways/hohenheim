@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -62,7 +63,7 @@ class InstanceStatsPageTest extends HohenheimTestBase {
     static void cleanUp() {
         for (Integer id : new Integer[] {incusInstanceId, dockerInstanceId, stoppedInstanceId}) {
             if (id != null) {
-                Models.get(InstanceModel.class).delete(id);
+                HardDeletes.byId(Models.get(InstanceModel.class), id);
             }
         }
         if (incusHostId != null) {

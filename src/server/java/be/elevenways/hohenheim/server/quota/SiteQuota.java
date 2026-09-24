@@ -24,8 +24,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * The alternative -- a boolean on the future create surface -- is the check that cannot
  * fail under the concurrency a quota exists for.
  *
- * AIDEV-NOTE: the RELEASE rides the deleted_at null -> non-null TRANSITION, because
- * SiteResource.deleteRow stamps deleted_at through save() and there is NO hard site delete
+ * AIDEV-NOTE: the RELEASE rides the deleted_at null -> non-null TRANSITION, because a site
+ * delete is SiteModel.SOFT_DELETE's, which stamps deleted_at through save(), and there is NO
+ * hard site delete
  * outside tests -- no remove hook would ever fire on the real path (the InstanceQuota
  * lesson verbatim). The remove pairing exists so a test's or a future bulk cleanup's hard
  * delete cannot leak a reservation either.

@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.VmFramebufferHandler;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -143,7 +144,7 @@ class VmFramebufferHandlerTest extends HohenheimTestBase {
     private static void cleanup(int userId, int instanceId) {
         RecordGrants.revoke(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.MANAGE);
-        Models.get(InstanceModel.class).delete(instanceId);
+        HardDeletes.byId(Models.get(InstanceModel.class), instanceId);
         AuthModels.users().delete(userId);
     }
 

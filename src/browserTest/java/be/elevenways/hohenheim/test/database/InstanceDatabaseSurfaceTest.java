@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -89,16 +90,16 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
         }
         Model instances = Models.get(InstanceModel.class);
         GeneratedRows.sweeping("test", () -> {
-            for (Row row : instances.find().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
-                instances.delete(row.get(InstanceModel.ID));
+            for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
+                HardDeletes.byId(instances, row.get(InstanceModel.ID));
             }
-            for (Row row : instances.find()
+            for (Row row : instances.find().withTrashed()
                     .where(InstanceModel.GENERATED_FOR_MODEL.eq(DatabaseModel.MODEL_ID.toString()))
                     .all()) {
                 Object generatedFor = row.get(InstanceModel.GENERATED_FOR_ID);
                 if (databaseId.equals(generatedFor)
                         || (waitingDatabaseId != null && waitingDatabaseId.equals(generatedFor))) {
-                    instances.delete(row.get(InstanceModel.ID));
+                    HardDeletes.byId(instances, row.get(InstanceModel.ID));
                 }
             }
         });

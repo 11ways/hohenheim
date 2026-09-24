@@ -94,7 +94,7 @@ public class CleanOrphanCertificates extends ScheduledTask {
         var domainModel = Models.get(SiteDomainModel.class);
 
         Set<Integer> liveSiteIds = new HashSet<>();
-        for (Row site : siteModel.find().where(SiteModel.DELETED_AT.isNull()).all()) {
+        for (Row site : siteModel.find().all()) {
             liveSiteIds.add(site.get(SiteModel.ID));
         }
 

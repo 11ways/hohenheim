@@ -115,6 +115,6 @@ public final class InstanceCatalogGuards {
     }
 
     private static @NonNull QueryBuilder<Row> liveInstances() {
-        return Models.get(InstanceModel.class).find().where(InstanceModel.DELETED_AT.isNull());
+        return Models.get(InstanceModel.class).find();
     }
 }

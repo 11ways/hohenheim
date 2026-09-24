@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.test.TestDatabases;
-import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -64,9 +64,7 @@ class IncusInstanceRuntimeLiveTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        remote = LiveIncusHost.configured();
-        LiveLane.require(LiveLane.Need.INCUS_HOST, remote != null,
-            "no live incus host enrolled at " + LiveIncusHost.CONFIG);
+        remote = LiveIncusHost.requirePrimary();
 
         // ONE database per test class: the controller identity (and therefore every
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
@@ -224,7 +222,7 @@ class IncusInstanceRuntimeLiveTest {
                 assertThat(infoOf(handle))
                     .as("step 6: the host's own CLI agrees it is gone")
                     .contains("ERROR");
-                assertThat((Object) Models.get(InstanceModel.class).findById(id)
+                assertThat((Object) StoredRows.byId(Models.get(InstanceModel.class), id)
                         .get(InstanceModel.DELETED_AT))
                     .as("step 6: the record is soft-deleted, not erased").isNotNull();
             } finally {

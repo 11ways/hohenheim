@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.protoblast.common.time.Now;
@@ -256,7 +257,7 @@ class ServerOverviewTest extends HohenheimTestBase {
             .as("and links to its record").contains("/admin/instances/" + instanceId);
 
         // Clean up so later classes' local-host assertions see no stray instance.
-        Row cleanup = instances.findById(instanceId);
+        Row cleanup = StoredRows.byId(instances, instanceId);
         cleanup.set(InstanceModel.DELETED_AT, Now.instant());
         instances.save(cleanup);
     }

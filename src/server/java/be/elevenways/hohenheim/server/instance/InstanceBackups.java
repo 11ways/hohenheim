@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -807,7 +808,7 @@ public final class InstanceBackups {
 
     private static Row requireRow(int instanceId) {
         Row row = Models.get(InstanceModel.class).findById(instanceId);
-        if (row == null || row.get(InstanceModel.DELETED_AT) != null) {
+        if (row == null) {
             throw new IllegalStateException("Instance is absent");
         }
         return row;
@@ -1262,8 +1263,8 @@ public final class InstanceBackups {
 
     /** The source instance's host, trashed included (the backup outlives the instance). */
     private static int sourceServerId(@NonNull Row backup) {
-        Row instance = Models.get(InstanceModel.class)
-            .findById(backup.get(InstanceBackupModel.INSTANCE_ID));
+        Row instance = StoredRows.byId(Models.get(InstanceModel.class),
+            backup.get(InstanceBackupModel.INSTANCE_ID));
         return ServerModel.canonicalServerId(instance != null
             ? instance.get(InstanceModel.SERVER_ID) : null);
     }

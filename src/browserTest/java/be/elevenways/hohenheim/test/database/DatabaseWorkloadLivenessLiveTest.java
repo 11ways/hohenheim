@@ -87,8 +87,15 @@ class DatabaseWorkloadLivenessLiveTest {
             // 2. Kill a process inside the engine's own cgroup. Asserted on the kernel's
             //    counter for THIS container, never on the exec's exit code and never on a
             //    daemon-wide reading (four forks share this daemon).
-            DockerClient.ExecResult killed =
-                docker.exec(container, List.of("tail", "/dev/zero"));
+            //    AIDEV-NOTE: the hog raises its OWN oom_score_adj to the maximum (raising it
+            //    needs no capability) so the kernel's victim is the hog by construction. Left
+            //    to the badness heuristic, the final --all run of 2026-09-24 (host swap
+            //    nearly exhausted by the parallel forks) took the ENGINE down during the hog's
+            //    run: the container exited 137, the product's crash policy correctly redeployed
+            //    it, and this step read a container that no longer existed -- a test that
+            //    never reached the shape it exists to prove.
+            DockerClient.ExecResult killed = docker.exec(container, List.of("sh", "-c",
+                "echo 1000 > /proc/self/oom_score_adj && exec tail /dev/zero"));
             Map<String, Long> events = memoryEvents(docker, container);
             assertThat(events.get("oom_kill"))
                 .withFailMessage("step 2: nothing was OOM-killed (exec exit %s), so the"

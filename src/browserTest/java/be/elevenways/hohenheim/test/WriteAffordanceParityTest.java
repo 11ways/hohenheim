@@ -176,7 +176,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             Models.get(SiteDomainModel.class).delete(domainId);
         }
         if (siteId != null) {
-            Models.get(SiteModel.class).delete(siteId);
+            HardDeletes.byId(Models.get(SiteModel.class), siteId);
         }
         if (linkId != null) {
             Models.get(InstanceDatabaseModel.class).delete(linkId);
@@ -194,7 +194,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             Models.get(DatabaseModel.class).delete(databaseId);
         }
         if (instanceId != null) {
-            Models.get(InstanceModel.class).delete(instanceId);
+            HardDeletes.byId(Models.get(InstanceModel.class), instanceId);
         }
     }
 
@@ -530,7 +530,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             RecordGrants.revoke(GrantSubjectType.USER, holderId, InstanceModel.MODEL_ID,
                 instanceId, HohenheimAccess.POWER);
             for (Integer id : extra) {
-                instances.delete(id);
+                HardDeletes.byId(instances, id);
             }
         }
     }

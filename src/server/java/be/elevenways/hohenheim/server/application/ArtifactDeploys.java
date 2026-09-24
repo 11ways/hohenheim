@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.ArtifactSourceModel;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.DeployStartPolicy;
@@ -291,7 +292,8 @@ public final class ArtifactDeploys {
             if (written == null) written = operation.get(ArtifactOperationModel.CREATED_AT);
             if (BootSettle.writtenByThisProcess(written)) continue;
             int applicationId = operation.get(ArtifactOperationModel.APPLICATION_ID);
-            Row application = Models.get(InstanceModel.class).findById(applicationId);
+            // Boot settle reclaims a trashed application's scratch too (trashed included).
+            Row application = StoredRows.byId(Models.get(InstanceModel.class), applicationId);
             if (application == null) {
                 finish(operation, ArtifactOperationModel.INTERRUPTED, "artifact_interrupted");
                 continue;
@@ -306,7 +308,7 @@ public final class ArtifactDeploys {
                 });
         }
         // A killed HTTP upload has no receipt yet. Reclaim those too, under the same host fence.
-        for (Row application : Models.get(InstanceModel.class).find()
+        for (Row application : Models.get(InstanceModel.class).find().withTrashed()
                 .where(InstanceModel.KIND.eq("hohenheim:application")).all()) {
             int applicationId = application.get(InstanceModel.ID);
             Path uploads = directoryFor(applicationId).toPath().resolve("uploads");

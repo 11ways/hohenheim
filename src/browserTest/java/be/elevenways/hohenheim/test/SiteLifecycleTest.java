@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 
@@ -129,7 +130,7 @@ class SiteLifecycleTest extends HohenheimTestBase {
         response = adminPostForm("/admin/sites/" + gitId + "/delete", confirmed(""));
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
-        Row after = Models.get(SiteModel.class).findById(gitId);
+        Row after = StoredRows.byId(Models.get(SiteModel.class), gitId);
         assertThat((Object) after.get(SiteModel.DELETED_AT)).isNotNull();
 
         // The success toast rides the SESSION the browser shares, so pop it (proving the

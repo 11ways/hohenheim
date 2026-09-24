@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.test.network;
 
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.TestDatabases;
-import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -75,9 +74,7 @@ class IncusKernelIsolationLiveTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        remote = LiveIncusHost.configured();
-        LiveLane.require(LiveLane.Need.INCUS_HOST, remote != null,
-            "no live incus host enrolled at " + LiveIncusHost.CONFIG);
+        remote = LiveIncusHost.requirePrimary();
 
         // ONE database per test class: the controller identity (and therefore every
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope

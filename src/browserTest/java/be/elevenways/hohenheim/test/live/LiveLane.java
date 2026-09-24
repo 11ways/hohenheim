@@ -5,6 +5,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.junit.jupiter.api.Assumptions;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Set;
@@ -104,6 +106,9 @@ public final class LiveLane {
     private static final boolean PULL =
         !"false".equalsIgnoreCase(System.getProperty("hohenheim.live.pull", "true"));
 
+    /** Connect budget of {@link #requireReachable}; a live endpoint answers well inside it. */
+    private static final int REACHABILITY_TIMEOUT_MILLIS = 3000;
+
     private LiveLane() {
     }
 
@@ -115,6 +120,28 @@ public final class LiveLane {
     public static void require(@NonNull Need need, boolean satisfied, @NonNull String reason) {
         if (!satisfied) {
             skip(need, reason);
+        }
+    }
+
+    /**
+     * Pass when a TCP connect to {@code host:port} completes within a short budget,
+     * otherwise abort (or fail, under the policy) naming {@code need} and the connect error.
+     *
+     * AIDEV-NOTE: a CONFIGURED host is not an AVAILABLE one. The Incus fixtures used to
+     * gate on the config file alone, so a live host that was down turned seventeen classes
+     * into setUp failures ("No route to host") instead of one named skip each. The probe
+     * is deliberately a bare connect: it proves the endpoint answers, nothing about trust,
+     * which the enrollment ceremony itself still checks.
+     *
+     * @param what the endpoint in words, for the reason ("incus daemon https://h:8443")
+     */
+    public static void requireReachable(@NonNull Need need, @NonNull String what,
+                                        @NonNull String host, int port) {
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress(host, port), REACHABILITY_TIMEOUT_MILLIS);
+        } catch (IOException | IllegalArgumentException unreachable) {
+            skip(need, what + " (" + host + ":" + port + ") unreachable: "
+                + describe(unreachable));
         }
     }
 

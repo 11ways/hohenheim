@@ -260,7 +260,7 @@ public class InstanceDeviceResource extends RowResource {
         int instanceId = parsed != null ? parsed : -1;
         if (instanceId <= 0 || Models.get(InstanceModel.class).find()
                 .where(InstanceModel.ID.eq(instanceId))
-                .where(InstanceModel.DELETED_AT.isNull()).count() == 0) {
+                .count() == 0) {
             throw Violations.ofField("instance_id", value,
                 CmsSupport.violationText("unknown_instance"));
         }

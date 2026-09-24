@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.FramebufferSource;
 import be.elevenways.hohenheim.server.instance.VmFramebufferHandler;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.protoblast.common.http.HttpMethod;
@@ -170,7 +171,7 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
                 HohenheimAccess.CONSOLE);
             RecordGrants.revoke(GrantSubjectType.USER, viewUserId, InstanceModel.MODEL_ID, instanceId,
                 HohenheimAccess.VIEW);
-            Models.get(InstanceModel.class).delete(instanceId);
+            HardDeletes.byId(Models.get(InstanceModel.class), instanceId);
             AuthModels.users().delete(consoleUserId);
             AuthModels.users().delete(viewUserId);
         }
@@ -200,7 +201,7 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
     private static void cleanup(int userId, int instanceId) {
         RecordGrants.revoke(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.MANAGE);
-        Models.get(InstanceModel.class).delete(instanceId);
+        HardDeletes.byId(Models.get(InstanceModel.class), instanceId);
         AuthModels.users().delete(userId);
     }
 

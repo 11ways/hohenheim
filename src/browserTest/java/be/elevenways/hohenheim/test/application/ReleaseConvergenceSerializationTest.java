@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
@@ -263,7 +264,7 @@ class ReleaseConvergenceSerializationTest {
 
                 // 3. RECLAIMED, not merely re-roled: the container is gone, the record is
                 //    trashed, the port claim released and the booking handed back.
-                Row stranded = Models.get(InstanceModel.class).findById(olderId);
+                Row stranded = StoredRows.byId(Models.get(InstanceModel.class), olderId);
                 assertThat(stranded.get(InstanceModel.DELETED_AT))
                     .as("step 3: the stranded release's record is trashed").isNotNull();
                 assertThat(daemon.exists(FakeDockerDaemon.handleOf(olderId)))

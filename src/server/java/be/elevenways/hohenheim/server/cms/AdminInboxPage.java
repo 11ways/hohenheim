@@ -23,6 +23,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The operator's own notification inbox: the shipped zenit-comms surface mounted
@@ -54,6 +55,25 @@ public final class AdminInboxPage extends PanelPage {
     @Override
     public @Nullable Microcopy description() {
         return Microcopy.of("nav_hint").withFilter("scope", "admin_inbox");
+    }
+
+    /**
+     * The reader's unread items, so an alert that lands while any page of the panel is open is
+     * seen without opening the inbox.
+     *
+     * AIDEV-NOTE: counted by comms for the request's own recipient, exactly as the page lists; a
+     * request-less context (a nav projection outside a request) has no recipient, so no badge.
+     */
+    @Override
+    public @Nullable Long navBadge(@NonNull AccessContext access) {
+        Conduit conduit = access.conduit();
+        return conduit == null ? null : CommsInbox.unreadCount(conduit);
+    }
+
+    /** Re-counted in place whenever an inbox item lands or is read (a delivery, a mark-read). */
+    @Override
+    public @NonNull Set<Identifier> navBadgeFeeds() {
+        return Set.of(CommsInbox.FEED);
     }
 
     @Override

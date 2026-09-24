@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.TestDatabases;
-import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -68,12 +67,8 @@ class IncusColdMigrationLiveTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        remoteA = LiveIncusHost.configured();
-        LiveLane.require(LiveLane.Need.INCUS_HOST, remoteA != null,
-            "no live incus host enrolled at " + LiveIncusHost.CONFIG);
-        remoteB = LiveIncusHost.configuredSecondary();
-        LiveLane.require(LiveLane.Need.INCUS_HOST, remoteB != null,
-            "no SECOND live incus host (url_b) enrolled at " + LiveIncusHost.CONFIG);
+        remoteA = LiveIncusHost.requirePrimary();
+        remoteB = LiveIncusHost.requireSecondary();
 
         // ONE database per test class: the controller identity (and therefore every
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope

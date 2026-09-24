@@ -434,7 +434,7 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
         List<WorkloadView> workloads = new ArrayList<>();
         for (Row instance : Models.get(InstanceModel.class).find()
                 .where(InstanceModel.SERVER_ID.eq(serverId))
-                .where(InstanceModel.DELETED_AT.isNull()).all()) {
+                .all()) {
             workloads.add(new WorkloadView(
                 String.valueOf((Object) instance.get(InstanceModel.NAME)),
                 WorkloadTier.INSTANCE,

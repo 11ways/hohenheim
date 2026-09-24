@@ -5,8 +5,8 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.quota.DatabaseQuota;
 import be.elevenways.hohenheim.server.quota.SiteQuota;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -54,10 +54,7 @@ class SiteAndDatabaseQuotaTest extends HohenheimTestBase {
     @AfterEach
     void cleanUp() {
         Model sites = Models.get(SiteModel.class);
-        for (Row row : sites.find().withTrashed()
-                .where(SiteModel.NAME.startsWith(SITE_PREFIX)).all()) {
-            sites.find().where(SiteModel.ID.eq(row.get(SiteModel.ID))).delete();
-        }
+        HardDeletes.where(sites, SiteModel.NAME.startsWith(SITE_PREFIX));
         Model databases = Models.get(DatabaseModel.class);
         for (Row row : databases.find().where(DatabaseModel.NAME.startsWith(DB_PREFIX)).all()) {
             databases.find().where(DatabaseModel.ID.eq(row.get(DatabaseModel.ID))).delete();
@@ -139,11 +136,11 @@ class SiteAndDatabaseQuotaTest extends HohenheimTestBase {
             .isEqualTo(1);
         assertThat(successes).as("step 3: exactly one winner").isEqualTo(1);
 
-        // 4. THE LOCKOUT TEST: the trash write SiteResource.deleteRow performs is a
-        //    deleted_at stamp through save(), so the release must ride that transition.
+        // 4. THE LOCKOUT TEST: the trash write SiteResource.deleteRow performs is the site
+        //    SoftDeleteBehaviour's deleted_at stamp through save(), so the release must ride
+        //    that transition.
         Row winner = raced.get(0);
-        winner.set(SiteModel.DELETED_AT, Now.instant());
-        Models.get(SiteModel.class).save(winner);
+        Models.get(SiteModel.class).delete(winner);
         assertThat(Quotas.usedOf(SITE_BUCKET))
             .as("step 4: the trash transition hands the slot back").isEqualTo(limit - 1);
 
@@ -167,8 +164,7 @@ class SiteAndDatabaseQuotaTest extends HohenheimTestBase {
             .isEqualTo("site_quota_reached");
 
         // 7. The hard-delete pairing releases too (tests and future bulk cleanup).
-        Models.get(SiteModel.class).find()
-            .where(SiteModel.NAME.eq(SITE_PREFIX + "replacement")).delete();
+        HardDeletes.where(Models.get(SiteModel.class), SiteModel.NAME.eq(SITE_PREFIX + "replacement"));
         assertThat(Quotas.usedOf(SITE_BUCKET))
             .as("step 7: a hard delete hands the slot back as well").isEqualTo(limit - 1);
     }

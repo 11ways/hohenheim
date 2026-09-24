@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.cms.InstanceResource;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.cms.common.action.RowAction;
@@ -362,7 +363,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
                 .as("step 3: another instance's activity never leaks onto this page")
                 .doesNotContain("/admin/activity/" + theirs);
         } finally {
-            instances.delete(decoy);
+            HardDeletes.row(instances, decoy);
         }
     }
 

@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceExec;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -90,7 +91,7 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
         Model instances = Models.get(InstanceModel.class);
         for (Row row : instances.find().where(InstanceModel.NAME.startsWith(PREFIX))
                 .withTrashed().all()) {
-            instances.delete(row.get(InstanceModel.ID));
+            HardDeletes.byId(instances, row.get(InstanceModel.ID));
         }
     }
 

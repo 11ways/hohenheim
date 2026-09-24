@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ProjectModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.zenit.auth.cms.RoleOwnership;
@@ -152,6 +153,15 @@ public final class ProjectGuards {
             if (environmentId == null) {
                 return;
             }
+            // AIDEV-NOTE: only a write that PLACES the record is judged -- a create, or a move
+            // into another environment. Ownership moves through grants without touching the
+            // row, so a write carrying its UNCHANGED environment cannot cause the drift this
+            // refuses; judging it anyway made a drifted record impossible to delete (the soft
+            // delete saves the whole row), to restore, or to edit at all.
+            Row stored = StoredRows.of(Models.get(InstanceModel.class), row);
+            if (stored != null && environmentId.equals(stored.get(InstanceModel.ENVIRONMENT_ID))) {
+                return;
+            }
             Row environment = Models.get(EnvironmentModel.class).findById(environmentId);
             if (environment == null) {
                 throw Violations.ofField(InstanceModel.ENVIRONMENT_ID.getName(), environmentId,
@@ -180,7 +190,8 @@ public final class ProjectGuards {
      */
     private static @Nullable Set<String> ownerOf(@NonNull Row row) {
         Object id = row.has(InstanceModel.ID.getName()) ? row.get(InstanceModel.ID) : null;
-        if (id != null && Models.get(InstanceModel.class).findById(id) != null) {
+        // Trashed included: a stored record answers by its grants even while trashed.
+        if (StoredRows.byId(Models.get(InstanceModel.class), id) != null) {
             return HohenheimAccess.manageSubjectsOf(InstanceModel.MODEL_ID, id);
         }
         return HohenheimAccess.creationOwnerSubjects(
@@ -195,7 +206,6 @@ public final class ProjectGuards {
         List<String> instances = new ArrayList<>();
         for (Row instance : Models.get(InstanceModel.class).find()
                 .where(InstanceModel.ENVIRONMENT_ID.eq(environmentId))
-                .where(InstanceModel.DELETED_AT.isNull())
                 .all()) {
             instances.add(EnvironmentUsage.nameOf(instance.get(InstanceModel.NAME),
                 instance.get(InstanceModel.ID)));

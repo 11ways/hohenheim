@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.network;
 
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
@@ -520,7 +521,7 @@ class VerifyWorkloadIsolationTest {
         }
         try {
             Db.run(datasource, () -> {
-                Row application = Models.get(InstanceModel.class).findById(applicationId);
+                Row application = StoredRows.byId(Models.get(InstanceModel.class), applicationId);
                 if (application != null) {
                     application.set(InstanceModel.DELETED_AT, Now.instant());
                     Models.get(InstanceModel.class).save(application);

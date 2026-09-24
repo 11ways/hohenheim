@@ -150,7 +150,6 @@ public class InstanceTemplateResource extends RowResource {
                                                        @NonNull AccessContext accessContext) {
         long referencing = Models.get(InstanceModel.class).find()
             .where(InstanceModel.TEMPLATE_ID.eq(record.get(InstanceTemplateModel.ID)))
-            .where(InstanceModel.DELETED_AT.isNull())
             .count();
         if (referencing > 0) {
             return Microcopy.of("delete_in_use").withFilter("scope", "instance_template")

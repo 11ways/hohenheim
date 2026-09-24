@@ -163,9 +163,12 @@ public class SiteDomainResource extends RowResource {
         return ctx -> AccessDecision.allow(QueryPredicate.of(liveSiteScope()));
     }
 
-    /** @return the criteria matching only rows whose owning site is not soft-deleted */
+    /**
+     * @return the criteria matching only rows whose owning site is not soft-deleted; spelled
+     *         through the site's SoftDeleteBehaviour because a relation hop runs no find hook
+     */
     protected static @NonNull Criteria liveSiteScope() {
-        return Criteria.related(SiteDomainModel.SITE, SiteModel.DELETED_AT.isNull());
+        return Criteria.related(SiteDomainModel.SITE, SiteModel.SOFT_DELETE.isNotTrashed());
     }
 
     @Override

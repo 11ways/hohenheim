@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
@@ -108,12 +109,12 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER,
             previousLimit == null ? 0 : previousLimit);
         Model instances = Models.get(InstanceModel.class);
-        for (Row row : instances.find().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
+        for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
             for (Row schedule : Models.get(RecordScheduleModel.class)
                     .findForRecord(InstanceModel.MODEL_ID, row.get(InstanceModel.ID))) {
                 Models.get(RecordScheduleModel.class).delete(schedule.get(RecordScheduleModel.ID));
             }
-            instances.delete(row.get(InstanceModel.ID));
+            HardDeletes.byId(instances, row.get(InstanceModel.ID));
         }
         Model templates = Models.get(InstanceTemplateModel.class);
         for (Row row : templates.find().where(InstanceTemplateModel.NAME.startsWith(PREFIX)).all()) {
@@ -559,8 +560,8 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         }
         Model instances = Models.get(InstanceModel.class);
         for (String name : List.of("created", "over-cap", "sneaky")) {
-            for (Row row : instances.find().where(InstanceModel.NAME.eq(PREFIX + name)).all()) {
-                instances.delete(row.get(InstanceModel.ID));
+            for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.eq(PREFIX + name)).all()) {
+                HardDeletes.byId(instances, row.get(InstanceModel.ID));
             }
         }
         if (admittedHostId != null) {

@@ -78,9 +78,7 @@ class LiveOffHostBackupTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        remote = LiveRemoteHost.configured();
-        LiveLane.require(LiveLane.Need.REMOTE_HOST, remote != null,
-            "no live remote host enrolled at " + LiveRemoteHost.CONFIG);
+        remote = LiveRemoteHost.requireAvailable();
 
         // ONE database per test class: the controller identity (and therefore every
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope

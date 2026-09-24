@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.incus.ControllerPresence;
 import be.elevenways.hohenheim.server.incus.IncusClient;
+import be.elevenways.hohenheim.server.incus.IncusEndpoint;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.incus.IncusReaper;
 import be.elevenways.hohenheim.server.incus.IncusTrust;
@@ -15,6 +16,8 @@ import be.elevenways.hohenheim.server.task.ReapIncusControllers;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -50,6 +53,9 @@ public final class LiveIncusHost {
 
     /** Wall-clock budget for one remote command; a hang must become a named failure. */
     private static final long DEFAULT_TIMEOUT_SECONDS = 180;
+
+    /** The ssh port a {@code trust_target} without one connects to. */
+    private static final int SSH_PORT = 22;
 
     /**
      * Pipe drains. Daemon threads: a test JVM must never be held open by a drain still
@@ -122,6 +128,52 @@ public final class LiveIncusHost {
      */
     public static LiveIncusHost configuredSecondary() {
         return fromConfig("url_b", "fingerprint_b", "trust_target_b", false);
+    }
+
+    /**
+     * THE gate of every Incus live class: the configured primary host, with its daemon
+     * endpoint and its ssh lane both answering, or a skip naming {@code incus-host}.
+     *
+     * AIDEV-NOTE: gating on the config file alone made a host that was merely DOWN fail
+     * every class in setUp (host_key_scan_failed "No route to host") instead of reporting
+     * one named skip each. A run declaring {@code hohenheim.live.require=incus-host} still
+     * FAILS here, which is the point of declaring it.
+     */
+    public static @NonNull LiveIncusHost requirePrimary() {
+        return requireReachable(configured(), "no live incus host enrolled at " + CONFIG,
+            LiveLane.Need.INCUS_HOST, true);
+    }
+
+    /** {@link #requirePrimary} for the SECOND, twinned host ({@code url_b}). */
+    public static @NonNull LiveIncusHost requireSecondary() {
+        return requireReachable(configuredSecondary(),
+            "no SECOND live incus host (url_b) enrolled at " + CONFIG,
+            LiveLane.Need.INCUS_HOST, true);
+    }
+
+    /**
+     * The primary host as a plain ssh host (the Docker-over-ssh twin): only its ssh lane
+     * must answer, and a miss is a {@code remote-host} skip.
+     */
+    public static @NonNull LiveIncusHost requireSshLane() {
+        return requireReachable(configured(), "no live host enrolled at " + CONFIG,
+            LiveLane.Need.REMOTE_HOST, false);
+    }
+
+    private static @NonNull LiveIncusHost requireReachable(@Nullable LiveIncusHost host,
+                                                           @NonNull String absent,
+                                                           LiveLane.Need need,
+                                                           boolean daemon) {
+        LiveLane.require(need, host != null, absent);
+        if (daemon) {
+            IncusEndpoint endpoint = IncusEndpoint.parse(host.url);
+            LiveLane.requireReachable(need, "incus daemon " + host.url,
+                endpoint.host(), endpoint.port());
+        }
+        HostKeys.Target ssh = HostKeys.parseTarget(host.trustTarget);
+        LiveLane.requireReachable(need, "ssh lane " + host.trustTarget,
+            ssh.host(), ssh.port() > 0 ? ssh.port() : SSH_PORT);
+        return host;
     }
 
     private static LiveIncusHost fromConfig(String urlKey, String fingerprintKey,

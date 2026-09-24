@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceInstalls;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
@@ -76,7 +77,7 @@ class InstanceReinstallTest extends HohenheimTestBase {
                 Models.get(InstanceVariableModel.class)
                     .delete(variable.get(InstanceVariableModel.ID));
             }
-            instances.delete(id);
+            HardDeletes.byId(instances, id);
         }
         Model templates = Models.get(InstanceTemplateModel.class);
         for (Row row : templates.find()

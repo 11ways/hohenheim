@@ -1074,6 +1074,10 @@
     "text": "Gekoppelde database {$name} is mislukt: de engine is onverwacht gestopt of de laatste bewerking is niet voltooid",
     "scope": "attention_detail"
   },
+  "database_workload_dead": {
+    "text": "Gekoppelde database {$name} draait, maar de engine is gestopt wegens geheugentekort",
+    "scope": "attention_detail"
+  },
   "site_unrouted": {
     "text": "Site {$name} ontbreekt in de routering",
     "scope": "attention_title"

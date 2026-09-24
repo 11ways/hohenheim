@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.build.BuildArtifacts;
@@ -569,7 +570,7 @@ public final class ReleaseEngine {
                                       @NonNull String servingImage, @NonNull String how) {
         try {
             Row retired = Models.get(InstanceModel.class).findById(retiredId);
-            if (retired != null && retired.get(InstanceModel.DELETED_AT) == null
+            if (retired != null
                     && InstanceModel.ROLE_RETIRED.equals(retired.get(InstanceModel.RUNTIME_ROLE))
                     && InstanceModel.STATUS_RUNNING.equals(retired.get(InstanceModel.STATUS))) {
                 new InstanceService().stop(retiredId);
@@ -708,7 +709,6 @@ public final class ReleaseEngine {
         for (Row serving : Models.get(InstanceModel.class).find()
                 .where(InstanceModel.RUNTIME_ROLE.eq(InstanceModel.ROLE_SERVING))
                 .where(InstanceModel.GENERATED_FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
-                .where(InstanceModel.DELETED_AT.isNull())
                 .orderBy(InstanceModel.ID, SortOrder.DESC)
                 .all()) {
             Integer applicationId = serving.get(InstanceModel.GENERATED_FOR_ID);
@@ -757,7 +757,8 @@ public final class ReleaseEngine {
             if (instanceId == null) {
                 continue;
             }
-            Row instance = Models.get(InstanceModel.class).findById(instanceId);
+            // Trashed included: a destroyed candidate still names the host its op ran on.
+            Row instance = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
             Integer serverId = instance != null ? instance.get(InstanceModel.SERVER_ID) : null;
             if (serverId != null) {
                 return serverId;
@@ -777,7 +778,11 @@ public final class ReleaseEngine {
             return;
         }
         if (ReleaseOperationModel.STATUS_SWITCHING.equals(status) && candidateId != null) {
-            Row candidate = Models.get(InstanceModel.class).findById(candidateId);
+            // AIDEV-NOTE: the candidate is read TRASHED INCLUDED (both switching branches):
+            // a flip that happened is a fact about the operation even when the candidate was
+            // destroyed since, and a trashed candidate read as absent would fall through to
+            // the pre-switch lane, whose destroy refuses a trashed record and strands the op.
+            Row candidate = StoredRows.byId(Models.get(InstanceModel.class), candidateId);
             boolean flipped = candidate != null
                 && InstanceModel.ROLE_SERVING.equals(candidate.get(InstanceModel.RUNTIME_ROLE));
             if (flipped && retiredId != null) {
@@ -797,7 +802,7 @@ public final class ReleaseEngine {
         }
         if (ReleaseOperationModel.STATUS_SWITCHING.equals(status) && candidateId != null
                 && retiredId == null) {
-            Row candidate = Models.get(InstanceModel.class).findById(candidateId);
+            Row candidate = StoredRows.byId(Models.get(InstanceModel.class), candidateId);
             if (candidate != null && InstanceModel.ROLE_SERVING.equals(
                     candidate.get(InstanceModel.RUNTIME_ROLE))) {
                 finish(op, ReleaseOperationModel.STATUS_SUCCEEDED, null,
@@ -823,7 +828,6 @@ public final class ReleaseEngine {
         List<Row> candidates = Models.get(InstanceModel.class).find()
             .where(InstanceModel.RUNTIME_ROLE.eq(InstanceModel.ROLE_CANDIDATE))
             .where(InstanceModel.GENERATED_FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
-            .where(InstanceModel.DELETED_AT.isNull())
             .all();
         for (Row candidate : candidates) {
             int candidateId = candidate.get(InstanceModel.ID);
@@ -977,7 +981,7 @@ public final class ReleaseEngine {
     private static void destroyCandidateQuietly(int candidateId) {
         try {
             Row row = Models.get(InstanceModel.class).findById(candidateId);
-            if (row == null || row.get(InstanceModel.DELETED_AT) != null
+            if (row == null
                     || !InstanceModel.ROLE_CANDIDATE.equals(row.get(InstanceModel.RUNTIME_ROLE))) {
                 return;
             }
@@ -994,7 +998,6 @@ public final class ReleaseEngine {
             .where(InstanceModel.GENERATED_FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
             .where(InstanceModel.GENERATED_FOR_ID.eq(applicationId))
             .where(InstanceModel.RUNTIME_ROLE.eq(role))
-            .where(InstanceModel.DELETED_AT.isNull())
             .orderBy(InstanceModel.ID, SortOrder.DESC)
             .all();
     }

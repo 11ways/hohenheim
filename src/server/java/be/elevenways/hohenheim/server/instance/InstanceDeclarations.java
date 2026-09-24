@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.source.GitRepository;
 import be.elevenways.hohenheim.server.source.SourceOwnership;
@@ -218,7 +219,8 @@ public final class InstanceDeclarations {
         if (!row.has(InstanceModel.ID.getName()) || row.get(InstanceModel.ID) == null) {
             return null;
         }
-        return Models.get(InstanceModel.class).findById(row.get(InstanceModel.ID));
+        // Trashed included: a re-save of a trashed record must still read as trashed.
+        return StoredRows.byId(Models.get(InstanceModel.class), row.get(InstanceModel.ID));
     }
 
     private static @NonNull Microcopy violation(@NonNull String key) {

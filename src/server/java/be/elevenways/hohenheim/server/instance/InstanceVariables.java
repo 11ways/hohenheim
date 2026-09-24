@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.variable.SecretVariableType;
 import be.elevenways.hohenheim.server.instance.variable.VariableTypeHandler;
@@ -239,7 +240,8 @@ public final class InstanceVariables {
      */
     public @NonNull Map<String, String> valuesFor(int instanceId) {
         Map<String, String> values = new LinkedHashMap<>();
-        Row instance = Models.get(InstanceModel.class).findById(instanceId);
+        // Trashed included: the boot seal of a trashed engine instance reads these too.
+        Row instance = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
         Integer environmentId = instance == null ? null
             : instance.get(InstanceModel.ENVIRONMENT_ID);
         if (environmentId != null) {

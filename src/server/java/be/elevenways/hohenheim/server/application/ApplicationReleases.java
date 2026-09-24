@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.build.BuildArtifacts;
 import be.elevenways.hohenheim.server.build.BuildQuota;
@@ -347,7 +348,6 @@ public final class ApplicationReleases {
             .where(InstanceModel.GENERATED_FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
             .where(InstanceModel.GENERATED_FOR_ID.eq(applicationId))
             .where(InstanceModel.RUNTIME_ROLE.eq(InstanceModel.ROLE_SERVING))
-            .where(InstanceModel.DELETED_AT.isNull())
             .orderBy(InstanceModel.ID, SortOrder.DESC)
             .first();
     }
@@ -380,7 +380,8 @@ public final class ApplicationReleases {
      * @return null when a release-managed owner has nothing serving
      */
     public static @Nullable Integer consumerInstanceOf(int ownerId) {
-        Row owner = Models.get(InstanceModel.class).findById(ownerId);
+        // Trashed included: the destroy-time link sweep asks this about a record it just trashed.
+        Row owner = StoredRows.byId(Models.get(InstanceModel.class), ownerId);
         if (owner == null) {
             return null;
         }
@@ -705,7 +706,7 @@ public final class ApplicationReleases {
      */
     public static @NonNull Row requireApplication(int applicationId) {
         Row application = Models.get(InstanceModel.class).findById(applicationId);
-        if (application == null || application.get(InstanceModel.DELETED_AT) != null
+        if (application == null
                 || !InstanceKinds.isReleaseManaged(application.get(InstanceModel.KIND))) {
             throw Violations.ofForm(Microcopy.of("application_not_found")
                 .withFilter("scope", "violations").withArg("id", applicationId));

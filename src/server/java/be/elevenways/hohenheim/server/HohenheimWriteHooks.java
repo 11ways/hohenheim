@@ -157,8 +157,8 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // the soft-delete transition (destroy/expiry) hands the slot back.
         ChargedModel.PREVIEWS.install();
         // A site RECORD is one owner slot whether or not it lowers a container (eight of
-        // eleven site types run none), released on the deleted_at transition SiteResource
-        // stamps -- there is no hard site delete outside tests.
+        // eleven site types run none), released on the deleted_at transition the site's
+        // SoftDeleteBehaviour stamps -- there is no hard site delete outside tests.
         ChargedModel.SITES.install();
         // A managed database is one owner slot ON TOP of the instance slot its engine
         // container spends; databases have no deleted_at, so the remove pairing is the one

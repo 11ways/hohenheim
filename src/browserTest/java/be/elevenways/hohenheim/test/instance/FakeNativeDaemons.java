@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.server.runtime.PortPublication;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.WorkloadAttribution;
 import be.elevenways.hohenheim.server.runtime.WorkloadAttribution.WorkloadClaim;
+import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
 import be.elevenways.hohenheim.server.runtime.StatsStreamSupport;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -123,6 +124,8 @@ final class FakeNativeDaemons {
         final Map<String, String> data = new LinkedHashMap<>();
         final List<String> snapshots = new ArrayList<>();
         boolean running;
+        /** The kernel OOM-killed the workload while the container kept running (sticky until a start). */
+        boolean oomKilled;
         Identifier ownerModel;
         String ownerId;
         /** Created with a pseudo-terminal (the spec's {@code tty}); see {@link #geometry}. */
@@ -337,7 +340,9 @@ final class FakeNativeDaemons {
 
         @Override
         public void start(@NonNull String handle) throws IOException {
-            require(handle).running = true;
+            FakeWorkload workload = require(handle);
+            workload.running = true;
+            workload.oomKilled = false;   // a restart clears the daemon's kill flag
         }
 
         @Override
@@ -359,8 +364,11 @@ final class FakeNativeDaemons {
             if (workload == null) {
                 return new InstanceStatus(ContainerState.ABSENT, null);
             }
-            return new InstanceStatus(workload.running
-                ? ContainerState.RUNNING : ContainerState.STOPPED, null);
+            if (!workload.running) {
+                return new InstanceStatus(ContainerState.STOPPED, null);
+            }
+            return new InstanceStatus(ContainerState.RUNNING, null, null,
+                workload.oomKilled ? WorkloadLiveness.WORKLOAD_DEAD : WorkloadLiveness.SERVING);
         }
 
         private @NonNull FakeWorkload require(String handle) throws IOException {

@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.source.TestSources;
@@ -173,7 +174,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
             .as("step 5: the preview's generated row was reclaimed").isNull();
         assertThat(domains.findById(handRow.get(SiteDomainModel.ID)))
             .as("step 5: the hand-authored row is untouched").isNotNull();
-        Row deadPreview = Models.get(PreviewDeploymentModel.class).findById(previewId);
+        Row deadPreview = StoredRows.byId(Models.get(PreviewDeploymentModel.class), previewId);
         assertThat((Object) deadPreview.get(PreviewDeploymentModel.DELETED_AT))
             .as("step 5: the preview row soft-deleted").isNotNull();
         assertThat((String) deadPreview.get(PreviewDeploymentModel.STATUS))
@@ -260,7 +261,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
             .as("step 3: the dead preview left no schedule rows behind").isEmpty();
 
         // 4. The healthy preview survived, its one-shot still armed and unspent.
-        Row alive = Models.get(PreviewDeploymentModel.class).findById(healthyId);
+        Row alive = StoredRows.byId(Models.get(PreviewDeploymentModel.class), healthyId);
         assertThat((Object) alive.get(PreviewDeploymentModel.DELETED_AT))
             .as("step 4: the unexpired preview survived the sweep").isNull();
         List<Row> armed = schedulesOf(healthyId);
@@ -270,7 +271,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
 
         // 5. A second sweep changes nothing: the healthy deadline is still ahead.
         new RecordSchedules(Datasources.getDefault()).runDue(null);
-        alive = Models.get(PreviewDeploymentModel.class).findById(healthyId);
+        alive = StoredRows.byId(Models.get(PreviewDeploymentModel.class), healthyId);
         assertThat((Object) alive.get(PreviewDeploymentModel.DELETED_AT))
             .as("step 5: still untouched after another sweep").isNull();
 
@@ -387,7 +388,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
     private static Row awaitDestroyed(int previewId) {
         return Poll.value("preview " + previewId + " is soft-deleted", Duration.ofSeconds(10),
             Duration.ofMillis(100), () -> {
-                Row row = Models.get(PreviewDeploymentModel.class).findById(previewId);
+                Row row = StoredRows.byId(Models.get(PreviewDeploymentModel.class), previewId);
                 return row != null && row.get(PreviewDeploymentModel.DELETED_AT) != null ? row : null;
             });
     }

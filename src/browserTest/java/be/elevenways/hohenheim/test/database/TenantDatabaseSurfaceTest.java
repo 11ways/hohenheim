@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.quota.DatabaseQuota;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -119,8 +120,8 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
             }
         }
         Model sites = Models.get(SiteModel.class);
-        for (Row row : sites.find().where(SiteModel.NAME.startsWith(PREFIX)).all()) {
-            sites.delete(row.get(SiteModel.ID));
+        for (Row row : sites.find().withTrashed().where(SiteModel.NAME.startsWith(PREFIX)).all()) {
+            HardDeletes.byId(sites, row.get(SiteModel.ID));
         }
         if (admittedHostId != null) {
             Models.get(ServerModel.class).delete(admittedHostId);

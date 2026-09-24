@@ -3,10 +3,12 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.quota.QuotaReconciler;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -83,7 +85,7 @@ class QuotaDriftReconcileTest {
     void cleanUp() {
         Db.run(datasource, () -> {
             for (Integer id : this.instances) {
-                Models.get(InstanceModel.class).delete(id);
+                HardDeletes.byId(Models.get(InstanceModel.class), id);
             }
             for (Integer id : this.hosts) {
                 Models.get(ServerModel.class).delete(id);
@@ -180,7 +182,7 @@ class QuotaDriftReconcileTest {
             // 6. A bucket whose last workload is GONE reconciles to zero. The trashed row
             //    is what names the bucket -- computing candidates from live rows alone
             //    would leave such a leak invisible forever.
-            Row trashed = Models.get(InstanceModel.class).findById(landed);
+            Row trashed = StoredRows.byId(Models.get(InstanceModel.class), landed);
             trashed.set(InstanceModel.DELETED_AT, Now.instant());
             Models.get(InstanceModel.class).save(trashed);
             Quotas.reserve(MEMORY_BUCKET, 777, Long.MAX_VALUE);

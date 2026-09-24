@@ -65,7 +65,7 @@ class SiteCreateHostnameTest extends HohenheimTestBase {
             for (Row domain : domainsOf(site)) {
                 domainModel.delete(domain);
             }
-            siteModel.delete(site);
+            HardDeletes.row(siteModel, site);
         }
         // Tearing a live site down IS a release, so cleanup itself ledgers quarantine rows;
         // they would otherwise refuse another class's claim on the same hostname.

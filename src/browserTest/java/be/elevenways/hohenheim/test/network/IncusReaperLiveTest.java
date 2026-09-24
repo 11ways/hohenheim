@@ -12,7 +12,6 @@ import be.elevenways.hohenheim.server.task.ReapIncusControllers;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
-import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -63,9 +62,7 @@ class IncusReaperLiveTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        remote = LiveIncusHost.configured();
-        LiveLane.require(LiveLane.Need.INCUS_HOST, remote != null,
-            "no live incus host enrolled at " + LiveIncusHost.CONFIG);
+        remote = LiveIncusHost.requirePrimary();
 
         // ONE database per class: the controller identity every name is scoped by resolves
         // through the CURRENT datasource (IncusNetworkIsolationLiveTest's rule verbatim).

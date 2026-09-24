@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.project.ProjectAdoption;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -122,12 +123,12 @@ class ProjectAdoptionTest extends HohenheimTestBase {
             Models.get(InstanceQuotaModel.class).delete(quotaOverrideId);
         }
         Model instances = Models.get(InstanceModel.class);
-        for (Row row : instances.find().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
-            instances.delete(row.get(InstanceModel.ID));
+        for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
+            HardDeletes.byId(instances, row.get(InstanceModel.ID));
         }
         Model sites = Models.get(SiteModel.class);
-        for (Row row : sites.find().where(SiteModel.NAME.startsWith(PREFIX)).all()) {
-            sites.delete(row.get(SiteModel.ID));
+        for (Row row : sites.find().withTrashed().where(SiteModel.NAME.startsWith(PREFIX)).all()) {
+            HardDeletes.byId(sites, row.get(SiteModel.ID));
         }
         // Adoption-created projects for this class's owner sets (throwaway members).
         Model projects = Models.get(ProjectModel.class);

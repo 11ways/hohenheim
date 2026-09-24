@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.host;
 
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
@@ -141,7 +142,7 @@ class HostRecordTest {
                 .as("step 1: the server row survives the refused delete").isNotNull();
 
             // 2. A stack on the host blocks removal too, even with no instances left.
-            Row instance = Models.get(InstanceModel.class).findById(instanceId);
+            Row instance = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
             instance.set(InstanceModel.DELETED_AT, Now.instant());
             Models.get(InstanceModel.class).save(instance);
             Row stack = Models.get(StackModel.class).createEmptyRow();
@@ -160,7 +161,8 @@ class HostRecordTest {
             servers.remove("edge-owned");
             assertThat(Models.get(ServerModel.class).findByName("edge-owned"))
                 .as("step 3: an unowned host removes cleanly").isNull();
-            Row trashed = Models.get(InstanceModel.class).findById(instanceId);
+            // Trashed: a default find hides it by design, so the kept row is read as stored.
+            Row trashed = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
             assertThat(trashed).as("step 3: the trashed instance row is kept").isNotNull();
             assertThat((Object) trashed.get(InstanceModel.SERVER_ID))
                 .as("step 3: with its host pointer detached").isNull();

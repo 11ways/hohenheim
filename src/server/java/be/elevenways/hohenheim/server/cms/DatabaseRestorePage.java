@@ -63,7 +63,6 @@ public final class DatabaseRestorePage implements RecordScopedPage<Row> {
         for (Row link : Models.get(InstanceDatabaseModel.class).findByDatabaseId(databaseId)) {
             Row instance = instanceModel.find()
                 .where(InstanceModel.ID.eq(link.get(InstanceDatabaseModel.INSTANCE_ID)))
-                .where(InstanceModel.DELETED_AT.isNull())
                 .first();
             if (instance != null) {
                 instances.add(Map.of(

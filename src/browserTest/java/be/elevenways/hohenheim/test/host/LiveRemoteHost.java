@@ -2,8 +2,10 @@ package be.elevenways.hohenheim.test.host;
 
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostKeys;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -32,6 +34,9 @@ public final class LiveRemoteHost {
     public static final Path CONFIG = Path.of(System.getProperty("user.home"),
         ".config", "hohenheim-livehost", "livehost.properties");
 
+    /** The ssh port a {@code target} without one connects to. */
+    private static final int SSH_PORT = 22;
+
     private final String target;
     private final String identityPrivateKey;
     private final String fingerprint;
@@ -57,6 +62,21 @@ public final class LiveRemoteHost {
         } catch (IOException e) {
             throw new UncheckedIOException("Unreadable " + CONFIG, e);
         }
+    }
+
+    /**
+     * THE gate of every live-remote class: the configured host with its ssh port answering,
+     * or a {@code remote-host} skip naming what is missing -- never a setUp failure for a
+     * host that is merely down (the {@link LiveIncusHost#requirePrimary} rule).
+     */
+    public static @NonNull LiveRemoteHost requireAvailable() {
+        LiveRemoteHost host = configured();
+        LiveLane.require(LiveLane.Need.REMOTE_HOST, host != null,
+            "no live remote host enrolled at " + CONFIG);
+        HostKeys.Target ssh = HostKeys.parseTarget(host.target);
+        LiveLane.requireReachable(LiveLane.Need.REMOTE_HOST, "ssh lane " + host.target,
+            ssh.host(), ssh.port() > 0 ? ssh.port() : SSH_PORT);
+        return host;
     }
 
     /** {@code [user@]host[:port]} as the product's own target parser takes it. */

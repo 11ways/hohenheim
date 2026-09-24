@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.application.ApplicationDeploys;
@@ -455,17 +456,19 @@ public final class InstanceService {
     /**
      * Verified teardown + soft delete: the container is removed (or observed absent),
      * the port claims are released as observed, and only then is the record trashed
-     * (deleted_at; the grant liveWhen predicate keys on it). Named volumes survive --
+     * (deleted_at, which InstanceModel.SOFT_DELETE hides from every default read, grant
+     * liveness included). Named volumes survive --
      * the reconciler reports them as orphans until an operator decides -- and every site
      * that exposed the workload is DISABLED rather than left serving a permanent 503
      * ({@link InstanceExposure}); the site itself, its hostnames and its certificate are
      * never touched.
      *
-     * AIDEV-NOTE: the deleted_at write itself rides save(), NOT the guarded updateAll,
-     * because the instance-quota release lives in a beforeWrite hook on the deleted_at
-     * transition and updateAll is hook-free by contract. The guarded stamp immediately
-     * before is the fence proof; the small window between it and the save is
-     * covered by the held lease, not by a row guard.
+     * AIDEV-NOTE: the deleted_at write itself rides save() ({@link #trash}), NOT the
+     * guarded updateAll, because the instance-quota release lives in a beforeWrite hook on
+     * the deleted_at transition and updateAll is hook-free by contract (and, since instances
+     * carry SoftDeleteBehaviour, scoped to live rows). The guarded stamp immediately before
+     * is the fence proof; the small window between it and the save is covered by the held
+     * lease, not by a row guard.
      *
      * @throws Violations when the daemon cannot confirm removal: the record is KEPT
      *         (status {@code error}), the claims are parked, and the operator retries
@@ -516,23 +519,9 @@ public final class InstanceService {
         // End of life: pre-allocated reservations die WITH the instance -- unlike stop,
         // which keeps them (the stable number is what DNS points at across restarts).
         PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, instanceId);
-        Row row = Models.get(InstanceModel.class).findById(instanceId);
-        if (row == null) {
+        if (!trash(instanceId)) {
             return;
         }
-        row.set(InstanceModel.DELETED_AT, Now.instant());
-        // The deleted_at write is the CONTINUATION of a destroy whose capability gate ran
-        // at the funnel; TenantWrites' instance rule would otherwise read it as a tenant
-        // authoring a frozen column (see inAuthorizedOperation's contract).
-        //
-        // This save is the ONE hook-firing write in the whole teardown, so the withAction
-        // rename belongs around it rather than around the caller's call: the CMS row
-        // action used to own that wrapper, which left every OTHER destroy caller (the
-        // release engine, preview expiry, database teardown) recording a bare "update"
-        // for an irreversible teardown.
-        ActivityLog.withAction(ActivityLog.ACTION_DELETE, ACTIVITY_DESTROY_DETAIL,
-            () -> TenantWrites.inAuthorizedOperation(
-                () -> Models.get(InstanceModel.class).save(row)));
         // Schedules must die with their record, and destroy SOFT-deletes (remove hooks
         // never fire here), so the cleanup is explicit -- nothing else will do it.
         new RecordSchedules(Db.currentOrDefault())
@@ -605,10 +594,7 @@ public final class InstanceService {
      * @throws Violations {@code instance_not_found} or {@code instance_fenced_out}
      */
     public void assignRuntimeRole(int instanceId, @NonNull String role) {
-        Row row = Models.get(InstanceModel.class).find()
-            .where(InstanceModel.ID.eq(instanceId))
-            .where(InstanceModel.DELETED_AT.isNull())
-            .first();
+        Row row = Models.get(InstanceModel.class).findById(instanceId);
         if (row == null) {
             throw Violations.ofForm(violationText("instance_not_found")
                 .withArg("id", instanceId));
@@ -639,27 +625,49 @@ public final class InstanceService {
 
     /** The record as it stands, or null when it is missing or trashed. */
     private static @Nullable Row liveRow(int instanceId) {
-        return Models.get(InstanceModel.class).find()
-            .where(InstanceModel.ID.eq(instanceId))
-            .where(InstanceModel.DELETED_AT.isNull())
-            .first();
+        return Models.get(InstanceModel.class).findById(instanceId);
     }
 
     /**
-     * Soft-delete a record whose runtime consequences are already settled.
+     * Soft-delete a record whose runtime consequences are already settled: THE trash write of
+     * every destroy lane, container and application alike.
      *
      * AIDEV-NOTE: an application has no container, so the destroy verb's fenced
      * stamp-then-trash sequence has nothing to fence against; what makes ITS delete safe is
      * that {@code ApplicationReleases.destroyFor} refused unless every release was verified
-     * gone first.
+     * gone first. The application lane used to save deleted_at bare -- recorded as a plain
+     * "update" and judged by TenantWrites as a tenant authoring a frozen column -- while the
+     * container lane wrapped it; both now take this one write.
+     *
+     * @return false when the record is missing or already trashed (nothing written)
      */
-    private void trash(int instanceId) {
+    private boolean trash(int instanceId) {
         Row row = Models.get(InstanceModel.class).findById(instanceId);
-        if (row == null || row.get(InstanceModel.DELETED_AT) != null) {
-            return;
+        if (row == null) {
+            return false;
         }
-        row.set(InstanceModel.DELETED_AT, Now.instant());
-        Models.get(InstanceModel.class).save(row);
+        // AIDEV-NOTE: this stamps the behaviour's own deleted_at field through save() instead
+        // of calling InstanceModel.delete(row), deliberately. SoftDeleteBehaviour records every
+        // soft delete as (delete, "soft-delete") and its inner ActivityLog.withAction REPLACES
+        // an enclosing one, so a destroy would lose its "destroy" detail -- the one fact that
+        // tells an operator this was an irreversible teardown and not a record edit. The save
+        // is what the behaviour's own delete does (same field, same hooks: the quota release,
+        // grant cleanup and claim releases ride the deleted_at transition either way), minus
+        // its wrapping transaction, which a single-row save does not need.
+        row.set(InstanceModel.SOFT_DELETE.deletedAtField(), Now.instant());
+        // The deleted_at write is the CONTINUATION of a destroy whose capability gate ran
+        // at the funnel; TenantWrites' instance rule would otherwise read it as a tenant
+        // authoring a frozen column (see inAuthorizedOperation's contract).
+        //
+        // This save is the ONE hook-firing write in the whole teardown, so the withAction
+        // rename belongs around it rather than around the caller's call: the CMS row
+        // action used to own that wrapper, which left every OTHER destroy caller (the
+        // release engine, preview expiry, database teardown) recording a bare "update"
+        // for an irreversible teardown.
+        ActivityLog.withAction(ActivityLog.ACTION_DELETE, ACTIVITY_DESTROY_DETAIL,
+            () -> TenantWrites.inAuthorizedOperation(
+                () -> Models.get(InstanceModel.class).save(row)));
+        return true;
     }
 
     // -- the fence discipline -------------------------------------------------
@@ -798,7 +806,6 @@ public final class InstanceService {
      */
     public static void recoverInterrupted() {
         List<Row> stuck = Models.get(InstanceModel.class).find()
-            .where(InstanceModel.DELETED_AT.isNull())
             .where(Criteria.or(
                 InstanceModel.STATUS.eq(InstanceModel.STATUS_CAPTURING),
                 InstanceModel.STATUS.eq(InstanceModel.STATUS_RESTORING)))
@@ -900,7 +907,8 @@ public final class InstanceService {
 
     /** {@link #destroyWithData}'s body; the caller holds the operation lock. */
     private @NonNull List<String> destroyWithDataNow(int instanceId) {
-        Row row = Models.get(InstanceModel.class).findById(instanceId);
+        // Trashed included: removing a destroyed record's data is this verb's whole point.
+        Row row = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
         if (row == null) {
             throw Violations.ofForm(violationText("instance_not_found")
                 .withArg("id", instanceId));
@@ -912,7 +920,7 @@ public final class InstanceService {
         // remove its files" has to work, so the container teardown is conditional and the
         // volume removal is not -- an unconditional destroy() here refused with
         // instance_not_found and left the bytes on the host forever.
-        if (row.get(InstanceModel.DELETED_AT) == null) {
+        if (!InstanceModel.SOFT_DELETE.isTrashed(row)) {
             destroy(instanceId);
         }
         List<String> removed = new ArrayList<>(removeNamedVolumes(row, serverName));
@@ -1017,10 +1025,7 @@ public final class InstanceService {
      * @throws Violations for a missing/trashed record, an unknown kind or a blank image
      */
     public Resolved resolve(int instanceId) {
-        Row row = Models.get(InstanceModel.class).find()
-            .where(InstanceModel.ID.eq(instanceId))
-            .where(InstanceModel.DELETED_AT.isNull())
-            .first();
+        Row row = Models.get(InstanceModel.class).findById(instanceId);
         if (row == null) {
             throw Violations.ofForm(violationText("instance_not_found")
                 .withArg("id", instanceId));

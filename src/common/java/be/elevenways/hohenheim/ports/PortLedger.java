@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.ports;
 
 import be.elevenways.hohenheim.model.DoomedRows;
 import be.elevenways.hohenheim.model.PortAllocationModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.util.BlastString;
@@ -206,7 +207,8 @@ public final class PortLedger {
         if (model == null) {
             return ownerModel + " #" + ownerId;
         }
-        Row owner = model.findById(ownerId);
+        // A trashed owner (a destroyed instance still releasing) is named like a live one.
+        Row owner = StoredRows.byId(model, ownerId);
         if (owner == null) {
             return model.getModelName() + " #" + ownerId;
         }

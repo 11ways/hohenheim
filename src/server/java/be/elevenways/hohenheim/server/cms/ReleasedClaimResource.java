@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -103,7 +104,8 @@ public class ReleasedClaimResource extends RowResource {
             return null;
         }
         Model sites = Models.get(SiteModel.class);
-        Row site = sites.findById(siteId);
+        // Trashed included: the former site of a released claim is usually a deleted one.
+        Row site = StoredRows.byId(sites, siteId);
         return site != null ? sites.getDisplayTitle(site) : null;
     }
 

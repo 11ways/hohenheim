@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 import org.opentest4j.TestAbortedException;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -85,6 +87,47 @@ class LiveLaneTest {
         assertThat(LiveLane.required())
             .as("step 5: withRequired restores the JVM's own policy")
             .isEmpty();
+    }
+
+    /**
+     * The reachability gate: a CONFIGURED host that is down is a named skip, not a setUp
+     * failure, and a host that declares the need still fails on it.
+     */
+    @Test
+    void anUnreachableConfiguredHostIsANamedSkipUnlessTheRunDeclaresTheNeed() throws Exception {
+        int closedPort;
+        try (ServerSocket listening = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+            // 1. A listening endpoint passes -- the positive anchor. A probe that always
+            //    aborted would satisfy every assertion below.
+            LiveLane.requireReachable(Need.INCUS_HOST, "incus daemon",
+                "127.0.0.1", listening.getLocalPort());
+            closedPort = listening.getLocalPort();
+        }
+
+        // 2. The same port with nothing listening: the test aborts naming the need, the
+        //    endpoint and the connect error, which is what the live lane report prints.
+        Throwable aborted = catchThrowable(() -> LiveLane.requireReachable(Need.INCUS_HOST,
+            "incus daemon", "127.0.0.1", closedPort));
+        assertThat(aborted)
+            .as("step 2: an unreachable endpoint aborts rather than failing in setUp")
+            .isInstanceOf(TestAbortedException.class);
+        assertThat(aborted.getMessage())
+            .as("step 2: and names the need, the endpoint and why it is unreachable")
+            .startsWith("[live:incus-host] incus daemon (127.0.0.1:" + closedPort + ") unreachable: ");
+
+        // 3. A host that DECLARES incus-host turns the very same skip into a failure: a
+        //    live host going down under a declaring run must never read as green.
+        Throwable[] captured = new Throwable[1];
+        LiveLane.withRequired(Set.of(Need.INCUS_HOST), () -> captured[0] = catchThrowable(
+            () -> LiveLane.requireReachable(Need.INCUS_HOST, "incus daemon",
+                "127.0.0.1", closedPort)));
+        assertThat(captured[0])
+            .as("step 3: a declared-but-unreachable host FAILS the run")
+            .isInstanceOf(AssertionError.class)
+            .isNotInstanceOf(TestAbortedException.class);
+        assertThat(captured[0].getMessage())
+            .as("step 3: naming the declared need and the unreachable endpoint")
+            .contains("REQUIRED").contains("[live:incus-host]").contains("unreachable");
     }
 
     /**

@@ -109,6 +109,12 @@ public class PreviewDeploymentResource extends RowResource {
     @Override public boolean updatable() { return false; }
 
     /**
+     * No generic delete: removing the row alone would leave the preview's container, generated
+     * domain and DNS rows behind; the destroy_preview row action is the one way a preview goes.
+     */
+    @Override public boolean deletable() { return false; }
+
+    /**
      * The create submit reaches OUTSIDE the datasource (arms a record schedule, spawns
      * the build); a scoped-create rollback would orphan those, so the subclass gate
      * refuses out-of-scope callers as its first statement instead.

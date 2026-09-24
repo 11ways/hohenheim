@@ -141,7 +141,7 @@ class UpstreamKindVocabularyTest {
         ok.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         sites.save(ok);
         assertThat(ok.get(SiteModel.ID)).as("step 3: an ordinary static site saves").isNotNull();
-        sites.find().where(SiteModel.ID.eq(ok.get(SiteModel.ID))).delete();
+        HardDeletes.byId(sites, ok.get(SiteModel.ID));
     }
 
     /** Both shipped languages must resolve the token to something other than the token. */

@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
@@ -84,13 +85,13 @@ class InstanceQuotaAttributionTest extends HohenheimTestBase {
         // Inside the sweeping scope: these rows carry generated attribution, which is
         // read-only (and undeletable) outside their owning tier's system scope.
         GeneratedRows.sweeping("site", () -> {
-            for (Row row : instances.find().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
-                instances.delete(row.get(InstanceModel.ID));
+            for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
+                HardDeletes.byId(instances, row.get(InstanceModel.ID));
             }
         });
         Model sites = Models.get(SiteModel.class);
-        for (Row row : sites.find().where(SiteModel.NAME.startsWith(PREFIX)).all()) {
-            sites.delete(row.get(SiteModel.ID));
+        for (Row row : sites.find().withTrashed().where(SiteModel.NAME.startsWith(PREFIX)).all()) {
+            HardDeletes.byId(sites, row.get(SiteModel.ID));
         }
     }
 

@@ -130,8 +130,7 @@ final class DeleteImpact {
             return gated;
         }
         for (Row site : sites()) {
-            if (providerId.equals(site.get(SiteModel.AUTH_PROVIDER_ID))
-                    && site.get(SiteModel.DELETED_AT) == null) {
+            if (providerId.equals(site.get(SiteModel.AUTH_PROVIDER_ID))) {
                 String name = site.get(SiteModel.NAME);
                 gated.add(name == null || name.isBlank() ? String.valueOf((Object) site.get(SiteModel.ID)) : name);
             }
@@ -167,7 +166,7 @@ final class DeleteImpact {
         }
         for (Row instance : instances()) {
             if (environmentId.equals(instance.get(InstanceModel.ENVIRONMENT_ID))
-                    && instance.get(InstanceModel.DELETED_AT) == null) {
+                    && !InstanceModel.SOFT_DELETE.isTrashed(instance)) {
                 instances.add(ProjectGuards.EnvironmentUsage.nameOf(
                     instance.get(InstanceModel.NAME), instance.get(InstanceModel.ID)));
             }
@@ -422,6 +421,7 @@ final class DeleteImpact {
         return snapshot(ZONES, () -> Models.get(DnsZoneModel.class).find().all());
     }
 
+    /** LIVE sites only (the soft-delete find hook): a trashed site gates and names nothing. */
     private static @NonNull List<Row> sites() {
         return snapshot(SITES, () -> Models.get(SiteModel.class).find().all());
     }

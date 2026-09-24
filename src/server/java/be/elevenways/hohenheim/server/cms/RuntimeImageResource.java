@@ -126,7 +126,6 @@ public class RuntimeImageResource extends RowResource {
         Integer id = record.get(RuntimeImageModel.ID);
         long instances = Models.get(InstanceModel.class).find()
             .where(InstanceModel.RUNTIME_IMAGE_ID.eq(id))
-            .where(InstanceModel.DELETED_AT.isNull())
             .count();
         long templates = Models.get(InstanceTemplateModel.class).find()
             .where(InstanceTemplateModel.RUNTIME_IMAGE_ID.eq(id))

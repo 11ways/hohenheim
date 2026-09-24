@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -81,8 +82,8 @@ class InstanceApiTest extends HohenheimTestBase {
     @AfterAll
     static void cleanUp() {
         InstanceModel instances = Models.get(InstanceModel.class);
-        for (Row row : instances.find().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
-            instances.delete(row.get(InstanceModel.ID));
+        for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
+            HardDeletes.byId(instances, row.get(InstanceModel.ID));
         }
     }
 
@@ -283,7 +284,7 @@ class InstanceApiTest extends HohenheimTestBase {
         assertThat(codeOf(refused.body()))
             .as("step 2: named by the service gate, which never says WHICH capability")
             .isEqualTo("instance_not_permitted");
-        assertThat((Object) Models.get(InstanceModel.class).findById(viewOnlyId)
+        assertThat((Object) StoredRows.byId(Models.get(InstanceModel.class), viewOnlyId)
                 .get(InstanceModel.DELETED_AT))
             .as("step 2: the record is untouched").isNull();
 
@@ -292,7 +293,7 @@ class InstanceApiTest extends HohenheimTestBase {
             .as("step 3: a foreign workload does not read").isEqualTo(404);
         assertThat(keyPost(keyTenant, "/api/v1/instances/" + foreignId + "/delete", "")
             .statusCode()).as("step 3: nor delete").isEqualTo(404);
-        assertThat((Object) Models.get(InstanceModel.class).findById(foreignId)
+        assertThat((Object) StoredRows.byId(Models.get(InstanceModel.class), foreignId)
                 .get(InstanceModel.DELETED_AT))
             .as("step 3: the foreign record is untouched").isNull();
     }
@@ -307,14 +308,14 @@ class InstanceApiTest extends HohenheimTestBase {
             "/api/v1/instances/" + createdId + "/delete", "");
         assertThat(deleted.statusCode()).as("step 1: the instance is deleted: " + deleted.body())
             .isEqualTo(200);
-        assertThat((Object) Models.get(InstanceModel.class).findById(createdId)
+        assertThat((Object) StoredRows.byId(Models.get(InstanceModel.class), createdId)
                 .get(InstanceModel.DELETED_AT))
             .as("step 1: soft-deleted, exactly like the form's destroy").isNotNull();
         assertThat(keyGet(keyAdmin, "/api/v1/instances/" + createdId).statusCode())
             .as("step 1: a trashed workload reads as absent").isEqualTo(404);
         assertThat(keyPost(keyAdmin, "/api/v1/instances/" + createdId + "/delete", "")
             .statusCode()).as("step 1: and cannot be deleted twice").isEqualTo(404);
-        assertThat((Object) Models.get(InstanceModel.class).findById(viewOnlyId)
+        assertThat((Object) StoredRows.byId(Models.get(InstanceModel.class), viewOnlyId)
                 .get(InstanceModel.DELETED_AT))
             .as("step 1: the other workload is untouched").isNull();
     }
@@ -375,7 +376,7 @@ class InstanceApiTest extends HohenheimTestBase {
             "/api/v1/instances/" + viewOnlyId + "/delete", "");
         assertThat(deleted.statusCode())
             .as("step 3: and it tears the workload down: " + deleted.body()).isEqualTo(200);
-        assertThat((Object) Models.get(InstanceModel.class).findById(viewOnlyId)
+        assertThat((Object) StoredRows.byId(Models.get(InstanceModel.class), viewOnlyId)
                 .get(InstanceModel.DELETED_AT))
             .as("step 3: soft-deleted, exactly like the operator's own destroy").isNotNull();
     }

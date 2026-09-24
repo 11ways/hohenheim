@@ -624,11 +624,18 @@ public final class IncusInstanceRuntime
     @Override
     public @NonNull ImageIdentity imageIdentity(@NonNull InstanceSpec spec)
             throws IOException {
-        Map<String, Object> instance = this.incus.instance(spec.handle());
-        String id = instance.get("config") instanceof Map<?, ?> config
+        return new ImageIdentity(spec.image(), baseImageOf(this.incus.instance(spec.handle())));
+    }
+
+    /**
+     * The image fingerprint a daemon instance object says it was created from.
+     *
+     * @return {@code volatile.base_image}, or null when the daemon names none
+     */
+    public static @Nullable String baseImageOf(@NonNull Map<String, Object> instance) {
+        return instance.get("config") instanceof Map<?, ?> config
             && config.get("volatile.base_image") instanceof String fingerprint
             ? fingerprint : null;
-        return new ImageIdentity(spec.image(), id);
     }
 
     // -- ImagePublishSupport --------------------------------------------------

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.application;
 
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -218,7 +219,7 @@ class ApplicationReleaseLiveTest {
             await("step 5: the rollback operation completes after drain",
                 12_000, () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
                     reload(rollbackOp).get(ReleaseOperationModel.STATUS)));
-            Row original = Models.get(InstanceModel.class).findById(firstInstanceId);
+            Row original = StoredRows.byId(Models.get(InstanceModel.class), firstInstanceId);
             assertThat((Object) original.get(InstanceModel.DELETED_AT))
                 .as("step 5: the older retired release was reclaimed (record)").isNotNull();
             assertThat(containerExists(docker, retiredHandle))
@@ -333,7 +334,7 @@ class ApplicationReleaseLiveTest {
             //    claim released; the serving release is untouched.
             Integer candidateId = op.get(ReleaseOperationModel.CANDIDATE_INSTANCE_ID);
             assertThat(candidateId).as("step 5: the candidate was recorded").isNotNull();
-            Row candidate = Models.get(InstanceModel.class).findById(candidateId);
+            Row candidate = StoredRows.byId(Models.get(InstanceModel.class), candidateId);
             assertThat((Object) candidate.get(InstanceModel.DELETED_AT))
                 .as("step 5: the refused candidate's record is soft-deleted").isNotNull();
             assertThat(containerExists(docker, ControllerScope.handle(ControllerScope.KIND_INSTANCE, candidateId)))
@@ -517,7 +518,7 @@ class ApplicationReleaseLiveTest {
             assertThat(reload(staleOp).get(ReleaseOperationModel.STATUS))
                 .as("step 3: the pre-switch operation is INTERRUPTED, visibly")
                 .isEqualTo(ReleaseOperationModel.STATUS_INTERRUPTED);
-            Row deadCandidate = Models.get(InstanceModel.class).findById(candidateId[0]);
+            Row deadCandidate = StoredRows.byId(Models.get(InstanceModel.class), candidateId[0]);
             assertThat((Object) deadCandidate.get(InstanceModel.DELETED_AT))
                 .as("step 3: the orphaned candidate's record died").isNotNull();
             assertThat(containerExists(docker, ControllerScope.handle(ControllerScope.KIND_INSTANCE, candidateId[0])))

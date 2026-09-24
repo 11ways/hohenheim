@@ -83,7 +83,7 @@ public final class RouteClaims {
     public static boolean isLive(@Nullable Row site) {
         return site != null
             && Boolean.TRUE.equals(site.get(SiteModel.ENABLED))
-            && site.get(SiteModel.DELETED_AT) == null;
+            && !SiteModel.SOFT_DELETE.isTrashed(site);
     }
 
     /**

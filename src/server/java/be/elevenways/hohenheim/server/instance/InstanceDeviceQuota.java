@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.quota.ChargedDimension;
 import be.elevenways.hohenheim.server.quota.ChargedModel;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
@@ -141,7 +142,8 @@ public final class InstanceDeviceQuota {
             if (pack != null) {
                 return pack;
             }
-            Row instance = Models.get(InstanceModel.class).findById(instanceId);
+            // Trashed included: a device's charge follows its instance's stamp, live or not.
+            Row instance = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
             String bucket = instance != null ? instance.get(InstanceModel.QUOTA_BUCKET) : null;
             if (bucket != null && bucket.startsWith(OwnerBudget.INSTANCES.prefix())) {
                 return OwnerBudget.INSTANCES.packOf(bucket);

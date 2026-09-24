@@ -230,8 +230,8 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
             var domainModel = Models.get(SiteDomainModel.class);
             for (Row d : domainModel.findBySiteId(aId)) domainModel.delete(d);
             for (Row d : domainModel.findBySiteId(bId)) domainModel.delete(d);
-            siteModel.delete(siteA);
-            siteModel.delete(siteB);
+            HardDeletes.row(siteModel, siteA);
+            HardDeletes.row(siteModel, siteB);
             // Tearing live sites down IS a release, so the fixture ledgers quarantine rows
             // that would otherwise refuse another test class's claim on these hostnames.
             Models.get(ReleasedRouteClaimModel.class).find().delete();
@@ -389,7 +389,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
             RecordGrants.revoke(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, siteId,
                 HohenheimAccess.MANAGE);
             for (Row d : domainModel.findBySiteId(siteId)) domainModel.delete(d);
-            siteModel.delete(site);
+            HardDeletes.row(siteModel, site);
             providerModel.delete(provider);
             Models.get(AccessListModel.class).delete(accessList);
             Models.get(ReleasedRouteClaimModel.class).find().delete();

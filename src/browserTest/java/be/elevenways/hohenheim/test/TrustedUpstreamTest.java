@@ -158,7 +158,7 @@ class TrustedUpstreamTest extends HohenheimTestBase {
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId,
                 HohenheimAccess.MANAGE);
             for (Row d : domainModel.findBySiteId(siteId)) domainModel.delete(d);
-            siteModel.delete(site);
+            HardDeletes.row(siteModel, site);
             Models.get(ReleasedRouteClaimModel.class).find().delete();
         }
     }

@@ -198,27 +198,68 @@ public final class IncusPreflight {
             @NonNull Row server, HostPreflight.@NonNull Report report,
             @NonNull IncusClient client) {
         boolean required = ServerModel.acceptsTenantWorkloads(server);
+        KernelProbe probe = probeInstanceKernel(client, required);
         List<HostPreflight.Check> checks = new ArrayList<>(report.checks());
-        checks.addAll(probeInstanceKernel(client, required));
+        checks.addAll(probe.checks());
         boolean passed = report.passed();
         for (HostPreflight.Check check : checks) {
             if (check.required() && check.failed()) {
                 passed = false;
             }
         }
-        return new HostPreflight.Report(List.copyOf(checks), report.facts(), passed,
+        Map<String, Object> facts = new LinkedHashMap<>(report.facts());
+        if (probe.imageFingerprint() != null) {
+            facts.put(PROBE_IMAGE_FACT, probe.imageFingerprint());
+        }
+        return new HostPreflight.Report(List.copyOf(checks), facts, passed,
             report.at(), report.daemonFailure());
     }
 
-    /** The image the kernel probe runs; a system container of the ordinary tenant shape. */
-    static final String PROBE_IMAGE = "alpine/3.22";
+    /**
+     * The image the kernel probe runs: a system container of the ordinary tenant shape, named by
+     * its most exact published alias (release AND variant) on {@link IncusInstanceRuntime#IMAGE_SERVER}.
+     *
+     * AIDEV-NOTE: the Incus twin of {@code docker.PinnedImages}, which CANNOT be pinned the same
+     * way. A fingerprint is a valid instance source, but images.linuxcontainers.org rebuilds every
+     * image and serves only its newest three builds (streams/v1/images.json read 2026-09-24:
+     * alpine:3.22:amd64:default offered 20260913_13:00, 20260916_14:09 and 20260917_13:00 only),
+     * so a pinned fingerprint stops resolving within days and every Incus preflight would then
+     * fail on "image not found" -- an admission outage, not a pin. The fingerprint is also per
+     * architecture. No patch-level alias exists either: this release's default variant publishes
+     * exactly {@code alpine/3.22} and {@code alpine/3.22/default}, and the variant-explicit one is
+     * used so a server-side change of what the bare release alias means cannot move the probe.
+     * What a pin buys on Docker -- a verdict that cannot rest on a different image with no
+     * record of it -- is kept by RECORDING the resolved build instead: the stored report carries
+     * the fingerprint the probe ran ({@link #PROBE_IMAGE_FACT}), so two runs on different builds
+     * show up as a recorded difference. Bump the release here together with PinnedImages.
+     */
+    public static final String PROBE_IMAGE = "alpine/3.22/default";
+
+    /** The stored fact naming the image fingerprint the kernel probe actually ran. */
+    public static final String PROBE_IMAGE_FACT = "probe_image_fingerprint";
+
+    /**
+     * What the kernel probe found.
+     *
+     * @param imageFingerprint the build the daemon created the probe from, or null when it
+     *                         never got that far or named none
+     */
+    public record KernelProbe(@NonNull List<HostPreflight.Check> checks,
+                              @Nullable String imageFingerprint) {
+    }
 
     /** How long the probe instance may take to accept its one exec. */
     private static final long PROBE_EXEC_TIMEOUT_MS = 30_000;
 
-    private static @NonNull List<HostPreflight.Check> probeInstanceKernel(
-            @NonNull IncusClient client, boolean required) {
+    /**
+     * Run one throwaway probe instance from {@link #PROBE_IMAGE} and read its kernel posture.
+     *
+     * @param required whether the userns and seccomp verdicts are REQUIRED on this host
+     */
+    public static @NonNull KernelProbe probeInstanceKernel(@NonNull IncusClient client,
+                                                           boolean required) {
         String name = "hohenheim-preflight-" + Long.toHexString(System.nanoTime());
+        String fingerprint = null;
         try {
             Map<String, Object> source = new LinkedHashMap<>();
             source.put("type", "image");
@@ -230,27 +271,32 @@ public final class IncusPreflight {
                 "type", "container",
                 "source", source,
                 "config", Map.of("user.hohenheim.probe", "preflight")));
+            fingerprint = probeFingerprint(client, name);
             client.changeState(name, "start", 30, false);
             IncusClient.ExecResult result = awaitProbeExec(client, name);
             if (result == null) {
-                return List.of(unanswered(USERNS_CHECK, required,
+                return new KernelProbe(List.of(unanswered(USERNS_CHECK, required,
                         "the probe instance never accepted an exec"),
                     unanswered(SECCOMP_CHECK, required,
                         "the probe instance never accepted an exec"),
-                    unanswered("lsm", false, "the probe instance never accepted an exec"));
+                    unanswered("lsm", false, "the probe instance never accepted an exec")),
+                    fingerprint);
             }
             String[] sections = result.output().split("---");
             String uidMap = sections.length > 0 ? sections[0].trim() : "";
             String status = sections.length > 1 ? sections[1].trim() : "";
             String lsmLabel = sections.length > 2 ? sections[2].trim() : "";
-            return List.of(usernsCheck(uidMap, required), seccompCheck(status, required),
-                HostPreflight.lsmCheck(lsmLabel));
+            return new KernelProbe(List.of(usernsCheck(uidMap, required),
+                seccompCheck(status, required), HostPreflight.lsmCheck(lsmLabel)), fingerprint);
         } catch (Exception error) {
-            String detail = "the kernel probe instance could not be run ("
+            // The image is named so an operator of a host that cannot reach the image
+            // server knows exactly what the daemon failed to obtain.
+            String detail = "the kernel probe instance (image " + PROBE_IMAGE + " from "
+                + IncusInstanceRuntime.IMAGE_SERVER + ") could not be run ("
                 + error.getMessage() + "), so what this host does to a workload is UNKNOWN";
-            return List.of(unanswered(USERNS_CHECK, required, detail),
+            return new KernelProbe(List.of(unanswered(USERNS_CHECK, required, detail),
                 unanswered(SECCOMP_CHECK, required, detail),
-                unanswered("lsm", false, detail));
+                unanswered("lsm", false, detail)), fingerprint);
         } finally {
             try {
                 client.changeState(name, "stop", 10, true);
@@ -262,6 +308,21 @@ public final class IncusPreflight {
             } catch (IOException | RuntimeException alreadyGone) {
                 // a stuck probe instance is the reconciler's, not this verdict's, problem
             }
+        }
+    }
+
+    /**
+     * The build the daemon resolved {@link #PROBE_IMAGE} to for this probe.
+     *
+     * @return null when the daemon names none or the read fails; the record is provenance,
+     *         so its absence never fails a check
+     */
+    private static @Nullable String probeFingerprint(@NonNull IncusClient client,
+                                                     @NonNull String name) {
+        try {
+            return IncusInstanceRuntime.baseImageOf(client.instance(name));
+        } catch (IOException | RuntimeException unread) {
+            return null;
         }
     }
 

@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -33,7 +34,7 @@ class InstanceOwnershipTest extends HohenheimTestBase {
         Model instances = Models.get(InstanceModel.class);
         for (Row row : this.createdInstances) {
             if (row.get(InstanceModel.ID) != null) {
-                instances.delete(row);
+                HardDeletes.row(instances, row);
             }
         }
         this.createdInstances.clear();
@@ -106,8 +107,9 @@ class InstanceOwnershipTest extends HohenheimTestBase {
             .as("step 5: subset ownership is different ownership (equality, not overlap)")
             .isFalse();
 
-        // 6. The liveWhen predicate: a soft-deleted instance refuses NEW grants -- a
-        //    trashed record must not accumulate authority that comes back on restore.
+        // 6. Grant liveness: a soft-deleted instance refuses NEW grants (its behaviour hides
+        //    it from the liveness read) -- a trashed record must not accumulate authority
+        //    that comes back on restore.
         Model instances = Models.get(InstanceModel.class);
         second.set(InstanceModel.DELETED_AT, Now.instant());
         instances.save(second);
