@@ -30,6 +30,7 @@ public class HohenheimSettings {
     public static final SettingGroup HOHENHEIM = Zenit.SETTINGS.createGroup("hohenheim")
         .label("Hohenheim");
 
+    // private-settings-context: loaded from settings/hohenheim.dry and HOHENHEIM__* by HohenheimSettingsFiles
     public static final SettingsContext VALUES = new SettingsContext(HOHENHEIM);
 
     // Nested groups below are force-loaded at compile time via @ZenitAutoLoad
