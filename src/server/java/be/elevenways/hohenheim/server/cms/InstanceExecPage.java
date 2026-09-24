@@ -11,7 +11,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.page.CmsFormBody;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.SubmittableRecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -32,7 +32,7 @@ import java.util.Map;
  * console or config delegate never sees it -- and {@code InstanceExec.run} asks the same
  * capability again, because a hidden tab is an affordance and a direct POST is not.
  */
-public final class InstanceExecPage implements RecordScopedPage<Row> {
+public final class InstanceExecPage implements SubmittableRecordScopedPage<Row> {
 
     public static final String SLUG = "exec";
 
@@ -77,11 +77,6 @@ public final class InstanceExecPage implements RecordScopedPage<Row> {
         vars.put("returnParam", ReturnTarget.PARAM);
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-exec"), vars);
-    }
-
-    @Override
-    public boolean submittable() {
-        return true;
     }
 
     /**
