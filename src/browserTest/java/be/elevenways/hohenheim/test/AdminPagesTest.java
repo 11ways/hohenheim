@@ -472,6 +472,28 @@ class AdminPagesTest extends HohenheimTestBase {
                 .count())
                 .as("the display entries are never inputs")
                 .isZero();
+            // 3b. Coverage and renewal are STATUS: both groups sit in the side column beside
+            //     the name and key material the operator edits.
+            assertThat(page.locator("[data-region='sidebar'] pl-field[data-path='renewal_error_display']")
+                .count()).as("the renewal status renders in the side column").isEqualTo(1);
+            assertThat(page.locator("[data-region='sidebar'] pl-field[data-path='covered_names_display']")
+                .count()).as("and so does the coverage").isEqualTo(1);
+            assertThat(page.locator("[data-region='main'] pl-field[data-path='nice_name']").count())
+                .as("the name stays in the main column").isEqualTo(1);
+            // 3c. The certificate's front door is its read-first overview: the same entries,
+            //     read-only, with the edit form as the "Edit" tab beside it.
+            navigateToApp("/admin/certificates/" + cert.get(CertificateModel.ID) + "/page/overview");
+            waitForHydration();
+            assertThat(page.locator("[data-cms-record-view]").count())
+                .as("the overview renders the read view").isEqualTo(1);
+            assertThat(page.locator("form.cms-form-layout").count())
+                .as("without an edit form").isZero();
+            assertThat(readonlyEntry("covered_names_display"))
+                .as("the overview shows the status the detail page shows")
+                .isEqualTo("broken.example.test");
+            assertThat(page.locator("[data-cms-record-tabs] a[href='/admin/certificates/"
+                + cert.get(CertificateModel.ID) + "']").count())
+                .as("the edit form is a tab of the overview").isEqualTo(1);
 
             // 4. Give it an expiry and a publisher: the same entries now read as an absolute
             //    stamp plus the relative wording, and the enum reads as its LABEL.

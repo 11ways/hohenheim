@@ -17,6 +17,7 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.AccessContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -84,6 +85,13 @@ public final class ManageCertificateResource extends CertificateResource {
         return new ArrayList<>(
             RecordSubpageRegistry.INSTANCE.contributionsFor(this.model().getModelId()));
     }
+
+    /**
+     * No overview: the parent's front door is the admin surface's read-first view, which this
+     * surface does not carry. Its readers never edit, so the detail page already renders as a
+     * read-only view of exactly the status entries this spec offers.
+     */
+    @Override public @Nullable String landingSubpage() { return null; }
 
     /**
      * NAV-ONLY; the route itself stays scoped by accessFunction. Any logged-in principal may
