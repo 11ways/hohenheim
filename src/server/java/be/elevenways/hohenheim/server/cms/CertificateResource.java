@@ -20,6 +20,8 @@ import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
+import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.RecordViewPage;
 import be.elevenways.zenit.cms.common.resource.RelatedPage;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.resource.RowResource;
@@ -107,15 +109,20 @@ public class CertificateResource extends RowResource {
         .add(RENEWAL_ERROR_DISPLAY)
         .add(CertificateModel.ERROR_COUNT)
         .add(NEXT_ATTEMPT_DISPLAY)
-        .group(FieldGroup.of("coverage", Microcopy.of("coverage").withFilter("scope", "certificate")))
-        .group(FieldGroup.of("renewal", Microcopy.of("renewal_status").withFilter("scope", "certificate")))
+        // AIDEV-NOTE: coverage and renewal are STATUS the ACME machinery writes, never
+        // authored here, so they sit in the side column beside the name and the key
+        // material an operator actually edits (and reads first on the overview).
+        .group(FieldGroup.of("coverage", Microcopy.of("coverage").withFilter("scope", "certificate"))
+            .inSidebar())
+        .group(FieldGroup.of("renewal", Microcopy.of("renewal_status").withFilter("scope", "certificate"))
+            .inSidebar())
         .build();
 
     /** One virtual read-only entry: a label from the field catalog, no column behind it. */
     private static @NonNull StringField displayField(@NonNull String name, @NonNull String labelKey,
                                                      @NonNull String group) {
         return StringField.builder().name(name)
-            .visibleIn(EditView.EDIT)
+            .visibleIn(EditView.EDIT, EditView.DETAIL)
             .attribute(FieldAttributes.GROUP, group)
             .label(HohenheimFormCopy.label(labelKey))
             .build();
@@ -179,6 +186,24 @@ public class CertificateResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(CertificateModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /**
+     * A certificate is READ far more often than it is edited (renewal is automatic), so its
+     * front door shows it: the overview first, the edit form as the "Edit" tab, and the
+     * framework history tabs after them.
+     */
+    @Override
+    public @NonNull List<RecordScopedPage<Row>> subpages() {
+        List<RecordScopedPage<Row>> pages = new ArrayList<>();
+        pages.add(new RecordViewPage<>());
+        pages.addAll(this.frameworkSubpages());
+        return pages;
+    }
+
+    @Override public @Nullable String landingSubpage() { return RecordViewPage.SLUG; }
+
+    /** The PEM blocks and the status column need the room a list gets. */
+    @Override public boolean wideRecordPages() { return true; }
     /** Views deliberately dropped: a certificate list is read by expiry, never by a saved query. */
     @Override public @NonNull ListChrome listChrome() { return CmsSupport.WIDE_LIST; }
 
