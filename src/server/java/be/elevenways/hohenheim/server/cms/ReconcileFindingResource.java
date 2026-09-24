@@ -3,18 +3,24 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.server.docker.DockerReconciler;
 import be.elevenways.hohenheim.server.docker.OrphanActions;
+import be.elevenways.protoblast.common.i18n.Locale;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.typed.CoreTypes;
+import be.elevenways.protoblast.common.typed.rule.Condition;
+import be.elevenways.protoblast.common.typed.rule.Operand;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
+import be.elevenways.zenit.cms.common.resource.ListScope;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -22,11 +28,15 @@ import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.widget.common.WidgetInstance;
+import be.elevenways.zenit.widget.common.WidgetTree;
+import be.elevenways.zenit.widget.common.builtin.StatWidget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The reconciler's stored findings as an operator surface: read-only rows, with the
@@ -58,9 +68,11 @@ public final class ReconcileFindingResource extends RowResource {
         .column(ColumnSpec.fromField(ReconcileFindingModel.BUCKET).filterable().build())
         .filter(FilterSpec.forField(ReconcileFindingModel.SERVER_NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(ReconcileFindingModel.SERVER_NAME)).build())
-        .filter(FilterSpec.forField(ReconcileFindingModel.BUCKET, FilterSpec.Kind.SELECT)
+        // MULTI-valued, so the facet rail presents both as counted checkbox panels: a triage
+        // pass reads "orphaned or colliding, containers and volumes" at a glance.
+        .filter(FilterSpec.forField(ReconcileFindingModel.BUCKET, FilterSpec.Kind.MULTI_SELECT)
             .label(FieldLabels.labelFor(ReconcileFindingModel.BUCKET)).build())
-        .filter(FilterSpec.forField(ReconcileFindingModel.KIND, FilterSpec.Kind.SELECT)
+        .filter(FilterSpec.forField(ReconcileFindingModel.KIND, FilterSpec.Kind.MULTI_SELECT)
             .label(FieldLabels.labelFor(ReconcileFindingModel.KIND)).build())
         .build();
 
@@ -91,7 +103,44 @@ public final class ReconcileFindingResource extends RowResource {
      * visible expression, no way to widen it, and a row count that matched nothing on
      * screen. Offering the box is what makes the narrowing legible and reversible.
      */
-    @Override public @NonNull ListChrome listChrome() { return ListChrome.MINIMAL.withAdvancedFilter(true); }
+    @Override public @NonNull ListChrome listChrome() {
+        return ListChrome.MINIMAL.withAdvancedFilter(true).withFacetRail(true);
+    }
+
+    /** Findings are pasted into host commands and tickets: the filtered list leaves as CSV. */
+    @Override public boolean exportable() { return true; }
+
+    /**
+     * What the current filters still hold that needs a decision: the orphans an operator may
+     * remove and the collisions the reconciler warns about. Both tiles count through the
+     * findings' own record source under the list's narrowing, so they follow every rail tick.
+     *
+     * AIDEV-NOTE: the narrowing is the FILTERS, never the plain search box (see zenit-cms
+     * ListScope), so the tiles are worded "under these filters", not "in this view": a typed
+     * search narrows the rows and leaves the tiles counting the filtered set.
+     */
+    @Override
+    public @NonNull WidgetTree listWidgets(@NonNull ListScope scope) {
+        return new WidgetTree(List.of(
+            bucketTile(scope, HohenheimWidgetCopy.localized("orphaned_filtered", "reconcile_finding"),
+                ReconcileFindingModel.BUCKET_ORPHANED, "trash"),
+            bucketTile(scope, HohenheimWidgetCopy.localized("colliding_filtered", "reconcile_finding"),
+                ReconcileFindingModel.BUCKET_FOREIGN_COLLIDING, "triangle-exclamation")));
+    }
+
+    /**
+     * The tiles count through the source the default CMS glue registered over the findings, the
+     * model's own (a default source's id IS its model's), named by the token that source spells.
+     */
+    private static @NonNull WidgetInstance bucketTile(@NonNull ListScope scope, @NonNull Map<Locale, String> label,
+                                                      @NonNull String bucket, @NonNull String icon) {
+        return new WidgetInstance(StatWidget.ID, Map.of(
+            "label", label,
+            "source", RecordSourceRegistry.INSTANCE.requireById(ReconcileFindingModel.MODEL_ID).idToken(),
+            "rules", Condition.all(scope.narrowing(), Condition.test(ReconcileFindingModel.BUCKET.getName(),
+                CoreTypes.EQUALS, Operand.of(bucket))),
+            "icon", icon));
+    }
 
     /** A finding is hunted for by the host it was seen on, the thing it names, or the words explaining it. */
     @Override

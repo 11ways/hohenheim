@@ -5822,6 +5822,14 @@
     "text": "Wees {$name} verwijderd bij de daemon",
     "scope": "reconcile_finding"
   },
+  "orphaned_filtered": {
+    "text": "Verweesd onder deze filters",
+    "scope": "reconcile_finding"
+  },
+  "colliding_filtered": {
+    "text": "Botsend onder deze filters",
+    "scope": "reconcile_finding"
+  },
   "orphan_not_orphaned": {
     "text": "{$name} is geen verweesde resource",
     "scope": "violations"
