@@ -247,11 +247,10 @@ version of the same procedure.
 ├── hohenheim-server.jar          # fat jar (rename the built artifact)
 ├── public/                       # static assets (shipped with the repo)
 ├── settings/
-│   ├── local.dry                 # Zenit server overrides (not tracked)
+│   ├── local.dry                 # Zenit + module overrides: auth.*, comms.*, ... (not tracked)
 │   ├── local.dry.example         # Zenit reference
 │   ├── hohenheim.dry             # Hohenheim proxy/app settings (not tracked)
-│   ├── hohenheim.dry.example     # Hohenheim reference
-│   └── auth.dry                  # zenit-auth overrides (external_base_url)
+│   └── hohenheim.dry.example     # Hohenheim reference
 ├── data/                         # instance volumes, backups, build contexts
 ├── hohenheim.db                  # SQLite database (auto-created)
 └── logs/                         # access + domain-miss logs

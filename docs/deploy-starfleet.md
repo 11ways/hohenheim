@@ -1540,3 +1540,20 @@ Public `/health` returned 200 on all three panels. Browser-UA probes returned
 Earl and Tomberg additionally rendered in the real Sketerm browser. Ephemeral
 browser identities were closed. No DNS, certificates or site records changed;
 the pushed workspace is retained for incremental builds.
+
+## Upgrade note 2026-09-24: module settings ride settings/local.dry
+
+zenit-auth and zenit-comms read their groups from the framework's settings chain
+now (`settings/local.dry` < `ZENIT__AUTH__*` / `ZENIT__COMMS__*`). The files this
+install carries since 2026-08-29 are RETIRED and the server REFUSES to boot while
+either exists, naming each one and where its keys go:
+
+- `settings/auth.dry` `{"external_base_url": ...}` becomes
+  `"auth": {"external_base_url": "https://admin.starfleet.life"}` in `settings/local.dry`;
+- `settings/comms.dry` `{"channels": {"mail_transports": ...}}` becomes
+  `"comms": {"channels": {"mail_transports": "hub://..."}}` in `settings/local.dry`.
+
+Move both into `local.dry` (0600, owner hohenheim), delete the two files, and
+unset any `AUTH__*` or `COMMS__*` variable in the unit, BEFORE swapping in a jar
+built on this change. The rehearsal on a byte copy surfaces the refusal first.
+
