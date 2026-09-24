@@ -3,17 +3,17 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.OnboardingStep;
+import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.typed.CoreTypes;
+import be.elevenways.protoblast.common.typed.rule.Condition;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.DashboardPanelPeer;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.rules.Rule;
-import be.elevenways.zenit.common.orm.query.rules.RuleGroup;
-import be.elevenways.zenit.common.orm.query.rules.RuleOperator;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
@@ -76,7 +76,7 @@ public final class AdminDashboard extends DashboardPanelPeer {
             tiles.add(new WidgetInstance(StatWidget.ID, Map.of(
                 "label", HohenheimWidgetCopy.localized("active_bans", "dashboard"),
                 "source", "hohenheim.ban",
-                "rules", RuleGroup.and(Rule.of("active", RuleOperator.IS_TRUE)),
+                "rules", Condition.all(Condition.test(BanModel.ACTIVE.getName(), CoreTypes.IS_TRUE)),
                 "icon", "ban",
                 // StatWidget's stored "link" is a String, so the typed target renders here.
                 "link", CmsRoutes.list(ADMIN, "bans").toUrl())));

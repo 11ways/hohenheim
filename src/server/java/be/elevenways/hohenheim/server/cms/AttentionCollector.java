@@ -22,9 +22,9 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.security.SshAuthWatcher;
 import be.elevenways.hohenheim.server.task.BackupControlPlane;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.query.rules.Rule;
-import be.elevenways.zenit.common.orm.query.rules.RuleGroup;
-import be.elevenways.zenit.common.orm.query.rules.RuleOperator;
+import be.elevenways.protoblast.common.typed.CoreTypes;
+import be.elevenways.protoblast.common.typed.rule.Condition;
+import be.elevenways.protoblast.common.typed.rule.Operand;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -190,9 +190,9 @@ public final class AttentionCollector {
      * hand-spelled string, and nothing here concatenates a URL.
      */
     private static @NonNull RouteTarget foreignFindingsOf(String server) {
-        RuleGroup tree = RuleGroup.and(
-            Rule.of(ReconcileFindingModel.SERVER_NAME.getName(), RuleOperator.EQUALS, server),
-            Rule.list(ReconcileFindingModel.BUCKET.getName(), RuleOperator.IN, FOREIGN_BUCKETS));
+        Condition tree = Condition.all(
+            Condition.test(ReconcileFindingModel.SERVER_NAME.getName(), CoreTypes.EQUALS, Operand.of(server)),
+            Condition.test(ReconcileFindingModel.BUCKET.getName(), CoreTypes.IN, Operand.of(FOREIGN_BUCKETS)));
         return CmsRoutes.list(ADMIN, "reconcile-findings").with(LIST_QUERY, RuleText.print(tree));
     }
 

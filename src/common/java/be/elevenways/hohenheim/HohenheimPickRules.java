@@ -3,16 +3,17 @@ package be.elevenways.hohenheim;
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.typed.CoreTypes;
+import be.elevenways.protoblast.common.typed.rule.Combinator;
+import be.elevenways.protoblast.common.typed.rule.Condition;
+import be.elevenways.protoblast.common.typed.rule.Operand;
 import be.elevenways.zenit.common.annotation.ZenitAutoLoad;
 import be.elevenways.zenit.common.edit.EmptyNarrowingReason;
 import be.elevenways.zenit.common.edit.SiblingRulesResolver;
-import be.elevenways.zenit.common.orm.query.rules.Combinator;
-import be.elevenways.zenit.common.orm.query.rules.Rule;
-import be.elevenways.zenit.common.orm.query.rules.RuleGroup;
-import be.elevenways.zenit.common.orm.query.rules.RuleOperator;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -62,7 +63,7 @@ public final class HohenheimPickRules {
      * 400'd the very pickers it was meant to empty (the manage-panel InstanceModel source
      * projects name and kind only). This node names nothing and validates everywhere.
      */
-    private static final RuleGroup NOTHING_QUALIFIES = RuleGroup.matchNone();
+    private static final Condition NOTHING_QUALIFIES = Condition.NOTHING;
 
     /** @return the sibling's raw value as trimmed text, or null when nothing is chosen */
     private static @Nullable String chosen(@NonNull Map<String, Object> siblings,
@@ -94,7 +95,7 @@ public final class HohenheimPickRules {
     ) implements SiblingRulesResolver, EmptyNarrowingReason {
 
         @Override
-        public @Nullable RuleGroup resolve(@NonNull Map<String, Object> siblingValues) {
+        public @Nullable Condition resolve(@NonNull Map<String, Object> siblingValues) {
             String kind = chosen(siblingValues, this.kindSibling);
             if (kind == null) {
                 return null;
@@ -103,13 +104,13 @@ public final class HohenheimPickRules {
             if (runtimes == null || runtimes.isEmpty()) {
                 return null;
             }
-            RuleGroup.Builder rules = RuleGroup.builder(Combinator.AND)
-                .add(Rule.list("runtime", RuleOperator.IN, List.copyOf(runtimes)));
+            List<Condition> rules = new ArrayList<>();
+            rules.add(Condition.test("runtime", CoreTypes.IN, Operand.of(List.copyOf(runtimes))));
             if (this.volumeQuotaKinds.contains(kind)) {
-                rules.add(Rule.list("volume_backend", RuleOperator.IN,
-                    VolumeBackend.quotaCapableTokens()));
+                rules.add(Condition.test("volume_backend", CoreTypes.IN,
+                    Operand.of(VolumeBackend.quotaCapableTokens())));
             }
-            return rules.build();
+            return new Condition.Group(Combinator.ALL, false, rules);
         }
 
         /**
@@ -154,12 +155,12 @@ public final class HohenheimPickRules {
     ) implements SiblingRulesResolver {
 
         @Override
-        public @Nullable RuleGroup resolve(@NonNull Map<String, Object> siblingValues) {
+        public @Nullable Condition resolve(@NonNull Map<String, Object> siblingValues) {
             String value = chosen(siblingValues, this.siblingName);
             if (value == null) {
                 return null;
             }
-            return RuleGroup.and(Rule.of(this.fieldName, RuleOperator.EQUALS, value));
+            return Condition.all(Condition.test(this.fieldName, CoreTypes.EQUALS, Operand.of(value)));
         }
     }
 
@@ -185,7 +186,7 @@ public final class HohenheimPickRules {
          * precondition: runtime images belong to the kinds that run inside one.
          */
         @Override
-        public @Nullable RuleGroup resolve(@NonNull Map<String, Object> siblingValues) {
+        public @Nullable Condition resolve(@NonNull Map<String, Object> siblingValues) {
             String kind = chosen(siblingValues, this.kindSibling);
             if (kind == null) {
                 return null;
@@ -193,12 +194,12 @@ public final class HohenheimPickRules {
             if (!this.imageKinds.contains(kind)) {
                 return NOTHING_QUALIFIES;
             }
-            RuleGroup.Builder rules = RuleGroup.builder(Combinator.AND)
-                .add(Rule.of("enabled", RuleOperator.IS_TRUE));
+            List<Condition> rules = new ArrayList<>();
+            rules.add(Condition.test("enabled", CoreTypes.IS_TRUE));
             if (this.incusOnlyKinds.contains(kind)) {
-                rules.add(Rule.of("incus_image", RuleOperator.IS_NOT_EMPTY));
+                rules.add(Condition.test("incus_image", CoreTypes.IS_NOT_EMPTY));
             }
-            return rules.build();
+            return new Condition.Group(Combinator.ALL, false, rules);
         }
 
         /**
@@ -243,7 +244,7 @@ public final class HohenheimPickRules {
          * lets the declared reason below say the true precondition instead.
          */
         @Override
-        public @Nullable RuleGroup resolve(@NonNull Map<String, Object> siblingValues) {
+        public @Nullable Condition resolve(@NonNull Map<String, Object> siblingValues) {
             String kind = chosen(siblingValues, this.kindSibling);
             if (kind == null) {
                 return null;
@@ -251,8 +252,8 @@ public final class HohenheimPickRules {
             if (!this.instanceKindValue.equals(kind)) {
                 return NOTHING_QUALIFIES;
             }
-            return RuleGroup.and(
-                Rule.list("kind", RuleOperator.IN, List.copyOf(this.exposableKinds)));
+            return Condition.all(
+                Condition.test("kind", CoreTypes.IN, Operand.of(List.copyOf(this.exposableKinds))));
         }
 
         /**

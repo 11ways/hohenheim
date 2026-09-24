@@ -55,7 +55,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
 import be.elevenways.zenit.common.orm.query.rules.RelationRules;
-import be.elevenways.zenit.common.orm.query.rules.Vocabulary;
+import be.elevenways.zenit.common.orm.query.rules.RuleVocabulary;
 import be.elevenways.zenit.common.orm.query.rules.SchemaVocabulary;
 import be.elevenways.zenit.common.orm.query.rules.VariableDefinition;
 import be.elevenways.zenit.common.routing.RouteTarget;
@@ -401,8 +401,8 @@ public class InstanceResource extends RowResource {
 
     /** The schema's variables plus the relational host name the strip filter rides. */
     @Override
-    public @NonNull Vocabulary filterVocabulary() {
-        Vocabulary.Builder vocabulary = Vocabulary.builder();
+    public @NonNull RuleVocabulary filterVocabulary() {
+        RuleVocabulary.Builder vocabulary = RuleVocabulary.builder();
         for (VariableDefinition definition : SchemaVocabulary.of(this.model()).definitions()) {
             vocabulary.add(definition);
         }
