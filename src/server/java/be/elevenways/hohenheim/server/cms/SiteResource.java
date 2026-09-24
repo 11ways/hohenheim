@@ -20,12 +20,13 @@ import be.elevenways.hohenheim.site.SiteHostnamesCell;
 import be.elevenways.hohenheim.site.SiteTlsCell;
 import be.elevenways.hohenheim.site.SiteUpstreamCell;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
+import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.access.QueryPredicate;
+import be.elevenways.zenit.cms.common.action.ActionInput;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
@@ -41,6 +42,7 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldFormEntryDefaults;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
@@ -51,6 +53,7 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.datasource.DuplicateKeyException;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.StringField;
@@ -714,6 +717,15 @@ public class SiteResource extends RowResource {
             .build();
     }
 
+    /** The copy's name, the one thing a clone asks: the form opens on {@link #freeCloneName}. */
+    private static final StringField CLONE_NAME = StringField.builder().name("name")
+        .label(Microcopy.of("clone_name").withFilter("scope", "site"))
+        .required()
+        .build();
+
+    private static final ActionInput<String> CLONE_INPUT = ActionInput.of(
+        FormSpec.builder().add(CLONE_NAME).build(), values -> Texts.trimmedOrNull(values.get(CLONE_NAME)));
+
     /** The record-creating clone action; deliberately admin-panel-only. */
     protected final @NonNull RowAction<Row> cloneAction() {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "clone_site"))
@@ -725,19 +737,42 @@ public class SiteResource extends RowResource {
                 .title(Microcopy.of("clone").withFilter("scope", "site"))
                 .body(Microcopy.of("clone_confirm").withFilter("scope", "site"))
                 .build())
-            .handler((row, ctx) -> cloneSite(row, ctx.access()))
+            .input(CLONE_INPUT, (row, name, ctx) -> cloneSite(row, name, ctx.access()))
+            .inputValues(row -> Map.of(CLONE_NAME.getName(), this.freeCloneName(row)))
             .build();
     }
 
     /**
-     * Clone a site + its domains; the copy starts disabled and carries NO bearer
-     * credentials of its own: a fresh webhook secret and no api keys at all.
+     * The name the clone form opens on: the site's own name followed by the first number from 2
+     * whose slug no site holds, trashed ones included, so the ordinary path never meets the
+     * taken-name refusal.
+     *
+     * AIDEV-NOTE: a NUMBER on purpose, never an English "(copy)": the value is saved as the
+     * site's NAME, and a number reads the same in every language, while the action's opening
+     * values are computed from the row alone with no reader locale to word a suffix in. The
+     * suggestion is only a convenience; the insert in {@link #cloneSite} decides a taken name.
      */
-    private @NonNull CmsActionResult cloneSite(@NonNull Row site, @NonNull AccessContext access) {
+    private @NonNull String freeCloneName(@NonNull Row site) {
+        String name = String.valueOf((Object) site.get(SiteModel.NAME));
+        for (int number = 2; ; number++) {
+            String candidate = name + " " + number;
+            String slug = Slugs.slugify(candidate);
+            if (this.model().find().withTrashed().where(SiteModel.SLUG.eq(slug)).first() == null) {
+                return candidate;
+            }
+        }
+    }
+
+    /**
+     * Clone a site + its domains under the name the operator gave; the copy starts disabled and
+     * carries NO bearer credentials of its own: a fresh webhook secret and no api keys at all.
+     *
+     * @throws Violations on the name when its slug is already a site's: the form shows it inline
+     */
+    private @NonNull CmsActionResult cloneSite(@NonNull Row site, @NonNull String name, @NonNull AccessContext access) {
         SiteModel siteModel = (SiteModel) this.model();
         SiteDomainModel domainModel = Models.get(SiteDomainModel.class);
 
-        String name = site.get(SiteModel.NAME) + " (copy)";
         Row clone = siteModel.createEmptyRow();
         clone.set(SiteModel.NAME, name);
         clone.set(SiteModel.SLUG, Slugs.slugify(name));
@@ -755,8 +790,19 @@ public class SiteResource extends RowResource {
         clone.set(SiteModel.ENABLED, false);
         clone.set(SiteModel.AUTH_PROVIDER_ID, site.get(SiteModel.AUTH_PROVIDER_ID));
         clone.set(SiteModel.ACCESS_LIST_ID, site.get(SiteModel.ACCESS_LIST_ID));
-        ActivityLog.withAction("cloned", "of site #" + site.get(SiteModel.ID),
-            () -> siteModel.save(clone));
+        // AIDEV-NOTE: the slug's UNIQUE constraint is the whole check, and it covers every row,
+        // soft-deleted ones included. A read-then-insert both missed a trashed site's slug (a
+        // plain find hides it) and lost the race to a concurrent clone; either way the insert
+        // conflict reached the operator as the generic failure instead of a refusal on the name.
+        try {
+            ActivityLog.withAction("cloned", "of site #" + site.get(SiteModel.ID),
+                () -> siteModel.save(clone));
+        } catch (DuplicateKeyException conflict) {
+            if (!SiteModel.SLUG.getName().equals(conflict.getColumnName())) {
+                throw conflict;
+            }
+            throw Violations.ofField(CLONE_NAME.getName(), name, ResourcePageEndpoints.DUPLICATE_VALUE);
+        }
 
         int newSiteId = clone.get(SiteModel.ID);
         for (Row domain : domainModel.findBySiteId(site.get(SiteModel.ID))) {
@@ -778,7 +824,7 @@ public class SiteResource extends RowResource {
         }
 
         // CmsActionResult.redirect is Uri-typed, so the typed target renders here.
-        return CmsActionResult.redirect(new be.elevenways.protoblast.common.http.Uri(
+        return CmsActionResult.redirect(new Uri(
             CmsRoutes.detail(HohenheimPanel.SLUG, this.slug(), newSiteId).toUrl()));
     }
 

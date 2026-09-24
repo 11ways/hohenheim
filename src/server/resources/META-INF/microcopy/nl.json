@@ -2713,6 +2713,10 @@
     "text": "Dupliceren",
     "scope": "site"
   },
+  "clone_name": {
+    "text": "Naam van de kopie",
+    "scope": "site"
+  },
   "databases": [
     {
       "text": "Databanken",

@@ -113,10 +113,18 @@ class SiteLifecycleTest extends HohenheimTestBase {
         assertThat((Boolean) Models.get(SiteModel.class).findById(redirectId).get(SiteModel.ENABLED))
             .isEqualTo(true);
 
+        // Cloning ASKS the copy's name (an action input): a confirmed POST without one is not a
+        // clone but the form again, re-rendered with the field's refusal, and nothing is created.
         response = adminPostForm("/admin/sites/" + redirectId + "/action/clone_site", confirmed(""));
-        assertThat(response.statusCode()).isIn(200, 302, 303);
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).as("the refused clone re-renders its form").contains("data-path=\"name\"");
+        assertThat(site("Old Domain 2")).as("no name, no clone").isNull();
 
-        Row clone = site("Old Domain (copy)");
+        response = adminPostForm("/admin/sites/" + redirectId + "/action/clone_site",
+            confirmed("name=Old+Domain+Staging"));
+        assertThat(response.statusCode()).isIn(302, 303);
+
+        Row clone = site("Old Domain Staging");
         assertThat(clone).isNotNull();
         assertThat((Boolean) clone.get(SiteModel.ENABLED))
             .as("clones start disabled")
