@@ -380,19 +380,22 @@ public final class DnsZoneResource extends RowResource {
 
     /**
      * Replication diagnostics belong to secondary zones only; a primary zone shows them
-     * neither in its list cell nor in its form.
+     * neither in its list cell nor in its form. That is presentation per RECORD, so across
+     * records the list still sorts and filters by them (the cross-record answer is declared).
      */
     @Override
     public @NonNull List<ResourceFieldBinding> fieldBindings() {
         FieldAccess secondaryOnly = FieldAccess.customRecordAware((ctx, record) ->
             record instanceof Row zone && DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))
                 ? FieldAccess.Decision.READONLY
-                : FieldAccess.Decision.HIDDEN);
+                : FieldAccess.Decision.HIDDEN)
+            .acrossRecords(ctx -> FieldAccess.Decision.READONLY);
         // The mirror image: a secondary's delegation is judged where it is owned.
         FieldAccess primaryOnly = FieldAccess.customRecordAware((ctx, record) ->
             record instanceof Row zone && !DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))
                 ? FieldAccess.Decision.READONLY
-                : FieldAccess.Decision.HIDDEN);
+                : FieldAccess.Decision.HIDDEN)
+            .acrossRecords(ctx -> FieldAccess.Decision.READONLY);
         return List.of(
             ResourceFieldBinding.of(DnsZoneModel.TRANSFER_STATUS.getName(), secondaryOnly),
             ResourceFieldBinding.of(DnsZoneModel.LAST_TRANSFER_AT.getName(), secondaryOnly),
