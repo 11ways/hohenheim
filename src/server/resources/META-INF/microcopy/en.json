@@ -2713,6 +2713,10 @@
     "text": "Clone",
     "scope": "site"
   },
+  "clone_name": {
+    "text": "Name of the copy",
+    "scope": "site"
+  },
   "databases": [
     {
       "text": "Databases",
