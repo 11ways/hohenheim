@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.server.ZenitAuth;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.setting.ServerSettings;
@@ -57,7 +58,7 @@ public final class HohenheimTestRuntime {
         ZenitAuth.init(Datasources.getDefault());
         // The users/roles resources live in HohenheimPanel; zenit-auth's own
         // default panel would be a second registration for the same slug.
-        AuthSettings.VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
+        Zenit.SETTINGS_VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
         ServerSettings.VALUES.setValue(ServerSettings.Network.AUTO_START_HTTP, false);
         // The suite opts OUT explicitly: its sites have no system user of their own
         // and would otherwise all fault. Nothing flips it back on any more -- the

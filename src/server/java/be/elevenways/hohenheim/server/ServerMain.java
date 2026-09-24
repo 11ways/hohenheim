@@ -28,6 +28,7 @@ import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import be.elevenways.hohenheim.server.security.SshAuthWatcher;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
@@ -73,10 +74,6 @@ public class ServerMain {
         // flat proxy/ssl/... shape. Also captures the HohenheimRoles snapshot,
         // which every role gate below reads.
         HohenheimSettingsFiles.load();
-        // zenit-comms' own context (settings/comms.dry + COMMS__* env): the transport
-        // chains the MODULES stage builds the dispatcher from. Loaded here, not in
-        // local.dry, because a comms key there lands in the framework context and is inert.
-        HohenheimCommsSettings.load();
 
         // Upstream kinds and auth-provider types self-register through compile-time
         // discovery (BlastAutoLoadInit); nothing needs an explicit boot here since the
@@ -97,7 +94,7 @@ public class ServerMain {
         ZenitAuth.init(HohenheimDatabase.datasource());
         // The users/roles resources live in HohenheimPanel's security group;
         // zenit-auth's own default panel would be a second UI over the same records.
-        AuthSettings.VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
+        Zenit.SETTINGS_VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
         installAuthBaselines();
         registerProteusIfConfigured();
 

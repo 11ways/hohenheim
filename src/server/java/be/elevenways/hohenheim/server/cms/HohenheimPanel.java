@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
-import be.elevenways.hohenheim.server.HohenheimCommsSettings;
 import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -242,9 +241,10 @@ public final class HohenheimPanel extends Panel {
 
     /**
      * The settings editor: Hohenheim's own settings file, zenit's framework mount, the comms
-     * transport chain and the spamservice backend. The hohenheim and comms mounts only appear
-     * when this boot actually loaded their editable file, so the panel never breaks over a
-     * missing settings source (test boots load others).
+     * transport chain (zenit-comms' group of the framework file, which the framework mount then
+     * leaves out) and the spamservice backend. The file-backed mounts only appear when this boot
+     * actually loaded their editable file, so the panel never breaks over a missing settings
+     * source (test boots load others).
      *
      * AIDEV-NOTE: the framework mount is zenit-cms's own {@link SettingsPage#frameworkMount()},
      * never a hand-built {@code SettingsEditor} over settings/local.dry: its key and label are
@@ -266,11 +266,10 @@ public final class HohenheimPanel extends Panel {
         if (framework != null) {
             mounts.add(framework);
         }
-        try {
-            mounts.add(new SettingsPage.Mount(CommsSettingsLabels.MOUNT_KEY, CommsSettingsLabels.mount(),
-                SettingsEditor.forFile(CommsSettings.VALUES, HohenheimCommsSettings.settingsFile())));
-        } catch (IllegalArgumentException notLoaded) {
-            // Boot without the comms settings file: no transport chain to edit.
+        SettingsPage.Mount comms = SettingsPage.frameworkGroup(CommsSettingsLabels.MOUNT_KEY,
+            CommsSettingsLabels.mount(), CommsSettings.ROOT);
+        if (comms != null) {
+            mounts.add(comms);
         }
         mounts.add(new SettingsPage.Mount("spamservice",
             Microcopy.literal("Spamservice"), new SpamserviceSettingsBackend()));
