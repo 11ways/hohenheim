@@ -9,10 +9,7 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
 import java.net.http.HttpResponse;
 import java.time.Instant;
@@ -31,7 +28,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * names no repository deploys a bare container and must still get NO tab, because a
  * history page over a record with no history is a dead end wearing a label.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class WorkspaceDeploysTabTest extends HohenheimTestBase {
 
     private static final String KIND = "hohenheim:workspace";
@@ -64,7 +60,6 @@ class WorkspaceDeploysTabTest extends HohenheimTestBase {
      * its deploy control -- and does NOT exist for a workspace with no source.
      */
     @Test
-    @Order(1)
     void aSourcedWorkspaceGetsTheDeploysTabAndABareOneDoesNot() throws Exception {
 
         // 1. THE ABSENCE, pre-fix: the slug answered 404 for every workspace.
@@ -125,7 +120,6 @@ class WorkspaceDeploysTabTest extends HohenheimTestBase {
 
     /** The tab is offered from the record's own tab strip, not only reachable by URL. */
     @Test
-    @Order(2)
     void theTabIsOfferedOnTheRecordItself() throws Exception {
         assertThat(adminGet("/admin/instances/" + sourcedWorkspaceId).body())
             .withFailMessage("the Deploys tab is reachable only by typing its URL")

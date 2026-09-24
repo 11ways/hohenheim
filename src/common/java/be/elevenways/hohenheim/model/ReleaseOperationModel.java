@@ -13,7 +13,9 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 
 /**
  * THE release-operation record (the BuildOperationModel shape): one row per attempt to
@@ -59,6 +61,76 @@ public class ReleaseOperationModel extends Model {
     public static final String STATUS_FAILED = "failed";
     /** Found in flight at boot; recovery settled the runtime state and stamped this. */
     public static final String STATUS_INTERRUPTED = "interrupted";
+
+    /**
+     * THE phase facts of every status: whether an operation in it is still IN FLIGHT (a
+     * controller is, or was until a crash, driving it) and whether its candidate has TAKEN
+     * TRAFFIC. Every reader of either question derives from here, never from a hand-spelled
+     * status list.
+     *
+     * AIDEV-NOTE: one member per {@link #STATUS} value, and ReleaseOperationPhaseDriftTest
+     * binds the two, so a new status is one edit here or the build breaks.
+     */
+    public enum Phase {
+        PENDING(STATUS_PENDING, true, false),
+        DEPLOYING(STATUS_DEPLOYING, true, false),
+        PROBING(STATUS_PROBING, true, false),
+        SWITCHING(STATUS_SWITCHING, true, true),
+        DRAINING(STATUS_DRAINING, true, true),
+        SUCCEEDED(STATUS_SUCCEEDED, false, true),
+        FAILED(STATUS_FAILED, false, false),
+        INTERRUPTED(STATUS_INTERRUPTED, false, false);
+
+        private final String token;
+        private final boolean inFlight;
+        private final boolean tookTraffic;
+
+        Phase(String token, boolean inFlight, boolean tookTraffic) {
+            this.token = token;
+            this.inFlight = inFlight;
+            this.tookTraffic = tookTraffic;
+        }
+
+        /** @return the stored status value */
+        public String token() {
+            return this.token;
+        }
+
+        public boolean inFlight() {
+            return this.inFlight;
+        }
+
+        /** Whether the candidate has been switched to (it serves, or served, the traffic). */
+        public boolean tookTraffic() {
+            return this.tookTraffic;
+        }
+
+        /** @return the phase of a stored status, or null for a value no member declares */
+        public static Phase of(String token) {
+            for (Phase phase : values()) {
+                if (phase.token.equals(token)) {
+                    return phase;
+                }
+            }
+            return null;
+        }
+    }
+
+    /** Every status an operation is still in flight in, derived from {@link Phase#inFlight()}. */
+    public static final List<String> IN_FLIGHT_STATUSES = tokensWhere(Phase::inFlight);
+
+    /** Every status whose candidate has taken traffic, derived from {@link Phase#tookTraffic()}. */
+    public static final List<String> TRAFFIC_TAKEN_STATUSES = tokensWhere(Phase::tookTraffic);
+
+    private static List<String> tokensWhere(Predicate<Phase> fact) {
+        List<String> tokens = new ArrayList<>();
+        for (Phase phase : Phase.values()) {
+            if (fact.test(phase)) {
+                tokens.add(phase.token());
+            }
+        }
+        return List.copyOf(tokens);
+    }
 
     public static final IntegerField ID = SCHEMA.addField(
         IntegerField.builder().name("id").build());
@@ -168,8 +240,7 @@ public class ReleaseOperationModel extends Model {
         return find()
             .where(FOR_MODEL.eq(forModel))
             .where(FOR_ID.eq(forId))
-            .where(STATUS.in(STATUS_PENDING, STATUS_DEPLOYING, STATUS_PROBING,
-                STATUS_SWITCHING, STATUS_DRAINING))
+            .where(STATUS.in(IN_FLIGHT_STATUSES))
             .orderBy(ID, SortOrder.DESC)
             .all();
     }

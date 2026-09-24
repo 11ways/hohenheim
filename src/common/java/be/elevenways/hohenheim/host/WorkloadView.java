@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.host;
 
+import be.elevenways.hohenheim.WorkloadTier;
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
 import be.elevenways.zenit.common.routing.RouteTarget;
@@ -10,14 +11,14 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * {@code ServerModel.refuseRemovalWhileOwned} counts, so drain/cordon/delete refusals are
  * legible BEFORE they fire.
  *
- * @param tier     {@code instance} / {@code stack} / {@code database}
+ * @param tier     which population the workload belongs to
  * @param bookedMb the memory this workload books on the host, null when it books nothing
  * @param target   the workload's record page, as a typed route (never a built URL)
  */
 @HawkeyeClass
 public record WorkloadView(
     String name,
-    String tier,
+    WorkloadTier tier,
     @Nullable EnumBadgeState status,
     @Nullable Integer bookedMb,
     RouteTarget target

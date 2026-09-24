@@ -3,29 +3,16 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.auth.server.ZenitAuth;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.csrf.CsrfTokens;
-import be.elevenways.zenit.common.session.Session;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.Map;
@@ -41,7 +28,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * workload got the same banner ({@code files_unsupported}) rather than a named "not
  * available for this runtime yet" state, so a declared runtime asymmetry read as breakage.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class InstanceFilesTabGateTest extends HohenheimTestBase {
 
     private static Integer dockerInstanceId;
@@ -81,21 +67,10 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
     }
 
     private static String delegate(String email, String capability) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, email);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        int userId = user.get(UserModel.ID);
+        int userId = ApiSupport.user(email);
         RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, dockerInstanceId,
             capability, true);
-        Session session = Zenit.getSessionStore().create();
-        session.set(AuthKeys.USER_ID, (long) userId);
-        session.set(CsrfTokens.TOKEN, ZenitAuth.randomToken());
-        Zenit.getSessionStore().save(session);
-        return session.token().secret();
+        return sessionFor(userId).token();
     }
 
     /**
@@ -103,12 +78,11 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
      * nor able to reach it, while a files.read delegate gets both.
      */
     @Test
-    @Order(1)
     void theFilesTabAnswersToFilesReadAndNotToMereViewership() throws Exception {
         String record = "/manage/instances/" + dockerInstanceId;
 
         // 1. The console delegate reaches the record -- without this the rest is vacuous.
-        HttpResponse<String> asConsole = get(record, consoleSession);
+        HttpResponse<String> asConsole = httpGet(record, consoleSession);
         assertThat(asConsole.statusCode()).as("step 1: the console delegate sees the record")
             .isEqualTo(200);
 
@@ -118,16 +92,16 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
             .withFailMessage("step 2: a console-only delegate is offered the files tab,"
                 + " whose every operation refuses -- an affordance that can only fail")
             .doesNotContain("/page/files");
-        assertThat(get(record + "/page/files", consoleSession).statusCode())
+        assertThat(httpGet(record + "/page/files", consoleSession).statusCode())
             .withFailMessage("step 2: and can reach the files route by hand")
             .isEqualTo(404);
 
         // 3. Positive anchor: a files.read delegate is offered it AND can open it, so
         //    step 2 is the gate rather than a deleted tab.
-        HttpResponse<String> asReader = get(record, readerSession);
+        HttpResponse<String> asReader = httpGet(record, readerSession);
         assertThat(asReader.body()).as("step 3: a files.read delegate is offered the tab")
             .contains("/page/files");
-        assertThat(get(record + "/page/files", readerSession).statusCode())
+        assertThat(httpGet(record + "/page/files", readerSession).statusCode())
             .as("step 3: and can open it")
             .isEqualTo(200);
     }
@@ -137,9 +111,8 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
      * every request with a refusal banner.
      */
     @Test
-    @Order(2)
     void anIncusWorkloadStatesTheRuntimeHasNoFileLaneYet() throws Exception {
-        HttpResponse<String> page = get(
+        HttpResponse<String> page = httpGet(
             "/admin/instances/" + incusInstanceId + "/page/files", sessionToken);
         assertThat(page.statusCode()).as("step 1: the tab renders for an operator")
             .isEqualTo(200);
@@ -155,7 +128,7 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
             .doesNotContain("<pl-alert variant=\"destructive\"");
 
         // 3. Positive anchor: the Docker workload still gets a real browser.
-        assertThat(get("/admin/instances/" + dockerInstanceId + "/page/files", sessionToken)
+        assertThat(httpGet("/admin/instances/" + dockerInstanceId + "/page/files", sessionToken)
                 .body())
             .as("step 3: the Docker tier still browses")
             .doesNotContain("data-files-unsupported");
@@ -166,10 +139,9 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
      * why a Docker workload has none.
      */
     @Test
-    @Order(3)
     void statsStatesItsLiveOnlyContractAndThePersistedDiskObservation() throws Exception {
         String statsUrl = "/admin/instances/" + dockerInstanceId + "/page/stats";
-        HttpResponse<String> page = get(statsUrl, sessionToken);
+        HttpResponse<String> page = httpGet(statsUrl, sessionToken);
         assertThat(page.statusCode()).isEqualTo(200);
 
         // 1. The live-only contract is stated on the page, not left implied by an empty
@@ -193,7 +165,7 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
         row.set(InstanceModel.DISK_OBSERVED_AT, Now.instant());
         instances.save(row);
         try {
-            assertThat(get(statsUrl, sessionToken).body())
+            assertThat(httpGet(statsUrl, sessionToken).body())
                 .as("step 3: a stored observation renders beside the live rings")
                 .contains("data-disk-state=\"measured\"");
         } finally {
@@ -206,14 +178,4 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
     }
 
     // -- plumbing -----------------------------------------------------------------
-
-    private HttpResponse<String> get(String path, String session) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session)
-            .GET().build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
 }

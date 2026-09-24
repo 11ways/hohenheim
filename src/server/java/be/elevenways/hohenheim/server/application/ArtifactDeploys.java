@@ -20,6 +20,7 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.File;
@@ -32,9 +33,7 @@ import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
-import java.security.MessageDigest;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.zip.CRC32;
@@ -329,12 +328,8 @@ public final class ArtifactDeploys {
     }
 
     static String digestOf(Path artifact) {
-        try (InputStream in = Files.newInputStream(artifact)) {
-            MessageDigest sha = MessageDigest.getInstance("SHA-256");
-            byte[] buffer = new byte[65536];
-            int count;
-            while ((count = in.read(buffer)) != -1) sha.update(buffer, 0, count);
-            return HexFormat.of().formatHex(sha.digest());
+        try {
+            return SecureTokens.sha256Hex(artifact);
         } catch (Exception failed) {
             throw Violations.ofForm(Microcopy.of("artifact_unreadable").withFilter("scope", "violations"));
         }

@@ -1,9 +1,10 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceFileModel;
@@ -14,28 +15,23 @@ import be.elevenways.hohenheim.server.files.InstanceFiles;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.InstanceFileSupport;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -66,22 +62,17 @@ class InstanceFilesLiveTest {
     /** The cap the bound counterfactual is measured against; small so the test stays cheap. */
     private static final int MAX_FILE_KB = 64;
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static PrivateNetns netns;
     private static Integer previousMaxFileKb;
 
     @BeforeAll
     static void setUp() throws Exception {
-        File db = File.createTempFile("hohenheim-instance-files-live-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
         // ONE database per test class: the controller identity (and therefore every
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         // BEFORE the boot: the capability matrix below grants files.read/files.write, and
         // zenit-auth refuses a grant on an undeclared model -- while declaring one AFTER the
         // CMS contributions drained is itself a hard failure. Same order ServerMain uses.
@@ -89,20 +80,14 @@ class InstanceFilesLiveTest {
         HohenheimTestRuntime.ensureBooted();
         previousMaxFileKb = HohenheimSettings.VALUES.getValue(HohenheimSettings.Files.MAX_FILE_KB);
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Files.MAX_FILE_KB, MAX_FILE_KB);
-        if (PrivateNetns.available()) {
-            netns = new PrivateNetns();
-            WorkloadNetworkPolicy.overrideForTest(netns.enforcingPolicy());
-        }
+        netns = PrivateNetns.installEnforcing();
     }
 
     @AfterAll
     static void tearDown() {
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Files.MAX_FILE_KB, previousMaxFileKb);
-        WorkloadNetworkPolicy.overrideForTest(null);
-        if (netns != null) {
-            netns.close();
-            netns = null;
-        }
+        PrivateNetns.uninstall(netns);
+        netns = null;
     }
 
     /**
@@ -114,7 +99,7 @@ class InstanceFilesLiveTest {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
-        LiveLane.requireImage(docker, "alpine:latest");
+        LiveLane.requireImage(docker, TestImages.ALPINE);
         LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: the instance tier refuses to deploy unprotected");
 
@@ -297,9 +282,9 @@ class InstanceFilesLiveTest {
      * counterfactual 5 (another tenant's instance is indistinguishable from a missing one).
      */
     private static void capabilityAndTenancyMatrix(int instanceId, InstanceFiles files) {
-        int reader = tenant("files-reader@live.test");
-        int writer = tenant("files-writer@live.test");
-        int stranger = tenant("files-stranger@live.test");
+        int reader = ApiSupport.user("files-reader@live.test");
+        int writer = ApiSupport.user("files-writer@live.test");
+        int stranger = ApiSupport.user("files-stranger@live.test");
         RecordGrants.grant(GrantSubjectType.USER, reader, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.FILES_READ, true);
         RecordGrants.grant(GrantSubjectType.USER, writer, InstanceModel.MODEL_ID, instanceId,
@@ -365,8 +350,7 @@ class InstanceFilesLiveTest {
 
     private static Map<String, Object> volumeSettings() {
         Map<String, Object> settings = new LinkedHashMap<>();
-        settings.put("image", "alpine");
-        settings.put("tag", "latest");
+        settings.put("image", TestImages.ALPINE);
         settings.put("command", "sleep 600");
         settings.put("volumes", Map.of("data", "/data"));
         return settings;
@@ -379,17 +363,6 @@ class InstanceFilesLiveTest {
         row.set(InstanceModel.SETTINGS, settings);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
-    }
-
-    private static int tenant(String email) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, email);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
     }
 
     private static Principal principal(int userId) {

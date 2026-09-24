@@ -11,10 +11,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.QueryBuilder;
-import be.elevenways.zenit.common.orm.query.QueryContext;
 import be.elevenways.zenit.common.orm.query.SortOrder;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.Accountability;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -100,23 +97,13 @@ public final class ReleasedClaims {
      * Record the release of every claim the rows a pending DELETE will remove are holding.
      *
      * AIDEV-NOTE: a remove hook fires ONCE for the whole delete with a criteria-only context
-     * whose row is null (RemoveFromDatasource's docblock; PortLedger.captureDoomedOwners is
-     * the in-repo reference), so the doomed rows are re-read from the criteria here. This is
-     * a beforeRemove hook and needs no after-hook partner: it only READS what the delete is
-     * about to remove, and its ledger insert rolls back with the delete's transaction.
+     * whose row is null, so the doomed rows come from the context's own read of the pending
+     * delete ({@link RemoveFromDatasource#doomedRows()}). This is a beforeRemove hook and
+     * needs no after-hook partner: it only READS what the delete is about to remove, and its
+     * ledger insert rolls back with the delete's transaction.
      */
     public static void recordReleaseOfDoomedRows(@NonNull RemoveFromDatasource context) {
-        Model model = context.getModel();
-        if (model == null) {
-            return;
-        }
-        QueryContext queryContext = context.getQueryContext();
-        Criteria criteria = queryContext != null ? queryContext.getCriteria() : null;
-        QueryBuilder<Row> builder = model.find();
-        if (criteria != null) {
-            builder.where(criteria);
-        }
-        for (Row domain : builder.all()) {
+        for (Row domain : context.doomedRows()) {
             recordReleaseOf(domain);
         }
     }

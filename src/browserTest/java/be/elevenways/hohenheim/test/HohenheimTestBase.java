@@ -219,8 +219,8 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
     //
     // THE one copy of the request helpers ~60 test classes used to each hand-roll.
     // Session requests carry the auth cookie (plus CSRF on writes); key requests
-    // carry X-Api-Key and no cookie. New tests use these; existing classes migrate
-    // opportunistically when touched.
+    // carry X-Api-Key and no cookie. A shape the verbs do not cover (multipart, a
+    // custom header) builds on requestTo + sendRequest, never on its own HttpClient.
 
     /** An authenticated session plus its CSRF token, for driving requests as one user. */
     protected record TestSession(String token, String csrf) {
@@ -259,22 +259,43 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         return body == null || body.isEmpty() ? proof : body + "&" + proof;
     }
 
+    /** A request builder aimed at {@code path} on the test server, for a shape the verbs below do not cover. */
+    protected HttpRequest.@NonNull Builder requestTo(@NonNull String path) {
+        return HttpRequest.newBuilder().uri(URI.create(baseUrl() + path));
+    }
+
+    /** The Cookie header value that carries {@code session}. */
+    protected static @NonNull String sessionCookieHeader(@NonNull String session) {
+        return AuthCookieSupport.sessionCookieName() + "=" + session;
+    }
+
     protected HttpResponse<String> httpGet(String path, @Nullable String session)
             throws Exception {
-        HttpRequest.Builder request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path)).GET();
+        return sendRequest(getRequest(path, session));
+    }
+
+    /**
+     * A GET that follows redirects to the final answer, for a test asserting where a
+     * redirect chain LANDS rather than the redirect itself.
+     */
+    protected HttpResponse<String> httpGetFollowingRedirects(String path, @Nullable String session)
+            throws Exception {
+        return sendFollowingRedirects(getRequest(path, session));
+    }
+
+    private HttpRequest.@NonNull Builder getRequest(String path, @Nullable String session) {
+        HttpRequest.Builder request = requestTo(path).GET();
         if (session != null) {
-            request.header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session);
+            request.header("Cookie", sessionCookieHeader(session));
         }
-        return send(request);
+        return request;
     }
 
     protected HttpResponse<String> httpPost(String path, String body, String session,
                                             String csrf, String contentType) throws Exception {
-        return send(HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
+        return sendRequest(requestTo(path)
             .header("Content-Type", contentType)
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session)
+            .header("Cookie", sessionCookieHeader(session))
             .header("X-Csrf-Token", csrf)
             .POST(HttpRequest.BodyPublishers.ofString(body)));
     }
@@ -294,17 +315,25 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         return httpGet(path, sessionToken);
     }
 
+    /** A urlencoded POST as the harness admin, CSRF token included. */
+    protected HttpResponse<String> adminPostForm(String path, String body) throws Exception {
+        return httpPostForm(path, body, sessionToken, csrfToken);
+    }
+
+    /** A DRY POST as the harness admin, CSRF token included. */
+    protected HttpResponse<String> adminPostDry(String path, String body) throws Exception {
+        return httpPostDry(path, body, sessionToken, csrfToken);
+    }
+
     protected HttpResponse<String> keyGet(String key, String path) throws Exception {
-        return send(HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
+        return sendRequest(requestTo(path)
             .header("X-Api-Key", key)
             .GET());
     }
 
     protected HttpResponse<String> keyPost(String key, String path, String body)
             throws Exception {
-        return send(HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
+        return sendRequest(requestTo(path)
             .header("X-Api-Key", key)
             .header("Content-Type", "application/x-www-form-urlencoded")
             .POST(HttpRequest.BodyPublishers.ofString(body)));
@@ -312,16 +341,27 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
 
     protected HttpResponse<String> keyPostDry(String key, String path, String body)
             throws Exception {
-        return send(HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
+        return sendRequest(requestTo(path)
             .header("X-Api-Key", key)
             .header("Content-Type", "application/dry")
             .POST(HttpRequest.BodyPublishers.ofString(body)));
     }
 
-    private static HttpResponse<String> send(HttpRequest.Builder builder) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER).build();
+    /** THE transport: redirects are answers here, never followed. */
+    protected static HttpResponse<String> sendRequest(HttpRequest.@NonNull Builder builder)
+            throws Exception {
+        return send(builder, HttpClient.Redirect.NEVER);
+    }
+
+    /** The transport for a test asserting where a redirect chain lands. */
+    protected static HttpResponse<String> sendFollowingRedirects(HttpRequest.@NonNull Builder builder)
+            throws Exception {
+        return send(builder, HttpClient.Redirect.NORMAL);
+    }
+
+    private static HttpResponse<String> send(HttpRequest.Builder builder,
+                                             HttpClient.Redirect redirects) throws Exception {
+        HttpClient client = HttpClient.newBuilder().followRedirects(redirects).build();
         return client.send(builder.build(), HttpResponse.BodyHandlers.ofString());
     }
 

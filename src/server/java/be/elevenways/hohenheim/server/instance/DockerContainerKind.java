@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
+import be.elevenways.hohenheim.server.docker.ContainerSettings;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
@@ -201,12 +202,8 @@ public final class DockerContainerKind implements InstanceKindHandler {
     @Override
     public @NonNull InstanceSpec specFor(int instanceId, @NonNull Map<String, Object> settings) {
         String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
-        String image = str(settings.get("image"));
-        String tag = str(settings.get("tag"));
-        String imageRef = tag.isEmpty() || image.contains(":") ? image : image + ":" + tag;
-
-        String command = str(settings.get("command"));
-        List<String> cmd = command.isEmpty() ? null : List.of(command.split("\\s+"));
+        String imageRef = ContainerSettings.imageReference(settings);
+        List<String> cmd = ContainerSettings.commandLine(settings);
 
         Map<String, String> volumes = new LinkedHashMap<>();
         EnvVars.toMap(settings.get("volumes")).forEach((name, path) -> {

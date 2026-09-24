@@ -1,9 +1,6 @@
 package be.elevenways.hohenheim.test;
 
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -11,11 +8,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Smoke test for the zenit-cms admin panel: the shell renders, the sidebar
  * carries the resources, and the dashboard is the landing page.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class CmsAdminSmokeTest extends HohenheimTestBase {
 
     @Test
-    @Order(1)
     void panelShellSidebarListsAndSettingsRender() {
         navigateToApp("/admin");
         waitForHydration();

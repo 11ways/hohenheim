@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.UpstreamForwarder;
 import be.elevenways.hohenheim.server.sitetype.UpstreamTarget;
+import be.elevenways.hohenheim.server.sitetype.WebSocketUpgrades;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -80,10 +81,7 @@ public final class InstanceUpstreamHandler implements SiteRequestHandler {
     @Override
     public void handleRequest(HttpServerExchange exchange, UpstreamForwarder forwarder) {
 
-        if (!this.websocketEnabled
-                && exchange.getRequestHeaders().contains(Headers.UPGRADE)) {
-            exchange.setStatusCode(403);
-            exchange.getResponseSender().send("WebSocket upgrades disabled for this site");
+        if (WebSocketUpgrades.refuse(exchange, this.websocketEnabled)) {
             return;
         }
 

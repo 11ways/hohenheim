@@ -16,9 +16,6 @@ import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
 import be.elevenways.zenit.server.setting.ServerSettings;
 import org.junit.jupiter.api.Test;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -168,12 +165,9 @@ class DynamicDnsTest extends HohenheimTestBase {
         // No session cookie: the endpoint is public and authenticates by token.
         String basic = Base64.getEncoder().encodeToString(
             ("dyndns:" + token).getBytes(StandardCharsets.UTF_8));
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpResponse<String> response = client.send(HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort()
-                + "/nic/update?hostname=home.dyn-http.example&myip=203.0.113.55"))
-            .header("Authorization", "Basic " + basic)
-            .build(), HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response = sendRequest(
+            requestTo("/nic/update?hostname=home.dyn-http.example&myip=203.0.113.55")
+                .header("Authorization", "Basic " + basic));
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body().trim()).isEqualTo("good 203.0.113.55");
@@ -182,21 +176,16 @@ class DynamicDnsTest extends HohenheimTestBase {
         // A bogus token over the same public route is badauth, never a redirect to login.
         String badBasic = Base64.getEncoder().encodeToString(
             "dyndns:hdyn_000000000a.x".getBytes(StandardCharsets.UTF_8));
-        HttpResponse<String> bad = client.send(HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + "/nic/update"))
-            .header("Authorization", "Basic " + badBasic)
-            .build(), HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> bad = sendRequest(requestTo("/nic/update")
+            .header("Authorization", "Basic " + badBasic));
         assertThat(bad.statusCode()).isEqualTo(200);
         assertThat(bad.body().trim()).isEqualTo("badauth");
 
         // The valid token presented ONLY in the query string is rejected: a DNS-write
         // credential must never travel in the URL (logs, Referer). Same token that just
         // succeeded over Basic auth, now with no Authorization header at all.
-        HttpResponse<String> queryToken = client.send(HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort()
-                + "/nic/update?hostname=home.dyn-http.example&myip=203.0.113.66&token="
-                + token))
-            .build(), HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> queryToken = sendRequest(requestTo(
+            "/nic/update?hostname=home.dyn-http.example&myip=203.0.113.66&token=" + token));
         assertThat(queryToken.statusCode()).isEqualTo(200);
         assertThat(queryToken.body().trim())
             .as("the ?token= query fallback is gone; the credential must ride Basic auth")

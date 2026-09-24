@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.auth.model.GrantModel;
@@ -20,10 +19,7 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.security.RecordCapabilityDecision;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
 import java.util.List;
 import java.util.Map;
@@ -38,7 +34,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * alive against the production permission checker, and the real cap: scope is
  * mintable exactly for a held grant.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class CapabilityWalkTest extends HohenheimTestBase {
 
     private static Integer walkSiteId;
@@ -57,14 +52,7 @@ class CapabilityWalkTest extends HohenheimTestBase {
         siteModel.save(site);
         walkSiteId = site.get(SiteModel.ID);
 
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, "walk-operator@hohenheim.local");
-        user.set(UserModel.DISPLAY_NAME, "Walk Operator");
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        walkOperatorId = user.get(UserModel.ID);
+        walkOperatorId = ApiSupport.user("walk-operator@hohenheim.local", "Walk Operator");
     }
 
     /**
@@ -74,7 +62,6 @@ class CapabilityWalkTest extends HohenheimTestBase {
      * old wrapper swallowed tri-state), and the admin permission bypasses.
      */
     @Test
-    @Order(1)
     void manageDecisionsRideThePrecedenceWalk() {
         UserPrincipal operator = new UserPrincipal(walkOperatorId, "Walk Operator");
         AccessContext ctx = contextFor(operator);
@@ -144,7 +131,6 @@ class CapabilityWalkTest extends HohenheimTestBase {
      * capability on the same model stays refused.
      */
     @Test
-    @Order(2)
     void realManageScopeMintsForAHolderAndOnlyAHolder() {
         UserPrincipal operator = new UserPrincipal(walkOperatorId, "Walk Operator");
         AccessContext actor = contextFor(operator);

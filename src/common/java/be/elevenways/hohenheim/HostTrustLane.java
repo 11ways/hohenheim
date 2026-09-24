@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim;
 
-import be.elevenways.hawkeye.common.annotation.Arg;
-import be.elevenways.hawkeye.common.annotation.HawkeyeFunction;
+import be.elevenways.hawkeye.common.annotation.HawkeyeAutoLoad;
+import be.elevenways.protoblast.common.dry.BlastDrySerializers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -9,14 +9,15 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * One trust relationship a controller keeps with a host: the declaring home of the trust-lane vocabulary.
  *
  * AIDEV-NOTE: the lane token is ALSO the row-action lane id ServerTrustActions composes its action
- * ids from ({@code host_key} / {@code incus_cert}), so it never changes. The host overview's trust card
- * reads its title and client-material label off the member ({@code HostTrustLanes.of(lane.laneId)}), so
- * no template branches over lane literals; once TrustLaneView carries the member itself the template
- * reads {@code lane.lane.title} and {@link #of} can go.
+ * ids from ({@code host_key} / {@code incus_cert}), so it never changes. TrustLaneView carries the
+ * MEMBER and the host overview's trust card reads its title and client-material label off it ({@code
+ * lane.lane.title}), so no template branches over lane literals. The member crosses the web boundary as
+ * its own name (the static initializer registers the DRY pair), the HostState shape.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
  */
+@HawkeyeAutoLoad
 public enum HostTrustLane {
 
     /** The ssh host key the controller pins, and the client key it installs. */
@@ -54,29 +55,7 @@ public enum HostTrustLane {
         return this.clientLabel;
     }
 
-    /**
-     * The member a lane token names.
-     *
-     * @throws IllegalArgumentException for an unknown token: an unknown lane fails closed instead of
-     *         rendering as the other lane
-     */
-    @HawkeyeFunction(
-        name = "of",
-        namespace = "HostTrustLanes",
-        description = "The host trust lane a lane token names",
-        returnType = HostTrustLane.class,
-        returnsReference = false,
-        arguments = {
-            @Arg(name = "key", required = true, type = String.class, expectsReference = false,
-                 description = "The lane token a trust lane view carries")
-        }
-    )
-    public static @NonNull HostTrustLane of(@NonNull String key) {
-        for (HostTrustLane lane : values()) {
-            if (lane.key.equals(key)) {
-                return lane;
-            }
-        }
-        throw new IllegalArgumentException("Unknown host trust lane: " + key);
+    static {
+        BlastDrySerializers.registerNameEnum(HostTrustLane.class);
     }
 }

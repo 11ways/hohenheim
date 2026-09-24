@@ -15,33 +15,21 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.project.Projects;
-import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.auth.server.ZenitAuth;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.csrf.CsrfTokens;
-import be.elevenways.zenit.common.session.Session;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,7 +44,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * No daemon is needed: every act exercised refuses or answers before a driver call,
  * except the instance-log tail whose named refusal IS the assertion.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class PaasApiTest extends HohenheimTestBase {
 
     private static final String PREFIX = "paas-api-";
@@ -97,8 +84,8 @@ class PaasApiTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        tenantAId = user("paas-tenant-a@surface.test", "Paas Tenant A");
-        tenantBId = user("paas-tenant-b@surface.test", "Paas Tenant B");
+        tenantAId = ApiSupport.user("paas-tenant-a@surface.test", "Paas Tenant A");
+        tenantBId = ApiSupport.user("paas-tenant-b@surface.test", "Paas Tenant B");
 
         // Both sites expose an APPLICATION: every deploy verb and every operation
         // record of the API is keyed to that application now, not to the site.
@@ -156,11 +143,7 @@ class PaasApiTest extends HohenheimTestBase {
                 .first().get(UserModel.ID),
             PREFIX + "admin", List.of("hohenheim.*"), null).plaintext();
 
-        Session session = Zenit.getSessionStore().create();
-        session.set(AuthKeys.USER_ID, tenantAId.longValue());
-        session.set(CsrfTokens.TOKEN, ZenitAuth.randomToken());
-        Zenit.getSessionStore().save(session);
-        sessionA = session.token().secret();
+        sessionA = sessionFor(tenantAId).token();
     }
 
     @AfterAll
@@ -206,17 +189,6 @@ class PaasApiTest extends HohenheimTestBase {
     }
 
     // -- fixtures --------------------------------------------------------------
-
-    private static int user(String email, String name) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, name);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
-    }
 
     private static int site(String name, String type) {
         Row row = Models.get(SiteModel.class).createEmptyRow();
@@ -298,13 +270,9 @@ class PaasApiTest extends HohenheimTestBase {
 
     /** Keys only; the inventory is exactly the granted one; scopes narrow it away. */
     @Test
-    @Order(1)
     void theSurfaceIsKeyOnlyAndScopeNarrowed() throws Exception {
         // 1. A browser session is not an automation credential.
-        HttpResponse<String> viaCookie = HttpClient.newHttpClient().send(HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + "/api/v1/sites"))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionA)
-            .build(), HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> viaCookie = httpGet("/api/v1/sites", sessionA);
         assertThat(viaCookie.statusCode())
             .as("step 1: a session cookie is refused on the PaaS surface")
             .isEqualTo(403);
@@ -347,7 +315,6 @@ class PaasApiTest extends HohenheimTestBase {
 
     /** COUNTERFACTUAL: unowned and nonexistent are one answer, and nothing happens. */
     @Test
-    @Order(2)
     void unownedAndAbsentAnswerIdenticallyWithNoSideEffect() throws Exception {
         int absentId = 900_000_101;
         assertThat(Models.get(SiteModel.class).findById(absentId))
@@ -404,7 +371,6 @@ class PaasApiTest extends HohenheimTestBase {
 
     /** Deploy/rollback dispatch to the SAME engines the UI uses, refusals named. */
     @Test
-    @Order(3)
     void deployAndRollbackAreTheSameDoorAsTheUi() throws Exception {
         // 1. A site that exposes NO application has nothing to deploy and says so by
         //    name -- the deploy verb acts on the application behind a site, so a site
@@ -477,7 +443,6 @@ class PaasApiTest extends HohenheimTestBase {
 
     /** Secrets are WRITE-ONLY over the API; plain values round-trip; deletes stick. */
     @Test
-    @Order(4)
     void variablesRoundTripAndSecretsNeverComeBack() throws Exception {
         String base = "/api/v1/instances/" + instanceAId + "/variables";
 
@@ -545,7 +510,6 @@ class PaasApiTest extends HohenheimTestBase {
 
     /** Operation records and logs are readable exactly within the granted scope. */
     @Test
-    @Order(5)
     void operationRecordsAndLogsAnswerWithinScope() throws Exception {
         // 1. The three record lanes of the owned site render their seeded rows.
         HttpResponse<String> releases = keyGet(keyPaasA,
@@ -596,7 +560,6 @@ class PaasApiTest extends HohenheimTestBase {
      * environment value lands in.
      */
     @Test
-    @Order(6)
     void theEnvironmentLaneIsNoWiderThanItsAdminUi() throws Exception {
         // 1. Reaching the vulnerable state takes the DRIFT path, not a direct write:
         //    ProjectGuards' beforeValidate hook refuses an instance whose manage-subject
@@ -676,7 +639,6 @@ class PaasApiTest extends HohenheimTestBase {
     }
 
     @Test
-    @Order(8)
     void artifactAuthorityAndDurableFailureAreScopedToTheExactApplicationAndSite() throws Exception {
         String path = "/api/v1/sites/" + siteAId + "/artifact";
         // This tenant can manage the hostname but has no application capability.
@@ -689,6 +651,19 @@ class PaasApiTest extends HohenheimTestBase {
                 List.of(CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimAccess.MANAGE)), null).plaintext();
             assertThat(keyPost(siteOnly, path, "not-a-jar").statusCode()).isEqualTo(404);
             assertThat(keyGet(siteOnly, path).statusCode()).isEqualTo(404);
+            // The deploy admission is asked on the REQUEST thread, before the body is taken:
+            // config without power may read the artifact state but never ship bytes, and the
+            // refused upload leaves no operation behind (the background check passes for
+            // everybody, so it could never have refused this).
+            HttpResponse<String> powerless = keyPost(keyPaasA, path, "not-a-jar");
+            assertThat(powerless.statusCode()).as("config without power cannot upload").isEqualTo(422);
+            assertThat(powerless.body()).as("refused by the deploy admission")
+                .contains("instance_not_permitted");
+            assertThat(Models.get(ArtifactOperationModel.class).find()
+                    .where(ArtifactOperationModel.APPLICATION_ID.eq(applicationAId)).count())
+                .as("the refused upload minted no operation").isZero();
+            RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID,
+                applicationAId, HohenheimAccess.POWER, true);
             HttpResponse<String> accepted = keyPost(keyPaasA, path, "not-a-jar");
             assertThat(keyPost(keyPaasA, path, "").statusCode()).isEqualTo(422);
             Integer previousCap = HohenheimSettings.VALUES.getValue(HohenheimSettings.Builds.MAX_UPLOAD_MB);
@@ -703,12 +678,12 @@ class PaasApiTest extends HohenheimTestBase {
                 .where(ArtifactOperationModel.APPLICATION_ID.eq(applicationAId)).first();
             assertThat(operation).isNotNull();
             int id = operation.get(ArtifactOperationModel.ID);
-            long deadline = System.nanoTime() + 10_000_000_000L;
-            do {
-                operation = Models.get(ArtifactOperationModel.class).findById(id);
-                if (ArtifactOperationModel.FAILED.equals(operation.get(ArtifactOperationModel.STATUS))) break;
-                Thread.sleep(20);
-            } while (System.nanoTime() < deadline);
+            // The upload is processed on a background thread; wait for it to settle.
+            Poll.until("the unreadable upload's operation settles as failed",
+                Duration.ofSeconds(10), Duration.ofMillis(20),
+                () -> ArtifactOperationModel.FAILED.equals(Models.get(ArtifactOperationModel.class)
+                    .findById(id).get(ArtifactOperationModel.STATUS)));
+            operation = Models.get(ArtifactOperationModel.class).findById(id);
             assertThat(operation.get(ArtifactOperationModel.STATUS)).isEqualTo(ArtifactOperationModel.FAILED);
             HttpResponse<String> receipt = keyGet(keyPaasA, path + "/" + id);
             assertThat(receipt.statusCode()).isEqualTo(200);
@@ -721,6 +696,8 @@ class PaasApiTest extends HohenheimTestBase {
             }
             assertThat(keyGet(keyPaasA, path).body()).contains("absent");
         } finally {
+            RecordGrants.revoke(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID,
+                applicationAId, HohenheimAccess.POWER);
             RecordGrants.revoke(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID,
                 applicationAId, HohenheimAccess.CONFIG);
         }

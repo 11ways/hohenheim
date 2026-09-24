@@ -52,7 +52,8 @@ import java.util.Map;
  * work. Without the scope the instance-tier tenant gates would judge a system
  * consequence as a tenant write.
  *
- * AIDEV-NOTE: engine PASSWORDS never enter {@code instances.settings}. They ride the
+ * AIDEV-NOTE: the engine's environment never enters {@code instances.settings}: not the
+ * PASSWORDS, and since 2026-09-24 not the root user or init database either. It rides the
  * instance-variable SECRET lane ({@link InstanceVariableModel#SECRET_VALUE}, the
  * statically declared encrypted column) and merge into the container environment at
  * deploy through {@code InstanceVariables.applyToSettings}. The pre-lowering shape put
@@ -161,7 +162,7 @@ public final class DatabaseInstances {
 
             // Secrets AFTER the row exists (they key on its id) and BEFORE the deploy
             // reads them: applyToSettings merges them into the container environment.
-            writeEngineSecrets(instanceId, host.engine(), host.rootUser(), host.rootPassword());
+            writeEngineEnvironment(instanceId, host);
 
             DockerClient docker = new ServerService().clientFor(serverName);
             if (!host.shared()) {
@@ -394,6 +395,9 @@ public final class DatabaseInstances {
      * @return how many databases were adopted in this pass
      */
     public static int adoptExisting() {
+        // First the credential backfill: pure database work, and it reaches the engines
+        // nobody redeploys (a deploy below writes its own rows sealed anyway).
+        sealPlaintextEnvironments();
         int adopted = 0;
         for (Row database : Models.get(DatabaseModel.class).find().all()) {
             Integer recordId = database.get(DatabaseModel.ID);
@@ -443,7 +447,9 @@ public final class DatabaseInstances {
         settings.put("ephemeral", host.ephemeral());
         settings.put("shared", host.shared());
         settings.put("data_volume", host.ephemeral() ? "" : host.dataVolume());
-        settings.put("environment_variables", engine.env(host.rootUser(), host.initDatabase()));
+        // No environment_variables: the engine's WHOLE environment (the root user and the
+        // init database as well as the passwords) rides the secret lane, see
+        // writeEngineEnvironment.
         String command = engine.containerCommandTemplate();
         if (command != null) {
             settings.put("command", command);
@@ -458,25 +464,93 @@ public final class DatabaseInstances {
     }
 
     /**
-     * Write the engine's password-bearing variables onto the instance through the SECRET
-     * lane, replacing any previous values, and remove secret rows the engine no longer
-     * declares (an engine change must not leave a stale credential behind).
+     * Make the engine's WHOLE initialization environment the instance's variable set, every
+     * value SECRET, and drop rows the engine no longer declares (an engine change must not
+     * leave a stale credential behind).
+     *
+     * AIDEV-NOTE: the non-secret half ({@link ManagedDatabase.Engine#env}: the root user and
+     * the init database) used to sit in {@code instances.settings}, a plain JSON column, so
+     * the engine superuser's NAME was stored in the clear beside the encrypted password. It
+     * now rides the same encrypted lane; {@link #sealPlaintextEnvironments} moves the rows an
+     * older controller wrote.
      */
-    private static void writeEngineSecrets(int instanceId, ManagedDatabase.@NonNull Engine engine,
-                                           @NonNull String rootUser, @Nullable String password) {
-        Map<String, String> secrets = engine.secretEnv(rootUser, password == null ? "" : password);
-        InstanceVariables variables = new InstanceVariables();
-        for (Map.Entry<String, String> secret : secrets.entrySet()) {
-            variables.setValue(instanceId, null, secret.getKey(),
-                InstanceVariableModel.KIND_SECRET, secret.getValue());
-        }
-        List<Row> existing = Models.get(InstanceVariableModel.class).findByInstanceId(instanceId);
-        for (Row row : existing) {
-            String key = row.get(InstanceVariableModel.KEY);
-            if (key != null && !secrets.containsKey(key)) {
-                variables.removeValue(instanceId, null, key);
+    private static void writeEngineEnvironment(int instanceId, @NonNull EngineHost host) {
+        new InstanceVariables().storeSecretEnvironment(instanceId, engineEnvironment(host));
+    }
+
+    /**
+     * THE environment an engine instance's variables hold: the plain half, then the
+     * password-bearing half.
+     */
+    public static @NonNull Map<String, String> engineEnvironment(@NonNull EngineHost host) {
+        Map<String, String> environment = new LinkedHashMap<>(
+            host.engine().env(host.rootUser(), host.initDatabase()));
+        environment.putAll(host.engine().secretEnv(host.rootUser(), host.rootPassword()));
+        return environment;
+    }
+
+    /**
+     * Boot backfill: move the environment an older controller stored in a database engine
+     * instance's settings into that instance's SECRET variables, and strip it.
+     *
+     * AIDEV-NOTE: the StackServiceSecrets / PreviewDeployments.sealPlaintextEnvironments shape,
+     * a boot reconcile rather than a migration for the same reason: {@code instances.settings}
+     * is a kind-discriminated field whose sub-schema lives in server code. Unlike those, an
+     * engine instance ALREADY holds secret rows (the passwords), and they are the newer truth:
+     * they win over the settings copy exactly as they do at deploy (applyToSettings), so the
+     * container environment a redeploy produces is unchanged. Idempotent, trashed rows
+     * included (their settings are credentials at rest too).
+     *
+     * @return how many engine instances were sealed in this pass
+     */
+    public static int sealPlaintextEnvironments() {
+        int sealed = 0;
+        for (Row instance : Models.get(InstanceModel.class).find()
+                .where(InstanceModel.KIND.eq(DatabaseContainerKind.ID.toString())).all()) {
+            Map<String, Object> settings = new LinkedHashMap<>();
+            if (instance.get(InstanceModel.SETTINGS) instanceof Map<?, ?> stored) {
+                stored.forEach((key, value) -> settings.put(String.valueOf(key), value));
+            }
+            Integer instanceId = instance.get(InstanceModel.ID);
+            if (instanceId == null
+                    || !settings.containsKey(DatabaseContainerKind.ENVIRONMENT_VARIABLES.getName())) {
+                continue;
+            }
+            String ownerToken = instance.get(InstanceModel.GENERATED_FOR_MODEL);
+            Identifier ownerModel = ownerToken == null ? null : Identifier.tryParse(ownerToken);
+            Integer ownerId = instance.get(InstanceModel.GENERATED_FOR_ID);
+            if (ownerModel == null || ownerId == null) {
+                Blast.log("DB-RUNTIME: engine instance", instanceId, "carries a plaintext"
+                    + " environment but names no owning database record; left for an operator");
+                continue;
+            }
+            try {
+                OwnedInstances.inScope(SOURCE, ownerModel, ownerId, () -> {
+                    InstanceVariables variables = new InstanceVariables();
+                    Map<String, String> environment =
+                        new LinkedHashMap<>(InstanceVariables.detachEnvironment(settings));
+                    environment.putAll(variables.valuesFor(instanceId));
+                    variables.storeSecretEnvironment(instanceId, environment);
+                    // Re-read right before the whole-row save: a save writes every column.
+                    Row fresh = Models.get(InstanceModel.class).findById(instanceId);
+                    if (fresh != null) {
+                        fresh.set(InstanceModel.SETTINGS, settings);
+                        Models.get(InstanceModel.class).save(fresh);
+                    }
+                    return null;
+                });
+                sealed++;
+            } catch (Exception failed) {
+                Blast.log("DB-RUNTIME: could not move the plaintext environment of engine instance",
+                    instanceId, "into secret variables; retried at the next boot -",
+                    failed.getMessage());
             }
         }
+        if (sealed > 0) {
+            Blast.log("DB-RUNTIME: moved the plaintext environment of", sealed,
+                "database engine instance(s) into encrypted secret variables");
+        }
+        return sealed;
     }
 
     /** The owner identity of a host, for callers that name it in a log or a refusal. */

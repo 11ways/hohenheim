@@ -104,8 +104,9 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
         // AIDEV-NOTE: a tenant-owned static site is REFUSED at dial time. No allowed-roots
         // declaration exists that could say which host directories a tenant may publish, and
         // without one root_path serves any directory hohenheim can read (its own database and
-        // settings included). Fail closed until the operator owns the site again.
-        if (TenantUpstreams.isTenantOwned(site)) {
+        // settings included). Fail closed until the operator owns the site again, or marks
+        // its upstream trusted (TenantUpstreams.publicOnly).
+        if (TenantUpstreams.publicOnly(site)) {
             Integer siteId = site.get(SiteModel.ID);
             return new FaultedSiteHandler(siteId != null ? siteId : -1,
                 "a tenant-owned site may not serve files from the host");

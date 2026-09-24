@@ -185,6 +185,16 @@ public final class PaasApi {
                 return ApiConduits.refusal(conduit, Violations.ofForm(
                     ApiConduits.violationText("artifact_upload_failed")));
             }
+            // AIDEV-NOTE: the deploy admission (power on a tenant-originated call, every
+            // attached database ready) runs HERE, on the request thread and before a byte of
+            // the body is accepted. ArtifactDeploys.run asks it again in the background, but
+            // there no tenant identity survives, so that check passes for everybody -- the
+            // same hole ApplicationDeploys.deployInBackground closes for the git lane.
+            try {
+                requireReleaseAuthority(applicationId);
+            } catch (Violations refused) {
+                return ApiConduits.refusal(conduit, refused);
+            }
             Path upload = null;
             boolean handedOff = false;
             Row operation = null;
@@ -203,6 +213,8 @@ public final class PaasApi {
                     conduit.notFound();
                     return null;
                 }
+                // And the admission again: power or a database can have moved meanwhile.
+                requireReleaseAuthority(applicationId);
                 operation = ArtifactDeploys.accept(site.get(SiteModel.ID), applicationId, upload);
                 int operationId = operation.get(ArtifactOperationModel.ID);
                 Path acceptedUpload = upload;
@@ -215,6 +227,9 @@ public final class PaasApi {
             } catch (RequestBodyTooLargeException tooLarge) {
                 return ApiConduits.refusal(conduit, Violations.ofForm(
                     ApiConduits.violationText("artifact_too_large")));
+            } catch (Violations refused) {
+                if (operation != null) ArtifactDeploys.handoffFailed(operation);
+                return ApiConduits.refusal(conduit, refused);
             } catch (Exception failed) {
                 if (operation != null) ArtifactDeploys.handoffFailed(operation);
                 return ApiConduits.refusal(conduit, Violations.ofForm(

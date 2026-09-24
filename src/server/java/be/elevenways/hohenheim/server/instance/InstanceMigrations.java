@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.WorkloadAttribution;
 import be.elevenways.hohenheim.server.runtime.WorkloadAttribution.WorkloadClaim;
+import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
@@ -437,7 +438,7 @@ public final class InstanceMigrations {
             }
             throw refusal("instance_migrate_failed", resolved.row(), error);
         } finally {
-            InstanceSnapshots.deleteRecursively(staging);
+            FileTrees.deleteQuietly(staging);
         }
 
         Blast.log("MIGRATE: moved", handle, "from",

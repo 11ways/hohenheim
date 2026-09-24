@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -23,11 +24,9 @@ import be.elevenways.hohenheim.server.upstream.kinds.TlsPassthroughUpstreamKind;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.QueryContext;
 import be.elevenways.zenit.common.routing.RouteScope;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.net.AddressScope;
@@ -71,7 +70,7 @@ import java.util.Set;
  * in production while looking like a security improvement. That request DOES pass here on
  * the WRITE side (an anonymous conduit reads as tenant-originated) and is allowed because it
  * is bounded to VALUE on a stored DYNAMIC row inside the type allow-list. Do not "fix" the
- * read side; the tenant READ scope lives on the RecordSource (ManagePanel.dnsRecordScope).
+ * read side; the tenant READ scope lives on the RecordSource (TenantScopes.DNS_RECORDS).
  *
  * @author Jelle De Loecker
  */
@@ -249,7 +248,7 @@ public final class TenantWrites {
             if (!isTenantOriginated()) {
                 return;
             }
-            for (Row doomed : doomedRows(context)) {
+            for (Row doomed : context.doomedRows()) {
                 requireManagedSite(doomed.get(SiteDomainModel.SITE_ID));
             }
         });
@@ -280,7 +279,7 @@ public final class TenantWrites {
             if (!isTenantOriginated()) {
                 return;
             }
-            for (Row doomed : doomedRows(context)) {
+            for (Row doomed : context.doomedRows()) {
                 requireVariableConfig(doomed.get(InstanceVariableModel.INSTANCE_ID));
             }
         });
@@ -294,7 +293,7 @@ public final class TenantWrites {
             if (!isTenantOriginated()) {
                 return;
             }
-            for (Row doomed : doomedRows(context)) {
+            for (Row doomed : context.doomedRows()) {
                 Object id = doomed.get(DatabaseModel.ID);
                 if (id == null) {
                     throw HohenheimAccess.databaseRefusal();
@@ -325,7 +324,7 @@ public final class TenantWrites {
             if (!isTenantOriginated()) {
                 return;
             }
-            for (Row doomed : doomedRows(context)) {
+            for (Row doomed : context.doomedRows()) {
                 requireInstanceLinkAuthority(doomed.get(InstanceDatabaseModel.INSTANCE_ID),
                     doomed.get(InstanceDatabaseModel.DATABASE_ID));
             }
@@ -336,7 +335,7 @@ public final class TenantWrites {
             }
             AccessContext ctx = acting();
             HostnameAuthority.Snapshot snapshot = HostnameAuthority.Snapshot.load();
-            for (Row doomed : doomedRows(context)) {
+            for (Row doomed : context.doomedRows()) {
                 refuseForeignRecordType(doomed.get(DnsRecordModel.TYPE));
                 // Removing a row is authority over the row, so it asks the SAME question a
                 // write does -- minus the claim half, since a delete claims no new name. An
@@ -370,7 +369,7 @@ public final class TenantWrites {
             // inAuthorizedOperation (the release is a mandated consequence of a
             // domain delete that already passed its own gate), which makes the
             // write non-tenant-originated and never reaches here.
-            for (Row doomed : doomedRows(context)) {
+            for (Row doomed : context.doomedRows()) {
                 checkCredentialWrite(doomed.get(DnsDyndnsCredentialModel.RECORD_ID));
             }
         });
@@ -384,7 +383,7 @@ public final class TenantWrites {
             if (!isTenantOriginated()) {
                 return;
             }
-            for (Row doomed : doomedRows(context)) {
+            for (Row doomed : context.doomedRows()) {
                 requireAccessListAuthority(doomed.get(AccessListModel.ID));
             }
         });
@@ -398,7 +397,7 @@ public final class TenantWrites {
             if (!isTenantOriginated()) {
                 return;
             }
-            for (Row doomed : doomedRows(context)) {
+            for (Row doomed : context.doomedRows()) {
                 requireAccessListAuthority(doomed.get(AccessRuleModel.ACCESS_LIST_ID));
             }
         });
@@ -412,10 +411,64 @@ public final class TenantWrites {
             if (!isTenantOriginated()) {
                 return;
             }
-            for (Row doomed : doomedRows(context)) {
+            for (Row doomed : context.doomedRows()) {
                 requireManagedSite(doomed.get(ProtectedPathModel.SITE_ID));
             }
         });
+        GitProviderModel.SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row != null && isTenantOriginated()) {
+                checkGitProviderWrite(row);
+            }
+        });
+        GitProviderModel.SCHEMA.addBeforeRemoveHook(context -> {
+            if (!isTenantOriginated()) {
+                return;
+            }
+            for (Row doomed : context.doomedRows()) {
+                requireGitProviderAuthority(doomed.get(GitProviderModel.ID));
+            }
+        });
+    }
+
+    // --- Git providers -------------------------------------------------------------------
+
+    /**
+     * A tenant may CREATE a provider (the /manage resource grants it {@code manage} right
+     * after) and may edit only one it holds {@code manage} on. SHARED stays frozen exactly
+     * like {@code AccessListModel.SHARED}: publishing a credential installation-wide is the
+     * operator's declaration.
+     *
+     * AIDEV-NOTE: this is THE gate; ManageGitProviderResource.refuseSharedChange and its
+     * managed-rows scope are the surface's own early answers, and neither stops a revision
+     * restore, a peer write or a direct model save. A shared provider a tenant may USE
+     * (the picker scope) is still not one it may edit: use is not manage.
+     *
+     * @throws Violations {@code tenant_git_provider_not_managed} or {@code tenant_field_frozen}
+     */
+    private static void checkGitProviderWrite(@NonNull Row row) {
+        Object id = row.has(GitProviderModel.ID.getName()) ? row.get(GitProviderModel.ID) : null;
+        Row stored = id != null ? Models.get(GitProviderModel.class).findById(id) : null;
+        if (stored != null) {
+            requireGitProviderAuthority(stored.get(GitProviderModel.ID));
+        }
+        Object baseline = stored != null ? stored.get(GitProviderModel.SHARED)
+            : GitProviderModel.SHARED.getDefaultValue();
+        if (row.has(GitProviderModel.SHARED.getName())
+                && Boolean.TRUE.equals(row.get(GitProviderModel.SHARED)) != Boolean.TRUE.equals(baseline)) {
+            throw Violations.ofField(GitProviderModel.SHARED.getName(),
+                row.get(GitProviderModel.SHARED), CmsSupport.violationText("tenant_field_frozen"));
+        }
+    }
+
+    /** @throws Violations when the acting tenant holds no {@code manage} on the provider */
+    private static void requireGitProviderAuthority(@Nullable Object providerId) {
+        AccessContext ctx = acting();
+        boolean authorized = ctx != null && !ctx.isAnonymous() && providerId != null
+            && ctx.hasCapability(GitProviderModel.MODEL_ID, providerId, HohenheimAccess.MANAGE);
+        if (!authorized) {
+            throw Violations.ofForm(CmsSupport.violationText("tenant_git_provider_not_managed"));
+        }
     }
 
     // --- Access lists and their rule trees ---------------------------------------------
@@ -673,6 +726,12 @@ public final class TenantWrites {
      * settings frozen the column rule would refuse the same write anyway; the upstream
      * judgement is the defence that survives a later widening of the allow-list, and it
      * gives the precise refusal while both apply.
+     *
+     * AIDEV-NOTE: {@code trusted_upstream} is deliberately NOT consulted here. It vouches
+     * for the OPERATOR's upstream (TenantUpstreams.publicOnly reads it at dial time), never
+     * for one a tenant authors, so a tenant move is judged at the tenant tier whatever the
+     * flag says; and the flag itself is outside {@link #SITE_TENANT_WRITABLE}, so a tenant
+     * setting it is refused as a frozen column.
      *
      * @throws Violations {@code tenant_proxy_upstream_private} or {@code tenant_field_frozen}
      */
@@ -1323,25 +1382,6 @@ public final class TenantWrites {
             throw Violations.ofField(DnsRecordModel.TYPE.getName(), text,
                 CmsSupport.violationText("tenant_record_type"));
         }
-    }
-
-    /**
-     * The rows a criteria delete is about to remove, whatever model it targets.
-     *
-     * AIDEV-NOTE: a remove context carries CRITERIA, not rows -- the same re-query idiom
-     * GeneratedDnsRecords.doomedRows uses, and for the same reason: enforcing on the
-     * resource's delete method would leave every criteria delete outside the guard.
-     */
-    private static @NonNull List<Row> doomedRows(@NonNull RemoveFromDatasource context) {
-        Model model = context.getModel();
-        QueryContext queryContext = context.getQueryContext();
-        if (model == null || queryContext == null) {
-            return List.of();
-        }
-        return model.executeFindQuery(new QueryContext(
-            queryContext.getCriteria(), List.of(), null, null, List.of(), null,
-            queryContext.getLocaleChain(),
-            queryContext.isAcrossLocales(), true, true, queryContext.getHints()));
     }
 
     /** The value the write will END UP with, reading the already-loaded stored row. */

@@ -3492,6 +3492,16 @@
     "text": "A delegated proxy site cannot forward to a loopback or private address",
     "scope": "violations"
   },
+  "trusted_upstream": [
+    {
+      "text": "Trusted upstream",
+      "scope": "field"
+    },
+    {
+      "text": "Let this site reach the upstream you configured even when a tenant manages it and the target is loopback, a private network address, a unix socket or a host directory. Tenants can never change this setting or the upstream itself.",
+      "scope": "help"
+    }
+  ],
   "proxy_upstream_invalid": {
     "text": "The upstream host must be a plain http(s) address without credentials",
     "scope": "violations"
@@ -6009,7 +6019,7 @@
     "scope": "violations"
   },
   "backup_target_in_use": {
-    "text": "Backup target {$name} still holds {$backups} backup(s) and backs {$instances} instance(s) and {$trashed} trashed instance(s); delete those backups and repoint or purge the instances first",
+    "text": "Backup target {$name} still holds {$backups} backup(s) and backs {$instances} instance(s); delete those backups and repoint the instances first",
     "scope": "violations"
   },
   "backup_target_control_plane": {
@@ -8361,6 +8371,54 @@
   "fetch": {
     "text": "Fetch",
     "scope": "server_media"
+  },
+  "media_fetch_started": {
+    "text": "Fetching '{$name}' in the background; its progress shows on this tab",
+    "scope": "server_media"
+  },
+  "fetches_title": {
+    "text": "Fetches",
+    "scope": "server_media"
+  },
+  "fetch_state": {
+    "text": "State",
+    "scope": "server_media"
+  },
+  "fetch_progress": {
+    "text": "Progress of fetching '{$name}'",
+    "scope": "server_media"
+  },
+  "fetch_state_pending": {
+    "text": "Queued",
+    "scope": "server_media"
+  },
+  "fetch_state_downloading": {
+    "text": "Downloading",
+    "scope": "server_media"
+  },
+  "fetch_state_importing": {
+    "text": "Importing into the host",
+    "scope": "server_media"
+  },
+  "fetch_state_ready": {
+    "text": "Available",
+    "scope": "server_media"
+  },
+  "fetch_state_failed": {
+    "text": "Failed",
+    "scope": "server_media"
+  },
+  "fetch_state_interrupted": {
+    "text": "Interrupted: the controller stopped before the fetch finished",
+    "scope": "server_media"
+  },
+  "media_fetch_running": {
+    "text": "Media '{$media}' is already being fetched onto this host",
+    "scope": "violations"
+  },
+  "media_fetch_busy": {
+    "text": "{$count} install media fetches are already running; wait for one to finish",
+    "scope": "violations"
   },
   "media_fetched": [
     {
@@ -11426,7 +11484,7 @@
   },
   "delete_in_use": [
     {
-      "text": "{$workloads} stored workloads still name this host. Remove or migrate them first, or their records would name a host that no longer exists.",
+      "text": "{$workloads} records still name this host: {$instances} instance(s), {$stacks} stack(s), {$databases} database(s), {$engines} shared database engine(s) and {$ports} port claim(s). Remove or move them (release the claims) first, or their records would name a host that no longer exists.",
       "scope": "server"
     },
     {
@@ -11594,6 +11652,10 @@
   },
   "protected_path_taken": {
     "text": "This path is already protected on this site",
+    "scope": "violations"
+  },
+  "tenant_git_provider_not_managed": {
+    "text": "You do not manage this git provider",
     "scope": "violations"
   },
   "tenant_access_list_not_managed": {
@@ -12076,6 +12138,10 @@
   },
   "import_nameservers_undeclared": {
     "text": "The zone file names other nameservers and this controller declares none (dns.nameservers): declare them, or keep the file's nameservers",
+    "scope": "violations"
+  },
+  "record_secondary_zone": {
+    "text": "A secondary zone takes its records from its primary over zone transfer; add or edit the record on the primary",
     "scope": "violations"
   },
   "import_secondary_zone": {

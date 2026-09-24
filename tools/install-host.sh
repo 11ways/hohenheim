@@ -760,6 +760,23 @@ esac
 LE_ENABLED="false"
 [ -n "$ADMIN_EMAIL" ] && [ "$role_proxy" = "true" ] && LE_ENABLED="true"
 
+# Where the control-plane database is named. A FRESH install (neither settings file
+# exists yet) names it the framework's way: zenit's database.url in local.dry. An
+# existing host is never re-pointed: its hohenheim.dry carries the deprecated
+# database.path the server still honours as its fallback, and seeding a database.url
+# beside it would silently win over a path the operator may have changed. So a host
+# that already has hohenheim.dry gets no database.url, even when local.dry is new.
+if [ ! -f "$SETTINGS_DIR/hohenheim.dry" ] && [ ! -f "$SETTINGS_DIR/local.dry" ]; then
+    info "fresh install: the control-plane database is database.url = jdbc:sqlite:$PREFIX/hohenheim.db in local.dry"
+    LOCAL_DATABASE_BLOCK="
+    \"database\": {
+        \"url\": \"jdbc:sqlite:$PREFIX/hohenheim.db\"
+    },"
+else
+    info "existing install: the database keeps the location its settings already name"
+    LOCAL_DATABASE_BLOCK=""
+fi
+
 seed_settings "$SETTINGS_DIR/hohenheim.dry" 0640 "{
     \"roles\": {
         \"proxy\": $role_proxy,
@@ -789,8 +806,6 @@ seed_settings "$SETTINGS_DIR/hohenheim.dry" 0640 "{
         \"data_path\": \"$PREFIX/data\"
     },
     \"database\": {
-        \"path\": \"$PREFIX/hohenheim.db\",
-        \"engine\": \"sqlite\",
         \"backup_path\": \"$PREFIX/data/backups\",
         \"backup_retention\": 7
     },
@@ -810,7 +825,7 @@ seed_settings "$SETTINGS_DIR/hohenheim.dry" 0640 "{
 "
 
 seed_settings "$SETTINGS_DIR/local.dry" 0600 "{
-    \"environment\": \"live\",
+    \"environment\": \"live\",$LOCAL_DATABASE_BLOCK
     \"network\": {
         \"port\": $PANEL_PORT,
         \"bind_address\": \"$PANEL_BIND\",

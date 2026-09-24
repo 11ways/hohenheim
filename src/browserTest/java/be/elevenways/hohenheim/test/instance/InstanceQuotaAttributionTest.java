@@ -7,13 +7,12 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -58,14 +57,7 @@ class InstanceQuotaAttributionTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, "tenant@quota-attribution.test");
-        user.set(UserModel.DISPLAY_NAME, "Quota Attribution Tenant");
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        tenantId = user.get(UserModel.ID);
+        tenantId = ApiSupport.user("tenant@quota-attribution.test", "Quota Attribution Tenant");
         tenant = new UserPrincipal(tenantId, "Quota Attribution Tenant");
 
         operatorSiteId = site(PREFIX + "operator-site");

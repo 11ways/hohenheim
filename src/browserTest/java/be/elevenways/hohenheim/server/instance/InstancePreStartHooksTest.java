@@ -3,8 +3,10 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.protoblast.common.registry.Identifier;
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
 import java.io.IOException;
-import java.io.UncheckedIOException;
+import java.lang.reflect.Modifier;
+import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -91,7 +93,7 @@ class InstancePreStartHooksTest {
         //    hooks it already knows about.
         List<String> declared = declaredHookClasses();
         assertThat(declared)
-            .as("step 3: the source scan found the implementations (a scan finding none"
+            .as("step 3: the type scan found the implementations (a scan finding none"
                 + " would make this assertion vacuous)")
             .hasSizeGreaterThanOrEqualTo(3);
         List<String> registered = new ArrayList<>();
@@ -139,39 +141,48 @@ class InstancePreStartHooksTest {
             .hasMessageContaining("game_domain_links");
     }
 
-    /** Fully-qualified names of every {@link InstancePreStartHook} implementation in the tree. */
-    private static List<String> declaredHookClasses() throws IOException {
-        Path root = sourceRoot();
+    /**
+     * Binary names of every concrete {@link InstancePreStartHook} in the compiled server
+     * classes, decided by the JVM's own type graph.
+     *
+     * AIDEV-NOTE: this used to grep the SOURCE for the text "implements
+     * InstancePreStartHook", which a subclass of an existing hook, an intermediate
+     * interface, a generic or a line break all escaped. Every class is now loaded WITHOUT
+     * initialization and asked isAssignableFrom, so any concrete type the runtime would
+     * treat as a hook is found however it got there. A class that cannot even link is
+     * skipped: the generated autoload loader references every hook directly, so an
+     * unlinkable hook fails boot loudly and can never be a SILENTLY unregistered one.
+     */
+    private static List<String> declaredHookClasses() throws IOException, URISyntaxException {
+        Path root = Path.of(InstancePreStartHooks.class.getProtectionDomain()
+            .getCodeSource().getLocation().toURI());
+        assertThat(root)
+            .as("step 3: the compiled server classes are a directory on the test classpath")
+            .isDirectory();
+        ClassLoader loader = InstancePreStartHooks.class.getClassLoader();
         List<String> found = new ArrayList<>();
+        List<Path> classFiles;
         try (Stream<Path> files = Files.walk(root)) {
-            files.filter(path -> path.toString().endsWith(".java")).forEach(path -> {
-                String body;
-                try {
-                    body = Files.readString(path);
-                } catch (IOException e) {
-                    throw new UncheckedIOException(e);
-                }
-                if (body.contains("implements InstancePreStartHook")) {
-                    String relative = root.relativize(path).toString();
-                    found.add(relative.substring(0, relative.length() - ".java".length())
-                        .replace(java.io.File.separatorChar, '.'));
-                }
-            });
+            classFiles = files.filter(path -> path.toString().endsWith(".class")).toList();
+        }
+        for (Path file : classFiles) {
+            String relative = root.relativize(file).toString();
+            String name = relative.substring(0, relative.length() - ".class".length())
+                .replace(File.separatorChar, '.');
+            if (name.endsWith("module-info") || name.endsWith("package-info")) {
+                continue;
+            }
+            Class<?> type;
+            try {
+                type = Class.forName(name, false, loader);
+            } catch (ClassNotFoundException | LinkageError unlinkable) {
+                continue;
+            }
+            if (InstancePreStartHook.class.isAssignableFrom(type) && !type.isInterface()
+                    && !Modifier.isAbstract(type.getModifiers())) {
+                found.add(type.getName());
+            }
         }
         return found;
-    }
-
-    /** The server source root, located by walking up from the working directory. */
-    private static Path sourceRoot() {
-        Path candidate = Path.of("").toAbsolutePath();
-        while (candidate != null) {
-            Path source = candidate.resolve("src/server/java");
-            if (Files.isDirectory(source)) {
-                return source;
-            }
-            candidate = candidate.getParent();
-        }
-        throw new IllegalStateException("Cannot locate src/server/java from "
-            + Path.of("").toAbsolutePath());
     }
 }

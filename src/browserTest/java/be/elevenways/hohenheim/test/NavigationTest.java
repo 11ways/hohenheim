@@ -3,14 +3,13 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
 /**
  * Navigation through the zenit-cms admin shell: sidebar links, soft
  * navigation, back button, and shell layout.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class NavigationTest extends HohenheimTestBase {
 
     private void waitForHeading(String expected) {
@@ -21,7 +20,6 @@ class NavigationTest extends HohenheimTestBase {
     }
 
     @Test
-    @Order(1)
     void shellLayoutSurvivesSoftNavigationAcrossThePanel() {
         navigateToApp("/admin");
         waitForHydration();
@@ -85,7 +83,6 @@ class NavigationTest extends HohenheimTestBase {
     }
 
     @Test
-    @Order(2)
     void softNavDashboardKeepsStatTitlesIconsAndAttentionEntries() throws Exception {
         // Regression: the dashboard re-renders CLIENT-side over soft navigation.
         // Stat titles are locale-map lookups (they need the payload-seeded locale

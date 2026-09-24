@@ -9,39 +9,26 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
-import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.CapabilityScopes;
+import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.ApiKeyService;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.auth.server.ZenitAuth;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.PermissionChecker;
-import be.elevenways.zenit.common.security.csrf.CsrfTokens;
-import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -58,7 +45,6 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  *
  * No daemon is needed: the paths exercised refuse before any driver call.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class TenantInstanceApiTest extends HohenheimTestBase {
 
     private static final String PREFIX = "tenant-api-";
@@ -90,10 +76,10 @@ class TenantInstanceApiTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        tenantAId = tenant("api-tenant-a@surface.test", "Api Tenant A");
-        tenantBId = tenant("api-tenant-b@surface.test", "Api Tenant B");
-        tenantConsoleId = tenant("api-tenant-console@surface.test", "Api Tenant Console");
-        tenantViewId = tenant("api-tenant-view@surface.test", "Api Tenant View");
+        tenantAId = ApiSupport.user("api-tenant-a@surface.test", "Api Tenant A");
+        tenantBId = ApiSupport.user("api-tenant-b@surface.test", "Api Tenant B");
+        tenantConsoleId = ApiSupport.user("api-tenant-console@surface.test", "Api Tenant Console");
+        tenantViewId = ApiSupport.user("api-tenant-view@surface.test", "Api Tenant View");
 
         instanceAId = instance(PREFIX + "alpha");
         instanceBId = instance(PREFIX + "bravo");
@@ -153,11 +139,7 @@ class TenantInstanceApiTest extends HohenheimTestBase {
                 CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.FILES_WRITE),
                 manageScope), null).plaintext();
 
-        Session session = Zenit.getSessionStore().create();
-        session.set(AuthKeys.USER_ID, tenantAId.longValue());
-        session.set(CsrfTokens.TOKEN, ZenitAuth.randomToken());
-        Zenit.getSessionStore().save(session);
-        sessionA = session.token().secret();
+        sessionA = sessionFor(tenantAId).token();
 
         Model templates = Models.get(InstanceTemplateModel.class);
         Row template = templates.createEmptyRow();
@@ -187,17 +169,6 @@ class TenantInstanceApiTest extends HohenheimTestBase {
         for (Row row : templates.find().where(InstanceTemplateModel.NAME.startsWith(PREFIX)).all()) {
             templates.delete(row.get(InstanceTemplateModel.ID));
         }
-    }
-
-    private static int tenant(String email, String name) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, name);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
     }
 
     private static int instance(String name) {
@@ -256,14 +227,10 @@ class TenantInstanceApiTest extends HohenheimTestBase {
 
     /** The API answers to keys only, and shows one tenant exactly its own inventory. */
     @Test
-    @Order(1)
     void theApiIsKeyOnlyAndNeverListsAnotherTenantsInstance() throws Exception {
         // 1. A browser session is not an automation credential. This is what makes the
         //    csrfExempt declaration on the mutating routes safe.
-        HttpResponse<String> viaCookie = HttpClient.newHttpClient().send(HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + "/api/v1/instances"))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionA)
-            .build(), HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> viaCookie = httpGet("/api/v1/instances", sessionA);
         assertThat(viaCookie.statusCode())
             .as("step 1: a session cookie is refused on the automation surface")
             .isEqualTo(403);
@@ -272,11 +239,7 @@ class TenantInstanceApiTest extends HohenheimTestBase {
         //    unauthenticated request on a login-required route is the login redirect,
         //    so the assertion is "not 200, and no record data in the body" rather than
         //    a particular refusal status.
-        HttpResponse<String> anonymous = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER).build()
-            .send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl() + "/api/v1/instances"))
-                .build(), HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> anonymous = httpGet("/api/v1/instances", null);
         assertThat(anonymous.statusCode())
             .as("step 2: an anonymous call is refused (401/403) or bounced to login")
             .isIn(302, 303, 401, 403);
@@ -305,7 +268,6 @@ class TenantInstanceApiTest extends HohenheimTestBase {
 
     /** COUNTERFACTUAL: unowned and nonexistent are one answer, status and body. */
     @Test
-    @Order(2)
     void anUnownedIdAndAnAbsentIdAreIndistinguishable() throws Exception {
         int absentId = 900_000_001;
         assertThat(Models.get(InstanceModel.class).findById(absentId))
@@ -341,7 +303,6 @@ class TenantInstanceApiTest extends HohenheimTestBase {
 
     /** COUNTERFACTUAL: the API refuses exactly what the HTML surface refuses. */
     @Test
-    @Order(3)
     void theApiRefusesWithTheSameNamedViolationAsTheHtmlSurface() throws Exception {
         // 1. Ask the SAME act through the in-process funnel the panel's row action uses,
         //    and keep the violation key it refuses with. Whatever that key is on this
@@ -383,25 +344,31 @@ class TenantInstanceApiTest extends HohenheimTestBase {
         // 5. Grant the owner the permission; the SAME call now gets past authority and
         //    meets the template approval gate -- the second named refusal the HTML
         //    surface produces for the same submit.
-        GrantService.createDirectGrant(GrantSubjectType.USER, tenantAId,
+        Row createGrant = GrantService.createDirectGrant(GrantSubjectType.USER, tenantAId,
             HohenheimAccess.INSTANCES_CREATE.value(), true);
-        HttpResponse<String> unapproved = keyPost(keyCreateA, "/api/v1/instances",
-            "template_id=" + unapprovedTemplateId + "&name=" + PREFIX + "api-created");
-        assertThat(unapproved.statusCode()).as("step 5: still refused, typed").isEqualTo(422);
-        assertThat(unapproved.body())
-            .as("step 5: now by the approval gate, named")
-            .contains("template_not_approved");
-        assertThat(Models.get(InstanceModel.class).find()
-                .where(InstanceModel.NAME.eq(PREFIX + "api-created")).count())
-            .as("step 5: and nothing was created along the way").isZero();
+        try {
+            HttpResponse<String> unapproved = keyPost(keyCreateA, "/api/v1/instances",
+                "template_id=" + unapprovedTemplateId + "&name=" + PREFIX + "api-created");
+            assertThat(unapproved.statusCode()).as("step 5: still refused, typed").isEqualTo(422);
+            assertThat(unapproved.body())
+                .as("step 5: now by the approval gate, named")
+                .contains("template_not_approved");
+            assertThat(Models.get(InstanceModel.class).find()
+                    .where(InstanceModel.NAME.eq(PREFIX + "api-created")).count())
+                .as("step 5: and nothing was created along the way").isZero();
 
-        // 6. The KEY narrows the permission lane too: a key without the create scope
-        //    cannot create even though its owner now may.
-        HttpResponse<String> narrowKey = keyPost(keyManageA, "/api/v1/instances",
-            "template_id=" + unapprovedTemplateId + "&name=" + PREFIX + "api-created-3");
-        assertThat(narrowKey.body())
-            .as("step 6: a capability-only key carries no create permission")
-            .contains("instance_create_not_permitted");
+            // 6. The KEY narrows the permission lane too: a key without the create scope
+            //    cannot create even though its owner now may.
+            HttpResponse<String> narrowKey = keyPost(keyManageA, "/api/v1/instances",
+                "template_id=" + unapprovedTemplateId + "&name=" + PREFIX + "api-created-3");
+            assertThat(narrowKey.body())
+                .as("step 6: a capability-only key carries no create permission")
+                .contains("instance_create_not_permitted");
+        } finally {
+            // Handed back, so no other journey inherits a create authority it never asked for.
+            GrantService.deleteDirectGrant(GrantSubjectType.USER, tenantAId,
+                createGrant.get(GrantModel.ID));
+        }
     }
 
     /** @return the first violation key of a typed refusal */
@@ -414,7 +381,6 @@ class TenantInstanceApiTest extends HohenheimTestBase {
 
     /** COUNTERFACTUAL: a key is narrowed by its scopes, both ways. */
     @Test
-    @Order(4)
     void aKeyCannotExceedItsScopesNorItsOwnersAuthority() throws Exception {
         // 1. The owner holds `snapshots` on this instance, but the manage-only KEY does
         //    not carry the scope: the credential layer narrows it away.
@@ -470,7 +436,6 @@ class TenantInstanceApiTest extends HohenheimTestBase {
      * is exactly that operator.
      */
     @Test
-    @Order(6)
     void theFileLaneCannotAddressAProductTierGeneratedInstance() throws Exception {
         int absentId = 900_000_002;
         String filesRoute = "/api/v1/instances/" + instanceGeneratedId + "/files";
@@ -535,7 +500,6 @@ class TenantInstanceApiTest extends HohenheimTestBase {
      * effective command became attacker-chosen text.
      */
     @Test
-    @Order(5)
     void aConsoleOnlyDelegateCannotWriteTheVariablesThatBecomeTheCommand() throws Exception {
         // 1. The delegate really does see the record: console implies view, so a refusal
         //    below is about the ACT and never about visibility.

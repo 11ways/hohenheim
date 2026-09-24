@@ -7,37 +7,25 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.data.RecordSourceBucketQuery;
 import be.elevenways.zenit.common.data.RecordSourceQuery;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.csrf.CsrfTokens;
-import be.elevenways.zenit.common.session.Session;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -46,24 +34,33 @@ import static org.assertj.core.api.Assertions.assertThat;
  * through the Access tab unlocks exactly one site's safe edit/operate surface,
  * domains stay read-only, and effective group/negative grants drive eligibility.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ManagePanelTest extends HohenheimTestBase {
 
-    private static Integer siteAId;
-    private static Integer appAId;
-    private static Integer siteBId;
-    private static Integer domainAId;
-    private static Integer operatorId;
-    private static String operatorSession;
-    private static String operatorCsrf;
+    /** Hands every test its own tag, so fixtures of different tests never share a name. */
+    private static final AtomicInteger FIXTURES = new AtomicInteger();
 
-    @BeforeAll
-    static void seedSitesAndOperator() {
+    // AIDEV-NOTE: a FRESH fixture per test (JUnit builds one instance per test method): two
+    // sites, site A's domain and application, and an operator with no grants yet. These
+    // tests used to share one operator and one site A through @Order, so the grant journey
+    // had to run first, the delegated-surface test leaned on the grant it left behind and
+    // the eligibility test on both -- running one alone failed, and one failure cascaded.
+    private Integer siteAId;
+    private Integer appAId;
+    private Integer siteBId;
+    private Integer domainAId;
+    private String managedHost;
+    private Integer operatorId;
+    private String operatorSession;
+    private String operatorCsrf;
+
+    @BeforeEach
+    void seedSitesAndOperator() {
+        int tag = FIXTURES.incrementAndGet();
         var siteModel = Models.get(SiteModel.class);
 
         Row siteA = siteModel.createEmptyRow();
-        siteA.set(SiteModel.NAME, "Manage Site A");
-        siteA.set(SiteModel.SLUG, "manage-site-a");
+        siteA.set(SiteModel.NAME, "Manage Site A " + tag);
+        siteA.set(SiteModel.SLUG, "manage-site-a-" + tag);
         siteA.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         siteA.set(SiteModel.SETTINGS, Map.of(
             "root_path", "/srv/manage-a",
@@ -82,8 +79,8 @@ class ManagePanelTest extends HohenheimTestBase {
         siteAId = siteA.get(SiteModel.ID);
 
         Row siteB = siteModel.createEmptyRow();
-        siteB.set(SiteModel.NAME, "Manage Site B");
-        siteB.set(SiteModel.SLUG, "manage-site-b");
+        siteB.set(SiteModel.NAME, "Manage Site B " + tag);
+        siteB.set(SiteModel.SLUG, "manage-site-b-" + tag);
         siteB.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         siteB.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
         siteB.set(SiteModel.STATUS, "active");
@@ -91,66 +88,51 @@ class ManagePanelTest extends HohenheimTestBase {
         siteModel.save(siteB);
         siteBId = siteB.get(SiteModel.ID);
 
+        managedHost = "managed-" + tag + ".example.com";
         Row domain = Models.get(SiteDomainModel.class).createEmptyRow();
         domain.set(SiteDomainModel.SITE_ID, siteAId);
-        domain.set(SiteDomainModel.HOSTNAME, "managed.example.com");
+        domain.set(SiteDomainModel.HOSTNAME, managedHost);
         domain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
         Models.get(SiteDomainModel.class).save(domain);
         domainAId = domain.get(SiteDomainModel.ID);
 
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, "operator@hohenheim.local");
-        user.set(UserModel.DISPLAY_NAME, "Site Operator");
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        operatorId = user.get(UserModel.ID);
-
-        Session session = Zenit.getSessionStore().create();
-        session.set(AuthKeys.USER_ID, operatorId.longValue());
-        operatorCsrf = ZenitAuth.randomToken();
-        session.set(CsrfTokens.TOKEN, operatorCsrf);
-        Zenit.getSessionStore().save(session);
-        operatorSession = session.token().secret();
+        operatorId = ApiSupport.user("operator-" + tag + "@hohenheim.local", "Site Operator");
+        TestSession session = sessionFor(operatorId);
+        operatorSession = session.token();
+        operatorCsrf = session.csrf();
     }
 
     private HttpResponse<String> get(String path, String session) throws Exception {
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session)
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
-
-    private HttpResponse<String> post(String path, String body, String session, String csrf) throws Exception {
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session)
-            .header("X-Csrf-Token", csrf)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
-
-    private HttpResponse<String> adminPost(String path, String body) throws Exception {
-        return post(path, body, sessionToken, csrfToken);
+        return httpGet(path, session);
     }
 
     private HttpResponse<String> operatorGet(String path) throws Exception {
-        return get(path, operatorSession);
+        return httpGet(path, operatorSession);
     }
 
     private HttpResponse<String> operatorPost(String path, String body) throws Exception {
-        return post(path, body, operatorSession, operatorCsrf);
+        return httpPostForm(path, body, operatorSession, operatorCsrf);
+    }
+
+    /**
+     * The operator REALLY reaches /manage: followed to a 200 page inside the panel. A bare
+     * isIn(200, 302, 303) on /manage was satisfied by a redirect to the login form, which is
+     * exactly the failure a "still has access" step exists to catch.
+     */
+    private void assertOperatorReachesThePanel(String step) throws Exception {
+        HttpResponse<String> panel = httpGetFollowingRedirects("/manage", operatorSession);
+        assertThat(panel.statusCode())
+            .withFailMessage(step + ": the panel must open (HTTP %s at %s)",
+                panel.statusCode(), panel.uri())
+            .isEqualTo(200);
+        assertThat(panel.uri().getPath())
+            .withFailMessage(step + ": and land inside /manage, never on a login or setup page"
+                + " (landed on %s)", panel.uri())
+            .startsWith("/manage");
     }
 
     /** Ungranted -> granted through the Access tab: exactly one site's delegated surface opens up. */
     @Test
-    @Order(1)
     void grantingThroughTheAccessTabUnlocksExactlyTheGrantedSite() throws Exception {
         assertThat(operatorGet("/manage").statusCode()).isEqualTo(403);
         assertThat(operatorGet("/manage/sites").statusCode()).isEqualTo(403);
@@ -160,7 +142,7 @@ class ManagePanelTest extends HohenheimTestBase {
 
         // The GENERIC record-access matrix (zenit-auth's contributed subpage)
         // is the grant surface -- the hand-written SiteAccessPage is deleted.
-        HttpResponse<String> add = adminPost(
+        HttpResponse<String> add = adminPostForm(
             "/admin/sites/" + siteAId + "/page/access",
             "access.0.type=user&access.0.id=" + operatorId
                 + "&access.0.caps.0.key=manage&access.0.caps.0.value=allow");
@@ -181,7 +163,7 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(GrantService.listDirectGrants(GrantSubjectType.USER, operatorId))
             .noneMatch(grant -> "hohenheim.manage.access".equals(grant.get(GrantModel.PERMISSION)));
 
-        assertThat(operatorGet("/manage").statusCode()).isIn(200, 302, 303);
+        assertOperatorReachesThePanel("the granted site opens the panel");
 
         // Post-login landing: the manage-only principal lands on /manage,
         // the operator (admin) keeps landing on /admin (lower landingWeight).
@@ -225,15 +207,8 @@ class ManagePanelTest extends HohenheimTestBase {
 
         // The manage-scoped site picker offers only granted sites.
         String body = Zenit.DRY.stringify(RecordSourceQuery.matchAll());
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + "/zn/records/hohenheim.site/query"))
-            .header("Content-Type", "application/dry")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + operatorSession)
-            .header("X-Csrf-Token", operatorCsrf)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-        HttpResponse<String> picker = client.send(request, HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> picker = httpPostDry("/zn/records/hohenheim.site/query", body,
+            operatorSession, operatorCsrf);
         assertThat(picker.statusCode()).isEqualTo(200);
         assertThat(picker.body()).contains("Manage Site A");
         assertThat(picker.body()).doesNotContain("Manage Site B");
@@ -241,8 +216,10 @@ class ManagePanelTest extends HohenheimTestBase {
 
     /** The delegated surface never exposes or accepts execution controls, secrets or domain writes. */
     @Test
-    @Order(2)
     void delegatedSurfaceStaysSafeAndReturnsToManage() throws Exception {
+        // The operator manages site A, the grant the Access tab journey hands out.
+        RecordGrants.grant(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, siteAId,
+            HohenheimAccess.MANAGE, true);
         HttpResponse<String> form = operatorGet("/manage/sites/" + siteAId);
         assertThat(form.statusCode()).isEqualTo(200);
         assertThat(form.body())
@@ -278,8 +255,7 @@ class ManagePanelTest extends HohenheimTestBase {
 
         // The Deploys tab lives on the APPLICATION instance now; reaching it through
         // /manage takes an instance grant, exactly like production delegation does.
-        // (Revoked again below: a lingering instance grant would keep this principal
-        // ELIGIBLE for /manage and break the eligibility journey that runs later.)
+        // (Revoked again below, so the rest of this test sees the site grant alone.)
         RecordGrants.grant(GrantSubjectType.USER, operatorId, InstanceModel.MODEL_ID, appAId,
             HohenheimAccess.MANAGE, true);
         try {
@@ -326,7 +302,7 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(subpage.statusCode()).isEqualTo(200);
         // Binding a hostname to a managed site is delegated; REQUESTING a certificate for it
         // stays installation administration (an issued certificate is authority over a name).
-        assertThat(subpage.body()).contains("managed.example.com").contains("add-domain-link")
+        assertThat(subpage.body()).contains(managedHost).contains("add-domain-link")
             .doesNotContain("certificates-request");
 
         // The delegated record form is WRITABLE now, but offers only the delegated columns.
@@ -346,11 +322,11 @@ class ManagePanelTest extends HohenheimTestBase {
         // A forged non-exact match type never lands: the form drops it and the pipeline
         // refuses an effective value other than exact.
         assertThat(operatorPost("/manage/domains/" + domainAId,
-            "site_id=" + siteAId + "&hostname=managed.example.com&match_type=regex").statusCode())
+            "site_id=" + siteAId + "&hostname=" + managedHost + "&match_type=regex").statusCode())
             .isIn(200, 302, 303, 422);
 
         Row domain = Models.get(SiteDomainModel.class).findById(domainAId);
-        assertThat(domain.get(SiteDomainModel.HOSTNAME)).isEqualTo("managed.example.com");
+        assertThat(domain.get(SiteDomainModel.HOSTNAME)).isEqualTo(managedHost);
         assertThat(domain.get(SiteDomainModel.MATCH_TYPE)).isEqualTo(SiteDomainModel.MATCH_EXACT);
 
         Row boundDomain = Models.get(SiteDomainModel.class).find()
@@ -366,10 +342,17 @@ class ManagePanelTest extends HohenheimTestBase {
 
     /** Revocation, group/negative record grants and an explicit global deny all drive eligibility. */
     @Test
-    @Order(3)
     void recordAndGlobalGrantsDrivePanelEligibility() throws Exception {
+        // The operator holds site A through the Access tab, where the grant journey leaves it.
+        assertThat(adminPostForm("/admin/sites/" + siteAId + "/page/access",
+            "access.0.type=user&access.0.id=" + operatorId
+                + "&access.0.caps.0.key=manage&access.0.caps.0.value=allow").statusCode())
+            .as("fixture: the Access tab grants site A").isIn(302, 303);
+        assertThat(HohenheimAccess.managedSiteIds(new UserPrincipal(operatorId, "Site Operator")))
+            .as("fixture: the operator manages exactly site A").containsExactly(siteAId);
+
         GrantService.createDirectGrant(GrantSubjectType.USER, operatorId, "hohenheim.manage.access", true);
-        HttpResponse<String> remove = adminPost("/admin/sites/" + siteAId + "/page/access",
+        HttpResponse<String> remove = adminPostForm("/admin/sites/" + siteAId + "/page/access",
             "access.__removed=" + java.net.URLEncoder.encode("user:" + operatorId,
                 java.nio.charset.StandardCharsets.UTF_8));
         assertThat(remove.statusCode()).isIn(302, 303);
@@ -418,7 +401,7 @@ class ManagePanelTest extends HohenheimTestBase {
         RecordGrants.grant(GrantSubjectType.GROUP, groupId, SiteModel.MODEL_ID, siteBId,
             HohenheimAccess.MANAGE, true);
 
-        assertThat(operatorGet("/manage").statusCode()).isIn(200, 302, 303);
+        assertOperatorReachesThePanel("a group's record grant opens the panel");
         assertThat(operatorGet("/manage/sites").body()).contains("Manage Site B");
 
         RecordGrants.grant(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, siteBId,
@@ -428,7 +411,7 @@ class ManagePanelTest extends HohenheimTestBase {
             .isEmpty();
 
         RecordGrants.revoke(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, siteBId, HohenheimAccess.MANAGE);
-        assertThat(operatorGet("/manage").statusCode()).isIn(200, 302, 303);
+        assertOperatorReachesThePanel("lifting the negative grant restores the group's access");
         RecordGrants.revoke(GrantSubjectType.GROUP, groupId, SiteModel.MODEL_ID, siteBId, HohenheimAccess.MANAGE);
         assertThat(operatorGet("/manage").statusCode()).isEqualTo(403);
 
@@ -450,7 +433,7 @@ class ManagePanelTest extends HohenheimTestBase {
                 GrantService.deleteDirectGrant(GrantSubjectType.USER, operatorId, grant.get(GrantModel.ID));
             }
         }
-        assertThat(operatorGet("/manage").statusCode()).isIn(200, 302, 303);
+        assertOperatorReachesThePanel("without the global deny the record grant counts again");
         RecordGrants.revoke(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, siteAId, HohenheimAccess.MANAGE);
     }
 
@@ -460,22 +443,10 @@ class ManagePanelTest extends HohenheimTestBase {
      * for EVERY record-source operation -- query, item, vocabulary, buckets.
      */
     @Test
-    @Order(5)
     void ungrantedLoginGetsNothingFromAnyHohenheimSource() throws Exception {
-        Row outsider = AuthModels.users().createEmptyRow();
-        outsider.set(UserModel.EMAIL, "outsider@hohenheim.local");
-        outsider.set(UserModel.DISPLAY_NAME, "No Grants");
-        outsider.set(UserModel.ENABLED, true);
-        outsider.set(UserModel.CREATED_AT, Now.instant());
-        outsider.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(outsider);
-
-        Session session = Zenit.getSessionStore().create();
-        session.set(AuthKeys.USER_ID, outsider.get(UserModel.ID).longValue());
-        String csrf = ZenitAuth.randomToken();
-        session.set(CsrfTokens.TOKEN, csrf);
-        Zenit.getSessionStore().save(session);
-        String outsiderSession = session.token().secret();
+        TestSession outsider = sessionFor(ApiSupport.user("outsider@hohenheim.local", "No Grants"));
+        String outsiderSession = outsider.token();
+        String csrf = outsider.csrf();
 
         String query = Zenit.DRY.stringify(RecordSourceQuery.matchAll());
         String buckets = Zenit.DRY.stringify(
@@ -563,27 +534,15 @@ class ManagePanelTest extends HohenheimTestBase {
      * lost memo) becomes a visible number, not a silent slowdown.
      */
     @Test
-    @Order(6)
     void managedSiteIdsStaysWithinItsPerRequestQueryBudget() throws Exception {
-        Row tenant = AuthModels.users().createEmptyRow();
-        tenant.set(UserModel.EMAIL, "budget@hohenheim.local");
-        tenant.set(UserModel.DISPLAY_NAME, "Budget Tenant");
-        tenant.set(UserModel.ENABLED, true);
-        tenant.set(UserModel.CREATED_AT, Now.instant());
-        tenant.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(tenant);
-        Integer tenantId = tenant.get(UserModel.ID);
-
-        Session session = Zenit.getSessionStore().create();
-        session.set(AuthKeys.USER_ID, tenantId.longValue());
-        session.set(CsrfTokens.TOKEN, ZenitAuth.randomToken());
-        Zenit.getSessionStore().save(session);
+        Integer tenantId = ApiSupport.user("budget@hohenheim.local", "Budget Tenant");
+        TestSession session = sessionFor(tenantId);
 
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteAId,
             HohenheimAccess.MANAGE, true);
         try {
             RecordGrantFinds.Result finds = RecordGrantFinds.during(() ->
-                assertThat(get("/manage/sites", session.token().secret()).statusCode()).isEqualTo(200));
+                assertThat(get("/manage/sites", session.token()).statusCode()).isEqualTo(200));
             int perRequest = finds.count();
 
             // Memoized: each distinct set's enumeration (1 candidate fetch + 1
@@ -635,15 +594,7 @@ class ManagePanelTest extends HohenheimTestBase {
     }
 
     private HttpResponse<String> dryPost(String path, String body, String session, String csrf) throws Exception {
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
-            .header("Content-Type", "application/dry")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session)
-            .header("X-Csrf-Token", csrf)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
+        return httpPostDry(path, body, session, csrf);
     }
 
     /**
@@ -653,7 +604,6 @@ class ManagePanelTest extends HohenheimTestBase {
      * checkbox.
      */
     @Test
-    @Order(4)
     void enablingAStagedConflictingSiteIsRefusedOnEveryDelegatedPath() throws Exception {
         var siteModel = Models.get(SiteModel.class);
         var domainModel = Models.get(SiteDomainModel.class);
@@ -746,7 +696,7 @@ class ManagePanelTest extends HohenheimTestBase {
             //    not per-panel).
             String adminEnableBody = "name=Staged+Takeover&upstream_kind=hohenheim%3Astatic"
                 + "&enabled=true&settings.root_path=%2Ftmp&description=";
-            assertThat(adminPost("/admin/sites/" + stagedId, adminEnableBody).statusCode())
+            assertThat(adminPostForm("/admin/sites/" + stagedId, adminEnableBody).statusCode())
                 .isIn(200, 302, 303, 422);
             assertThat(siteModel.findById(stagedId).get(SiteModel.ENABLED))
                 .as("the admin form must not enable a route-conflicting site either")
@@ -763,14 +713,14 @@ class ManagePanelTest extends HohenheimTestBase {
             //     this is still a cross-owner takeover and is still refused -- on the real
             //     admin HTTP path. Lift it the way an administrator does, so step 6 keeps
             //     proving what it claims.
-            assertThat(adminPost("/admin/sites/" + stagedId, adminEnableBody).statusCode())
+            assertThat(adminPostForm("/admin/sites/" + stagedId, adminEnableBody).statusCode())
                 .isIn(200, 422);
             assertThat(siteModel.findById(stagedId).get(SiteModel.ENABLED))
                 .as("a just-released hostname stays quarantined against a different owner")
                 .isEqualTo(false);
             Models.get(ReleasedRouteClaimModel.class).find().delete();
 
-            assertThat(adminPost("/admin/sites/" + stagedId, adminEnableBody).statusCode())
+            assertThat(adminPostForm("/admin/sites/" + stagedId, adminEnableBody).statusCode())
                 .isIn(302, 303);
             assertThat(siteModel.findById(stagedId).get(SiteModel.ENABLED))
                 .as("with the conflict gone the same submit enables the site")

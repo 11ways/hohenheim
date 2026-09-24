@@ -22,7 +22,7 @@
                 <pl-table-row>
                     <pl-table-cell><a use:Zenit.route={% workload.target %}>{{ workload.name }}</a></pl-table-cell>
                     <pl-table-cell>
-                        {{ WorkloadTiers.of(workload.tier).label }}
+                        {{ workload.tier.label }}
                     </pl-table-cell>
                     <pl-table-cell>
                         {% if workload.status != null %}

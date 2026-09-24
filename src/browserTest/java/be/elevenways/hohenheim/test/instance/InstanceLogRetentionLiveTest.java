@@ -11,24 +11,24 @@ import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.task.CleanOldInstanceLogs;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
+import java.time.Duration;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -36,7 +36,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Supplier;
 import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -48,41 +47,33 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class InstanceLogRetentionLiveTest {
 
+    /** The interval of every wait here: each probe is a daemon or database round trip. */
+    private static final Duration POLL_INTERVAL = Duration.ofMillis(200);
+
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
 
     private static final String SECRET = "hh-stored-secret-77c1d0ea";
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static PrivateNetns netns;
 
     @BeforeAll
     static void setUp() throws Exception {
-        File db = File.createTempFile("hohenheim-instance-log-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
-        if (PrivateNetns.available()) {
-            netns = new PrivateNetns();
-            WorkloadNetworkPolicy.overrideForTest(netns.enforcingPolicy());
-        }
+        netns = PrivateNetns.installEnforcing();
     }
 
     @AfterAll
     static void tearDown() {
-        WorkloadNetworkPolicy.overrideForTest(null);
-        if (netns != null) {
-            netns.close();
-            netns = null;
-        }
+        PrivateNetns.uninstall(netns);
+        netns = null;
     }
 
     private static void assumeLiveDaemon() {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
-        LiveLane.requireImage(new DockerClient(), "alpine:latest");
+        LiveLane.requireImage(new DockerClient(), TestImages.ALPINE);
         LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: the instance tier refuses to deploy unprotected");
     }
@@ -104,7 +95,7 @@ class InstanceLogRetentionLiveTest {
             row.set(InstanceModel.NAME, "console-history");
             row.set(InstanceModel.KIND, "hohenheim:docker_container");
             row.set(InstanceModel.SETTINGS,
-                new LinkedHashMap<>(Map.of("image", "alpine", "tag", "latest")));
+                new LinkedHashMap<>(Map.of("image", TestImages.ALPINE)));
             row.set(InstanceModel.TEMPLATE_ID, template.get(InstanceTemplateModel.ID));
             row.set(InstanceModel.CRASH_POLICY, InstanceModel.CRASH_NONE);
             Models.get(InstanceModel.class).save(row);
@@ -126,10 +117,11 @@ class InstanceLogRetentionLiveTest {
                 //    flushed to its row.
                 InstanceConsoles.sendCommand(id, "echo history-line-abcdef");
                 InstanceConsoles.sendCommand(id, "echo token=" + SECRET + " ok");
-                assertThat(await(15_000, () -> {
+                Poll.until("step 2: the episode's output was written down",
+                    Duration.ofMillis(15_000), POLL_INTERVAL, () -> {
                     InstanceConsoles.flushLogNow(id);
                     return storedText(logs, id).contains("history-line-abcdef");
-                })).as("step 2: the episode's output was written down").isTrue();
+                });
 
                 List<Row> stored = logs.findByInstanceId(id, 50);
                 assertThat(stored).as("step 2: exactly ONE row per episode, upserted")
@@ -153,8 +145,8 @@ class InstanceLogRetentionLiveTest {
                 // 4. HISTORY SURVIVES THE RING. Stop the workload: the session (and its
                 //    in-memory ring) is gone, and the output is still readable.
                 service.stop(id);
-                assertThat(await(10_000, () -> InstanceConsoles.peek(id) == null))
-                    .as("step 4: the live session is gone").isTrue();
+                Poll.until("step 4: the live session is gone",
+                    Duration.ofMillis(10_000), POLL_INTERVAL, () -> InstanceConsoles.peek(id) == null);
                 assertThat(storedText(logs, id))
                     .as("step 4: and the history is still there without any live session")
                     .contains("history-line-abcdef");
@@ -162,10 +154,11 @@ class InstanceLogRetentionLiveTest {
                 // 5. A REDEPLOY is a new episode, not an appendix to the old one.
                 service.deploy(id);
                 InstanceConsoles.sendCommand(id, "echo second-episode-ghijkl");
-                assertThat(await(15_000, () -> {
+                Poll.until("step 5: the second run got its own row",
+                    Duration.ofMillis(15_000), POLL_INTERVAL, () -> {
                     InstanceConsoles.flushLogNow(id);
                     return logs.findByInstanceId(id, 50).size() == 2;
-                })).as("step 5: the second run got its own row").isTrue();
+                });
 
                 // 6. RETENTION. Age the first episode past the window and sweep: the old
                 //    row goes, the recent one stays. An unconditional sweeper would take
@@ -206,22 +199,6 @@ class InstanceLogRetentionLiveTest {
             }
         }
         return all.toString();
-    }
-
-    private static boolean await(long timeoutMs, Supplier<Boolean> condition) {
-        long deadline = Now.millis() + timeoutMs;
-        while (Now.millis() < deadline) {
-            if (Boolean.TRUE.equals(condition.get())) {
-                return true;
-            }
-            try {
-                Thread.sleep(200);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return false;
-            }
-        }
-        return Boolean.TRUE.equals(condition.get());
     }
 
     private static void cleanup(DockerClient docker, String handle) {

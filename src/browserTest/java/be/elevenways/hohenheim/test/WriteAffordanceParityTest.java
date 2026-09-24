@@ -16,7 +16,6 @@ import be.elevenways.hohenheim.server.cms.InstanceScheduleResource;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleStepResource;
 import be.elevenways.hohenheim.server.cms.SiteDomainResource;
 import be.elevenways.hohenheim.server.cms.SiteDomainsPage;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.cms.common.action.RowAction;
@@ -72,8 +71,8 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        viewerId = user("affparity-viewer@surface.test", "Affordance Viewer");
-        holderId = user("affparity-holder@surface.test", "Affordance Holder");
+        viewerId = ApiSupport.user("affparity-viewer@surface.test", "Affordance Viewer");
+        holderId = ApiSupport.user("affparity-holder@surface.test", "Affordance Holder");
 
         Model instances = Models.get(InstanceModel.class);
         Row instance = instances.createEmptyRow();
@@ -197,17 +196,6 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         if (instanceId != null) {
             Models.get(InstanceModel.class).delete(instanceId);
         }
-    }
-
-    private static int user(String email, String name) {
-        Row row = AuthModels.users().createEmptyRow();
-        row.set(UserModel.EMAIL, email);
-        row.set(UserModel.DISPLAY_NAME, name);
-        row.set(UserModel.ENABLED, true);
-        row.set(UserModel.CREATED_AT, Now.instant());
-        row.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(row);
-        return row.get(UserModel.ID);
     }
 
     private static AccessContext viewer() {

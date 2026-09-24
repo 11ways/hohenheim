@@ -14,13 +14,11 @@ import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.game.VelocityConfigs;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.key.IdentifierKey;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.api.ResponseCarrier;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -34,10 +32,7 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer.OrderAnnotation;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
 import java.util.HashMap;
 import java.util.List;
@@ -55,24 +50,28 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * rows into the replica and bumped its serial. TWO: the mapping was saved before the
  * steps that can refuse (link, push, re-render), so a refusal left it stored and the
  * operator's retry was refused as a duplicate.
+ *
+ * AIDEV-NOTE: the two tests are independent: each makes the mappings it needs on its own
+ * domain row. The refusal test used to move the mapping the zone test had created, handed
+ * over in a static field, so it could not run alone.
  */
-@TestMethodOrder(OrderAnnotation.class)
 class GameDomainIntegrityTest extends HohenheimTestBase {
 
     private static final String PRIMARY_ORIGIN = "gamezone.test";
     private static final String REPLICA_ORIGIN = "replica.gamezone.test";
     private static final String REPLICA_HOST = "srv.replica.gamezone.test";
     private static final String PLAY_HOST = "play.gamezone.test";
+    private static final String MOVE_HOST = "move.gamezone.test";
 
     private static int primaryZoneId;
     private static int replicaZoneId;
     private static int replicaDomainId;
     private static int playDomainId;
+    private static int moveDomainId;
     private static int backendId;
     private static int proxyId;
     private static int secondProxyId;
     private static int tenantId;
-    private static int replicaMappingId;
 
     @BeforeAll
     static void fixtures() {
@@ -89,12 +88,13 @@ class GameDomainIntegrityTest extends HohenheimTestBase {
 
         replicaDomainId = domain(siteId, REPLICA_HOST);
         playDomainId = domain(siteId, PLAY_HOST);
+        moveDomainId = domain(siteId, MOVE_HOST);
 
         backendId = instance("game-integrity-backend");
         proxyId = instance("game-integrity-proxy");
         secondProxyId = instance("game-integrity-proxy-2");
 
-        tenantId = user("tenant@game-integrity.test");
+        tenantId = ApiSupport.user("tenant@game-integrity.test");
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId,
             HohenheimAccess.MANAGE, true);
         for (int instance : List.of(backendId, proxyId, secondProxyId)) {
@@ -138,14 +138,13 @@ class GameDomainIntegrityTest extends HohenheimTestBase {
 
     /** Generated DNS for a host under a replica zone lands in the covering PRIMARY zone. */
     @Test
-    @Order(1)
     void generatedDnsNeverLandsInASecondaryZone() {
         long replicaSerial = serialOf(replicaZoneId);
 
         // 1. Map a hostname whose MOST specific enabled zone is a secondary.
         Row mapping = GameDomains.applyAuthorized(tenant(),
             mappingRow(replicaDomainId, backendId, proxyId));
-        replicaMappingId = mapping.get(GameDomainModel.ID);
+        int replicaMappingId = mapping.get(GameDomainModel.ID);
 
         // 2. The SRV row exists, in the primary zone, named relative to it.
         Row srv = generatedRow(replicaMappingId, DnsRecordModel.TYPE_SRV);
@@ -178,11 +177,13 @@ class GameDomainIntegrityTest extends HohenheimTestBase {
      * proxy, the new proxy got no generated file, and the retry succeeds.
      */
     @Test
-    @Order(2)
     void aRefusalAfterTheSaveLeavesTheMappingAsItWas() {
         var files = Models.get(InstanceFileModel.class);
 
-        // 1. A second mapping keeps the first proxy's generated config non-empty.
+        // 1. The mapping that will move, plus a second one that keeps the first proxy's
+        //    generated config non-empty after the move.
+        int movingMappingId = GameDomains.applyAuthorized(tenant(),
+            mappingRow(moveDomainId, backendId, proxyId)).get(GameDomainModel.ID);
         GameDomains.applyAuthorized(tenant(), mappingRow(playDomainId, backendId, proxyId));
 
         // 2. The operator replaces the first proxy's generated config by hand, AFTER the
@@ -198,9 +199,9 @@ class GameDomainIntegrityTest extends HohenheimTestBase {
         handAuthored.set(InstanceFileModel.CONTENT, "# operator-authored velocity.toml");
         files.save(handAuthored);
 
-        // 3. Moving the replica mapping to the second proxy SAVES first and re-renders the
+        // 3. Moving the first mapping to the second proxy SAVES first and re-renders the
         //    OLD proxy after: that re-render refuses.
-        Row move = Models.get(GameDomainModel.class).findById(replicaMappingId);
+        Row move = Models.get(GameDomainModel.class).findById(movingMappingId);
         move.set(GameDomainModel.PROXY_INSTANCE_ID, secondProxyId);
         Throwable refused = catchThrowable(() -> GameDomains.applyAuthorized(tenant(), move));
         assertThat(refused)
@@ -208,7 +209,7 @@ class GameDomainIntegrityTest extends HohenheimTestBase {
             .isInstanceOf(Violations.class);
 
         // 4. THE DEFECT: nothing of the refused write survives.
-        assertThat((Integer) Models.get(GameDomainModel.class).findById(replicaMappingId)
+        assertThat((Integer) Models.get(GameDomainModel.class).findById(movingMappingId)
                 .get(GameDomainModel.PROXY_INSTANCE_ID))
             .as("step 4: the stored mapping still names the first proxy")
             .isEqualTo(proxyId);
@@ -219,11 +220,11 @@ class GameDomainIntegrityTest extends HohenheimTestBase {
         // 5. POSITIVE ANCHOR: with the conflict gone the SAME move succeeds, so step 3's
         //    refusal was the conflict and a retry is never refused as a duplicate.
         files.delete(handAuthored);
-        Row retry = Models.get(GameDomainModel.class).findById(replicaMappingId);
+        Row retry = Models.get(GameDomainModel.class).findById(movingMappingId);
         retry.set(GameDomainModel.PROXY_INSTANCE_ID, secondProxyId);
         assertThat(catchThrowable(() -> GameDomains.applyAuthorized(tenant(), retry)))
             .as("step 5: the retried move succeeds").isNull();
-        assertThat((Integer) Models.get(GameDomainModel.class).findById(replicaMappingId)
+        assertThat((Integer) Models.get(GameDomainModel.class).findById(movingMappingId)
                 .get(GameDomainModel.PROXY_INSTANCE_ID))
             .as("step 5: and is stored").isEqualTo(secondProxyId);
         assertThat(configRow(secondProxyId))
@@ -251,17 +252,6 @@ class GameDomainIntegrityTest extends HohenheimTestBase {
         row.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "tag", "latest"));
         model.save(row);
         return row.get(InstanceModel.ID);
-    }
-
-    private static int user(String email) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, email);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
     }
 
     private static int zone(String origin, String role) {

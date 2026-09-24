@@ -106,6 +106,29 @@ public class AcmeService {
      */
     public record ReissueResult(boolean issued, @Nullable String failureReason) {}
 
+    /**
+     * What a fresh certificate request came to.
+     *
+     * AIDEV-NOTE: the row id rides the outcome on failure too, so a caller reads the failure
+     * reason off THAT row (its renewal_error) instead of guessing which error row is its own.
+     * A request that joined an identical in-flight order names the leader's row, which is the
+     * row whose fate it shared.
+     *
+     * @param certificateId the certificate row the request wrote or joined, or null when it
+     *                      reached no row (a manual order for the same names is running)
+     * @param issued        whether that row now holds the issued certificate
+     */
+    public record RequestOutcome(@Nullable Integer certificateId, boolean issued) {
+
+        static @NonNull RequestOutcome issued(int certificateId) {
+            return new RequestOutcome(certificateId, true);
+        }
+
+        static @NonNull RequestOutcome failed(@Nullable Integer certificateId) {
+            return new RequestOutcome(certificateId != null && certificateId > 0 ? certificateId : null, false);
+        }
+    }
+
     public AcmeService(CertificateStore certificateStore) {
         this.certificateStore = certificateStore;
         DnsTxtPublishers.INSTANCE.register(new CommandDnsTxtPublisher());
@@ -162,18 +185,20 @@ public class AcmeService {
      *
      * @param requester the identity the order acts as; its authority over EVERY requested
      *                  name is decided here, before any row or CA order exists
-     * @return the certificate database row ID, or -1 on failure
+     * @return the row the request wrote or joined, and whether it was issued
      * @throws CertificateAuthority.Refused when the requester may not obtain these names
      */
-    public int requestCertificate(List<String> hostnames, String niceName, @Nullable String email,
-                                  CertificateAuthority.Requester requester) {
+    public @NonNull RequestOutcome requestCertificate(List<String> hostnames, String niceName,
+                                                      @Nullable String email,
+                                                      CertificateAuthority.Requester requester) {
         return requestCertificate(hostnames, niceName, email,
             CertificateModel.CHALLENGE_HTTP, null, requester);
     }
 
-    public int requestCertificate(List<String> hostnames, String niceName, @Nullable String email,
-                                  String challengeType, @Nullable String dnsPublisher,
-                                  CertificateAuthority.Requester requester) {
+    public @NonNull RequestOutcome requestCertificate(List<String> hostnames, String niceName,
+                                                      @Nullable String email, String challengeType,
+                                                      @Nullable String dnsPublisher,
+                                                      CertificateAuthority.Requester requester) {
         var certModel = Models.get(CertificateModel.class);
 
         // AIDEV-NOTE: authorization runs FIRST, before the order-key claim and before the
@@ -193,16 +218,16 @@ public class AcmeService {
         if (existing != null) {
             if (!existing.joinable()) {
                 Blast.log("ACME: a manual order for", String.join(", ", hostnames), "is already in progress");
-                return -1;
+                return RequestOutcome.failed(null);
             }
             try {
                 existing.result().get();
-                return existing.certificateId().get();
+                return RequestOutcome.issued(existing.certificateId().get());
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                return -1;
+                return RequestOutcome.failed(existing.certificateId().get());
             } catch (Exception e) {
-                return -1;
+                return RequestOutcome.failed(existing.certificateId().get());
             }
         }
 
@@ -230,7 +255,7 @@ public class AcmeService {
 
             certificateStore.loadFromDatabase();
             Blast.log("ACME: certificate issued for", String.join(", ", hostnames));
-            return certId;
+            return RequestOutcome.issued(certId);
 
         } catch (Exception e) {
             String reason = failureReason(e);
@@ -239,7 +264,7 @@ public class AcmeService {
             recordRenewalFailure(certRow, reason);
             certModel.save(certRow);
 
-            return -1;
+            return RequestOutcome.failed(certId);
         }
     }
 
@@ -623,14 +648,10 @@ public class AcmeService {
                 continue;   // already alerted for this expiry cycle
             }
             String niceName = cert.get(CertificateModel.NICE_NAME);
-            try {
-                Alerts.send(NotificationEvents.CERT_EXPIRING,
-                    "Certificate expiring soon",
-                    "Certificate '" + niceName + "' expires on " + expiresOn
-                        + ". Renew or replace it before then.");
-            } catch (Exception e) {
-                Blast.log("ACME: could not send expiry notification -", e.getMessage());
-            }
+            Alerts.trySend(NotificationEvents.CERT_EXPIRING,
+                "Certificate expiring soon",
+                "Certificate '" + niceName + "' expires on " + expiresOn
+                    + ". Renew or replace it before then.");
             cert.set(CertificateModel.EXPIRY_NOTIFIED_AT, now);
             certModel.save(cert);
         }
@@ -723,14 +744,10 @@ public class AcmeService {
     private static void notifyRenewalFailure(Row certRow, String niceName, String message) {
         Integer errorCount = certRow.get(CertificateModel.ERROR_COUNT);
         if (errorCount == null || errorCount != 1) return;
-        try {
-            Alerts.send(NotificationEvents.CERT_RENEWAL_FAILED,
-                "Certificate renewal failing",
-                "Renewal of " + niceName + " failed: " + message
-                    + "\nRetries continue with escalating backoff; see the certificates page.");
-        } catch (Exception e) {
-            Blast.log("ACME: could not send renewal-failure notification -", e.getMessage());
-        }
+        Alerts.trySend(NotificationEvents.CERT_RENEWAL_FAILED,
+            "Certificate renewal failing",
+            "Renewal of " + niceName + " failed: " + message
+                + "\nRetries continue with escalating backoff; see the certificates page.");
     }
 
     /** Reset error/backoff state after a successful issuance or renewal. */

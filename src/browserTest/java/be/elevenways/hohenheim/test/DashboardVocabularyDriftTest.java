@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.HostTrustLane;
 import be.elevenways.hohenheim.OnboardingState;
 import be.elevenways.hohenheim.WorkloadTier;
 import be.elevenways.hohenheim.dns.DelegationVerdict;
+import be.elevenways.hohenheim.host.HostState;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -97,13 +98,22 @@ class DashboardVocabularyDriftTest {
     }
 
     @Test
-    void hostTokensResolveToTheirMembers() {
-        // 1. The tokens the host overview's views carry resolve; an unknown one is refused.
-        assertThat(WorkloadTier.of("database_engine")).as("step 1: a tier token").isEqualTo(WorkloadTier.DATABASE_ENGINE);
-        assertThat(HostTrustLane.of("incus_cert")).as("step 1: a lane token").isEqualTo(HostTrustLane.INCUS);
-        assertThatThrownBy(() -> WorkloadTier.of("vm")).as("step 1: unknown tier").isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> HostTrustLane.of("wireguard")).as("step 1: unknown lane")
-            .isInstanceOf(IllegalArgumentException.class);
+    void hostVocabulariesCarryTheirOwnFacts() {
+        // 1. The tokens are STORED/rendered facts (data-trust-lane, the lane's row-action ids),
+        //    so they are pinned: a rename is a deliberate edit here, never a silent drift.
+        assertThat(keys(WorkloadTier.values(), WorkloadTier::key)).as("step 1: the tier tokens")
+            .containsExactlyInAnyOrder("instance", "stack", "database", "database_engine");
+        assertThat(keys(HostTrustLane.values(), HostTrustLane::key)).as("step 1: the lane tokens")
+            .containsExactlyInAnyOrder("host_key", "incus_cert");
+
+        // 2. The host-status cell's emphasis is a fact on the member: only a quarantine is loud,
+        //    only a silent host names its daemon beside the wording, only OK looks green.
+        for (HostState state : HostState.values()) {
+            assertThat(state.loud()).as("step 2: %s loud", state).isEqualTo(state == HostState.QUARANTINED);
+            assertThat(state.namesDaemon()).as("step 2: %s names its daemon", state)
+                .isEqualTo(state == HostState.SILENT);
+            assertThat(state.dot().equals("online")).as("step 2: %s green", state).isEqualTo(state == HostState.OK);
+        }
     }
 
     @Test

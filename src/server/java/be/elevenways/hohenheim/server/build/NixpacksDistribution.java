@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.hohenheim.server.util.Tar;
 import be.elevenways.zenit.common.setting.SettingDefinition;
+import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.ByteArrayInputStream;
@@ -18,10 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
-import java.util.HexFormat;
 import java.util.Locale;
 import java.util.zip.GZIPInputStream;
 
@@ -155,10 +153,6 @@ public final class NixpacksDistribution {
     }
 
     private static @NonNull String sha256Hex(byte[] data) throws IOException {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(data));
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IOException("SHA-256 unavailable", impossible);
-        }
+        return SecureTokens.sha256Hex(new ByteArrayInputStream(data));
     }
 }

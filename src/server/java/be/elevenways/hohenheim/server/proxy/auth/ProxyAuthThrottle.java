@@ -43,13 +43,26 @@ public final class ProxyAuthThrottle {
      * @return null when the attempt may proceed; otherwise the 429 to send, with Retry-After set
      */
     public static @Nullable SiteAuthDecision spend(@NonNull HttpServerExchange exchange, int siteId) {
-        String subject = RateLimitKeys.subject(POLICY, null, ResolvedClientIp.get(exchange));
+        Long retryAfter = spendFor(ResolvedClientIp.get(exchange), siteId);
+        return retryAfter == null ? null : refusal(exchange, retryAfter);
+    }
+
+    /**
+     * Spend one verification token for an already resolved client on this site, writing nothing:
+     * for a caller that decides only later whether the refusal is the answer (an access-rule leaf).
+     *
+     * @return null when the attempt may proceed; otherwise the seconds until it may
+     */
+    public static @Nullable Long spendFor(@Nullable String clientIp, int siteId) {
+        String subject = RateLimitKeys.subject(POLICY, null, clientIp);
         String key = RateLimitKeys.of(POLICY.bucketName() + ":" + siteId, subject);
         RateLimiter.Decision decision = LIMITER.tryAcquire(key, POLICY.requests(), POLICY.window());
-        if (decision.allowed()) {
-            return null;
-        }
-        exchange.getResponseHeaders().put(Headers.RETRY_AFTER, String.valueOf(decision.retryAfterSeconds()));
+        return decision.allowed() ? null : decision.retryAfterSeconds();
+    }
+
+    /** @return the 429 for a spent budget, with Retry-After set on the exchange */
+    public static @NonNull SiteAuthDecision refusal(@NonNull HttpServerExchange exchange, long retryAfterSeconds) {
+        exchange.getResponseHeaders().put(Headers.RETRY_AFTER, String.valueOf(retryAfterSeconds));
         return SiteAuthDecision.deny(429, "Too Many Requests");
     }
 

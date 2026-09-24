@@ -51,9 +51,11 @@ final class DatabaseHandlers {
                 conduit.notFound();
                 return null;
             }
-            DatabaseService.BackupDownload dump;
+            DatabaseService.BackupStream dump;
             try {
-                dump = databaseService.backupDownload(name);
+                // STREAMED: the dump is never held in the heap (a large database used to be
+                // a controller OOM reachable by any backups holder), and its size is a long.
+                dump = databaseService.backupStream(name);
             } catch (Violations refused) {
                 // AIDEV-NOTE: absence and refusal are ONE answer here. The URL is keyed by
                 // NAME, so distinguishing them would turn this endpoint into an oracle
@@ -68,9 +70,19 @@ final class DatabaseHandlers {
                 Blast.log("DB: backup of", name, "failed -", e.getMessage());
                 return HandlerSupport.redirect(CmsRoutes.list(HandlerSupport.ADMIN, "databases"));
             }
-            ActivityLog.record(Models.get(DatabaseModel.class), name, "backup_downloaded", name);
-            HandlerSupport.download(conduit, dump.contentType(), dump.filename(), dump.content());
-            return null;
+            try {
+                ActivityLog.record(Models.get(DatabaseModel.class), name, "backup_downloaded", name);
+            } catch (RuntimeException | Error failed) {
+                // Nothing will serve the stream now; its unlinked file is freed on close.
+                try {
+                    dump.close();
+                } catch (IOException ignored) {
+                    // the record failure is the one worth reporting
+                }
+                throw failed;
+            }
+            return HandlerSupport.downloadStream(dump.contentType(), dump.filename(),
+                dump.content(), dump.size());
         });
 
         HohenheimEndpoints.DATABASES_RESTORE.setHandler(conduit -> {

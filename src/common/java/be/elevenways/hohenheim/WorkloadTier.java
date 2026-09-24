@@ -1,21 +1,22 @@
 package be.elevenways.hohenheim;
 
-import be.elevenways.hawkeye.common.annotation.Arg;
-import be.elevenways.hawkeye.common.annotation.HawkeyeFunction;
+import be.elevenways.hawkeye.common.annotation.HawkeyeAutoLoad;
+import be.elevenways.protoblast.common.dry.BlastDrySerializers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
  * Which population a workload on a host belongs to: the declaring home of the host workload-tier vocabulary.
  *
- * AIDEV-NOTE: the host overview's workloads card reads the tier's label off the member
- * ({@code WorkloadTiers.of(workload.tier).label}), so no template branches over tier literals. The keys
- * are the strings WorkloadView.tier already carries; once that view carries the member itself the
- * template reads {@code workload.tier.label} and {@link #of} can go.
+ * AIDEV-NOTE: WorkloadView carries the MEMBER, and the host overview's workloads card reads its label
+ * off it ({@code workload.tier.label}), so no template branches over tier literals. The member crosses
+ * the web boundary as its own name (the static initializer registers the DRY pair and the autoload
+ * annotation forces TeaVM to run it), the HostState shape.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
  */
+@HawkeyeAutoLoad
 public enum WorkloadTier {
 
     INSTANCE("instance", Microcopy.of("tier_instance").withFilter("scope", "server_overview")),
@@ -41,29 +42,7 @@ public enum WorkloadTier {
         return this.label;
     }
 
-    /**
-     * The member a tier token names.
-     *
-     * @throws IllegalArgumentException for an unknown token: an unknown tier fails closed instead of
-     *         rendering under a neighbour's name
-     */
-    @HawkeyeFunction(
-        name = "of",
-        namespace = "WorkloadTiers",
-        description = "The workload tier a tier token names",
-        returnType = WorkloadTier.class,
-        returnsReference = false,
-        arguments = {
-            @Arg(name = "key", required = true, type = String.class, expectsReference = false,
-                 description = "The tier token a workload view carries")
-        }
-    )
-    public static @NonNull WorkloadTier of(@NonNull String key) {
-        for (WorkloadTier tier : values()) {
-            if (tier.key.equals(key)) {
-                return tier;
-            }
-        }
-        throw new IllegalArgumentException("Unknown workload tier: " + key);
+    static {
+        BlastDrySerializers.registerNameEnum(WorkloadTier.class);
     }
 }

@@ -42,4 +42,40 @@ public final class IpLiterals {
         // well-formed IPv6 literal.
         return IpRanges.parseLiteral(value) != null;
     }
+
+    /**
+     * Whether a configured value is one literal address or one CIDR range (trimmed, no DNS,
+     * no zone index), the shape the PROXY-protocol trusted-source list stores.
+     *
+     * AIDEV-NOTE: the parsing is zenit's {@link IpRanges#parseLiteral}; the prefix bound is
+     * read off the SPELLING's family (128 for anything with a colon), exactly as the parser
+     * this replaced did, because a stored value it accepted must keep coercing after an
+     * upgrade. An IPv4-mapped entry with a prefix over 32 is therefore still ACCEPTED here
+     * although the listener's matcher, which bounds the prefix by the folded 4 bytes,
+     * ignores it as malformed.
+     */
+    public static boolean isNetwork(@Nullable String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        String trimmed = value.trim();
+        int slash = trimmed.indexOf('/');
+        String address = (slash < 0 ? trimmed : trimmed.substring(0, slash)).trim();
+        if (address.indexOf('%') >= 0 || IpRanges.parseLiteral(address) == null) {
+            return false;
+        }
+        if (slash < 0) {
+            return true;
+        }
+        if (slash != trimmed.lastIndexOf('/')) {
+            return false;
+        }
+        int prefix;
+        try {
+            prefix = Integer.parseInt(trimmed.substring(slash + 1));
+        } catch (NumberFormatException malformed) {
+            return false;
+        }
+        return prefix >= 0 && prefix <= (address.indexOf(':') >= 0 ? 128 : 32);
+    }
 }

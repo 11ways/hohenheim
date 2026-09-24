@@ -89,10 +89,10 @@ class AcmeAccountEmailTest {
         // legal hostname, so it fails during validation before any CA contact -- and the
         // row, with its account email, must already be persisted by then.
         serveHostname("not a hostname");
-        int certId = service.requestCertificate(
+        AcmeService.RequestOutcome outcome = service.requestCertificate(
             List.of("not a hostname"), "Email Test", "certs@tenant.example",
             CertificateAuthority.Requester.SYSTEM);
-        assertThat(certId).isEqualTo(-1);
+        assertThat(outcome.issued()).isFalse();
 
         var certModel = Models.get(CertificateModel.class);
         Row cert = certModel.find()

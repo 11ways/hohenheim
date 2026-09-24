@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -69,7 +70,7 @@ class DatabaseCapacityApiTest extends HohenheimTestBase {
 
         // A key whose SCOPES claim everything but whose owner holds nothing: scopes narrow
         // authority, they never grant it, so the engine detail must still refuse it.
-        int outsiderId = user(PREFIX + "outsider@surface.test", "Capacity API Outsider");
+        int outsiderId = ApiSupport.user(PREFIX + "outsider@surface.test", "Capacity API Outsider");
         keyOutsider = ApiKeyService.create(outsiderId, PREFIX + "outsider",
             List.of("hohenheim.*"), null).plaintext();
     }
@@ -184,17 +185,6 @@ class DatabaseCapacityApiTest extends HohenheimTestBase {
     }
 
     // -- fixtures -------------------------------------------------------------
-
-    private static int user(String email, String name) {
-        Row row = AuthModels.users().createEmptyRow();
-        row.set(UserModel.EMAIL, email);
-        row.set(UserModel.DISPLAY_NAME, name);
-        row.set(UserModel.ENABLED, true);
-        row.set(UserModel.CREATED_AT, Now.instant());
-        row.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(row);
-        return row.get(UserModel.ID);
-    }
 
     private static int host(String name) {
         Model servers = Models.get(ServerModel.class);

@@ -6,14 +6,12 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
@@ -78,7 +76,7 @@ class VmFramebufferConsoleLiveTest extends HohenheimTestBase {
 
             RecordingClient client = new RecordingClient();
             ws = HttpClient.newHttpClient().newWebSocketBuilder()
-                .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + token)
+                .header("Cookie", sessionCookieHeader(token))
                 .buildAsync(URI.create("ws://localhost:" + getServerPort()
                     + "/ws/instance-framebuffer/" + instanceId), client)
                 .join();
@@ -138,14 +136,7 @@ class VmFramebufferConsoleLiveTest extends HohenheimTestBase {
     // -----------------------------------------------------------------------
 
     private static int user(String label) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, label + "@hohenheim.local");
-        user.set(UserModel.DISPLAY_NAME, "FB " + label);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
+        return ApiSupport.user(label + "@hohenheim.local", "FB " + label);
     }
 
     private static int vmRecord(String name, int hostId) {

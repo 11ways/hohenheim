@@ -4,30 +4,20 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceShell;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.auth.server.ZenitAuth;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Principal;
-import be.elevenways.zenit.common.security.csrf.CsrfTokens;
-import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
 import java.net.http.HttpResponse;
 import java.util.LinkedHashMap;
@@ -53,7 +43,6 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * exactly a socket. This suite would not have caught that; the direct principal argument
  * on {@code InstanceShell.open} is what makes it catchable.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class InstanceShellGateTest extends HohenheimTestBase {
 
     private static final String PREFIX = "shellgate-";
@@ -77,9 +66,9 @@ class InstanceShellGateTest extends HohenheimTestBase {
         rootWorkloadId = dockerInstance(PREFIX + "root-workload");
         incusWorkspaceId = incusWorkspace(PREFIX + "incus-workspace");
 
-        shellUserId = tenant("shell@shellgate.test", "Shell Delegate");
-        consoleUserId = tenant("console@shellgate.test", "Console Delegate");
-        strangerUserId = tenant("stranger@shellgate.test", "Stranger");
+        shellUserId = ApiSupport.user("shell@shellgate.test", "Shell Delegate");
+        consoleUserId = ApiSupport.user("console@shellgate.test", "Console Delegate");
+        strangerUserId = ApiSupport.user("stranger@shellgate.test", "Stranger");
         shellPrincipal = new UserPrincipal(shellUserId, "Shell Delegate");
         strangerPrincipal = new UserPrincipal(strangerUserId, "Stranger");
 
@@ -93,8 +82,8 @@ class InstanceShellGateTest extends HohenheimTestBase {
         RecordGrants.grant(GrantSubjectType.USER, consoleUserId, InstanceModel.MODEL_ID,
             rootWorkloadId, HohenheimAccess.CONSOLE, true);
 
-        shellSession = sessionOf(shellUserId);
-        consoleSession = sessionOf(consoleUserId);
+        shellSession = sessionFor(shellUserId).token();
+        consoleSession = sessionFor(consoleUserId).token();
     }
 
     @AfterAll
@@ -111,7 +100,6 @@ class InstanceShellGateTest extends HohenheimTestBase {
      * delegate and for nobody else -- console, the neighbouring terminal verb, included.
      */
     @Test
-    @Order(1)
     void theShellTabAnswersToTheShellCapabilityAndNeverToConsole() throws Exception {
         String record = "/manage/instances/" + rootWorkloadId;
 
@@ -148,7 +136,6 @@ class InstanceShellGateTest extends HohenheimTestBase {
      * the tab says so instead of offering a terminal that would never open.
      */
     @Test
-    @Order(2)
     void aRootRunningWorkloadIsRefusedByNameAndSaysSoOnItsTab() throws Exception {
         // 1. The tab renders for the capability holder -- the refusal is content, not a 404.
         HttpResponse<String> page = httpGet(
@@ -183,7 +170,6 @@ class InstanceShellGateTest extends HohenheimTestBase {
      * exactly as the Files tab does, instead of failing mid-handshake.
      */
     @Test
-    @Order(3)
     void anIncusWorkspaceStatesTheRuntimeHasNoShellLaneYet() throws Exception {
         HttpResponse<String> page = httpGet(
             "/manage/instances/" + incusWorkspaceId + "/page/shell", shellSession);
@@ -217,7 +203,6 @@ class InstanceShellGateTest extends HohenheimTestBase {
      * instance-existence oracle.
      */
     @Test
-    @Order(4)
     void theFunnelRefusesAStrangerIdenticallyToAMissingInstanceAndRefusesNoPrincipal() {
         int missingId = rootWorkloadId + 987_654;
         assertThat(Models.get(InstanceModel.class).findById(missingId))
@@ -250,9 +235,8 @@ class InstanceShellGateTest extends HohenheimTestBase {
      * already administer.
      */
     @Test
-    @Order(5)
     void manageDoesNotImplyShell() {
-        int managerId = tenant("manager@shellgate.test", "Manager");
+        int managerId = ApiSupport.user("manager@shellgate.test", "Manager");
         RecordGrants.grant(GrantSubjectType.USER, managerId, InstanceModel.MODEL_ID,
             rootWorkloadId, HohenheimAccess.MANAGE, true);
         Principal manager = new UserPrincipal(managerId, "Manager");
@@ -323,25 +307,6 @@ class InstanceShellGateTest extends HohenheimTestBase {
         row.set(InstanceModel.RUNTIME_IMAGE_ID, 1);
         instances.save(row);
         return row.get(InstanceModel.ID);
-    }
-
-    private static int tenant(String email, String name) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, name);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
-    }
-
-    private static String sessionOf(int userId) {
-        Session session = Zenit.getSessionStore().create();
-        session.set(AuthKeys.USER_ID, (long) userId);
-        session.set(CsrfTokens.TOKEN, ZenitAuth.randomToken());
-        Zenit.getSessionStore().save(session);
-        return session.token().secret();
     }
 
     /** The MACHINE KEY of a refusal; the class name for anything that is not one. */

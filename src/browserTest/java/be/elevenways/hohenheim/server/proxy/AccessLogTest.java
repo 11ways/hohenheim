@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import com.sun.net.httpserver.HttpServer;
@@ -9,10 +10,13 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -101,16 +105,17 @@ class AccessLogTest {
     }
 
     /** The log's lines once it holds at least {@code count}; the line lands after the response. */
-    private static List<String> awaitLines(Path file, int count) throws Exception {
-        for (int attempt = 0; attempt < 200; attempt++) {
-            if (Files.exists(file)) {
-                List<String> lines = Files.readAllLines(file);
-                if (lines.size() >= count) {
-                    return lines;
-                }
+    private static List<String> awaitLines(Path file, int count) {
+        return Poll.value("the access log holds " + count + " line(s)", Duration.ofSeconds(5), () -> {
+            if (!Files.exists(file)) {
+                return null;
             }
-            Thread.sleep(25);
-        }
-        return Files.exists(file) ? Files.readAllLines(file) : List.of();
+            try {
+                List<String> lines = Files.readAllLines(file);
+                return lines.size() >= count ? lines : null;
+            } catch (IOException unreadable) {
+                throw new UncheckedIOException(unreadable);
+            }
+        });
     }
 }

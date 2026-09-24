@@ -1,8 +1,9 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
@@ -25,21 +26,19 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.quota.Quotas;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
+import java.time.Duration;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Supplier;
 import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -58,6 +57,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class IncusVmLiveTest {
 
+    /** The interval of every wait here: each probe is a daemon or database round trip. */
+    private static final Duration POLL_INTERVAL = Duration.ofMillis(2000);
+
     // AIDEV-NOTE: the record name must be UNIQUE across live classes: the product's
     // authorized_keys comment is hohenheim-<name> (HostKeys.rotateIdentity), and
     // LiveIncusHost.authorizeKey sweeps by that comment -- a sibling fork enrolling
@@ -71,7 +73,7 @@ class IncusVmLiveTest {
     /** The isolation peer: a plain system container on the same daemon. */
     private static final String PEER_IMAGE = "alpine/3.22";
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static LiveIncusHost remote;
     private static String enrolledFingerprint;
 
@@ -91,16 +93,11 @@ class IncusVmLiveTest {
         LiveLane.require(LiveLane.Need.INCUS_HOST, remote != null,
             "no live incus host enrolled at " + LiveIncusHost.CONFIG);
 
-        File db = File.createTempFile("hohenheim-incus-vm-live", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
         // ONE database per test class: the controller identity (and therefore every
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
 
         Db.run(datasource, () -> {
@@ -226,7 +223,7 @@ class IncusVmLiveTest {
                 // warns about unavailable ssh host key types), and the ssh helper
                 // throws on any nonzero exit -- without the `|| true` the probe reads
                 // "" forever while the daemon happily answers "status: done".
-                awaitTrue("VM agent up and cloud-init finished", 600_000, () ->
+                Poll.until("VM agent up and cloud-init finished", Duration.ofMillis(600_000), POLL_INTERVAL, () ->
                     execQuietly(handle, "cloud-init status || true").contains("done"));
                 assertThat(exec(handle, "cat /root/hohenheim-mark"))
                     .as("step 5: write_files wrote the substituted plain variable")
@@ -254,7 +251,7 @@ class IncusVmLiveTest {
                     .as("step 7: the peer container runs")
                     .isEqualTo(ContainerState.RUNNING);
                 String[] peerIp = new String[1];
-                awaitTrue("peer container IPv4 present", 60_000, () -> {
+                Poll.until("peer container IPv4 present", Duration.ofMillis(60_000), POLL_INTERVAL, () -> {
                     peerIp[0] = ipv4Of(incus, peerHandle);
                     return peerIp[0] != null;
                 });
@@ -357,7 +354,7 @@ class IncusVmLiveTest {
                     .contains("\"1GiB\"").contains("block");
                 assertThat(instanceOf(incus, handle).get("devices").toString())
                     .as("step 8: the disk device is attached").contains("data");
-                awaitTrue("guest sees the hotplugged disk", 30_000, () ->
+                Poll.until("guest sees the hotplugged disk", Duration.ofMillis(30_000), POLL_INTERVAL, () ->
                     execQuietly(handle, "ls /sys/block").contains("sdb"));
 
                 // 9. Resize while RUNNING is the daemon's own refusal, surfaced by
@@ -424,7 +421,7 @@ class IncusVmLiveTest {
                 assertThat((String) Models.get(InstanceModel.class).findById(id)
                         .get(InstanceModel.IMAGE_FINGERPRINT))
                     .as("step 12: the pin is unchanged").isEqualTo(pinned);
-                awaitTrue("guest sees the second NIC", 600_000, () ->
+                Poll.until("guest sees the second NIC", Duration.ofMillis(600_000), POLL_INTERVAL, () ->
                     execQuietly(handle, "ls /sys/class/net").contains("eth1"));
 
                 // 13. DESTROY with verified reclaim AT THE DAEMON: instance absent,
@@ -522,7 +519,7 @@ class IncusVmLiveTest {
 
                 // 3. THE ONLY INDEPENDENT CHECK: the GUEST's own block device is 6 GiB.
                 //    /sys/block/sda/size is in 512-byte sectors.
-                awaitTrue("VM agent up", 600_000, () ->
+                Poll.until("VM agent up", Duration.ofMillis(600_000), POLL_INTERVAL, () ->
                     execQuietly(handle, "cat /sys/block/sda/size").trim().matches("\\d+"));
                 assertThat(Long.parseLong(exec(handle, "cat /sys/block/sda/size").trim()) * 512L)
                     .as("step 3: the guest really sees a 6 GiB disk -- the hypervisor"
@@ -557,7 +554,7 @@ class IncusVmLiveTest {
                     .get("devices")).get("root");
                 assertThat(grownDevice.get("size"))
                     .as("step 5: the daemon declares 8GiB").isEqualTo("8GiB");
-                awaitTrue("guest sees the grown disk", 600_000, () ->
+                Poll.until("guest sees the grown disk", Duration.ofMillis(600_000), POLL_INTERVAL, () ->
                     execQuietly(handle, "cat /sys/block/sda/size").trim().matches("\\d+"));
                 assertThat(Long.parseLong(exec(handle, "cat /sys/block/sda/size").trim()) * 512L)
                     .as("step 5: and the GUEST really got the extra 2 GiB")
@@ -658,23 +655,6 @@ class IncusVmLiveTest {
     private static String violationKeyOf(Throwable thrown) {
         assertThat(thrown).isInstanceOf(Violations.class);
         return ((Violations) thrown).all().get(0).message().key();
-    }
-
-    /** Bounded poll: never assert a fresh workload's state with zero retry. */
-    private static void awaitTrue(String what, long timeoutMs, Supplier<Boolean> probe) {
-        long deadline = Now.millis() + timeoutMs;
-        while (Now.millis() < deadline) {
-            if (Boolean.TRUE.equals(probe.get())) {
-                return;
-            }
-            try {
-                Thread.sleep(2000);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
-        throw new AssertionError("timed out after " + timeoutMs + "ms waiting for: " + what);
     }
 
     private static String exec(String handle, String command) {

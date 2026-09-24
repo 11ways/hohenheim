@@ -4,10 +4,9 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.host.HostState;
 import be.elevenways.hohenheim.host.HostStatusCell;
-import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.HostMode;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.incus.IncusEndpoint;
@@ -392,7 +391,7 @@ public final class ServerResource extends RowResource {
 
     /** Whether a (possibly absent) record is the implicit local host. */
     private static boolean isLocal(@Nullable Object record) {
-        return record instanceof Row row && ServerService.LOCAL.equals(row.get(ServerModel.NAME));
+        return record instanceof Row row && ServerService.LOCAL_HOST_NAME.equals(row.get(ServerModel.NAME));
     }
 
     /**
@@ -417,8 +416,8 @@ public final class ServerResource extends RowResource {
         String token = takeTrustToken(values, null);
         // MODE is the DOCKER lane's transport discriminator; an incus host keeps the
         // default (its transport is declared by incus_url instead).
-        values.put("mode", ServerModel.RUNTIME_DOCKER.equals(runtime)
-            ? ServerService.MODE_SSH : ServerService.MODE_LOCAL);
+        values.put("mode", (ServerModel.RUNTIME_DOCKER.equals(runtime)
+            ? HostMode.SSH : HostMode.LOCAL).token());
         Object[] id = new Object[1];
         this.inMutationTransaction(() -> id[0] = super.persistRow(values, accessContext));
         reportIncomplete(HostEnrolment.afterCreate(id[0], token));
@@ -456,8 +455,8 @@ public final class ServerResource extends RowResource {
         String runtime = runtimeOf(values, existing);
         validate(values, existing);
         String token = takeTrustToken(values, existing);
-        values.put("mode", ServerModel.RUNTIME_DOCKER.equals(runtime)
-            ? ServerService.MODE_SSH : ServerService.MODE_LOCAL);
+        values.put("mode", (ServerModel.RUNTIME_DOCKER.equals(runtime)
+            ? HostMode.SSH : HostMode.LOCAL).token());
         this.inMutationTransaction(() -> super.updateRow(existing, values, accessContext));
         reportIncomplete(HostEnrolment.afterUpdate(existing.get(ServerModel.ID), token));
         ServerOptions.refresh();
@@ -532,7 +531,7 @@ public final class ServerResource extends RowResource {
 
     @Override
     public void deleteRow(@NonNull Row existing, @NonNull AccessContext accessContext) {
-        if (ServerService.LOCAL.equals(existing.get(ServerModel.NAME))) {
+        if (ServerService.LOCAL_HOST_NAME.equals(existing.get(ServerModel.NAME))) {
             throw Violations.ofForm(CmsSupport.violationText("local_server_undeletable"));
         }
         super.deleteRow(existing, accessContext);
@@ -553,7 +552,7 @@ public final class ServerResource extends RowResource {
     @Override
     public @Nullable Microcopy deleteUnavailableReason(@NonNull Row record,
                                                        @NonNull AccessContext accessContext) {
-        if (ServerService.LOCAL.equals(record.get(ServerModel.NAME))) {
+        if (ServerService.LOCAL_HOST_NAME.equals(record.get(ServerModel.NAME))) {
             return Microcopy.of("delete_local").withFilter("scope", "server");
         }
         Integer id = record.get(ServerModel.ID);
@@ -564,10 +563,11 @@ public final class ServerResource extends RowResource {
             return Microcopy.of("delete_migrating").withFilter("scope", "server")
                 .withArg("instance", String.valueOf((Object) migrating.get(InstanceModel.NAME)));
         }
-        long workloads = workloadsOn(id);
-        if (workloads > 0) {
-            return Microcopy.of("delete_in_use").withFilter("scope", "server")
-                .withArg("workloads", workloads);
+        // THE count the funnel refusal reads (ServerModel.referencesOf): engines and port
+        // claims included, so the button is never offered alive for a delete that refuses.
+        ServerModel.References references = id == null ? null : ServerModel.referencesOf(id);
+        if (references != null && references.any()) {
+            return references.describe(Microcopy.of("delete_in_use").withFilter("scope", "server"));
         }
         return super.deleteUnavailableReason(record, accessContext);
     }
@@ -581,21 +581,6 @@ public final class ServerResource extends RowResource {
         return deleteConfirmation(Microcopy.of("delete_confirm").withFilter("scope", "server"));
     }
 
-    /** @return how many stored workloads still name this host */
-    private static long workloadsOn(@Nullable Integer serverId) {
-        if (serverId == null) {
-            return 0;
-        }
-        return Models.get(InstanceModel.class).find()
-                .where(InstanceModel.SERVER_ID.eq(serverId))
-                .where(InstanceModel.DELETED_AT.isNull())
-                .count()
-            + Models.get(StackModel.class).find()
-                .where(StackModel.SERVER_ID.eq(serverId)).count()
-            + Models.get(DatabaseModel.class).find()
-                .where(DatabaseModel.SERVER_ID.eq(serverId)).count();
-    }
-
     /**
      * Name spelling plus the runtime's own address demand.
      *
@@ -606,7 +591,7 @@ public final class ServerResource extends RowResource {
      */
     private static void validate(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
         String name = CmsSupport.textOf(coerced, existing, ServerModel.NAME);
-        if (ServerService.LOCAL.equals(name)) {
+        if (ServerService.LOCAL_HOST_NAME.equals(name)) {
             throw Violations.ofField("name", name, CmsSupport.violationText(
                 existing == null ? "local_server_reserved" : "local_server_immutable"));
         }

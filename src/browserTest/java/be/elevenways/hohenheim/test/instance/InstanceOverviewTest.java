@@ -6,21 +6,14 @@ import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.Map;
@@ -38,7 +31,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * operator could never see how full a disk was until it crossed the attention threshold.
  * THREE, the port ledger's published port appeared on no instance surface at all.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class InstanceOverviewTest extends HohenheimTestBase {
 
     private static Integer instanceId;
@@ -71,11 +63,10 @@ class InstanceOverviewTest extends HohenheimTestBase {
      * resource's OWN actions -- not a hand-rolled form beside them.
      */
     @Test
-    @Order(1)
     void theOverviewIsTheRecordsLandingPageAndCarriesTheResourcesOwnActions()
             throws Exception {
         // 1. THE ABSENCE: pre-fix this URL answered 404.
-        HttpResponse<String> page = get(overviewUrl());
+        HttpResponse<String> page = adminGet(overviewUrl());
         assertThat(page.statusCode())
             .withFailMessage("step 1: the instance overview page does not exist (HTTP %s)",
                 page.statusCode())
@@ -83,7 +74,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
 
         // 2. The list row title opens it, so the operator lands on state rather than on
         //    a five-column edit form.
-        HttpResponse<String> list = get("/admin/instances");
+        HttpResponse<String> list = adminGet("/admin/instances");
         assertThat(list.body())
             .withFailMessage("step 2: the instance list row does not target the overview")
             .contains("/admin/instances/" + instanceId + "/page/overview");
@@ -108,9 +99,8 @@ class InstanceOverviewTest extends HohenheimTestBase {
      * travels onto this page with it.
      */
     @Test
-    @Order(2)
     void restartIsOfferedAsOneConfirmedActionThroughTheService() throws Exception {
-        HttpResponse<String> page = get(overviewUrl());
+        HttpResponse<String> page = adminGet(overviewUrl());
 
         // 1. The action is projected onto the page, through the standard invoke lane.
         assertThat(page.body())
@@ -157,12 +147,11 @@ class InstanceOverviewTest extends HohenheimTestBase {
      * real bar the moment an observation lands. Never a zero bar reading as "empty disk".
      */
     @Test
-    @Order(3)
     void diskRendersNotMeasuredForDockerAndARealBarOnceObserved() throws Exception {
         var instances = Models.get(InstanceModel.class);
 
         // 1. Docker stamps nothing: the honest rendering is a named state, not a bar.
-        HttpResponse<String> unmeasured = get(overviewUrl());
+        HttpResponse<String> unmeasured = adminGet(overviewUrl());
         // The not-measured posture is the usage widget's own built-in state now (the
         // page used to spell it in a bespoke template branch); the SEMANTIC assertion is
         // unchanged -- a named state, never a bar.
@@ -182,7 +171,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
         row.set(InstanceModel.DISK_OBSERVED_AT, Instant.parse("2026-08-11T08:00:00Z"));
         instances.save(row);
         try {
-            HttpResponse<String> measured = get(overviewUrl());
+            HttpResponse<String> measured = adminGet(overviewUrl());
             assertThat(measured.body())
                 .withFailMessage("step 2: a stored disk observation still renders nowhere")
                 .doesNotContain("widget-usage-unmeasured")
@@ -197,7 +186,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
             Row unenforced = instances.findById(instanceId);
             unenforced.set(InstanceModel.DISK_LIMIT_BYTES, 0L);
             instances.save(unenforced);
-            assertThat(get(overviewUrl()).body())
+            assertThat(adminGet(overviewUrl()).body())
                 .as("step 3: a zero ceiling is silence, never a full bar")
                 .contains("widget-usage-unmeasured");
         } finally {
@@ -214,7 +203,6 @@ class InstanceOverviewTest extends HohenheimTestBase {
      * declares no public address the page SAYS so instead of inventing localhost.
      */
     @Test
-    @Order(4)
     void theLedgersPublishedPortRendersWithItsHostAddress() throws Exception {
         int id = instance();
         int localHost = ServerModel.localServerId();
@@ -222,7 +210,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
             "overview test");
         try {
             // 1. THE DEFECT: pre-fix the ledger's claim appeared on no instance surface.
-            HttpResponse<String> page = get(overviewUrl());
+            HttpResponse<String> page = adminGet(overviewUrl());
             assertThat(page.body())
                 .withFailMessage("step 1: the instance's published port renders nowhere")
                 .contains("data-endpoint-port=\"25565\"");
@@ -246,7 +234,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
             server.set(ServerModel.PUBLIC_IPV4, "203.0.113.7");
             Models.get(ServerModel.class).save(server);
             try {
-                assertThat(get(overviewUrl()).body())
+                assertThat(adminGet(overviewUrl()).body())
                     .as("step 3: the declared host address joins the published port")
                     .contains("203.0.113.7:25565");
             } finally {
@@ -259,7 +247,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
         }
 
         // 4. With the claim gone the page states the absence instead of an empty table.
-        assertThat(get(overviewUrl()).body())
+        assertThat(adminGet(overviewUrl()).body())
             .as("step 4: no claim renders an explicit empty state")
             .contains("<pl-empty-state");
     }
@@ -274,12 +262,13 @@ class InstanceOverviewTest extends HohenheimTestBase {
      * fine: state "Created", Deploy offered, no reason anywhere.
      */
     @Test
-    @Order(5)
     void aBlockedHostIsStatedOnTheOverviewAndNotOnlyToasted() throws Exception {
         var servers = Models.get(ServerModel.class);
         int serverId = ServerModel.localServerId();
-        Row server = servers.findById(serverId);
-        String admissionBefore = server.get(ServerModel.ADMISSION);
+        // The whole fixture-written state, not just admission: admitLocal also stamps the
+        // posture, the preflight and its acknowledgement, and the local host is one row
+        // every class in the fork shares.
+        HostFixtures.LocalHostState localBefore = HostFixtures.captureLocal();
 
         try {
             // 1. THE NEGATIVE ANCHOR: a FULLY placeable host, so the page says nothing
@@ -289,16 +278,16 @@ class InstanceOverviewTest extends HohenheimTestBase {
             HostFixtures.admitLocal();
             // The banner is the framework's alert widget now, so it is identified by the
             // copy it carries rather than by a hand-written data attribute.
-            assertThat(get(overviewUrl()).body())
+            assertThat(adminGet(overviewUrl()).body())
                 .as("step 1: an admitted host produces no blocker banner")
                 .doesNotContain(BLOCKER_TITLE);
 
             // 2. Block the host and change NOTHING else.
-            server = servers.findById(serverId);
+            Row server = servers.findById(serverId);
             server.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
             servers.save(server);
 
-            String blocked = get(overviewUrl()).body();
+            String blocked = adminGet(overviewUrl()).body();
             assertThat(blocked)
                 .withFailMessage("step 2: the overview does not state the blocking condition,"
                     + " so the only explanation is the toast that follows the click")
@@ -319,19 +308,14 @@ class InstanceOverviewTest extends HohenheimTestBase {
 
             // 5. THE DURABILITY: ask again, with no action in between. A toast is gone by
             //    now; this must not be.
-            assertThat(get(overviewUrl()).body())
+            assertThat(adminGet(overviewUrl()).body())
                 .withFailMessage("step 5: the explanation did not survive a second render --"
                     + " it is action-scoped after all, which is the defect being fixed")
                 .contains(BLOCKER_TITLE);
         } finally {
-            Row restore = servers.findById(serverId);
-            restore.set(ServerModel.ADMISSION, admissionBefore);
-            servers.save(restore);
+            localBefore.restore();
         }
     }
-
-    // -- plumbing -----------------------------------------------------------------
-
 
     /**
      * The per-record activity band: what happened to THIS instance, and only this one.
@@ -343,7 +327,6 @@ class InstanceOverviewTest extends HohenheimTestBase {
      * which is precisely the wrong filter this band could regress to.
      */
     @Test
-    @Order(6)
     void theOverviewShowsThisRecordsActivityAndNoOtherRecords() throws Exception {
         var instances = Models.get(InstanceModel.class);
         Row decoy = instances.createEmptyRow();
@@ -366,7 +349,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
             assertThat(theirs).as("step 1: the decoy has one too").isNotNull();
 
             // 2. The band renders, and links this instance's entry.
-            String body = get(overviewUrl()).body();
+            String body = adminGet(overviewUrl()).body();
             assertThat(body)
                 .as("step 2: the overview carries a recent-activity band")
                 .contains("Recent activity");
@@ -391,15 +374,5 @@ class InstanceOverviewTest extends HohenheimTestBase {
             .orderBy(ActivityModel.ID, SortOrder.DESC)
             .first();
         return entry == null ? null : entry.get(ActivityModel.ID);
-    }
-
-    private HttpResponse<String> get(String path) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .GET().build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 }

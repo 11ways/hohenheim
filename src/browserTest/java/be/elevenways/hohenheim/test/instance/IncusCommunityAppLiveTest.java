@@ -1,8 +1,9 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.instance.ReadinessKind;
@@ -20,18 +21,16 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
+import java.time.Duration;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -54,16 +53,18 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * everything created is destroyed and absence is asserted at the daemon.
  */
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class IncusCommunityAppLiveTest {
+
+    /** The interval of every wait here: each probe is a daemon or database round trip. */
+    private static final Duration POLL_INTERVAL = Duration.ofMillis(500);
 
     private static final String HOST = "live-incus-apps";
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static LiveIncusHost remote;
     private static String enrolledFingerprint;
 
-    /** Every daemon handle this class created, for the scoped final sweep. */
+    /** Every daemon handle the running test created, for the scoped sweep after it. */
     private static final Set<String> created =
         Collections.synchronizedSet(new LinkedHashSet<>());
 
@@ -78,16 +79,11 @@ class IncusCommunityAppLiveTest {
         LiveLane.require(LiveLane.Need.INCUS_HOST, remote != null,
             "no live incus host enrolled at " + LiveIncusHost.CONFIG);
 
-        File db = File.createTempFile("hohenheim-incus-community-live", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
         // ONE database per test class: the controller identity (and therefore every
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
         Db.run(datasource, () -> enrolledFingerprint =
             remote.enrollThroughProduct(HOST, "hohenheim-live-community"));
@@ -112,7 +108,6 @@ class IncusCommunityAppLiveTest {
     }
 
     @Test
-    @Order(1)
     void gotifyInstallsRunsAndUpdatesThroughThePinnedScripts() {
         Db.run(datasource, () -> {
             // 1. Import from the vendored catalog and approve (operator act; the
@@ -216,7 +211,6 @@ class IncusCommunityAppLiveTest {
     }
 
     @Test
-    @Order(2)
     void adguardInstallsAndAnswersAsTheSecondCatalogApp() {
         Db.run(datasource, () -> {
             int templateId = CommunityScripts.importApp("adguard");
@@ -275,7 +269,6 @@ class IncusCommunityAppLiveTest {
      * the shim's named message -- never a silently degraded app.
      */
     @Test
-    @Order(3)
     void unknownHelperFailsTheInstallLoudlyAtRuntime() {
         Db.run(datasource, () -> {
             Row template = Models.get(InstanceTemplateModel.class).createEmptyRow();
@@ -320,8 +313,18 @@ class IncusCommunityAppLiveTest {
         });
     }
 
+    @BeforeEach
+    void forgetThePreviousTestsHandles() {
+        created.clear();
+    }
+
     /**
-     * After everything: no instance THIS CLASS created remains at the daemon.
+     * After every test: no instance THAT TEST created remains at the daemon.
+     *
+     * AIDEV-NOTE: this used to be a fourth @Order(4) test sweeping what tests 1-3 had
+     * tracked, which made the class order-dependent (run alone, it had nothing to sweep).
+     * As an @AfterEach it runs for every test, alone or not, and a leak fails the test
+     * that leaked.
      *
      * AIDEV-NOTE: scoped to the tracked handles, NOT "no hohenheim-instance-* at all".
      * The live host is shared and browser test classes run in parallel forks, so a
@@ -330,17 +333,16 @@ class IncusCommunityAppLiveTest {
      * legitimate, tripped it). The tracked set is the honest spelling of the method
      * name; the non-empty anchor below keeps it from going vacuously green.
      */
-    @Test
-    @Order(4)
-    void theDaemonIsEmptyOfEverythingThisSuiteCreated() {
+    @AfterEach
+    void theDaemonIsEmptyOfEverythingThisTestCreated() {
         assertThat(created)
-            .as("positive anchor: this class really created instances to sweep for")
+            .as("positive anchor: this test really created instances to sweep for")
             .isNotEmpty();
         Db.run(datasource, () -> {
             IncusClient incus = new ServerService().incusClientFor(HOST);
             try {
                 assertThat(incus.instances())
-                    .as("no instance created by this suite survives at the daemon")
+                    .as("no instance created by this test survives at the daemon")
                     .noneMatch(instance -> created.contains(
                         String.valueOf(instance.get("name"))));
             } catch (IOException e) {
@@ -370,22 +372,18 @@ class IncusCommunityAppLiveTest {
     /** Poll the RECORD's status (the fenced writes are async off the console pump). */
     private static void awaitStatus(int instanceId, String expected, long timeoutMs,
                                     String description) {
-        long deadline = Now.millis() + timeoutMs;
-        String last = "";
-        while (Now.millis() < deadline) {
-            last = Models.get(InstanceModel.class).findById(instanceId)
-                .get(InstanceModel.STATUS);
-            if (expected.equals(last)) {
-                return;
-            }
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
-            }
+        try {
+            Poll.until(description, Duration.ofMillis(timeoutMs), POLL_INTERVAL,
+                () -> expected.equals(statusOf(instanceId)));
+        } catch (AssertionError timedOut) {
+            // The status it was left in is the evidence; assert on it to name it.
+            assertThat(statusOf(instanceId)).as(description).isEqualTo(expected);
+            throw timedOut;
         }
-        assertThat(last).as(description).isEqualTo(expected);
+    }
+
+    private static String statusOf(int instanceId) {
+        return Models.get(InstanceModel.class).findById(instanceId).get(InstanceModel.STATUS);
     }
 
     /** The container's bridge IPv4, read from the daemon's state object. */

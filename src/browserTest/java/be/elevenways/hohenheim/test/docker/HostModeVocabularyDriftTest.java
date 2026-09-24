@@ -1,8 +1,9 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.model.HostMode;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.docker.HostMode;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.zenit.common.orm.field.EnumField;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -50,6 +51,24 @@ class HostModeVocabularyDriftTest {
         // 4. The local HOST NAME is its own fact, spelled once, and it is not a mode lookup.
         assertThat(ServerService.LOCAL_HOST_NAME)
             .as("step 4: the implicit local host row keeps its stored name")
+            .isEqualTo(ServerModel.LOCAL_HOST_NAME)
             .isEqualTo("local");
+
+        // 5. The stored field is BUILT from the enum: every value carries its member's facts.
+        for (HostMode mode : HostMode.values()) {
+            EnumField.EnumValue value = ServerModel.MODE.getValues().get(mode.token());
+            assertThat(value.getDisplayName()).as("step 5: " + mode + " display name")
+                .isEqualTo(mode.displayName());
+            assertThat(value.getColor()).as("step 5: " + mode + " color").isEqualTo(mode.color());
+            assertThat(value.getLabel()).as("step 5: " + mode + " label")
+                .isEqualTo(mode.label());
+        }
+
+        // 6. The non-throwing reading answers null for what it does not know, and a row
+        //    declares a mode only when it names a known one.
+        assertThat(HostMode.parse("local")).as("step 6: a known token parses").isEqualTo(HostMode.LOCAL);
+        assertThat(HostMode.parse("sshh")).as("step 6: an unknown token is no mode").isNull();
+        assertThat(HostMode.parse(null)).as("step 6: a missing token is no mode").isNull();
+        assertThat(HostMode.SSH.declaredBy(null)).as("step 6: no row declares nothing").isFalse();
     }
 }

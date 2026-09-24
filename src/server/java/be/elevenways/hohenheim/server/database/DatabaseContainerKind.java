@@ -92,8 +92,9 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
             .label(HohenheimFormCopy.label("container_command")).build());
 
     // secret(): redacted on derived surfaces (revisions, activity), like every env map.
-    // The engine PASSWORDS never live here -- they ride the instance-variable secret lane
-    // (encrypted column) and merge into the env at deploy; see DatabaseInstances.
+    // The engine's environment never lives here -- passwords, root user and init database
+    // all ride the instance-variable secret lane (encrypted column) and merge into the env
+    // at deploy; see DatabaseInstances. Rows an older controller wrote are sealed at boot.
     public static final StringMapField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(
         StringMapField.builder("environment_variables")
             .label(HohenheimFormCopy.label("environment_variables")).secret().build());

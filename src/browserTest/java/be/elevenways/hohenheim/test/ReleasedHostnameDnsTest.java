@@ -10,7 +10,6 @@ import be.elevenways.hohenheim.server.dns.DynamicDnsService.Status;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -152,14 +151,7 @@ class ReleasedHostnameDnsTest extends HohenheimTestBase {
         Row record = enabledRecord(zoneId, "g", "10.0.0.1");
         int recordId = record.get(DnsRecordModel.ID);
 
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, "release-grant@hohenheim.local");
-        user.set(UserModel.DISPLAY_NAME, "Grant Holder");
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        int userId = user.get(UserModel.ID);
+        int userId = ApiSupport.user("release-grant@hohenheim.local", "Grant Holder");
         RecordGrants.grant(GrantSubjectType.USER, userId, DnsRecordModel.MODEL_ID, recordId,
             HohenheimAccess.EDIT, true);
         assertThat(grantCount(recordId)).as("the grant landed").isGreaterThan(0);
@@ -185,14 +177,7 @@ class ReleasedHostnameDnsTest extends HohenheimTestBase {
         int recordId = record.get(DnsRecordModel.ID);
         DnsZoneStore.INSTANCE.reload();
 
-        Row tenant = AuthModels.users().createEmptyRow();
-        tenant.set(UserModel.EMAIL, "release-arm-tenant@hohenheim.local");
-        tenant.set(UserModel.DISPLAY_NAME, "Arm Tenant");
-        tenant.set(UserModel.ENABLED, true);
-        tenant.set(UserModel.CREATED_AT, Now.instant());
-        tenant.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(tenant);
-        int tenantId = tenant.get(UserModel.ID);
+        int tenantId = ApiSupport.user("release-arm-tenant@hohenheim.local", "Arm Tenant");
         // The tenant MANAGES the site, so it has hostname authority over "arm." -- exactly
         // the authority the /manage DNS surface grants, and the one that used to reach the
         // dynamic columns because only the form omitted them.

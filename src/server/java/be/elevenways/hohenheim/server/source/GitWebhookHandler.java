@@ -21,16 +21,23 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.security.SecureTokens;
+import io.undertow.io.IoCallback;
 import io.undertow.io.Receiver;
+import io.undertow.io.Sender;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 import io.undertow.util.HttpString;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.xnio.IoUtils;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Handles git webhook requests on the proxy port; intercepted by SiteDispatcher before
@@ -68,6 +75,15 @@ public class GitWebhookHandler {
     /** Payloads larger than this are refused, whether or not they announce their length. */
     private static final int MAX_BODY_BYTES = 2 * 1024 * 1024;
 
+    /** How much of a refused body is read and discarded before the connection is cut anyway. */
+    private static final long MAX_DRAIN_BYTES = 8L * 1024 * 1024;
+
+    /** How long a refused request may take to finish sending before the connection is cut. */
+    private static final long DRAIN_MILLIS = 10_000;
+
+    /** The refusal of an oversized body. */
+    private static final String TOO_LARGE_BODY = "{\"error\":\"payload too large\"}";
+
     private static final RateLimiter LIMITER = new RateLimiter();
     private static final int ATTEMPTS_PER_MINUTE = 60;
 
@@ -96,48 +112,120 @@ public class GitWebhookHandler {
             refuse(exchange);
             return;
         }
-        long contentLength = exchange.getRequestContentLength();
-        if (contentLength > MAX_BODY_BYTES) {
-            exchange.setPersistent(false);
-            sendJson(exchange, 413, "{\"error\":\"payload too large\"}");
-            return;
+        BoundedBody body = new BoundedBody(slug);
+        if (exchange.getRequestContentLength() > MAX_BODY_BYTES) {
+            // Announced too large: refused before a byte is buffered, then drained.
+            body.refuse(exchange);
+        }
+        exchange.getRequestReceiver().receivePartialBytes(body, body::failed);
+    }
+
+    /**
+     * The webhook body, read in pieces with the cap enforced WHILE it streams in, and the
+     * refusal of an oversized one as 413-then-drain-then-close.
+     *
+     * AIDEV-NOTE: the cap is enforced while the body streams in, not only against
+     * Content-Length: a chunked request announces no length, and receiveFullString without
+     * a buffer limit used to hold ALL of it in memory before the size check could run. Only
+     * the first MAX_BODY_BYTES are ever held; everything past the cap is counted and thrown
+     * away.
+     *
+     * AIDEV-NOTE: the refusal is written FIRST (with its own Content-Length and Connection:
+     * close, the response closed at once), and only then is the rest of the body DRAINED --
+     * read and discarded, bounded by MAX_DRAIN_BYTES and DRAIN_MILLIS -- so the connection
+     * closes on a fully read request. Closing it straight after the 413 while the client was
+     * still sending left unread bytes in the kernel buffer, which makes the close a TCP RESET:
+     * a real client on a real network then saw "connection reset" and never read the 413.
+     * Deliberately NOT exchange.setMaxEntitySize: that transport cap fires inside Undertow's
+     * body conduit and closes the whole CONNECTION before any refusal can be written.
+     */
+    private static final class BoundedBody implements Receiver.PartialBytesCallback {
+
+        private final String slug;
+        private final ByteArrayOutputStream buffered = new ByteArrayOutputStream();
+        private boolean refused;
+        private long drained;
+
+        BoundedBody(String slug) {
+            this.slug = slug;
         }
 
-        // AIDEV-NOTE: the cap is enforced WHILE the body streams in, not only against
-        // Content-Length: a chunked request announces no length, and receiveFullString
-        // without a buffer limit used to hold ALL of it in memory before the size check
-        // could run -- a multi-gigabyte POST from anyone who can reach the proxy port. The
-        // receiver aborts the read the moment the buffer passes the cap and hands the
-        // failure to the callback below, which answers 413.
-        //
-        // AIDEV-NOTE: deliberately NOT exchange.setMaxEntitySize as well. That transport cap
-        // fires inside Undertow's body conduit, which closes the whole CONNECTION before it
-        // throws, so no refusal can be written at all: the client sees a connection reset
-        // instead of a 413. Its exception also reaches an async receiver wrapped in an
-        // IOException, so the check below could not have recognised it as too large anyway.
-        exchange.getRequestReceiver().setMaxBufferSize(MAX_BODY_BYTES);
-        exchange.getRequestReceiver().receiveFullString((ex, body) -> {
-            ex.dispatch(() -> {
-                try {
-                    processWebhook(ex, slug, body);
-                } catch (Exception e) {
-                    Blast.log("GIT WEBHOOK: error processing webhook for slug", slug, "-", e.getMessage());
-                    sendJson(ex, 500, "{\"error\":\"internal error\"}");
+        @Override
+        public synchronized void handle(HttpServerExchange exchange, byte[] message, boolean last) {
+            if (this.refused) {
+                this.drained += message.length;
+                if (!last && this.drained > MAX_DRAIN_BYTES) {
+                    // The bound on what a refusal costs: past it the reset is the client's.
+                    IoUtils.safeClose(exchange.getConnection());
                 }
-            });
-        }, (ex, failure) -> {
-            // Never keep the connection: Undertow would otherwise DRAIN the rest of an
-            // oversized body before it lets the refusal go out.
-            ex.setPersistent(false);
-            if (failure instanceof Receiver.RequestToLargeException) {
-                sendJson(ex, 413, "{\"error\":\"payload too large\"}");
+                // On the last piece the request completes; the response already did, so the
+                // exchange ends and the non-persistent connection closes on a drained socket.
                 return;
             }
-            Blast.log("GIT WEBHOOK: could not read the body for slug", slug, "-",
+            if (this.buffered.size() + (long) message.length > MAX_BODY_BYTES) {
+                refuse(exchange);
+                this.drained += message.length;
+                return;
+            }
+            this.buffered.write(message, 0, message.length);
+            if (last) {
+                String text = this.buffered.toString(StandardCharsets.UTF_8);
+                exchange.dispatch(() -> {
+                    try {
+                        processWebhook(exchange, this.slug, text);
+                    } catch (Exception e) {
+                        Blast.log("GIT WEBHOOK: error processing webhook for slug", this.slug, "-",
+                            e.getMessage());
+                        sendJson(exchange, 500, "{\"error\":\"internal error\"}");
+                    }
+                });
+            }
+        }
+
+        /** Answer 413 now, without ending the exchange: the drain in handle() ends it. */
+        synchronized void refuse(HttpServerExchange exchange) {
+            if (this.refused) {
+                return;
+            }
+            this.refused = true;
+            byte[] refusal = TOO_LARGE_BODY.getBytes(StandardCharsets.UTF_8);
+            exchange.setPersistent(false);
+            exchange.setStatusCode(413);
+            exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json");
+            exchange.getResponseHeaders().put(Headers.CONNECTION, "close");
+            exchange.setResponseContentLength(refusal.length);
+            exchange.getResponseSender().send(ByteBuffer.wrap(refusal), new IoCallback() {
+                @Override
+                public void onComplete(HttpServerExchange done, Sender sender) {
+                    sender.close();
+                }
+
+                @Override
+                public void onException(HttpServerExchange failed, Sender sender, IOException e) {
+                    IoUtils.safeClose(failed.getConnection());
+                }
+            });
+            // A client that stalls mid-body is not waited for past the drain window.
+            exchange.getIoThread().executeAfter(() -> IoUtils.safeClose(exchange.getConnection()),
+                DRAIN_MILLIS, TimeUnit.MILLISECONDS);
+        }
+
+        /** The receiver's error lane. */
+        synchronized void failed(HttpServerExchange exchange, IOException failure) {
+            if (this.refused) {
+                // The 413 is already on its way; the drain window closes what is left.
+                return;
+            }
+            exchange.setPersistent(false);
+            if (failure instanceof Receiver.RequestToLargeException) {
+                refuse(exchange);
+                return;
+            }
+            Blast.log("GIT WEBHOOK: could not read the body for slug", this.slug, "-",
                 failure.getMessage());
-            ex.setStatusCode(400);
-            ex.endExchange();
-        }, StandardCharsets.UTF_8);
+            exchange.setStatusCode(400);
+            exchange.endExchange();
+        }
     }
 
     private static void processWebhook(HttpServerExchange exchange, String slug, String body) {

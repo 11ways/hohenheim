@@ -16,7 +16,7 @@ import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
+import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
@@ -43,6 +43,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BooleanSupplier;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -82,10 +83,7 @@ class ApplicationReleaseLiveTest {
             booted = true;
             ProxyTestSupport.bootRuntime();
         }
-        if (PrivateNetns.available()) {
-            netns = new PrivateNetns();
-            WorkloadNetworkPolicy.overrideForTest(netns.enforcingPolicy());
-        }
+        netns = PrivateNetns.installEnforcing();
         savedProbeTimeout = HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS);
         savedProbeInterval = HohenheimSettings.VALUES.getValue(
@@ -98,11 +96,7 @@ class ApplicationReleaseLiveTest {
 
     @AfterAll
     static void restoreSettings() {
-        WorkloadNetworkPolicy.overrideForTest(null);
-        if (netns != null) {
-            netns.close();
-            netns = null;
-        }
+        PrivateNetns.uninstall(netns);
         HohenheimSettings.VALUES.setValue(
             HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS, savedProbeTimeout);
         HohenheimSettings.VALUES.setValue(
@@ -120,7 +114,7 @@ class ApplicationReleaseLiveTest {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
-        LiveLane.requireImage(docker, "alpine:latest");
+        LiveLane.requireImage(docker, TestImages.ALPINE);
 
         String repoA = "hohenheim-rel-a-" + System.nanoTime();
         String repoB = "hohenheim-rel-b-" + System.nanoTime();
@@ -276,7 +270,7 @@ class ApplicationReleaseLiveTest {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
-        LiveLane.requireImage(docker, "alpine:latest");
+        LiveLane.requireImage(docker, TestImages.ALPINE);
 
         String repoGood = "hohenheim-rel-good-" + System.nanoTime();
         String repoEvil = "hohenheim-rel-evil-" + System.nanoTime();
@@ -303,7 +297,15 @@ class ApplicationReleaseLiveTest {
             // 2. Release the unhealthy candidate under continuous traffic.
             hammer = new Hammer(port, "gate.test", 3);
             converge(applicationId, settingsFor(repoEvil));
-            Thread.sleep(400);
+            // The window must include traffic AFTER the refused release returned: wait
+            // until every lane has answered a few more requests (or one failed, which the
+            // step 3 assertions then name), instead of a fixed sleep.
+            Hammer running = hammer;
+            List<Integer> servedAtRefusal = running.lanes().stream().map(List::size).toList();
+            Poll.until("step 2: every lane kept serving after the refused release returned",
+                Duration.ofSeconds(10), () -> !running.failures.isEmpty()
+                    || IntStream.range(0, servedAtRefusal.size()).allMatch(lane ->
+                        running.lanes().get(lane).size() >= servedAtRefusal.get(lane) + 3));
             hammer.close();
 
             // 3. NOT ONE request reached the candidate, and not one failed: the prior
@@ -368,7 +370,7 @@ class ApplicationReleaseLiveTest {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
-        LiveLane.requireImage(docker, "alpine:latest");
+        LiveLane.requireImage(docker, TestImages.ALPINE);
 
         String repo = "hohenheim-rel-mv-" + System.nanoTime();
         String tagRef = repo + ":latest";
@@ -457,7 +459,7 @@ class ApplicationReleaseLiveTest {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
-        LiveLane.requireImage(docker, "alpine:latest");
+        LiveLane.requireImage(docker, TestImages.ALPINE);
 
         String repo1 = "hohenheim-rel-rc1-" + System.nanoTime();
         String repo2 = "hohenheim-rel-rc2-" + System.nanoTime();
@@ -486,7 +488,7 @@ class ApplicationReleaseLiveTest {
                 candidate.set(InstanceModel.NAME, "rc-candidate");
                 candidate.set(InstanceModel.KIND, "hohenheim:release");
                 candidate.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of(
-                    "image", "alpine:latest", "command", "sleep 300")));
+                    "image", TestImages.ALPINE, "command", "sleep 300")));
                 candidate.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_CANDIDATE);
                 Models.get(InstanceModel.class).save(candidate);
                 candidateId[0] = candidate.get(InstanceModel.ID);
@@ -673,16 +675,8 @@ class ApplicationReleaseLiveTest {
         return response.statusCode() + " " + response.body();
     }
 
-    private static void await(String what, long timeoutMs, BooleanSupplier condition)
-            throws InterruptedException {
-        long deadline = Now.millis() + timeoutMs;
-        while (Now.millis() < deadline) {
-            if (condition.getAsBoolean()) {
-                return;
-            }
-            Thread.sleep(100);
-        }
-        assertThat(condition.getAsBoolean()).as(what).isTrue();
+    private static void await(String what, long timeoutMs, BooleanSupplier condition) {
+        Poll.until(what, Duration.ofMillis(timeoutMs), Duration.ofMillis(100), condition);
     }
 
     private static void removeQuietly(DockerClient docker, String reference) {

@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.hohenheim.server.util.EnvVars;
+import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
@@ -30,11 +31,9 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Stream;
 
 /**
  * Driver-level snapshots of one instance's volumes: cold capture (the EXPLICIT
@@ -168,7 +167,7 @@ public final class InstanceSnapshots {
                 .set(InstanceSnapshotModel.TOTAL_BYTES, total)
                 .write();
         } catch (IOException | RuntimeException error) {
-            deleteRecursively(directory);
+            FileTrees.deleteQuietly(directory);
             RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot)
                 .set(InstanceSnapshotModel.ERROR, describe(error))
                 .write();
@@ -464,7 +463,7 @@ public final class InstanceSnapshots {
             String directory = row.get(InstanceSnapshotModel.DIRECTORY);
             if (directory != null && !directory.isBlank()
                     && Files.exists(Path.of(directory))) {
-                IOException undeletable = deleteRecursivelyReporting(Path.of(directory));
+                IOException undeletable = FileTrees.delete(Path.of(directory));
                 if (undeletable != null) {
                     Blast.log("SNAPSHOT: could not reclaim interrupted capture", id,
                         "payload at", directory, "- retried at the next boot:",
@@ -558,7 +557,7 @@ public final class InstanceSnapshots {
      * @throws Violations {@code snapshot_delete_failed} naming the IO error
      */
     private static void requireRemoved(@NonNull Path root, @NonNull String label) {
-        IOException failure = deleteRecursivelyReporting(root);
+        IOException failure = FileTrees.delete(root);
         if (failure != null) {
             throw Violations.ofForm(violationText("snapshot_delete_failed")
                 .withArg("snapshot", label)
@@ -641,45 +640,6 @@ public final class InstanceSnapshots {
 
     static @NonNull String describe(@NonNull Exception error) {
         return error.getMessage() != null ? error.getMessage() : error.toString();
-    }
-
-    /**
-     * Best effort, for the cleanup paths where a failure must not mask the failure being
-     * cleaned up after (a failed capture's half-written directory, a staging area).
-     * Anything that DELETES A ROW must use {@link #deleteRecursivelyReporting} instead.
-     */
-    static void deleteRecursively(@NonNull Path root) {
-        deleteRecursivelyReporting(root);
-    }
-
-    /**
-     * The same walk, but it ANSWERS: the first IO error, or null when the tree is gone.
-     *
-     * AIDEV-NOTE: this exists because the two lanes of one mechanism had opposite failure
-     * semantics. deleteNativePayload turned an unreachable daemon into Violations BEFORE
-     * the row delete, while the volume lane swallowed every IO error and deleted the row
-     * anyway -- so an unremovable tar became an orphaned payload with nothing pointing at
-     * it, reported as a successful prune.
-     */
-    static @Nullable IOException deleteRecursivelyReporting(@NonNull Path root) {
-        if (!Files.exists(root)) {
-            return null;
-        }
-        IOException[] first = new IOException[1];
-        try (Stream<Path> paths = Files.walk(root)) {
-            paths.sorted(Comparator.reverseOrder()).forEach(path -> {
-                try {
-                    Files.deleteIfExists(path);
-                } catch (IOException failed) {
-                    if (first[0] == null) {
-                        first[0] = failed;
-                    }
-                }
-            });
-        } catch (IOException walkFailed) {
-            return walkFailed;
-        }
-        return first[0];
     }
 
     private static Path snapshotRoot() {

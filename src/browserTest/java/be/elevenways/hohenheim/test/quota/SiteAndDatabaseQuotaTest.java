@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.server.quota.DatabaseQuota;
 import be.elevenways.hohenheim.server.quota.SiteQuota;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -16,9 +15,6 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -256,19 +252,8 @@ class SiteAndDatabaseQuotaTest extends HohenheimTestBase {
     }
 
     private HttpResponse<String> postCreate(String name) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + "/admin/sites/new"))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .header("X-Csrf-Token", csrfToken)
-            .POST(HttpRequest.BodyPublishers.ofString(
-                "name=" + name + "&upstream_kind=hohenheim%3Aaddress"
-                    + "&settings.forward_host=127.0.0.1&settings.forward_port=8080"))
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
+        return adminPostForm("/admin/sites/new", "name=" + name + "&upstream_kind=hohenheim%3Aaddress"
+            + "&settings.forward_host=127.0.0.1&settings.forward_port=8080");
     }
 
     private static String violationKeyOf(Throwable thrown) {

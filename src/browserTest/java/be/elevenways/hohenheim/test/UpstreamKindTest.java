@@ -21,7 +21,6 @@ import static org.assertj.core.api.Assertions.*;
  * alchemy) is gone: those questions are answered by the INSTANCE kind now, so this test
  * walks the six upstreams a hostname can resolve to and nothing else.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class UpstreamKindTest extends HohenheimTestBase {
 
     /** The one open pl-select popup (closed popups stay mounted but hidden). */
@@ -44,7 +43,6 @@ class UpstreamKindTest extends HohenheimTestBase {
 
     /** One create-form load walked through every upstream variant. */
     @Test
-    @Order(1)
     void createFormSwapsEverySettingsVariant() {
         navigateToApp("/admin/sites/new");
         waitForHydration();
@@ -105,7 +103,6 @@ class UpstreamKindTest extends HohenheimTestBase {
      * site that names it.
      */
     @Test
-    @Order(2)
     void instanceUpstreamFlowEndToEnd() {
         var instances = Models.get(InstanceModel.class);
         Row application = instances.find()

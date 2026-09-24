@@ -5,17 +5,14 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.migration.InstallsAt;
-import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.PasswordService;
 import be.elevenways.zenit.auth.server.SetPasswordOfflineCommand;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
-import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.server.cli.HistorySecretSurveyCommand;
 import be.elevenways.zenit.server.cli.HostConsole;
@@ -269,6 +266,21 @@ class OfflineCommandLaneTest {
         assertThat(ServerMain.runCommandLineOnly(new String[0]))
             .as("step 8: the entry point must fall through to a normal boot without flags")
             .isFalse();
+
+        // 8b. The entry point's argv gate runs BEFORE the migration lane: a typo beside
+        //     --run-migrations is refused in words, exit 1, and no datasource is opened for it.
+        List<String> entryErrors = new ArrayList<>();
+        int[] entryExit = {-1};
+        Datasource beforeEntryTypo = Datasources.getDefault();
+        assertThat(ServerMain.runCommandLineOnly(new String[] {"--run-migrations", "--no-such-flag"},
+                new HostConsole(line -> { }, entryErrors::add, status -> entryExit[0] = status)))
+            .as("step 8b: the entry point claims the refused invocation so main never boots")
+            .isTrue();
+        assertThat(entryExit[0]).as("step 8b: with exit status 1").isEqualTo(1);
+        assertThat(String.join("\n", entryErrors))
+            .as("step 8b: and a readable refusal naming the typo").contains("--no-such-flag");
+        assertThat(Datasources.getDefault())
+            .as("step 8b: refused before the migration lane opened anything").isSameAs(beforeEntryTypo);
     }
 
     /**
@@ -339,13 +351,6 @@ class OfflineCommandLaneTest {
     }
 
     private static int createUser() {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, EMAIL);
-        user.set(UserModel.DISPLAY_NAME, "Locked Out Admin");
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
+        return ApiSupport.user(EMAIL, "Locked Out Admin");
     }
 }

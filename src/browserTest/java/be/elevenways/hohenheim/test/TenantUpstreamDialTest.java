@@ -4,10 +4,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.proxy.RoutingProblem;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import com.sun.net.httpserver.HttpServer;
@@ -153,13 +150,6 @@ class TenantUpstreamDialTest {
     }
 
     private static int tenantUser() {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, "dial-tenant@hohenheim.local");
-        user.set(UserModel.DISPLAY_NAME, "Dial Tenant");
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
+        return ApiSupport.user("dial-tenant@hohenheim.local", "Dial Tenant");
     }
 }

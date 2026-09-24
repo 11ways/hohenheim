@@ -15,7 +15,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -44,8 +43,6 @@ class BootWiringWindowTest {
 
     @Test
     void everyRequestFacingWiringExistsWhenTheListenerAccepts() throws Exception {
-        int port = freePort();
-
         // 1. Exactly ServerMain's pre-boot sequence, up to (not including) the
         //    ServerZenitRuntime call that launches the boot stages.
         File settingsDry = File.createTempFile("hohenheim-boot-window", ".dry");
@@ -65,9 +62,12 @@ class BootWiringWindowTest {
         // 2. Bind for real: this test is about what the listener serves, so the
         //    STARTHTTP stage must actually run. Pinned from a boot stage rather
         //    than here, because init() reloads the settings sources synchronously
-        //    before launching any stage.
+        //    before launching any stage. Port 0: the listener takes an ephemeral port
+        //    itself and the probe reads the one it got, instead of this test learning a
+        //    "free" port by binding and closing it -- another process could take that
+        //    port before the listener binds it.
         Zenit.ROOT_STAGE.addChildStage("boot-window-pin", () -> {
-            ServerSettings.VALUES.setValue(ServerSettings.Network.PORT, port);
+            ServerSettings.VALUES.setValue(ServerSettings.Network.PORT, 0);
             ServerSettings.VALUES.setValue(ServerSettings.Network.AUTO_START_HTTP, true);
         }).setWeight(400);
 
@@ -82,6 +82,7 @@ class BootWiringWindowTest {
 
         Zenit.ROOT_STAGE.addChildStage("boot-window-probe", () -> {
             try {
+                int port = ServerZenitRuntime.INSTANCE.getHttpServer().getPort();
                 HttpClient client = HttpClient.newBuilder()
                     .followRedirects(HttpClient.Redirect.NEVER)
                     .build();
@@ -152,12 +153,6 @@ class BootWiringWindowTest {
                 .isEqualTo("DevTunnelServerHandler");
         } finally {
             ServerZenitRuntime.stop();
-        }
-    }
-
-    private static int freePort() throws Exception {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
         }
     }
 }

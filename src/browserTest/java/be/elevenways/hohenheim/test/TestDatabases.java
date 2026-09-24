@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ControllerIdentityModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.test.live.LiveNamespaces;
 import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -77,6 +78,7 @@ public final class TestDatabases {
         }
 
         SqlDatasource outgoing = HohenheimDatabase.datasource();
+        releaseHostLeases();
 
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
@@ -114,6 +116,36 @@ public final class TestDatabases {
     public static synchronized SqlDatasource freshDatasource() throws Exception {
         freshDatabase();
         return HohenheimDatabase.datasource();
+    }
+
+    /** {@link #freshDatasource()}, then the runtime booted over it. */
+    public static synchronized SqlDatasource freshBootedDatasource() throws Exception {
+        SqlDatasource datasource = freshDatasource();
+        HohenheimTestRuntime.ensureBooted();
+        return datasource;
+    }
+
+    /**
+     * Hand back every host lease this JVM's production controller holds, while the database
+     * those leases live in is still open.
+     *
+     * AIDEV-NOTE: this was the single biggest cost of the default browser lane: 15 tests
+     * took exactly ~30s and two more ~90-120s. HostLeases.production() holds its leases for
+     * the process lifetime, so after a swap its next requireFence finds a hold on the
+     * OUTGOING datasource, which closeOutgoing has already closed, and releases it. That
+     * release fails, zenit Leases reads the failure as lost storage ("orm.lease.storage_lost"),
+     * tries to recreate the table on the closed datasource and then polls 30s for it to
+     * become queryable (Leases.awaitQueryableStorage) before giving up; the heartbeat of the
+     * same hold does the same on the renewal thread. Releasing here, before the close,
+     * cancels the heartbeat and expires the row while the statement can still succeed. A
+     * closed datasource should fail that heal at once; that is reported as a zenit defect.
+     */
+    private static void releaseHostLeases() {
+        try {
+            HostLeases.production().releaseAll();
+        } catch (RuntimeException ignored) {
+            // Best effort like closeOutgoing: a lease that cannot be released expires by TTL.
+        }
     }
 
     /**

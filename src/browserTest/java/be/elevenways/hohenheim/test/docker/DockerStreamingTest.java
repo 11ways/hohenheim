@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.test.Poll;
+import java.time.Duration;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.ContainerStream;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -40,7 +42,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class DockerStreamingTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
-    private static final String TEST_IMAGE = "alpine:latest";
+    private static final String TEST_IMAGE = TestImages.ALPINE;
 
     // -- wire parsing over scripted connections (always runs) ----------------
 
@@ -435,18 +437,14 @@ class DockerStreamingTest {
         for (ContainerStream stream : streams) {
             stream.close();
         }
-        long deadline = Now.millis() + 10_000;
-        while (countCatChildren() > before && Now.millis() < deadline) {
-            Thread.sleep(100);
-        }
+        Poll.until("step 3: the closed streams' cat subprocesses exiting",
+            Duration.ofSeconds(10), Duration.ofMillis(100), () -> countCatChildren() <= before);
         assertThat(countCatChildren())
             .as("step 3: after close, ZERO cat subprocesses remain (counted, not eyeballed)")
             .isEqualTo(before);
         for (ContainerStream stream : streams) {
-            long releaseDeadline = Now.millis() + 5_000;
-            while (!stream.isReleased() && Now.millis() < releaseDeadline) {
-                Thread.sleep(50);
-            }
+            Poll.until("step 4: a closed connection observing its own release",
+                Duration.ofSeconds(5), Duration.ofMillis(50), stream::isReleased);
             assertThat(stream.isReleased())
                 .as("step 4: every connection observes its own release").isTrue();
         }

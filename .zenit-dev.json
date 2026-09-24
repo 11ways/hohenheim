@@ -9,6 +9,7 @@
         "nonHermeticClasses": [
             "*Incus*",
             "*Live*",
+            "AdminUiScreenshotTest",
             "BackupDatabasesTaskTest",
             "BackupTargetsTest",
             "BinaryBackupTest",

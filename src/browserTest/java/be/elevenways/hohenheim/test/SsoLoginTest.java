@@ -10,9 +10,6 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Map;
 
@@ -31,25 +28,16 @@ class SsoLoginTest extends HohenheimTestBase {
         IdentityProviderRegistry.register(new FakeProvider(), AutoProvisioningSink.builder().build());
     }
 
-    private HttpResponse<String> get(String path, boolean follow) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(follow ? HttpClient.Redirect.NORMAL : HttpClient.Redirect.NEVER)
-            .build();
-        return client.send(HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path)).GET().build(),
-            HttpResponse.BodyHandlers.ofString());
-    }
-
     /** The login page offers the provider next to password login, and its start route enters the flow. */
     @Test
     void registeredProviderIsOfferedAndStartsItsFlow() throws Exception {
-        HttpResponse<String> loginPage = get("/login", false);
+        HttpResponse<String> loginPage = httpGet("/login", null);
         assertThat(loginPage.statusCode()).isEqualTo(200);
         assertThat(loginPage.body()).contains("name=\"password\"");          // password login option
         assertThat(loginPage.body()).contains("/login/sso-test/start");      // provider login option
         assertThat(loginPage.body()).contains("SSO Test");
 
-        HttpResponse<String> start = get("/login/sso-test/start", false);
+        HttpResponse<String> start = httpGet("/login/sso-test/start", null);
         assertThat(start.statusCode()).isEqualTo(302);
         assertThat(start.headers().firstValue("Location")).hasValue("/login/sso-test/callback");
     }

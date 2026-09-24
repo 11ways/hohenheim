@@ -83,7 +83,7 @@ public final class TlsPassthroughUpstreamKind implements TlsPassthroughProvider 
         }
         // A tenant-owned site reaches public addresses only: a literal is judged here, a name
         // at dial time against every address it resolves to (BackendConnector).
-        boolean publicOnly = TenantUpstreams.isTenantOwned(site);
+        boolean publicOnly = TenantUpstreams.publicOnly(site);
         if (publicOnly && host != null
                 && Boolean.FALSE.equals(TenantUpstreams.literalIsPublic(host.trim()))) {
             throw new IllegalArgumentException("a tenant-owned site may only pass TLS through to a public address");

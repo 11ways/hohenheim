@@ -3,11 +3,8 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.CapabilityScopes;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.data.RecordSourceQuery;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -54,14 +51,7 @@ class CertificateOwnerScopeTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, "cert-owner-scope@hohenheim.local");
-        user.set(UserModel.DISPLAY_NAME, "Cert Owner Scope Tenant");
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        tenantId = user.get(UserModel.ID);
+        tenantId = ApiSupport.user("cert-owner-scope@hohenheim.local", "Cert Owner Scope Tenant");
 
         tenant = sessionFor(tenantId);
 

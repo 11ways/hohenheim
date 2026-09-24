@@ -16,19 +16,16 @@ import be.elevenways.hohenheim.server.runtime.DeviceAttachSupport;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.ApiKeyService;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -46,9 +43,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.Set;
@@ -117,26 +111,12 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         HostFixtures.acknowledgePosture(host);
         hostId = host.get(ServerModel.ID);
 
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, "devsurf-tenant@surface.test");
-        user.set(UserModel.DISPLAY_NAME, "Device Surface Tenant");
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        tenantId = user.get(UserModel.ID);
+        tenantId = ApiSupport.user("devsurf-tenant@surface.test", "Device Surface Tenant");
         tenantKey = ApiKeyService.create(tenantId, NAME_PREFIX + "key",
             List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.MANAGE)),
             null).plaintext();
 
-        Row viewer = AuthModels.users().createEmptyRow();
-        viewer.set(UserModel.EMAIL, "devsurf-viewer@surface.test");
-        viewer.set(UserModel.DISPLAY_NAME, "Device Surface Viewer");
-        viewer.set(UserModel.ENABLED, true);
-        viewer.set(UserModel.CREATED_AT, Now.instant());
-        viewer.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(viewer);
-        viewerId = viewer.get(UserModel.ID);
+        viewerId = ApiSupport.user("devsurf-viewer@surface.test", "Device Surface Viewer");
         viewerKey = ApiKeyService.create(viewerId, NAME_PREFIX + "viewer-key",
             List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.VIEW),
                 CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.CONFIG)),
@@ -231,7 +211,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
 
         // 1. The tab EXISTS and offers both attach affordances. Before this wave there
         //    was no page, no link and no route that could write a device row at all.
-        HttpResponse<String> tab = get("/admin/instances/" + instanceId + "/page/devices");
+        HttpResponse<String> tab = adminGet("/admin/instances/" + instanceId + "/page/devices");
         assertThat(tab.statusCode())
             .as("step 1: the Devices tab renders").isEqualTo(200);
         assertThat(tab.body())
@@ -240,7 +220,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             .contains("/admin/instance-devices/new?type=nic&instance_id=" + instanceId);
 
         // 2. Attaching a disk through the form creates the VOLUME at the daemon.
-        HttpResponse<String> attached = postForm("/admin/instance-devices/new",
+        HttpResponse<String> attached = adminPostForm("/admin/instance-devices/new",
             "instance_id=" + instanceId + "&type=disk&name=" + device + "&size_gb=2");
         assertThat(attached.statusCode())
             .as("step 2: the attach form was accepted").isIn(200, 302, 303);
@@ -253,7 +233,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             .as("step 2: and the desired-state row agrees").isEqualTo(2);
 
         // 3. Editing the size RESIZES the volume at the daemon.
-        HttpResponse<String> resized = postForm(
+        HttpResponse<String> resized = adminPostForm(
             "/admin/instance-devices/" + row.get(InstanceDeviceModel.ID),
             "instance_id=" + instanceId + "&type=disk&name=" + device + "&size_gb=5");
         assertThat(resized.statusCode())
@@ -262,7 +242,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             .as("step 3: the daemon volume grew to 5 GB").isEqualTo(5);
 
         // 4. Attaching an extra NIC is the same door.
-        HttpResponse<String> nic = postForm("/admin/instance-devices/new",
+        HttpResponse<String> nic = adminPostForm("/admin/instance-devices/new",
             "instance_id=" + instanceId + "&type=nic&name=" + NAME_PREFIX + "net");
         assertThat(nic.statusCode())
             .as("step 4: the NIC attach was accepted").isIn(200, 302, 303);
@@ -272,7 +252,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
 
         // 5. Deleting the row DETACHES at the daemon and DELETES the volume -- the
         //    reason this delete is typed-confirmed destructive rather than a row removal.
-        HttpResponse<String> detached = postForm(
+        HttpResponse<String> detached = adminPostForm(
             "/admin/instance-devices/" + row.get(InstanceDeviceModel.ID) + "/delete", confirmed(""));
         assertThat(detached.statusCode())
             .as("step 5: the detach was accepted").isIn(200, 302, 303);
@@ -320,11 +300,11 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         //     (InstanceKindHandler.supportsDevices) and the ENFORCEMENT
         //     (InstanceDevices.requireSupport) are pinned as one answer, not two.
         HttpResponse<String> dockerTab =
-            get("/admin/instances/" + dockerId + "/page/devices");
+            adminGet("/admin/instances/" + dockerId + "/page/devices");
         assertThat(dockerTab.statusCode())
             .as("step 1b: the devices tab of a Docker instance does not exist")
             .isEqualTo(404);
-        HttpResponse<String> dockerRecord = get("/admin/instances/" + dockerId);
+        HttpResponse<String> dockerRecord = adminGet("/admin/instances/" + dockerId);
         assertThat(dockerRecord.statusCode())
             .as("step 1b: while the record itself opens fine -- the tab is what is gone")
             .isEqualTo(200);
@@ -616,38 +596,13 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
 
     // -- transport --------------------------------------------------------------
 
-    private HttpResponse<String> get(String path) throws Exception {
-        return send(HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .GET());
-    }
-
-    private HttpResponse<String> postForm(String path, String body) throws Exception {
-        return send(HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .header("X-Csrf-Token", csrfToken)
-            .POST(HttpRequest.BodyPublishers.ofString(body)));
-    }
-
     /** The API lane authenticates by KEY only; this is a real delegated tenant's key. */
     private HttpResponse<String> apiGet(String path) throws Exception {
-        return send(HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("X-Api-Key", tenantKey)
-            .GET());
+        return keyGet(tenantKey, path);
     }
 
     private HttpResponse<String> apiPost(String path, String body) throws Exception {
         return keyPost(tenantKey, path, body);
-    }
-
-    private static HttpResponse<String> send(HttpRequest.Builder builder) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER).build();
-        return client.send(builder.build(), HttpResponse.BodyHandlers.ofString());
     }
 
     // -- the in-memory device-capable runtime -----------------------------------

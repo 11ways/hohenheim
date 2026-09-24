@@ -422,7 +422,7 @@ public final class HohenheimAccess {
         // Managed databases: the tenant-allocation tier (Phase 5). MANAGE stays THE
         // ownership identity for exactly the reason it does on instances -- there is no
         // owner column on managed_databases, and manageSubjectsOf/sameOwner, the instance
-        // quota bucket the engine is charged to (InstanceQuota.creationOwnerOf reads the
+        // quota bucket the engine is charged to (InstanceQuota.creationOwnerPackOf reads the
         // OWNING DATABASE's manage grants) and creationOwnerSubjects all read it. The
         // narrow verbs are what manage IMPLIES, exactly the instance-tier template.
         //
@@ -1376,17 +1376,6 @@ public final class HohenheimAccess {
         if (cache != null) {
             cache.clear();
         }
-    }
-
-    /**
-     * The previous, misleading name of {@link #forgetCapabilityScopes}: it never dropped
-     * "granted record ids" only, it clears the whole memo.
-     *
-     * @deprecated use {@link #grantCreatorManage}, or {@link #forgetCapabilityScopes}
-     */
-    @Deprecated
-    public static void forgetGrantedRecordIds(@NonNull AccessContext ctx) {
-        forgetCapabilityScopes(ctx);
     }
 
     /**

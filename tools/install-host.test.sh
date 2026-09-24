@@ -104,6 +104,24 @@ else
     expect "an unsafe volume root is named" "$OUT" "must be a plain absolute path"
 fi
 
+# 2b. The control-plane database location: a fresh install names zenit's database.url,
+#     an existing host is never re-pointed (its hohenheim.dry database.path stays the
+#     honoured fallback).
+PLAN="$(plan_of --roles proxy --prefix "$WORK/fresh")"
+expect "a fresh install seeds zenit's database.url" "$PLAN" "fresh install: the control-plane database is database.url = jdbc:sqlite:$WORK/fresh/hohenheim.db in local.dry"
+expect "a fresh install writes local.dry" "$PLAN" "write $WORK/fresh/settings/local.dry"
+mkdir -p "$WORK/existing/settings"
+printf '{ "database": { "path": "/srv/elsewhere/hohenheim.db" } }\n' > "$WORK/existing/settings/hohenheim.dry"
+PLAN="$(plan_of --roles proxy --prefix "$WORK/existing")"
+expect "an existing host keeps its database location" "$PLAN" "existing install: the database keeps the location its settings already name"
+expect "an existing host is not given a database.url" "$PLAN" "fresh install:" no
+expect "an existing hohenheim.dry is left untouched" "$PLAN" "hohenheim.dry exists (left untouched)"
+if /usr/bin/grep -qF "/srv/elsewhere/hohenheim.db" "$WORK/existing/settings/hohenheim.dry"; then
+    ok "the dry run did not rewrite the existing hohenheim.dry"
+else
+    no "the dry run did not rewrite the existing hohenheim.dry"
+fi
+
 # 3. Refusals.
 if OUT="$(bash "$SCRIPT" --dry-run --jar "$JAR" --roles proxy,bogus 2>&1)"; then
     no "unknown role is refused"

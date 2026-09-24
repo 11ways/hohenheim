@@ -5,6 +5,7 @@ import be.elevenways.zenit.common.security.SecurityEventTypes;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -26,10 +27,10 @@ import java.util.Set;
 public enum BanScope {
 
     /** HTTP/TLS traffic to the proxy: the app-level ban cache plus the web nftables sets. */
-    WEB("web"),
+    WEB("web", "Web", "globe", "blue"),
 
     /** SSH traffic only: the ssh nftables sets, and deliberately NOT the proxy's ban cache. */
-    SSH("ssh");
+    SSH("ssh", "SSH", "terminal", "purple");
 
     /**
      * The event types whose crossing means the actor was attacking SSH, derived from core's
@@ -44,14 +45,35 @@ public enum BanScope {
         SecurityEventTypes.SSH_PROTOCOL_ABUSE);
 
     private final String token;
+    private final String displayName;
+    private final String icon;
+    private final String color;
 
-    BanScope(String token) {
+    BanScope(String token, String displayName, String icon, String color) {
         this.token = token;
+        this.displayName = displayName;
+        this.icon = icon;
+        this.color = color;
     }
 
     /** The stored column value. */
     public @NonNull String token() {
         return this.token;
+    }
+
+    /** The English display name the stored field declares beside its label. */
+    public @NonNull String displayName() {
+        return this.displayName;
+    }
+
+    /** The badge icon name. */
+    public @NonNull String icon() {
+        return this.icon;
+    }
+
+    /** The badge color. */
+    public @NonNull String color() {
+        return this.color;
     }
 
     /** The localized label an operator reads. */
@@ -61,7 +83,11 @@ public enum BanScope {
 
     /** Every token, in declaration order, for surfaces that enumerate the vocabulary. */
     public static @NonNull List<String> tokens() {
-        return List.of(WEB.token, SSH.token);
+        List<String> tokens = new ArrayList<>();
+        for (BanScope scope : values()) {
+            tokens.add(scope.token);
+        }
+        return List.copyOf(tokens);
     }
 
     /**

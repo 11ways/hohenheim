@@ -1,11 +1,14 @@
 package be.elevenways.hohenheim.test.host;
 
+import be.elevenways.hohenheim.test.Poll;
+
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -21,6 +24,9 @@ import java.util.concurrent.TimeUnit;
  * tell those apart, which is the point.
  */
 public final class Sshd {
+
+    /** Fresh ports tried before a lost bind race is reported as a failure. */
+    private static final int BIND_ATTEMPTS = 5;
 
     private final Path directory;
     private final int port;
@@ -39,12 +45,33 @@ public final class Sshd {
             && Files.isExecutable(Path.of("/usr/bin/ssh-keyscan"));
     }
 
+    /**
+     * Start a server on a free loopback port.
+     *
+     * AIDEV-NOTE: a free port can only be LEARNED by binding port 0 and closing it, and
+     * sshd has no way to inherit that bound socket, so another process can take the port in
+     * between. That race is survived by retrying on a fresh port whenever sshd itself
+     * reports the bind lost, never by hoping: see {@link #spawn} for how a lost bind is told
+     * apart from a server that is up.
+     */
     public static Sshd start(Path directory) throws IOException {
         Files.createDirectories(directory);
-        int port;
-        try (ServerSocket probe = new ServerSocket(0)) {
-            port = probe.getLocalPort();
+        PortTaken lost = null;
+        for (int attempt = 0; attempt < BIND_ATTEMPTS; attempt++) {
+            int port;
+            try (ServerSocket probe = new ServerSocket(0)) {
+                port = probe.getLocalPort();
+            }
+            try {
+                return startOn(directory, port);
+            } catch (PortTaken taken) {
+                lost = taken;
+            }
         }
+        throw new IOException("sshd lost the bind race " + BIND_ATTEMPTS + " times in a row", lost);
+    }
+
+    private static Sshd startOn(Path directory, int port) throws IOException {
         Path authorizedKeys = directory.resolve("authorized_keys");
         Files.writeString(authorizedKeys, "", StandardCharsets.UTF_8);
         Files.writeString(directory.resolve("sshd_config"), "Port " + port + "\n"
@@ -83,16 +110,48 @@ public final class Sshd {
         // bound after the master is killed; the replacement master then loses the
         // bind while the port still ACCEPTS nothing, which reaches the test as an
         // empty-stderr "unreachable" instead of the failure it is measuring.
+        //
+        // AIDEV-NOTE: -e sends sshd's log to the captured file, and the server is up only
+        // once THAT process says it listens on OUR port. A bare TCP connect used to be the
+        // readiness check, and it succeeds just as well against whichever process took the
+        // port after the probe closed it; sshd then dies with "Address already in use"
+        // and the test talks to a stranger. A lost bind is reported as PortTaken so
+        // start() can retry on a fresh port.
         waitUntilClosed();
-        this.process = new ProcessBuilder("/usr/sbin/sshd", "-D",
+        Path log = this.directory.resolve("sshd.log");
+        Process started = new ProcessBuilder("/usr/sbin/sshd", "-D", "-e",
             "-f", this.directory.resolve("sshd_config").toString())
             .redirectErrorStream(true)
-            .redirectOutput(this.directory.resolve("sshd.log").toFile())
+            .redirectOutput(log.toFile())
             .start();
+        this.process = started;
+        String listening = "Server listening on 127.0.0.1 port " + this.port;
+        Poll.until("sshd to listen on 127.0.0.1:" + this.port + " or exit", Duration.ofSeconds(10),
+            Duration.ofMillis(50), () -> !started.isAlive() || readLog(log).contains(listening));
+        if (!started.isAlive()) {
+            this.process = null;
+            String output = readLog(log);
+            if (output.contains("Address already in use") || output.contains("Cannot bind")) {
+                throw new PortTaken("port " + this.port + " was taken before sshd bound it: "
+                    + output.trim());
+            }
+            throw new IOException("sshd exited immediately: " + output);
+        }
         waitUntilListening();
-        if (!this.process.isAlive()) {
-            throw new IOException("sshd exited immediately: "
-                + Files.readString(this.directory.resolve("sshd.log"), StandardCharsets.UTF_8));
+    }
+
+    private static String readLog(Path log) {
+        try {
+            return Files.readString(log, StandardCharsets.UTF_8);
+        } catch (IOException notYet) {
+            return "";
+        }
+    }
+
+    /** sshd reported that another process holds its port. */
+    private static final class PortTaken extends IOException {
+        PortTaken(String message) {
+            super(message);
         }
     }
 
@@ -107,7 +166,7 @@ public final class Sshd {
             }
             sleep();
         }
-        throw new IOException("port " + this.port + " never became free");
+        throw new PortTaken("port " + this.port + " never became free");
     }
 
     private void waitUntilListening() throws IOException {

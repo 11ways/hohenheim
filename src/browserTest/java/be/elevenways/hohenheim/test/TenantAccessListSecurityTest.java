@@ -5,11 +5,8 @@ import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -50,10 +47,8 @@ class TenantAccessListSecurityTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        Row aliceRow = user("alice-acl@hohenheim.local", "Alice Tenant");
-        Row bobRow = user("bob-acl@hohenheim.local", "Bob Tenant");
-        aliceId = aliceRow.get(UserModel.ID);
-        bobId = bobRow.get(UserModel.ID);
+        aliceId = ApiSupport.user("alice-acl@hohenheim.local", "Alice Tenant");
+        bobId = ApiSupport.user("bob-acl@hohenheim.local", "Bob Tenant");
         alice = new UserPrincipal(aliceId, "Alice Tenant");
         bob = new UserPrincipal(bobId, "Bob Tenant");
 
@@ -168,17 +163,6 @@ class TenantAccessListSecurityTest extends HohenheimTestBase {
     }
 
     // --- Fixture helpers ---------------------------------------------------------------
-
-    private static Row user(String email, String name) {
-        Row row = AuthModels.users().createEmptyRow();
-        row.set(UserModel.EMAIL, email);
-        row.set(UserModel.DISPLAY_NAME, name);
-        row.set(UserModel.ENABLED, true);
-        row.set(UserModel.CREATED_AT, Now.instant());
-        row.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(row);
-        return row;
-    }
 
     private static Integer site(String name, String slug) {
         Model model = Models.get(SiteModel.class);

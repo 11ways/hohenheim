@@ -6,33 +6,20 @@ import be.elevenways.hohenheim.server.source.GitProviderKinds;
 import be.elevenways.hohenheim.server.source.GitProviders;
 import be.elevenways.hohenheim.server.source.GiteaProviderKind;
 import be.elevenways.hohenheim.server.source.GithubProviderKind;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.data.RecordSourceQuery;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.csrf.CsrfTokens;
-import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Map;
 
@@ -43,9 +30,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * The git provider tier end to end: the kind registry is the ONE vocabulary, the per-kind
  * invariants refuse at SAVE, and ownership is a manage grant -- so a tenant reaches shared
  * providers plus its own, registers providers of its own from /manage, and never sees
- * another tenant's forge installation.
+ * another tenant's forge installation. The tests share a class-wide fixture and are
+ * independent of each other: none reads what another wrote.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class GitProviderOwnershipTest extends HohenheimTestBase {
 
     private static Integer sharedProviderId;
@@ -70,20 +57,20 @@ class GitProviderOwnershipTest extends HohenheimTestBase {
         strangerProviderId = save(providers, "Stranger Forge", GiteaProviderKind.ID,
             "https://forge.stranger.example", false);
 
-        tenantUserId = user("provider-tenant@hohenheim.local", "Provider Tenant");
-        strangerUserId = user("provider-stranger@hohenheim.local", "Provider Stranger");
+        tenantUserId = ApiSupport.user("provider-tenant@hohenheim.local", "Provider Tenant");
+        strangerUserId = ApiSupport.user("provider-stranger@hohenheim.local", "Provider Stranger");
 
         RecordGrants.grant(GrantSubjectType.USER, tenantUserId,
             GitProviderModel.MODEL_ID, tenantProviderId, HohenheimAccess.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, strangerUserId,
             GitProviderModel.MODEL_ID, strangerProviderId, HohenheimAccess.MANAGE, true);
 
-        String[] tenantAuth = session(tenantUserId);
-        tenantSession = tenantAuth[0];
-        tenantCsrf = tenantAuth[1];
-        String[] strangerAuth = session(strangerUserId);
-        strangerSession = strangerAuth[0];
-        strangerCsrf = strangerAuth[1];
+        TestSession tenantAuth = sessionFor(tenantUserId);
+        tenantSession = tenantAuth.token();
+        tenantCsrf = tenantAuth.csrf();
+        TestSession strangerAuth = sessionFor(strangerUserId);
+        strangerSession = strangerAuth.token();
+        strangerCsrf = strangerAuth.csrf();
     }
 
     private static Integer save(Model providers, String name, Identifier kind,
@@ -98,61 +85,10 @@ class GitProviderOwnershipTest extends HohenheimTestBase {
         return row.get(GitProviderModel.ID);
     }
 
-    private static Integer user(String email, String displayName) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, displayName);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
-    }
-
-    /** @return the session secret and its csrf token */
-    private static String[] session(Integer userId) {
-        Session session = Zenit.getSessionStore().create();
-        session.set(AuthKeys.USER_ID, userId.longValue());
-        String csrf = ZenitAuth.randomToken();
-        session.set(CsrfTokens.TOKEN, csrf);
-        Zenit.getSessionStore().save(session);
-        return new String[] {session.token().secret(), csrf};
-    }
-
-    private HttpResponse<String> get(String path, String session) throws Exception {
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session)
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
-
-    private HttpResponse<String> post(String path, String body, String session, String csrf)
-            throws Exception {
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session)
-            .header("X-Csrf-Token", csrf)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
-
     /** The picker's own source, asked as one principal. */
     private HttpResponse<String> pickerAs(String session, String csrf) throws Exception {
-        String body = Zenit.DRY.stringify(RecordSourceQuery.matchAll());
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + "/zn/records/hohenheim.git_provider/query"))
-            .header("Content-Type", "application/dry")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session)
-            .header("X-Csrf-Token", csrf)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
+        return httpPostDry("/zn/records/hohenheim.git_provider/query",
+            Zenit.DRY.stringify(RecordSourceQuery.matchAll()), session, csrf);
     }
 
     /**
@@ -160,7 +96,6 @@ class GitProviderOwnershipTest extends HohenheimTestBase {
      * every handler is in the registry, and the stored token is the identifier string.
      */
     @Test
-    @Order(1)
     void theKindRegistryIsTheOnlyVocabulary() {
         assertThat(GitProviderModel.KIND.getValues().keySet())
             .as("the form's kind options enumerate the registry, never a hand-written list")
@@ -181,7 +116,6 @@ class GitProviderOwnershipTest extends HohenheimTestBase {
      * undeclared kind fails CLOSED on both the write path and the client funnel.
      */
     @Test
-    @Order(2)
     void perKindInvariantsRefuseAtSave() {
         Model providers = Models.get(GitProviderModel.class);
 
@@ -220,7 +154,6 @@ class GitProviderOwnershipTest extends HohenheimTestBase {
      * behind the picker and the /manage list cannot disagree.
      */
     @Test
-    @Order(3)
     void thePickerOffersSharedProvidersAndOwnedOnesOnly() throws Exception {
         HttpResponse<String> tenant = pickerAs(tenantSession, tenantCsrf);
         assertThat(tenant.statusCode()).isEqualTo(200);
@@ -253,9 +186,8 @@ class GitProviderOwnershipTest extends HohenheimTestBase {
      * reads as MISSING, and a create adopts the row by planting the creator's manage grant.
      */
     @Test
-    @Order(4)
     void theManageLaneListsOwnedProvidersAndAdoptsWhatItCreates() throws Exception {
-        HttpResponse<String> list = get("/manage/git-providers", tenantSession);
+        HttpResponse<String> list = httpGet("/manage/git-providers", tenantSession);
         assertThat(list.statusCode()).isEqualTo(200);
         assertThat(list.body()).contains("Tenant Forge");
         assertThat(list.body())
@@ -263,14 +195,14 @@ class GitProviderOwnershipTest extends HohenheimTestBase {
             .doesNotContain("Operator GitHub");
         assertThat(list.body()).doesNotContain("Stranger Forge");
 
-        assertThat(get("/manage/git-providers/" + strangerProviderId, tenantSession).statusCode())
+        assertThat(httpGet("/manage/git-providers/" + strangerProviderId, tenantSession).statusCode())
             .as("another tenant's provider reads as missing, not forbidden")
             .isEqualTo(404);
-        assertThat(get("/manage/git-providers/" + sharedProviderId, tenantSession).statusCode())
+        assertThat(httpGet("/manage/git-providers/" + sharedProviderId, tenantSession).statusCode())
             .as("a shared provider is not editable from the delegated surface either")
             .isEqualTo(404);
 
-        HttpResponse<String> created = post("/manage/git-providers/new",
+        HttpResponse<String> created = httpPostForm("/manage/git-providers/new",
             "name=Tenant+Second+Forge&kind=hohenheim%3Agitea"
                 + "&base_url=https%3A%2F%2Fsecond.tenant.example"
                 + "&access_token=second-token&shared=true",
@@ -288,7 +220,7 @@ class GitProviderOwnershipTest extends HohenheimTestBase {
             .as("creating adopts the row: the creator holds manage on what it registered")
             .containsExactly("user:" + tenantUserId);
 
-        assertThat(get("/manage/git-providers/" + row.get(GitProviderModel.ID), strangerSession)
+        assertThat(httpGet("/manage/git-providers/" + row.get(GitProviderModel.ID), strangerSession)
                 .statusCode())
             .as("the freshly created row is invisible to another tenant")
             .isEqualTo(404);
@@ -296,7 +228,6 @@ class GitProviderOwnershipTest extends HohenheimTestBase {
 
     /** Step 5: the per-kind sub-form -- App identifiers on GitHub, and on nothing else. */
     @Test
-    @Order(5)
     void theKindSubFormCarriesOnlyItsOwnKindsSettings() throws Exception {
         Model providers = Models.get(GitProviderModel.class);
         Row row = providers.findById(sharedProviderId);

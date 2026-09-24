@@ -7,17 +7,12 @@ import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.*;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -31,7 +26,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * /databases/:name/restore loads the dump into the live container.
  */
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class DatabaseRestoreUploadTest extends HohenheimTestBase {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
@@ -39,9 +33,8 @@ class DatabaseRestoreUploadTest extends HohenheimTestBase {
     private static final String BOUNDARY = "HohenheimRestoreTestBoundary";
 
     @Test
-    @Order(1)
     void restoreWithoutFileRedirectsWithError() throws Exception {
-        HttpResponse<String> response = postForm("/databases/whatever/restore", "unused=1");
+        HttpResponse<String> response = adminPostForm("/databases/whatever/restore", "unused=1");
         assertThat(response.statusCode()).isEqualTo(302);
         // Unknown database: the redirect falls back to the admin list with an error.
         assertThat(response.headers().firstValue("Location").orElse(""))
@@ -49,7 +42,6 @@ class DatabaseRestoreUploadTest extends HohenheimTestBase {
     }
 
     @Test
-    @Order(2)
     void uploadedDumpRestoresIntoTheLiveDatabase() throws Exception {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
@@ -98,14 +90,6 @@ class DatabaseRestoreUploadTest extends HohenheimTestBase {
         }
     }
 
-    private HttpResponse<String> postForm(String path, String body) throws Exception {
-        HttpRequest request = requestBuilder(path)
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-        return send(request);
-    }
-
     private HttpResponse<String> postMultipartFile(String path, String field, String filename,
                                                    String content) throws Exception {
         String body = "--" + BOUNDARY + "\r\n"
@@ -113,24 +97,6 @@ class DatabaseRestoreUploadTest extends HohenheimTestBase {
             + "Content-Type: application/octet-stream\r\n\r\n"
             + content + "\r\n"
             + "--" + BOUNDARY + "--\r\n";
-        HttpRequest request = requestBuilder(path)
-            .header("Content-Type", "multipart/form-data; boundary=" + BOUNDARY)
-            .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-            .build();
-        return send(request);
-    }
-
-    private HttpRequest.Builder requestBuilder(String path) {
-        return HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .header("X-Csrf-Token", csrfToken);
-    }
-
-    private static HttpResponse<String> send(HttpRequest request) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
+        return httpPost(path, body, sessionToken, csrfToken, "multipart/form-data; boundary=" + BOUNDARY);
     }
 }

@@ -6,35 +6,21 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.ManageInstanceResource;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
-import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.common.flash.FlashEncoding;
 import be.elevenways.zenit.common.flash.FlashLevel;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.csrf.CsrfTokens;
-import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Map;
 
@@ -53,7 +39,6 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * tenant-originated call underneath it (step 6 proves that separately, so neither claim
  * rests on the other).
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class InstanceMigrateSurfaceTest extends HohenheimTestBase {
 
     private static Integer instanceId;
@@ -97,23 +82,13 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
         new ServerService().add("migrate-unpinned", "nobody@migrate-unpinned.invalid");
         unpinnedHostId = servers.findByName("migrate-unpinned").get(ServerModel.ID);
 
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, "migrate-tenant@hohenheim.local");
-        user.set(UserModel.DISPLAY_NAME, "Migrate Tenant");
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        tenantId = user.get(UserModel.ID);
+        tenantId = ApiSupport.user("migrate-tenant@hohenheim.local", "Migrate Tenant");
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.MANAGE, true);
 
-        Session session = Zenit.getSessionStore().create();
-        session.set(AuthKeys.USER_ID, tenantId.longValue());
-        tenantCsrf = ZenitAuth.randomToken();
-        session.set(CsrfTokens.TOKEN, tenantCsrf);
-        Zenit.getSessionStore().save(session);
-        tenantSession = session.token().secret();
+        TestSession session = sessionFor(tenantId);
+        tenantSession = session.token();
+        tenantCsrf = session.csrf();
     }
 
     /**
@@ -121,7 +96,6 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
      * now, and is reached from the instance's own row action.
      */
     @Test
-    @Order(1)
     void theMigratePageExistsAndIsReachableFromTheInstanceRowAction() throws Exception {
         // 1. The page renders. Pre-fix this URL answered 404 -- migrateTo had no caller.
         HttpResponse<String> page = adminGet(migrateUrl());
@@ -149,7 +123,6 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
      * only fail.
      */
     @Test
-    @Order(2)
     void anIneligibleHostIsNamedWithItsRefusalAndOffersNoButton() throws Exception {
         HttpResponse<String> page = adminGet(migrateUrl());
         String body = page.body();
@@ -212,7 +185,6 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
      * vanished control -- and the vocabulary is the guard's own, never a second list.
      */
     @Test
-    @Order(3)
     void aProtectedStatusBlocksTheMoveWithAStatedReason() throws Exception {
         var instances = Models.get(InstanceModel.class);
         Row row = instances.findById(instanceId);
@@ -253,14 +225,13 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
      * (which zenitcms:record-tabs now performs for every app-owned subpage).
      */
     @Test
-    @Order(4)
     void arefusedSubmitSurfacesTheRefusalInsteadOfASuccessToast() throws Exception {
         int localHost = ServerModel.localServerId();
 
         // 1. The host the workload ALREADY runs on: refused by its own name, as an ERROR.
         //    A success toast here would carry migrated_toast at level SUCCESS, so the two
         //    outcomes can no longer look alike to this test.
-        HttpResponse<String> sameHost = adminPost(migrateUrl(),
+        HttpResponse<String> sameHost = adminPostForm(migrateUrl(),
             "target_server_id=" + localHost);
         assertThat(sameHost.statusCode())
             .withFailMessage("step 1: the refused submit must answer with the lane's"
@@ -288,7 +259,7 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
                     && !candidate.eligible()))
             .as("step 2: the stranger host is a genuine OTHER destination, and ineligible")
             .isTrue();
-        HttpResponse<String> other = adminPost(migrateUrl(),
+        HttpResponse<String> other = adminPostForm(migrateUrl(),
             "target_server_id=" + strangerHostId);
         assertThat(other.statusCode())
             .withFailMessage("step 2: the refused submit must answer with the lane's"
@@ -319,12 +290,6 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
     }
 
     /**
-     * Pop the admin session's pending CMS flash, exactly as the next untabbed page render
-     * would: these requests carry no hawkeye tab id, so they land in the untabbed bucket.
-     */
-
-
-    /**
      * THE ADMIN-ONLY GATE. A delegated tenant holding {@code manage} on this very
      * instance sees the record on /manage and can act on it -- and gets no migrate
      * affordance and no migrate ROUTE at all.
@@ -334,11 +299,10 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
      * subpages) and assertions 3 and 4 fail immediately.
      */
     @Test
-    @Order(5)
     void aDelegatedTenantHasNoMigrateAffordanceAndNoMigrateRoute() throws Exception {
         // 1. The tenant genuinely reaches this instance -- without this the rest would
         //    be vacuous (an absent surface trivially offers no migrate control).
-        HttpResponse<String> manageList = get("/manage/instances", tenantSession);
+        HttpResponse<String> manageList = httpGet("/manage/instances", tenantSession);
         assertThat(manageList.statusCode()).as("step 1: the tenant reaches /manage")
             .isEqualTo(200);
         assertThat(manageList.body())
@@ -354,7 +318,7 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
             .noneMatch(id -> id.contains("migrate"));
 
         // 3. Nothing on the tenant's own record page points at the migrate page.
-        HttpResponse<String> record = get("/manage/instances/" + instanceId, tenantSession);
+        HttpResponse<String> record = httpGet("/manage/instances/" + instanceId, tenantSession);
         assertThat(record.statusCode()).as("step 3: the tenant's record page renders")
             .isEqualTo(200);
         assertThat(record.body())
@@ -363,11 +327,11 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
 
         // 4. And the route itself is absent for them, on BOTH methods -- hide AND
         //    enforce, so a hand-typed URL is not a wider door than the rendered page.
-        assertThat(get("/manage/instances/" + instanceId + "/page/migrate", tenantSession)
+        assertThat(httpGet("/manage/instances/" + instanceId + "/page/migrate", tenantSession)
                 .statusCode())
             .withFailMessage("step 4: the tenant can GET the migrate page")
             .isEqualTo(404);
-        assertThat(post("/manage/instances/" + instanceId + "/page/migrate",
+        assertThat(httpPostForm("/manage/instances/" + instanceId + "/page/migrate",
                 "target_server_id=" + strangerHostId, tenantSession, tenantCsrf).statusCode())
             .withFailMessage("step 4: the tenant can POST a migration")
             .isEqualTo(404);
@@ -390,7 +354,6 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
      * read as the only thing standing between a tenant and a host move.
      */
     @Test
-    @Order(6)
     void theAuthorityRefusesATenantOriginatedMigrationRegardlessOfTheSurface() {
         UserPrincipal tenant = new UserPrincipal(tenantId, "Migrate Tenant");
 
@@ -420,33 +383,5 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
 
     private static String migrateUrl() {
         return "/admin/instances/" + instanceId + "/page/migrate";
-    }
-
-    private HttpResponse<String> adminPost(String path, String body) throws Exception {
-        return post(path, body, sessionToken, csrfToken);
-    }
-
-    private HttpResponse<String> get(String path, String session) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session)
-            .GET().build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
-
-    private HttpResponse<String> post(String path, String body, String session, String csrf)
-            throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session)
-            .header("X-Csrf-Token", csrf)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 }

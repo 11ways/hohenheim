@@ -94,7 +94,7 @@ public final class SpamserviceOverviewPage extends PanelPage {
             Map.entry("error", snapshot.lastError() != null ? snapshot.lastError() : "")));
         vars.put("sections", sections(conduit));
         vars.put("connected", false);
-        vars.put("ready", "ready".equals(snapshot.state()));
+        vars.put("ready", snapshot.ready());
         vars.put("service", Map.of());
         vars.put("checks", List.of());
         vars.put("summary", Map.of());

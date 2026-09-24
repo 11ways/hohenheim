@@ -16,10 +16,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
 import java.net.http.HttpResponse;
 import java.util.LinkedHashMap;
@@ -41,7 +38,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * a removed hostname releases its claim to its owner, and the doors are exactly the
  * panels' (site create/delete admin-only, domain rows for whoever manages the site).
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SiteApiTest extends HohenheimTestBase {
 
     private static final String PREFIX = "site-api-";
@@ -53,11 +49,6 @@ class SiteApiTest extends HohenheimTestBase {
     private static String keyAdmin;
     private static String keyTenant;
     private static String keyNarrow;
-
-    /** Filled by the create journey, consumed by the delete journey. */
-    private static Integer proxySiteId;
-    private static Integer staticSiteId;
-    private static Integer redirectSiteId;
 
     @BeforeAll
     static void seed() {
@@ -138,10 +129,18 @@ class SiteApiTest extends HohenheimTestBase {
 
     // -- the journeys ----------------------------------------------------------
 
-    /** Every migration-relevant site kind lands through the form pipeline with its route claimed. */
+    /**
+     * The site lane end to end: every migration-relevant site kind lands through the form
+     * pipeline with its route claimed, the doors are the panels' (site create/delete
+     * admin-only, domains for managers), and removing a hostname releases its claim to its
+     * owner while deleting a site trashes it.
+     *
+     * AIDEV-NOTE: this was three @Order-coupled methods passing the created site ids through
+     * statics; run alone, the doors and removal halves NPE'd. It is one CRUD story, so it is
+     * one journey now, in the order the three used to run.
+     */
     @Test
-    @Order(1)
-    void everySiteKindLandsWithItsRouteClaimed() throws Exception {
+    void theSiteLaneCreatesGuardsReleasesAndTrashes() throws Exception {
         // 1. An address upstream whose domain rewrites the Host header (the Apache
         //    fallthrough shape): the site row, then two hostnames on it.
         HttpResponse<String> proxy = keyPost(keyAdmin, "/api/v1/sites", form(
@@ -150,7 +149,7 @@ class SiteApiTest extends HohenheimTestBase {
             "settings.forward_port", "8080", "settings.rewrite_location", "false"));
         assertThat(proxy.statusCode()).as("step 1: the proxy site is created: " + proxy.body())
             .isEqualTo(200);
-        proxySiteId = idOf(proxy.body());
+        int proxySiteId = idOf(proxy.body());
         Row proxySite = Models.get(SiteModel.class).findById(proxySiteId);
         assertThat((Object) proxySite.get(SiteModel.SLUG))
             .as("step 1: the slug is derived exactly as SiteResource.persistRow derives it")
@@ -204,14 +203,14 @@ class SiteApiTest extends HohenheimTestBase {
             "settings.fallback_file", "index.html"));
         assertThat(statik.statusCode()).as("step 3: the static site is created: " + statik.body())
             .isEqualTo(200);
-        staticSiteId = idOf(statik.body());
+        int staticSiteId = idOf(statik.body());
         HttpResponse<String> redirect = keyPost(keyAdmin, "/api/v1/sites", form(
             "name", PREFIX + "redirect", "upstream_kind", "hohenheim:redirect", "enabled", "true",
             "settings.target_url", "https://www.earl." + ZONE,
             "settings.http_status", "301", "settings.preserve_path", "true"));
         assertThat(redirect.statusCode())
             .as("step 3: the redirect site is created: " + redirect.body()).isEqualTo(200);
-        redirectSiteId = idOf(redirect.body());
+        int redirectSiteId = idOf(redirect.body());
         assertThat(String.valueOf(Models.get(SiteModel.class).findById(redirectSiteId)
                 .get(SiteModel.SETTINGS)))
             .as("step 3: the redirect settings were coerced (status enum, boolean)")
@@ -248,11 +247,77 @@ class SiteApiTest extends HohenheimTestBase {
         assertThat(Models.get(SiteModel.class).find()
                 .where(SiteModel.NAME.eq(PREFIX + "stranger")).first())
             .as("step 4: neither refused create wrote a row").isNull();
+
+        // -- the doors --------------------------------------------------------
+        // 5. A tenant key and a scope-narrowed admin key cannot create a site at all.
+        assertThat(keyPost(keyTenant, "/api/v1/sites", form("name", PREFIX + "nope",
+            "upstream_kind", "hohenheim:static", "settings.root_path", "/tmp/x")).statusCode())
+            .as("step 5: a tenant cannot create a site (the /manage panel has no create)")
+            .isEqualTo(403);
+        assertThat(keyPost(keyNarrow, "/api/v1/sites", form("name", PREFIX + "nope",
+            "upstream_kind", "hohenheim:static", "settings.root_path", "/tmp/x")).statusCode())
+            .as("step 5: a key narrowed away from the admin permission is refused")
+            .isEqualTo(403);
+        assertThat(keyPost(keyTenant, "/api/v1/sites/" + proxySiteId + "/delete", "").statusCode())
+            .as("step 5: nor delete one").isEqualTo(403);
+        assertThat(Models.get(SiteModel.class).find()
+                .where(SiteModel.NAME.eq(PREFIX + "nope")).first())
+            .as("step 5: nothing was created").isNull();
+
+        // 6. A site the tenant does not manage is a uniform 404 on the domain lane, on
+        //    the read and on the write alike.
+        assertThat(keyGet(keyTenant, "/api/v1/sites/" + proxySiteId + "/domains").statusCode())
+            .as("step 6: the foreign site's domains are not enumerable").isEqualTo(404);
+        assertThat(keyPost(keyTenant, "/api/v1/sites/" + proxySiteId + "/domains",
+            form("hostname", "hijack." + ZONE)).statusCode())
+            .as("step 6: nor writable").isEqualTo(404);
+        int foreignDomainId = domainsOf(proxySiteId).get(0).get(SiteDomainModel.ID);
+        assertThat(keyPost(keyTenant, "/api/v1/sites/" + tenantSiteId + "/domains/"
+            + foreignDomainId + "/delete", "").statusCode())
+            .as("step 6: another site's domain row answers like a missing one").isEqualTo(404);
+        assertThat(domainsOf(proxySiteId)).as("step 6: the foreign rows are untouched").hasSize(2);
+
+        // -- removal and deletion ---------------------------------------------
+        // 7. The list names the rows; remove the www one.
+        HttpResponse<String> list = keyGet(keyAdmin, "/api/v1/sites/" + proxySiteId + "/domains");
+        assertThat(list.statusCode()).isEqualTo(200);
+        Row wwwRow = domainsOf(proxySiteId).stream()
+            .filter(row -> ("www.earl." + ZONE).equals(row.get(SiteDomainModel.HOSTNAME)))
+            .findFirst().orElseThrow();
+        int wwwId = wwwRow.get(SiteDomainModel.ID);
+        HttpResponse<String> removed = keyPost(keyAdmin,
+            "/api/v1/sites/" + proxySiteId + "/domains/" + wwwId + "/delete", "");
+        assertThat(removed.statusCode()).as("step 7: the row is removed: " + removed.body())
+            .isEqualTo(200);
+        assertThat(Models.get(SiteDomainModel.class).findById(wwwId))
+            .as("step 7: the row is gone").isNull();
+
+        // 8. The released claim is the owner's to take back: the SAME hostname on the
+        //    same site lands again (the quarantine only bars a different owner).
+        HttpResponse<String> again = keyPost(keyAdmin, "/api/v1/sites/" + proxySiteId + "/domains",
+            form("hostname", "www.earl." + ZONE));
+        assertThat(again.statusCode()).as("step 8: the owner re-claims its released name: " + again.body())
+            .isEqualTo(200);
+        assertThat(has(again.body(), "live", "true")).as("step 8: and it routes again").isTrue();
+
+        // 9. Deleting a site is the admin form's soft delete: trashed, invisible, its
+        //    rows kept for a restore.
+        HttpResponse<String> deleted = keyPost(keyAdmin, "/api/v1/sites/" + redirectSiteId + "/delete", "");
+        assertThat(deleted.statusCode()).as("step 9: the site is deleted: " + deleted.body())
+            .isEqualTo(200);
+        assertThat((Object) Models.get(SiteModel.class).findById(redirectSiteId).get(SiteModel.DELETED_AT))
+            .as("step 9: soft-deleted, exactly like the form").isNotNull();
+        assertThat(keyGet(keyAdmin, "/api/v1/sites/" + redirectSiteId).statusCode())
+            .as("step 9: a trashed site reads as absent").isEqualTo(404);
+        assertThat(keyPost(keyAdmin, "/api/v1/sites/" + redirectSiteId + "/delete", "").statusCode())
+            .as("step 9: and cannot be deleted twice").isEqualTo(404);
+        assertThat(domainsOf(redirectSiteId)).as("step 9: its rows stay for a restore").hasSize(1);
+        assertThat(keyGet(keyAdmin, "/api/v1/sites/" + staticSiteId).statusCode())
+            .as("step 9: the static site is untouched").isEqualTo(200);
     }
 
     /** The tenancy refusals are the panel's: neutral for a tenant, detailed for an admin. */
     @Test
-    @Order(2)
     void aForeignWildcardRefusesATenantWithTheNeutralSentence() throws Exception {
         // 1. A tenant adding a free name under the operator's catch-all gets the one
         //    neutral sentence the /manage form gives -- no site, no pattern named.
@@ -287,80 +352,5 @@ class SiteApiTest extends HohenheimTestBase {
             form("hostname", "own.tenant-" + ZONE));
         assertThat(landed.statusCode()).as("step 3: the tenant's own name lands: " + landed.body())
             .isEqualTo(200);
-    }
-
-    /** The doors are the panels': site create/delete admin-only, domains for managers. */
-    @Test
-    @Order(3)
-    void theDoorsAreExactlyThePanelsDoors() throws Exception {
-        // 1. A tenant key and a scope-narrowed admin key cannot create a site at all.
-        assertThat(keyPost(keyTenant, "/api/v1/sites", form("name", PREFIX + "nope",
-            "upstream_kind", "hohenheim:static", "settings.root_path", "/tmp/x")).statusCode())
-            .as("step 1: a tenant cannot create a site (the /manage panel has no create)")
-            .isEqualTo(403);
-        assertThat(keyPost(keyNarrow, "/api/v1/sites", form("name", PREFIX + "nope",
-            "upstream_kind", "hohenheim:static", "settings.root_path", "/tmp/x")).statusCode())
-            .as("step 1: a key narrowed away from the admin permission is refused")
-            .isEqualTo(403);
-        assertThat(keyPost(keyTenant, "/api/v1/sites/" + proxySiteId + "/delete", "").statusCode())
-            .as("step 1: nor delete one").isEqualTo(403);
-        assertThat(Models.get(SiteModel.class).find()
-                .where(SiteModel.NAME.eq(PREFIX + "nope")).first())
-            .as("step 1: nothing was created").isNull();
-
-        // 2. A site the tenant does not manage is a uniform 404 on the domain lane, on
-        //    the read and on the write alike.
-        assertThat(keyGet(keyTenant, "/api/v1/sites/" + proxySiteId + "/domains").statusCode())
-            .as("step 2: the foreign site's domains are not enumerable").isEqualTo(404);
-        assertThat(keyPost(keyTenant, "/api/v1/sites/" + proxySiteId + "/domains",
-            form("hostname", "hijack." + ZONE)).statusCode())
-            .as("step 2: nor writable").isEqualTo(404);
-        int foreignDomainId = domainsOf(proxySiteId).get(0).get(SiteDomainModel.ID);
-        assertThat(keyPost(keyTenant, "/api/v1/sites/" + tenantSiteId + "/domains/"
-            + foreignDomainId + "/delete", "").statusCode())
-            .as("step 2: another site's domain row answers like a missing one").isEqualTo(404);
-        assertThat(domainsOf(proxySiteId)).as("step 2: the foreign rows are untouched").hasSize(2);
-    }
-
-    /** Removing a hostname releases its claim to its owner; deleting a site trashes it. */
-    @Test
-    @Order(4)
-    void aRemovedHostnameReleasesItsClaimAndADeletedSiteIsTrashed() throws Exception {
-        // 1. The list names the rows; remove the www one.
-        HttpResponse<String> list = keyGet(keyAdmin, "/api/v1/sites/" + proxySiteId + "/domains");
-        assertThat(list.statusCode()).isEqualTo(200);
-        Row www = domainsOf(proxySiteId).stream()
-            .filter(row -> ("www.earl." + ZONE).equals(row.get(SiteDomainModel.HOSTNAME)))
-            .findFirst().orElseThrow();
-        int wwwId = www.get(SiteDomainModel.ID);
-        HttpResponse<String> removed = keyPost(keyAdmin,
-            "/api/v1/sites/" + proxySiteId + "/domains/" + wwwId + "/delete", "");
-        assertThat(removed.statusCode()).as("step 1: the row is removed: " + removed.body())
-            .isEqualTo(200);
-        assertThat(Models.get(SiteDomainModel.class).findById(wwwId))
-            .as("step 1: the row is gone").isNull();
-
-        // 2. The released claim is the owner's to take back: the SAME hostname on the
-        //    same site lands again (the quarantine only bars a different owner).
-        HttpResponse<String> again = keyPost(keyAdmin, "/api/v1/sites/" + proxySiteId + "/domains",
-            form("hostname", "www.earl." + ZONE));
-        assertThat(again.statusCode()).as("step 2: the owner re-claims its released name: " + again.body())
-            .isEqualTo(200);
-        assertThat(has(again.body(), "live", "true")).as("step 2: and it routes again").isTrue();
-
-        // 3. Deleting a site is the admin form's soft delete: trashed, invisible, its
-        //    rows kept for a restore.
-        HttpResponse<String> deleted = keyPost(keyAdmin, "/api/v1/sites/" + redirectSiteId + "/delete", "");
-        assertThat(deleted.statusCode()).as("step 3: the site is deleted: " + deleted.body())
-            .isEqualTo(200);
-        assertThat((Object) Models.get(SiteModel.class).findById(redirectSiteId).get(SiteModel.DELETED_AT))
-            .as("step 3: soft-deleted, exactly like the form").isNotNull();
-        assertThat(keyGet(keyAdmin, "/api/v1/sites/" + redirectSiteId).statusCode())
-            .as("step 3: a trashed site reads as absent").isEqualTo(404);
-        assertThat(keyPost(keyAdmin, "/api/v1/sites/" + redirectSiteId + "/delete", "").statusCode())
-            .as("step 3: and cannot be deleted twice").isEqualTo(404);
-        assertThat(domainsOf(redirectSiteId)).as("step 3: its rows stay for a restore").hasSize(1);
-        assertThat(keyGet(keyAdmin, "/api/v1/sites/" + staticSiteId).statusCode())
-            .as("step 3: the static site is untouched").isEqualTo(200);
     }
 }

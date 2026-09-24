@@ -131,7 +131,7 @@ public class DatabaseService extends DatasourceScoped {
     public ManagedDatabase.Connection create(String name, ManagedDatabase.Engine engine, String image,
                                              String user, String password, String database,
                                              boolean ephemeral) throws IOException {
-        return create(name, engine, image, user, password, database, ephemeral, ServerService.LOCAL);
+        return create(name, engine, image, user, password, database, ephemeral, ServerService.LOCAL_HOST_NAME);
     }
 
     /**
@@ -281,7 +281,7 @@ public class DatabaseService extends DatasourceScoped {
     public Row createAsync(String name, ManagedDatabase.Engine engine, String image,
                            String user, String password, String database, boolean ephemeral) {
         return createAsync(name, engine, image, user, password, database, ephemeral,
-            ServerService.LOCAL);
+            ServerService.LOCAL_HOST_NAME);
     }
 
     /**
@@ -803,24 +803,6 @@ public class DatabaseService extends DatasourceScoped {
             // Unlinked while (on success) still open: see BackupStream.
             Files.deleteIfExists(dump);
             Files.deleteIfExists(directory);
-        }
-    }
-
-    /** A dump materialized in memory: filename, MIME type and the bytes. */
-    public record BackupDownload(String filename, String contentType, byte[] content) {}
-
-    /**
-     * {@link #backupStream} read fully into memory.
-     *
-     * @deprecated buffers the whole dump in the heap; the download handler must serve
-     *             {@link #backupStream} through a streaming result. Kept only until
-     *             DatabaseHandlers moves over, then delete it.
-     */
-    @Deprecated
-    public BackupDownload backupDownload(String name) throws IOException {
-        try (BackupStream stream = backupStream(name)) {
-            return new BackupDownload(stream.filename(), stream.contentType(),
-                stream.content().readAllBytes());
         }
     }
 

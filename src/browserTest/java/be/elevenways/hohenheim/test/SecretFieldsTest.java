@@ -7,16 +7,11 @@ import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.PasswordHasher;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.*;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Map;
@@ -28,28 +23,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * admin forms: secrets never reach the client and a blank submit keeps the
  * stored value, including through the dynamic provider-config sub-form.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SecretFieldsTest extends HohenheimTestBase {
 
     private static final String WEBHOOK_URL = "https://hooks.example.com/services/T000/B000/xoxb-hook-token";
     private static final String ACCESS_KEY = "proteus-access-key-9f8e7d6c";
     private static final String SITE_SECRET = "site-webhook-secret-a1b2c3d4";
-
-    private HttpResponse<String> postForm(String path, String body) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
-
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .header("X-Csrf-Token", csrfToken)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
 
     /** The argon2 hash stored inside one rule's per-type data map. */
     private static String storedPassword(int ruleId) {
@@ -59,10 +37,9 @@ class SecretFieldsTest extends HohenheimTestBase {
     }
 
     @Test
-    @Order(1)
     void storedSecretsStayServerSideAndBlankSavesKeepThem() throws Exception {
         // Notification channel: a secret URL field on a plain resource form.
-        var response = postForm("/admin/notifications/new",
+        var response = adminPostForm("/admin/notifications/new",
             "name=Ops+alerts&format=slack&url=" + java.net.URLEncoder.encode(WEBHOOK_URL, "UTF-8"));
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
@@ -77,7 +54,7 @@ class SecretFieldsTest extends HohenheimTestBase {
         assertThat(page.content()).doesNotContain("xoxb-hook-token");
 
         // Blank url keeps the stored secret; other edits apply.
-        response = postForm("/admin/notifications/" + channelId, "name=Ops+alerts+renamed&format=slack&url=");
+        response = adminPostForm("/admin/notifications/" + channelId, "name=Ops+alerts+renamed&format=slack&url=");
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         Row storedChannel = Models.get(NotificationChannelModel.class).findByName("Ops alerts renamed");
@@ -85,7 +62,7 @@ class SecretFieldsTest extends HohenheimTestBase {
         assertThat((String) storedChannel.get(NotificationChannelModel.URL)).isEqualTo(WEBHOOK_URL);
 
         // Proteus access key: a secret inside the dynamic provider-config sub-form.
-        response = postForm("/admin/auth-providers/new",
+        response = adminPostForm("/admin/auth-providers/new",
             "name=Realm+gate&provider_type=hohenheim%3Aproteus"
             + "&config.endpoint=https%3A%2F%2Fproteus.example.com"
             + "&config.realm_client=hohenheim-realm"
@@ -104,7 +81,7 @@ class SecretFieldsTest extends HohenheimTestBase {
         assertThat(page.content()).doesNotContain(ACCESS_KEY);
 
         // Blank access key keeps the stored one; the endpoint edit applies.
-        response = postForm("/admin/auth-providers/" + providerId,
+        response = adminPostForm("/admin/auth-providers/" + providerId,
             "name=Realm+gate&provider_type=hohenheim%3Aproteus"
             + "&config.endpoint=https%3A%2F%2Fproteus2.example.com"
             + "&config.realm_client=hohenheim-realm"
@@ -121,7 +98,7 @@ class SecretFieldsTest extends HohenheimTestBase {
         // Access rule: a hashed secret INSIDE a dynamic (schemaFrom) sub-form, blank save
         // keeps the hash untouched.
         String password = "access-list-password-4c2a9e";
-        response = postForm("/admin/access-lists/new", "name=Private+network&satisfy=any");
+        response = adminPostForm("/admin/access-lists/new", "name=Private+network&satisfy=any");
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         row = Models.get(AccessListModel.class).find()
@@ -129,7 +106,7 @@ class SecretFieldsTest extends HohenheimTestBase {
         assertThat(row).isNotNull();
         Integer accessListId = row.get(AccessListModel.ID);
 
-        response = postForm("/admin/access-lists/" + accessListId + "/rules",
+        response = adminPostForm("/admin/access-lists/" + accessListId + "/rules",
             "type=basic_auth");
         assertThat(response.statusCode()).isIn(200, 302, 303);
         Row rule = Models.get(AccessRuleModel.class).find()
@@ -137,7 +114,7 @@ class SecretFieldsTest extends HohenheimTestBase {
         assertThat(rule).isNotNull();
         Integer ruleId = rule.get(AccessRuleModel.ID);
 
-        response = postForm("/admin/access-rules/" + ruleId,
+        response = adminPostForm("/admin/access-rules/" + ruleId,
             "type=basic_auth&data.username=operator&data.password=" + password + "&enabled=true");
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
@@ -149,7 +126,7 @@ class SecretFieldsTest extends HohenheimTestBase {
         waitForHydration();
         assertThat(page.content()).doesNotContain(password);
 
-        response = postForm("/admin/access-rules/" + ruleId,
+        response = adminPostForm("/admin/access-rules/" + ruleId,
             "type=basic_auth&data.username=operator&data.password=&enabled=true");
         assertThat(response.statusCode()).isIn(200, 302, 303);
         assertThat(storedPassword(ruleId)).isEqualTo(storedHash);
@@ -173,9 +150,8 @@ class SecretFieldsTest extends HohenheimTestBase {
     }
 
     @Test
-    @Order(2)
     void basicAuthCredentialsAreHashedAndStayEditable() throws Exception {
-        var response = postForm("/admin/auth-providers/new",
+        var response = adminPostForm("/admin/auth-providers/new",
             "name=Team+gate&provider_type=hohenheim%3Abasic"
             + "&config.credentials.0.key=alice&config.credentials.0.value=secret123");
         assertThat(response.statusCode()).isIn(200, 302, 303);
@@ -199,7 +175,7 @@ class SecretFieldsTest extends HohenheimTestBase {
         assertThat(content).as("step 2: the plaintext never reaches the page").doesNotContain("secret123");
 
         // 3. Typing a new password replaces it, hashed again.
-        response = postForm("/admin/auth-providers/" + id,
+        response = adminPostForm("/admin/auth-providers/" + id,
             "name=Team+gate&provider_type=hohenheim%3Abasic"
             + "&config.credentials.0.key=alice&config.credentials.0.value=new-secret");
         assertThat(response.statusCode()).isIn(200, 302, 303);

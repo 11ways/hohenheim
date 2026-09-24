@@ -27,14 +27,13 @@ import be.elevenways.hohenheim.server.runtime.IncusWorkloadType;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.GrantService;
@@ -100,14 +99,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
         HostFixtures.acknowledgePosture(host);
         hostId = host.get(ServerModel.ID);
 
-        Row tenant = AuthModels.users().createEmptyRow();
-        tenant.set(UserModel.EMAIL, "media-surf-tenant@surface.test");
-        tenant.set(UserModel.DISPLAY_NAME, "Media Surface Tenant");
-        tenant.set(UserModel.ENABLED, true);
-        tenant.set(UserModel.CREATED_AT, Now.instant());
-        tenant.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(tenant);
-        tenantId = tenant.get(UserModel.ID);
+        tenantId = ApiSupport.user("media-surf-tenant@surface.test", "Media Surface Tenant");
     }
 
     @AfterAll
@@ -591,7 +583,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
      */
     @Test
     void installMediaIsItsOwnPermissionSeparateFromBeingAnAdmin() throws Exception {
-        Integer operatorId = mediaUser("media-surf-operator@hohenheim.local", "Media Operator");
+        Integer operatorId = ApiSupport.user("media-surf-operator@hohenheim.local", "Media Operator");
         GrantService.createDirectGrant(GrantSubjectType.USER, operatorId, "*", true);
         Row denial = GrantService.createDirectGrant(GrantSubjectType.USER, operatorId,
             HohenheimSources.MEDIA_MANAGE.value(), false);
@@ -692,18 +684,6 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
     }
 
     // -- plumbing -------------------------------------------------------------
-
-    /** A user row for the permission journey. */
-    private static Integer mediaUser(String email, String displayName) {
-        Row row = AuthModels.users().createEmptyRow();
-        row.set(UserModel.EMAIL, email);
-        row.set(UserModel.DISPLAY_NAME, displayName);
-        row.set(UserModel.ENABLED, true);
-        row.set(UserModel.CREATED_AT, Now.instant());
-        row.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(row);
-        return row.get(UserModel.ID);
-    }
 
     /** Run the body inside a tenant request scope and return what it threw. */
     private Throwable catchThrowableInTenantScope(@NonNull Runnable body) {

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.options;
 
+import be.elevenways.hohenheim.model.HostMode;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -43,7 +44,7 @@ public final class ServerOptions {
                 // Keyed by the server's ID (the canonical host key), never its name:
                 // stored settings keep pointing at the same host through a rename.
                 entries.put(Identifier.of("hohenheim", String.valueOf(row.get(ServerModel.ID))),
-                    new ServerEntry(name, row.get(ServerModel.MODE)));
+                    new ServerEntry(name, HostMode.parse(row.get(ServerModel.MODE))));
             }
         }
         // AIDEV-NOTE: overwrite, then prune; never clear first. A clear-then-refill left a
@@ -69,13 +70,13 @@ public final class ServerOptions {
         }
     }
 
-    private record ServerEntry(String name, String mode) implements TypeDefinition {
+    private record ServerEntry(String name, @Nullable HostMode mode) implements TypeDefinition {
         @Override public String getDisplayName() {
-            return ServerModel.MODE_LOCAL.equals(mode) ? name + " (local)" : name;
+            return mode == HostMode.LOCAL ? name + " (local)" : name;
         }
 
         @Override public Microcopy getLabel() {
-            return ServerModel.MODE_LOCAL.equals(mode)
+            return mode == HostMode.LOCAL
                 ? Microcopy.of("server_local").withFilter("scope", "server_option")
                     .withArg("name", name)
                 : Microcopy.literal(name);

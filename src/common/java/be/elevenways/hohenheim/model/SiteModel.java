@@ -14,10 +14,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
-import be.elevenways.zenit.common.orm.query.QueryBuilder;
-import be.elevenways.zenit.common.orm.query.QueryContext;
 import be.elevenways.zenit.common.orm.query.SortOrder;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -61,6 +58,23 @@ public class SiteModel extends Model {
             .schemaFrom("upstream_kind")
             .label(HohenheimFormCopy.label("settings"))
             .build());
+
+    /**
+     * The operator's declaration that this site may reach the upstream configured in
+     * {@link #SETTINGS} even when the site is tenant-owned and that upstream is loopback, LAN,
+     * a unix socket or a host directory.
+     *
+     * AIDEV-NOTE: it vouches for the OPERATOR's value only. A tenant can neither set it nor
+     * write the settings it vouches for (TenantWrites freezes every site column outside its
+     * allow-list), and a tenant-authored upstream move is judged at the tenant tier whatever
+     * this says. Read at dial time through TenantUpstreams.publicOnly; M012 set it on every
+     * tenant-owned site stored before the tenant upstream gates existed.
+     */
+    public static final BooleanField TRUSTED_UPSTREAM = SCHEMA.addField(BooleanField.builder("trusted_upstream")
+        .defaultValue(false)
+        .label(HohenheimFormCopy.label("trusted_upstream"))
+        .help(HohenheimFormCopy.help("trusted_upstream"))
+        .build());
 
     /**
      * The instance this site serves, when {@link #UPSTREAM_KIND} says so.
@@ -169,24 +183,14 @@ public class SiteModel extends Model {
      * Remove the domain rows of every site a pending delete will remove.
      *
      * A remove hook fires ONCE for the whole delete with a criteria-only context whose row
-     * is null, so the doomed ids are read back from the criteria here (the framework's
-     * documented seam, mirroring PortLedger.captureDoomedOwners). Deleting the children
-     * BEFORE the parents also keeps the claim release ordered: SiteDomainModel's own remove
-     * hook still sees rows whose site exists.
+     * is null, so the doomed ids come from the context's own read of the pending delete
+     * ({@link RemoveFromDatasource#doomedRows()}, trashed sites included). Deleting the
+     * children BEFORE the parents also keeps the claim release ordered: SiteDomainModel's
+     * own remove hook still sees rows whose site exists.
      */
     private static void cascadeDomainRows(RemoveFromDatasource context) {
-        Model sites = context.getModel();
-        if (sites == null) {
-            return;
-        }
-        QueryContext queryContext = context.getQueryContext();
-        Criteria criteria = queryContext != null ? queryContext.getCriteria() : null;
-        QueryBuilder<Row> builder = sites.find();
-        if (criteria != null) {
-            builder.where(criteria);
-        }
         List<Integer> doomed = new ArrayList<>();
-        for (Row site : builder.all()) {
+        for (Row site : context.doomedRows()) {
             if (site.get(ID) instanceof Integer siteId) {
                 doomed.add(siteId);
             }

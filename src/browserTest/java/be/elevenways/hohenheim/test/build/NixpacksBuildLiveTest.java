@@ -1,7 +1,8 @@
 package be.elevenways.hohenheim.test.build;
 
+import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -19,14 +20,13 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
+import java.time.Duration;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -65,35 +65,24 @@ class NixpacksBuildLiveTest {
     /** Owner of the undetectable-repository refusal. */
     private static final int REFUSED_OWNER_ID = 977_203;
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static PrivateNetns netns;
 
     @BeforeAll
     static void setUp() throws Exception {
-        File db = File.createTempFile("hohenheim-nixpacks-live-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
         // ONE database per test class: the controller identity (and therefore every
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
-        if (PrivateNetns.available()) {
-            netns = new PrivateNetns();
-            WorkloadNetworkPolicy.overrideForTest(netns.enforcingPolicy());
-        }
+        netns = PrivateNetns.installEnforcing();
     }
 
     @AfterAll
     static void tearDown() {
-        WorkloadNetworkPolicy.overrideForTest(null);
-        if (netns != null) {
-            netns.close();
-            netns = null;
-        }
+        PrivateNetns.uninstall(netns);
+        netns = null;
     }
 
     /**
@@ -435,24 +424,21 @@ class NixpacksBuildLiveTest {
             + " let d = ''; res.on('data', c => d += c);"
             + " res.on('end', () => { console.log(d); process.exit(0); });"
             + " }).on('error', () => process.exit(1))";
-        String last = "";
-        for (int attempt = 0; attempt < 30; attempt++) {
-            try {
-                last = docker.exec(handle, List.of("node", "-e", script)).output();
-                if (last.contains("hello-")) {
-                    return last;
-                }
-            } catch (IOException retried) {
-                last = "(exec failed: " + retried.getMessage() + ")";
-            }
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                break;
-            }
+        String[] last = {""};
+        try {
+            return Poll.value("the app to answer inside " + handle, Duration.ofSeconds(30),
+                Duration.ofSeconds(1), () -> {
+                    try {
+                        last[0] = docker.exec(handle, List.of("node", "-e", script)).output();
+                    } catch (IOException retried) {
+                        last[0] = "(exec failed: " + retried.getMessage() + ")";
+                    }
+                    return last[0].contains("hello-") ? last[0] : null;
+                });
+        } catch (AssertionError neverAnswered) {
+            // The caller asserts on the answer; the last one seen is its evidence.
+            return last[0];
         }
-        return last;
     }
 
     private static String logOf(SandboxedBuilds.Result result) {

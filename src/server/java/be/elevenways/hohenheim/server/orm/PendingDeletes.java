@@ -12,10 +12,12 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * The delete a remove hook is asked about, as CRITERIA another model correlates against.
  *
  * AIDEV-NOTE: a remove context carries criteria, never rows. A cascade or a refusal spelled
- * as {@code Criteria.related} over these criteria never re-reads the doomed rows to collect
- * their ids (the private {@code doomedRows} idiom four classes in this repo still carry),
- * removes a whole level in one statement and terminates on a count. Reach for this before
- * writing a fifth copy of that idiom.
+ * as {@code Criteria.related} over these criteria never reads the doomed rows at all,
+ * removes a whole level in one statement and terminates on a count. When the rows
+ * themselves are needed (a per-row refusal message, a ledger entry), read them through
+ * {@code RemoveFromDatasource.doomedRows()} -- once per delete, shared by every hook -- and
+ * when something must happen AFTER the delete, register the pair through
+ * {@code DoomedRows.handOver}. Never a private re-read of the criteria.
  */
 public final class PendingDeletes {
 

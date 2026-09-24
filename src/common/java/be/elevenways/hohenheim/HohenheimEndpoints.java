@@ -419,7 +419,7 @@ public class HohenheimEndpoints {
             .addDelimiter().addStatic("backup").build())
         // requiresLogin, NOT the admin permission: a delegated tenant holding the
         // `backups` capability on their own database reaches this. The gate moved onto
-        // the SERVICE (DatabaseService.backupDownload -> requireDatabaseCapability), so
+        // the SERVICE (DatabaseService.backupStream -> requireDatabaseCapability), so
         // the /manage row action, this URL and any later caller answer to one policy;
         // the handler renders both "no such database" and "not yours" as one 404.
         .requiresLogin()

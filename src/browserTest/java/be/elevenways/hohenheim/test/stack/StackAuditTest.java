@@ -5,9 +5,9 @@ import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.cms.StackResource;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
+import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.ActionContext;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BooleanSupplier;
@@ -206,18 +207,6 @@ class StackAuditTest {
 
     /** Bounded wait: an async row action settles on the stack's worker, not inline. */
     private static void await(String what, BooleanSupplier condition) {
-        long deadline = Now.millis() + 15_000;
-        while (Now.millis() < deadline) {
-            if (condition.getAsBoolean()) {
-                return;
-            }
-            try {
-                Thread.sleep(50);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
-        assertThat(condition.getAsBoolean()).as(what).isTrue();
+        Poll.until(what, Duration.ofSeconds(15), Duration.ofMillis(50), condition);
     }
 }

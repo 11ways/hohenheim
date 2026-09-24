@@ -4,13 +4,11 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.ManageInstanceScheduleStepResource;
 import be.elevenways.hohenheim.server.schedule.InstancePowerAction;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -57,8 +55,8 @@ class ScheduleStepAuthorityTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        powerOnlyId = user(PREFIX + "power@surface.test", "Power Only");
-        ownerId = user(PREFIX + "owner@surface.test", "Chain Owner");
+        powerOnlyId = ApiSupport.user(PREFIX + "power@surface.test", "Power Only");
+        ownerId = ApiSupport.user(PREFIX + "owner@surface.test", "Chain Owner");
         instanceId = instance(PREFIX + "target");
         otherInstanceId = instance(PREFIX + "other");
 
@@ -90,17 +88,6 @@ class ScheduleStepAuthorityTest extends HohenheimTestBase {
                 Models.get(InstanceModel.class).delete(id);
             }
         }
-    }
-
-    private static int user(String email, String name) {
-        Row row = AuthModels.users().createEmptyRow();
-        row.set(UserModel.EMAIL, email);
-        row.set(UserModel.DISPLAY_NAME, name);
-        row.set(UserModel.ENABLED, true);
-        row.set(UserModel.CREATED_AT, Now.instant());
-        row.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(row);
-        return row.get(UserModel.ID);
     }
 
     private static int instance(String name) {

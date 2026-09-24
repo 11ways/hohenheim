@@ -32,6 +32,7 @@ import java.io.IOException;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -168,16 +169,17 @@ class DnsHardeningTest {
         }
 
         // 4. Released slots come back (the server sees each close asynchronously).
-        boolean served = false;
-        for (int attempt = 0; attempt < 50 && !served; attempt++) {
-            try (Socket again = new Socket("127.0.0.1", port)) {
-                again.setSoTimeout(2_000);
-                served = exchange(again, "www." + ORIGIN).getHeader().getRcode() == Rcode.NOERROR;
-            } catch (IOException notYet) {
-                Thread.sleep(100);
-            }
-        }
-        assertThat(served).as("step 4: a closed connection gives its slot back").isTrue();
+        Poll.until("step 4: a closed connection gives its slot back", Duration.ofSeconds(10),
+            Duration.ofMillis(100), () -> {
+                try (Socket again = new Socket("127.0.0.1", port)) {
+                    again.setSoTimeout(2_000);
+                    return exchange(again, "www." + ORIGIN).getHeader().getRcode() == Rcode.NOERROR;
+                } catch (IOException notYet) {
+                    return false;
+                } catch (Exception broken) {
+                    throw new IllegalStateException("the exchange failed outright", broken);
+                }
+            });
 
         // 5. A connection that never finishes is closed at the ABSOLUTE deadline, long before
         //    the 30s idle timeout that a byte-dribbling client could re-arm forever.
@@ -297,8 +299,8 @@ class DnsHardeningTest {
             () -> record(replica, "www", DnsRecordModel.TYPE_A, "192.0.2.30"), Violations.class);
         assertThat((Throwable) refused).as("step 1: a row in a replica zone is refused").isNotNull();
         assertThat(refused.all().get(0).message().key())
-            .as("step 1: as a replica, whose rows come from its primary")
-            .isEqualTo("import_secondary_zone");
+            .as("step 1: as a replica, whose rows come from its primary (its own sentence, not the import's)")
+            .isEqualTo("record_secondary_zone");
         assertThat(records.find().where(DnsRecordModel.ZONE_ID.eq(replica)).first())
             .as("step 1: and nothing was stored").isNull();
 

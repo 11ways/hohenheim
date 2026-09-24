@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -9,9 +8,6 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.revision.RevisionModel;
 import org.junit.jupiter.api.Test;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,35 +36,13 @@ class EnvironmentSecretsTest extends HohenheimTestBase {
     private static final String TOKEN_V2 = "pw-v2-tr0ub4dor-3c2b1a0f9e8d";
     private static final String LEGACY_TOKEN = "legacy-plaintext-pw-0102030405";
 
-    private HttpResponse<String> postForm(String path, String body) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .header("X-Csrf-Token", csrfToken)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
-
-    private HttpResponse<String> getPage(String path) throws Exception {
-        return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
-            .send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl() + path))
-                .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-                .GET().build(), HttpResponse.BodyHandlers.ofString());
-    }
-
     @Test
     void aStoredSecretNeverEntersDerivedSurfacesAndLegacyRestoreCannotRevive() throws Exception {
         SiteModel sites = Models.get(SiteModel.class);
 
         // 1. A REAL admin creates a REAL site whose settings carry a credential, through
         //    the real form transport.
-        var created = postForm("/admin/sites/new",
+        var created = adminPostForm("/admin/sites/new",
             "name=Env+Secret+Site&upstream_kind=hohenheim%3Adev_namespace"
             + "&settings.registration_token=" + TOKEN_V1
             + "&description=production-mode");
@@ -82,7 +56,7 @@ class EnvironmentSecretsTest extends HohenheimTestBase {
             .isEqualTo(TOKEN_V1);
 
         // 2. An update rotates the password and flips an ordinary setting.
-        var updated = postForm("/admin/sites/" + siteId,
+        var updated = adminPostForm("/admin/sites/" + siteId,
             "name=Env+Secret+Site+Renamed&upstream_kind=hohenheim%3Adev_namespace"
             + "&settings.registration_token=" + TOKEN_V2
             + "&description=staging-mode");
@@ -155,7 +129,7 @@ class EnvironmentSecretsTest extends HohenheimTestBase {
 
         // 5. The form stays USABLE: the field renders, the value never echoes, and a
         //    submit that leaves it blank keeps the stored one (keep-on-blank).
-        HttpResponse<String> form = getPage("/admin/sites/" + siteId);
+        HttpResponse<String> form = adminGet("/admin/sites/" + siteId);
         assertThat(form.statusCode()).as("5. the edit form must render").isEqualTo(200);
         assertThat(form.body())
             .as("5. the secret field must stay in the form so it is editable")
@@ -163,7 +137,7 @@ class EnvironmentSecretsTest extends HohenheimTestBase {
         assertThat(form.body())
             .as("5. the VALUE must never echo into the form")
             .doesNotContain(TOKEN_V2);
-        var blankResubmit = postForm("/admin/sites/" + siteId,
+        var blankResubmit = adminPostForm("/admin/sites/" + siteId,
             "name=Env+Secret+Site+Renamed&upstream_kind=hohenheim%3Adev_namespace"
             + "&description=staging-mode"
             + "&settings.registration_token=");

@@ -87,7 +87,7 @@ public final class DatabaseApi {
         });
 
         HohenheimEndpoints.API_DATABASE_MOVE_SHARED.setHandler(conduit -> {
-            AccessContext ctx = requireAdminKey(conduit);
+            AccessContext ctx = ApiConduits.requireAdminKey(conduit);
             if (ctx == null) {
                 return null;
             }
@@ -142,7 +142,7 @@ public final class DatabaseApi {
         });
 
         HohenheimEndpoints.API_DATABASE_ENGINES.setHandler(conduit -> {
-            AccessContext ctx = requireAdminKey(conduit);
+            AccessContext ctx = ApiConduits.requireAdminKey(conduit);
             if (ctx == null) {
                 return null;
             }
@@ -155,7 +155,7 @@ public final class DatabaseApi {
         });
 
         HohenheimEndpoints.API_DATABASE_ENGINE.setHandler(conduit -> {
-            AccessContext ctx = requireAdminKey(conduit);
+            AccessContext ctx = ApiConduits.requireAdminKey(conduit);
             if (ctx == null) {
                 return null;
             }
@@ -185,25 +185,6 @@ public final class DatabaseApi {
     }
 
     // -- doors ----------------------------------------------------------------
-
-    /**
-     * An API-key context that also holds the admin panel permission, as narrowed by the
-     * key's own scopes -- the site create/delete lane's shape, for the two verbs whose
-     * only panel is the operator one.
-     *
-     * @return the access context, or null when the response has already been ended
-     */
-    private static @Nullable AccessContext requireAdminKey(@NonNull Conduit conduit) {
-        AccessContext ctx = ApiConduits.requireKey(conduit);
-        if (ctx == null) {
-            return null;
-        }
-        if (!HohenheimAccess.isAdmin(ctx)) {
-            conduit.forbidden();
-            return null;
-        }
-        return ctx;
-    }
 
     /**
      * The databases this context may see: admins everything, everyone else exactly the

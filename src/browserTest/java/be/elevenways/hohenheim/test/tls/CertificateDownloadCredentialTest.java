@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -14,9 +13,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -146,18 +142,10 @@ class CertificateDownloadCredentialTest extends HohenheimTestBase {
     // -- fixtures -------------------------------------------------------------
 
     private HttpResponse<String> keyGet(String path) throws Exception {
-        return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
-            .send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl() + path))
-                .header("X-Api-Key", adminKey)
-                .build(), HttpResponse.BodyHandlers.ofString());
+        return keyGet(adminKey, path);
     }
 
     private HttpResponse<String> sessionGet(String path) throws Exception {
-        return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
-            .send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl() + path))
-                .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-                .build(), HttpResponse.BodyHandlers.ofString());
+        return adminGet(path);
     }
 }

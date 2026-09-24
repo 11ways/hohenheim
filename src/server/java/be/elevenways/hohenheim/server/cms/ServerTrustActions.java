@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HostTrustLane;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostKeys;
@@ -67,7 +68,7 @@ final class ServerTrustActions {
     }
 
     /** The ssh host-key lane: a docker host's transport, an Incus host's admin shell. */
-    static final TrustLane SSH_LANE = new TrustLane("host_key", HostTrustSlot.SSH,
+    static final TrustLane SSH_LANE = new TrustLane(HostTrustLane.SSH.key(), HostTrustSlot.SSH,
         ServerModel::hasSshLane, HostKeys::scanAndPin, HostKeys::confirm, HostKeys::repin,
         HostKeys::rotateIdentity, HostKeys::fingerprintOf,
         new LaneCopy("scan_host_key", "confirm_host_key", "repin_host_key", "rotate_identity",
@@ -75,7 +76,7 @@ final class ServerTrustActions {
             "host_key_repinned_toast", "identity_rotated_toast", "host_key_mismatch"));
 
     /** The Incus daemon's TLS lane: pinned server certificate + enrolled client certificate. */
-    static final TrustLane INCUS_LANE = new TrustLane("incus_cert",
+    static final TrustLane INCUS_LANE = new TrustLane(HostTrustLane.INCUS.key(),
         HostTrustSlot.INCUS_TLS, ServerModel::isIncusHttps, IncusTrust::scanAndPin,
         IncusTrust::confirm, IncusTrust::repin, IncusTrust::rotateIdentity,
         IncusTrust::fingerprintOf,

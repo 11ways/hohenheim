@@ -46,7 +46,7 @@ class DatabaseMoveClaimTest {
     void aMoveThatAnotherOperationHoldsIsRefusedAndLeavesTheRecordAlone() {
         DatabaseService service = new DatabaseService();
         service.insertRecord(NAME, ManagedDatabase.Engine.POSTGRES, null, "app", "pw", "app", false,
-            ServerService.LOCAL, ResourceLimits.none(), DatabaseModel.STATUS_ACTIVE,
+            ServerService.LOCAL_HOST_NAME, ResourceLimits.none(), DatabaseModel.STATUS_ACTIVE,
             DatabaseModel.PLACEMENT_DEDICATED, null);
 
         // 1. Another move (or any operation) holds the record: it reads provisioning.

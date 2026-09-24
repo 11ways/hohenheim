@@ -5,33 +5,20 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.HostnameAuthority;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
-import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.auth.server.ZenitAuth;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.security.csrf.CsrfTokens;
-import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer.OrderAnnotation;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.Map;
@@ -55,7 +42,6 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  * with the control it was supposed to check; that is why the assertions here are about the
  * ROW EXISTING and about {@link HostnameAuthority#canManage}, never about the column.
  */
-@TestMethodOrder(OrderAnnotation.class)
 class TenantHostnameTierTest extends HohenheimTestBase {
 
     /** The name the tenant tries to swallow, and a sibling under it that proves the reach. */
@@ -85,26 +71,16 @@ class TenantHostnameTierTest extends HohenheimTestBase {
         // is exactly the name a swallowing wildcard would hand to the tenant.
         domain(domainModel, victimSiteId, VICTIM_APEX);
 
-        Row tenant = AuthModels.users().createEmptyRow();
-        tenant.set(UserModel.EMAIL, "tenant-tier@hohenheim.local");
-        tenant.set(UserModel.DISPLAY_NAME, "Tier Tenant");
-        tenant.set(UserModel.ENABLED, true);
-        tenant.set(UserModel.CREATED_AT, Now.instant());
-        tenant.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(tenant);
-        Integer tenantId = tenant.get(UserModel.ID);
+        Integer tenantId = ApiSupport.user("tenant-tier@hohenheim.local", "Tier Tenant");
         tenantPrincipal = new UserPrincipal(tenantId, "Tier Tenant");
 
         Row admin = AuthModels.users().find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         adminPrincipal = new UserPrincipal(admin.get(UserModel.ID), "Test Admin");
 
-        Session session = Zenit.getSessionStore().create();
-        session.set(AuthKeys.USER_ID, tenantId.longValue());
-        tenantCsrf = ZenitAuth.randomToken();
-        session.set(CsrfTokens.TOKEN, tenantCsrf);
-        Zenit.getSessionStore().save(session);
-        tenantSession = session.token().secret();
+        TestSession session = sessionFor(tenantId);
+        tenantCsrf = session.csrf();
+        tenantSession = session.token();
 
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, ownSiteId,
             HohenheimAccess.MANAGE, true);
@@ -134,16 +110,7 @@ class TenantHostnameTierTest extends HohenheimTestBase {
     // --- Helpers ----------------------------------------------------------------------
 
     private HttpResponse<String> tenantPost(String path, String body) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + tenantSession)
-            .header("X-Csrf-Token", tenantCsrf)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
+        return httpPostForm(path, body, tenantSession, tenantCsrf);
     }
 
     private static Row domainByHostname(String hostname) {
@@ -177,7 +144,6 @@ class TenantHostnameTierTest extends HohenheimTestBase {
      * through while looking green.
      */
     @Test
-    @Order(1)
     void aGlobShapedHostnameIsRefusedWhateverTheMatchTypeColumnSays() throws Exception {
         // 1. Nobody answers for the victim's unbound sibling to begin with -- the authority
         //    walk fails closed on a name no live row covers.
@@ -278,7 +244,6 @@ class TenantHostnameTierTest extends HohenheimTestBase {
      * tuple's newline separator honest.
      */
     @Test
-    @Order(2)
     void amalformedHostnameIsRefusedForOperatorsToo() {
         Model model = Models.get(SiteDomainModel.class);
         for (String malformed : List.of("bad_underscore.tiertest.test", "double..dot.test",
@@ -320,7 +285,6 @@ class TenantHostnameTierTest extends HohenheimTestBase {
      * indistinguishable, and a refusal that still wrote the row passes a status-only test.
      */
     @Test
-    @Order(3)
     void everyDelegationFreezeNamesItsOwnRefusalAndWritesNothing() {
         Model model = Models.get(SiteDomainModel.class);
 

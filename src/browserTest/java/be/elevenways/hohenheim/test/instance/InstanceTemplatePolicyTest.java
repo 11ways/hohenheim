@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.TemplatePortability;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
@@ -53,14 +54,7 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seedActors() {
-        Row tenant = AuthModels.users().createEmptyRow();
-        tenant.set(UserModel.EMAIL, "tpl-tenant@hohenheim.local");
-        tenant.set(UserModel.DISPLAY_NAME, "Template Tenant");
-        tenant.set(UserModel.ENABLED, true);
-        tenant.set(UserModel.CREATED_AT, Now.instant());
-        tenant.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(tenant);
-        tenantId = tenant.get(UserModel.ID);
+        tenantId = ApiSupport.user("tpl-tenant@hohenheim.local", "Template Tenant");
         tenantPrincipal = new UserPrincipal(tenantId, "Template Tenant");
 
         Row admin = AuthModels.users().find()

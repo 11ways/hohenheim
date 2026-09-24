@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
-import be.elevenways.hohenheim.server.security.NftRunner;
+import be.elevenways.hohenheim.server.process.BoundedProcess;
 import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -59,8 +59,9 @@ public final class HostKeys {
         "ssh-ed25519", "ecdsa-sha2-nistp521", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp256",
         "ssh-rsa");
 
-    private static final long SSH_KEYGEN_TIMEOUT_SECONDS = 20;
-    private static final long SSH_KEYSCAN_TIMEOUT_SECONDS = 20;
+    private static final long SSH_KEYGEN_TIMEOUT_MILLIS = 20_000;
+    private static final long SSH_KEYSCAN_TIMEOUT_MILLIS = 20_000;
+    private static final int TOOL_OUTPUT_CAP_CHARS = 64 * 1024;
 
     /** What a rescan concluded about the key the host currently offers. */
     public enum ScanOutcome {
@@ -281,7 +282,8 @@ public final class HostKeys {
         }
         argv.add("--");
         argv.add(target.host());
-        NftRunner.Result result = NftRunner.Sudo.execute(argv, null, SSH_KEYSCAN_TIMEOUT_SECONDS);
+        BoundedProcess.Result result = BoundedProcess.execute(argv, null, SSH_KEYSCAN_TIMEOUT_MILLIS,
+            TOOL_OUTPUT_CAP_CHARS);
 
         Offer best = null;
         int bestRank = Integer.MAX_VALUE;
@@ -336,10 +338,10 @@ public final class HostKeys {
         try {
             directory = Files.createTempDirectory("hohenheim-hostkey");
             Path key = directory.resolve("id_ed25519");
-            NftRunner.Result result = NftRunner.Sudo.execute(List.of("ssh-keygen",
+            BoundedProcess.Result result = BoundedProcess.execute(List.of("ssh-keygen",
                 "-q", "-t", "ed25519", "-N", "", "-C", "hohenheim-" + name,
-                "-f", key.toString()), null, SSH_KEYGEN_TIMEOUT_SECONDS);
-            if (!result.ok() || !Files.exists(key)) {
+                "-f", key.toString()), null, SSH_KEYGEN_TIMEOUT_MILLIS, TOOL_OUTPUT_CAP_CHARS);
+            if (!result.succeeded() || !Files.exists(key)) {
                 throw Violations.ofForm(violation("identity_generation_failed")
                     .withArg("detail", result.failureText()));
             }

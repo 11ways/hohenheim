@@ -15,10 +15,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
 import java.net.http.HttpResponse;
 import java.util.LinkedHashMap;
@@ -34,7 +31,6 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * matching record -- and the server re-narrows a hand-posted host that the picker would
  * never have offered (the falsification of the dependent-pick guard).
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class InstanceCreateFlowTest extends HohenheimTestBase {
 
     private static final String OPEN_SELECT_POPUP = "he-bottom .pl-select-popup[data-open]";
@@ -90,7 +86,6 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
 
     /** One create-form load walked through kinds, hosts and the image pick. */
     @Test
-    @Order(1)
     void kindCardsDriveTheDependentPicks() {
         navigateToApp("/admin/instances/new");
         waitForHydration();
@@ -198,7 +193,6 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
      * server-side re-narrowing (the client filter is never the gate).
      */
     @Test
-    @Order(2)
     void handPostedOutOfScopeHostIsRefused() throws Exception {
         HttpResponse<String> refused = httpPostForm("/admin/instances/new",
             "name=cf-forged-vm&kind=hohenheim%3Avm&server_id=" + dockerHostId,
@@ -229,7 +223,6 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
      * open, because a refusal nobody can see reads as a save that silently did nothing.
      */
     @Test
-    @Order(3)
     void theAdvancedSectionFoldsWithoutFilteringTheSubmit() throws Exception {
         String form = adminGet("/admin/instances/new").body();
 
@@ -291,7 +284,6 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
      * leaves the others folded.
      */
     @Test
-    @Order(4)
     void theKindSettingsFoldWithoutFilteringTheSubmit() throws Exception {
         navigateToApp("/admin/instances/new");
         waitForHydration();
@@ -377,7 +369,6 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
      * proves the sentence is what the operator actually sees.
      */
     @Test
-    @Order(5)
     void anEmptyHostNarrowingExplainsItself() {
         navigateToApp("/admin/instances/new");
         waitForHydration();
@@ -480,7 +471,6 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
      * FIELD rather than a row.
      */
     @Test
-    @Order(6)
     void anEmptyHostPickIsPlacedByTheChooserOrRefusedOnTheHostField() throws Exception {
         var servers = Models.get(ServerModel.class);
         int local = ServerModel.localServerId();

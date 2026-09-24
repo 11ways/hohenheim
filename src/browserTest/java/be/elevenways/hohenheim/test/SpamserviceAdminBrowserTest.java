@@ -10,8 +10,8 @@ import be.elevenways.zenit.server.flash.Flash;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -74,29 +74,22 @@ class SpamserviceAdminBrowserTest extends HohenheimTestBase {
         assertThat(response.body())
             .as("the app-owned page must render the centrally injected flash")
             .contains("data-flash-toast");
-        assertThat(awaitPendingFlash())
-            .as("rendering consumes the one-shot flash")
-            .isNull();
+        Poll.until("rendering consumes the one-shot flash", Duration.ofSeconds(5),
+            () -> pendingFlash() == null);
     }
 
     /**
-     * The session's pending flash once the server had its chance to spend it.
+     * The session's pending flash, polled by the caller until the server had its chance to
+     * spend it.
      *
      * AIDEV-NOTE: zenit spends a flash in the render's responseWritten stage, which runs AFTER
      * the body was written and closed -- so the client holds the whole page before the
      * acknowledgement's session write, and reading the store at once races it. Polling with a
      * bound keeps the assertion meaning "spent by that render" without a fixed sleep.
      */
-    private static @Nullable Map<String, String> awaitPendingFlash() throws InterruptedException {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        while (true) {
-            Session session = Zenit.getSessionStore().get(SessionToken.of(sessionToken));
-            assertThat(session).as("the session survives the render").isNotNull();
-            Map<String, String> pending = session.get(Flash.PENDING_BY_TAB);
-            if (pending == null || System.nanoTime() >= deadline) {
-                return pending;
-            }
-            Thread.sleep(20);
-        }
+    private static @Nullable Map<String, String> pendingFlash() {
+        Session session = Zenit.getSessionStore().get(SessionToken.of(sessionToken));
+        assertThat(session).as("the session survives the render").isNotNull();
+        return session.get(Flash.PENDING_BY_TAB);
     }
 }

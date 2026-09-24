@@ -68,7 +68,7 @@ class QuotaDimensionsReconcileTest {
 
         // 1. A create that lands spends one database slot.
         service.insertRecord("recon-one", ManagedDatabase.Engine.POSTGRES, null, "app", "pw", "app",
-            false, ServerService.LOCAL, ResourceLimits.none(), DatabaseModel.STATUS_ACTIVE,
+            false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(), DatabaseModel.STATUS_ACTIVE,
             DatabaseModel.PLACEMENT_DEDICATED, null);
         assertThat(Quotas.usedOf(databaseBucket))
             .as("step 1: the landed create holds one slot").isEqualTo(before + 1);
@@ -77,7 +77,7 @@ class QuotaDimensionsReconcileTest {
         //    with the insert: no row, no slot.
         FAIL_NEXT_DATABASE_WRITE.set(true);
         Throwable lost = catchThrowable(() -> service.insertRecord("recon-two",
-            ManagedDatabase.Engine.POSTGRES, null, "app2", "pw", "app2", false, ServerService.LOCAL,
+            ManagedDatabase.Engine.POSTGRES, null, "app2", "pw", "app2", false, ServerService.LOCAL_HOST_NAME,
             ResourceLimits.none(), DatabaseModel.STATUS_ACTIVE, DatabaseModel.PLACEMENT_DEDICATED,
             null));
         assertThat(lost).as("step 2: the injected failure reached the caller").isNotNull();

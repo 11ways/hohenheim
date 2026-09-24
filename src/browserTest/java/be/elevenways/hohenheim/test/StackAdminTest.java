@@ -7,18 +7,12 @@ import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.ports.PortLedger;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -29,147 +23,164 @@ import static org.assertj.core.api.Assertions.assertThat;
  * a missing source is a 500, and nothing else covers these pages), records
  * validate, and deleting cascades to the child rows that have no FK cascade.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class StackAdminTest extends HohenheimTestBase {
 
-    private static Integer stackId;
-    private static Integer serviceId;
-
-    private HttpResponse<String> postForm(String path, String body) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .header("X-Csrf-Token", csrfToken)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
-
+    /**
+     * The stack's own CRUD story in one pass: the list and create form render, the created
+     * stack lands on its services tab, a service and a staged file are validated against its
+     * mounts, and deleting the stack cascades to the child rows that have no FK cascade.
+     *
+     * AIDEV-NOTE: this was eleven @Order-coupled methods passing the stack and service ids
+     * through statics, so running one alone NPE'd and one failure cascaded. The CRUD half is
+     * this journey; the refusals that merely needed SOME stack are self-contained tests below,
+     * each over a stack of its own.
+     */
     @Test
-    @Order(1)
-    void stackListAndFormRender() throws Exception {
+    void theStackSurfaceRendersValidatesAndCascadesItsDelete() throws Exception {
+        // 1. The list and the create form render; creating a stack lands on its SERVICES
+        //    tab, not back on the form it just submitted: everything that makes a stack run
+        //    is added there, and the tab's empty state is what says so.
         navigateToApp("/admin/stacks");
         waitForHydration();
-        assertThat(page.locator("body").textContent()).doesNotContain("Internal Server Error");
+        assertThat(page.locator("body").textContent())
+            .as("step 1: the stack list renders").doesNotContain("Internal Server Error");
 
         navigateToApp("/admin/stacks/new");
         waitForHydration();
-        assertThat(page.locator("form").count()).isGreaterThan(0);
+        assertThat(page.locator("form").count()).as("step 1: the create form renders").isGreaterThan(0);
 
-        var response = postForm("/admin/stacks/new",
+        var response = adminPostForm("/admin/stacks/new",
             "name=admin-test-stack&enabled=false&enabled=true&server_id="
             + ServerModel.localServerId());
-        assertThat(response.statusCode()).isIn(200, 302, 303);
+        assertThat(response.statusCode()).as("step 1: the stack is created").isIn(200, 302, 303);
 
         Row stack = Models.get(StackModel.class).find()
             .where(StackModel.NAME.eq("admin-test-stack")).first();
-        assertThat(stack).isNotNull();
-        stackId = stack.get(StackModel.ID);
+        assertThat(stack).as("step 1: the created stack exists").isNotNull();
+        int stackId = stack.get(StackModel.ID);
 
-        // Creating a stack lands on its SERVICES tab, not back on the form it just
-        // submitted: everything that makes a stack run is added there, and the tab's
-        // empty state is what says so.
         assertThat(response.headers().firstValue("Location").orElse(""))
+            .as("step 1: the create lands on the services tab")
             .contains("/admin/stacks/" + stackId + "/page/services");
 
         var landing = adminGet("/admin/stacks/" + stackId + "/page/services");
-        assertThat(landing.statusCode()).isEqualTo(200);
-        assertThat(landing.body()).contains("A stack is composed of services")
+        assertThat(landing.statusCode()).as("step 1: the services tab renders").isEqualTo(200);
+        assertThat(landing.body()).as("step 1: and its empty state says what to do")
+            .contains("A stack is composed of services")
             .contains("add-first-service-link");
-    }
 
-    /** The service form's RelationPick needs a registered record source for the stack model. */
-    @Test
-    @Order(3)
-    void serviceFormRendersAndCreates() throws Exception {
+        // 2. The service form's RelationPick needs a registered record source for the stack
+        //    model; the service it creates renders its image back.
         navigateToApp("/admin/stack-services/new?stack_id=" + stackId);
         waitForHydration();
-        assertThat(page.locator("form").count()).isGreaterThan(0);
+        assertThat(page.locator("form").count()).as("step 2: the service form renders").isGreaterThan(0);
 
-        var response = postForm("/admin/stack-services/new",
+        response = adminPostForm("/admin/stack-services/new",
             "stack_id=" + stackId + "&name=web&enabled=false&enabled=true&image=alpine%3Alatest"
             + "&command=&restart_policy=no"
             + "&mounts.0.type=volume&mounts.0.name=data&mounts.0.container_path=%2Fdata"
             + "&ports.0.container_port=80&ports.0.host_port=8099&ports.0.protocol=tcp");
-        assertThat(response.statusCode()).isIn(200, 302, 303);
+        assertThat(response.statusCode()).as("step 2: the service is created").isIn(200, 302, 303);
 
-        Row service = Models.get(StackServiceModel.class).find()
-            .where(StackServiceModel.NAME.eq("web")).first();
-        assertThat(service).isNotNull();
-        serviceId = service.get(StackServiceModel.ID);
+        Row service = serviceNamed(stackId, "web");
+        assertThat(service).as("step 2: the created service exists").isNotNull();
+        int serviceId = service.get(StackServiceModel.ID);
 
         navigateToApp("/admin/stack-services/" + serviceId);
         waitForHydration();
-        assertThat(page.content()).contains("alpine:latest");
-    }
+        assertThat(page.content()).as("step 2: the service renders its image").contains("alpine:latest");
 
-    @Test
-    @Order(4)
-    void servicesTabRendersLiveState() {
+        // 3. The services tab renders live state. The container does not exist, so the
+        //    state badge renders the LOCALIZED "missing" label rather than the raw token.
         navigateToApp("/admin/stacks/" + stackId + "/page/services");
         waitForHydration();
 
         String body = page.locator("body").textContent();
-        assertThat(body).contains("web");
-        // The container does not exist, so the state badge renders the LOCALIZED
-        // "missing" label rather than the raw state token.
-        assertThat(body).contains("Missing");
-        assertThat(body).doesNotContain("- Services");
-    }
+        assertThat(body).as("step 3: the service is listed").contains("web");
+        assertThat(body).as("step 3: its state is the localized label").contains("Missing");
+        assertThat(body).as("step 3: the tab title is not doubled").doesNotContain("- Services");
 
-    @Test
-    @Order(5)
-    void deploymentsTabRenders() {
+        // 4. The deployments tab renders.
         navigateToApp("/admin/stacks/" + stackId + "/page/deployments");
         waitForHydration();
-        assertThat(page.locator("body").textContent()).doesNotContain("Internal Server Error");
-    }
+        assertThat(page.locator("body").textContent())
+            .as("step 4: the deployments tab renders").doesNotContain("Internal Server Error");
 
-    /** The file form's RelationPick targets the SERVICE model's record source. */
-    @Test
-    @Order(6)
-    void fileFormRendersAndValidatesAgainstMounts() throws Exception {
+        // 5. The file form's RelationPick targets the SERVICE model's record source, and a
+        //    file under a volume mount is refused: /data would shadow it at container start.
         navigateToApp("/admin/stack-files/new?stack_service_id=" + serviceId);
         waitForHydration();
-        assertThat(page.locator("form").count()).isGreaterThan(0);
+        assertThat(page.locator("form").count()).as("step 5: the file form renders").isGreaterThan(0);
 
-        // /data is a volume mount, so a file there would be shadowed at container start.
-        postForm("/admin/stack-files/new",
+        adminPostForm("/admin/stack-files/new",
             "stack_service_id=" + serviceId + "&container_path=%2Fdata%2Fapp.conf"
             + "&content=secret%3D1&mode=0600");
-        assertThat(Models.get(StackFileModel.class).find()
-            .where(StackFileModel.STACK_SERVICE_ID.eq(serviceId)).count())
-            .as("a file under a volume mount must be refused")
+        assertThat(filesOf(serviceId))
+            .as("step 5: a file under a volume mount must be refused")
             .isEqualTo(0);
 
-        var accepted = postForm("/admin/stack-files/new",
+        var accepted = adminPostForm("/admin/stack-files/new",
             "stack_service_id=" + serviceId + "&container_path=%2Fetc%2Fapp.conf"
             + "&content=secret%3D1&mode=0600");
-        assertThat(accepted.statusCode()).isIn(200, 302, 303);
-        assertThat(Models.get(StackFileModel.class).find()
-            .where(StackFileModel.STACK_SERVICE_ID.eq(serviceId)).count()).isEqualTo(1);
+        assertThat(accepted.statusCode()).as("step 5: a file outside the mounts is accepted")
+            .isIn(200, 302, 303);
+        assertThat(filesOf(serviceId)).as("step 5: and stored").isEqualTo(1);
+
+        // 6. The mirror of the file-side shadow refusal: adding the MOUNT after the file
+        //    must be refused exactly like adding the file after the mount.
+        navigateToApp("/admin/stack-services/" + serviceId);
+        waitForHydration();
+        String snapshot = page.locator("input[name='cms__snapshot']").inputValue();
+
+        adminPostForm("/admin/stack-services/" + serviceId,
+            "stack_id=" + stackId + "&name=web&enabled=false&enabled=true"
+            + "&image=alpine%3Alatest&command=&restart_policy=no"
+            + "&mounts.0.type=volume&mounts.0.name=data&mounts.0.container_path=%2Fdata"
+            + "&mounts.1.type=volume&mounts.1.name=etc&mounts.1.container_path=%2Fetc"
+            + "&cms__snapshot=" + URLEncoder.encode(snapshot, StandardCharsets.UTF_8));
+
+        Row edited = Models.get(StackServiceModel.class).findById(serviceId);
+        assertThat(edited.getRecords(StackServiceModel.MOUNTS))
+            .as("step 6: the shadowing mount must be refused, keeping the original single mount")
+            .hasSize(1);
+
+        // 7. Deleting the stack cascades to its services and their files.
+        response = adminPostForm("/admin/stacks/" + stackId + "/delete", confirmed(""));
+        assertThat(response.statusCode()).as("step 7: the stack is deleted").isIn(200, 302, 303);
+
+        assertThat(Models.get(StackModel.class).findById(stackId))
+            .as("step 7: the stack row is gone").isNull();
+        assertThat(Models.get(StackServiceModel.class).find()
+            .where(StackServiceModel.STACK_ID.eq(stackId)).count())
+            .as("step 7: its services are gone").isEqualTo(0);
+        assertThat(filesOf(serviceId))
+            .as("step 7: config files (encrypted secrets) must not outlive their stack")
+            .isEqualTo(0);
     }
 
     // AIDEV-NOTE: since C3 the sibling-row scan this test originally pinned is GONE --
-    // what refuses the duplicate now is the PORT LEDGER's exclusivity (the "web" service's
+    // what refuses the duplicate now is the PORT LEDGER's exclusivity (the first service's
     // saved claim in port_allocations). The test is kept as the stack-vs-stack face of that
     // exclusivity; the cross-AUTHORITY faces are the two tests directly below.
     @Test
-    @Order(7)
     void duplicateHostPortAcrossServicesIsRefused() throws Exception {
-        postForm("/admin/stack-services/new",
+        int stackId = createStack("admin-stack-dup-port");
+        var first = adminPostForm("/admin/stack-services/new",
+            "stack_id=" + stackId + "&name=web&enabled=false&enabled=true&image=alpine%3Alatest"
+            + "&command=&restart_policy=no"
+            + "&ports.0.container_port=80&ports.0.host_port=8098&ports.0.protocol=tcp");
+        assertThat(first.statusCode()).as("the first publisher of the port is accepted")
+            .isIn(200, 302, 303);
+        assertThat(serviceNamed(stackId, "web")).as("and stored").isNotNull();
+
+        adminPostForm("/admin/stack-services/new",
             "stack_id=" + stackId + "&name=other&enabled=false&enabled=true&image=alpine%3Alatest"
             + "&command=&restart_policy=no"
-            + "&ports.0.container_port=80&ports.0.host_port=8099&ports.0.protocol=tcp");
+            + "&ports.0.container_port=80&ports.0.host_port=8098&ports.0.protocol=tcp");
 
-        assertThat(Models.get(StackServiceModel.class).find()
-            .where(StackServiceModel.NAME.eq("other")).count())
+        assertThat(serviceNamed(stackId, "other"))
             .as("two services cannot publish the same host port")
-            .isEqualTo(0);
+            .isNull();
     }
 
     /**
@@ -179,8 +190,8 @@ class StackAdminTest extends HohenheimTestBase {
      * assertion is the named conflict AND the resulting state, never a bare status code.
      */
     @Test
-    @Order(12)
     void stackPortCollidingWithAManagedDatabaseClaimIsRefused() throws Exception {
+        int stackId = createStack("admin-stack-db-clash");
         DatabaseModel databases = Models.get(DatabaseModel.class);
         Row db = databases.createEmptyRow();
         db.set(DatabaseModel.NAME, "ledgerdb");
@@ -193,15 +204,14 @@ class StackAdminTest extends HohenheimTestBase {
         PortLedger.claim(ServerModel.localServerId(), "", 8210, "tcp",
             DatabaseModel.MODEL_ID, db.get(DatabaseModel.ID), null);
 
-        var response = postForm("/admin/stack-services/new",
+        var response = adminPostForm("/admin/stack-services/new",
             "stack_id=" + stackId + "&name=dbclash&enabled=false&enabled=true"
             + "&image=alpine%3Alatest&command=&restart_policy=no"
             + "&ports.0.container_port=80&ports.0.host_port=8210&ports.0.protocol=tcp");
 
-        assertThat(Models.get(StackServiceModel.class).find()
-            .where(StackServiceModel.NAME.eq("dbclash")).count())
+        assertThat(serviceNamed(stackId, "dbclash"))
             .as("a stack service cannot seize a port the ledger records for a managed database")
-            .isEqualTo(0);
+            .isNull();
         assertThat(response.body())
             .as("the refusal names the holding database, not a bare status")
             .contains("ledgerdb");
@@ -216,8 +226,8 @@ class StackAdminTest extends HohenheimTestBase {
 
     /** The same cross-authority refusal against a DOCKER SITE's recorded publication. */
     @Test
-    @Order(13)
     void stackPortCollidingWithADockerSiteClaimIsRefused() throws Exception {
+        int stackId = createStack("admin-stack-site-clash");
         SiteModel sites = Models.get(SiteModel.class);
         Row site = sites.createEmptyRow();
         site.set(SiteModel.NAME, "ledgersite");
@@ -228,32 +238,30 @@ class StackAdminTest extends HohenheimTestBase {
         PortLedger.claim(ServerModel.localServerId(), "0.0.0.0", 8211, null,
             SiteModel.MODEL_ID, site.get(SiteModel.ID), null);
 
-        var response = postForm("/admin/stack-services/new",
+        var response = adminPostForm("/admin/stack-services/new",
             "stack_id=" + stackId + "&name=siteclash&enabled=false&enabled=true"
             + "&image=alpine%3Alatest&command=&restart_policy=no"
             + "&ports.0.container_port=80&ports.0.host_port=8211&ports.0.protocol=tcp");
 
-        assertThat(Models.get(StackServiceModel.class).find()
-            .where(StackServiceModel.NAME.eq("siteclash")).count())
+        assertThat(serviceNamed(stackId, "siteclash"))
             .as("a stack service cannot seize a port the ledger records for a docker site")
-            .isEqualTo(0);
+            .isNull();
         assertThat(response.body())
             .as("the refusal names the holding site (0.0.0.0 + null protocol folded canonically)")
             .contains("ledgersite");
     }
 
     @Test
-    @Order(8)
     void unknownDependencyIsRefused() throws Exception {
-        postForm("/admin/stack-services/new",
+        int stackId = createStack("admin-stack-dependency");
+        adminPostForm("/admin/stack-services/new",
             "stack_id=" + stackId + "&name=dependent&enabled=false&enabled=true&image=alpine%3Alatest"
             + "&command=&restart_policy=no"
             + "&depends_on.0.service=nope&depends_on.0.condition=started");
 
-        assertThat(Models.get(StackServiceModel.class).find()
-            .where(StackServiceModel.NAME.eq("dependent")).count())
+        assertThat(serviceNamed(stackId, "dependent"))
             .as("a dependency naming no sibling service can never be satisfied")
-            .isEqualTo(0);
+            .isNull();
     }
 
     /**
@@ -262,22 +270,20 @@ class StackAdminTest extends HohenheimTestBase {
      * invalid Docker names (and unmatchable sibling checks) used to ship.
      */
     @Test
-    @Order(9)
     void trailingWhitespaceServiceNameIsStoredTrimmed() throws Exception {
-        var response = postForm("/admin/stack-services/new",
+        int stackId = createStack("admin-stack-trim");
+        var response = adminPostForm("/admin/stack-services/new",
             "stack_id=" + stackId + "&name=web2%20&enabled=false&enabled=true"
             + "&image=alpine%3Alatest&command=&restart_policy=no");
-        assertThat(response.statusCode()).isIn(200, 302, 303);
-        assertThat(Models.get(StackServiceModel.class).find()
-            .where(StackServiceModel.NAME.eq("web2")).count())
+        assertThat(response.statusCode()).as("the untrimmed name is accepted").isIn(200, 302, 303);
+        assertThat(servicesNamed(stackId, "web2"))
             .as("the canonical trimmed name is the stored name")
             .isEqualTo(1);
 
-        postForm("/admin/stack-services/new",
+        adminPostForm("/admin/stack-services/new",
             "stack_id=" + stackId + "&name=%20web2&enabled=false&enabled=true"
             + "&image=alpine%3Alatest&command=&restart_policy=no");
-        assertThat(Models.get(StackServiceModel.class).find()
-            .where(StackServiceModel.NAME.eq("web2")).count())
+        assertThat(servicesNamed(stackId, "web2"))
             .as("a whitespace variant is the same name and must be refused")
             .isEqualTo(1);
     }
@@ -285,16 +291,15 @@ class StackAdminTest extends HohenheimTestBase {
     /** Docker rejects zero-period healthchecks at container create -- exactly the
      *  deploy-time failure form validation exists to prevent. */
     @Test
-    @Order(10)
     void zeroHealthIntervalIsRefused() throws Exception {
-        postForm("/admin/stack-services/new",
+        int stackId = createStack("admin-stack-health");
+        adminPostForm("/admin/stack-services/new",
             "stack_id=" + stackId + "&name=sick&enabled=false&enabled=true"
             + "&image=alpine%3Alatest&command=&restart_policy=no"
             + "&health_cmd=true&health_interval_seconds=0");
-        assertThat(Models.get(StackServiceModel.class).find()
-            .where(StackServiceModel.NAME.eq("sick")).count())
+        assertThat(serviceNamed(stackId, "sick"))
             .as("a zero healthcheck interval must fail the form, not the deploy")
-            .isEqualTo(0);
+            .isNull();
     }
 
     /**
@@ -306,15 +311,14 @@ class StackAdminTest extends HohenheimTestBase {
      * is the "knob nobody can set is theater" outcome this mechanism was built to avoid.
      */
     @Test
-    @Order(14)
     void aDeclarableCapabilityIsStoredAndAnEscapeIsRefusedAtTheForm() throws Exception {
+        int stackId = createStack("admin-stack-capabilities");
         // 1. THE POSITIVE ANCHOR: a name on the allow-list lands on the record.
-        postForm("/admin/stack-services/new",
+        adminPostForm("/admin/stack-services/new",
             "stack_id=" + stackId + "&name=capok&enabled=false&enabled=true"
             + "&image=alpine%3Alatest&command=&restart_policy=no"
             + "&capabilities=NET_RAW&capabilities=");
-        Row stored = Models.get(StackServiceModel.class).find()
-            .where(StackServiceModel.NAME.eq("capok")).first();
+        Row stored = serviceNamed(stackId, "capok");
         assertThat(stored)
             .as("step 1: a declarable capability must not block the save").isNotNull();
         assertThat((List<String>) stored.get(StackServiceModel.CAPABILITIES))
@@ -322,53 +326,47 @@ class StackAdminTest extends HohenheimTestBase {
             .containsExactly("NET_RAW");
 
         // 2. THE REFUSAL: an escape never becomes a row at all.
-        postForm("/admin/stack-services/new",
+        adminPostForm("/admin/stack-services/new",
             "stack_id=" + stackId + "&name=capbad&enabled=false&enabled=true"
             + "&image=alpine%3Alatest&command=&restart_policy=no"
             + "&capabilities=SYS_ADMIN&capabilities=");
-        assertThat(Models.get(StackServiceModel.class).find()
-            .where(StackServiceModel.NAME.eq("capbad")).count())
+        assertThat(serviceNamed(stackId, "capbad"))
             .as("step 2: SYS_ADMIN must fail the form, not the deploy")
-            .isEqualTo(0);
+            .isNull();
     }
 
-    /**
-     * The mirror of the file-side shadow refusal: adding the MOUNT after the file
-     * must be refused exactly like adding the file after the mount (the service has
-     * a staged file at /etc/app.conf from the earlier test).
-     */
-    @Test
-    @Order(11)
-    void mountShadowingAStagedFileIsRefused() throws Exception {
-        navigateToApp("/admin/stack-services/" + serviceId);
-        waitForHydration();
-        String snapshot = page.locator("input[name='cms__snapshot']").inputValue();
+    // -- fixtures -----------------------------------------------------------------
 
-        postForm("/admin/stack-services/" + serviceId,
-            "stack_id=" + stackId + "&name=web&enabled=false&enabled=true"
-            + "&image=alpine%3Alatest&command=&restart_policy=no"
-            + "&mounts.0.type=volume&mounts.0.name=data&mounts.0.container_path=%2Fdata"
-            + "&mounts.1.type=volume&mounts.1.name=etc&mounts.1.container_path=%2Fetc"
-            + "&cms__snapshot=" + java.net.URLEncoder.encode(snapshot, java.nio.charset.StandardCharsets.UTF_8));
-
-        Row service = Models.get(StackServiceModel.class).findById(serviceId);
-        assertThat(service.getRecords(StackServiceModel.MOUNTS))
-            .as("the shadowing mount must be refused, keeping the original single mount")
-            .hasSize(1);
+    /** Create a stack on the local host through the admin form; each test owns its own. */
+    private int createStack(String name) throws Exception {
+        var response = adminPostForm("/admin/stacks/new",
+            "name=" + name + "&enabled=false&enabled=true&server_id=" + ServerModel.localServerId());
+        assertThat(response.statusCode()).as("stack %s is created", name).isIn(200, 302, 303);
+        Row stack = Models.get(StackModel.class).find().where(StackModel.NAME.eq(name)).first();
+        assertThat(stack).as("stack %s exists", name).isNotNull();
+        return stack.get(StackModel.ID);
     }
 
-    @Test
-    @Order(99)
-    void deletingTheStackCascadesToServicesAndFiles() throws Exception {
-        var response = postForm("/admin/stacks/" + stackId + "/delete", confirmed(""));
-        assertThat(response.statusCode()).isIn(200, 302, 303);
+    /** The service of one stack stored under {@code name}, or null. */
+    private static Row serviceNamed(int stackId, String name) {
+        return Models.get(StackServiceModel.class).find()
+            .where(StackServiceModel.STACK_ID.eq(stackId))
+            .where(StackServiceModel.NAME.eq(name))
+            .first();
+    }
 
-        assertThat(Models.get(StackModel.class).findById(stackId)).isNull();
-        assertThat(Models.get(StackServiceModel.class).find()
-            .where(StackServiceModel.STACK_ID.eq(stackId)).count()).isEqualTo(0);
-        assertThat(Models.get(StackFileModel.class).find()
-            .where(StackFileModel.STACK_SERVICE_ID.eq(serviceId)).count())
-            .as("config files (encrypted secrets) must not outlive their stack")
-            .isEqualTo(0);
+    /** How many services of one stack are stored under {@code name}. */
+    private static long servicesNamed(int stackId, String name) {
+        return Models.get(StackServiceModel.class).find()
+            .where(StackServiceModel.STACK_ID.eq(stackId))
+            .where(StackServiceModel.NAME.eq(name))
+            .count();
+    }
+
+    /** How many files are staged on one service. */
+    private static long filesOf(int serviceId) {
+        return Models.get(StackFileModel.class).find()
+            .where(StackFileModel.STACK_SERVICE_ID.eq(serviceId))
+            .count();
     }
 }

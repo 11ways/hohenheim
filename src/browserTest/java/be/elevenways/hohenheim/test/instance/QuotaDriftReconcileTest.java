@@ -34,20 +34,20 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * exist -- and where a before-write hook structurally cannot compensate, the reconcile
  * lane moves the ledger back to what the live rows say.
  *
- * AIDEV-NOTE: this is the production defect of 2026-09-01 in a test. Three hooks spend
- * against ONE instance write (the owner's slot, the owner's memory, the host's memory) and
- * an instance save carries no ambient transaction, so a write refused after the first hook
- * has spent leaves that spend behind with no record to release it. Robbedoes read
- * {@code owner_mem_mb} exactly 512 MB above the sum of its live bookings and
- * {@code instances} 15 against 14 live rows, with every {@code host_mem_mb} bucket correct
- * -- the signature of an owner-side spend followed by a HOST-side refusal, which is step 3
- * below. Step 2 is the half that IS locally fixable and now is.
+ * AIDEV-NOTE: this is the production defect of 2026-09-01 in a test. The owner's slot, the
+ * owner's memory and the host's memory are all spent against ONE instance write, and an
+ * instance save carries no ambient transaction. Robbedoes read {@code owner_mem_mb} exactly
+ * 512 MB above the sum of its live bookings and {@code instances} 15 against 14 live rows,
+ * with every {@code host_mem_mb} bucket correct -- the signature of an owner-side spend
+ * followed by a HOST-side refusal. Step 2 (the owner's own memory refusal) and step 3 (the
+ * host's refusal) now both hand back what the write had spent: the dimensions share one
+ * charge hook that unwinds on a refusal (ChargedModel).
  *
- * AIDEV-NOTE: step 3 asserts a leak still happens, deliberately. It is not a blessing of
- * the defect: it is the fact that pins WHY the reconciler exists, and it is what makes
- * step 4 a real proof rather than a no-op over an already-correct ledger. If a later
- * change makes the sibling refusal compensate itself, this step is the one to rewrite --
- * never delete it silently, or step 4 stops testing anything.
+ * AIDEV-NOTE: step 3 used to assert that the leak still happened, because that was what
+ * made step 4 a real proof. It was rewritten when the host refusal learned to compensate
+ * (2026-09-24), exactly as its note asked: step 3 now pins the compensation, and plants the
+ * drift a deployed ledger from before the fix still carries, so step 4 still has something
+ * real to repair.
  *
  * Its OWN datasource, so every bucket asserted here is this class's alone. No daemon is
  * contacted: every decision is over stored record state.
@@ -133,10 +133,9 @@ class QuotaDriftReconcileTest {
             HohenheimSettings.VALUES.setValue(
                 HohenheimSettings.Quota.MAX_MEMORY_MB_PER_OWNER, 0);
 
-            // 3. THE RESIDUE, and the shape robbedoes carried: the HOST budget refuses, and
-            //    it does so in a LATER hook -- so the owner's slot and memory are already
-            //    spent and no before-write hook can hand them back. The host bucket itself
-            //    is untouched, which is exactly what the production ledger showed.
+            // 3. The shape robbedoes carried: the HOST budget refuses AFTER the owner's slot
+            //    and memory were booked in the same write -- and hands them back, because the
+            //    owner and host dimensions share one charge hook that unwinds on a refusal.
             Throwable overHostBudget =
                 catchThrowable(() -> Models.get(InstanceModel.class)
                     .save(workload(tiny, "over-host", 4096)));
@@ -146,14 +145,16 @@ class QuotaDriftReconcileTest {
             assertThat(liveNamed(PREFIX + "over-host"))
                 .as("step 3: and no row landed").isEmpty();
             assertThat(Quotas.usedOf(COUNT_BUCKET))
-                .as("step 3: the owner is left holding a slot for it -- the leak")
-                .isEqualTo(2);
+                .as("step 3: the owner holds no slot for a workload that does not exist")
+                .isEqualTo(1);
             assertThat(Quotas.usedOf(MEMORY_BUCKET))
-                .as("step 3: and its memory too")
-                .isEqualTo(FOOTPRINT_MB + 4096);
+                .as("step 3: nor its memory").isEqualTo(FOOTPRINT_MB);
             assertThat(InstanceCapacity.bookedMbOn(tiny))
-                .as("step 3: while the host that refused booked nothing, which is why the"
-                    + " production symptom was owner-only").isZero();
+                .as("step 3: and the host that refused booked nothing").isZero();
+            // The ledger a deployment from before that fix still carries: exactly the
+            // production residue, one slot and 4096 MB the live rows do not account for.
+            Quotas.reserve(COUNT_BUCKET, 1, Long.MAX_VALUE);
+            Quotas.reserve(MEMORY_BUCKET, 4096, Long.MAX_VALUE);
 
             // 4. THE RECONCILE: truth is what the live rows say, and both drifted buckets
             //    are named and corrected. This is the lane that heals a control plane

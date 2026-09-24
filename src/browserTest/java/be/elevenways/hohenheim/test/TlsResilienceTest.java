@@ -22,12 +22,12 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
  * DB-level tests for TLS resilience: hostname validation, error backoff, the widened
  * renewal sweep, and orphan-certificate cleanup. No Playwright, no live ACME.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class TlsResilienceTest {
 
     private static boolean initialized = false;
@@ -55,7 +55,6 @@ class TlsResilienceTest {
     }
 
     @Test
-    @Order(1)
     void hostnameValidatorRejectsBadNames() {
         assertThat(AcmeService.isValidHostname("example.com")).isTrue();
         assertThat(AcmeService.isValidHostname("sub.example-site.co.uk")).isTrue();
@@ -79,7 +78,6 @@ class TlsResilienceTest {
     }
 
     @Test
-    @Order(2)
     void failureBackoffEscalatesAndSuccessResets() {
         Row cert = createCert("Backoff", CertificateModel.PROVIDER_LETSENCRYPT,
             CertificateModel.STATUS_ACTIVE, "backoff.test");
@@ -102,7 +100,6 @@ class TlsResilienceTest {
     }
 
     @Test
-    @Order(3)
     void backoffDelayEscalatesWithJitterBounds() {
         Instant now = Now.instant();
         // 15min * 2^min(count,7), +/-20% jitter
@@ -117,7 +114,6 @@ class TlsResilienceTest {
     }
 
     @Test
-    @Order(4)
     void renewalSweepIncludesDueErroredCertsOnly() {
         var certModel = Models.get(CertificateModel.class);
         Instant now = Now.instant();
@@ -158,7 +154,6 @@ class TlsResilienceTest {
     }
 
     @Test
-    @Order(5)
     void orphanCleanupDeletesUnlinkedLetsencryptOnly() {
         var certModel = Models.get(CertificateModel.class);
         var siteModel = Models.get(SiteModel.class);
@@ -199,7 +194,6 @@ class TlsResilienceTest {
     }
 
     @Test
-    @Order(6)
     void disabledSitesKeepTheirCertsButDeletedSitesOrphanThem() {
         var certModel = Models.get(CertificateModel.class);
         var siteModel = Models.get(SiteModel.class);
@@ -255,28 +249,39 @@ class TlsResilienceTest {
     }
 
     @Test
-    @Order(60)
     @Timeout(30)
     void verboseDnsHookIsDrainedInsteadOfMisreportedAsTimeout() throws Exception {
         File hook = File.createTempFile("hh-dns-hook", ".sh");
         hook.deleteOnExit();
-        // Emits far more than the OS pipe buffer: an undrained stdout would
-        // block the hook forever and surface as a bogus 60s timeout.
+        File finished = File.createTempFile("hh-dns-hook-finished", ".txt");
+        finished.deleteOnExit();
+        // 1. A hook that emits far more than the OS pipe buffer BEFORE it can finish: an
+        //    undrained stdout would block it on that write forever and surface as a bogus
+        //    60s timeout. Only a hook whose output was drained reaches the marker line.
         java.nio.file.Files.writeString(hook.toPath(),
-            "#!/bin/sh\nhead -c 262144 /dev/zero | tr '\\0' 'x'\nexit 0\n");
+            "#!/bin/sh\nhead -c 262144 /dev/zero | tr '\\0' 'x'\n"
+                + "echo \"$1 $2 $3\" > '" + finished.getAbsolutePath() + "'\nexit 0\n");
         hook.setExecutable(true);
         String previous = HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND);
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND, hook.getAbsolutePath());
         try {
-            new CommandDnsTxtPublisher().publish(
-                new DnsTxtRecord("_acme-challenge.example.com", "verbose-hook-value"));
+            // 2. The publish succeeds: no timeout, no failure verdict.
+            assertThatCode(() -> new CommandDnsTxtPublisher().publish(
+                    new DnsTxtRecord("_acme-challenge.example.com", "verbose-hook-value")))
+                .as("step 2: a verbose hook that exits 0 is a successful publish, not a timeout")
+                .doesNotThrowAnyException();
         } finally {
             HohenheimSettings.VALUES.setValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND, previous);
         }
+
+        // 3. And the hook really ran to its end with the publish's arguments, which it can
+        //    only do once every byte it wrote before the marker was drained.
+        assertThat(java.nio.file.Files.readString(finished.toPath()).trim())
+            .as("step 3: the hook got past its 256 KiB of output and saw the present call")
+            .isEqualTo("present _acme-challenge.example.com verbose-hook-value");
     }
 
     @Test
-    @Order(61)
     @Timeout(30)
     void failingDnsHookSurfacesItsOutputInTheError() throws Exception {
         File hook = File.createTempFile("hh-dns-hook-fail", ".sh");

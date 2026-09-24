@@ -3492,6 +3492,16 @@
     "text": "Een gedelegeerde proxysite kan niet doorsturen naar een loopback- of privé-adres",
     "scope": "violations"
   },
+  "trusted_upstream": [
+    {
+      "text": "Vertrouwde upstream",
+      "scope": "field"
+    },
+    {
+      "text": "Laat deze site de upstream bereiken die je hebt ingesteld, ook wanneer een tenant de site beheert en het doel een loopback-adres, een adres in een intern netwerk, een unix-socket of een map op de host is. Tenants kunnen deze instelling en de upstream zelf nooit wijzigen.",
+      "scope": "help"
+    }
+  ],
   "proxy_upstream_invalid": {
     "text": "De upstream-host moet een gewoon http(s)-adres zonder inloggegevens zijn",
     "scope": "violations"
@@ -6009,7 +6019,7 @@
     "scope": "violations"
   },
   "backup_target_in_use": {
-    "text": "Back-updoel {$name} bevat nog {$backups} back-up(s) en dient als doel voor {$instances} instantie(s) en {$trashed} verwijderde instantie(s); verwijder eerst die back-ups en wijs de instanties elders toe of wis ze definitief",
+    "text": "Back-updoel {$name} bevat nog {$backups} back-up(s) en dient als doel voor {$instances} instantie(s); verwijder eerst die back-ups en wijs de instanties elders toe",
     "scope": "violations"
   },
   "backup_target_control_plane": {
@@ -8361,6 +8371,54 @@
   "fetch": {
     "text": "Ophalen",
     "scope": "server_media"
+  },
+  "media_fetch_started": {
+    "text": "'{$name}' wordt op de achtergrond opgehaald; de voortgang staat op dit tabblad",
+    "scope": "server_media"
+  },
+  "fetches_title": {
+    "text": "Ophaalacties",
+    "scope": "server_media"
+  },
+  "fetch_state": {
+    "text": "Status",
+    "scope": "server_media"
+  },
+  "fetch_progress": {
+    "text": "Voortgang van het ophalen van '{$name}'",
+    "scope": "server_media"
+  },
+  "fetch_state_pending": {
+    "text": "In de wachtrij",
+    "scope": "server_media"
+  },
+  "fetch_state_downloading": {
+    "text": "Downloaden",
+    "scope": "server_media"
+  },
+  "fetch_state_importing": {
+    "text": "Importeren op de host",
+    "scope": "server_media"
+  },
+  "fetch_state_ready": {
+    "text": "Beschikbaar",
+    "scope": "server_media"
+  },
+  "fetch_state_failed": {
+    "text": "Mislukt",
+    "scope": "server_media"
+  },
+  "fetch_state_interrupted": {
+    "text": "Onderbroken: de controller stopte voordat het ophalen klaar was",
+    "scope": "server_media"
+  },
+  "media_fetch_running": {
+    "text": "Media '{$media}' wordt al naar deze host opgehaald",
+    "scope": "violations"
+  },
+  "media_fetch_busy": {
+    "text": "Er lopen al {$count} ophaalacties voor installatiemedia; wacht tot er een klaar is",
+    "scope": "violations"
   },
   "media_fetched": [
     {
@@ -11426,7 +11484,7 @@
   },
   "delete_in_use": [
     {
-      "text": "{$workloads} opgeslagen workloads verwijzen nog naar deze host. Verwijder of migreer ze eerst, anders verwijzen hun records naar een host die niet meer bestaat.",
+      "text": "{$workloads} records verwijzen nog naar deze host: {$instances} instantie(s), {$stacks} stack(s), {$databases} database(s), {$engines} gedeelde database-engine(s) en {$ports} poortclaim(s). Verwijder of verplaats ze eerst (geef de claims vrij), anders verwijzen hun records naar een host die niet meer bestaat.",
       "scope": "server"
     },
     {
@@ -11594,6 +11652,10 @@
   },
   "protected_path_taken": {
     "text": "Dit pad is al beschermd op deze site",
+    "scope": "violations"
+  },
+  "tenant_git_provider_not_managed": {
+    "text": "Je beheert deze git-provider niet",
     "scope": "violations"
   },
   "tenant_access_list_not_managed": {
@@ -12076,6 +12138,10 @@
   },
   "import_nameservers_undeclared": {
     "text": "Het zonebestand noemt andere nameservers en deze controller declareert er geen (dns.nameservers): declareer ze, of behoud de nameservers van het bestand",
+    "scope": "violations"
+  },
+  "record_secondary_zone": {
+    "text": "Een secundaire zone krijgt haar records via zoneoverdracht van haar primaire; voeg het record toe of bewerk het op de primaire",
     "scope": "violations"
   },
   "import_secondary_zone": {

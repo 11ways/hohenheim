@@ -77,7 +77,7 @@ public final class DnsDelegationHealth {
         Models.get(DnsZoneModel.class).save(zone);
 
         if (report.verdict().severity() != null && report.verdict() != previous) {
-            Alerts.send(NotificationEvents.DNS_DELEGATION_BROKEN,
+            Alerts.trySend(NotificationEvents.DNS_DELEGATION_BROKEN,
                 "Delegation of zone " + originString + ": " + report.verdict().token(),
                 report.detail());
             Blast.slog("dns.delegation_verdict", Map.of(

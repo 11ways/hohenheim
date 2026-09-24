@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.test.docker.TestImages;
+import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
@@ -12,21 +15,16 @@ import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ServerService;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -54,11 +52,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ManagedDatabaseTest {
 
     private static PrivateNetns netns;
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
 
     @BeforeAll
-    static void fixture() throws IOException {
-        datasource = freshDatasource();
+    static void fixture() throws Exception {
+        datasource = TestDatabases.freshBootedDatasource();
         netns = PrivateNetns.installEnforcing();
     }
 
@@ -269,7 +267,7 @@ class ManagedDatabaseTest {
     void provisionRefusesToReplaceAForeignSameNamedContainer() throws IOException {
         DockerClient docker = new DockerClient();
         requireFixture(docker, PG_IMAGE);
-        LiveLane.requireImage(docker, "alpine:latest");
+        LiveLane.requireImage(docker, TestImages.ALPINE);
 
         DatabaseService service = new DatabaseService(datasource);
         String name = "foreign" + System.nanoTime();
@@ -282,7 +280,7 @@ class ManagedDatabaseTest {
             //    (what a force-removing path would have destroyed without a thought).
             docker.removeContainer(handle, true);
             docker.createContainer(handle, Map.of(
-                "Image", "alpine:latest", "Cmd", List.of("sleep", "300")),
+                "Image", TestImages.ALPINE, "Cmd", List.of("sleep", "300")),
                 ContainerHardening.STRICT);
 
             // 3. Re-provisioning over it is a named refusal, not a silent replace.
@@ -340,7 +338,7 @@ class ManagedDatabaseTest {
                 List.of("PGPASSWORD=secret123"));
             assertThat(create.exitCode()).withFailMessage("seed failed: %s", create.stderr()).isZero();
 
-            String dump = new ManagedDatabase(new ServerService().clientFor(ServerService.LOCAL))
+            String dump = new ManagedDatabase(new ServerService().clientFor(ServerService.LOCAL_HOST_NAME))
                 .backup(container, ManagedDatabase.Engine.POSTGRES, "appuser", "secret123", "appdb");
             assertThat(dump).contains("CREATE TABLE");
             assertThat(dump).contains("widgets");
@@ -362,7 +360,7 @@ class ManagedDatabaseTest {
                 "appuser", "secret123", "appdb", true);   // ephemeral: tmpfs, no btrfs I/O
             String container = Db.supply(datasource, () -> EngineHandles.of(name));
             ManagedDatabase engine =
-                new ManagedDatabase(new ServerService().clientFor(ServerService.LOCAL));
+                new ManagedDatabase(new ServerService().clientFor(ServerService.LOCAL_HOST_NAME));
 
             psql(docker, container, env, "CREATE TABLE notes (id int); INSERT INTO notes VALUES (7);");
             String dump = engine.backup(container, ManagedDatabase.Engine.POSTGRES,
@@ -403,7 +401,7 @@ class ManagedDatabaseTest {
                 "appuser", "secret123", "appdb", true);   // ephemeral: tmpfs, no btrfs I/O
             String container = Db.supply(datasource, () -> EngineHandles.of(name));
             ManagedDatabase engine =
-                new ManagedDatabase(new ServerService().clientFor(ServerService.LOCAL));
+                new ManagedDatabase(new ServerService().clientFor(ServerService.LOCAL_HOST_NAME));
 
             mysql(docker, container, env, "CREATE TABLE notes (id int); INSERT INTO notes VALUES (7);");
             String dump = engine.backup(container, ManagedDatabase.Engine.MYSQL,
@@ -450,18 +448,5 @@ class ManagedDatabaseTest {
         } catch (IOException absent) {
             return null;
         }
-    }
-
-    private static SqliteDatasource freshDatasource() throws IOException {
-        File db = File.createTempFile("hohenheim-manageddb-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        SqliteDatasource ds = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(ds).migrate().requireSuccess();
-        // Names and labels are controller-namespaced, and the namespace resolves through
-        // the CURRENT datasource -- so this one must BE the current one.
-        Datasources.register(Datasources.DEFAULT, ds);
-        HohenheimTestRuntime.ensureBooted();
-        return ds;
     }
 }

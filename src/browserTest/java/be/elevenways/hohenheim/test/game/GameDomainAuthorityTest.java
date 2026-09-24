@@ -19,12 +19,10 @@ import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.game.VelocityConfigs;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.conduit.ConduitAttributes;
@@ -39,10 +37,7 @@ import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.protoblast.common.key.IdentifierKey;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer.OrderAnnotation;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -54,8 +49,12 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * The game-domains security core and its materialization, driven straight at the write
  * funnel: authority over BOTH records, generated rows that are attributed, self-scoped
  * and immutable to everyone else, and cleanup that removes only its own output.
+ *
+ * AIDEV-NOTE: the mapping's life (authorize, materialize, reconcile the address records,
+ * clean up) is ONE journey: its phases used to be four @Order'ed tests handing the mapping
+ * id to each other through a static field, so running any later one alone failed and one
+ * failure cascaded. The two remaining tests only READ the class fixture.
  */
-@TestMethodOrder(OrderAnnotation.class)
 class GameDomainAuthorityTest extends HohenheimTestBase {
 
     private static final String HOST = "play.gamedomain.test";
@@ -70,7 +69,6 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
     private static int tenantInstancesId;
     private static int tenantDomainId;
     private static int zoneId;
-    private static int mappingId;
 
     @BeforeAll
     static void fixtures() {
@@ -97,8 +95,8 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
         secondBackendId = instance("game-backend-2");
         proxyId = instance("game-proxy");
 
-        tenantInstancesId = user("tenant-instances@gamedomain.test");
-        tenantDomainId = user("tenant-domain@gamedomain.test");
+        tenantInstancesId = ApiSupport.user("tenant-instances@gamedomain.test");
+        tenantDomainId = ApiSupport.user("tenant-domain@gamedomain.test");
 
         RecordGrants.grant(GrantSubjectType.USER, tenantInstancesId, InstanceModel.MODEL_ID, backendId,
             HohenheimAccess.MANAGE, true);
@@ -150,17 +148,6 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
         return row.get(InstanceModel.ID);
     }
 
-    private static int user(String email) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, email);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
-    }
-
     private static Row mappingRow(int domain, int backend, int proxy) {
         Row row = Models.get(GameDomainModel.class).createEmptyRow();
         row.set(GameDomainModel.SITE_DOMAIN_ID, domain);
@@ -195,8 +182,19 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
     }
 
     @Test
-    @Order(1)
-    void authorityOverBothRecordsIsRequiredAndARefusalCreatesNothing() {
+    void aGameMappingIsAuthorizedMaterializedReconciledAndCleanedUp() {
+        // 1. Authority over BOTH records is required, and a refusal creates nothing.
+        int mappingId = authorityOverBothRecordsIsRequiredAndARefusalCreatesNothing();
+        // 2. The accepted mapping materializes attributed, immutable config, DNS and secret.
+        materializationGeneratesAttributedConfigDnsAndSecret(mappingId);
+        // 3. Its A/AAAA rows ride the server's declared address and nothing else.
+        aRecordsRideTheServerAddressAuthorityAndOnlyIt(mappingId);
+        // 4. Deleting it (and its domain row) removes exactly its own output.
+        cleanupRemovesOnlyItsOwnOutput(mappingId);
+    }
+
+    /** @return the created mapping's id */
+    private int authorityOverBothRecordsIsRequiredAndARefusalCreatesNothing() {
         // 1. A principal with manage on BOTH instances but NOT the domain's site is
         //    refused, and the mapping does NOT exist afterwards.
         AccessContext instancesOnly = contextFor(
@@ -229,15 +227,13 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
             HohenheimAccess.MANAGE, true);
         Row mapping = GameDomains.applyAuthorized(instancesOnly,
             mappingRow(domainId, backendId, proxyId));
-        mappingId = mapping.get(GameDomainModel.ID);
         assertThat(mappingCount())
             .as("step 3: with authority over BOTH records the mapping is created")
             .isEqualTo(1);
+        return mapping.get(GameDomainModel.ID);
     }
 
-    @Test
-    @Order(2)
-    void materializationGeneratesAttributedConfigDnsAndSecret() {
+    private void materializationGeneratesAttributedConfigDnsAndSecret(int mappingId) {
         // 1. The proxy's velocity.toml row is GENERATED and attributed.
         Row file = generatedFileRow();
         assertThat(file).as("step 1: the generated config row exists").isNotNull();
@@ -248,6 +244,7 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
             .as("step 1: the config row is anchored to the proxy instance")
             .isEqualTo(InstanceModel.MODEL_ID.toString());
         assertThat((Integer) file.get(InstanceFileModel.GENERATED_FOR_ID))
+            .as("step 1: the config row names the proxy instance's id")
             .isEqualTo(proxyId);
         String content = file.get(InstanceFileModel.CONTENT);
         assertThat(content)
@@ -266,9 +263,12 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
         assertThat(DnsRecordModel.portOf(srv))
             .as("step 2: the SRV port is the proxy's PUBLIC pre-allocated port")
             .isEqualTo(25599);
-        assertThat((String) srv.get(DnsRecordModel.VALUE)).isEqualTo(HOST);
-        assertThat((Integer) srv.get(DnsRecordModel.GENERATED_FOR_ID)).isEqualTo(mappingId);
-        assertThat((Integer) srv.get(DnsRecordModel.ZONE_ID)).isEqualTo(zoneId);
+        assertThat((String) srv.get(DnsRecordModel.VALUE))
+            .as("step 2: the SRV target is the mapped hostname").isEqualTo(HOST);
+        assertThat((Integer) srv.get(DnsRecordModel.GENERATED_FOR_ID))
+            .as("step 2: the SRV row is attributed to the mapping").isEqualTo(mappingId);
+        assertThat((Integer) srv.get(DnsRecordModel.ZONE_ID))
+            .as("step 2: the SRV row lives in the hostname's zone").isEqualTo(zoneId);
 
         // 3. The forwarding secret was handed to the backend as an ENCRYPTED variable:
         //    the model read decrypts it to the proxy's value, the raw column is a
@@ -327,9 +327,7 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
             .isEqualTo(1);
     }
 
-    @Test
-    @Order(3)
-    void aRecordsRideTheServerAddressAuthorityAndOnlyIt() {
+    private void aRecordsRideTheServerAddressAuthorityAndOnlyIt(int mappingId) {
         var records = Models.get(DnsRecordModel.class);
         var servers = Models.get(ServerModel.class);
         int serverId = ServerModel.canonicalServerId(null);
@@ -368,14 +366,17 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
         servers.save(declare);
         Row a = generatedRow(DnsRecordModel.TYPE_A);
         assertThat(a).as("step 4: the generated A row exists").isNotNull();
-        assertThat((String) a.get(DnsRecordModel.NAME)).isEqualTo("play");
+        assertThat((String) a.get(DnsRecordModel.NAME))
+            .as("step 4: the A row's owner name is the mapped host").isEqualTo("play");
         assertThat((String) a.get(DnsRecordModel.VALUE))
             .as("step 4: the A value is the DECLARED public IPv4")
             .isEqualTo("192.0.2.10");
-        assertThat((Integer) a.get(DnsRecordModel.GENERATED_FOR_ID)).isEqualTo(mappingId);
+        assertThat((Integer) a.get(DnsRecordModel.GENERATED_FOR_ID))
+            .as("step 4: the A row is attributed to the mapping").isEqualTo(mappingId);
         Row aaaa = generatedRow(DnsRecordModel.TYPE_AAAA);
         assertThat(aaaa).as("step 4: the generated AAAA row exists").isNotNull();
-        assertThat((String) aaaa.get(DnsRecordModel.VALUE)).isEqualTo("2001:db8::10");
+        assertThat((String) aaaa.get(DnsRecordModel.VALUE))
+            .as("step 4: the AAAA value is the DECLARED public IPv6").isEqualTo("2001:db8::10");
 
         // 5. The host's address CHANGES: the generated value moves with the declaration
         //    (a stale A record is a dangling pointer); the hand-authored row is
@@ -430,18 +431,9 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
 
     /** The admin surface renders: list page and create form answer 200 for the admin. */
     @Test
-    @Order(4)
     void adminResourceRenders() throws Exception {
-        java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
         for (String path : new String[] {"/admin/game-domains", "/admin/game-domains/new"}) {
-            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                .uri(java.net.URI.create("http://localhost:" + getServerPort() + path))
-                .header("Cookie", be.elevenways.zenit.auth.server.AuthCookieSupport
-                    .sessionCookieName() + "=" + sessionToken)
-                .build();
-            java.net.http.HttpResponse<String> response = client.send(request,
-                java.net.http.HttpResponse.BodyHandlers.ofString());
-            assertThat(response.statusCode())
+            assertThat(adminGet(path).statusCode())
                 .as("admin page " + path + " renders")
                 .isEqualTo(200);
         }
@@ -453,7 +445,6 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
      * "structurally guarded by the same write hook" is a claim, not a verification.
      */
     @Test
-    @Order(6)
     void aGameMappingCannotIntroduceAHostnameAndInheritsTheDomainRowsQuarantine() {
         Integer savedWindow = HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS);
@@ -481,7 +472,7 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
         victimSite.set(SiteModel.ENABLED, true);
         sites.save(victimSite);
         int victimSiteId = victimSite.get(SiteModel.ID);
-        int arenaTenant = user("tenant-arena@gamedomain.test");
+        int arenaTenant = ApiSupport.user("tenant-arena@gamedomain.test");
         RecordGrants.grant(GrantSubjectType.USER, arenaTenant, SiteModel.MODEL_ID, victimSiteId,
             HohenheimAccess.MANAGE, true);
         Row victimDomain = domains.createEmptyRow();
@@ -519,9 +510,7 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
             .as("step 3: and no domain row for it exists to hang a mapping on").isEmpty();
     }
 
-    @Test
-    @Order(5)
-    void cleanupRemovesOnlyItsOwnOutput() {
+    private void cleanupRemovesOnlyItsOwnOutput(int mappingId) {
         // 1. A hand-authored SRV row beside the generated one (same zone, own name).
         var records = Models.get(DnsRecordModel.class);
         Row foreign = records.createEmptyRow();

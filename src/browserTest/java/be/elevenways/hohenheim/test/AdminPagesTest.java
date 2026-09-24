@@ -10,8 +10,6 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.hohenheim.AttentionItem;
@@ -29,10 +27,6 @@ import be.elevenways.zenit.server.http.RateLimitMiddleware;
 import com.microsoft.playwright.Locator;
 import org.junit.jupiter.api.*;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -47,34 +41,7 @@ import static org.assertj.core.api.Assertions.*;
  * Settings persistence, audit log, and certificate pages through the
  * zenit-cms admin.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class AdminPagesTest extends HohenheimTestBase {
-
-    private HttpResponse<String> post(String path, String body) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .header("X-Csrf-Token", csrfToken)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
-
-    private HttpResponse<String> get(String path) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .GET()
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
 
     // -----------------------------------------------------------------------
     // Settings
@@ -82,7 +49,6 @@ class AdminPagesTest extends HohenheimTestBase {
 
     /** One settings page load: render, save, reset, path browser and a rejected raw POST. */
     @Test
-    @Order(1)
     void settingsPageRendersSavesResetsAndRefusesInvalidValues() throws Exception {
         // Sections are LAZY since zenit-cms 380f48f: a bare load renders only the first
         // group's rows, so every group this journey touches is named in ?section=
@@ -258,7 +224,7 @@ class AdminPagesTest extends HohenheimTestBase {
         // rejection with a raw POST: an uncoercible port must rerender with a
         // violation instead of persisting anything.
         Integer before = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT);
-        var response = post("/admin/settings",
+        var response = adminPostForm("/admin/settings",
             "app.proxy.http_port=not-a-port&app.proxy.http_port__base=" + before);
 
         // Validation failure rerenders the page (no PRG redirect).
@@ -289,9 +255,8 @@ class AdminPagesTest extends HohenheimTestBase {
 
     /** Creating a record shows up in the activity list, the dashboard feed and the activity detail. */
     @Test
-    @Order(10)
     void activityLogDashboardFeedAndActivityDetailReflectACreation() throws Exception {
-        var createResponse = post("/admin/sites/new",
+        var createResponse = adminPostForm("/admin/sites/new",
             "name=Audit+Test+Site&upstream_kind=hohenheim%3Astatic");
         assertThat(createResponse.statusCode()).isIn(200, 302, 303);
 
@@ -317,7 +282,7 @@ class AdminPagesTest extends HohenheimTestBase {
             .first();
         assertThat(logged).as("the site creation was logged").isNotNull();
         assertThat((String) logged.get(ActivityModel.ACTION)).isEqualTo("create");
-        assertThat(get("/admin/activity?filter.record_id=" + siteId).body())
+        assertThat(adminGet("/admin/activity?filter.record_id=" + siteId).body())
             .as("the activity resource is mounted in the hohenheim panel and lists the creation")
             .contains("/admin/activity/" + logged.get(ActivityModel.ID));
 
@@ -372,7 +337,6 @@ class AdminPagesTest extends HohenheimTestBase {
 
     /** The request and upload forms render their fields and refuse impossible input. */
     @Test
-    @Order(19)
     void certificateRequestAndUploadFormsRenderAndValidate() throws Exception {
         navigateToApp("/admin/certificates-request");
         waitForHydration();
@@ -402,7 +366,7 @@ class AdminPagesTest extends HohenheimTestBase {
         page.keyboard().press("Escape");
 
         // A wildcard with HTTP validation is refused before the CA is contacted.
-        var response = post("/admin/certificates-request",
+        var response = adminPostForm("/admin/certificates-request",
             "nice_name=wildcard&domains=*.example.test&challenge_type=http&dns_mode=manual");
         assertThat(response.statusCode()).isIn(302, 303);
         var wildcardRefusal = popFlash();
@@ -410,7 +374,7 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(wildcardRefusal.message().key()).isEqualTo("wildcard_requires_dns");
 
         // Every repeated domain value is kept, so the wildcard is still seen.
-        response = post("/admin/certificates-request",
+        response = adminPostForm("/admin/certificates-request",
             "nice_name=wildcard&domains=&domains=example.test&domains=*.example.test"
                 + "&challenge_type=http&dns_mode=manual");
         assertThat(response.statusCode()).isIn(302, 303);
@@ -418,7 +382,7 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(repeatedRefusal).describedAs("the refusal rides the session flash").isNotNull();
         assertThat(repeatedRefusal.message().key()).isEqualTo("wildcard_requires_dns");
 
-        post("/admin/certificates/new",
+        adminPostForm("/admin/certificates/new",
             "nice_name=my-bad-cert&certificate_pem=NOT-A-PEM-BODY&private_key_pem=NOT-A-KEY");
         Row cert = Models.get(CertificateModel.class).find()
             .where(CertificateModel.NICE_NAME.eq("my-bad-cert")).first();
@@ -451,7 +415,6 @@ class AdminPagesTest extends HohenheimTestBase {
 
     /** A failed renewal is diagnosable from the list, the detail page and the dashboard. */
     @Test
-    @Order(21)
     void certificateListDetailAndDashboardSurfaceRenewalFailures() throws Exception {
         // A cert whose last renewal failed: the diagnosis must be readable.
         var certModel = Models.get(CertificateModel.class);
@@ -469,7 +432,7 @@ class AdminPagesTest extends HohenheimTestBase {
             // markup (a header-action anchor and a list column), so a hydrated load only added
             // latency. The DETAIL page below stays hydrated on purpose: it is the one place
             // this method proves the client render does not turn the diagnostic into an input.
-            String list = get("/admin/certificates").body();
+            String list = adminGet("/admin/certificates").body();
             assertThat(list).contains("/admin/certificates-request");
             assertThat(list)
                 .as("the renewal error is a visible list column")
@@ -564,7 +527,6 @@ class AdminPagesTest extends HohenheimTestBase {
      * edit form of an existing order, and a row that has no order to repeat is refused.
      */
     @Test
-    @Order(22)
     void certificateRequestPageOpensInReissueModeForAnAcmeRow() throws Exception {
         var certModel = Models.get(CertificateModel.class);
         Row cert = certModel.createEmptyRow();
@@ -584,7 +546,7 @@ class AdminPagesTest extends HohenheimTestBase {
 
         try {
             // 1. The list offers the action for the ACME row, in the overflow menu.
-            String list = get("/admin/certificates").body();
+            String list = adminGet("/admin/certificates").body();
             assertThat(list)
                 .as("step 1: the re-issue link is rendered for the ACME certificate")
                 .contains("/admin/certificates-request?cert_id=" + cert.get(CertificateModel.ID));
@@ -633,7 +595,6 @@ class AdminPagesTest extends HohenheimTestBase {
 
     /** Site detail fields, the toggle action label, the retired processes tab and the domains tab. */
     @Test
-    @Order(23)
     void siteRecordPagesRenderFieldsActionsTabsAndDomains() throws Exception {
         var siteModel = Models.get(SiteModel.class);
         Row suffixSite = siteModel.createEmptyRow();
@@ -694,22 +655,26 @@ class AdminPagesTest extends HohenheimTestBase {
             siteModel.delete(toggleSite);
         }
 
+        // A site of this test's own, created through the form like an operator's.
+        assertThat(adminPostForm("/admin/sites/new",
+            "name=Record+Tabs+Site&upstream_kind=hohenheim%3Astatic").statusCode())
+            .as("the tab fixture site is created").isIn(200, 302, 303);
         Row site = Models.get(SiteModel.class).find()
-            .where(SiteModel.NAME.eq("Audit Test Site")).first();
-        assertThat(site).isNotNull();
+            .where(SiteModel.NAME.eq("Record Tabs Site")).first();
+        assertThat(site).as("the tab fixture site is stored").isNotNull();
         Integer siteId = site.get(SiteModel.ID);
 
         // The processes tab is GONE: it was deleted with the host-user process lane
         // (phase-0 design section 3), so no site has one and the route 404s for every one.
-        assertThat(get("/admin/sites/" + siteId).body())
+        assertThat(adminGet("/admin/sites/" + siteId).body())
             .doesNotContain("/admin/sites/" + siteId + "/page/processes");
-        assertThat(get("/admin/sites/" + siteId + "/page/processes").statusCode()).isEqualTo(404);
+        assertThat(adminGet("/admin/sites/" + siteId + "/page/processes").statusCode()).isEqualTo(404);
 
         // The domains tab renders its empty state before any domain exists. Read over HTTP:
         // the empty state is server-rendered and RoutedLinkTargetsTest already reads this same
         // page that way. The POPULATED tab below stays a hydrated load -- that is where the
         // client render actually has something to get wrong.
-        assertThat(get("/admin/sites/" + siteId + "/page/domains").body())
+        assertThat(adminGet("/admin/sites/" + siteId + "/page/domains").body())
             .contains("No domains configured");
 
         var domainModel = Models.get(SiteDomainModel.class);
@@ -749,7 +714,7 @@ class AdminPagesTest extends HohenheimTestBase {
             // The pick's value is a Java-side property; the SSR-resolved display
             // title in the field is the observable prefill.
             assertThat(page.locator("pl-select[name='site_id'] .pl-select-value").textContent().trim())
-                .isEqualTo("Audit Test Site");
+                .isEqualTo("Record Tabs Site");
 
             // The request-certificate link prefills the site's exact hostnames.
             navigateToApp("/admin/certificates-request?site=" + siteId);
@@ -768,15 +733,9 @@ class AdminPagesTest extends HohenheimTestBase {
         // trip across classes); unset it so the DECLARED policies apply.
         RateLimitMiddleware.setPolicyResolver(null);
         try {
-            HttpClient client = HttpClient.newBuilder()
-                .followRedirects(HttpClient.Redirect.NEVER).build();
             boolean limited = false;
             for (int i = 0; i < 40 && !limited; i++) {
-                var response = client.send(HttpRequest.newBuilder()
-                    .uri(URI.create(baseUrl() + "/certificates/999999/download"))
-                    .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-                    .build(), HttpResponse.BodyHandlers.ofString());
-                limited = response.statusCode() == 429;
+                limited = adminGet("/certificates/999999/download").statusCode() == 429;
             }
             assertThat(limited)
                 .as("the declared download policy (30/min) must answer 429 under a hammer")
@@ -792,7 +751,6 @@ class AdminPagesTest extends HohenheimTestBase {
      * stat tiles form ONE grid whatever the role mix.
      */
     @Test
-    @Order(24)
     void dashboardAttentionOnboardingAndStatsAgreeWithEachOther() throws Exception {
         var serverModel = Models.get(ServerModel.class);
         Row local = serverModel.findById(ServerModel.localServerId());
@@ -873,7 +831,6 @@ class AdminPagesTest extends HohenheimTestBase {
      * ({@code AdminActivityResource.recordingNotice()}), so the two surfaces cannot drift.
      */
     @Test
-    @Order(25)
     void theDashboardActivityBandSaysWhenRecordingIsSwitchedOff() throws Exception {
 
         Boolean before = Zenit.SETTINGS_VALUES.getValue(ActivityLog.ENABLED);
@@ -904,7 +861,7 @@ class AdminPagesTest extends HohenheimTestBase {
 
             // 3. And it is the SAME sentence /admin/activity shows, which is what makes
             //    this one declaring home rather than two settings reads that agree today.
-            assertThat(get("/admin/activity").body())
+            assertThat(adminGet("/admin/activity").body())
                 .as("step 3: both surfaces say the same thing")
                 .contains(sentence);
 
@@ -932,10 +889,9 @@ class AdminPagesTest extends HohenheimTestBase {
      * home instead of a second copy of the same lookup written in a test.
      */
     @Test
-    @Order(26)
     void theQuotaListNamesItsOwnerInsteadOfThePackedSubjectKey() throws Exception {
 
-        int ownerId = labelUser("quota-owner@label.test", "Quota Label Owner");
+        int ownerId = ApiSupport.user("quota-owner@label.test", "Quota Label Owner");
         String packed = "user:" + ownerId;
         Row quota = quotaFor(packed);
         // A subject nobody can resolve, so step 3 can tell a real lookup from a surface
@@ -949,7 +905,7 @@ class AdminPagesTest extends HohenheimTestBase {
                 .isEqualTo("Quota Label Owner");
 
             // 2. And that is exactly what the list renders.
-            String body = get("/admin/instance-quotas").body();
+            String body = adminGet("/admin/instance-quotas").body();
             assertThat(body).as("step 2: the quota list names the owner")
                 .contains("Quota Label Owner");
 
@@ -982,10 +938,9 @@ class AdminPagesTest extends HohenheimTestBase {
      * An activity entry that stored no actor label still names the person who acted.
      */
     @Test
-    @Order(27)
     void theActivityListNamesAnActorThatStoredNoLabel() throws Exception {
 
-        int actorId = labelUser("activity-actor@label.test", "Activity Label Actor");
+        int actorId = ApiSupport.user("activity-actor@label.test", "Activity Label Actor");
         Row entry = Models.get(ActivityModel.class).createEmptyRow();
         entry.set(ActivityModel.MODEL, "hohenheim:label-probe");
         entry.set(ActivityModel.RECORD_ID, "1");
@@ -1003,7 +958,7 @@ class AdminPagesTest extends HohenheimTestBase {
 
             // 2. The list resolves it through the one home that knows the subject
             //    vocabulary, so the operator reads a name and not a bare id.
-            assertThat(get("/admin/activity").body())
+            assertThat(adminGet("/admin/activity").body())
                 .as("step 2: the activity list names the actor")
                 .contains(HohenheimAccess.subjectLabel("user:" + actorId))
                 .contains("Activity Label Actor");
@@ -1011,16 +966,5 @@ class AdminPagesTest extends HohenheimTestBase {
             Models.get(ActivityModel.class).delete(entry.get(ActivityModel.ID));
             AuthModels.users().delete(actorId);
         }
-    }
-
-    private static int labelUser(String email, String displayName) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, displayName);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
     }
 }

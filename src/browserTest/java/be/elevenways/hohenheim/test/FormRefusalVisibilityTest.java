@@ -6,7 +6,6 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
 
-import java.net.http.HttpResponse;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -20,14 +19,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class FormRefusalVisibilityTest extends HohenheimTestBase {
 
-    private HttpResponse<String> post(String path, String body) throws Exception {
-        return httpPostForm(path, body, sessionToken, csrfToken);
-    }
-
     @Test
     void refusedSavesExplainThemselvesInWordsNotMachineTokens() throws Exception {
         // Step 1: a static site with settings, the positive anchor.
-        var create = post("/admin/sites/new",
+        var create = adminPostForm("/admin/sites/new",
             "name=Refusal+Probe&upstream_kind=hohenheim%3Astatic"
                 + "&settings.root_path=%2Ftmp%2Frefusal-probe&settings.indexes=true");
         assertThat(create.statusCode()).as("the well-formed create succeeds").isEqualTo(302);
@@ -42,7 +37,7 @@ class FormRefusalVisibilityTest extends HohenheimTestBase {
         // Step 2: an update that submits settings WITHOUT their upstream_kind
         // discriminator is refused, leaves the record untouched, and the
         // rerendered error is a human sentence naming the missing sibling.
-        var noSibling = post("/admin/sites/" + id,
+        var noSibling = adminPostForm("/admin/sites/" + id,
             "name=Refusal+Probe&settings.root_path=%2Ftmp%2Felsewhere");
         assertThat(noSibling.statusCode()).as("refusal rerenders the form").isEqualTo(200);
         site = Models.get(SiteModel.class).find().where(SiteModel.ID.eq(id)).first();
@@ -57,7 +52,7 @@ class FormRefusalVisibilityTest extends HohenheimTestBase {
 
         // Step 3: a nonsense scalar for a boolean setting is refused with the
         // boolean sentence, again with nothing written.
-        var badBoolean = post("/admin/sites/" + id,
+        var badBoolean = adminPostForm("/admin/sites/" + id,
             "name=Refusal+Probe&upstream_kind=hohenheim%3Astatic"
                 + "&settings.root_path=%2Ftmp%2Frefusal-probe&settings.indexes=index.html");
         assertThat(badBoolean.statusCode()).isEqualTo(200);
@@ -72,7 +67,7 @@ class FormRefusalVisibilityTest extends HohenheimTestBase {
         // whose follow-up page RENDERS the flash naming the bad hostnames --
         // pinned because a curl-only probe once read this refusal as "302 and
         // then nothing".
-        var commaDomains = post("/admin/certificates-request",
+        var commaDomains = adminPostForm("/admin/certificates-request",
             "domains=a.example.com%2Cb.example.com");
         assertThat(commaDomains.statusCode()).isEqualTo(302);
         var followUp = httpGet("/admin/certificates-request", sessionToken);

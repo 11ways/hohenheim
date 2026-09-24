@@ -21,6 +21,9 @@ public final class BasicCredentials {
 
     private static final String ARGON2_PREFIX = "$argon2";
 
+    /** The scheme token with its separating space; compared case-insensitively. */
+    private static final String SCHEME = "Basic ";
+
     private BasicCredentials() {
     }
 
@@ -80,17 +83,36 @@ public final class BasicCredentials {
             presented.username().getBytes(StandardCharsets.UTF_8)) && passwordMatches;
     }
 
-    /** The credentials an {@code Authorization: Basic} header carries, or null. */
+    /**
+     * The credentials an {@code Authorization: Basic} header carries, or null.
+     *
+     * AIDEV-NOTE: the scheme name is matched case-insensitively (RFC 7617 via RFC 7235:
+     * {@code basic} and {@code BASIC} are the same scheme), and the credential is trimmed;
+     * a client spelling the scheme in lower case used to be refused as "no credential".
+     */
     public static @Nullable Presented parse(@Nullable String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Basic ")) {
+        return parse(authHeader, false);
+    }
+
+    /**
+     * {@link #parse} for a protocol that tolerates a colon-less credential (dyndns2 clients
+     * that send a token as the bare username): such a value reads as that username with an
+     * empty password.
+     */
+    public static @Nullable Presented parseAllowingBareUser(@Nullable String authHeader) {
+        return parse(authHeader, true);
+    }
+
+    private static @Nullable Presented parse(@Nullable String authHeader, boolean allowBareUser) {
+        if (authHeader == null || !authHeader.regionMatches(true, 0, SCHEME, 0, SCHEME.length())) {
             return null;
         }
         try {
-            String decoded = new String(Base64.getDecoder().decode(authHeader.substring(6)),
-                StandardCharsets.UTF_8);
+            String decoded = new String(Base64.getDecoder().decode(
+                authHeader.substring(SCHEME.length()).trim()), StandardCharsets.UTF_8);
             int colon = decoded.indexOf(':');
             if (colon < 0) {
-                return null;
+                return allowBareUser ? new Presented(decoded, "") : null;
             }
             return new Presented(decoded.substring(0, colon), decoded.substring(colon + 1));
         } catch (IllegalArgumentException malformed) {

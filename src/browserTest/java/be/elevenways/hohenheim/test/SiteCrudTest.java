@@ -1,14 +1,10 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.*;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
 import static org.assertj.core.api.Assertions.*;
@@ -17,22 +13,7 @@ import static org.assertj.core.api.Assertions.*;
  * Site CRUD through the zenit-cms resource routes: list, create form,
  * create submit (slug + status derivation), edit, and soft delete.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SiteCrudTest extends HohenheimTestBase {
-
-    private HttpResponse<String> post(String path, String body) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .header("X-Csrf-Token", csrfToken)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
 
     private Row crudSite() {
         return Models.get(SiteModel.class).find()
@@ -42,7 +23,6 @@ class SiteCrudTest extends HohenheimTestBase {
 
     /** List render, create form, create, edit render, list render and soft delete in one pass. */
     @Test
-    @Order(1)
     void siteCrudJourney() throws Exception {
         navigateToApp("/admin/sites");
         waitForHydration();
@@ -60,7 +40,7 @@ class SiteCrudTest extends HohenheimTestBase {
         // The type-discriminated settings sub-form renders a type selector.
         assertThat(page.content()).contains("upstream_kind");
 
-        HttpResponse<String> response = post("/admin/sites/new",
+        HttpResponse<String> response = adminPostForm("/admin/sites/new",
             "name=Crud+Test+Site&upstream_kind=hohenheim%3Astatic&enabled=true");
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
@@ -94,7 +74,7 @@ class SiteCrudTest extends HohenheimTestBase {
         waitForHydration();
         assertThat(page.content()).contains("Crud Test Site");
 
-        response = post("/admin/sites/" + siteId + "/delete", confirmed(""));
+        response = adminPostForm("/admin/sites/" + siteId + "/delete", confirmed(""));
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         Row after = Models.get(SiteModel.class).findById(siteId);

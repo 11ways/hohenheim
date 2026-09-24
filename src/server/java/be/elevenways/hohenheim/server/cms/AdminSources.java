@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.page.CmsRecordLinks;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.server.page.CmsRecordSources;
 import be.elevenways.zenit.common.data.RecordCreateProvider;
@@ -88,7 +87,7 @@ public final class AdminSources {
         Identifier modelId = model.getModelId();
         String primaryKey = model.getPrimaryKeyField().getName();
         builder.permission(HohenheimSources.ADMIN_ACCESS)
-            .editUrl((Row row) -> CmsRecordLinks.detailUrl(modelId, String.valueOf(row.get(primaryKey))));
+            .editUrl((Row row) -> AdminRecordLinks.detailUrl(modelId, String.valueOf(row.get(primaryKey))));
 
         RecordCreateProvider create = CmsRecordSources.createProviderFor(resource);
         if (create != null) {

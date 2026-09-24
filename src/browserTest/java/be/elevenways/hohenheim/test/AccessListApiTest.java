@@ -13,10 +13,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
 import java.net.http.HttpResponse;
 import java.util.List;
@@ -35,7 +32,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * by name, and the doors are exactly the panels' (an operator writes the admin form, a
  * tenant the delegated one and owns what it authored).
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class AccessListApiTest extends HohenheimTestBase {
 
     private static final String PREFIX = "access-list-api-";
@@ -47,11 +43,6 @@ class AccessListApiTest extends HohenheimTestBase {
     private static String keyAdmin;
     private static String keyTenant;
     private static String keyNarrow;
-
-    /** Filled by the create journey, consumed by the later ones. */
-    private static Integer adminListId;
-    private static Integer groupRuleId;
-    private static Integer tenantListId;
 
     @BeforeAll
     static void seed() {
@@ -93,18 +84,43 @@ class AccessListApiTest extends HohenheimTestBase {
         return Models.get(AccessRuleModel.class).findById(ruleId);
     }
 
+    /** An operator list of this journey's own, published installation-wide like the first one. */
+    private int operatorList(String name) throws Exception {
+        HttpResponse<String> created = keyPost(keyAdmin, "/api/v1/access-lists", form(
+            "name", PREFIX + name, "satisfy", "all", "shared", "true"));
+        assertThat(created.statusCode()).as("fixture: the list %s is created: %s", name, created.body())
+            .isEqualTo(200);
+        return idOf(created.body());
+    }
+
+    /** One rule node on a list through the operator key. */
+    private int operatorRule(int listId, String... pairs) throws Exception {
+        HttpResponse<String> rule = keyPost(keyAdmin, "/api/v1/access-lists/" + listId + "/rules",
+            form(pairs));
+        assertThat(rule.statusCode()).as("fixture: the rule lands: %s", rule.body()).isEqualTo(200);
+        return idOf(rule.body());
+    }
+
+    /** A list the tenant authored through its delegated form. */
+    private int tenantList(String name) throws Exception {
+        HttpResponse<String> created = keyPost(keyTenant, "/api/v1/access-lists",
+            form("name", PREFIX + name, "satisfy", "any"));
+        assertThat(created.statusCode()).as("fixture: the tenant list %s is created: %s", name,
+            created.body()).isEqualTo(200);
+        return idOf(created.body());
+    }
+
     // -- the journeys ----------------------------------------------------------
 
     /** A list and every rule kind an old installation carries land through the form pipeline. */
     @Test
-    @Order(1)
     void anOperatorAuthorsAListAndItsRuleTree() throws Exception {
         // 1. The list itself: the operator form, so `shared` is settable here.
         HttpResponse<String> created = keyPost(keyAdmin, "/api/v1/access-lists", form(
             "name", PREFIX + "staff", "satisfy", "all", "shared", "true"));
         assertThat(created.statusCode()).as("step 1: the list is created: " + created.body())
             .isEqualTo(200);
-        adminListId = idOf(created.body());
+        int adminListId = idOf(created.body());
         Row list = Models.get(AccessListModel.class).findById(adminListId);
         assertThat((Object) list.get(AccessListModel.SATISFY))
             .as("step 1: satisfy was coerced against the enum").isEqualTo("all");
@@ -118,7 +134,7 @@ class AccessListApiTest extends HohenheimTestBase {
             form("type", AccessRuleModel.TYPE_GROUP, "data.satisfy", "any"));
         assertThat(group.statusCode()).as("step 2: the group lands: " + group.body())
             .isEqualTo(200);
-        groupRuleId = idOf(group.body());
+        int groupRuleId = idOf(group.body());
         assertThat(ruleById(groupRuleId).get(AccessRuleModel.ENABLED))
             .as("step 2: a group is born switched on").isEqualTo(true);
 
@@ -195,14 +211,19 @@ class AccessListApiTest extends HohenheimTestBase {
 
     /** The doors are the panels': a tenant owns what it authors and sees nothing else. */
     @Test
-    @Order(2)
     void aTenantOwnsWhatItAuthorsAndSeesNothingElse() throws Exception {
+        // 0. Someone else's list with a rule on it, for the tenant to be shut out of.
+        int adminListId = operatorList("staff-doors");
+        operatorRule(adminListId, "type", AccessRuleModel.TYPE_IP_ALLOW, "data.network", "10.0.0.0/8",
+            "enabled", "true");
+        int foreignRules = rulesOf(adminListId).size();
+
         // 1. A tenant creates through the DELEGATED form, which plants its ownership.
         HttpResponse<String> created = keyPost(keyTenant, "/api/v1/access-lists",
             form("name", PREFIX + "tenant", "satisfy", "any"));
         assertThat(created.statusCode()).as("step 1: the tenant may author one: " + created.body())
             .isEqualTo(200);
-        tenantListId = idOf(created.body());
+        int tenantListId = idOf(created.body());
         assertThat(keyGet(keyTenant, "/api/v1/access-lists/" + tenantListId).statusCode())
             .as("step 1: and manages it afterwards (the create planted the grant)")
             .isEqualTo(200);
@@ -227,7 +248,7 @@ class AccessListApiTest extends HohenheimTestBase {
         assertThat(listed.body()).as("step 3: the listing is exactly its own")
             .contains(PREFIX + "tenant").doesNotContain(PREFIX + "staff");
         assertThat(rulesOf(adminListId)).as("step 3: the operator's tree is untouched")
-            .hasSize(4);
+            .hasSize(foreignRules);
 
         // 4. A key narrowed away from every hohenheim permission opens no door.
         assertThat(keyPost(keyNarrow, "/api/v1/access-lists",
@@ -243,8 +264,16 @@ class AccessListApiTest extends HohenheimTestBase {
 
     /** Deleting a list takes its whole rule tree with it, and only once. */
     @Test
-    @Order(3)
     void deletingAListTakesItsRulesWithIt() throws Exception {
+        // 0. An operator list with a nested tree, and a tenant's list beside it.
+        int adminListId = operatorList("staff-delete");
+        int groupRuleId = operatorRule(adminListId, "type", AccessRuleModel.TYPE_GROUP,
+            "data.satisfy", "any");
+        operatorRule(adminListId, "type", AccessRuleModel.TYPE_IP_ALLOW, "parent_id",
+            String.valueOf(groupRuleId), "data.network", "10.0.0.0/8", "enabled", "true");
+        assertThat(rulesOf(adminListId)).as("step 0: the tree has two nodes").hasSize(2);
+        int tenantListId = tenantList("tenant-bystander");
+
         HttpResponse<String> deleted = keyPost(keyAdmin,
             "/api/v1/access-lists/" + adminListId + "/delete", "");
         assertThat(deleted.statusCode()).as("step 1: the list is deleted: " + deleted.body())

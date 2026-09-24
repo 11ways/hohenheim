@@ -8,10 +8,7 @@ import be.elevenways.hohenheim.server.security.SecretShapes;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.QueryBuilder;
-import be.elevenways.zenit.common.orm.query.QueryContext;
 import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -146,16 +143,7 @@ public final class DynamicDnsService {
         }
         cascadeInstalled = true;
         DnsRecordModel.SCHEMA.addBeforeRemoveHook(context -> {
-            Model model = context.getModel();
-            if (model == null) {
-                return;
-            }
-            QueryBuilder<Row> doomed = model.find();
-            QueryContext queryContext = context.getQueryContext();
-            if (queryContext != null && queryContext.getCriteria() != null) {
-                doomed.where(queryContext.getCriteria());
-            }
-            for (Row record : doomed.all()) {
+            for (Row record : context.doomedRows()) {
                 Integer recordId = record.get(DnsRecordModel.ID);
                 if (recordId != null) {
                     TenantWrites.inAuthorizedOperation(() -> revokeFor(recordId));

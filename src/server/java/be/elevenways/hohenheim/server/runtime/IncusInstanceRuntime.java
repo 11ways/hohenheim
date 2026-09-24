@@ -2,15 +2,11 @@ package be.elevenways.hohenheim.server.runtime;
 
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.incus.ControllerPresence;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
-import be.elevenways.hohenheim.server.incus.IncusWebSocket;
-import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 
@@ -24,6 +20,8 @@ import java.util.Map;
 import java.util.Set;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+
+import static be.elevenways.hohenheim.server.runtime.IncusDefinitions.ROOT_DEVICE;
 
 /**
  * Driver #2 of the instance tier: SYSTEM CONTAINERS on an Incus daemon, wrapping
@@ -51,32 +49,17 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * boundary 1 of the plan's threat model: a system container is NOT a security boundary
  * against a determined root user, and privileged mode widens that further -- the network
  * ACL isolates the WIRE, not the kernel, and privileged still carries its escape warning.
+ *
+ * AIDEV-NOTE: this class keeps the LIFECYCLE (create/converge, start, stop, destroy, status)
+ * and is the one public face of the driver; the definition rules live in
+ * {@link IncusDefinitions}, and the device, guest (exec/console/install) and archive
+ * (snapshot/backup/publish) lanes in {@link IncusDeviceLane}, {@link IncusGuestLane} and
+ * {@link IncusArchiveLane}, which every capability method here delegates to.
  */
 public final class IncusInstanceRuntime
         implements InstanceRuntime, ConsoleStreamSupport, NativeSnapshotSupport,
         InstallSupport, AppUpdateSupport, DeviceAttachSupport, RootDiskSizeSupport,
         RootDiskUsageSupport, ExecSupport, ImagePublishSupport {
-
-    @Override
-    public ExecSupport.@NonNull ExecOutcome runExec(@NonNull InstanceSpec spec,
-                                                    @NonNull List<String> command,
-                                                    ExecSupport.@NonNull ExecOptions options,
-                                                    long timeoutMs) throws IOException {
-        if (!status(spec.handle()).running()) {
-            throw new IOException("Instance '" + spec.handle() + "' is not running;"
-                + " an exec runs inside the live system");
-        }
-        if (!spec.guestAgent()) {
-            throw new IOException("Instance '" + spec.handle() + "' declares no guest agent"
-                + " (guest_agent=false); its image cannot run an exec");
-        }
-        IncusClient.ExecResult result = this.incus.exec(spec.handle(), command,
-            options.env(), spec.runUser(), options.workdir(), timeoutMs);
-        return new ExecSupport.ExecOutcome(result.exitCode(), result.output());
-    }
-
-    /** The daemon's name for the one device a workload cannot detach. */
-    static final String ROOT_DEVICE = "root";
 
     /** The public image server system-container aliases resolve against. */
     public static final String IMAGE_SERVER = "https://images.linuxcontainers.org";
@@ -84,14 +67,14 @@ public final class IncusInstanceRuntime
     /** Hardening profile name that maps onto {@code security.privileged=true}. */
     public static final String PROFILE_PRIVILEGED = "incus-privileged";
 
-    /** Config-key prefix Incus reserves for arbitrary user metadata. */
-    private static final String USER_PREFIX = "user.";
-
     private final @NonNull IncusClient incus;
     private final @NonNull IncusNetworkPolicy policy;
     private final @NonNull Egress egress;
     private final @NonNull IncusWorkloadType type;
     private final @Nullable String serverName;
+    private final @NonNull IncusDeviceLane devices;
+    private final @NonNull IncusGuestLane guest;
+    private final @NonNull IncusArchiveLane archive;
 
     public IncusInstanceRuntime(@NonNull IncusClient incus) {
         this(incus, Egress.OPEN);
@@ -121,6 +104,9 @@ public final class IncusInstanceRuntime
         this.egress = egress;
         this.type = type;
         this.serverName = serverName;
+        this.devices = new IncusDeviceLane(this, incus, this.policy, egress, type);
+        this.guest = new IncusGuestLane(this, incus, type);
+        this.archive = new IncusArchiveLane(this, incus, this.policy, egress);
     }
 
     /**
@@ -136,7 +122,7 @@ public final class IncusInstanceRuntime
      * a liveness marker. {@code ControllerPresence.stamp} no-ops while fresh, so this
      * costs one GET per deploy.
      */
-    private void stampPresence() {
+    void stampPresence() {
         try {
             ControllerPresence.stamp(this.incus);
         } catch (Exception unstamped) {
@@ -171,8 +157,8 @@ public final class IncusInstanceRuntime
         // never at the point where a tenant container is already running unisolated.
         this.policy.ensureIsolationAcl();
         stampPresence();
-        Map<String, Object> nic = this.policy.nicDevice(managedNetworkName(), this.egress,
-            spec.networkLimitMbit());
+        Map<String, Object> nic = this.policy.nicDevice(
+            IncusDefinitions.managedNetworkName(this.incus), this.egress, spec.networkLimitMbit());
 
         // AIDEV-NOTE: converge, never replace. A system container's persistent state
         // IS its rootfs, so the Docker driver's replace-on-create semantic would be
@@ -198,7 +184,7 @@ public final class IncusInstanceRuntime
             // converge PUT: a running grow is accepted and not performed (see
             // RootDiskSizeSupport), so it goes through the stopped-only path, which
             // refuses by name rather than reporting a success it did not deliver.
-            reconcileRootDisk(spec);
+            this.devices.reconcileRootDisk(spec);
             return spec.handle();
         }
 
@@ -207,7 +193,7 @@ public final class IncusInstanceRuntime
         // false, since catalog VM builds are not Secure Boot signed and the first launch
         // fails naming exactly that, verified live on daystrom); a prepared image may
         // declare true.
-        applyManagedConfig(spec, config);
+        IncusDefinitions.applyManagedConfig(spec, this.type, config);
 
         // Pin honesty: an ABSENT workload with a recorded resolved fingerprint is
         // recreated from THAT image, never by re-resolving the mutable alias.
@@ -254,134 +240,33 @@ public final class IncusInstanceRuntime
         // declared size is under the image's own volume is refused by the daemon here,
         // verbatim -- that is a real constraint, not something to paper over.)
         if (spec.rootDiskGb() != null) {
-            devices.put(ROOT_DEVICE, rootDevice(spec.rootDiskGb()));
+            devices.put(ROOT_DEVICE, this.devices.rootDevice(spec.rootDiskGb()));
         }
-        devices.putAll(bindDevices(spec));
+        devices.putAll(IncusDefinitions.bindDevices(spec));
         definition.put("devices", devices);
         definition.put("profiles", List.of("default"));
         this.incus.createInstance(definition);
         verifyIsolated(spec);
-        verifyRootDiskDeclared(spec);
+        this.devices.verifyRootDiskDeclared(spec);
         return spec.handle();
     }
 
-    /** The root disk device override: the default profile's pool, our declared size. */
-    private @NonNull Map<String, Object> rootDevice(int sizeGb) throws IOException {
-        Map<String, Object> device = new LinkedHashMap<>();
-        device.put("type", "disk");
-        device.put("path", "/");
-        device.put("pool", managedPoolName());
-        device.put("size", sizeGb + "GiB");
-        return device;
-    }
-
-    /** Read back what the daemon DECLARES for the root device after a write that set it. */
-    private void verifyRootDiskDeclared(@NonNull InstanceSpec spec) throws IOException {
-        Integer declared = spec.rootDiskGb();
-        if (declared == null) {
-            return;
-        }
-        Integer actual = rootDiskGb(spec);
-        if (actual == null || !actual.equals(declared)) {
-            throw new IOException("Root disk of '" + spec.handle() + "' was accepted at "
-                + declared + "GiB but the daemon reports " + actual + "GiB");
-        }
-    }
+    // -- RootDiskSizeSupport / RootDiskUsageSupport -----------------------------
 
     @Override
     public @Nullable Integer rootDiskGb(@NonNull InstanceSpec spec) throws IOException {
-        Map<String, Object> instance = this.incus.instance(spec.handle());
-        if (instance.get("devices") instanceof Map<?, ?> devices
-                && devices.get(ROOT_DEVICE) instanceof Map<?, ?> root) {
-            return parseSizeGb(root.get("size"));
-        }
-        return null;
+        return this.devices.rootDiskGb(spec);
     }
 
-    /**
-     * The daemon's OBSERVED root-disk figures, straight out of the instance state.
-     *
-     * AIDEV-NOTE: {@code total} is 0 when the workload declares no root size, and it is
-     * passed through as 0 rather than substituted with the pool's capacity. A workload with
-     * no enforced ceiling genuinely has no percentage, and inventing one would produce a
-     * reassuring "3% used" for storage nothing is rationing.
-     */
     @Override
     public RootDiskUsageSupport.@Nullable DiskUsage rootDiskUsage(@NonNull InstanceSpec spec)
             throws IOException {
-        Map<String, Object> state;
-        try {
-            state = this.incus.instanceState(spec.handle());
-        } catch (IncusClient.ApiException e) {
-            if (e.isNotFound()) {
-                return null;   // observed absent: no workload to measure
-            }
-            throw e;
-        }
-        if (!"Running".equalsIgnoreCase(String.valueOf(state.get("status")))) {
-            return null;
-        }
-        if (!(state.get("disk") instanceof Map<?, ?> disks
-                && disks.get(ROOT_DEVICE) instanceof Map<?, ?> root)) {
-            return null;
-        }
-        Object usage = root.get("usage");
-        if (!(usage instanceof Number used)) {
-            return null;   // no figure is not a zero figure
-        }
-        long total = root.get("total") instanceof Number number ? number.longValue() : 0;
-        return new RootDiskUsageSupport.DiskUsage(used.longValue(), Math.max(0, total));
+        return this.devices.rootDiskUsage(spec);
     }
 
     @Override
     public void resizeRootDisk(@NonNull InstanceSpec spec, int sizeGb) throws IOException {
-        ContainerState state = status(spec.handle()).state();
-        if (state != ContainerState.STOPPED) {
-            // The load-bearing guard, not a convenience: a running grow is ACCEPTED and
-            // not performed, and the accepted config then blocks the correct retry.
-            throw new IOException("REFUSED to resize the root disk of '" + spec.handle()
-                + "': the workload is " + state + " and a root disk can only be resized"
-                + " while it is STOPPED. Stop it and deploy again.");
-        }
-        Integer current = rootDiskGb(spec);
-        if (current != null && sizeGb < current) {
-            throw new IOException("REFUSED to shrink the root disk of '" + spec.handle()
-                + "' from " + current + "GiB to " + sizeGb + "GiB: a root disk can only"
-                + " grow. Create a smaller workload and migrate the data instead.");
-        }
-        putDevice(spec.handle(), ROOT_DEVICE, rootDevice(sizeGb));
-        Integer actual = rootDiskGb(spec);
-        if (actual == null || actual != sizeGb) {
-            throw new IOException("Resize of the root disk of '" + spec.handle() + "' to "
-                + sizeGb + "GiB did not take: the daemon reports " + actual + "GiB");
-        }
-    }
-
-    /**
-     * Bring an EXISTING workload's root disk to its declared size, or refuse by name.
-     *
-     * A declaration that already matches costs one read and does nothing; a declaration
-     * that is absent leaves the daemon alone entirely (the knob is opt-in, and clearing
-     * it must not silently shrink anything).
-     *
-     * AIDEV-NOTE: known limitation, and it belongs to the daemon rather than to us. If
-     * something OUTSIDE this product grows a RUNNING instance's root device, Incus 7.3
-     * records the new size and does not apply it, and every API read-back then echoes
-     * the recorded value. This reconcile would see "already at the declared size" and
-     * skip -- correctly, by every fact it can obtain. Refusing a running grow HERE is
-     * what keeps the product from creating that state; it cannot repair one it did not
-     * create. The only detection is inside the guest.
-     */
-    private void reconcileRootDisk(@NonNull InstanceSpec spec) throws IOException {
-        Integer declared = spec.rootDiskGb();
-        if (declared == null) {
-            return;
-        }
-        Integer current = rootDiskGb(spec);
-        if (current != null && current.equals(declared)) {
-            return;
-        }
-        resizeRootDisk(spec, declared);
+        this.devices.resizeRootDisk(spec, sizeGb);
     }
 
     /** Read one instance back and require EVERY NIC to carry the isolation just written. */
@@ -398,98 +283,14 @@ public final class IncusInstanceRuntime
      * shipping a read-back that could refuse a deploy is only acceptable while it cannot
      * refuse one that did not ask for the feature.
      */
-    private void verifyIsolated(@NonNull InstanceSpec spec) throws IOException {
+    void verifyIsolated(@NonNull InstanceSpec spec) throws IOException {
         Map<String, Object> instance = this.incus.instance(spec.handle());
         this.policy.verifyAllNics(spec.handle(), instance, this.egress);
         this.policy.verifyBandwidth(spec.handle(), instance, spec.networkLimitMbit());
     }
 
-    /**
-     * The managed network the default profile's NIC inherits (incusbr0). The device
-     * override must name it, or Incus refuses a NIC with an ACL but no network.
-     */
-    private @NonNull String managedNetworkName() throws IOException {
-        Object devices = this.incus.profile("default").get("devices");
-        if (devices instanceof Map<?, ?> map && map.get(IncusNetworkPolicy.NIC) instanceof Map<?, ?> nic
-                && nic.get("network") instanceof String network && !network.isBlank()) {
-            return network;
-        }
-        throw new IOException("REFUSED to isolate an Incus instance: the default profile has no"
-            + " '" + IncusNetworkPolicy.NIC + "' NIC on a managed network to inherit, so there"
-            + " is nothing to attach the isolation ACL to. This host is not admissible for"
-            + " tenant workloads until its default profile carries a managed bridge NIC.");
-    }
-
-    /** The config keys this driver OWNS on a converge (everything else is preserved). */
-    private void applyManagedConfig(@NonNull InstanceSpec spec,
-                                    @NonNull Map<String, Object> config) {
-        if (this.type == IncusWorkloadType.VIRTUAL_MACHINE) {
-            // Managed key: a converge re-asserts it, so an operator edit that drifted
-            // from the image's DECLARATION cannot brick the next boot silently. The
-            // value is the spec's declaration, not an inference: catalog Linux images are
-            // unsigned and need it false, a prepared image (e.g. Microsoft-signed Windows
-            // media) can genuinely need it true.
-            config.put("security.secureboot", String.valueOf(spec.secureBoot()));
-        }
-        spec.ownerLabels().forEach((key, value) -> config.put(USER_PREFIX + key, value));
-        spec.env().forEach((name, value) -> config.put("environment." + name, value));
-        applyLimits(spec.limits(), config);
-        // Cloud-init rides the daemon's own config key; the guest's cloud-init reads it
-        // from the config drive on first boot (and only first boot -- instance-id bound).
-        if (spec.cloudInitUserData() != null && !spec.cloudInitUserData().isBlank()) {
-            config.put("cloud-init.user-data", spec.cloudInitUserData());
-        }
-        // Unprivileged is the DEFAULT and the deliberate posture; only the explicitly
-        // declared privileged profile flips it (threat model boundary 1).
-        if (PROFILE_PRIVILEGED.equals(spec.hardening().name())) {
-            config.put("security.privileged", "true");
-        }
-        applyRunUser(spec, config);
-    }
-
     /** PID 1 of a workspace container; shipped by every runtime image (images/README.md). */
     public static final String WORKSPACE_INIT = "/sbin/hohenheim-init";
-
-    /**
-     * A spec that declares a run user boots the image's own init, which drops to that uid.
-     *
-     * AIDEV-NOTE: {@code lxc.init.cmd} rather than arguments, and the command in the
-     * ENVIRONMENT rather than in that key: lxc.init.cmd is whitespace-split and does not
-     * honour quoting, so a start command with a space would silently become two. The
-     * image's {@code hohenheim-init} reads HOHENHEIM_START_COMMAND instead (images/README).
-     *
-     * AIDEV-NOTE: deliberately NO {@code raw.idmap}. An identity map would give host and
-     * namespace uid PARITY, and it was measured working on nightstrom 2026-08-22 -- but
-     * only after delegating the workspace uid window in /etc/subuid, and a second range
-     * there makes Incus union both into one default map with two entries for namespace id
-     * 0, after which EVERY container without its own raw.idmap fails to start. The uid
-     * here is therefore a NAMESPACE id, and {@code WorkspaceUids.incusHostUid} is what the
-     * controller chowns the volume to.
-     */
-    private static void applyRunUser(@NonNull InstanceSpec spec,
-                                     @NonNull Map<String, Object> config) {
-        if (spec.runUser() == null) {
-            return;
-        }
-        config.put("raw.lxc", "lxc.init.cmd = " + WORKSPACE_INIT);
-    }
-
-    /**
-     * AIDEV-NOTE: this is a CONFIG-key predicate and the {@code limits.} clause therefore
-     * covers {@code limits.memory} / {@code limits.cpu} / {@code limits.cpu.allowance} --
-     * the instance-config namespace. The BANDWIDTH ceiling is not in it: Incus expresses a
-     * rate as {@code limits.ingress} / {@code limits.egress} on the NIC DEVICE, which this
-     * driver owns through {@code IncusNetworkPolicy.nicDevice} and rewrites wholesale on
-     * every converge. Both namespaces are driver-owned on purpose, and both are now
-     * DECLARABLE through the product (memory/cpu as ResourceLimits, the rate as
-     * NetworkBandwidth) -- a driver-owned key with no product spelling is the shape that
-     * makes a converge look like it is eating an operator's configuration.
-     */
-    private static boolean isManagedKey(@NonNull String key) {
-        return key.startsWith(USER_PREFIX) || key.startsWith("environment.")
-            || key.startsWith("limits.") || key.startsWith("cloud-init.")
-            || key.equals("security.privileged") || key.equals("security.secureboot");
-    }
 
     /** Rewrite the managed config of an existing OWNED instance; the rootfs is untouched. */
     private void converge(@NonNull InstanceSpec spec, @NonNull Map<String, Object> nic)
@@ -498,8 +299,8 @@ public final class IncusInstanceRuntime
             // volatile.* and image.* keys ride along unchanged (read-modify-write, the
             // CLI's own shape); only the managed keys are recomputed, so a value REMOVED
             // from the settings really disappears.
-            config.keySet().removeIf(IncusInstanceRuntime::isManagedKey);
-            applyManagedConfig(spec, config);
+            config.keySet().removeIf(IncusDefinitions::isManagedKey);
+            IncusDefinitions.applyManagedConfig(spec, this.type, config);
             // The isolating NIC override is (re)written every converge: a reboot or an
             // operator edit that dropped it is repaired here, not silently tolerated.
             devices.put(IncusNetworkPolicy.NIC, nic);
@@ -532,24 +333,6 @@ public final class IncusInstanceRuntime
                 + " exist on server '" + (this.serverName != null ? this.serverName
                 : "(unnamed)") + "'; a prepared image is published into the daemon's own"
                 + " image store by an operator and is never fetched.");
-        }
-    }
-
-    /** Map the operator's cgroup caps onto Incus's limits vocabulary. */
-    private static void applyLimits(@NonNull ResourceLimits limits,
-                                    @NonNull Map<String, Object> config) {
-        if (limits.memoryMb() != null && limits.memoryMb() > 0) {
-            config.put("limits.memory", limits.memoryMb() + "MiB");
-        }
-        if (limits.cpus() != null && limits.cpus() > 0) {
-            double cpus = limits.cpus();
-            if (cpus == Math.floor(cpus)) {
-                config.put("limits.cpu", String.valueOf((int) cpus));
-            } else {
-                // Fractional cores have no core-count spelling; allowance is the
-                // incus-native equivalent of Docker's NanoCpus.
-                config.put("limits.cpu.allowance", Math.round(cpus * 100) + "%");
-            }
         }
     }
 
@@ -737,160 +520,47 @@ public final class IncusInstanceRuntime
 
     @Override
     public @NonNull Console openConsole(@NonNull String handle) throws IOException {
-        Map<String, Object> operation = this.incus.startConsole(handle);
-        Object id = operation.get("id");
-        Object metadata = operation.get("metadata");
-        String secret = metadata instanceof Map<?, ?> meta
-            && meta.get("fds") instanceof Map<?, ?> fds
-            && fds.get("0") instanceof String value ? value : null;
-        if (id == null || secret == null) {
-            throw new IOException("Incus console operation of '" + handle
-                + "' carried no websocket secret");
-        }
-        IncusWebSocket socket = this.incus.operationWebSocket(
-            "/1.0/operations/" + id, secret);
-        // /dev/console is bidirectional by construction: what we write IS delivered to
-        // the workload's console, unlike Docker's discarded attach-without-OpenStdin.
-        // AIDEV-NOTE: NOT declared interactive, deliberately. /dev/console of a system
-        // container or VM is a terminal, but what answers on it is the guest's own init
-        // and getty, and the surface here stays the line console it always was (the form
-        // POST); flipping it to keystrokes is a separate decision with its own consumer.
-        return new Console(new IncusConsoleStream(socket), true, false);
+        return this.guest.openConsole(handle);
     }
 
     @Override
     public @NonNull String consoleTail(@NonNull String handle, int lines) throws IOException {
-        String log = this.incus.consoleLog(handle);
-        String[] all = log.split("\n", -1);
-        if (all.length <= lines) {
-            return log;
-        }
-        return String.join("\n", List.of(all).subList(all.length - lines, all.length));
+        return this.guest.consoleTail(handle, lines);
     }
 
-    /**
-     * @throws IOException ALWAYS for a stopped workload: Incus does not report the init
-     *         process's exit status, and inventing one (0, -1) would misclassify a
-     *         crash as a stop or vice versa -- the console hub's "could not confirm the
-     *         exit" lane is the honest landing for this named refusal
-     */
+    /** @throws IOException ALWAYS for a stopped workload; see {@link IncusGuestLane#exitCode} */
     @Override
     public @Nullable Integer exitCode(@NonNull String handle) throws IOException {
-        if (status(handle).running()) {
-            return null;
-        }
-        throw new IOException("Incus reports no init exit status for '" + handle
-            + "'; the exit outcome cannot be observed on this driver");
+        return this.guest.exitCode(handle);
     }
 
-    // -- InstallSupport / AppUpdateSupport ------------------------------------
+    // -- ExecSupport / InstallSupport / AppUpdateSupport ----------------------
 
-    /** Output tail cap of one install/update run (the durable failure record). */
-    private static final int OUTPUT_TAIL_CHARS = 16 * 1024;
+    @Override
+    public ExecSupport.@NonNull ExecOutcome runExec(@NonNull InstanceSpec spec,
+                                                    @NonNull List<String> command,
+                                                    ExecSupport.@NonNull ExecOptions options,
+                                                    long timeoutMs) throws IOException {
+        return this.guest.runExec(spec, command, options, timeoutMs);
+    }
 
-    /**
-     * Run the install script INSIDE the instance's own system container: create it if
-     * absent (the converge path keeps an existing owned rootfs), start it, exec the
-     * script with {@code bash -ec}, and stop it again -- the platform's "installed but
-     * not running" state stays true at the daemon.
-     *
-     * @throws IOException for a separate install image: the rootfs IS the install
-     *         target, so "run the install elsewhere" cannot be honoured, only refused
-     */
+    /** Runs INSIDE the instance's own rootfs; see {@link IncusGuestLane#runInstall}. */
     @Override
     public @NonNull InstallOutcome runInstall(@NonNull InstanceSpec spec,
                                               @NonNull String installImage,
                                               @NonNull String script,
                                               @NonNull Map<String, String> env,
                                               long timeoutMs) throws IOException {
-        if (!installImage.equals(spec.image())) {
-            throw new IOException("The incus driver runs install steps inside the"
-                + " instance's own rootfs; a separate install image ('" + installImage
-                + "') cannot be honoured. Leave the template's install image empty.");
-        }
-        // The readiness wait exists to ride out a real guest agent's bring-up; an
-        // agent-less image would never answer it, so burning the full
-        // execReadyTimeoutMs and reporting a timeout would misreport an absent
-        // capability as a broken guest. Refuse by name, and refuse BEFORE create so a
-        // workload is never born just to be torn down again.
-        if (!spec.guestAgent()) {
-            throw new IOException("Instance '" + spec.handle() + "' declares no guest"
-                + " agent (guest_agent=false); its image cannot run an exec-driven"
-                + " install");
-        }
-        create(spec);
-        boolean started = false;
-        try {
-            start(spec.handle());
-            started = true;
-            IncusClient.ExecResult result = execWhenReady(spec.handle(),
-                List.of("bash", "-ec", script), env, timeoutMs);
-            return new InstallOutcome(result.exitCode(), tailOf(result.output()));
-        } finally {
-            if (started) {
-                try {
-                    stop(spec.handle(), 10);
-                } catch (IOException stopFailed) {
-                    Blast.log("INCUS: could not stop", spec.handle(),
-                        "after its install run:", stopFailed.getMessage());
-                }
-            }
-        }
+        return this.guest.runInstall(spec, installImage, script, env, timeoutMs);
     }
 
-    /** Run the update script inside the RUNNING workload (services restart in place). */
     @Override
     public InstallSupport.@NonNull InstallOutcome runAppUpdate(@NonNull InstanceSpec spec,
                                                                @NonNull String script,
                                                                @NonNull Map<String, String> env,
                                                                long timeoutMs)
             throws IOException {
-        if (!status(spec.handle()).running()) {
-            throw new IOException("Instance '" + spec.handle() + "' is not running;"
-                + " the in-place app update runs inside the live system");
-        }
-        if (!spec.guestAgent()) {
-            throw new IOException("Instance '" + spec.handle() + "' declares no guest agent"
-                + " (guest_agent=false); its image cannot run an exec-driven app update");
-        }
-        IncusClient.ExecResult result = this.incus.exec(spec.handle(),
-            List.of("bash", "-ec", script), env, timeoutMs);
-        return new InstallOutcome(result.exitCode(), tailOf(result.output()));
-    }
-
-    /**
-     * Exec with a bring-up retry: the daemon refuses execs while the workload's init
-     * (container) or incus agent (VM -- tens of seconds after start) is still coming
-     * up, and that refusal must not fail the install. The window is the DECLARED
-     * per-flavour one ({@link IncusWorkloadType#execReadyTimeoutMs()}).
-     */
-    private IncusClient.@NonNull ExecResult execWhenReady(@NonNull String handle,
-                                                          @NonNull List<String> command,
-                                                          @NonNull Map<String, String> env,
-                                                          long timeoutMs) throws IOException {
-        long deadline = Now.millis() + this.type.execReadyTimeoutMs();
-        while (true) {
-            try {
-                return this.incus.exec(handle, command, env, timeoutMs);
-            } catch (IncusClient.ApiException refused) {
-                if (Now.millis() >= deadline) {
-                    throw refused;
-                }
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                    throw refused;
-                }
-            }
-        }
-    }
-
-    private static @NonNull String tailOf(@NonNull String output) {
-        if (output.length() <= OUTPUT_TAIL_CHARS) {
-            return output;
-        }
-        return output.substring(output.length() - OUTPUT_TAIL_CHARS);
+        return this.guest.runAppUpdate(spec, script, env, timeoutMs);
     }
 
     // -- NativeSnapshotSupport ------------------------------------------------
@@ -898,118 +568,37 @@ public final class IncusInstanceRuntime
     @Override
     public void createSnapshot(@NonNull InstanceSpec spec, @NonNull String snapshotName)
             throws IOException {
-        this.incus.createSnapshot(spec.handle(), snapshotName);
+        this.archive.createSnapshot(spec, snapshotName);
     }
 
     @Override
     public boolean snapshotExists(@NonNull InstanceSpec spec, @NonNull String snapshotName)
             throws IOException {
-        try {
-            this.incus.snapshot(spec.handle(), snapshotName);
-            return true;
-        } catch (IncusClient.ApiException e) {
-            if (e.isNotFound()) {
-                return false;
-            }
-            throw e;
-        }
+        return this.archive.snapshotExists(spec, snapshotName);
     }
 
     @Override
     public void restoreSnapshot(@NonNull InstanceSpec spec, @NonNull String snapshotName)
             throws IOException {
-        this.incus.restoreSnapshot(spec.handle(), snapshotName);
+        this.archive.restoreSnapshot(spec, snapshotName);
     }
 
     @Override
     public void deleteSnapshot(@NonNull InstanceSpec spec, @NonNull String snapshotName)
             throws IOException {
-        try {
-            this.incus.deleteSnapshot(spec.handle(), snapshotName);
-        } catch (IncusClient.ApiException e) {
-            if (!e.isNotFound()) {
-                throw e;   // refused: NOT gone
-            }
-            // 404 = observed absent, which is what delete exists to establish.
-        }
+        this.archive.deleteSnapshot(spec, snapshotName);
     }
 
     @Override
     public long exportBackup(@NonNull InstanceSpec spec, @NonNull Path destination,
                              long maxBytes, boolean withSnapshots) throws IOException {
-        // The daemon-side backup object is a TEMPORARY: the export tarball is the
-        // artifact, and leaving the object behind would silently fill the pool.
-        String backupName = "hib-" + Now.millis();
-        this.incus.createBackup(spec.handle(), backupName, !withSnapshots);
-        try {
-            return this.incus.exportBackup(spec.handle(), backupName, destination, maxBytes);
-        } finally {
-            try {
-                this.incus.deleteBackup(spec.handle(), backupName);
-            } catch (IOException cleanupFailed) {
-                Blast.log("INCUS: could not remove temporary backup object", backupName,
-                    "of", spec.handle(), ":", cleanupFailed.getMessage());
-            }
-        }
+        return this.archive.exportBackup(spec, destination, maxBytes, withSnapshots);
     }
 
     @Override
     public void importBackup(@NonNull InstanceSpec spec, @NonNull Path archive)
             throws IOException {
-        // AIDEV-NOTE: the isolation ACL is ensured BEFORE the import, on THIS daemon. The
-        // archive carries the source's device config, and its eth0 names this
-        // controller's isolation ACL (`security.acls`); the daemon validates every
-        // device while creating the instance record, so a destination that has never
-        // placed one of our workloads refused the whole import with `Network ACL
-        // "hohenheim-<token>-isolation" does not exist` (F1, cold migration daystrom ->
-        // nightstrom, 2026-08-29). The live proof never caught it because its peer
-        // container deployed on the destination first, which created the ACL there
-        // through the ordinary create() path. This is the SAME ensure the source used
-        // (conditional write, verified read-back), never a copy of the source's object
-        // -- and doing it here is strictly safer than after the import: a conditional
-        // UPDATE of a stale ACL retriggers every referencing NIC, and before the import
-        // the clone that could carry a duplicate MAC does not exist yet.
-        this.policy.ensureIsolationAcl();
-        stampPresence();
-        this.incus.importInstance(archive, spec.handle());
-        // Re-identification is part of the import contract: the tarball carries the
-        // SOURCE instance's user.* labels (until they are replaced the import is
-        // attributed to the wrong record -- a crash inside the window leaves an
-        // instance the NEW record's next deploy refuses as foreign, visible operator
-        // cleanup, never silent adoption) AND the source's volatile NIC MACs, which
-        // the daemon refuses beside the still-running source ("MAC address already
-        // defined on another NIC"). Dropping the hwaddr keys makes the daemon mint
-        // fresh ones at start.
-        Map<String, Object> existing = this.incus.instance(spec.handle());
-        boolean carriedMacs = existing.get("config") instanceof Map<?, ?> current
-            && current.keySet().stream().map(String::valueOf).anyMatch(IncusInstanceRuntime::isVolatileMac);
-        IncusClient.DefinitionEdit reidentify = (config, devices) -> {
-            config.keySet().removeIf(IncusInstanceRuntime::isVolatileMac);
-            spec.ownerLabels().forEach((key, value) -> config.put(USER_PREFIX + key, value));
-        };
-        // AIDEV-NOTE: the MAC strip is its OWN write, BEFORE the post-import
-        // ensureIsolationAcl, and the order is load-bearing. Between import and the
-        // strip the clone and its source share a MAC at the daemon, and ANY ACL write in
-        // that window makes the daemon re-trigger every referencing NIC and fail 409 on
-        // the duplicate (observed live on the source instance, not the clone). This
-        // write touches only the clone's own definition -- devices unchanged -- so it
-        // cannot trip over other instances.
-        if (carriedMacs) {
-            this.incus.editInstance(spec.handle(), reidentify);
-        }
-        // An imported instance re-joins the fleet's isolation exactly like a fresh one:
-        // its NIC gets the verified ACL override, so a backup made before isolation
-        // existed cannot land an unisolated container. The pre-import ensure above
-        // already converged the ACL, so this call writes nothing and is the read-back
-        // VERIFICATION that the daemon still carries every tenant-range reject.
-        this.policy.ensureIsolationAcl();
-        Map<String, Object> nic = this.policy.nicDevice(managedNetworkName(), this.egress,
-            spec.networkLimitMbit());
-        this.incus.editInstance(spec.handle(), (config, devices) -> {
-            reidentify.apply(config, devices);
-            devices.put(IncusNetworkPolicy.NIC, nic);
-        });
-        verifyIsolated(spec);
+        this.archive.importBackup(spec, archive);
     }
 
     @Override
@@ -1028,7 +617,7 @@ public final class IncusInstanceRuntime
             }
             throw e;
         }
-        return OwnerLabels.matches(ownerOf(existing), owner)
+        return OwnerLabels.matches(IncusDefinitions.ownerOf(existing), owner)
             ? WorkloadClaim.OURS : WorkloadClaim.FOREIGN;
     }
 
@@ -1044,81 +633,14 @@ public final class IncusInstanceRuntime
 
     // -- ImagePublishSupport --------------------------------------------------
 
-    /**
-     * @throws IOException for a RUNNING or absent workload: publishing a live rootfs
-     *         would capture a torn filesystem, and Incus's own refusal for that case is
-     *         less specific than the state this driver can already read
-     */
+    /** @throws IOException for a RUNNING or absent workload; see {@link IncusArchiveLane#publishImage} */
     @Override
     public @NonNull String publishImage(@NonNull InstanceSpec spec, @NonNull String alias,
                                         @Nullable String description) throws IOException {
-        ContainerState state = status(spec.handle()).state();
-        if (state != ContainerState.STOPPED) {
-            throw new IOException("REFUSED to publish '" + spec.handle() + "' as an image:"
-                + " the workload is " + state + " and only a STOPPED workload captures a"
-                + " consistent filesystem. Stop it first.");
-        }
-        return this.incus.publishImage(spec.handle(), alias, description);
+        return this.archive.publishImage(spec, alias, description);
     }
 
     // -- DeviceAttachSupport --------------------------------------------------
-
-    /**
-     * The Hohenheim-owned host directories of a spec as {@code disk} devices.
-     *
-     * AIDEV-NOTE: {@code shift=true} is what makes the files usable from inside an
-     * unprivileged container -- the daemon idmaps the host directory onto the container's
-     * uid range instead of the workload seeing everything as {@code nobody}. Without it a
-     * workspace's home directory would mount and then refuse every write, which reads as a
-     * broken image rather than as a missing mount option.
-     *
-     * AIDEV-NOTE: these ARE {@code spec.volumes()}'s counterpart on this driver, and until
-     * now a spec carrying volumes deployed on Incus lost them without a word -- the one
-     * silent drop in a driver whose every other gap refuses by name. Named volumes still
-     * have no Incus meaning; owned host directories do.
-     */
-    private static @NonNull Map<String, Object> bindDevices(@NonNull InstanceSpec spec) {
-
-        Map<String, Object> devices = new LinkedHashMap<>();
-        int index = 0;
-        // AIDEV-NOTE: the SAME containment rule the Docker funnel applies
-        // (InstanceVolumes.requireMountableBy, called from
-        // ContainerHardening.requireOwnVolumeSource), and it is called here because this
-        // driver never passes through that funnel -- until 2026-08-23 an Incus workload's
-        // disk devices were built from spec.binds() with NO check at all, not even the
-        // volume-root bound the Docker side has had for weeks. A host path is a mount of
-        // real tenant data whichever daemon materializes it.
-        Integer instanceId = OwnerLabels.instanceIdOf(OwnerLabels.parse(spec.ownerLabels()));
-
-        for (Map.Entry<String, String> bind : spec.binds().entrySet()) {
-            if (bind.getValue() == null || bind.getValue().isBlank()) {
-                continue;
-            }
-            if (instanceId == null) {
-                throw new IllegalArgumentException("REFUSED to create container: '"
-                    + spec.handle() + "' binds host path '" + bind.getKey() + "' while"
-                    + " declaring no instance owner. A bind is permitted per INSTANCE, so a"
-                    + " workload with no instance identity may bind nothing.");
-            }
-            InstanceVolumes.requireMountableBy(bind.getKey(), instanceId);
-            Map<String, Object> device = new LinkedHashMap<>();
-            device.put("type", "disk");
-            device.put("source", bind.getKey());
-            device.put("path", bind.getValue());
-            // AIDEV-NOTE: no {@code shift} for a workspace. Both live twins report an
-            // EMPTY kernel_features set, so the daemon never idmaps the mount and the
-            // option is silently inert -- a workspace's home then reads as the raw host
-            // uid from inside and refuses every write. The controller chowns the directory
-            // to the host uid the namespace id maps to instead
-            // (WorkspaceUids.incusHostUid), which needs no kernel feature at all.
-            if (spec.runUser() == null) {
-                device.put("shift", "true");
-            }
-            devices.put("hohvol" + (++index), device);
-        }
-
-        return devices;
-    }
 
     /** The daemon-side custom-volume name of one device (handle-scoped, collision-free). */
     public static @NonNull String volumeNameOf(@NonNull InstanceSpec spec,
@@ -1129,278 +651,54 @@ public final class IncusInstanceRuntime
     @Override
     public void ensureDisk(@NonNull InstanceSpec spec, @NonNull String deviceName, int sizeGb)
             throws IOException {
-        String pool = managedPoolName();
-        String volumeName = volumeNameOf(spec, deviceName);
-        Map<String, Object> existing = this.incus.customVolume(pool, volumeName);
-        if (existing == null) {
-            Map<String, Object> config = new LinkedHashMap<>();
-            config.put("size", sizeGb + "GiB");
-            // The attribution doctrine holds for volumes exactly as for workloads:
-            // owner labels land at CREATE, so a crash between volume and device leaves
-            // the volume attributable and a same-named stranger is refused below.
-            spec.ownerLabels().forEach((key, value) -> config.put(USER_PREFIX + key, value));
-            Map<String, Object> definition = new LinkedHashMap<>();
-            definition.put("name", volumeName);
-            definition.put("content_type", "block");
-            definition.put("config", config);
-            this.incus.createCustomVolume(pool, definition);
-        } else {
-            requireOwnedVolume(spec, volumeName, existing);
-        }
-
-        Map<String, Object> device = new LinkedHashMap<>();
-        device.put("type", "disk");
-        device.put("pool", pool);
-        device.put("source", volumeName);
-        putDevice(spec.handle(), deviceName, device);
-        requireDevicePresent(spec.handle(), deviceName);
+        this.devices.ensureDisk(spec, deviceName, sizeGb);
     }
 
     @Override
     public void resizeDisk(@NonNull InstanceSpec spec, @NonNull String deviceName, int sizeGb)
             throws IOException {
-        String pool = managedPoolName();
-        String volumeName = volumeNameOf(spec, deviceName);
-        Map<String, Object> existing = this.incus.customVolume(pool, volumeName);
-        if (existing == null) {
-            throw new IOException("Volume '" + volumeName + "' does not exist on pool '"
-                + pool + "'; nothing to resize");
-        }
-        requireOwnedVolume(spec, volumeName, existing);
-        Map<String, Object> config = new LinkedHashMap<>();
-        if (existing.get("config") instanceof Map<?, ?> current) {
-            current.forEach((key, value) -> config.put(String.valueOf(key), value));
-        }
-        config.put("size", sizeGb + "GiB");
-        this.incus.updateCustomVolume(pool, volumeName, Map.of("config", config));
-        // Read-back verification: "the API said yes" and "the daemon did it" are
-        // independent facts for a resize too.
-        Integer actual = diskSizeGb(spec, deviceName);
-        if (actual == null || actual != sizeGb) {
-            throw new IOException("Resize of volume '" + volumeName + "' to " + sizeGb
-                + "GiB did not take: the daemon reports " + actual + "GiB");
-        }
+        this.devices.resizeDisk(spec, deviceName, sizeGb);
     }
 
     @Override
     public void ensureNic(@NonNull InstanceSpec spec, @NonNull String deviceName)
             throws IOException {
-        // The same throwing appliers as the primary NIC: ACL verified in the daemon,
-        // the extra bridge verified managed-with-subnet, BEFORE the device lands.
-        this.policy.ensureIsolationAcl();
-        this.policy.ensureExtraNetwork();
-        stampPresence();
-        putDevice(spec.handle(), deviceName,
-            this.policy.extraNicDevice(this.egress, spec.networkLimitMbit()));
-        verifyIsolated(spec);
+        this.devices.ensureNic(spec, deviceName);
     }
 
-    /** Boot priority of the workload's own root disk while install media is attached. */
-    static final String ROOT_BOOT_PRIORITY = "10";
-
-    /** Boot priority of an attached install-media CD-ROM (below the root disk's). */
-    static final String CDROM_BOOT_PRIORITY = "5";
-
-    /**
-     * AIDEV-NOTE: the boot-order policy is ENCODED here, not exposed as a knob, and the
-     * numbers are the measured ones from docs/prepare-windows-template.md step 5: the
-     * firmware only lists a CD that carries a boot.priority, and the DISK must hold the
-     * HIGHER one -- while it is blank the firmware falls through to the CD, and the
-     * moment the OS makes it bootable the installer stops being re-entered from the
-     * media (booting the CD first again after the first-phase reboot strands Windows
-     * Setup on its "started an upgrade" question, a full boot cycle to discover).
-     */
+    /** The boot-order policy is encoded in {@link IncusDeviceLane#ensureCdrom}. */
     @Override
     public void ensureCdrom(@NonNull InstanceSpec spec, @NonNull String deviceName,
                             @NonNull String mediaVolume) throws IOException {
-        if (this.type != IncusWorkloadType.VIRTUAL_MACHINE) {
-            throw new IOException("Instance '" + spec.handle() + "' is a "
-                + this.type.apiType() + "; only a virtual machine can boot install media");
-        }
-        String pool = managedPoolName();
-        Map<String, Object> media = this.incus.customVolume(pool, mediaVolume);
-        if (media == null) {
-            throw new IOException("Install media volume '" + mediaVolume + "' does not"
-                + " exist on pool '" + pool + "' of this host; import the ISO on this"
-                + " host first (the media surface on the server record).");
-        }
-        if (!"iso".equals(media.get("content_type"))) {
-            throw new IOException("Volume '" + mediaVolume + "' on pool '" + pool
-                + "' is not an ISO volume (content_type "
-                + media.get("content_type") + "); refusing to attach it as install media");
-        }
-        Map<String, Object> cdrom = new LinkedHashMap<>();
-        cdrom.put("type", "disk");
-        cdrom.put("pool", pool);
-        cdrom.put("source", mediaVolume);
-        cdrom.put("boot.priority", CDROM_BOOT_PRIORITY);
-        putDevice(spec.handle(), deviceName, cdrom);
-        ensureRootBootPriority(spec.handle());
-        requireDevicePresent(spec.handle(), deviceName);
-    }
-
-    /** Stamp the root disk's boot priority ABOVE the media's (see ensureCdrom's note). */
-    private void ensureRootBootPriority(@NonNull String handle) throws IOException {
-        Map<String, Object> instance = this.incus.instance(handle);
-        if (instance.get("devices") instanceof Map<?, ?> devices
-                && devices.get(ROOT_DEVICE) instanceof Map<?, ?> root
-                && ROOT_BOOT_PRIORITY.equals(root.get("boot.priority"))) {
-            return;
-        }
-        this.incus.editInstance(handle, (config, devices) -> {
-            Map<String, Object> root = new LinkedHashMap<>();
-            if (devices.get(ROOT_DEVICE) instanceof Map<?, ?> existing) {
-                existing.forEach((key, value) -> root.put(String.valueOf(key), value));
-            } else {
-                // No instance-level root override yet (the profile's root applies): mint
-                // the minimal one so the priority has a device to ride on.
-                root.put("type", "disk");
-                root.put("path", "/");
-                root.put("pool", managedPoolName());
-            }
-            root.put("boot.priority", ROOT_BOOT_PRIORITY);
-            devices.put(ROOT_DEVICE, root);
-        });
+        this.devices.ensureCdrom(spec, deviceName, mediaVolume);
     }
 
     @Override
     public void removeDevice(@NonNull InstanceSpec spec, @NonNull String deviceName,
                              boolean hasVolume) throws IOException {
-        Map<String, Object> instance;
-        try {
-            instance = this.incus.instance(spec.handle());
-        } catch (IncusClient.ApiException e) {
-            if (!e.isNotFound()) {
-                throw e;
-            }
-            instance = null;   // workload gone: only the volume can remain
-        }
-        if (instance != null && instance.get("devices") instanceof Map<?, ?> devices
-                && devices.get(deviceName) != null) {
-            this.incus.editInstance(spec.handle(), (config, current) -> current.remove(deviceName));
-        }
-        if (hasVolume) {
-            deleteVolumes(spec, List.of(deviceName));
-        }
+        this.devices.removeDevice(spec, deviceName, hasVolume);
     }
 
     @Override
     public void deleteVolumes(@NonNull InstanceSpec spec, @NonNull List<String> deviceNames)
             throws IOException {
-        String pool = managedPoolName();
-        for (String deviceName : deviceNames) {
-            String volumeName = volumeNameOf(spec, deviceName);
-            Map<String, Object> existing = this.incus.customVolume(pool, volumeName);
-            if (existing == null) {
-                continue;   // observed absent, which is what delete exists to establish
-            }
-            // Never a stranger's data over a name collision -- the volume-side twin of
-            // the workload attribution refusal.
-            requireOwnedVolume(spec, volumeName, existing);
-            try {
-                this.incus.deleteCustomVolume(pool, volumeName);
-            } catch (IncusClient.ApiException e) {
-                if (!e.isNotFound()) {
-                    throw e;
-                }
-            }
-            if (this.incus.customVolume(pool, volumeName) != null) {
-                throw new IOException("Volume '" + volumeName + "' still exists on pool '"
-                    + pool + "' after its delete was accepted");
-            }
-        }
+        this.devices.deleteVolumes(spec, deviceNames);
     }
 
     @Override
     public @Nullable Integer diskSizeGb(@NonNull InstanceSpec spec, @NonNull String deviceName)
             throws IOException {
-        Map<String, Object> volume = this.incus.customVolume(managedPoolName(),
-            volumeNameOf(spec, deviceName));
-        if (volume == null || !(volume.get("config") instanceof Map<?, ?> config)) {
-            return null;
-        }
-        return parseSizeGb(config.get("size"));
-    }
-
-    /** Parse a daemon size value ("2GiB" or raw bytes) into whole GB, null when unreadable. */
-    private static @Nullable Integer parseSizeGb(@Nullable Object size) {
-        if (size == null) {
-            return null;
-        }
-        String text = String.valueOf(size).trim();
-        if (text.endsWith("GiB")) {
-            try {
-                return Integer.parseInt(text.substring(0, text.length() - 3).trim());
-            } catch (NumberFormatException unreadable) {
-                return null;
-            }
-        }
-        try {
-            long bytes = Long.parseLong(text);
-            return (int) (bytes / (1024L * 1024L * 1024L));
-        } catch (NumberFormatException unreadable) {
-            return null;
-        }
-    }
-
-    /** Write ONE device onto the instance definition (read-modify-write, NIC untouched). */
-    private void putDevice(@NonNull String handle, @NonNull String deviceName,
-                           @NonNull Map<String, Object> device) throws IOException {
-        this.incus.editInstance(handle, (config, devices) -> devices.put(deviceName, device));
-    }
-
-    /** Read the instance back and require the device the write just claimed to add. */
-    private void requireDevicePresent(@NonNull String handle, @NonNull String deviceName)
-            throws IOException {
-        Map<String, Object> instance = this.incus.instance(handle);
-        boolean present = instance.get("devices") instanceof Map<?, ?> devices
-            && devices.get(deviceName) != null;
-        if (!present) {
-            throw new IOException("Device '" + deviceName + "' of '" + handle
-                + "' was accepted but does not read back on the instance");
-        }
-    }
-
-    /** @throws IOException when the volume's user.* labels do not attribute it to this record */
-    private static void requireOwnedVolume(@NonNull InstanceSpec spec,
-                                           @NonNull String volumeName,
-                                           @NonNull Map<String, Object> volume)
-            throws IOException {
-        OwnerLabels.Owner want = OwnerLabels.parse(spec.ownerLabels());
-        OwnerLabels.Owner actual = ownerOf(volume);
-        if (!OwnerLabels.matches(actual, want)) {
-            throw new IOException("REFUSED to touch volume '" + volumeName + "': the daemon"
-                + " does not attribute it to this record ("
-                + (actual != null ? "owned by " + actual.model() + " #" + actual.id()
-                    + " of controller " + actual.controller()
-                    : "no hohenheim owner labels")
-                + "). A same-named foreign volume is a name collision, not a leftover.");
-        }
+        return this.devices.diskSizeGb(spec, deviceName);
     }
 
     /**
-     * The pool the default profile's root disk lives on -- the one pool this driver
-     * places custom volumes in, never a guess.
-     */
-    private @NonNull String managedPoolName() throws IOException {
-        return managedPoolNameOf(this.incus);
-    }
-
-    /**
-     * Static twin of {@link #managedPoolName()} for host-scoped callers with only a
-     * client (the install-media surface): ONE authority on which pool is ours, so the
-     * media lane and the device lane can never place volumes in different pools.
+     * The pool the default profile's root disk lives on, for host-scoped callers with only a
+     * client (the install-media surface): ONE authority on which pool is ours, so the media
+     * lane and the device lane can never place volumes in different pools.
      */
     public static @NonNull String managedPoolNameOf(@NonNull IncusClient incus)
             throws IOException {
-        Object devices = incus.profile("default").get("devices");
-        if (devices instanceof Map<?, ?> map && map.get("root") instanceof Map<?, ?> root
-                && root.get("pool") instanceof String pool && !pool.isBlank()) {
-            return pool;
-        }
-        throw new IOException("REFUSED to place a volume: the default profile has no root"
-            + " disk on a storage pool to inherit. This host is not admissible for disk"
-            + " devices until its default profile carries a pooled root disk.");
+        return IncusDefinitions.managedPoolName(incus);
     }
 
     /**
@@ -1419,35 +717,13 @@ public final class IncusInstanceRuntime
             }
             throw e;
         }
-        OwnerLabels.Owner actual = ownerOf(existing);
+        OwnerLabels.Owner actual = IncusDefinitions.ownerOf(existing);
         if (!OwnerLabels.matches(actual, owner)) {
             throw new IOException("REFUSED to replace instance '" + handle + "': the daemon"
                 + " does not attribute it to this record ("
-                + (actual != null ? "owned by " + actual.model() + " #" + actual.id()
-                    + " of controller " + actual.controller()
-                    : "no hohenheim owner labels")
+                + IncusDefinitions.foreignOwner(actual)
                 + "). A same-named foreign instance is a name collision, not a leftover.");
         }
         return existing;
-    }
-
-    /** A per-NIC MAC the daemon minted ({@code volatile.<nic>.hwaddr}). */
-    private static boolean isVolatileMac(@NonNull String key) {
-        return key.startsWith("volatile.") && key.endsWith(".hwaddr");
-    }
-
-    /** The owner claim of an instance object's {@code user.*} config, or null. */
-    private static OwnerLabels.@Nullable Owner ownerOf(@NonNull Map<String, Object> instance) {
-        if (!(instance.get("config") instanceof Map<?, ?> config)) {
-            return null;
-        }
-        Map<String, Object> labels = new LinkedHashMap<>();
-        for (Map.Entry<?, ?> entry : config.entrySet()) {
-            String key = String.valueOf(entry.getKey());
-            if (key.startsWith(USER_PREFIX)) {
-                labels.put(key.substring(USER_PREFIX.length()), entry.getValue());
-            }
-        }
-        return OwnerLabels.parse(labels);
     }
 }

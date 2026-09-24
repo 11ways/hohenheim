@@ -27,8 +27,10 @@ import java.util.TreeMap;
  * {@code database.url} (settings/local.dry, or ZENIT__DATABASE__URL) wins, and the
  * hohenheim settings only supply the FALLBACK url ({@link #fallbackUrl}). The hohenheim
  * keys {@code database.path} and {@code database.url} are deprecated app-owned spellings
- * that production installs still set (the installer seeds an absolute database.path), so
- * they stay honoured as that fallback and an upgraded server opens the same file.
+ * that production installs still set (the installer seeded an absolute database.path until
+ * 2026-09-24; a fresh install now gets zenit's database.url in local.dry, and an existing
+ * host is never re-pointed), so they stay honoured as that fallback and an upgraded server
+ * opens the same file.
  *
  * AIDEV-NOTE: FOREIGN KEYS ARE ON, deliberately. zenit opens every SQLite url with
  * foreign_keys=on unless the url says otherwise (zenit 8a86d3c2, 2026-09-22), and

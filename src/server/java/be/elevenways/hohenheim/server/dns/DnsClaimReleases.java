@@ -12,11 +12,7 @@ import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
-import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.QueryBuilder;
-import be.elevenways.zenit.common.orm.query.QueryContext;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -140,10 +136,10 @@ public final class DnsClaimReleases {
         });
 
         // Deleting the domain row itself -- the most ordinary way a tenant releases one
-        // hostname while keeping the site. Criteria-only context, so re-query the doomed
-        // rows (the ReleasedClaims/TenantWrites idiom).
+        // hostname while keeping the site. Criteria-only context, so the doomed rows
+        // come from the context's own read of the pending delete.
         SiteDomainModel.SCHEMA.addBeforeRemoveHook(context -> {
-            List<Row> doomed = doomedRows(context);
+            List<Row> doomed = context.doomedRows();
             Set<Integer> leaving = new HashSet<>();
             for (Row domain : doomed) {
                 leaving.add(domain.get(SiteDomainModel.ID));
@@ -252,20 +248,5 @@ public final class DnsClaimReleases {
             origins.put(zone.get(DnsZoneModel.ID), zone.get(DnsZoneModel.ORIGIN));
         }
         return origins;
-    }
-
-    /** The rows a criteria delete is about to remove (the shared re-query idiom). */
-    private static @NonNull List<Row> doomedRows(@NonNull RemoveFromDatasource context) {
-        Model model = context.getModel();
-        QueryContext queryContext = context.getQueryContext();
-        Criteria criteria = queryContext != null ? queryContext.getCriteria() : null;
-        if (model == null) {
-            return List.of();
-        }
-        QueryBuilder<Row> builder = model.find();
-        if (criteria != null) {
-            builder.where(criteria);
-        }
-        return builder.all();
     }
 }

@@ -143,7 +143,7 @@ public final class HostProbe {
         }
         Models.get(ServerModel.class).save(server);
         if (previous == null || previous.isBlank()) {
-            Alerts.send(NotificationEvents.HOST_UNREACHABLE,
+            Alerts.trySend(NotificationEvents.HOST_UNREACHABLE,
                 "Host '" + serverName + "' stopped answering (" + outcome.kind().token + ")",
                 outcome.detail());
         }

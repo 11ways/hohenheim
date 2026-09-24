@@ -8,6 +8,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.hohenheim.net.Hostnames;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -92,11 +93,7 @@ public class DnsPeerModel extends Model {
 
     /** TSIG key names are DNS names: compared lowercased and without the root dot. */
     private static @NonNull String canonicalKeyName(@NonNull String keyName) {
-        String canonical = BlastString.lower(keyName.trim());
-        while (canonical.endsWith(".")) {
-            canonical = canonical.substring(0, canonical.length() - 1);
-        }
-        return canonical;
+        return Hostnames.stripTrailingDots(BlastString.lower(keyName.trim()));
     }
 
     /** @return the peer's declared type, defaulting a null/unknown column to a plain nameserver */

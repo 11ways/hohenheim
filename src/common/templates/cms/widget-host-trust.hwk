@@ -7,10 +7,10 @@
 {% declare data: List<TrustLaneView> = null %}
 
 {% each data as lane %}
-<pl-card class="widget hh-overview-card" data-trust-lane={% lane.laneId %}>
+<pl-card class="widget hh-overview-card" data-trust-lane={% lane.lane.key %}>
     <pl-card-header>
         <pl-card-title>
-            {{ HostTrustLanes.of(lane.laneId).title }}
+            {{ lane.lane.title }}
         </pl-card-title>
     </pl-card-header>
     <pl-card-content>
@@ -41,7 +41,7 @@
         {% /if %}
         <div class="hh-trust-client">
             <span class="hh-trust-label">
-                {{ HostTrustLanes.of(lane.laneId).clientLabel }}
+                {{ lane.lane.clientLabel }}
             </span>
             {% if lane.clientMaterial != "" %}
             <pl-code value={% lane.clientMaterial %} wrap="wrap" size="sm"

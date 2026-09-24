@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.database;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.Secrets;
+import be.elevenways.hohenheim.server.auth.GrantSubjects;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
@@ -12,7 +13,6 @@ import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -94,9 +94,12 @@ public final class TenantDatabases {
             return label;
         }
         if (owner.size() == 1) {
-            String subject = owner.iterator().next();
-            if (subject.startsWith("user:")) {
-                return "u" + subject.substring("user:".length()) + "-" + label;
+            // AIDEV-NOTE: the "u<id>-" spelling is STORED (every tenant database name a
+            // running installation holds), so it never changes shape; only the reading of
+            // the token moved onto GrantSubjects.
+            GrantSubjects.Subject subject = GrantSubjects.parse(owner.iterator().next());
+            if (subject != null && subject.type() == GrantSubjectType.USER) {
+                return "u" + subject.id() + "-" + label;
             }
         }
         // A project (or any multi-subject) owner: a short stable digest of the packed set,
@@ -179,7 +182,7 @@ public final class TenantDatabases {
         // Ownership BEFORE the engine row: InstanceQuota charges an owned instance to the
         // owner of the record that owns it, and reads exactly these grants to find out who
         // that is. Planting them afterwards charges the operator for a tenant's engine.
-        grantCreatorManage(recordId, ctx);
+        HohenheimAccess.grantCreatorManage(DatabaseModel.MODEL_ID, recordId, ctx);
 
         // AIDEV-NOTE: the record is compensated EXPLICITLY rather than left to the scoped
         // create transaction. That transaction only exists when the resource's access
@@ -217,33 +220,7 @@ public final class TenantDatabases {
     private static void abandon(int databaseId, @Nullable AccessContext ctx) {
         Models.get(DatabaseModel.class).find()
             .where(DatabaseModel.ID.eq(databaseId)).delete();
-        for (String subject : HohenheimAccess.creationOwnerSubjects(ctx)) {
-            int separator = subject.indexOf(':');
-            RecordGrants.revoke(GrantSubjectType.fromKey(subject.substring(0, separator)),
-                Integer.parseInt(subject.substring(separator + 1)),
-                DatabaseModel.MODEL_ID, databaseId, HohenheimAccess.MANAGE);
-        }
-    }
-
-    /**
-     * Hand a tenant creator {@code manage} on what they just allocated. Operator
-     * allocations plant nothing: an empty subject set IS operator ownership, and a grant
-     * there would make one admin's database look tenant-held to sameOwner.
-     */
-    private static void grantCreatorManage(int databaseId, @Nullable AccessContext ctx) {
-        for (String subject : HohenheimAccess.creationOwnerSubjects(ctx)) {
-            int separator = subject.indexOf(':');
-            RecordGrants.grant(GrantSubjectType.fromKey(subject.substring(0, separator)),
-                Integer.parseInt(subject.substring(separator + 1)),
-                DatabaseModel.MODEL_ID, databaseId, HohenheimAccess.MANAGE, true);
-        }
-        // The request memo caches "which records does this principal hold X on", and the
-        // line above just changed the answer. zenit-cms verifies the created row against
-        // the caller's own scope predicate before committing, so a stale memo makes a
-        // legitimate allocation refuse ITSELF with out_of_scope.
-        if (ctx != null) {
-            HohenheimAccess.forgetGrantedRecordIds(ctx);
-        }
+        HohenheimAccess.revokeCreatorManage(DatabaseModel.MODEL_ID, databaseId, ctx);
     }
 
     private static ManagedDatabase.@NonNull Engine engineOf(@NonNull String token) {

@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.test.docker.TestImages;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -21,19 +24,15 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -70,9 +69,8 @@ class SharedDatabaseEngineLiveTest {
     private static final String MONGO_IMAGE = "mongo:7";
     private static final String MYSQL_IMAGE = "mysql:8.0";
     private static final String POSTGRES_IMAGE = "postgres:17-alpine";
-    private static final String ALPINE_IMAGE = "alpine:latest";
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static PrivateNetns netns;
     private static Path backupRoot;
     private static String originalBackupPath;
@@ -82,12 +80,7 @@ class SharedDatabaseEngineLiveTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        File db = File.createTempFile("hohenheim-shared-engine-live", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
         netns = PrivateNetns.installEnforcing();
         backupRoot = Files.createTempDirectory("hohenheim-shared-engine-backups");
@@ -147,10 +140,10 @@ class SharedDatabaseEngineLiveTest {
             // 1. Two shared databases, created synchronously: both active, both SHARED,
             //    both naming the same engine.
             service.create(nameA, ManagedDatabase.Engine.MONGO, MONGO_IMAGE, "usera",
-                passwordA, dbA, false, ServerService.LOCAL, ResourceLimits.none(),
+                passwordA, dbA, false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
                 DatabaseModel.PLACEMENT_SHARED);
             service.create(nameB, ManagedDatabase.Engine.MONGO, MONGO_IMAGE, "userb",
-                passwordB, dbB, false, ServerService.LOCAL, ResourceLimits.none(),
+                passwordB, dbB, false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
                 DatabaseModel.PLACEMENT_SHARED);
             DatabaseService.Detail detailA = service.detail(nameA);
             DatabaseService.Detail detailB = service.detail(nameB);
@@ -288,7 +281,7 @@ class SharedDatabaseEngineLiveTest {
     @Test
     void aDedicatedDatabaseMovesOntoTheSharedEngineAndItsWorkloadFollows() throws Exception {
         DockerClient docker = requireDaemon(MONGO_IMAGE);
-        LiveLane.requireImage(docker, ALPINE_IMAGE);
+        LiveLane.requireImage(docker, TestImages.ALPINE);
         Db.run(datasource, () -> {
             try {
                 moveJourney(docker);
@@ -313,7 +306,7 @@ class SharedDatabaseEngineLiveTest {
         try {
             // 1. A DEDICATED, volume-backed mongo with a workload attached and running.
             service.create(name, ManagedDatabase.Engine.MONGO, MONGO_IMAGE, user, password,
-                database, false, ServerService.LOCAL, ResourceLimits.none(),
+                database, false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
                 DatabaseModel.PLACEMENT_DEDICATED);
             Row record = Models.get(DatabaseModel.class).findByName(name);
             int databaseId = record.get(DatabaseModel.ID);
@@ -338,7 +331,7 @@ class SharedDatabaseEngineLiveTest {
             //     very user name the dedicated record carries. The move must not
             //     re-credential it; the dedicated record's user is renamed instead.
             service.create(squatterName, ManagedDatabase.Engine.MONGO, MONGO_IMAGE, user,
-                "squatpw1234", "squat", false, ServerService.LOCAL, ResourceLimits.none(),
+                "squatpw1234", "squat", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
                 DatabaseModel.PLACEMENT_SHARED);
 
             // 2. Three documents through the dedicated container, as its own root user.
@@ -541,10 +534,10 @@ class SharedDatabaseEngineLiveTest {
         try {
             // 1. One shared database per SQL engine, created synchronously.
             service.create(mysqlName, ManagedDatabase.Engine.MYSQL, MYSQL_IMAGE, "myuser",
-                password, mysqlDatabase, false, ServerService.LOCAL, ResourceLimits.none(),
+                password, mysqlDatabase, false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
                 DatabaseModel.PLACEMENT_SHARED);
             service.create(postgresName, ManagedDatabase.Engine.POSTGRES, POSTGRES_IMAGE,
-                "pguser", password, postgresDatabase, false, ServerService.LOCAL,
+                "pguser", password, postgresDatabase, false, ServerService.LOCAL_HOST_NAME,
                 ResourceLimits.none(), DatabaseModel.PLACEMENT_SHARED);
             assertThat(service.detail(mysqlName).placement())
                 .as("step 1: the mysql record is shared")
@@ -557,7 +550,7 @@ class SharedDatabaseEngineLiveTest {
             //     create script would have re-credentialed the first record's user.
             assertThatThrownBy(() -> service.create(mysqlName + "b",
                     ManagedDatabase.Engine.MYSQL, MYSQL_IMAGE, "myuser", "otherpw1234",
-                    "mysharedb", false, ServerService.LOCAL, ResourceLimits.none(),
+                    "mysharedb", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
                     DatabaseModel.PLACEMENT_SHARED))
                 .as("step 1b: the same logical user on one engine is refused")
                 .isInstanceOf(Violations.class)
@@ -610,7 +603,7 @@ class SharedDatabaseEngineLiveTest {
             // 3b. TENANT ISOLATION. A second postgres record's role cannot even CONNECT to
             //     the first record's database: PUBLIC's connect is revoked on create.
             service.create(postgresOther, ManagedDatabase.Engine.POSTGRES, POSTGRES_IMAGE,
-                "pgother", password, "pgother", false, ServerService.LOCAL, ResourceLimits.none(),
+                "pgother", password, "pgother", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
                 DatabaseModel.PLACEMENT_SHARED);
             DockerClient.ExecResult crossPg = docker.exec(pgHandle, List.of("psql",
                 "-U", "pgother", "-d", postgresDatabase, "-tA", "-c", "SELECT id FROM probe"),
@@ -624,10 +617,10 @@ class SharedDatabaseEngineLiveTest {
             // 3c. MySQL: "_" is a GRANT wildcard, so a grant on my_wild used to reach a
             //     database named myxwild on the same engine. The escaped grant does not.
             service.create(mysqlWild, ManagedDatabase.Engine.MYSQL, MYSQL_IMAGE, "wilduser",
-                password, "my_wild", false, ServerService.LOCAL, ResourceLimits.none(),
+                password, "my_wild", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
                 DatabaseModel.PLACEMENT_SHARED);
             service.create(mysqlVictim, ManagedDatabase.Engine.MYSQL, MYSQL_IMAGE, "victimuser",
-                password, "myxwild", false, ServerService.LOCAL, ResourceLimits.none(),
+                password, "myxwild", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
                 DatabaseModel.PLACEMENT_SHARED);
             DockerClient.ExecResult victimWrite = docker.exec(myHandle, List.of("mysql",
                 "-u", "victimuser", "myxwild", "-e",
@@ -793,8 +786,8 @@ class SharedDatabaseEngineLiveTest {
 
     private static int workload(String name) {
         Map<String, Object> settings = new LinkedHashMap<>();
-        settings.put("image", "alpine");
-        settings.put("tag", "latest");
+        // The pinned reference carries its own tag, so no separate tag setting.
+        settings.put("image", TestImages.ALPINE);
         settings.put("command", "sleep 600");
         settings.put("container_port", 8080);
         Row row = Models.get(InstanceModel.class).createEmptyRow();

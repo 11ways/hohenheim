@@ -442,7 +442,7 @@ public class SiteDomainResource extends RowResource {
                         holder -> CmsSupport.violationText("route_overlaps_other_site")
                             .withArg("hostname", String.valueOf(candidateHostname))
                             .withArg("site", holder),
-                        CmsSupport.violationText(ClaimRefusals.HOSTNAME_UNAVAILABLE)));
+                        CmsSupport.violationText(HostnameAuthority.HOSTNAME_UNAVAILABLE)));
             }
             if (!sameSite) {
                 throw Violations.ofField(path == null ? "hostname" : "path",
@@ -450,7 +450,7 @@ public class SiteDomainResource extends RowResource {
                     ClaimRefusals.heldBy(candidateSiteId, candidateSite,
                         holder -> CmsSupport.violationText("route_taken_other_site")
                             .withArg("site", holder),
-                        CmsSupport.violationText(ClaimRefusals.HOSTNAME_UNAVAILABLE)));
+                        CmsSupport.violationText(HostnameAuthority.HOSTNAME_UNAVAILABLE)));
             }
             if (path == null) {
                 throw Violations.ofField("hostname", hostname, CmsSupport.violationText("hostname_taken"));

@@ -146,8 +146,10 @@ A role-owned `ScheduledTask` declares its schedules through
 `HohenheimRoles.schedulesWhen(List.of(...), Role...)`, never a bare list. A bare
 list compiles, discovers and reconciles fine and then RUNS on nodes that do not
 host the capability -- `TaskService` knows nothing about roles and almost no
-executor self-guards. The two genuinely node-agnostic tasks
-(`BackupControlPlane`, `CleanOldActivity`) use a bare list on purpose. Reading
+executor self-guards. The genuinely node-agnostic tasks (`BackupControlPlane`,
+`CheckForeignKeys`) use a bare list on purpose. Activity pruning is no Hohenheim task
+any more: zenit's own `ActivityPruneTask` reads `activity.retention_days`, which
+`HohenheimSettingsFiles.applyFrameworkDefaults` seeds to 90 days. Reading
 roles before `HohenheimSettingsFiles.load()` throws; tests get their snapshot
 from `HohenheimTestRuntime.ensureBooted()` unless they need a restricted set,
 which they capture themselves before booting.

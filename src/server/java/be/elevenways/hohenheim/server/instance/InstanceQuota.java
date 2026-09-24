@@ -1,30 +1,21 @@
 package be.elevenways.hohenheim.server.instance;
 
-import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
+import be.elevenways.hohenheim.server.quota.ChargedDimension;
+import be.elevenways.hohenheim.server.quota.ChargedModel;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
+import be.elevenways.hohenheim.server.quota.OwnerDimension;
 import be.elevenways.hohenheim.server.quota.OwnerQuota;
+import be.elevenways.hohenheim.server.quota.QuotaReconciler;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
-import be.elevenways.zenit.common.orm.model.Model;
-import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.QueryBuilder;
-import be.elevenways.zenit.common.orm.query.QueryContext;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
-import be.elevenways.zenit.common.orm.quota.QuotaExceeded;
 import be.elevenways.zenit.common.orm.quota.Quotas;
-import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Set;
 
 /**
@@ -61,7 +52,7 @@ import java.util.Set;
  * -claim quarantine answer from, never a principal column. The empty set is the
  * operator, so EVERY operator-owned instance shares one bucket, deliberately. An OWNED
  * instance (a site's container, a managed database's engine) answers to the owner of the
- * record that OWNS it -- see {@link #creationOwnerOf}.
+ * record that OWNS it -- see {@link #creationOwnerPackOf}.
  *
  * AIDEV-NOTE: enforcement rides a beforeWrite hook and the hook is ADJACENT to the
  * write, not transactional -- Model.save opens a transaction only for revisionable
@@ -78,31 +69,112 @@ import java.util.Set;
  * the DELTA against the bucket the row was already charged to (the InstanceDeviceQuota
  * size-update idiom). A count has no delta -- one live row is one slot whatever it says.
  *
- * AIDEV-NOTE: the RELEASE rides the deleted_at null -> non-null TRANSITION in this
- * same hook, detected against the STORED row (a partial CMS update carries only the
- * changed keys -- the SiteDomainModel.effective idiom). It must NOT ride the remove
- * hooks for the destroy path: InstanceService.destroy soft-deletes via save(), so
- * beforeRemove/afterRemove never fire there (the only hard-delete call sites in the
- * repo are tests). The remove-hook pairing below exists ONLY for hard deletes, so a
- * criteria delete cannot leak reservations either. Known bypass, by the ledger's own
- * contract: updateAll() fires no hooks, so a future bulk edit that stamps deleted_at
- * set-based would skip the release -- keep destroys on the save path.
+ * AIDEV-NOTE: the lifecycle (create, the deleted_at transitions detected against the
+ * STORED row, the live-to-live delta, the hard-delete pairing) is {@link ChargedModel}'s,
+ * shared with every other dimension; this class only declares the two dimensions. The
+ * release rides the deleted_at transition because InstanceService.destroy soft-deletes
+ * via save() and the remove hooks never fire there -- keep destroys on the save path.
  *
  * Localization: refusals are Microcopy-backed violations; bucket keys are machine
  * tokens and never localized content.
  */
 public final class InstanceQuota {
 
-    /** The consumer-namespaced bucket prefix; the packed subject set follows it. */
-    static final String BUCKET_PREFIX = "hohenheim:instances:";
+    /**
+     * One slot per live instance, charged to the owner the create is ABOUT TO HAVE (see
+     * {@link #creationOwnerPackOf}); a restore is a new claim against the owner derived NOW.
+     */
+    public static final ChargedDimension COUNT =
+        new OwnerDimension("instances", OwnerBudget.INSTANCES, InstanceModel.QUOTA_BUCKET) {
 
-    /** The owner-memory bucket prefix; the same packed subject set follows it. */
-    static final String MEMORY_PREFIX = "hohenheim:owner_mem_mb:";
+            @Override
+            protected long heldAmount(@NonNull Row stored) {
+                return 1;
+            }
 
-    /** Where the before-remove hook stashes the buckets the after-remove hook releases. */
-    private static final String DOOMED_BUCKETS = "hohenheim.quota.doomed-buckets";
+            @Override
+            public @Nullable Charge claim(@NonNull Row row, @Nullable Row stored,
+                                          @NonNull Transition transition) {
+                return switch (transition) {
+                    // AIDEV-NOTE: this used to charge the operator bucket unconditionally,
+                    // with a comment saying that was "always" the owner because grants land
+                    // after the record. That held only while creates were admin-only; the
+                    // moment a tenant can create (InstanceTemplates.createFromTemplate), every
+                    // tenant shared ONE bucket with the operator. The derivation is shared
+                    // with the grant that follows, so the charged bucket and the record's
+                    // real owner are one answer.
+                    case CREATE -> new Charge(creationBucket(), 1, false);
+                    case RESTORE -> this.forCurrentOwner(InstanceModel.MODEL_ID, stored,
+                        stored.get(InstanceModel.ID), 1);
+                    // A count has no delta: one live row is one slot whatever it says.
+                    case REBOOK -> this.held(stored);
+                };
+            }
+        };
 
-    private static boolean installed;
+    /**
+     * The workload memory an owner's live instances hold, booked in the owner-memory bucket
+     * that matches the COUNT bucket the row is charged to, and stamped as
+     * {@code quota_memory_mb} so the release hands back exactly what was booked.
+     *
+     * AIDEV-NOTE: declared AFTER {@link #COUNT} in {@link ChargedModel#INSTANCES} on
+     * purpose: a create or restore books into the bucket COUNT just stamped, so a folded
+     * owner's two dimensions can never land in different buckets. The count is reserved
+     * first, and a memory refusal unwinds it (the ChargedModel journal) -- an instance save
+     * opens no transaction, and an uncompensated refusal once cost the owner one slot per
+     * refusal, forever (production robbedoes, {@code instances} 15 against 14 live rows).
+     */
+    public static final ChargedDimension MEMORY = new ChargedDimension() {
+
+        @Override
+        public @NonNull String key() {
+            return "owner_memory";
+        }
+
+        @Override
+        public @NonNull String prefix() {
+            return OwnerBudget.OWNER_MEMORY.prefix();
+        }
+
+        @Override
+        public @Nullable Charge held(@NonNull Row stored) {
+            Charge count = COUNT.held(stored);
+            Integer stamped = stored.get(InstanceModel.QUOTA_MEMORY_MB);
+            long amount = Math.max(0, stamped != null ? stamped : InstanceCapacity.footprintMbOf(stored));
+            return new Charge(memoryBucketOfChargedBucket(count.bucket()), amount,
+                stamped == null || count.derived());
+        }
+
+        @Override
+        public @Nullable Charge claim(@NonNull Row row, @Nullable Row stored,
+                                      @NonNull Transition transition) {
+            long amount = Math.max(0, InstanceCapacity.effectiveFootprintMb(row, stored));
+            String countBucket = switch (transition) {
+                case CREATE, RESTORE -> {
+                    String stamped = row.get(InstanceModel.QUOTA_BUCKET);
+                    if (stamped == null) {
+                        throw new IllegalStateException(
+                            "owner memory is charged after the instance count stamps its bucket");
+                    }
+                    yield stamped;
+                }
+                case REBOOK -> COUNT.held(stored).bucket();
+            };
+            return new Charge(memoryBucketOfChargedBucket(countBucket), amount, false);
+        }
+
+        @Override
+        public void reserve(@NonNull String bucket, long amount) {
+            OwnerBudget.OWNER_MEMORY.reserve(bucket, amount);
+        }
+
+        @Override
+        public void stamp(@NonNull Row row, @Nullable Charge charge) {
+            if (charge != null) {
+                row.set(InstanceModel.QUOTA_MEMORY_MB, (int) charge.amount());
+            }
+        }
+    };
 
     private InstanceQuota() {
     }
@@ -112,12 +184,12 @@ public final class InstanceQuota {
      * digest so the key always fits the ledger's 191-char primary key.
      */
     public static @NonNull String bucketKeyOf(@NonNull String packedSubjects) {
-        return OwnerQuota.bucketOf(BUCKET_PREFIX, packedSubjects);
+        return OwnerBudget.INSTANCES.bucketOf(packedSubjects);
     }
 
     /** The owner-memory bucket for a packed subject set; same 191-char fold. */
     public static @NonNull String memoryBucketOf(@NonNull String packedSubjects) {
-        return OwnerQuota.bucketOf(MEMORY_PREFIX, packedSubjects);
+        return OwnerBudget.OWNER_MEMORY.bucketOf(packedSubjects);
     }
 
     /**
@@ -126,7 +198,7 @@ public final class InstanceQuota {
      * dimensions can never land in different buckets.
      */
     public static @NonNull String memoryBucketOfChargedBucket(@NonNull String countBucket) {
-        return memoryBucketOf(OwnerQuota.packOf(BUCKET_PREFIX, countBucket));
+        return memoryBucketOf(OwnerBudget.INSTANCES.packOf(countBucket));
     }
 
     /**
@@ -136,24 +208,22 @@ public final class InstanceQuota {
      * @return the cap, or null for uncapped
      */
     public static @Nullable Integer limitFor(@NonNull String packedSubjects) {
-        return OwnerQuota.limitOf(packedSubjects, InstanceQuotaModel.MAX_INSTANCES,
-            HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER);
+        return OwnerBudget.INSTANCES.limitFor(packedSubjects);
     }
 
     /** The owner's workload-memory cap in MB; same override/default semantics. */
     public static @Nullable Integer memoryLimitFor(@NonNull String packedSubjects) {
-        return OwnerQuota.limitOf(packedSubjects, InstanceQuotaModel.MAX_MEMORY_MB,
-            HohenheimSettings.Quota.MAX_MEMORY_MB_PER_OWNER);
+        return OwnerBudget.OWNER_MEMORY.limitFor(packedSubjects);
     }
 
     /** How much of an owner's cap is spent (admin surfaces, tests). */
     public static long usedBy(@NonNull String packedSubjects) {
-        return Quotas.usedOf(bucketKeyOf(packedSubjects));
+        return OwnerBudget.INSTANCES.usedBy(packedSubjects);
     }
 
     /** How much workload memory (MB) an owner is holding (admin surfaces, tests). */
     public static long memoryUsedBy(@NonNull String packedSubjects) {
-        return Quotas.usedOf(memoryBucketOf(packedSubjects));
+        return OwnerBudget.OWNER_MEMORY.usedBy(packedSubjects);
     }
 
     /**
@@ -176,7 +246,7 @@ public final class InstanceQuota {
         if (newBucket.equals(oldBucket)) {
             return 0;
         }
-        long memory = bookedMemoryOf(stored);
+        long memory = MEMORY.held(stored).amount();
         Quotas.release(oldBucket, 1);
         Quotas.reserve(newBucket, 1, Long.MAX_VALUE);
         if (memory > 0) {
@@ -186,69 +256,19 @@ public final class InstanceQuota {
         return 1;
     }
 
-    /** Install the reserve/release hooks on the instance write funnel (MODULES stage). */
-    public static synchronized void install() {
-        if (installed) {
-            return;
-        }
-        installed = true;
-
-        InstanceModel.SCHEMA.addBeforeWriteHook(context -> {
-            Row row = context.getRow();
-            if (row == null) {
-                return;
-            }
-            Row stored = storedOf(row);
-            boolean storedLive = stored != null && stored.get(InstanceModel.DELETED_AT) == null;
-            boolean willBeLive = effectiveDeletedAt(row, stored) == null;
-
-            if (stored == null) {
-                // CREATE (no stored row; covers the explicit-PK insert fallback too). The
-                // instance itself holds no grant yet, so the charge goes to the owner it
-                // is ABOUT TO HAVE -- see creationOwnerOf for the two ways that is derived.
-                //
-                // AIDEV-NOTE: this used to charge the operator bucket unconditionally,
-                // with a comment saying that was "always" the owner because grants land
-                // after the record. That held only while creates were admin-only. The
-                // moment a tenant can create (InstanceTemplates.createFromTemplate, which
-                // plants the creator's manage grant right after), charging the operator
-                // meant every tenant shared ONE bucket with the operator: a per-owner cap
-                // that could not bind the thing it exists for. The derivation is shared
-                // with the grant that follows (HohenheimAccess.creationOwnerSubjects), so
-                // the charged bucket and the record's real owner are one answer.
-                if (willBeLive) {
-                    reserveInto(row, HohenheimAccess.packSubjects(creationOwnerOf()), stored);
-                }
-            } else if (storedLive && !willBeLive) {
-                // The soft-delete transition: hand the CHARGED buckets back.
-                Quotas.release(chargedBucketOf(stored), 1);
-                releaseMemoryOf(stored);
-            } else if (!storedLive && willBeLive) {
-                // The restore transition: a restore is a new claim on headroom, judged
-                // against the owner as derived NOW (the record and its grants exist).
-                Set<String> subjects =
-                    HohenheimAccess.manageSubjectsOf(InstanceModel.MODEL_ID, stored.get(InstanceModel.ID));
-                if (subjects == null) {
-                    // Unreadable grants: fail toward the bucket that was charged before.
-                    reserveIntoBucket(row, chargedBucketOf(stored), stored);
-                } else {
-                    reserveInto(row, HohenheimAccess.packSubjects(subjects), stored);
-                }
-            } else if (storedLive) {
-                // A live row that stays live: only MEMORY can change, and it changes on a
-                // settings edit, so the delta rides the bucket already charged.
-                rebookMemory(row, stored);
-            }
-        });
-
-        // Hard deletes only (tests, future bulk cleanup): the destroy path soft-deletes
-        // and never reaches these. The criteria-context capture/release pairing is the
-        // framework's documented seam (PortLedger.captureDoomedOwners is the reference).
-        InstanceModel.SCHEMA.addBeforeRemoveHook(InstanceQuota::captureDoomedBuckets);
-        InstanceModel.SCHEMA.addAfterRemoveHook(InstanceQuota::releaseDoomedBuckets);
+    /**
+     * The count bucket a record created RIGHT NOW would be charged to -- the same
+     * derivation the create claim uses, exposed for a caller that must judge a host
+     * against the owner before the record exists (the archive-restore placement gate).
+     *
+     * AIDEV-NOTE: exposed rather than re-derived at the call site on purpose. "Who will
+     * this be charged to" has exactly one answer, and a second spelling of it is how a
+     * dedicated host ends up admitting a workload the ledger then charges to somebody
+     * else.
+     */
+    public static @NonNull String creationBucket() {
+        return bucketKeyOf(creationOwnerPackOf());
     }
-
-    // -- hook internals -------------------------------------------------------
 
     /**
      * WHO a brand-new instance is charged to.
@@ -275,23 +295,9 @@ public final class InstanceQuota {
      * converging the runtime would charge the operator and then hand the record to a
      * tenant, leaving the reservation attributed to a bucket nobody will ever release.
      *
-     * @return the manage-subject set to charge; empty IS the operator, never an error
+     * @return the packed manage-subject set to charge; "" IS the operator, never an error
      */
-    /**
-     * The count bucket a record created RIGHT NOW would be charged to -- the same
-     * derivation the create hook below uses, exposed for a caller that must judge a host
-     * against the owner before the record exists (the archive-restore placement gate).
-     *
-     * AIDEV-NOTE: exposed rather than re-derived at the call site on purpose. "Who will
-     * this be charged to" has exactly one answer, and a second spelling of it is how a
-     * dedicated host ends up admitting a workload the ledger then charges to somebody
-     * else.
-     */
-    public static @NonNull String creationBucket() {
-        return bucketKeyOf(HohenheimAccess.packSubjects(creationOwnerOf()));
-    }
-
-    private static @NonNull Set<String> creationOwnerOf() {
+    private static @NonNull String creationOwnerPackOf() {
         GeneratedRows.Attribution attribution = GeneratedRows.currentAttribution();
         if (attribution != null && attribution.forModel() != null && attribution.forId() != null) {
             Identifier ownerModel = Identifier.tryParse(attribution.forModel());
@@ -299,7 +305,7 @@ public final class InstanceQuota {
                 Set<String> owner =
                     HohenheimAccess.manageSubjectsOf(ownerModel, attribution.forId());
                 if (owner != null) {
-                    return owner;
+                    return HohenheimAccess.packSubjects(owner);
                 }
                 // Unreadable grants: fall through to the ambient derivation and say so,
                 // rather than silently inventing an owner for a record we cannot read.
@@ -307,186 +313,17 @@ public final class InstanceQuota {
                     attribution.forId(), "- charging the owned instance by write scope");
             }
         }
-        return HohenheimAccess.creationOwnerSubjects(
-            TenantWrites.isTenantOriginated() ? TenantWrites.acting() : null);
+        return OwnerQuota.creationOwnerPack();
     }
-
-    private static void reserveInto(@NonNull Row row, @NonNull String packedSubjects,
-                                    @Nullable Row stored) {
-        reserveIntoBucket(row, bucketKeyOf(packedSubjects), stored);
-    }
-
-    /**
-     * Reserve one slot AND the workload's memory in the owner's buckets, and stamp both on
-     * the row -- usage is counted even when no cap is configured, so enabling a cap later
-     * starts from honest numbers.
-     *
-     * AIDEV-NOTE: the count is reserved first, and the memory reservation is UNWOUND onto
-     * it -- corrected 2026-09-01, and the note that stood here was the bug. It claimed a
-     * count spent without its memory "cannot outlive the refusal" because the ledger rides
-     * the caller's transaction; an instance save opens NO transaction (Model.save opens one
-     * only for a revisionable schema, and this model is not one), so a memory refusal left
-     * the slot spent forever. Every such refusal cost the owner one instance from their cap
-     * with no record to release it, which is a lockout that only ever grows -- measured on
-     * production robbedoes, whose {@code instances} bucket read 15 against 14 live rows.
-     *
-     * The compensation is LOCAL to this method and cannot reach further: a refusal in a
-     * LATER hook (the host budget's {@code host_capacity_reached} is the reachable one,
-     * since InstanceCapacity installs after this) still leaves both owner reservations
-     * spent, because a before-write hook cannot see a sibling throw. That residue is what
-     * {@link be.elevenways.hohenheim.server.quota.QuotaReconciler} exists for.
-     */
-    private static void reserveIntoBucket(@NonNull Row row, @NonNull String bucket,
-                                          @Nullable Row stored) {
-        String packed = OwnerQuota.packOf(BUCKET_PREFIX, bucket);
-        Integer limit = limitFor(packed);
-        try {
-            Quotas.reserve(bucket, 1, limit == null ? Long.MAX_VALUE : limit);
-        } catch (QuotaExceeded full) {
-            throw Violations.ofForm(Microcopy.of("quota_reached")
-                .withFilter("scope", "violations")
-                .withArg("used", full.getUsed())
-                .withArg("limit", full.getLimit()));
-        }
-        row.set(InstanceModel.QUOTA_BUCKET, bucket);
-        try {
-            reserveMemory(row, packed, InstanceCapacity.effectiveFootprintMb(row, stored));
-        } catch (RuntimeException | Error refused) {
-            Quotas.release(bucket, 1);
-            throw refused;
-        }
-    }
-
-    /** Book {@code amountMb} against the owner's memory budget and stamp what was taken. */
-    private static void reserveMemory(@NonNull Row row, @NonNull String packed, int amountMb) {
-        OwnerQuota.reserve(memoryBucketOf(packed), amountMb, memoryLimitFor(packed),
-            "memory_quota_reached");
-        row.set(InstanceModel.QUOTA_MEMORY_MB, Math.max(0, amountMb));
-    }
-
-    /** Hand a stored row's booked memory back to the bucket it was charged to. */
-    private static void releaseMemoryOf(@NonNull Row stored) {
-        long booked = bookedMemoryOf(stored);
-        if (booked > 0) {
-            Quotas.release(memoryBucketOf(chargedPackOf(stored)), booked);
-        }
-    }
-
-    /**
-     * A live row that stays live: charge or release only the DIFFERENCE between what it
-     * holds and what its new settings declare, against the bucket it is already in.
-     */
-    private static void rebookMemory(@NonNull Row row, @NonNull Row stored) {
-        long booked = bookedMemoryOf(stored);
-        int amount = InstanceCapacity.effectiveFootprintMb(row, stored);
-        if (booked == amount) {
-            return;
-        }
-        String packed = chargedPackOf(stored);
-        if (amount > booked) {
-            OwnerQuota.reserve(memoryBucketOf(packed), amount - booked, memoryLimitFor(packed),
-                "memory_quota_reached");
-        } else {
-            Quotas.release(memoryBucketOf(packed), booked - amount);
-        }
-        row.set(InstanceModel.QUOTA_MEMORY_MB, Math.max(0, amount));
-    }
-
-    /**
-     * What a stored row is holding against its owner's memory budget: the STAMP when it has
-     * one, else the footprint its settings imply.
-     *
-     * AIDEV-NOTE: the fallback covers rows written before the stamp column existed and is
-     * SLOGGED rather than silent -- a release computed from settings that changed since is
-     * exactly the drift the stamp prevents (the InstanceCapacity.bookedOf twin).
-     */
-    private static long bookedMemoryOf(@NonNull Row stored) {
-        Integer stamped = stored.get(InstanceModel.QUOTA_MEMORY_MB);
-        if (stamped != null) {
-            return Math.max(0, stamped);
-        }
-        int derived = InstanceCapacity.footprintMbOf(stored);
-        Blast.log("QUOTA: instance", stored.get(InstanceModel.ID),
-            "carries no booked owner memory; releasing the derived footprint", derived);
-        return Math.max(0, derived);
-    }
-
-    /** The packed subject set behind the bucket a stored row was charged to. */
-    private static @NonNull String chargedPackOf(@NonNull Row stored) {
-        return OwnerQuota.packOf(BUCKET_PREFIX, chargedBucketOf(stored));
-    }
-
 
     /**
      * The bucket a stored row was charged to; pre-quota rows fall to the operator bucket.
      *
-     * Public because the reconcile lane must ask the SAME question the release paths ask:
-     * a second spelling of "which bucket is this row's" is how a recompute corrects a
-     * bucket the row was never charged to.
+     * Public because every reader must ask the SAME question the release paths ask (the
+     * {@link QuotaReconciler} reads it through {@link #COUNT}): a second spelling of "which
+     * bucket is this row's" is how a recompute corrects a bucket the row was never charged to.
      */
     public static @NonNull String chargedBucketOf(@NonNull Row stored) {
-        String bucket = stored.get(InstanceModel.QUOTA_BUCKET);
-        if (bucket != null && !bucket.isBlank()) {
-            return bucket;
-        }
-        Blast.log("QUOTA: instance", stored.get(InstanceModel.ID),
-            "carries no charged bucket; releasing against the operator bucket");
-        return bucketKeyOf("");
-    }
-
-    /** The value deleted_at will END UP with: staged when carried, else stored. */
-    private static @Nullable Object effectiveDeletedAt(@NonNull Row row, @Nullable Row stored) {
-        if (row.has(InstanceModel.DELETED_AT.getName())) {
-            return row.get(InstanceModel.DELETED_AT.getName());
-        }
-        return stored != null ? stored.get(InstanceModel.DELETED_AT) : null;
-    }
-
-    private static @Nullable Row storedOf(@NonNull Row row) {
-        if (!row.has(InstanceModel.ID.getName()) || row.get(InstanceModel.ID) == null) {
-            return null;
-        }
-        return Models.get(InstanceModel.class).findById(row.get(InstanceModel.ID));
-    }
-
-    private static void captureDoomedBuckets(@NonNull RemoveFromDatasource context) {
-        Model model = context.getModel();
-        if (model == null) {
-            return;
-        }
-        QueryContext queryContext = context.getQueryContext();
-        Criteria criteria = queryContext != null ? queryContext.getCriteria() : null;
-        QueryBuilder<Row> builder = model.find();
-        if (criteria != null) {
-            builder.where(criteria);
-        }
-        List<Doomed> doomed = new ArrayList<>();
-        for (Row row : builder.all()) {
-            // Trashed rows already released on their soft-delete transition.
-            if (row.get(InstanceModel.DELETED_AT) == null) {
-                doomed.add(new Doomed(chargedBucketOf(row), bookedMemoryOf(row)));
-            }
-        }
-        if (!doomed.isEmpty()) {
-            context.setAttribute(DOOMED_BUCKETS, doomed);
-        }
-    }
-
-    /** One doomed row's release: the count bucket it held, and the memory it booked. */
-    private record Doomed(@NonNull String bucket, long memoryMb) {}
-
-    private static void releaseDoomedBuckets(@NonNull RemoveFromDatasource context) {
-        if (!(context.getAttribute(DOOMED_BUCKETS) instanceof List<?> doomed)) {
-            return;
-        }
-        for (Object entry : doomed) {
-            if (entry instanceof Doomed release) {
-                Quotas.release(release.bucket(), 1);
-                if (release.memoryMb() > 0) {
-                    Quotas.release(memoryBucketOfChargedBucket(release.bucket()),
-                        release.memoryMb());
-                }
-            }
-        }
+        return COUNT.held(stored).bucket();
     }
 }

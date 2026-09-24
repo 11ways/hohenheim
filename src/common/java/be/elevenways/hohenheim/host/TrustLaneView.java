@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.host;
 
+import be.elevenways.hohenheim.HostTrustLane;
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -8,7 +9,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * the pinned fingerprint, its confirmation state, the pin's own timestamp, any
  * offered-but-contradicting material, and the client credential the operator installs.
  *
- * @param laneId          the action-id lane token ({@code host_key} / {@code incus_cert})
+ * @param lane            the trust lane; its key is also the lane's row-action id
  * @param pinned          whether the slot holds pinned material at all
  * @param fingerprint     the pinned fingerprint, {@code ""} when unpinned
  * @param verified        whether an operator confirmed the fingerprint out of band
@@ -19,7 +20,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 @HawkeyeClass
 public record TrustLaneView(
-    String laneId,
+    HostTrustLane lane,
     boolean pinned,
     String fingerprint,
     boolean verified,

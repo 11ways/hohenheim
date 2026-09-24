@@ -6,37 +6,25 @@ import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.AuthEndpoints;
-import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.cms.GrantsEditField;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.GrantAdministration;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.auth.server.ZenitAuth;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.KnownPermissions;
 import be.elevenways.zenit.common.security.RecordCapabilityDecision;
-import be.elevenways.zenit.common.security.csrf.CsrfTokens;
-import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.net.URI;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
@@ -105,14 +93,10 @@ class SitesManageAllTest extends HohenheimTestBase {
         Models.get(DatabaseModel.class).save(database);
         databaseId = database.get(DatabaseModel.ID);
 
-        holderId = user("manage-all@hohenheim.local", "Every Site Holder");
-        peerId = user("manage-all-peer@hohenheim.local", "Peer");
+        holderId = ApiSupport.user("manage-all@hohenheim.local", "Every Site Holder");
+        peerId = ApiSupport.user("manage-all-peer@hohenheim.local", "Peer");
 
-        Session session = Zenit.getSessionStore().create();
-        session.set(AuthKeys.USER_ID, holderId.longValue());
-        session.set(CsrfTokens.TOKEN, ZenitAuth.randomToken());
-        Zenit.getSessionStore().save(session);
-        holderSession = session.token().secret();
+        holderSession = sessionFor(holderId).token();
     }
 
     /**
@@ -348,7 +332,7 @@ class SitesManageAllTest extends HohenheimTestBase {
             // 6. THE CONTROL, so step 5 is a narrowing and not a shutdown: a RECORD-LEVEL
             //    manage holder still delegates manage on the site it actually holds. That
             //    is the delegation this lane exists for and it is untouched.
-            Integer ownerId = user("manage-all-owner@hohenheim.local", "Site Owner");
+            Integer ownerId = ApiSupport.user("manage-all-owner@hohenheim.local", "Site Owner");
             RecordGrants.grant(GrantSubjectType.USER, ownerId, SiteModel.MODEL_ID, alphaSiteId,
                 HohenheimAccess.MANAGE, true);
             AccessContext owner = TestAccessContexts.contextFor(
@@ -404,39 +388,16 @@ class SitesManageAllTest extends HohenheimTestBase {
         return row.get(SiteModel.ID);
     }
 
-    private static Integer user(String email, String displayName) {
-        Row row = AuthModels.users().createEmptyRow();
-        row.set(UserModel.EMAIL, email);
-        row.set(UserModel.DISPLAY_NAME, displayName);
-        row.set(UserModel.ENABLED, true);
-        row.set(UserModel.CREATED_AT, Now.instant());
-        row.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(row);
-        return row.get(UserModel.ID);
-    }
-
     private static String encoded(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
     /** The same request, followed to its landing page, so a redirect proves where it went. */
     private HttpResponse<String> holderGetFollowingRedirects(String path) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NORMAL).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + holderSession)
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
+        return httpGetFollowingRedirects(path, holderSession);
     }
 
     private HttpResponse<String> holderGet(String path) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + holderSession)
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
+        return httpGet(path, holderSession);
     }
 }

@@ -1,93 +1,62 @@
 package be.elevenways.hohenheim.server.preview;
 
-import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.model.PreviewDeploymentModel;
+import be.elevenways.hohenheim.server.quota.ChargedDimension;
+import be.elevenways.hohenheim.server.quota.ChargedModel;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
+import be.elevenways.hohenheim.server.quota.OwnerDimension;
 import be.elevenways.hohenheim.server.quota.OwnerQuota;
-import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
-import be.elevenways.zenit.common.orm.model.Model;
-import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.QueryBuilder;
-import be.elevenways.zenit.common.orm.query.QueryContext;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
-import be.elevenways.zenit.common.orm.quota.QuotaExceeded;
-import be.elevenways.zenit.common.orm.quota.Quotas;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-
 /**
- * Concurrent-preview quota per owner: the InstanceQuota shape over its own bucket
- * prefix. A preview's owner IS its application's grant-derived owner (a project is one
- * owner), so two racing webhook-triggered previews of one project contest one atomic
- * ledger row and the cap holds under concurrency. Unreadable grants fail CLOSED --
- * a preview whose owner cannot be derived is refused, never charged to nobody.
+ * Concurrent-preview quota per owner, charged through {@link ChargedModel#PREVIEWS}. A
+ * preview's owner IS its application's grant-derived owner (a project is one owner), so two
+ * racing webhook-triggered previews of one project contest one atomic ledger row and the cap
+ * holds under concurrency. Unreadable grants fail CLOSED -- a preview whose owner cannot be
+ * derived is refused, never charged to nobody.
  */
 public final class PreviewQuota {
 
-    static final String BUCKET_PREFIX = "hohenheim:previews:";
+    /** One slot per live preview, charged to its application's owner on create and restore. */
+    public static final ChargedDimension PREVIEWS =
+        new OwnerDimension("previews", OwnerBudget.PREVIEWS, PreviewDeploymentModel.QUOTA_BUCKET) {
 
-    private static final String DOOMED_BUCKETS = "hohenheim.preview-quota.doomed-buckets";
+            @Override
+            protected long heldAmount(@NonNull Row stored) {
+                return 1;
+            }
 
-    private static boolean installed;
+            @Override
+            public @Nullable Charge claim(@NonNull Row row, @Nullable Row stored,
+                                          @NonNull Transition transition) {
+                return switch (transition) {
+                    case CREATE -> new Charge(this.budget.bucketOf(ownerPackOf(row)), 1, false);
+                    // A restore is a new claim on headroom (unused today; correctness anyway).
+                    case RESTORE -> new Charge(this.budget.bucketOf(ownerPackOf(stored)), 1, false);
+                    case REBOOK -> this.held(stored);
+                };
+            }
+        };
 
     private PreviewQuota() {
     }
 
     public static @NonNull String bucketKeyOf(@NonNull String packedSubjects) {
-        return OwnerQuota.bucketOf(BUCKET_PREFIX, packedSubjects);
+        return OwnerBudget.PREVIEWS.bucketOf(packedSubjects);
     }
 
     /** @return the cap, or null for uncapped (0 or less in settings) */
     public static @Nullable Integer limit() {
-        Integer cap = HohenheimSettings.VALUES.getValue(
-            HohenheimSettings.Previews.MAX_PER_OWNER);
-        return cap != null && cap > 0 ? cap : null;
+        return OwnerBudget.PREVIEWS.limitFor("");
     }
 
     public static long usedBy(@NonNull String packedSubjects) {
-        return Quotas.usedOf(bucketKeyOf(packedSubjects));
-    }
-
-    /** Install the reserve/release hooks on the preview write funnel (MODULES stage). */
-    public static synchronized void install() {
-        if (installed) {
-            return;
-        }
-        installed = true;
-
-        PreviewDeploymentModel.SCHEMA.addBeforeWriteHook(context -> {
-            Row row = context.getRow();
-            if (row == null) {
-                return;
-            }
-            Row stored = storedOf(row);
-            boolean storedLive = stored != null
-                && stored.get(PreviewDeploymentModel.DELETED_AT) == null;
-            boolean willBeLive = effectiveDeletedAt(row, stored) == null;
-
-            if (stored == null) {
-                if (willBeLive) {
-                    reserveInto(row, ownerPackOf(row));
-                }
-            } else if (storedLive && !willBeLive) {
-                Quotas.release(chargedBucketOf(stored), 1);
-            } else if (!storedLive && willBeLive) {
-                // A restore is a new claim on headroom (unused today; correctness anyway).
-                reserveInto(row, ownerPackOf(stored));
-            }
-        });
-
-        PreviewDeploymentModel.SCHEMA.addBeforeRemoveHook(PreviewQuota::captureDoomedBuckets);
-        PreviewDeploymentModel.SCHEMA.addAfterRemoveHook(PreviewQuota::releaseDoomedBuckets);
+        return OwnerBudget.PREVIEWS.usedBy(packedSubjects);
     }
 
     /**
@@ -97,6 +66,8 @@ public final class PreviewQuota {
      * It is the same rule as before -- the owner of the thing being deployed pays -- and it
      * has to be re-derivable from the stored row on release, which is why it reads the
      * application id off the row rather than an actor identity.
+     *
+     * @throws Violations {@code preview_application_required} or {@code preview_owner_unreadable}
      */
     private static @NonNull String ownerPackOf(@NonNull Row previewRow) {
         Object applicationId = previewRow.has(PreviewDeploymentModel.APPLICATION_ID.getName())
@@ -106,85 +77,11 @@ public final class PreviewQuota {
                 applicationId,
                 Microcopy.of("preview_application_required").withFilter("scope", "violations"));
         }
-        Set<String> subjects = HohenheimAccess.manageSubjectsOf(
-            InstanceModel.MODEL_ID, number.intValue());
-        if (subjects == null) {
+        String pack = OwnerQuota.currentOwnerPack(InstanceModel.MODEL_ID, number.intValue());
+        if (pack == null) {
             throw Violations.ofForm(Microcopy.of("preview_owner_unreadable")
                 .withFilter("scope", "violations"));
         }
-        return HohenheimAccess.packSubjects(subjects);
-    }
-
-    private static void reserveInto(@NonNull Row row, @NonNull String packedSubjects) {
-        String bucket = bucketKeyOf(packedSubjects);
-        Integer limit = limit();
-        try {
-            Quotas.reserve(bucket, 1, limit == null ? Long.MAX_VALUE : limit);
-        } catch (QuotaExceeded full) {
-            throw Violations.ofForm(Microcopy.of("preview_quota_reached")
-                .withFilter("scope", "violations")
-                .withArg("used", full.getUsed())
-                .withArg("limit", full.getLimit()));
-        }
-        row.set(PreviewDeploymentModel.QUOTA_BUCKET, bucket);
-    }
-
-    private static @NonNull String chargedBucketOf(@NonNull Row stored) {
-        String bucket = stored.get(PreviewDeploymentModel.QUOTA_BUCKET);
-        if (bucket != null && !bucket.isBlank()) {
-            return bucket;
-        }
-        Blast.log("QUOTA: preview", stored.get(PreviewDeploymentModel.ID),
-            "carries no charged bucket; releasing against the operator bucket");
-        return bucketKeyOf("");
-    }
-
-    private static @Nullable Object effectiveDeletedAt(@NonNull Row row, @Nullable Row stored) {
-        if (row.has(PreviewDeploymentModel.DELETED_AT.getName())) {
-            return row.get(PreviewDeploymentModel.DELETED_AT.getName());
-        }
-        return stored != null ? stored.get(PreviewDeploymentModel.DELETED_AT) : null;
-    }
-
-    private static @Nullable Row storedOf(@NonNull Row row) {
-        if (!row.has(PreviewDeploymentModel.ID.getName())
-                || row.get(PreviewDeploymentModel.ID) == null) {
-            return null;
-        }
-        return Models.get(PreviewDeploymentModel.class)
-            .findById(row.get(PreviewDeploymentModel.ID));
-    }
-
-    private static void captureDoomedBuckets(@NonNull RemoveFromDatasource context) {
-        Model model = context.getModel();
-        if (model == null) {
-            return;
-        }
-        QueryContext queryContext = context.getQueryContext();
-        Criteria criteria = queryContext != null ? queryContext.getCriteria() : null;
-        QueryBuilder<Row> builder = model.find();
-        if (criteria != null) {
-            builder.where(criteria);
-        }
-        List<String> doomed = new ArrayList<>();
-        for (Row row : builder.all()) {
-            if (row.get(PreviewDeploymentModel.DELETED_AT) == null) {
-                doomed.add(chargedBucketOf(row));
-            }
-        }
-        if (!doomed.isEmpty()) {
-            context.setAttribute(DOOMED_BUCKETS, doomed);
-        }
-    }
-
-    private static void releaseDoomedBuckets(@NonNull RemoveFromDatasource context) {
-        if (!(context.getAttribute(DOOMED_BUCKETS) instanceof List<?> doomed)) {
-            return;
-        }
-        for (Object bucket : doomed) {
-            if (bucket instanceof String key) {
-                Quotas.release(key, 1);
-            }
-        }
+        return pack;
     }
 }

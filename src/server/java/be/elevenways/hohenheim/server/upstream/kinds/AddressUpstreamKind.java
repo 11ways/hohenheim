@@ -170,7 +170,8 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
         // The socket check comes FIRST because socket OVERRIDES forward_host below: a tenant
         // could pass the write-time forward_host check with a public name and still dial a
         // unix socket through this setting.
-        boolean tenantOwned = TenantUpstreams.isTenantOwned(site);
+        // publicOnly: tenant-owned AND not marked trusted by the operator.
+        boolean tenantOwned = TenantUpstreams.publicOnly(site);
         Integer siteId = site.get(SiteModel.ID);
         if (tenantOwned && socket != null) {
             return new FaultedSiteHandler(siteId != null ? siteId : -1,

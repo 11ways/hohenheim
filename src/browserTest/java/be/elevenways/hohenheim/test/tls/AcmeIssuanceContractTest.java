@@ -128,10 +128,11 @@ class AcmeIssuanceContractTest {
             });
 
             // 1. The order succeeds and yields a stored certificate row.
-            int certId = acme.requestCertificate(List.of("acme.test"), "ACME http order",
-                null, CertificateAuthority.Requester.SYSTEM);
-            assertThat(certId).as("step 1: the order produced a certificate row")
-                .isGreaterThan(0);
+            AcmeService.RequestOutcome ordered = acme.requestCertificate(List.of("acme.test"),
+                "ACME http order", null, CertificateAuthority.Requester.SYSTEM);
+            assertThat(ordered.issued()).as("step 1: the order produced a certificate row")
+                .isTrue();
+            int certId = ordered.certificateId();
 
             // 2. THE PRODUCT'S OWN RESPONDER answered the challenge, and refused the token
             //    for an unordered hostname while doing it.
@@ -178,10 +179,10 @@ class AcmeIssuanceContractTest {
             assertThat(accountRows).as("step 5: exactly one account key row exists")
                 .isEqualTo(1);
             domain(siteId, "second.test");
-            int secondId = acme.requestCertificate(List.of("second.test"), "ACME second order",
-                null, CertificateAuthority.Requester.SYSTEM);
-            assertThat(secondId).as("step 5: the second order also succeeded")
-                .isGreaterThan(0);
+            AcmeService.RequestOutcome second = acme.requestCertificate(List.of("second.test"),
+                "ACME second order", null, CertificateAuthority.Requester.SYSTEM);
+            assertThat(second.issued()).as("step 5: the second order also succeeded")
+                .isTrue();
             assertThat(accountKeyRows())
                 .as("step 5: and reused the stored account key rather than minting another")
                 .isEqualTo(accountRows);
@@ -215,15 +216,16 @@ class AcmeIssuanceContractTest {
             assertThat(publisher.published)
                 .as("precondition: nothing is published before the order starts").isEmpty();
 
-            int certId = acme.requestCertificate(List.of("*.wild.test"), "ACME wildcard",
-                null, CertificateModel.CHALLENGE_DNS, publisher.id(),
+            AcmeService.RequestOutcome wildcard = acme.requestCertificate(List.of("*.wild.test"),
+                "ACME wildcard", null, CertificateModel.CHALLENGE_DNS, publisher.id(),
                 CertificateAuthority.Requester.SYSTEM);
 
             // 1. The order succeeded through the DNS-01 lane.
-            assertThat(certId)
+            assertThat(wildcard.issued())
                 .as("step 1: the wildcard order produced a certificate; published so far: %s",
                     publisher.published.stream().map(DnsTxtRecord::name).toList())
-                .isGreaterThan(0);
+                .isTrue();
+            int certId = wildcard.certificateId();
 
             // 2. The record name drops the wildcard label -- publishing under
             //    "_acme-challenge.*.wild.test" would never validate.
@@ -271,13 +273,16 @@ class AcmeIssuanceContractTest {
 
             // 1. THE CA CANNOT VALIDATE: the shape of a host that is not actually reachable.
             ca.refuseValidation(true);
-            int failed = acme.requestCertificate(List.of("refused.test"), "ACME refused",
-                null, CertificateAuthority.Requester.SYSTEM);
+            AcmeService.RequestOutcome failed = acme.requestCertificate(List.of("refused.test"),
+                "ACME refused", null, CertificateAuthority.Requester.SYSTEM);
             ca.refuseValidation(false);
-            assertThat(failed)
-                .as("step 1: a refused order reports failure, never a row id").isEqualTo(-1);
+            assertThat(failed.issued())
+                .as("step 1: a refused order reports failure").isFalse();
 
             Row refusedRow = latestCertificateNamed("ACME refused");
+            assertThat(failed.certificateId())
+                .as("step 1: and names the very row it stamped, so a caller reads THAT reason")
+                .isEqualTo(refusedRow.get(CertificateModel.ID));
             assertThat((String) refusedRow.get(CertificateModel.STATUS))
                 .as("step 1: the row is stamped error, not left looking pending")
                 .isEqualTo(CertificateModel.STATUS_ERROR);
@@ -295,11 +300,11 @@ class AcmeIssuanceContractTest {
             ca.validateHttpWith((token, identifier) ->
                 acme.getChallengeResponse(token, identifier) != null);
             ca.refuseFinalize(true);
-            int rejected = acme.requestCertificate(List.of("badcsr.test"), "ACME rejected",
-                null, CertificateAuthority.Requester.SYSTEM);
+            AcmeService.RequestOutcome rejected = acme.requestCertificate(List.of("badcsr.test"),
+                "ACME rejected", null, CertificateAuthority.Requester.SYSTEM);
             ca.refuseFinalize(false);
-            assertThat(rejected)
-                .as("step 2: a finalize rejection reports failure too").isEqualTo(-1);
+            assertThat(rejected.issued())
+                .as("step 2: a finalize rejection reports failure too").isFalse();
             Row rejectedRow = latestCertificateNamed("ACME rejected");
             assertThat((String) rejectedRow.get(CertificateModel.CERTIFICATE_PEM))
                 .as("step 2: no certificate was stored").isNull();

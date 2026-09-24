@@ -3,28 +3,22 @@ package be.elevenways.hohenheim.server.files;
 import be.elevenways.domino.common.DominoFile;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.HandlerSupport;
+import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
 import be.elevenways.hohenheim.server.cms.InstanceFilesPage;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.result.ActionResult;
-import be.elevenways.zenit.common.result.ErrorResponse;
-import be.elevenways.zenit.common.result.ErrorResult;
-import be.elevenways.zenit.common.result.JsonResult;
 import be.elevenways.zenit.common.routing.RouteLocation;
-import be.elevenways.zenit.server.http.RedirectResult;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.server.http.HttpConduit;
 import be.elevenways.zenit.server.http.ReturnTarget;
 import be.elevenways.zenit.server.http.body.FormSubmissionRawValues;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -73,9 +67,9 @@ public final class InstanceFileEndpoints {
             try {
                 content = new InstanceFiles().read(instanceId, path);
             } catch (Violations refused) {
-                return redirect(filesUrl(conduit, instanceId, parentOf(path), refused));
+                return HandlerSupport.redirectUntyped(filesUrl(conduit, instanceId, parentOf(path), refused));
             }
-            download(conduit, "application/octet-stream", baseName(path), content);
+            HandlerSupport.download(conduit, "application/octet-stream", baseName(path), content);
             return null;
         });
 
@@ -92,11 +86,11 @@ public final class InstanceFileEndpoints {
             try {
                 perform(instanceId, action, form, path);
             } catch (Violations refused) {
-                return redirect(filesUrl(conduit, instanceId,
+                return HandlerSupport.redirectUntyped(filesUrl(conduit, instanceId,
                     back.isEmpty() ? parentOf(path) : back, refused));
             }
             ActivityLog.record(Models.get(InstanceModel.class), instanceId, "files_" + action, path);
-            return redirect(filesUrl(conduit, instanceId,
+            return HandlerSupport.redirectUntyped(filesUrl(conduit, instanceId,
                 back.isEmpty() ? parentOf(path) : back, null));
         });
     }
@@ -125,10 +119,10 @@ public final class InstanceFileEndpoints {
                     projection.put("managed", entry.managed());
                     entries.add(projection);
                 }
-                return json(Map.of("id", instanceId, "path", listing.path(),
+                return ApiConduits.json(Map.of("id", instanceId, "path", listing.path(),
                     "volumes", listing.volumeRoots(), "entries", entries));
             } catch (Violations refused) {
-                return refusal(conduit, refused);
+                return ApiConduits.refusal(conduit, refused);
             }
         });
 
@@ -140,14 +134,14 @@ public final class InstanceFileEndpoints {
             int instanceId = instance.get(InstanceModel.ID);
             String path = conduit.getQueryParam("path");
             if (path == null || path.isEmpty()) {
-                return refusal(conduit, InstanceFilePath.refused());
+                return ApiConduits.refusal(conduit, InstanceFilePath.refused());
             }
             try {
-                download(conduit, "application/octet-stream", baseName(path),
+                HandlerSupport.download(conduit, "application/octet-stream", baseName(path),
                     new InstanceFiles().read(instanceId, path));
                 return null;
             } catch (Violations refused) {
-                return refusal(conduit, refused);
+                return ApiConduits.refusal(conduit, refused);
             }
         });
 
@@ -162,10 +156,10 @@ public final class InstanceFileEndpoints {
             try {
                 new InstanceFiles().write(instanceId, path, contentOf(form));
             } catch (Violations refused) {
-                return refusal(conduit, refused);
+                return ApiConduits.refusal(conduit, refused);
             }
             ActivityLog.record(Models.get(InstanceModel.class), instanceId, "files_write", path);
-            return json(Map.of("id", instanceId, "path", path, "status", "written"));
+            return ApiConduits.json(Map.of("id", instanceId, "path", path, "status", "written"));
         });
 
         HohenheimEndpoints.API_INSTANCE_FILE_ACTION.setHandler(conduit -> {
@@ -180,11 +174,11 @@ public final class InstanceFileEndpoints {
             try {
                 perform(instanceId, action, form, path);
             } catch (Violations refused) {
-                return refusal(conduit, refused);
+                return ApiConduits.refusal(conduit, refused);
             }
             ActivityLog.record(Models.get(InstanceModel.class), instanceId,
                 "files_" + action, path);
-            return json(Map.of("id", instanceId, "path", path, "action", action));
+            return ApiConduits.json(Map.of("id", instanceId, "path", path, "action", action));
         });
     }
 
@@ -273,9 +267,9 @@ public final class InstanceFileEndpoints {
      * ONE 404, and a session principal is refused outright (the HTML routes are not the
      * automation API -- that is what makes csrfExempt safe here).
      *
-     * AIDEV-NOTE: the {@code GENERATED_BY.isNull()} clause is the SAME scope
-     * {@code InstanceApi.visibleInstances}/{@code visibleInstance} apply, and it must stay
-     * in step with them. docs/paas-api.md says the automation API "never lists or drives"
+     * AIDEV-NOTE: the {@link InstanceModel#liveAuthored} clause is the SAME scope
+     * {@code InstanceApi.visibleInstances}/{@code visibleInstance} and TenantScopes.INSTANCES
+     * apply, read from its one home so the lanes cannot drift. docs/paas-api.md says the automation API "never lists or drives"
      * a product-tier-generated instance; without this clause the file lane was the one
      * v1 route that could address one (latent -- files.read has no impliedBy and nothing
      * plants it on a generated row -- but an operator can hand-grant it).
@@ -283,16 +277,14 @@ public final class InstanceFileEndpoints {
      * @return the row, or null when the response has already been ended
      */
     private static @Nullable Row apiInstance(@NonNull Conduit conduit) {
-        if (!(conduit.getAttribute(ConduitAttributes.PRINCIPAL) instanceof ApiKeyPrincipal)) {
-            conduit.forbidden();
+        AccessContext ctx = ApiConduits.requireKey(conduit);
+        if (ctx == null) {
             return null;
         }
-        AccessContext ctx = AccessContext.of(conduit);
         Integer instanceId = conduit.getParameter(HohenheimEndpoints.INSTANCE_ID);
         Row row = instanceId == null ? null : Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
-            .where(InstanceModel.DELETED_AT.isNull())
-            .where(InstanceModel.GENERATED_BY.isNull())
+            .where(InstanceModel.liveAuthored())
             .first();
         // Visibility rides files.read: an id whose files the caller may not even LIST must
         // read as nonexistent, not as forbidden.
@@ -319,32 +311,13 @@ public final class InstanceFileEndpoints {
                                             @NonNull String directory,
                                             @Nullable Violations refused) {
         if (refused != null) {
-            HohenheimFlash.error(conduit, messageOf(refused));
+            HohenheimFlash.error(conduit, HandlerSupport.violationMessage(refused));
         }
         String base = ReturnTarget.or(ReturnTarget.read(conduit),
-            CmsRoutes.subpage("admin", "instances", instanceId,
+            CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES, instanceId,
                 InstanceFilesPage.SLUG).toUrl());
         return RouteLocation.with(base, HohenheimParams.FILES_PATH,
             directory.isEmpty() ? null : directory);
-    }
-
-    /** The refusal's own message, so it keeps its localized text. */
-    private static @NonNull Microcopy messageOf(@NonNull Violations violations) {
-        List<Violation> all = violations.all();
-        return all.isEmpty()
-            ? Microcopy.of("refused").withFilter("scope", "violations")
-            : all.get(0).message();
-    }
-
-    /** 422 carrying the violation's MACHINE KEY, matching the rest of the v1 surface. */
-    @SuppressWarnings("unchecked")
-    private static @NonNull ActionResult<Object> refusal(@NonNull Conduit conduit,
-                                                        @NonNull Violations violations) {
-        List<Violation> all = violations.all();
-        String code = all.isEmpty() ? "REFUSED" : all.get(0).message().key();
-        return (ActionResult<Object>) (ActionResult<?>) new ErrorResult(
-            ErrorResponse.of(422, code,
-                messageOf(violations).resolve(conduit.getLocales(), conduit.getMessageResolver())));
     }
 
     private static @NonNull String parentOf(@NonNull String path) {
@@ -357,33 +330,18 @@ public final class InstanceFileEndpoints {
         return slash < 0 || slash == path.length() - 1 ? path : path.substring(slash + 1);
     }
 
+    /**
+     * The submitted value as is.
+     *
+     * AIDEV-NOTE: deliberately NOT {@code HandlerSupport.submittedString}, which trims: a
+     * file path or file content with leading or trailing whitespace is a different path or
+     * a different file.
+     */
     private static @NonNull String string(@NonNull Map<String, Object> form, @NonNull String name) {
         Object value = form.get(name);
         if (value instanceof List<?> list) {
             value = list.isEmpty() ? null : list.get(0);
         }
         return value == null ? "" : String.valueOf(value);
-    }
-
-    /** Stream a binary body as a downloadable attachment with a sanitized filename. */
-    private static void download(@NonNull Conduit conduit, @NonNull String contentType,
-                                 @NonNull String filename, byte @NonNull [] body) {
-        if (conduit instanceof HttpConduit http) {
-            String safeName = filename.replaceAll("[^a-zA-Z0-9._-]", "_");
-            http.setResponseHeader("Content-Type", contentType);
-            http.setResponseHeader("Content-Disposition",
-                "attachment; filename=\"" + safeName + "\"");
-        }
-        conduit.endWithBytes(contentType, body);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static @NonNull ActionResult<Object> json(@NonNull Map<String, Object> body) {
-        return (ActionResult<Object>) (ActionResult<?>) new JsonResult<>(body);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static @NonNull ActionResult<Object> redirect(@NonNull String url) {
-        return (ActionResult<Object>) (ActionResult<?>) new RedirectResult(url);
     }
 }

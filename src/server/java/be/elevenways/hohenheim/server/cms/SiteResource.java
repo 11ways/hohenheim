@@ -136,6 +136,9 @@ public class SiteResource extends RowResource {
                 "upstream_kind")
             .build())
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SETTINGS))
+        // Operator-only: ManageSiteResource declares its own form, and TenantWrites freezes
+        // the column for every tenant write whatever a form offers.
+        .add(SiteModel.TRUSTED_UPSTREAM)
         .add(SiteModel.ENABLED)
         .add(SiteModel.DESCRIPTION)
         // Both are SECURITY declarations shared across sites: minting one from inside a
@@ -148,6 +151,7 @@ public class SiteResource extends RowResource {
         // prose and the two shared security declarations are edits a site receives later,
         // so they fold -- still in the DOM, still posted, and forced open by a refusal.
         .section(FormSection.advanced(
+            SiteModel.TRUSTED_UPSTREAM.getName(),
             SiteModel.DESCRIPTION.getName(),
             SiteModel.AUTH_PROVIDER_ID.getName(),
             SiteModel.ACCESS_LIST_ID.getName()))

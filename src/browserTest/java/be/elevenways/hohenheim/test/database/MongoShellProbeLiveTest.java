@@ -1,21 +1,17 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -51,13 +47,13 @@ class MongoShellProbeLiveTest {
 
     @ParameterizedTest(name = "{0} reaches ready through the shell it ships")
     @ValueSource(strings = { "mongo:4.4", "mongo:7" })
-    void aManagedMongoReachesReadyWhicheverShellTheImageShips(String image) throws IOException {
+    void aManagedMongoReachesReadyWhicheverShellTheImageShips(String image) throws Exception {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, image);
 
-        DatabaseService service = new DatabaseService(freshDatasource());
+        DatabaseService service = new DatabaseService(TestDatabases.freshBootedDatasource());
         String name = "probe" + System.nanoTime();
         try {
             // 1. create() blocks on awaitReady: a probe that cannot run its shell times
@@ -88,16 +84,5 @@ class MongoShellProbeLiveTest {
                 // best effort
             }
         }
-    }
-
-    private static SqliteDatasource freshDatasource() throws IOException {
-        File db = File.createTempFile("hohenheim-mongoprobe-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        SqliteDatasource ds = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(ds).migrate().requireSuccess();
-        Datasources.register(Datasources.DEFAULT, ds);
-        HohenheimTestRuntime.ensureBooted();
-        return ds;
     }
 }

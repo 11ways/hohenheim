@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BackupTargetModel;
@@ -16,13 +18,11 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.schedule.InstanceBackupAction;
 import be.elevenways.hohenheim.server.schedule.InstanceConsoleCommandAction;
 import be.elevenways.hohenheim.server.schedule.InstancePowerAction;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
-import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -34,14 +34,12 @@ import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
 import be.elevenways.zenit.common.task.record.RunStatus;
 import be.elevenways.zenit.common.task.record.StepFailurePolicy;
 import be.elevenways.zenit.common.task.record.StepStatus;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
+import java.time.Duration;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -62,9 +60,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class InstanceScheduleLiveTest {
 
+    /** The interval of every wait here: each probe is a daemon or database round trip. */
+    private static final Duration POLL_INTERVAL = Duration.ofMillis(100);
+
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static PrivateNetns netns;
     private static Path workRoot;
     private static String previousSnapshotPath;
@@ -72,16 +73,11 @@ class InstanceScheduleLiveTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        File db = File.createTempFile("hohenheim-schedule-live-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
         // ONE database per test class: the controller identity (and therefore every
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.declareAccessModelsOnce();
         HohenheimTestRuntime.ensureBooted();
 
@@ -97,19 +93,13 @@ class InstanceScheduleLiveTest {
         FieldEncryption.installKeyring(EncryptionKeyring.loadOrCreate(
             workRoot.resolve("test-keyring.keys")));
 
-        if (PrivateNetns.available()) {
-            netns = new PrivateNetns();
-            WorkloadNetworkPolicy.overrideForTest(netns.enforcingPolicy());
-        }
+        netns = PrivateNetns.installEnforcing();
     }
 
     @AfterAll
     static void tearDown() {
-        WorkloadNetworkPolicy.overrideForTest(null);
-        if (netns != null) {
-            netns.close();
-            netns = null;
-        }
+        PrivateNetns.uninstall(netns);
+        netns = null;
         FieldEncryption.installKeyring(null);
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.SNAPSHOT_PATH,
             previousSnapshotPath);
@@ -138,8 +128,7 @@ class InstanceScheduleLiveTest {
         row.set(InstanceModel.KIND, "hohenheim:docker_container");
         // No command: alpine's /bin/sh reads console lines from OpenStdin stdin.
         Map<String, Object> settings = new LinkedHashMap<>();
-        settings.put("image", "alpine");
-        settings.put("tag", "latest");
+        settings.put("image", TestImages.ALPINE);
         settings.put("volumes", Map.of("data", "/data"));
         row.set(InstanceModel.SETTINGS, settings);
         row.set(InstanceModel.TEMPLATE_ID, template.get(InstanceTemplateModel.ID));
@@ -191,22 +180,6 @@ class InstanceScheduleLiveTest {
         }
     }
 
-    private static boolean await(long timeoutMs, java.util.function.Supplier<Boolean> condition) {
-        long deadline = Now.millis() + timeoutMs;
-        while (Now.millis() < deadline) {
-            if (Boolean.TRUE.equals(condition.get())) {
-                return true;
-            }
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return false;
-            }
-        }
-        return Boolean.TRUE.equals(condition.get());
-    }
-
     @SuppressWarnings("unchecked")
     private static List<Map<String, Object>> stepsOf(Row run) {
         Object raw = run.get(RecordScheduleRunModel.STEP_RESULTS);
@@ -223,14 +196,7 @@ class InstanceScheduleLiveTest {
         DockerClient docker = new DockerClient();
 
         // The schedule's OWNER: a real user with a real manage grant, both revocable.
-        Row tenant = AuthModels.users().createEmptyRow();
-        tenant.set(UserModel.EMAIL, "schedule-tenant@hohenheim.local");
-        tenant.set(UserModel.DISPLAY_NAME, "Schedule Tenant");
-        tenant.set(UserModel.ENABLED, true);
-        tenant.set(UserModel.CREATED_AT, Now.instant());
-        tenant.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(tenant);
-        long tenantId = tenant.get(UserModel.ID);
+        long tenantId = ApiSupport.user("schedule-tenant@hohenheim.local", "Schedule Tenant");
 
         Db.run(datasource, () -> {
             HostFixtures.admitLocal();
@@ -247,9 +213,9 @@ class InstanceScheduleLiveTest {
             try {
                 // 1. Deploy and reach a live console-capable workload.
                 service.deploy(id);
-                assertThat(await(15_000, () -> InstanceModel.STATUS_RUNNING.equals(
-                        Models.get(InstanceModel.class).findById(id).get(InstanceModel.STATUS))))
-                    .as("step 1: the instance record reaches running").isTrue();
+                Poll.until("step 1: the instance record reaches running",
+                    Duration.ofMillis(15_000), POLL_INTERVAL, () -> InstanceModel.STATUS_RUNNING.equals(
+                        Models.get(InstanceModel.class).findById(id).get(InstanceModel.STATUS)));
                 String beforeRestart = containerId(docker, handle);
                 assertThat(beforeRestart).as("step 1: the daemon runs a container").isNotEmpty();
 
@@ -269,13 +235,14 @@ class InstanceScheduleLiveTest {
                 // 3. Host truth: the warning reached the workload's console (persisted
                 //    on the volume across the restart) and the restart REPLACED the
                 //    container (new daemon id) while the record says running again.
-                assertThat(await(15_000, () -> {
+                Poll.until("step 3: the restart produced a NEW container",
+                    Duration.ofMillis(15_000), POLL_INTERVAL, () -> {
                     String now = containerId(docker, handle);
                     return !now.isEmpty() && !now.equals(beforeRestart);
-                })).as("step 3: the restart produced a NEW container").isTrue();
-                assertThat(await(15_000, () -> InstanceModel.STATUS_RUNNING.equals(
-                        Models.get(InstanceModel.class).findById(id).get(InstanceModel.STATUS))))
-                    .as("step 3: and the record is running again").isTrue();
+                });
+                Poll.until("step 3: and the record is running again",
+                    Duration.ofMillis(15_000), POLL_INTERVAL, () -> InstanceModel.STATUS_RUNNING.equals(
+                        Models.get(InstanceModel.class).findById(id).get(InstanceModel.STATUS)));
                 String marker = execRead(docker, handle, "cat /data/marker");
                 assertThat(marker)
                     .as("step 3: the console warning was really delivered before the restart")

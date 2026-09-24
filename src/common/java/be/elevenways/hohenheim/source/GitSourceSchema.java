@@ -1,10 +1,13 @@
 package be.elevenways.hohenheim.source;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.orm.field.*;
+import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Schema;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.EnumSet;
 import java.util.List;
 
 /**
@@ -43,7 +46,7 @@ public final class GitSourceSchema {
     public static final List<String> BUILD_DETAIL = List.of(
         BUILD_DIRECTORY, BUILD_TIMEOUT, BUILD_ENVIRONMENT_VARIABLES, SHALLOW_CLONE, SUBMODULES);
 
-    /** When a new revision is picked up, and what proves the webhook that says so. */
+    /** When a new revision is picked up, and what proves the webhook that says so (poll_interval is retired, see addTo). */
     public static final List<String> DELIVERY = List.of(AUTO_DEPLOY, POLL_INTERVAL, WEBHOOK_SECRET);
 
     /** The preview lane: off by default, and three fields nobody sets while creating. */
@@ -103,9 +106,16 @@ public final class GitSourceSchema {
             .label(HohenheimFormCopy.label("auto_deploy"))
             .help(HohenheimFormCopy.help("auto_deploy")).build());
 
+        // AIDEV-NOTE: RETIRED. Nothing ever polled a repository: a new revision arrives by
+        // the webhook (auto_deploy + webhook_secret), and inventing a poller was decided
+        // against (2026-09-24). The field stays DECLARED so a stored value still reads and an
+        // API request that still sends settings.poll_interval is still accepted (the schema
+        // is closed-world: an undeclared key would become an unknown_field refusal). It is
+        // visible in NO edit view, so no form offers a setting that does nothing.
         schema.addField(IntegerField.builder().name(POLL_INTERVAL).suffix("s")
             .label(HohenheimFormCopy.label("poll_interval"))
-            .help(HohenheimFormCopy.help("poll_interval")).build());
+            .help(HohenheimFormCopy.help("poll_interval"))
+            .attribute(FieldAttributes.VISIBLE_IN, EnumSet.noneOf(EditView.class)).build());
 
         schema.addField(StringField.builder().name(WEBHOOK_SECRET).secret()
             .label(HohenheimFormCopy.label("webhook_secret"))

@@ -27,7 +27,6 @@ import java.util.Date;
  * Tests the TLS certificate infrastructure: CertificateStore, SNI lookup,
  * ProxyServer HTTPS lifecycle, and certificate model lifecycle fields.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class TlsCertificateTest {
 
     private static boolean initialized = false;
@@ -43,8 +42,20 @@ class TlsCertificateTest {
         Zenit.getHawkeye().setClientScriptLocation("/cms.js");
     }
 
+    /**
+     * Every test starts from its own empty, migrated database.
+     *
+     * AIDEV-NOTE: the first four tests used to share one database in @Order: the store
+     * tests read the certificate the load test had inserted, so running one alone (or
+     * after a failure) asserted against whatever the previous test left. Each test now
+     * seeds exactly what it reads; the template copy makes the per-test database cheap.
+     */
+    @BeforeEach
+    void freshDatabasePerTest() throws Exception {
+        TestDatabases.freshDatabase();
+    }
+
     @Test
-    @Order(1)
     void emptyCertificateStoreReportsEmpty() {
         CertificateStore store = new CertificateStore();
         assertThat(store.isEmpty()).isTrue();
@@ -53,7 +64,6 @@ class TlsCertificateTest {
     }
 
     @Test
-    @Order(2)
     void certificateStoreLoadsFromDatabase() throws Exception {
         // Insert a self-signed cert into the database
         var ds = HohenheimDatabase.datasource();
@@ -79,12 +89,9 @@ class TlsCertificateTest {
     }
 
     @Test
-    @Order(3)
     void sniResolvesExactHostname() throws Exception {
-        var ds = HohenheimDatabase.datasource();
-        var certModel = Models.get(CertificateModel.class);
+        saveCert("Test Cert", "test.example.com");
 
-        // The cert from the previous test should still be in DB
         CertificateStore store = new CertificateStore();
         store.loadFromDatabase();
 
@@ -94,8 +101,10 @@ class TlsCertificateTest {
     }
 
     @Test
-    @Order(4)
     void sniReturnsNullForUnknownHostname() throws Exception {
+        // A loaded store, so the null below is a lookup miss and not an empty store.
+        saveCert("Test Cert", "test.example.com");
+
         CertificateStore store = new CertificateStore();
         store.loadFromDatabase();
 
@@ -103,11 +112,7 @@ class TlsCertificateTest {
     }
 
     @Test
-    @Order(5)
     void httpsNotStartedWithoutCertificates() throws Exception {
-        // Use a fresh DB with no certs
-        TestDatabases.freshDatabase();
-
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         ProxyServer proxy = new ProxyServer();
         proxy.start();
@@ -120,11 +125,7 @@ class TlsCertificateTest {
     }
 
     @Test
-    @Order(6)
     void httpsStartsWhenCertificatesAvailable() throws Exception {
-        // Re-init DB and insert a cert
-        TestDatabases.freshDatabase();
-
         var ds = HohenheimDatabase.datasource();
         var certModel = Models.get(CertificateModel.class);
 
@@ -152,10 +153,7 @@ class TlsCertificateTest {
     }
 
     @Test
-    @Order(7)
     void certificateModelHasLifecycleFields() throws Exception {
-        TestDatabases.freshDatabase();
-
         var ds = HohenheimDatabase.datasource();
         var certModel = Models.get(CertificateModel.class);
 
@@ -177,6 +175,20 @@ class TlsCertificateTest {
     // -----------------------------------------------------------------------
     // Self-signed cert generation for testing
     // -----------------------------------------------------------------------
+
+    /** Store one active self-signed certificate for {@code cn}. */
+    private static void saveCert(String niceName, String cn) throws Exception {
+        KeyPair keyPair = generateKeyPair();
+        X509Certificate cert = generateSelfSignedCert(keyPair, cn);
+        var certModel = Models.get(CertificateModel.class);
+        Row row = certModel.createEmptyRow();
+        row.set(CertificateModel.NICE_NAME, niceName);
+        row.set(CertificateModel.PROVIDER, "custom");
+        row.set(CertificateModel.STATUS, "active");
+        row.set(CertificateModel.CERTIFICATE_PEM, certToPem(cert));
+        row.set(CertificateModel.PRIVATE_KEY_PEM, keyToPem(keyPair));
+        certModel.save(row);
+    }
 
     static KeyPair generateKeyPair() throws Exception {
         KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
@@ -264,10 +276,7 @@ class TlsCertificateTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @Order(10)
     void wildcardCertResolvesSubdomains() throws Exception {
-        TestDatabases.freshDatabase();
-
         var ds = HohenheimDatabase.datasource();
         var certModel = Models.get(CertificateModel.class);
 
@@ -297,10 +306,7 @@ class TlsCertificateTest {
     }
 
     @Test
-    @Order(11)
     void certificateRemovalClearsFromStore() throws Exception {
-        TestDatabases.freshDatabase();
-
         var ds = HohenheimDatabase.datasource();
         var certModel = Models.get(CertificateModel.class);
 
@@ -329,7 +335,6 @@ class TlsCertificateTest {
     }
 
     @Test
-    @Order(12)
     void acmeChallengeValidatesHostname() {
         var store = new CertificateStore();
         var acme = new AcmeService(store);
@@ -339,10 +344,7 @@ class TlsCertificateTest {
     }
 
     @Test
-    @Order(13)
     void acmeAccountKeyRowExcludedFromStore() throws Exception {
-        TestDatabases.freshDatabase();
-
         var ds = HohenheimDatabase.datasource();
         var certModel = Models.get(CertificateModel.class);
 
@@ -363,10 +365,7 @@ class TlsCertificateTest {
     }
 
     @Test
-    @Order(13)
     void forceSslRedirectsHttpToHttps() throws Exception {
-        TestDatabases.freshDatabase();
-
         var ds = HohenheimDatabase.datasource();
         var siteModel = Models.get(SiteModel.class);
         var domainModel = Models.get(SiteDomainModel.class);
@@ -450,10 +449,7 @@ class TlsCertificateTest {
     }
 
     @Test
-    @Order(14)
     void httpsActuallyAcceptsTlsConnections() throws Exception {
-        TestDatabases.freshDatabase();
-
         var ds = HohenheimDatabase.datasource();
         var certModel = Models.get(CertificateModel.class);
 
@@ -508,10 +504,7 @@ class TlsCertificateTest {
     }
 
     @Test
-    @Order(15)
     void preferredCertificateAliasOverridesHostnameSelection() throws Exception {
-        TestDatabases.freshDatabase();
-
         var ds = HohenheimDatabase.datasource();
         var certModel = Models.get(CertificateModel.class);
         var siteModel = Models.get(SiteModel.class);

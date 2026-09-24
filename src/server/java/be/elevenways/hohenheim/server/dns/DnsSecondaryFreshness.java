@@ -108,7 +108,7 @@ public final class DnsSecondaryFreshness {
             if (isStale(behindSince, now) && link.get(DnsZonePeerModel.STALE_ALERTED_AT) == null) {
                 link.set(DnsZonePeerModel.STALE_ALERTED_AT, now);
                 String peerName = String.valueOf(peer.get(DnsPeerModel.NAME));
-                Alerts.send(NotificationEvents.DNS_SECONDARY_STALE,
+                Alerts.trySend(NotificationEvents.DNS_SECONDARY_STALE,
                     "Secondary '" + peerName + "' of zone " + originString + " is stale",
                     error != null ? error
                         : "serves serial " + served + " while the primary serves " + ourSerial);

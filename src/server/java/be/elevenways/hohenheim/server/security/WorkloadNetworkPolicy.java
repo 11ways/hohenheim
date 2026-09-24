@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.HostMode;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -105,7 +106,7 @@ public final class WorkloadNetworkPolicy {
             // model registered, so this fallback can never silently mis-target a host.
             return PRODUCTION;
         }
-        if (server == null || !ServerModel.MODE_SSH.equals(server.get(ServerModel.MODE))) {
+        if (!HostMode.SSH.declaredBy(server)) {
             return PRODUCTION;
         }
         return new WorkloadNetworkPolicy(NftRunner.forServer(server), ENABLED_SETTING);

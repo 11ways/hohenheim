@@ -196,17 +196,19 @@ final class CertificateHandlers {
                 return HandlerSupport.redirect(CmsRoutes.list(HandlerSupport.ADMIN, HohenheimSlugs.CERTIFICATES));
             }
 
-            int highWater = newestCertificateId(certModel);
-            int certId;
+            AcmeService.RequestOutcome outcome;
             try {
-                certId = proxy.getAcmeService().requestCertificate(hostnames, niceName,
+                outcome = proxy.getAcmeService().requestCertificate(hostnames, niceName,
                     email.isEmpty() ? null : email, challengeType, publisher, requester);
             } catch (CertificateAuthority.Refused refused) {
                 return requestError(conduit, refusalMessage(refused));
             }
 
-            if (certId < 0) {
-                Row failed = failedRequestOf(certModel, highWater, hostnames, requester);
+            Integer certId = outcome.certificateId();
+            if (!outcome.issued() || certId == null) {
+                // The reason of THE row this request wrote (or joined), never a guess at which
+                // error row is ours.
+                Row failed = certId != null ? certModel.findById(certId) : null;
                 String reason = failed != null ? failed.get(CertificateModel.RENEWAL_ERROR) : null;
                 if (reason == null) {
                     reason = certificateError("unknown_reason")
@@ -238,38 +240,6 @@ final class CertificateHandlers {
                 (niceName != null ? niceName : "certificate") + ".pem", bundle.getBytes(StandardCharsets.UTF_8));
             return null;
         });
-    }
-
-    /** The newest certificate id before a request, so its own row can be told from older ones. */
-    private static int newestCertificateId(@NonNull CertificateModel certModel) {
-        Row newest = certModel.find().orderBy(CertificateModel.ID, SortOrder.DESC).first();
-        Integer id = newest != null ? newest.get(CertificateModel.ID) : null;
-        return id != null ? id : 0;
-    }
-
-    /**
-     * The certificate row THIS failed request wrote: created after {@code highWater}, for
-     * exactly these hostnames, by this requester, and in the error status.
-     *
-     * AIDEV-NOTE: this replaced "the newest certificate in error", which named ANY failure --
-     * a renewal sweep or another operator's request in the same second showed its reason on
-     * this form. AcmeService.requestCertificate answers -1 without the id of the row it wrote;
-     * the exact fix is for it to return a typed outcome carrying that id (the shape
-     * ReissueResult already has), and this lookup goes away then. A request that JOINED an
-     * identical in-flight order wrote no row of its own and falls back to "unknown reason".
-     */
-    private static @Nullable Row failedRequestOf(@NonNull CertificateModel certModel, int highWater,
-                                                @NonNull List<String> hostnames,
-                                                CertificateAuthority.@NonNull Requester requester) {
-        var query = certModel.find()
-            .where(CertificateModel.ID.gt(highWater))
-            .where(CertificateModel.STATUS.eq(CertificateModel.STATUS_ERROR))
-            .where(CertificateModel.DOMAIN_NAMES_TEXT.eq(String.join(",", hostnames)));
-        Integer subject = requester.subjectId();
-        query = subject != null
-            ? query.where(CertificateModel.REQUESTED_BY_USER_ID.eq(subject))
-            : query.where(CertificateModel.REQUESTED_BY_USER_ID.isNull());
-        return query.orderBy(CertificateModel.ID, SortOrder.ASC).first();
     }
 
     private static Microcopy certificateError(String key) {

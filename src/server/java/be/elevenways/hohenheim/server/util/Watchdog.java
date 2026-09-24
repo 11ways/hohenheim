@@ -42,4 +42,17 @@ public final class Watchdog {
     public static @NonNull ScheduledFuture<?> schedule(@NonNull Runnable onExpiry, long timeoutMs) {
         return SCHEDULER.schedule(onExpiry, timeoutMs, TimeUnit.MILLISECONDS);
     }
+
+    /**
+     * Run {@code sweep} every {@code intervalMs} (first after one interval) until the returned
+     * future is cancelled.
+     *
+     * AIDEV-NOTE: a sweep here only DECIDES what has expired; anything that blocks (an
+     * activity-log write, a daemon call) must be handed to its own thread, or it delays
+     * every other exchange's deadline. A sweep that throws is never run again, so it
+     * catches its own failures.
+     */
+    public static @NonNull ScheduledFuture<?> every(@NonNull Runnable sweep, long intervalMs) {
+        return SCHEDULER.scheduleWithFixedDelay(sweep, intervalMs, intervalMs, TimeUnit.MILLISECONDS);
+    }
 }

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -7,17 +8,12 @@ import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -63,17 +59,17 @@ class DatabaseWorkloadLivenessLiveTest {
     }
 
     @Test
-    void anOomKilledEngineStopsBeingReportedHealthy() throws IOException {
+    void anOomKilledEngineStopsBeingReportedHealthy() throws Exception {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, REDIS_IMAGE);
 
-        DatabaseService service = new DatabaseService(freshDatasource());
+        DatabaseService service = new DatabaseService(TestDatabases.freshBootedDatasource());
         String name = "livenessdb" + System.nanoTime();
         try {
             service.create(name, ManagedDatabase.Engine.REDIS, REDIS_IMAGE,
-                "appuser", "secret123", "appdb", true, ServerService.LOCAL,
+                "appuser", "secret123", "appdb", true, ServerService.LOCAL_HOST_NAME,
                 ResourceLimits.of(MEMORY_LIMIT_MB, null));
             String container = EngineHandles.of(name);
 
@@ -143,16 +139,5 @@ class DatabaseWorkloadLivenessLiveTest {
                 result.stdout(), result.stderr())
             .containsKeys("max", "oom_kill");
         return events;
-    }
-
-    private static SqliteDatasource freshDatasource() throws IOException {
-        File db = File.createTempFile("hohenheim-dbliveness-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        SqliteDatasource ds = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(ds).migrate().requireSuccess();
-        Datasources.register(Datasources.DEFAULT, ds);
-        HohenheimTestRuntime.ensureBooted();
-        return ds;
     }
 }

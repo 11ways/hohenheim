@@ -38,6 +38,7 @@ import be.elevenways.hohenheim.server.runtime.ImageIdentity;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
+import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
@@ -191,7 +192,7 @@ public final class InstanceBackups {
                 applicationEntry = captureApplication(owner, resolved, applicationImage,
                     staging, applicationFiles);
             } catch (IOException | RuntimeException error) {
-                InstanceSnapshots.deleteRecursively(staging);
+                FileTrees.deleteQuietly(staging);
                 failedRow(instanceId, targetId, null, "Application source/image capture failed");
                 throw refusal("instance_backup_failed", owner,
                     new IOException("Application source/image capture failed", error));
@@ -224,7 +225,7 @@ public final class InstanceBackups {
                             "instance", "/", export, size)));
                     });
             } catch (IOException | RuntimeException error) {
-                InstanceSnapshots.deleteRecursively(staging);
+                FileTrees.deleteQuietly(staging);
                 failedRow(instanceId, targetId, null, InstanceSnapshots.describe(error));
                 if (error instanceof Violations refused) {
                     throw refused;
@@ -275,7 +276,7 @@ public final class InstanceBackups {
                         TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(runtimeId));
                     }
                 } catch (RuntimeException restartFailed) {
-                    InstanceSnapshots.deleteRecursively(staging);
+                    FileTrees.deleteQuietly(staging);
                     if (application) {
                         InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
                             resolved.serverId(), fence, InstanceModel.STATUS_ERROR,
@@ -292,7 +293,7 @@ public final class InstanceBackups {
                             restartFailed));
                 }
                 if (captureFailure != null) {
-                    InstanceSnapshots.deleteRecursively(staging);
+                    FileTrees.deleteQuietly(staging);
                     failedRow(instanceId, targetId, null, "Volume capture failed");
                 }
             }
@@ -374,7 +375,7 @@ public final class InstanceBackups {
             }
             throw refusal("instance_backup_failed", resolved.row(), error);
         } finally {
-            InstanceSnapshots.deleteRecursively(staging);
+            FileTrees.deleteQuietly(staging);
         }
         pruneForRetention(instanceId, targetId, target);
         Blast.log("BACKUP: instance", instanceId, "exported to", key);
@@ -616,7 +617,7 @@ public final class InstanceBackups {
                     // staging cleanup below covers it
                 }
             }
-            InstanceSnapshots.deleteRecursively(staging);
+            FileTrees.deleteQuietly(staging);
         }
     }
 

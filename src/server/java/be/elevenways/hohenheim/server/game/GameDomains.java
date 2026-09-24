@@ -30,9 +30,6 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.QueryBuilder;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
-import be.elevenways.zenit.common.orm.query.QueryContext;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -134,17 +131,7 @@ public final class GameDomains {
         }
         installed = true;
         SiteDomainModel.SCHEMA.addBeforeRemoveHook(context -> {
-            Model model = context.getModel();
-            if (model == null) {
-                return;
-            }
-            QueryContext queryContext = context.getQueryContext();
-            Criteria criteria = queryContext != null ? queryContext.getCriteria() : null;
-            QueryBuilder<Row> builder = model.find();
-            if (criteria != null) {
-                builder.where(criteria);
-            }
-            for (Row domain : builder.all()) {
+            for (Row domain : context.doomedRows()) {
                 Integer domainId = domain.get(SiteDomainModel.ID);
                 if (domainId == null) {
                     continue;

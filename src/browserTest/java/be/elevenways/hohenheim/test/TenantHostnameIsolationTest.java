@@ -12,7 +12,6 @@ import be.elevenways.hohenheim.server.auth.HostnameAuthority;
 import be.elevenways.hohenheim.server.cms.ManageDashboard;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.hohenheim.server.tls.CertificateAuthority;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -27,10 +26,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -51,7 +47,6 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  * the MODEL through TenantConduits, because the write pipeline is the gate the /manage
  * forms merely render.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class TenantHostnameIsolationTest extends HohenheimTestBase {
 
     /** Every hostname here ends in this, so no other class in the shared fork can cover it. */
@@ -81,13 +76,12 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
         catchAllSiteId = site("Tenant-iso catch-all", "tenant-iso-catch-all");
         domain(catchAllSiteId, "*." + ZONE, SiteDomainModel.MATCH_WILDCARD);
 
-        Row aliceRow = user("alice-iso@hohenheim.local", "Alice Iso");
-        aliceId = aliceRow.get(UserModel.ID);
+        aliceId = ApiSupport.user("alice-iso@hohenheim.local", "Alice Iso");
         alice = new UserPrincipal(aliceId, "Alice Iso");
-        Row bobRow = user("bob-iso@hohenheim.local", "Bob Iso");
+        int bobId = ApiSupport.user("bob-iso@hohenheim.local", "Bob Iso");
         RecordGrants.grant(GrantSubjectType.USER, aliceId, SiteModel.MODEL_ID,
             aliceSiteId, HohenheimAccess.MANAGE, true);
-        RecordGrants.grant(GrantSubjectType.USER, bobRow.get(UserModel.ID), SiteModel.MODEL_ID,
+        RecordGrants.grant(GrantSubjectType.USER, bobId, SiteModel.MODEL_ID,
             bobSiteId, HohenheimAccess.MANAGE, true);
 
         // The harness administrator, revived as a principal for the detailed-sentence half.
@@ -99,7 +93,6 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
     }
 
     @Test
-    @Order(1)
     void theMostSpecificCoveringRowDecidesANameExactlyAsRoutingDoes() {
         AccessContext ctx = AccessContext.of(TenantConduits.stubFor(alice));
         HostnameAuthority.Snapshot snapshot = HostnameAuthority.Snapshot.load();
@@ -163,7 +156,6 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
     }
 
     @Test
-    @Order(2)
     void aForeignClaimRefusesWithOneNeutralSentenceForATenantAndTheDetailedOneForAnAdmin() {
         // 1. A tenant claiming another tenant's hostname and a tenant claiming a FREE
         //    hostname under the catch-all get the SAME violation -- key, arguments, field --
@@ -223,7 +215,6 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
      * later edit of it -- while the name that claim does not cover stays refused.
      */
     @Test
-    @Order(3)
     void anExistingClaimIsNeverReRefusedByTheWildcardItAlreadyOutranks() {
         var domains = Models.get(SiteDomainModel.class);
         var sites = Models.get(SiteModel.class);
@@ -295,7 +286,6 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
      * the shared server, exactly like DashboardRoleGatingTest asserts the collectors.
      */
     @Test
-    @Order(4)
     void theDelegatedPanelOffersNoTierTheNodeHasSwitchedOff() {
         Set<Role> booted = EnumSet.noneOf(Role.class);
         for (Role role : Role.values()) {
@@ -345,17 +335,23 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
         }
     }
 
-    /** The zone cascade rides the model funnel: a model delete sweeps the records. */
+    /**
+     * The zone cascade rides the model funnel: a model delete sweeps the records. The zone
+     * is this test's own, so it neither needs the record another test wrote nor deletes the
+     * zone the other tests author into.
+     */
     @Test
-    @Order(5)
     void deletingAZoneThroughTheModelSweepsItsRecords() {
+        int cascadeZoneId = DnsFixtures.createZone("tenant-iso-cascade.test",
+            DnsZoneModel.ROLE_PRIMARY, null);
+        record(cascadeZoneId, "a", "192.0.2.12");
         DnsRecordModel records = Models.get(DnsRecordModel.class);
-        assertThat(records.find().where(DnsRecordModel.ZONE_ID.eq(zoneId)).count())
-            .as("precondition: the tenant's record from step 4 above is stored")
+        assertThat(records.find().where(DnsRecordModel.ZONE_ID.eq(cascadeZoneId)).count())
+            .as("precondition: the zone's record is stored")
             .isEqualTo(1L);
         DnsZoneModel zones = Models.get(DnsZoneModel.class);
-        zones.delete(zones.findById(zoneId));
-        assertThat(records.find().where(DnsRecordModel.ZONE_ID.eq(zoneId)).count())
+        zones.delete(zones.findById(cascadeZoneId));
+        assertThat(records.find().where(DnsRecordModel.ZONE_ID.eq(cascadeZoneId)).count())
             .as("a zone deleted past the admin resource still takes its records with it")
             .isZero();
     }
@@ -390,17 +386,6 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
         HohenheimRoles.capture();
     }
 
-    private static Row user(String email, String name) {
-        Row row = AuthModels.users().createEmptyRow();
-        row.set(UserModel.EMAIL, email);
-        row.set(UserModel.DISPLAY_NAME, name);
-        row.set(UserModel.ENABLED, true);
-        row.set(UserModel.CREATED_AT, Now.instant());
-        row.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(row);
-        return row;
-    }
-
     private static Integer site(String name, String slug) {
         var model = Models.get(SiteModel.class);
         Row row = model.createEmptyRow();
@@ -425,9 +410,13 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
     }
 
     private static void record(String name, String value) {
+        record(zoneId, name, value);
+    }
+
+    private static void record(int zone, String name, String value) {
         DnsRecordModel records = Models.get(DnsRecordModel.class);
         Row record = records.createEmptyRow();
-        record.set(DnsRecordModel.ZONE_ID, zoneId);
+        record.set(DnsRecordModel.ZONE_ID, zone);
         record.set(DnsRecordModel.NAME, name);
         record.set(DnsRecordModel.TYPE, DnsRecordModel.TYPE_A);
         record.set(DnsRecordModel.VALUE, value);

@@ -1,10 +1,11 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
@@ -16,22 +17,19 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Tag;
@@ -68,13 +66,13 @@ class DatabaseServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void createPersistsProvisionsBackupByNameAndDestroyRemovesRecord() throws IOException {
+    void createPersistsProvisionsBackupByNameAndDestroyRemovesRecord() throws Exception {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, PG_IMAGE);
 
-        SqliteDatasource datasource = freshDatasource();
+        SqlDatasource datasource = TestDatabases.freshBootedDatasource();
         DatabaseService service = new DatabaseService(datasource);
 
         String name = "svc" + System.nanoTime();
@@ -82,7 +80,7 @@ class DatabaseServiceTest {
         try {
             ManagedDatabase.Connection conn = service.create(name, ManagedDatabase.Engine.POSTGRES,
                 PG_IMAGE, "appuser", "secret123", "appdb",
-                true, ServerService.LOCAL, ResourceLimits.of(256, 1.0));   // ephemeral: tmpfs, no btrfs I/O
+                true, ServerService.LOCAL_HOST_NAME, ResourceLimits.of(256, 1.0));   // ephemeral: tmpfs, no btrfs I/O
             assertThat(conn.port()).isGreaterThan(0);
 
             // create() persisted exactly one record with the right config.
@@ -103,7 +101,7 @@ class DatabaseServiceTest {
             assertThat(((Number) hostConfig.get("Memory")).longValue()).isEqualTo(256L * 1024 * 1024);
             assertThat(((Number) hostConfig.get("NanoCpus")).longValue()).isEqualTo(1_000_000_000L);
 
-            // backupDownload(name) resolves engine + credentials from the record (caller passes no params).
+            // backupStream(name) resolves engine + credentials from the record (caller passes no params).
             DockerClient.ExecResult seed = docker.exec(containerName[0],
                 List.of("psql", "-U", "appuser", "-d", "appdb", "-c", "CREATE TABLE t (id int);"),
                 List.of("PGPASSWORD=secret123"));
@@ -134,13 +132,13 @@ class DatabaseServiceTest {
     }
 
     @Test
-    void createAsyncRecordsProvisioningThenActive() throws IOException, InterruptedException {
+    void createAsyncRecordsProvisioningThenActive() throws Exception {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, PG_IMAGE);
 
-        DatabaseService service = new DatabaseService(freshDatasource());
+        DatabaseService service = new DatabaseService(TestDatabases.freshBootedDatasource());
         String name = "async" + System.nanoTime();
         try {
             service.createAsync(name, ManagedDatabase.Engine.POSTGRES, PG_IMAGE,
@@ -150,12 +148,7 @@ class DatabaseServiceTest {
             assertThat(service.detail(name).status()).isEqualTo(DatabaseModel.STATUS_PROVISIONING);
 
             // The background job flips it to "active" once the container is up and ready.
-            long deadline = Now.millis() + 60_000;
-            String status = service.detail(name).status();
-            while (!DatabaseModel.STATUS_ACTIVE.equals(status) && Now.millis() < deadline) {
-                Thread.sleep(500);
-                status = service.detail(name).status();
-            }
+            String status = awaitStatus(service, name, DatabaseModel.STATUS_ACTIVE, 60_000);
             assertThat(status).isEqualTo(DatabaseModel.STATUS_ACTIVE);
             assertThat(service.detail(name).running()).isTrue();
         } finally {
@@ -173,13 +166,13 @@ class DatabaseServiceTest {
      */
     @Test
     void createAsyncProvisionsAfterTheCallersCommitAndAFailureIsTerminalWithItsReason()
-            throws IOException {
+            throws Exception {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, PG_IMAGE);
 
-        SqliteDatasource datasource = freshDatasource();
+        SqlDatasource datasource = TestDatabases.freshBootedDatasource();
         DatabaseService service = new DatabaseService(datasource);
         String name = "aftercommit" + System.nanoTime();
         String doomed = "doomed" + System.nanoTime();
@@ -256,15 +249,13 @@ class DatabaseServiceTest {
         }
     }
 
+    /** Wait for the record to reach {@code wanted}; the status it then reads. */
     private static String awaitStatus(DatabaseService service, String name, String wanted,
                                       long timeoutMs) {
-        long deadline = Now.millis() + timeoutMs;
-        String status = service.detail(name).status();
-        while (!wanted.equals(status) && Now.millis() < deadline) {
-            pause(500);
-            status = service.detail(name).status();
-        }
-        return status;
+        Poll.until("database " + name + " reaching status " + wanted,
+            Duration.ofMillis(timeoutMs), Duration.ofMillis(500),
+            () -> wanted.equals(service.detail(name).status()));
+        return service.detail(name).status();
     }
 
     private static void pause(long millis) {
@@ -283,18 +274,18 @@ class DatabaseServiceTest {
      * one proves the logic without a daemon, this one proves the wiring reaches it.
      */
     @Test
-    void theProvisionedPortIsClaimedInTheLedgerAndFreedOnDestroy() throws IOException {
+    void theProvisionedPortIsClaimedInTheLedgerAndFreedOnDestroy() throws Exception {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, PG_IMAGE);
 
-        SqliteDatasource datasource = freshDatasource();
+        SqlDatasource datasource = TestDatabases.freshBootedDatasource();
         DatabaseService service = new DatabaseService(datasource);
         String name = "ledger" + System.nanoTime();
         try {
             ManagedDatabase.Connection conn = service.create(name, ManagedDatabase.Engine.POSTGRES,
-                PG_IMAGE, "appuser", "secret123", "appdb", true, ServerService.LOCAL);
+                PG_IMAGE, "appuser", "secret123", "appdb", true, ServerService.LOCAL_HOST_NAME);
 
             Db.run(datasource, () -> {
                 Integer recordId = service.list().get(0).get(DatabaseModel.ID);
@@ -342,13 +333,13 @@ class DatabaseServiceTest {
      * equivalent -- nothing can build a daemon connection for it.
      */
     @Test
-    void destroyRefusesToLieWhenTheHostCannotBeAddressed() throws IOException {
+    void destroyRefusesToLieWhenTheHostCannotBeAddressed() throws Exception {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, PG_IMAGE);
 
-        SqliteDatasource datasource = freshDatasource();
+        SqlDatasource datasource = TestDatabases.freshBootedDatasource();
         DatabaseService service = new DatabaseService(datasource);
 
         String name = "c6destroy" + System.nanoTime();
@@ -356,7 +347,7 @@ class DatabaseServiceTest {
         try {
             // 1. Provision for real; the OWNED INSTANCE holds the ledger claim now.
             ManagedDatabase.Connection conn = service.create(name, ManagedDatabase.Engine.POSTGRES,
-                PG_IMAGE, "appuser", "secret123", "appdb", true, ServerService.LOCAL);
+                PG_IMAGE, "appuser", "secret123", "appdb", true, ServerService.LOCAL_HOST_NAME);
             int[] instanceId = new int[1];
             Db.run(datasource, () -> {
                 Integer recordId = service.list().get(0).get(DatabaseModel.ID);
@@ -459,18 +450,5 @@ class DatabaseServiceTest {
                 row.set(InstanceModel.SERVER_ID, serverId);
                 Models.get(InstanceModel.class).save(row);
             });
-    }
-
-    private static SqliteDatasource freshDatasource() throws IOException {
-        File db = File.createTempFile("hohenheim-dbservice-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        SqliteDatasource ds = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(ds).migrate().requireSuccess();
-        // The container NAME is derived from the controller identity in THIS database, so
-        // it must be the one every unscoped call resolves to as well.
-        Datasources.register(Datasources.DEFAULT, ds);
-        HohenheimTestRuntime.ensureBooted();
-        return ds;
     }
 }

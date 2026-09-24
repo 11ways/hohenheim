@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.backup;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
+import be.elevenways.hohenheim.server.process.BoundedProcess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -13,6 +14,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InterruptedIOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -21,7 +23,6 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 /**
@@ -52,7 +53,10 @@ public final class SshBackupTarget implements BackupTarget {
     /** Keys are controller-generated; anything outside this set is refused, not quoted. */
     private static final Pattern SAFE_KEY = Pattern.compile("[A-Za-z0-9._/-]+");
 
-    private static final long COMMAND_TIMEOUT_MS = 600_000;
+    /** How long an exchange may go without moving a byte before it is abandoned. */
+    private static final long COMMAND_IDLE_TIMEOUT_MS = 600_000;
+
+    private static final int STDERR_CAP_CHARS = 64 * 1024;
 
     private final int serverId;
     private final @NonNull String basePath;
@@ -251,72 +255,33 @@ public final class SshBackupTarget implements BackupTarget {
         return exchange(argv, stdin, stdout, remoteCommand);
     }
 
+    /**
+     * AIDEV-NOTE: the bound is IDLE time ({@link BoundedProcess#stream}): an archive's
+     * upload or download takes as long as its size needs, so a wall clock would cut a
+     * large backup, while an ssh that stopped moving bytes is abandoned. The exchange this
+     * replaced read stdout to its end before ever consulting the clock, so a wedged ssh
+     * held the backup job forever.
+     */
     private static byte @NonNull [] exchange(@NonNull List<String> argv,
                                              @Nullable InputStream stdin,
                                              @Nullable OutputStream stdout,
                                              @NonNull String what) throws IOException {
-        Process process = new ProcessBuilder(argv).start();
-        ByteArrayOutputStream stderr = new ByteArrayOutputStream();
-        Thread drain = new Thread(() -> {
-            try {
-                process.getErrorStream().transferTo(stderr);
-            } catch (IOException ignored) {
-                // process gone
-            }
-        });
-        drain.setDaemon(true);
-        drain.start();
         ByteArrayOutputStream captured = stdout == null ? new ByteArrayOutputStream() : null;
+        BoundedProcess.Result result;
         try {
-            Thread writer = null;
-            if (stdin != null) {
-                writer = new Thread(() -> {
-                    try (OutputStream processIn = process.getOutputStream()) {
-                        byte[] buffer = new byte[64 * 1024];
-                        int read;
-                        while ((read = stdin.read(buffer)) >= 0) {
-                            processIn.write(buffer, 0, read);
-                        }
-                    } catch (IOException ignored) {
-                        // the exit code is the authority on failure
-                    }
-                });
-                writer.setDaemon(true);
-                writer.start();
-            } else {
-                process.getOutputStream().close();
-            }
-            byte[] buffer = new byte[64 * 1024];
-            int read;
-            InputStream processOut = process.getInputStream();
-            while ((read = processOut.read(buffer)) >= 0) {
-                if (stdout != null) {
-                    stdout.write(buffer, 0, read);
-                } else {
-                    captured.write(buffer, 0, read);
-                }
-            }
-            if (writer != null) {
-                writer.join(COMMAND_TIMEOUT_MS);
-            }
-            if (!process.waitFor(COMMAND_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
-                process.destroyForcibly();
-                throw new IOException("SSH backup-target command timed out: " + what);
-            }
-            if (process.exitValue() != 0) {
-                drain.join(2000);
-                throw new IOException("SSH backup-target command failed (exit "
-                    + process.exitValue() + "): " + what + " -- "
-                    + new String(stderr.toByteArray(), StandardCharsets.UTF_8).trim());
-            }
-            return captured != null ? captured.toByteArray() : new byte[0];
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            process.destroyForcibly();
-            throw new IOException("SSH backup-target command interrupted: " + what);
-        } finally {
-            process.destroyForcibly();
+            result = BoundedProcess.stream(new ProcessBuilder(argv), stdin,
+                stdout != null ? stdout : captured, COMMAND_IDLE_TIMEOUT_MS, STDERR_CAP_CHARS);
+        } catch (InterruptedIOException interrupted) {
+            throw new IOException("SSH backup-target command interrupted: " + what, interrupted);
         }
+        if (result.timedOut()) {
+            throw new IOException("SSH backup-target command timed out: " + what);
+        }
+        if (!result.succeeded()) {
+            throw new IOException("SSH backup-target command failed (exit "
+                + result.exitCode() + "): " + what + " -- " + result.stderr().trim());
+        }
+        return captured != null ? captured.toByteArray() : new byte[0];
     }
 
     /** A remote command flushing one path to disk, degrading to a whole-system sync. */

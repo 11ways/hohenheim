@@ -2,11 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSources;
-import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
-import be.elevenways.zenit.auth.server.AuthModels;
-import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.routing.Endpoint;
 import org.junit.jupiter.api.Test;
 
@@ -52,14 +48,8 @@ class AdminApiDeclarationTest extends HohenheimTestBase {
 
         // 3. On the wire: a key whose owner holds no admin permission is refused at the
         //    door for a host read, a zone list and a site create alike.
-        Row tenant = AuthModels.users().createEmptyRow();
-        tenant.set(UserModel.EMAIL, "admin-api-declaration@surface.test");
-        tenant.set(UserModel.DISPLAY_NAME, "Admin Api Declaration");
-        tenant.set(UserModel.ENABLED, true);
-        tenant.set(UserModel.CREATED_AT, Now.instant());
-        tenant.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(tenant);
-        String key = ApiKeyService.create(tenant.get(UserModel.ID), "admin-api-declaration",
+        int tenantId = ApiSupport.user("admin-api-declaration@surface.test", "Admin Api Declaration");
+        String key = ApiKeyService.create(tenantId, "admin-api-declaration",
             List.of("hohenheim.*"), null).plaintext();
         HttpResponse<String> hosts = keyGet(key, "/api/v1/hosts");
         assertThat(hosts.statusCode()).as("step 3: a tenant key cannot read hosts").isEqualTo(403);

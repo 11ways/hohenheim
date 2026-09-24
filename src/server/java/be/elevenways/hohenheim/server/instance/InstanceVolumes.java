@@ -112,7 +112,7 @@ public final class InstanceVolumes {
      *
      * AIDEV-NOTE: it lives HERE, beside the minter, and both transports call it -- the
      * Docker funnel ({@code ContainerHardening.requireOwnVolumeSource}) and the Incus disk
-     * devices ({@code IncusInstanceRuntime.bindDevices}). Two spellings of this rule is how
+     * devices ({@code IncusDefinitions.bindDevices}). Two spellings of this rule is how
      * one driver ends up permitting what the other refuses, and the Incus lane had NO
      * containment check at all until 2026-08-23 -- not even the volume-root bound.
      *

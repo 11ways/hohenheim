@@ -3,20 +3,17 @@ package be.elevenways.hohenheim.server.orm;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
-import be.elevenways.zenit.common.orm.query.QueryContext;
 import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.List;
 import java.util.Objects;
 
 /**
@@ -178,32 +175,12 @@ public final class GeneratedRows {
             if (inSystemScope()) {
                 return;
             }
-            for (Row doomed : doomedRows(context)) {
+            for (Row doomed : context.doomedRows()) {
                 if (doomed.get(columns.by()) != null) {
                     throw readOnly(columns, doomed, readOnlyKey);
                 }
             }
         });
-    }
-
-    /**
-     * The rows a criteria delete is about to remove.
-     *
-     * AIDEV-NOTE: a remove context carries CRITERIA, not rows, so the guard re-runs the
-     * same query -- the ActivityLog.captureDoomed idiom. Enforcing on a resource's delete
-     * method instead would leave every criteria delete outside the guard, which is the
-     * whole point of the funnel.
-     */
-    private static @NonNull List<Row> doomedRows(@NonNull RemoveFromDatasource context) {
-        Model model = context.getModel();
-        QueryContext queryContext = context.getQueryContext();
-        if (model == null || queryContext == null) {
-            return List.of();
-        }
-        return model.executeFindQuery(new QueryContext(
-            queryContext.getCriteria(), List.of(), null, null, List.of(), null,
-            queryContext.getLocaleChain(),
-            queryContext.isAcrossLocales(), true, true, queryContext.getHints()));
     }
 
     private static @NonNull Violations readOnly(@NonNull Columns columns, @NonNull Row stored,

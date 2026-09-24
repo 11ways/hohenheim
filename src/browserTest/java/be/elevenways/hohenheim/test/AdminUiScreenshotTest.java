@@ -18,8 +18,11 @@ import be.elevenways.zenit.common.orm.model.Models;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.Cookie;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -27,20 +30,26 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 /**
  * Screenshot generator for the admin-UI wave: walks every page the wave touched, in
  * light AND dark, over a realistic fixture fleet, and writes the captures where a
- * human can review them. It asserts only that each page renders (title/2xx via the
- * navigation itself); the point is the pictures.
+ * human can review them.
  *
- * AIDEV-NOTE: captures land OUTSIDE the repo (~/temp/hohenheim-ui). The class stays in
- * the suite so the pages it walks stay renderable; the screenshots are a cheap side
- * effect of that walk, and the directory is created on demand.
+ * AIDEV-NOTE: an OPT-IN lane member (@Tag("slow"), declared in .zenit-dev.json
+ * nonHermeticClasses so a receipt never stands in for fresh pictures): the walk is ~90s
+ * of Playwright, which the default lane cannot afford, and every page it visits is
+ * already rendered and asserted by its own surface test. Captures land under the build
+ * directory (build/admin-ui-screenshots), never in the developer's home. Each capture
+ * still asserts what a picture silently hides: the page answered below 400, it is the
+ * admin shell and not the login page it would redirect to, and the file was written.
  */
+@Tag("slow")
 class AdminUiScreenshotTest extends HohenheimTestBase {
 
-    private static final Path OUT = Paths.get(System.getProperty("user.home"),
-        "temp", "hohenheim-ui");
+    /** Relative to the gradle test worker's working directory, the project root. */
+    private static final Path OUT = Paths.get("build", "admin-ui-screenshots");
 
     private static Integer dockerHostId;
     private static Integer workspaceId;
@@ -213,14 +222,29 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
             page.context().addCookies(List.of(new Cookie("pl-theme", theme)
                 .setDomain("localhost").setPath("/")));
             page.setViewportSize(1440, 900);
+            // navigateToApp itself fails on any status >= 400.
             navigateToApp(path);
             waitForHydration();
+            String requested = path.contains("?") ? path.substring(0, path.indexOf('?')) : path;
+            assertThat(URI.create(page.url()).getPath())
+                .as("%s (%s) is served where it was asked for, not redirected to a login", path, theme)
+                .isEqualTo(requested);
+            assertThat(page.locator(".cms-brand").count())
+                .as("%s (%s) renders inside the admin shell", path, theme)
+                .isPositive();
             if (interaction != null) {
                 interaction.run();
             }
+            Path capture = OUT.resolve(slug + "-" + theme + ".png");
             page.screenshot(new Page.ScreenshotOptions()
-                .setPath(OUT.resolve(slug + "-" + theme + ".png"))
+                .setPath(capture)
                 .setFullPage(true));
+            try {
+                assertThat(Files.size(capture))
+                    .as("%s (%s) was captured to %s", path, theme, capture).isPositive();
+            } catch (IOException unreadable) {
+                throw new AssertionError("the capture of " + path + " is unreadable", unreadable);
+            }
         }
     }
 

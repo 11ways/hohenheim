@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -21,9 +22,7 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -34,14 +33,13 @@ import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -63,16 +61,19 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * endpoint, the automation API and any direct {@code model.save} never pass a resource
  * method -- proving it through a form would prove the form omits a field.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class InstanceDatabaseAttachTest extends HohenheimTestBase {
 
     private static final String PREFIX = "inst-db-";
     private static final String PASSWORD = "s3cr3t-attach-pw";
 
+    /** Numbers each test's own pairing, so no two tests share an instance or a database. */
+    private static final AtomicInteger FIXTURES = new AtomicInteger();
+
+    // The cast and the hosts are read-only for every test; the records they act on are
+    // each test's own (see Pairing).
     private static Integer tenantAId;
     private static Integer tenantBId;
     private static Integer viewerId;
-    private static Integer authAdminId;
     private static Principal principalA;
     private static Principal principalB;
     private static Principal principalViewer;
@@ -80,21 +81,14 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
 
     private static Integer hostId;
     private static Integer otherHostId;
-    private static Integer instanceAId;
-    private static Integer instanceBId;
     private static Integer incusHostId;
-    private static Integer incusInstanceId;
-    private static Integer remoteInstanceId;
-    private static Integer databaseAId;
-    private static Integer databaseBId;
-    private static Integer databaseRemoteId;
 
     @BeforeAll
     static void seed() {
-        tenantAId = tenant("a@" + PREFIX + "test", "Attach Tenant A");
-        tenantBId = tenant("b@" + PREFIX + "test", "Attach Tenant B");
-        viewerId = tenant("viewer@" + PREFIX + "test", "Attach Viewer");
-        authAdminId = tenant("authadmin@" + PREFIX + "test", "Auth Admin Only");
+        tenantAId = ApiSupport.user("a@" + PREFIX + "test", "Attach Tenant A");
+        tenantBId = ApiSupport.user("b@" + PREFIX + "test", "Attach Tenant B");
+        viewerId = ApiSupport.user("viewer@" + PREFIX + "test", "Attach Viewer");
+        int authAdminId = ApiSupport.user("authadmin@" + PREFIX + "test", "Auth Admin Only");
         principalA = new UserPrincipal(tenantAId, "Attach Tenant A");
         principalB = new UserPrincipal(tenantBId, "Attach Tenant B");
         principalViewer = new UserPrincipal(viewerId, "Attach Viewer");
@@ -104,38 +98,6 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         otherHostId = host(PREFIX + "other");
         incusHostId = host(PREFIX + "incus-host", ServerModel.RUNTIME_INCUS);
 
-        instanceAId = instance(PREFIX + "srv-a", "hohenheim:docker_container", hostId);
-        instanceBId = instance(PREFIX + "srv-b", "hohenheim:docker_container", hostId);
-        incusInstanceId = instance(PREFIX + "srv-incus", "hohenheim:system_container", incusHostId);
-        remoteInstanceId = instance(PREFIX + "srv-remote", "hohenheim:docker_container", otherHostId);
-        databaseAId = database(PREFIX + "db-a", hostId);
-        databaseBId = database(PREFIX + "db-b", hostId);
-        databaseRemoteId = database(PREFIX + "db-remote", otherHostId);
-
-        // Tenant A owns instance A, the Incus one, the remote one and database A;
-        // tenant B owns instance B and database B. MANAGE is the ownership marker and
-        // implies CONFIG on an instance, so A is a legitimate attacher on its own pair.
-        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
-            HohenheimAccess.MANAGE, true);
-        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, incusInstanceId,
-            HohenheimAccess.MANAGE, true);
-        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, remoteInstanceId,
-            HohenheimAccess.MANAGE, true);
-        RecordGrants.grant(GrantSubjectType.USER, tenantAId, DatabaseModel.MODEL_ID, databaseAId,
-            HohenheimAccess.MANAGE, true);
-        RecordGrants.grant(GrantSubjectType.USER, tenantBId, InstanceModel.MODEL_ID, instanceBId,
-            HohenheimAccess.MANAGE, true);
-        RecordGrants.grant(GrantSubjectType.USER, tenantBId, DatabaseModel.MODEL_ID, databaseBId,
-            HohenheimAccess.MANAGE, true);
-        // Tenant B also owns a database on the OTHER host: the fixture whose stored
-        // (owner-namespaced) name and host the pre-fix mismatch refusal leaked.
-        RecordGrants.grant(GrantSubjectType.USER, tenantBId, DatabaseModel.MODEL_ID, databaseRemoteId,
-            HohenheimAccess.MANAGE, true);
-        // The read-only teammate: VIEW on both ends of a legitimate pair, and nothing more.
-        RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceAId,
-            HohenheimAccess.VIEW, true);
-        RecordGrants.grant(GrantSubjectType.USER, viewerId, DatabaseModel.MODEL_ID, databaseAId,
-            HohenheimAccess.VIEW, true);
         // THE trap actor: an auth administrator (it can edit users) who holds no hohenheim
         // record grant at all. Without it a refusal could be zenit-auth's /admin baseline
         // answering rather than this rule.
@@ -145,7 +107,12 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
     @AfterAll
     static void cleanUp() {
         Model links = Models.get(InstanceDatabaseModel.class);
-        for (Integer databaseId : List.of(databaseAId, databaseBId, databaseRemoteId)) {
+        Model databases = Models.get(DatabaseModel.class);
+        List<Integer> databaseIds = new ArrayList<>();
+        for (Row row : databases.find().where(DatabaseModel.NAME.startsWith(PREFIX)).all()) {
+            databaseIds.add(row.get(DatabaseModel.ID));
+        }
+        for (Integer databaseId : databaseIds) {
             for (Row link : Models.get(InstanceDatabaseModel.class).findByDatabaseId(databaseId)) {
                 links.delete(link.get(InstanceDatabaseModel.ID));
             }
@@ -159,21 +126,81 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
             for (Row row : instances.find()
                     .where(InstanceModel.GENERATED_FOR_MODEL.eq(DatabaseModel.MODEL_ID.toString()))
                     .all()) {
-                Integer owner = row.get(InstanceModel.GENERATED_FOR_ID);
-                if (databaseAId.equals(owner) || databaseBId.equals(owner)
-                        || databaseRemoteId.equals(owner)) {
+                if (databaseIds.contains((Integer) row.get(InstanceModel.GENERATED_FOR_ID))) {
                     instances.delete(row.get(InstanceModel.ID));
                 }
             }
         });
-        Model databases = Models.get(DatabaseModel.class);
-        for (Row row : databases.find().where(DatabaseModel.NAME.startsWith(PREFIX)).all()) {
-            databases.delete(row.get(DatabaseModel.ID));
+        for (Integer databaseId : databaseIds) {
+            databases.delete(databaseId);
         }
         Model servers = Models.get(ServerModel.class);
         for (Row row : servers.find().where(ServerModel.NAME.startsWith(PREFIX)).all()) {
             servers.delete(row.get(ServerModel.ID));
         }
+    }
+
+    /**
+     * One test's own records: tenant A owns instance A, the Incus instance, the remote one
+     * and database A; tenant B owns instance B, database B and the remote database; the
+     * read-only teammate holds VIEW on both ends of A's legitimate pair.
+     *
+     * AIDEV-NOTE: every test builds its own, so a test runs alone and one failure never
+     * leaves the next without its attachment. This class used to thread instance A's
+     * attachment through five @Order-ed tests, and journey 4 soft-deleted the instance
+     * the later ones then had to work around.
+     *
+     * @param tag the name prefix of every record in this pairing
+     */
+    private record Pairing(String tag, int instanceA, int instanceB, int incusInstance,
+                           int remoteInstance, int databaseA, int databaseB, int databaseRemote) {
+    }
+
+    private static Pairing pairing() {
+        String tag = PREFIX + FIXTURES.incrementAndGet() + "-";
+        int instanceA = instance(tag + "srv-a", "hohenheim:docker_container", hostId);
+        int instanceB = instance(tag + "srv-b", "hohenheim:docker_container", hostId);
+        int incusInstance = instance(tag + "srv-incus", "hohenheim:system_container", incusHostId);
+        int remoteInstance = instance(tag + "srv-remote", "hohenheim:docker_container", otherHostId);
+        int databaseA = database(tag + "db-a", hostId);
+        int databaseB = database(tag + "db-b", hostId);
+        int databaseRemote = database(tag + "db-remote", otherHostId);
+
+        // MANAGE is the ownership marker and implies CONFIG on an instance, so A is a
+        // legitimate attacher on its own pair.
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceA,
+            HohenheimAccess.MANAGE, true);
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, incusInstance,
+            HohenheimAccess.MANAGE, true);
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, remoteInstance,
+            HohenheimAccess.MANAGE, true);
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, DatabaseModel.MODEL_ID, databaseA,
+            HohenheimAccess.MANAGE, true);
+        RecordGrants.grant(GrantSubjectType.USER, tenantBId, InstanceModel.MODEL_ID, instanceB,
+            HohenheimAccess.MANAGE, true);
+        RecordGrants.grant(GrantSubjectType.USER, tenantBId, DatabaseModel.MODEL_ID, databaseB,
+            HohenheimAccess.MANAGE, true);
+        // Tenant B also owns a database on the OTHER host: the fixture whose stored
+        // (owner-namespaced) name and host the pre-fix mismatch refusal leaked.
+        RecordGrants.grant(GrantSubjectType.USER, tenantBId, DatabaseModel.MODEL_ID, databaseRemote,
+            HohenheimAccess.MANAGE, true);
+        // The read-only teammate: VIEW on both ends of a legitimate pair, and nothing more.
+        RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceA,
+            HohenheimAccess.VIEW, true);
+        RecordGrants.grant(GrantSubjectType.USER, viewerId, DatabaseModel.MODEL_ID, databaseA,
+            HohenheimAccess.VIEW, true);
+        return new Pairing(tag, instanceA, instanceB, incusInstance, remoteInstance,
+            databaseA, databaseB, databaseRemote);
+    }
+
+    /** A pairing whose owner already attached database A to instance A under DB. */
+    private static Pairing attachedPairing() {
+        Pairing pairing = pairing();
+        assertThat(attachAs(principalA, pairing.instanceA(), pairing.databaseA(), "DB"))
+            .as("fixture: the owner of both ends attaches").isNull();
+        assertThat(linksOf(pairing.instanceA()))
+            .as("fixture: instance A is attached to database A").hasSize(1);
+        return pairing;
     }
 
     // -- the journeys ---------------------------------------------------------
@@ -184,8 +211,13 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
      * refusal that still wrote the row would pass a throws-only test.
      */
     @Test
-    @Order(1)
     void attachingNeedsAuthorityOverBOTHEndsAndPersistsNothingWhenItDoesNot() {
+        Pairing p = pairing();
+        int instanceAId = p.instanceA();
+        int instanceBId = p.instanceB();
+        int databaseAId = p.databaseA();
+        int databaseBId = p.databaseB();
+
         // 1. ATTACK -- a tenant attaching a database they do NOT own. Tenant A manages
         //    instance A and would receive tenant B's credentials as plain environment
         //    variables inside their own container: the one-sided check's whole failure mode.
@@ -251,11 +283,14 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
 
     /**
      * What the workload actually receives, and -- the property this whole design exists to
-     * keep -- what is NEVER stored. Depends on the attachment made in journey 1.
+     * keep -- what is NEVER stored.
      */
     @Test
-    @Order(2)
     void theWorkloadReceivesADerivedFamilyThatIsStoredNOWHERE() {
+        Pairing p = attachedPairing();
+        int instanceAId = p.instanceA();
+        int instanceBId = p.instanceB();
+
         // 1. The derived family for the attached database, resolved through the injectable
         //    live resolver (a running engine, container-network style).
         Map<String, String> derived = DatabaseEnvInjection.envForInstance(instanceAId, running());
@@ -336,8 +371,14 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
      * workload cannot dial.
      */
     @Test
-    @Order(3)
     void anUnreachablePairingIsRefusedWhenItIsATTACHEDRatherThanAtTheNextStart() {
+        Pairing p = attachedPairing();
+        int instanceAId = p.instanceA();
+        int databaseAId = p.databaseA();
+        int databaseBId = p.databaseB();
+        int incusInstanceId = p.incusInstance();
+        int remoteInstanceId = p.remoteInstance();
+
         InstanceDatabaseResource resource = new InstanceDatabaseResource();
         AccessContext admin = AccessContext.anonymous();
 
@@ -387,9 +428,6 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
             .as("step 6: a second database on its own prefix attaches")
             .isNull();
         assertThat(linksOf(instanceAId)).as("step 6: two attachments now").hasSize(2);
-        // Clean the second one back off: the later journeys reason about ONE attachment.
-        Models.get(InstanceDatabaseModel.class).find()
-            .where(InstanceDatabaseModel.DATABASE_ID.eq(databaseBId)).delete();
     }
 
     /**
@@ -398,8 +436,12 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
      * holding a database hostage.
      */
     @Test
-    @Order(4)
     void aDatabaseCannotDieUnderALiveWorkloadAndADeadWorkloadReleasesIt() {
+        Pairing p = attachedPairing();
+        int instanceAId = p.instanceA();
+        int databaseAId = p.databaseA();
+        int databaseBId = p.databaseB();
+
         assertThat(linksOf(instanceAId))
             .as("precondition: instance A is still attached to database A").hasSize(1);
 
@@ -415,7 +457,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
             .contains("database_in_use");
         assertThat(InstanceDatabaseLinks.liveInstanceNames(databaseAId))
             .as("step 1: and the refusal names the workload the operator has to detach")
-            .contains(PREFIX + "srv-a");
+            .contains(p.tag() + "srv-a");
         assertThat((Object) Models.get(DatabaseModel.class).findById(databaseAId))
             .as("step 1: the record is still there -- a refusal that still deleted"
                 + " would pass a status-only test")
@@ -469,17 +511,15 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
      * are one answer.
      */
     @Test
-    @Order(5)
     void probingForeignDatabaseIdsThroughTheFormIsOneIndistinguishableAnswer() {
-        // 0. A FRESH instance owned by tenant A. Journey 4 soft-deleted instance A, and
-        //    zenit-auth's RecordGrantCleanup revokes a soft-deleted record's grants (a
-        //    restore never re-grants), so this journey brings its own probe base. The
-        //    precondition pins the capability so every refusal below is provably about
-        //    the DATABASE side.
-        int probeInstanceId = instance(PREFIX + "srv-probe", "hohenheim:docker_container",
-            hostId);
-        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, probeInstanceId,
-            HohenheimAccess.MANAGE, true);
+        Pairing p = pairing();
+        int databaseAId = p.databaseA();
+        int databaseBId = p.databaseB();
+        int databaseRemoteId = p.databaseRemote();
+
+        // 0. The probe base is tenant A's own instance. The precondition pins the
+        //    capability so every refusal below is provably about the DATABASE side.
+        int probeInstanceId = p.instanceA();
         assertThat(HohenheimAccess.hasInstanceCapability(
                 AccessContext.of(TenantConduits.stubFor(principalA)), probeInstanceId,
                 HohenheimAccess.CONFIG))
@@ -508,7 +548,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         assertThat(String.valueOf(crossHost.getMessage()))
             .as("step 1: and nothing about the foreign record leaks -- not its stored"
                 + " name, not its host")
-            .doesNotContain(PREFIX + "db-remote")
+            .doesNotContain(p.tag() + "db-remote")
             .doesNotContain(PREFIX + "other");
 
         // 2. BYTE-IDENTICAL, which is the whole contract: a probing tenant cannot tell
@@ -559,10 +599,6 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         assertThat(violationKeys(operator))
             .as("step 5: operators keep database_instance_server_mismatch")
             .contains("database_instance_server_mismatch");
-
-        // 6. Leave the class the way journey 4 left it: no attachments on instance A.
-        Models.get(InstanceDatabaseModel.class).find()
-            .where(InstanceDatabaseModel.DATABASE_ID.eq(databaseAId)).delete();
     }
 
     /** One form-path probe as one principal; @return the refusal (never null here). */
@@ -611,17 +647,6 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
             keys.append(violation.message().key()).append(' ');
         }
         return keys.toString();
-    }
-
-    private static int tenant(String email, String name) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, name);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
     }
 
     private static int host(String name) {

@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.HostnameAuthority;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -54,8 +53,8 @@ class TenantHostnameClaimTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        int userA = user("claim-a@hohenheim.local", "Claim Tenant A");
-        int userB = user("claim-b@hohenheim.local", "Claim Tenant B");
+        int userA = ApiSupport.user("claim-a@hohenheim.local", "Claim Tenant A");
+        int userB = ApiSupport.user("claim-b@hohenheim.local", "Claim Tenant B");
         tenantA = new UserPrincipal(userA, "Claim Tenant A");
         tenantB = new UserPrincipal(userB, "Claim Tenant B");
         Row adminRow = AuthModels.users().find()
@@ -80,17 +79,6 @@ class TenantHostnameClaimTest extends HohenheimTestBase {
 
         // A claim that predates the rule: stored by the system, never judged by it.
         legacyDomainId = domain(siteA, LEGACY, SiteDomainModel.MATCH_EXACT);
-    }
-
-    private static int user(String email, String name) {
-        Row row = AuthModels.users().createEmptyRow();
-        row.set(UserModel.EMAIL, email);
-        row.set(UserModel.DISPLAY_NAME, name);
-        row.set(UserModel.ENABLED, true);
-        row.set(UserModel.CREATED_AT, Now.instant());
-        row.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(row);
-        return row.get(UserModel.ID);
     }
 
     private static int site(String slug) {

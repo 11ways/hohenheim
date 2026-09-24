@@ -1,7 +1,8 @@
 package be.elevenways.hohenheim.test.build;
 
+import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.BuildOperationModel;
@@ -22,14 +23,12 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -60,35 +59,24 @@ class SandboxedBuildLiveTest {
     /** Owner of the standalone builds here (a synthetic instance id). */
     private static final int OWNER_ID = 977_101;
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static PrivateNetns netns;
 
     @BeforeAll
     static void setUp() throws Exception {
-        File db = File.createTempFile("hohenheim-build-live-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
         // ONE database per test class: the controller identity (and therefore every
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
-        if (PrivateNetns.available()) {
-            netns = new PrivateNetns();
-            WorkloadNetworkPolicy.overrideForTest(netns.enforcingPolicy());
-        }
+        netns = PrivateNetns.installEnforcing();
     }
 
     @AfterAll
     static void tearDown() {
-        WorkloadNetworkPolicy.overrideForTest(null);
-        if (netns != null) {
-            netns.close();
-            netns = null;
-        }
+        PrivateNetns.uninstall(netns);
+        netns = null;
     }
 
     /**
@@ -111,7 +99,7 @@ class SandboxedBuildLiveTest {
             //    mounted" design, refused at the one funnel rather than by convention.
             Throwable bound = catchThrowable(() -> docker.createContainer(
                 "hohenheim-build-socket-probe", Map.of(
-                    "Image", "alpine:latest",
+                    "Image", TestImages.ALPINE,
                     "Cmd", List.of("true"),
                     "HostConfig", Map.of("Mounts", List.of(Map.of(
                         "Type", "bind",
@@ -127,11 +115,10 @@ class SandboxedBuildLiveTest {
             //    absent and unreachable. The probe exits 0 either way -- the ASSERTION is
             //    on what it printed, so a reachable daemon fails THIS step instead of the
             //    build failing for some unrelated reason.
-            SandboxedBuilds.Result probe = build(docker, OWNER_ID, "probe", """
-                FROM alpine:latest
+            SandboxedBuilds.Result probe = build(docker, OWNER_ID, "probe", fromAlpine("""
                 RUN echo "hh-socket=$(test -S /var/run/docker.sock && echo present || echo absent)"
                 RUN echo "hh-daemon=$(wget -q -T 3 -O - http://172.17.0.1:2375/version >/dev/null 2>&1 && echo reachable || echo unreachable)"
-                """, Map.of(), 300_000);
+                """), Map.of(), 300_000);
             String log = logOf(probe);
 
             assertThat(probe.succeeded())
@@ -144,10 +131,9 @@ class SandboxedBuildLiveTest {
 
             // 3. A build that TRIES to use the socket FAILS, rather than succeeding
             //    quietly with a step that silently did nothing.
-            SandboxedBuilds.Result uses = build(docker, OWNER_ID, "uses", """
-                FROM alpine:latest
+            SandboxedBuilds.Result uses = build(docker, OWNER_ID, "uses", fromAlpine("""
                 RUN test -S /var/run/docker.sock
-                """, Map.of(), 300_000);
+                """), Map.of(), 300_000);
             assertThat(uses.succeeded()).as("step 3: a build that needs the daemon fails")
                 .isFalse();
             assertThat(uses.status()).as("step 3: as an ordinary build failure")
@@ -157,12 +143,11 @@ class SandboxedBuildLiveTest {
             //    assertions in the site journey would be proving that nothing at all is
             //    passed, which is a check that cannot fail.
             String registryPassword = "REGISTRY-LEASE-SECRET-" + System.nanoTime();
-            SandboxedBuilds.Result args = buildWithQuota(docker, OWNER_ID, "args", """
-                FROM alpine:latest
+            SandboxedBuilds.Result args = buildWithQuota(docker, OWNER_ID, "args", fromAlpine("""
                 ARG HH_BUILD_ARG
                 RUN echo "hh-arg=$HH_BUILD_ARG"
                 RUN echo "hh-registry-config=$(test -f /kaniko/.docker/config.json && echo staged || echo missing)"
-                """, Map.of("HH_BUILD_ARG", "reached-the-build"),
+                """), Map.of("HH_BUILD_ARG", "reached-the-build"),
                 new BuildRequest.RegistryCredential("ghcr.io", "hohenheim-test", registryPassword),
                 defaultQuota(300_000));
             String argsLog = logOf(args);
@@ -200,10 +185,9 @@ class SandboxedBuildLiveTest {
 
             // 1. TIME: a build that sleeps past its wall-clock quota is killed, the
             //    operation says timed_out, and it carries no image to deploy.
-            SandboxedBuilds.Result timedOut = build(docker, OWNER_ID, "slow", """
-                FROM alpine:latest
+            SandboxedBuilds.Result timedOut = build(docker, OWNER_ID, "slow", fromAlpine("""
                 RUN sleep 300
-                """, Map.of(), 25_000);
+                """), Map.of(), 25_000);
             assertThat(timedOut.succeeded()).as("step 1: a timed-out build is not a success")
                 .isFalse();
             assertThat(timedOut.status()).as("step 1: and says why")
@@ -227,10 +211,9 @@ class SandboxedBuildLiveTest {
 
             // 3. DISK: a build that keeps writing crosses its disk quota and is killed by
             //    the watchdog, with the peak the daemon actually reported on the record.
-            SandboxedBuilds.Result fat = buildWithQuota(docker, OWNER_ID, "fat", """
-                FROM alpine:latest
+            SandboxedBuilds.Result fat = buildWithQuota(docker, OWNER_ID, "fat", fromAlpine("""
                 RUN i=0; while [ $i -lt 400 ]; do dd if=/dev/zero of=/fill.$i bs=1M count=8 2>/dev/null; sleep 0.2; i=$((i+1)); done
-                """, Map.of(), new BuildQuota(2.0, 1024, 64L * 1024 * 1024, 240_000, 128,
+                """), Map.of(), new BuildQuota(2.0, 1024, 64L * 1024 * 1024, 240_000, 128,
                     256 * 1024, 512L * 1024 * 1024));
             assertThat(fat.status()).as("step 3: the disk quota bound")
                 .isEqualTo(BuildOperationModel.STATUS_QUOTA_EXCEEDED);
@@ -262,6 +245,8 @@ class SandboxedBuildLiveTest {
         LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: the sandbox refuses to build unprotected");
         DockerClient docker = new DockerClient();
+        // Step 4 moves a tag onto the LOCAL base image, so the pinned base must be present.
+        LiveLane.requireImage(docker, TestImages.ALPINE);
         String secret = "TENANT-RUNTIME-SECRET-" + System.nanoTime();
         // AIDEV-NOTE: both ARGs are DECLARED, which is the point. A build container's own
         // environment does NOT reach a RUN step (measured: kaniko gives RUN the image's env
@@ -269,14 +254,13 @@ class SandboxedBuildLiveTest {
         // a check that cannot fail. The channel a runtime secret would ACTUALLY leak through
         // is a build ARG, so the test declares the tenant variable as one and requires it to
         // arrive EMPTY -- while a real build argument beside it must arrive populated.
-        Path context = createContext("journey", """
-            FROM alpine:latest
+        Path context = createContext("journey", fromAlpine("""
             ARG TENANT_DB_PASSWORD
             ARG HH_CONTROL
             RUN echo "hh-tenant=${TENANT_DB_PASSWORD:-EMPTY}"
             RUN echo "hh-control=${HH_CONTROL:-EMPTY}"
             RUN echo built-by-the-sandbox > /hohenheim-marker
-            """);
+            """));
 
         Db.run(datasource, () -> {
             HostFixtures.admitLocal();
@@ -336,7 +320,7 @@ class SandboxedBuildLiveTest {
                 // 4. THE tag counterfactual: move the human-facing tag onto a different
                 //    image and redeploy. A tag-pinned release would now run alpine; the
                 //    digest-pinned one still runs what was built.
-                tag(docker, "alpine:latest",
+                tag(docker, TestImages.ALPINE,
                     ControllerScope.handle(ControllerScope.KIND_INSTANCE, applicationId),
                     "latest");
                 new InstanceService().deploy(instanceId);
@@ -473,6 +457,11 @@ class SandboxedBuildLiveTest {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    /** A Dockerfile on the pinned alpine base: {@code steps} follow its FROM line. */
+    private static String fromAlpine(String steps) {
+        return "FROM " + TestImages.ALPINE + "\n" + steps;
     }
 
     private static void tag(DockerClient docker, String image, String repo, String tag) {

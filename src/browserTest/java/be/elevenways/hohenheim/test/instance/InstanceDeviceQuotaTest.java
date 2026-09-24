@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.server.instance.InstanceDeviceQuota;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -15,10 +14,6 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CyclicBarrier;
@@ -271,7 +266,7 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
         Model quotas = Models.get(InstanceQuotaModel.class);
 
         // 1. Create through the resource form, with both device caps.
-        var created = postForm("/admin/instance-quotas/new",
+        var created = adminPostForm("/admin/instance-quotas/new",
             "subjects=" + FORM_OWNER + "&max_instances=3&max_disk_gb=7&max_nics=2");
         assertThat(created.statusCode())
             .as("step 1: the quota form accepted the submission").isIn(200, 302, 303);
@@ -296,7 +291,7 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
 
         // 3. An UPDATE to 0 must survive as 0 -- "this owner gets nothing" is a
         //    different answer from "no override, fall through to the global default".
-        var updated = postForm("/admin/instance-quotas/" + this.quotaRowId,
+        var updated = adminPostForm("/admin/instance-quotas/" + this.quotaRowId,
             "subjects=" + FORM_OWNER + "&max_instances=3&max_disk_gb=0&max_nics=0");
         assertThat(updated.statusCode())
             .as("step 3: the quota form accepted the update").isIn(200, 302, 303);
@@ -306,19 +301,5 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
         assertThat(InstanceDeviceQuota.nicLimitFor(FORM_OWNER))
             .as("step 3: the NIC override of 0 stays 0")
             .isEqualTo(0);
-    }
-
-    private HttpResponse<String> postForm(String path, String body) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .header("X-Csrf-Token", csrfToken)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 }

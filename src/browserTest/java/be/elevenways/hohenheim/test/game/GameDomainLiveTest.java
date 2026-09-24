@@ -1,9 +1,13 @@
 package be.elevenways.hohenheim.test.game;
 
+import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.hohenheim.test.docker.TestImages;
+import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -25,14 +29,11 @@ import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.protoblast.common.key.IdentifierKey;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.api.ResponseCarrier;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -45,19 +46,18 @@ import be.elevenways.zenit.common.routing.BodyDefinition;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Principal;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.orm.seed.Seeds;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.util.function.BooleanSupplier;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -91,22 +91,17 @@ class GameDomainLiveTest {
     private static final String HOST_ONE = "mc.gamelive.test";
     private static final String HOST_TWO = "lobby.gamelive.test";
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static PrivateNetns netns;
     private static Path workRoot;
 
     @BeforeAll
     static void setUp() throws Exception {
-        File db = File.createTempFile("hohenheim-game-live-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
         // ONE database per test class: the controller identity (and therefore every
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         // The keyring is installed BEFORE the boot: this class's database is now THE
         // default, so anything the boot encrypts into it must be encrypted with the
         // keyring the class will later read it back with.
@@ -115,19 +110,12 @@ class GameDomainLiveTest {
             workRoot.resolve("test-keyring.keys")));
         HohenheimTestRuntime.declareAccessModelsOnce();
         HohenheimTestRuntime.ensureBooted();
-        if (PrivateNetns.available()) {
-            netns = new PrivateNetns();
-            WorkloadNetworkPolicy.overrideForTest(netns.enforcingPolicy());
-        }
+        netns = PrivateNetns.installEnforcing();
     }
 
     @AfterAll
     static void tearDown() {
-        WorkloadNetworkPolicy.overrideForTest(null);
-        if (netns != null) {
-            netns.close();
-            netns = null;
-        }
+        PrivateNetns.uninstall(netns);
         FieldEncryption.installKeyring(null);
     }
 
@@ -138,7 +126,7 @@ class GameDomainLiveTest {
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, VELOCITY_IMAGE);
         LiveLane.requireImage(docker, BACKEND_IMAGE);
-        LiveLane.requireImage(docker, "alpine:latest");
+        LiveLane.requireImage(docker, TestImages.ALPINE);
         LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: the instance tier refuses to deploy unprotected");
 
@@ -188,15 +176,15 @@ class GameDomainLiveTest {
                 // 2. Deploy the proxy: REAL Velocity boots and its readiness line
                 //    ("Done (") flips starting -> Running through the console matcher.
                 service.deploy(proxyId);
-                boolean proxyRunning = await(60_000, () -> InstanceModel.STATUS_RUNNING.equals(
-                    Models.get(InstanceModel.class).findById(proxyId)
-                        .get(InstanceModel.STATUS)));
-                if (!proxyRunning) {
+                try {
+                    await("step 2: readiness detected from Velocity's console output", 60_000,
+                        () -> InstanceModel.STATUS_RUNNING.equals(
+                            Models.get(InstanceModel.class).findById(proxyId)
+                                .get(InstanceModel.STATUS)));
+                } catch (AssertionError notReady) {
                     System.out.println("PROXY TAIL: " + tail(service, proxyId));
+                    throw notReady;
                 }
-                assertThat(proxyRunning)
-                    .as("step 2: readiness detected from Velocity's console output")
-                    .isTrue();
 
                 // 3. Create the mapping (authority held over BOTH records): the
                 //    forced-hosts config lands INSIDE the running proxy container.
@@ -226,11 +214,10 @@ class GameDomainLiveTest {
                 // 5. Deploy the backend: link networks attach BEFORE start, the
                 //    Minecraft template's real config file renders the SAME secret.
                 service.deploy(backendId);
-                assertThat(await(30_000, () -> InstanceModel.STATUS_RUNNING.equals(
-                    Models.get(InstanceModel.class).findById(backendId)
-                        .get(InstanceModel.STATUS))))
-                    .as("step 5: the backend deployed and runs")
-                    .isTrue();
+                await("step 5: the backend deployed and runs", 30_000,
+                    () -> InstanceModel.STATUS_RUNNING.equals(
+                        Models.get(InstanceModel.class).findById(backendId)
+                            .get(InstanceModel.STATUS)));
                 String backendConf = exec(docker, backendHandle, "cat",
                     "/data/config/paper-global.yml");
                 assertThat(backendConf)
@@ -285,11 +272,10 @@ class GameDomainLiveTest {
                 //    over the attached console; the observed stop suppresses crash
                 //    restart and the record settles STOPPED.
                 InstanceConsoles.sendCommand(proxyId, "shutdown");
-                assertThat(await(30_000, () -> InstanceModel.STATUS_STOPPED.equals(
-                    Models.get(InstanceModel.class).findById(proxyId)
-                        .get(InstanceModel.STATUS))))
-                    .as("step 8: the console stop command settled the proxy STOPPED")
-                    .isTrue();
+                await("step 8: the console stop command settled the proxy STOPPED", 30_000,
+                    () -> InstanceModel.STATUS_STOPPED.equals(
+                        Models.get(InstanceModel.class).findById(proxyId)
+                            .get(InstanceModel.STATUS)));
                 sleep(3_000);
                 assertThat((String) Models.get(InstanceModel.class).findById(proxyId)
                     .get(InstanceModel.STATUS))
@@ -369,14 +355,7 @@ class GameDomainLiveTest {
     }
 
     private static int tenant() {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, "game-live@hohenheim.local");
-        user.set(UserModel.DISPLAY_NAME, "Game Live Tenant");
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
+        return ApiSupport.user("game-live@hohenheim.local", "Game Live Tenant");
     }
 
     private static Row approve(Row template) {
@@ -446,8 +425,7 @@ class GameDomainLiveTest {
         row.set(InstanceModel.NAME, "gamelive-stranger");
         row.set(InstanceModel.KIND, "hohenheim:docker_container");
         Map<String, Object> settings = new LinkedHashMap<>();
-        settings.put("image", "alpine");
-        settings.put("tag", "latest");
+        settings.put("image", TestImages.ALPINE);
         settings.put("command", "sleep 999999");
         row.set(InstanceModel.SETTINGS, settings);
         model.save(row);
@@ -551,15 +529,8 @@ class GameDomainLiveTest {
         }
     }
 
-    private static boolean await(long timeoutMs, java.util.function.Supplier<Boolean> condition) {
-        long deadline = Now.millis() + timeoutMs;
-        while (Now.millis() < deadline) {
-            if (Boolean.TRUE.equals(condition.get())) {
-                return true;
-            }
-            sleep(150);
-        }
-        return Boolean.TRUE.equals(condition.get());
+    private static void await(String what, long timeoutMs, BooleanSupplier condition) {
+        Poll.until(what, Duration.ofMillis(timeoutMs), Duration.ofMillis(150), condition);
     }
 
     private static void sleep(long millis) {

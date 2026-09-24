@@ -191,12 +191,8 @@ public final class ReleaseKind implements InstanceKindHandler {
     @Override
     public @NonNull InstanceSpec specFor(int instanceId, @NonNull Map<String, Object> settings) {
         String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
-        String image = str(settings.get("image"));
-        String tag = str(settings.get("tag"));
-        String imageRef = tag.isEmpty() || image.contains(":") ? image : image + ":" + tag;
-
-        String command = str(settings.get("command"));
-        List<String> cmd = command.isEmpty() ? null : List.of(command.split("\\s+"));
+        String imageRef = ContainerSettings.imageReference(settings);
+        List<String> cmd = ContainerSettings.commandLine(settings);
 
         // AIDEV-NOTE: the keys are HOST PATHS under the volume root, minted from the
         // APPLICATION's id, and this method may never re-derive them from the release's own

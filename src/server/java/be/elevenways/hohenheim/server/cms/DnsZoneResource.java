@@ -51,6 +51,7 @@ import be.elevenways.zenit.common.routing.RouteScope;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.hohenheim.net.Hostnames;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -684,10 +685,8 @@ public final class DnsZoneResource extends RowResource {
 
         if (creating || coerced.containsKey(DnsZoneModel.SOA_PRIMARY_NS.getName())) {
             Object nsValue = coerced.get(DnsZoneModel.SOA_PRIMARY_NS.getName());
-            String primaryNs = nsValue != null ? String.valueOf(nsValue).trim().toLowerCase(Locale.ROOT) : "";
-            while (primaryNs.endsWith(".")) {
-                primaryNs = primaryNs.substring(0, primaryNs.length() - 1);
-            }
+            String primaryNs = Hostnames.stripTrailingDots(
+                nsValue != null ? String.valueOf(nsValue).trim().toLowerCase(Locale.ROOT) : "");
             if (!primaryNs.isEmpty() && DnsNames.normalizeOrigin(primaryNs) == null) {
                 throw Violations.ofField("soa_primary_ns", primaryNs,
                     CmsSupport.violationText("dns_target_format"));

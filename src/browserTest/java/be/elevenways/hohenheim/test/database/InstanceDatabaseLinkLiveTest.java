@@ -1,5 +1,10 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.test.docker.TestImages;
+import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
+import java.time.Duration;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -24,19 +29,14 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
-import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -75,7 +75,7 @@ class InstanceDatabaseLinkLiveTest {
     private static final String PASSWORD_A = "idblink-pw-a";
     private static final String PASSWORD_B = "idblink-pw-b";
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static PrivateNetns netns;
 
     /** Link networks the PRODUCTION lanes should have reclaimed and did not. */
@@ -83,12 +83,7 @@ class InstanceDatabaseLinkLiveTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        File db = File.createTempFile("hohenheim-instance-dblink-live", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
         netns = PrivateNetns.installEnforcing();
     }
@@ -110,7 +105,7 @@ class InstanceDatabaseLinkLiveTest {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
-        LiveLane.requireImage(docker, "alpine:latest");
+        LiveLane.requireImage(docker, TestImages.ALPINE);
         LiveLane.requireImage(docker, REDIS_IMAGE);
         LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: the instance tier refuses to deploy unprotected");
@@ -133,9 +128,9 @@ class InstanceDatabaseLinkLiveTest {
         String instanceHandle = null;
         try {
             service.create(dbA, ManagedDatabase.Engine.REDIS, REDIS_IMAGE,
-                "unused", PASSWORD_A, "0", true, ServerService.LOCAL);
+                "unused", PASSWORD_A, "0", true, ServerService.LOCAL_HOST_NAME);
             service.create(dbB, ManagedDatabase.Engine.REDIS, REDIS_IMAGE,
-                "unused", PASSWORD_B, "0", true, ServerService.LOCAL);
+                "unused", PASSWORD_B, "0", true, ServerService.LOCAL_HOST_NAME);
             int idA = databaseId(dbA);
             int idB = databaseId(dbB);
             String engineA = EngineHandles.of(dbA);
@@ -323,8 +318,8 @@ class InstanceDatabaseLinkLiveTest {
         Model instances = Models.get(InstanceModel.class);
         Row row = instances.createEmptyRow();
         Map<String, Object> settings = new LinkedHashMap<>();
-        settings.put("image", "alpine");
-        settings.put("tag", "latest");
+        // The pinned reference carries its own tag, so no separate tag setting.
+        settings.put("image", TestImages.ALPINE);
         settings.put("command", "sleep 600");
         settings.put("container_port", 8080);
         row.set(InstanceModel.NAME, name);
@@ -442,32 +437,29 @@ class InstanceDatabaseLinkLiveTest {
     }
 
     /** Any address of a container, retried briefly: only the observation is tolerant. */
-    private static String anyAddress(DockerClient docker, String handle) throws IOException {
-        long deadline = Now.millis() + 20_000;
-        Object lastSeen = null;
-        while (true) {
-            Object settings = docker.inspectContainer(handle).get("NetworkSettings");
-            Object networks = settings instanceof Map<?, ?> map ? map.get("Networks") : null;
-            if (networks instanceof Map<?, ?> map) {
-                for (Object endpoint : map.values()) {
-                    if (endpoint instanceof Map<?, ?> e
-                            && e.get("IPAddress") instanceof String ip && !ip.isBlank()) {
-                        return ip;
-                    }
+    private static String anyAddress(DockerClient docker, String handle) {
+        return Poll.value(handle + " having an address on any network", Duration.ofSeconds(20),
+            Duration.ofMillis(200), () -> addressOf(docker, handle));
+    }
+
+    /** The first non-blank address the daemon reports for {@code handle}, or null. */
+    private static String addressOf(DockerClient docker, String handle) {
+        Object settings;
+        try {
+            settings = docker.inspectContainer(handle).get("NetworkSettings");
+        } catch (IOException inspectFailed) {
+            throw new IllegalStateException("inspecting " + handle + " failed", inspectFailed);
+        }
+        Object networks = settings instanceof Map<?, ?> map ? map.get("Networks") : null;
+        if (networks instanceof Map<?, ?> map) {
+            for (Object endpoint : map.values()) {
+                if (endpoint instanceof Map<?, ?> e
+                        && e.get("IPAddress") instanceof String ip && !ip.isBlank()) {
+                    return ip;
                 }
             }
-            lastSeen = networks;
-            if (Now.millis() >= deadline) {
-                throw new IllegalStateException(handle + " has no address after 20s;"
-                    + " last NetworkSettings.Networks: " + lastSeen);
-            }
-            try {
-                Thread.sleep(200);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException(handle + " address wait interrupted");
-            }
         }
+        return null;
     }
 
     /**

@@ -264,7 +264,7 @@ public final class PreviewDeployments {
             // 2. Sandboxed, digest-pinned build of the preview's image.
             // Previews build against the local daemon, so the policy targets "local".
             SandboxedBuilds.Result build = new SandboxedBuilds(new DockerClient(),
-                ServerModel.MODE_LOCAL)
+                ServerModel.LOCAL_HOST_NAME)
                 .run(new BuildRequest(PreviewDeploymentModel.MODEL_ID, previewId,
                     BuildOperationModel.kindOrDefault(siteSettings.get("builder")),
                     checkout.toPath(),
@@ -621,15 +621,7 @@ public final class PreviewDeployments {
                 instance.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
                 instance.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_SERVING);
             }
-            // The preview's environment is stored as SECRET variables of its instance,
-            // never as plaintext in instances.settings (a plain JSON column): the release
-            // lane's discipline, which the preview lane used to skip.
-            Map<String, Object> persisted = new LinkedHashMap<>(desired);
-            Map<String, String> environment = InstanceVariables.detachEnvironment(persisted);
-            instance.set(InstanceModel.SETTINGS, persisted);
-            Models.get(InstanceModel.class).save(instance);
-            int freshInstanceId = instance.get(InstanceModel.ID);
-            new InstanceVariables().storeSecretEnvironment(freshInstanceId, environment);
+            int freshInstanceId = persistInstance(instance, desired);
             preview.set(PreviewDeploymentModel.INSTANCE_ID, freshInstanceId);
             Models.get(PreviewDeploymentModel.class).save(preview);
 
@@ -641,6 +633,27 @@ public final class PreviewDeployments {
             reconcileGeneratedDns(previewId, hostname);
         });
         return status[0];
+    }
+
+    /**
+     * THE write of a preview's instance row: {@code desired} as its settings MINUS the
+     * environment, which is stored as the instance's SECRET variables. The caller runs it
+     * inside the preview's attribution.
+     *
+     * AIDEV-NOTE: never plaintext in instances.settings (a plain JSON column): the release
+     * lane's discipline, which the preview lane used to skip. {@link #sealPlaintextEnvironments}
+     * is the boot backfill for rows an older controller wrote before this.
+     *
+     * @return the saved instance's id
+     */
+    public static int persistInstance(@NonNull Row instance, @NonNull Map<String, Object> desired) {
+        Map<String, Object> persisted = new LinkedHashMap<>(desired);
+        Map<String, String> environment = InstanceVariables.detachEnvironment(persisted);
+        instance.set(InstanceModel.SETTINGS, persisted);
+        Models.get(InstanceModel.class).save(instance);
+        int instanceId = instance.get(InstanceModel.ID);
+        new InstanceVariables().storeSecretEnvironment(instanceId, environment);
+        return instanceId;
     }
 
     /**

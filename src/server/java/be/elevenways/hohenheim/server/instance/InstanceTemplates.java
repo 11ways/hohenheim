@@ -10,13 +10,12 @@ import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVolumeModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.server.instance.variable.VariableTypeHandler;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.submit.FormValidator;
 import be.elevenways.zenit.common.edit.submit.SubmittedValueCoercion;
@@ -64,33 +63,9 @@ public final class InstanceTemplates {
      * both resolve the same field the same way.
      */
     public static @Nullable Row templateFrom(@NonNull Map<String, Object> form) {
-        Integer templateId = submittedInteger(form, "template_id");
+        Integer templateId = HandlerSupport.submittedInteger(form, "template_id");
         return templateId == null ? null
             : Models.get(InstanceTemplateModel.class).findById(templateId);
-    }
-
-    /** One raw submit value as a trimmed string ("" when absent); lists take their first. */
-    public static @NonNull String submittedString(@NonNull Map<String, Object> form,
-                                                  @NonNull String name) {
-        Object value = form.get(name);
-        if (value instanceof List<?> list) {
-            value = list.isEmpty() ? null : list.get(0);
-        }
-        return value == null ? "" : String.valueOf(value).trim();
-    }
-
-    /** One raw submit value as an Integer, or null when absent or unparseable. */
-    public static @Nullable Integer submittedInteger(@NonNull Map<String, Object> form,
-                                                     @NonNull String name) {
-        String raw = submittedString(form, name);
-        if (raw.isEmpty()) {
-            return null;
-        }
-        try {
-            return Integer.parseInt(raw);
-        } catch (NumberFormatException malformed) {
-            return null;
-        }
     }
 
     /** Whether the template declares an install step. */
@@ -202,57 +177,58 @@ public final class InstanceTemplates {
         // becomes the creation OWNER -- the quota charge, the placement decision, the
         // environment-grouping guard and the planted manage grant all follow the one
         // pinned derivation (HohenheimAccess.withCreationOwner). Membership is the gate.
-        Integer environmentId = submittedInteger(rawVariableValues, "environment_id");
-        Row project = projectFor(rawVariableValues, environmentId);
-        if (project != null) {
-            if (!Projects.mayCreateInto(ctx, project)) {
-                throw Violations.ofField("project_id", project.get(ProjectModel.ID),
-                    violationText("project_member_required"));
-            }
-            int[] created = new int[1];
-            HohenheimAccess.withCreationOwner(Projects.ownerSubjectsOf(project), () ->
-                created[0] = createRecord(template, name, serverId, environmentId,
-                    rawVariableValues, ctx));
-            return created[0];
+        Integer projectId = HandlerSupport.submittedInteger(rawVariableValues, "project_id");
+        Integer environmentId = HandlerSupport.submittedInteger(rawVariableValues, "environment_id");
+        if (projectId == null && environmentId == null) {
+            return createRecord(template, name, serverId, null, rawVariableValues, ctx);
         }
-        if (environmentId != null) {
-            // An environment without a resolvable project can never pass the grouping
-            // guard; refuse it by name instead of surfacing a generic mismatch.
-            throw Violations.ofField("environment_id", environmentId,
-                violationText("environment_unknown"));
+        Row project = projectFor(projectId, environmentId);
+        if (project == null || !Projects.mayCreateInto(ctx, project)) {
+            throw notAProjectMember(projectId, environmentId);
         }
-        return createRecord(template, name, serverId, null, rawVariableValues, ctx);
+        int[] created = new int[1];
+        HohenheimAccess.withCreationOwner(Projects.ownerSubjectsOf(project), () ->
+            created[0] = createRecord(template, name, serverId, environmentId,
+                rawVariableValues, ctx));
+        return created[0];
     }
 
-    /** The submitted project row, from {@code project_id} or the environment's parent. */
-    private static @Nullable Row projectFor(@NonNull Map<String, Object> form,
+    /**
+     * The project a submit creates into: {@code project_id}, or the environment's parent,
+     * and null when either names nothing or the two disagree.
+     */
+    private static @Nullable Row projectFor(@Nullable Integer projectId,
                                             @Nullable Integer environmentId) {
-        Integer projectId = submittedInteger(form, "project_id");
-        if (projectId != null) {
-            Row project = Models.get(ProjectModel.class).findById(projectId);
-            if (project == null) {
-                throw Violations.ofField("project_id", projectId,
-                    violationText("project_unknown"));
-            }
-            if (environmentId != null) {
-                Row environment = Models.get(EnvironmentModel.class).findById(environmentId);
-                if (environment == null || !projectId.equals(
-                        environment.get(EnvironmentModel.PROJECT_ID))) {
-                    throw Violations.ofField("environment_id", environmentId,
-                        violationText("environment_project_mismatch"));
-                }
-            }
-            return project;
-        }
+        Integer owning = projectId;
         if (environmentId != null) {
             Row environment = Models.get(EnvironmentModel.class).findById(environmentId);
             if (environment == null) {
                 return null;
             }
-            return Models.get(ProjectModel.class)
-                .findById(environment.get(EnvironmentModel.PROJECT_ID));
+            Integer environmentProject = environment.get(EnvironmentModel.PROJECT_ID);
+            if (owning != null && !owning.equals(environmentProject)) {
+                return null;
+            }
+            owning = environmentProject;
         }
-        return null;
+        return owning == null ? null : Models.get(ProjectModel.class).findById(owning);
+    }
+
+    /**
+     * THE refusal of a create into a project the actor cannot reach.
+     *
+     * AIDEV-NOTE: ONE answer for an unknown project, an unknown environment, an environment
+     * of another project and a project the actor is not a member of, on the field the
+     * submit itself named and carrying only the value it submitted. Distinct keys (or a
+     * refusal carrying the environment's real project id) were an existence oracle: a
+     * tenant could enumerate the installation's project and environment ids by probing.
+     */
+    private static @NonNull Violations notAProjectMember(@Nullable Integer projectId,
+                                                         @Nullable Integer environmentId) {
+        return projectId != null
+            ? Violations.ofField("project_id", projectId, violationText("project_member_required"))
+            : Violations.ofField("environment_id", environmentId,
+                violationText("project_member_required"));
     }
 
     private int createRecord(@NonNull Row template, @NonNull String name,
@@ -312,7 +288,12 @@ public final class InstanceTemplates {
         // create that granted itself manage only at the end refused its OWN template
         // variables halfway through. The creator is the owner from the moment the row
         // exists; nothing between the save and here reads the grant.
-        grantCreatorManage(instanceId, ctx);
+        //
+        // AIDEV-NOTE: the grant MUST name the same subject the quota charged
+        // (HohenheimAccess.creationOwnerSubjects) -- InstanceQuota reserves against that set
+        // at create, and this is what makes the reservation honest afterwards. The shared
+        // funnel reads that one derivation; operator creates plant nothing.
+        HohenheimAccess.grantCreatorManage(InstanceModel.MODEL_ID, instanceId, ctx);
         this.variables.writeForInstance(instanceId, declaredVariables(templateId), coerced);
         copyFiles(templateId, instanceId);
         completeOrDestroy(instanceId, () -> {
@@ -485,24 +466,6 @@ public final class InstanceTemplates {
         int instanceId = instance.get(InstanceModel.ID);
         TemplateDatabases.link(instanceId, TemplateDatabases.allocate(template,
             instance.get(InstanceModel.NAME), serverId, ctx));
-    }
-
-    /**
-     * Hand a tenant creator {@code manage} on what it just created. Operator creates
-     * plant nothing: an empty subject set IS operator ownership, and a grant there would
-     * make one admin's instance look tenant-held to sameOwner.
-     *
-     * AIDEV-NOTE: this MUST name the same subject the quota charged
-     * ({@link HohenheimAccess#creationOwnerSubjects}) -- InstanceQuota reserves against
-     * that set at create, and this is what makes the reservation honest afterwards.
-     */
-    private static void grantCreatorManage(int instanceId, @Nullable AccessContext ctx) {
-        for (String subject : HohenheimAccess.creationOwnerSubjects(ctx)) {
-            int separator = subject.indexOf(':');
-            RecordGrants.grant(GrantSubjectType.fromKey(subject.substring(0, separator)),
-                Integer.parseInt(subject.substring(separator + 1)),
-                InstanceModel.MODEL_ID, instanceId, HohenheimAccess.MANAGE, true);
-        }
     }
 
     /** Copy the template's config files onto the instance (placeholders intact). */

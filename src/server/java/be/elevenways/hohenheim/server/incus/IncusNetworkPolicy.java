@@ -157,7 +157,7 @@ public final class IncusNetworkPolicy {
      * The same device, carrying the workload's DECLARED bandwidth ceiling.
      *
      * AIDEV-NOTE: the rate rides the NIC DEVICE, not the instance config, which is why
-     * {@code IncusInstanceRuntime.isManagedKey} (a CONFIG-key predicate) never covered it
+     * {@code IncusDefinitions.isManagedKey} (a CONFIG-key predicate) never covered it
      * -- what erased a hand-set {@code limits.ingress} was this map being rewritten
      * wholesale on every converge. That rewrite is correct and stays: it is what repairs
      * an ACL an operator dropped. The fix is that the rate is now DECLARED through the

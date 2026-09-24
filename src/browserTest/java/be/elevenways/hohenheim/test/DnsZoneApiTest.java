@@ -17,10 +17,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
 import java.net.http.HttpResponse;
 import java.util.List;
@@ -38,7 +35,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * controller's nameservers for the provider's unless told to keep them and never does so
  * silently, and the declared set is a yardstick the delegation check reads.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class DnsZoneApiTest extends HohenheimTestBase {
 
     private static final String ORIGIN = "zone-api-a.test";
@@ -47,9 +43,6 @@ class DnsZoneApiTest extends HohenheimTestBase {
     private static String keyAdmin;
     private static String keyNarrow;
     private static List<String> previousDeclared;
-
-    /** Filled by the create journey, consumed by the import journey. */
-    private static Integer zoneId;
 
     @BeforeAll
     static void seed() {
@@ -100,15 +93,24 @@ class DnsZoneApiTest extends HohenheimTestBase {
         return Models.get(DnsZoneModel.class).findById(zone);
     }
 
+    /** A zone of this journey's own, created through the API with the declared nameservers. */
+    private int createdZone(String origin) throws Exception {
+        HttpResponse<String> created = keyPost(keyAdmin, "/api/v1/dns/zones", form(
+            "origin", origin, "soa_contact", "hostmaster@" + origin));
+        assertThat(created.statusCode()).as("fixture: the zone %s is created: %s", origin, created.body())
+            .isEqualTo(200);
+        return idOf(created.body());
+    }
+
     /** A provider export the way afraid.org hands it out: its own SOA and NS set. */
-    private static String providerExport(boolean withApexNs) {
+    private static String providerExport(String origin, boolean withApexNs) {
         StringBuilder text = new StringBuilder();
-        text.append("$ORIGIN ").append(ORIGIN).append(".\n$TTL 3600\n");
+        text.append("$ORIGIN ").append(origin).append(".\n$TTL 3600\n");
         text.append("@ IN SOA ns1.afraid.org. dnsadmin.afraid.org. 2604070003 86400 7200 2419200 3600\n");
         if (withApexNs) {
             text.append("@ IN NS ns1.afraid.org.\n@ IN NS ns2.afraid.org.\n");
         }
-        text.append("@ IN A 192.0.2.1\nwww IN A 192.0.2.2\n@ IN MX 10 mail.").append(ORIGIN).append(".\n");
+        text.append("@ IN A 192.0.2.1\nwww IN A 192.0.2.2\n@ IN MX 10 mail.").append(origin).append(".\n");
         return text.toString();
     }
 
@@ -116,7 +118,6 @@ class DnsZoneApiTest extends HohenheimTestBase {
 
     /** A created primary zone carries the declared nameservers; the declared set is a yardstick. */
     @Test
-    @Order(1)
     void aCreatedPrimaryZoneIsSeededWithTheDeclaredNameservers() throws Exception {
         // 1. The create is the form's: the origin lands canonical and the apex NS rows are
         //    the declared set, written once by the resource's own persist.
@@ -124,7 +125,7 @@ class DnsZoneApiTest extends HohenheimTestBase {
             "origin", "Zone-Api-A.test.", "soa_contact", "hostmaster@" + ORIGIN));
         assertThat(created.statusCode()).as("step 1: the zone is created: " + created.body())
             .isEqualTo(200);
-        zoneId = idOf(created.body());
+        int zoneId = idOf(created.body());
         assertThat((Object) zone(zoneId).get(DnsZoneModel.ORIGIN))
             .as("step 1: the origin is canonical").isEqualTo(ORIGIN);
         assertThat(apexNs(zoneId)).as("step 1: the apex NS rows are the declared set")
@@ -168,15 +169,17 @@ class DnsZoneApiTest extends HohenheimTestBase {
             .statusCode()).as("step 4: the narrowed key is shut out").isEqualTo(403);
         assertThat(keyGet(keyNarrow, "/api/v1/dns/zones").statusCode())
             .as("step 4: the list is admin-only too").isEqualTo(403);
-        assertThat(Models.get(DnsZoneModel.class).find()
-                .where(DnsZoneModel.ORIGIN.endsWith("-zone-api-a.test")).count())
-            .as("step 4: neither refused create wrote a row").isZero();
+        assertThat(Models.get(DnsZoneModel.class).findByOrigin("stranger-zone-api-a.test"))
+            .as("step 4: the stranger-key create wrote no row").isNull();
+        assertThat(Models.get(DnsZoneModel.class).findByOrigin("narrow-zone-api-a.test"))
+            .as("step 4: nor did the narrowed-key create").isNull();
     }
 
     /** An import substitutes the declared nameservers for the provider's, unless told to keep them. */
     @Test
-    @Order(2)
     void importReplacesTheForeignApexNsSetUnlessToldToKeepIt() throws Exception {
+        String origin = "import-zone-api-a.test";
+        int zoneId = createdZone(origin);
         int acmeId = acmeRow(zoneId);
         int serialBefore = serialOf(zoneId);
 
@@ -184,7 +187,7 @@ class DnsZoneApiTest extends HohenheimTestBase {
         //    declared set, the SOA is reported rather than silently dropped, the ACME row
         //    survives, the serial moves.
         HttpResponse<String> imported = keyPost(keyAdmin, "/api/v1/dns/zones/" + zoneId + "/import",
-            form("zone_text", providerExport(true)));
+            form("zone_text", providerExport(origin, true)));
         assertThat(imported.statusCode()).as("step 1: the import lands: " + imported.body())
             .isEqualTo(200);
         assertThat(apexNs(zoneId)).as("step 1: the foreign NS set was replaced by the declared one")
@@ -201,7 +204,7 @@ class DnsZoneApiTest extends HohenheimTestBase {
 
         // 2. keep_ns keeps the file's set exactly, and says so by writing no nameservers.
         HttpResponse<String> kept = keyPost(keyAdmin, "/api/v1/dns/zones/" + zoneId + "/import",
-            form("zone_text", providerExport(true), "keep_ns", "on"));
+            form("zone_text", providerExport(origin, true), "keep_ns", "on"));
         assertThat(kept.statusCode()).isEqualTo(200);
         assertThat(apexNs(zoneId)).as("step 2: the file's apex NS rows are kept")
             .containsExactly("ns1.afraid.org", "ns2.afraid.org");
@@ -214,14 +217,14 @@ class DnsZoneApiTest extends HohenheimTestBase {
         try {
             int serialBeforeRefusal = serialOf(zoneId);
             HttpResponse<String> refused = keyPost(keyAdmin, "/api/v1/dns/zones/" + zoneId + "/import",
-                form("zone_text", providerExport(true)));
+                form("zone_text", providerExport(origin, true)));
             assertThat(refused.statusCode()).as("step 3: refused, not silently degraded").isEqualTo(422);
             assertThat(codeOf(refused.body())).isEqualTo("import_nameservers_undeclared");
             assertThat(apexNs(zoneId)).as("step 3: the rows are untouched by a refusal")
                 .containsExactly("ns1.afraid.org", "ns2.afraid.org");
             assertThat(serialOf(zoneId)).as("step 3: nor did the serial move").isEqualTo(serialBeforeRefusal);
             HttpResponse<String> bare = keyPost(keyAdmin, "/api/v1/dns/zones/" + zoneId + "/import",
-                form("zone_text", providerExport(false)));
+                form("zone_text", providerExport(origin, false)));
             assertThat(bare.statusCode()).as("step 3: a file without apex NS has nothing to replace")
                 .isEqualTo(200);
             assertThat(apexNs(zoneId)).as("step 3: which leaves the zone with no apex NS at all").isEmpty();
@@ -237,22 +240,22 @@ class DnsZoneApiTest extends HohenheimTestBase {
         assertThat(blank.statusCode()).isEqualTo(422);
         assertThat(codeOf(blank.body())).as("step 4: an empty paste is named").isEqualTo("import_empty");
         assertThat(keyPost(keyNarrow, "/api/v1/dns/zones/" + zoneId + "/import",
-            form("zone_text", providerExport(true))).statusCode())
+            form("zone_text", providerExport(origin, true))).statusCode())
             .as("step 4: the narrowed key is shut out").isEqualTo(403);
         assertThat(keyPost(keyAdmin, "/api/v1/dns/zones/99000001/import",
-            form("zone_text", providerExport(true))).statusCode())
+            form("zone_text", providerExport(origin, true))).statusCode())
             .as("step 4: an unknown zone is 404").isEqualTo(404);
         Row secondary = Models.get(DnsZoneModel.class).createEmptyRow();
         secondary.set(DnsZoneModel.ORIGIN, "secondary-zone-api-a.test");
         secondary.set(DnsZoneModel.ROLE, DnsZoneModel.ROLE_SECONDARY);
         secondary.set(DnsZoneModel.ENABLED, false);
         Models.get(DnsZoneModel.class).save(secondary);
-        assertThatThrownBy(() -> DnsZoneFiles.importText(secondary, providerExport(true)))
+        assertThatThrownBy(() -> DnsZoneFiles.importText(secondary, providerExport(origin, true)))
             .as("step 4: the panel's own import call refuses a secondary the same way")
             .isInstanceOf(Violations.class);
         HttpResponse<String> onSecondary = keyPost(keyAdmin,
             "/api/v1/dns/zones/" + secondary.get(DnsZoneModel.ID) + "/import",
-            form("zone_text", providerExport(true)));
+            form("zone_text", providerExport(origin, true)));
         assertThat(onSecondary.statusCode()).isEqualTo(422);
         assertThat(codeOf(onSecondary.body())).isEqualTo("import_secondary_zone");
     }
@@ -262,7 +265,6 @@ class DnsZoneApiTest extends HohenheimTestBase {
      * the same create seeded at the apex, an explicit one is the operator's.
      */
     @Test
-    @Order(3)
     void aBlankSoaPrimaryNsDefaultsToTheFirstDeclaredNameserver() throws Exception {
         // 1. Blank: the MNAME becomes the first declared name, which is one of the apex
         //    NS rows this very create wrote -- never a host nothing delegates to.

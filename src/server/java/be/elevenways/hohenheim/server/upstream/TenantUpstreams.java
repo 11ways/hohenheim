@@ -23,7 +23,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * name can resolve to 127.0.0.1 or 169.254.169.254, and rows written before the gate existed
  * were never judged at all. Ownership is {@link HohenheimAccess#manageSubjectsOf}, THE owner
  * identity; unreadable grants FAIL CLOSED to tenant-owned. Operator-owned sites (no manage
- * grants) keep reaching the LAN and loopback, the reverse-proxy use case the product ships.
+ * grants) keep reaching the LAN and loopback, the reverse-proxy use case the product ships, and
+ * so does a tenant-owned site whose operator marked its upstream trusted ({@link #publicOnly}).
  * Address classification is zenit's {@link AddressScope} through {@link OutboundUrlGuard},
  * never a private range table.
  *
@@ -57,6 +58,20 @@ public final class TenantUpstreams {
         }
         Set<String> subjects = HohenheimAccess.manageSubjectsOf(siteId);
         return subjects == null || !subjects.isEmpty();
+    }
+
+    /**
+     * THE dial-time question every upstream kind asks: whether this site may reach only the
+     * public internet.
+     *
+     * AIDEV-NOTE: an operator's {@link SiteModel#TRUSTED_UPSTREAM} lifts the restriction for a
+     * tenant-owned site, so a site the operator pointed at a LAN backend keeps being served. A
+     * row that does not carry the column (a partial read) counts as untrusted: fail closed.
+     *
+     * @return true for a tenant-owned site the operator has not marked trusted
+     */
+    public static boolean publicOnly(@Nullable Row site) {
+        return isTenantOwned(site) && !Boolean.TRUE.equals(site.get(SiteModel.TRUSTED_UPSTREAM));
     }
 
     /**

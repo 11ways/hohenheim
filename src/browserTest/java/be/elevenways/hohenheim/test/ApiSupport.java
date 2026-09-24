@@ -13,7 +13,7 @@ import java.util.regex.Pattern;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** The plumbing the API journey tests share: body encoding, response field reads, and a user row. */
-final class ApiSupport {
+public final class ApiSupport {
 
     private static final Pattern ID = Pattern.compile("\"id\"\\s*:\\s*(\\d+)");
     private static final Pattern CODE = Pattern.compile("\"code\"\\s*:\\s*\"([^\"]+)\"");
@@ -23,7 +23,7 @@ final class ApiSupport {
     }
 
     /** A urlencoded body from alternating key/value pairs. */
-    static String form(String... pairs) {
+    public static String form(String... pairs) {
         StringBuilder body = new StringBuilder();
         for (int i = 0; i < pairs.length; i += 2) {
             if (body.length() > 0) {
@@ -36,27 +36,27 @@ final class ApiSupport {
     }
 
     /** The id the response carries. */
-    static int idOf(String json) {
+    public static int idOf(String json) {
         Matcher matcher = ID.matcher(json);
         assertThat(matcher.find()).as("the response carries an id: " + json).isTrue();
         return Integer.parseInt(matcher.group(1));
     }
 
     /** The refusal code the response carries. */
-    static String codeOf(String json) {
+    public static String codeOf(String json) {
         Matcher matcher = CODE.matcher(json);
         assertThat(matcher.find()).as("the refusal carries a code: " + json).isTrue();
         return matcher.group(1);
     }
 
     /** The path of the value the refusal names, or null when it names none. */
-    static String fieldOf(String json) {
+    public static String fieldOf(String json) {
         Matcher matcher = FIELD.matcher(json);
         return matcher.find() ? matcher.group(1) : null;
     }
 
     /** An enabled user row; returns its id. */
-    static int user(String email, String name) {
+    public static int user(String email, String name) {
         Row user = AuthModels.users().createEmptyRow();
         user.set(UserModel.EMAIL, email);
         user.set(UserModel.DISPLAY_NAME, name);
@@ -65,5 +65,10 @@ final class ApiSupport {
         user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         return user.get(UserModel.ID);
+    }
+
+    /** An enabled user row whose display name is its email; returns its id. */
+    public static int user(String email) {
+        return user(email, email);
     }
 }

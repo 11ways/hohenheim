@@ -20,7 +20,11 @@ import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.NetworkPosture;
 import be.elevenways.hohenheim.server.runtime.PtySupport;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
@@ -28,30 +32,26 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
+import java.time.Duration;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -93,7 +93,10 @@ class InstanceShellLiveTest {
     /** How long any single output expectation may wait for the shell to answer. */
     private static final long OUTPUT_TIMEOUT_MS = 20_000;
 
-    private static SqliteDatasource datasource;
+    /** The interval of every wait here: each probe reads a live terminal or daemon. */
+    private static final Duration POLL_INTERVAL = Duration.ofMillis(100);
+
+    private static SqlDatasource datasource;
     private static PrivateNetns netns;
     private static long startedAt;
 
@@ -134,30 +137,19 @@ class InstanceShellLiveTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        File db = File.createTempFile("hohenheim-instance-shell-live-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         // BEFORE the boot: the grant below is on InstanceModel, and zenit-auth refuses a
         // grant on an undeclared model. Same order ServerMain uses.
         HohenheimTestRuntime.declareAccessModelsOnce();
         HohenheimTestRuntime.ensureBooted();
         LiveShellKind.register();
-        if (PrivateNetns.available()) {
-            netns = new PrivateNetns();
-            WorkloadNetworkPolicy.overrideForTest(netns.enforcingPolicy());
-        }
+        netns = PrivateNetns.installEnforcing();
     }
 
     @AfterAll
     static void tearDown() {
-        WorkloadNetworkPolicy.overrideForTest(null);
-        if (netns != null) {
-            netns.close();
-            netns = null;
-        }
+        PrivateNetns.uninstall(netns);
+        netns = null;
     }
 
     /**
@@ -169,7 +161,7 @@ class InstanceShellLiveTest {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
-        LiveLane.requireImage(docker, "alpine:latest");
+        LiveLane.requireImage(docker, TestImages.ALPINE);
         LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: the instance tier refuses to deploy unprotected");
 
@@ -189,7 +181,7 @@ class InstanceShellLiveTest {
                 mark("deploy");
                 new InstanceService().deploy(id);
 
-                int userId = tenant("shell-live@hohenheim.test");
+                int userId = ApiSupport.user("shell-live@hohenheim.test");
                 RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, id,
                     HohenheimAccess.SHELL, true);
                 Principal tenant = new UserPrincipal((long) userId, "Shell Live Tenant");
@@ -333,7 +325,7 @@ class InstanceShellLiveTest {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
-        LiveLane.requireImage(docker, "alpine:latest");
+        LiveLane.requireImage(docker, TestImages.ALPINE);
         LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: the instance tier refuses to deploy unprotected");
 
@@ -353,7 +345,7 @@ class InstanceShellLiveTest {
                 handle[0] = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
                 new InstanceService().deploy(id);
 
-                int userId = tenant("shell-fallback@hohenheim.test");
+                int userId = ApiSupport.user("shell-fallback@hohenheim.test");
                 RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, id,
                     HohenheimAccess.SHELL, true);
                 Principal tenant = new UserPrincipal((long) userId, "Fallback Tenant");
@@ -370,11 +362,11 @@ class InstanceShellLiveTest {
                 PtySupport.PtySession real = openPty(driver, spec, "/bin/sh");
                 try {
                     mark("fb-settle");
-                    settle();
-                    assertThat(failedToStart(bogus))
-                        .withFailMessage("step 1: a missing interpreter was not detected --"
-                            + " the daemon answers 101 for it just like a real shell")
-                        .isTrue();
+                    // Polled, not slept: the daemon reports the failed exec (MEASURED at
+                    // ~50ms) whenever it gets to it, and a fixed 400ms guessed at that.
+                    Poll.until("step 1: the missing interpreter to be detected (the daemon"
+                            + " answers 101 for it just like a real shell)",
+                        Duration.ofMillis(OUTPUT_TIMEOUT_MS), POLL_INTERVAL, () -> failedToStart(bogus));
                     assertThat(failedToStart(real))
                         .withFailMessage("step 1: a REAL shell was reported as failed to"
                             + " start -- the detector would refuse every session")
@@ -437,20 +429,11 @@ class InstanceShellLiveTest {
         }
     }
 
-    /** Long enough for the daemon to have reported a failed exec (MEASURED at ~50ms). */
-    private static void settle() {
-        try {
-            Thread.sleep(400);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
-
     /** A runtime image row whose declared shell is the subject of the test. */
     private static int runtimeImageDeclaring(String shell) {
         Row image = Models.get(RuntimeImageModel.class).createEmptyRow();
         image.set(RuntimeImageModel.NAME, "shell-live-declares-" + shell.replace("/", "-"));
-        image.set(RuntimeImageModel.DOCKER_IMAGE, "alpine:latest");
+        image.set(RuntimeImageModel.DOCKER_IMAGE, TestImages.ALPINE);
         image.set(RuntimeImageModel.SHELL, shell);
         image.set(RuntimeImageModel.ENABLED, true);
         Models.get(RuntimeImageModel.class).save(image);
@@ -466,21 +449,15 @@ class InstanceShellLiveTest {
 
     /** Wait for the shell to produce {@code expected}; fail with the message if it never does. */
     private static void awaitOutput(StringBuilder output, String expected, String failure) {
-        long deadline = Now.millis() + OUTPUT_TIMEOUT_MS;
-        while (Now.millis() < deadline) {
-            if (snapshot(output).contains(expected)) {
-                return;
-            }
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
-            }
+        try {
+            Poll.until(failure, Duration.ofMillis(OUTPUT_TIMEOUT_MS), POLL_INTERVAL,
+                () -> snapshot(output).contains(expected));
+        } catch (AssertionError timedOut) {
+            // The terminal's text at the moment of failure is the evidence; the poll's own
+            // message was fixed before the wait began.
+            throw new AssertionError(failure + " (looking for '" + expected
+                + "'; the terminal produced: " + snapshot(output) + ")", timedOut);
         }
-        assertThat(snapshot(output)).withFailMessage(failure + " (looking for '"
-            + expected + "'; the terminal produced: " + snapshot(output) + ")")
-            .contains(expected);
     }
 
     private static List<Row> activityFor(int instanceId, String action) {
@@ -498,17 +475,6 @@ class InstanceShellLiveTest {
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<String, Object>());
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
-    }
-
-    private static int tenant(String email) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, email);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
     }
 
     private static String keyOf(Throwable thrown) {
@@ -587,7 +553,7 @@ class InstanceShellLiveTest {
         public @NonNull InstanceSpec specFor(int instanceId,
                                              @NonNull Map<String, Object> settings) {
             String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
-            return InstanceSpec.builder(handle, "alpine:latest",
+            return InstanceSpec.builder(handle, TestImages.ALPINE,
                     ResourceLimits.none(), ContainerHardening.SERVICE,
                     OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
                 .command(List.of("sleep", "3600"))

@@ -5,11 +5,9 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.render.inline.InlineEditResult;
 import be.elevenways.zenit.cms.common.render.inline.InlineEditState;
@@ -208,17 +206,14 @@ class DnsListEditingTest extends HohenheimTestBase {
     @Test
     void tenantAuthorityDecidesEveryLanePerRecord() throws Exception {
         int zoneId = createZone("tenant.example");
+        // The /manage lane resolves a name's zone in the SERVED primary view, which every
+        // production zone writer (DnsZoneResource) reloads on commit; the fixture wrote the
+        // row straight through the model, so it publishes the zone the same way.
+        DnsZoneStore.INSTANCE.reload();
         int ownName = createRecord(zoneId, "own", DnsRecordModel.TYPE_A, "192.0.2.30");
         int foreignName = createRecord(zoneId, "foreign", DnsRecordModel.TYPE_A, "192.0.2.31");
 
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, "dns-tenant@hohenheim.local");
-        user.set(UserModel.DISPLAY_NAME, "Dns Tenant");
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        int tenantId = user.get(UserModel.ID);
+        int tenantId = ApiSupport.user("dns-tenant@hohenheim.local", "Dns Tenant");
 
         // The tenant manages a site serving own.tenant.example, which is what gives it
         // hostname authority over that ONE name (and manage-panel access).

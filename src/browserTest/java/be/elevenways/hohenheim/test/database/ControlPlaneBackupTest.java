@@ -12,6 +12,8 @@ import be.elevenways.hohenheim.server.backup.FilesystemBackupTarget;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
+import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
@@ -67,6 +69,10 @@ class ControlPlaneBackupTest {
 
         // 1. A migrated control-plane database with a real encrypted secret, under a real
         //    keyring file, marker recorded by the boot guard.
+        // AIDEV-NOTE: deliberately NOT TestDatabases.freshDatasource(): the subject is the
+        // database FILE at a known location -- step 3 proves nothing was written beside it,
+        // step 4 deletes it and step 5 restores it to the path the settings name -- so the
+        // journey owns its file and migrates it from empty.
         Files.createDirectories(dbFile.getParent());
         EncryptionKeyring keyring = EncryptionKeyring.loadOrCreate(keyringFile);
         FieldEncryption.installKeyring(keyring);
@@ -177,10 +183,7 @@ class ControlPlaneBackupTest {
     @Test
     void anUnconfiguredOrUnknownDestinationIsRefusedByName() throws Exception {
         Path workspace = Files.createTempDirectory("hh-cp-destination");
-        Path dbFile = workspace.resolve("hohenheim.db");
-        SqliteDatasource datasource = new SqliteDatasource("jdbc:sqlite:" + dbFile.toAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
-        Datasources.register(Datasources.DEFAULT, datasource);
+        SqlDatasource datasource = TestDatabases.freshDatasource();
 
         String original = HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET);
@@ -225,7 +228,6 @@ class ControlPlaneBackupTest {
             HohenheimSettings.VALUES.setValue(
                 HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET,
                 original == null ? "" : original);
-            datasource.close();
         }
     }
 
