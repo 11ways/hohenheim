@@ -144,12 +144,12 @@ abstract class InstanceArtifactsPage implements RecordScopedPage<Row> {
                                                         @NonNull String panel,
                                                         @NonNull Object artifactId,
                                                         @NonNull String pageUrl) {
-        // AIDEV-NOTE: RowAction.Url is Uri-typed, so the typed target renders here.
+        // AIDEV-NOTE: the invoke target travels TYPED (the translator renders it and pairs its
+        // input lane off the same bindings); only RowAction.Url is Uri-typed.
         ActionStateTranslator.RowActionPresentation presentation =
             this.actions.translateRowActionsForList(this.resource.rowActions(), artifact,
-                (actionId, row) -> new Uri(ReturnTarget.bind(
-                    CmsRoutes.invokeRow(panel, this.resource.slug(), artifactId, actionId),
-                    pageUrl).toUrl()),
+                (actionId, row) -> ReturnTarget.bind(
+                    CmsRoutes.invokeRow(panel, this.resource.slug(), artifactId, actionId), pageUrl),
                 accessContext);
         // Every band, the destructive tail included: restore IS destructive, and summing
         // the inline and overflow buckets by hand silently dropped it.

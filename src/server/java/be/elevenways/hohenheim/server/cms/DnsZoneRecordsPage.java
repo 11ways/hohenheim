@@ -12,7 +12,6 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
-import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
@@ -173,9 +172,8 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
             resource::rowKey,
             row -> resource.rowCells(applied, row),
             resource.rowActions(),
-            (actionId, row) -> new Uri(ReturnTarget.bind(
-                CmsRoutes.invokeRow(PANEL, resource.slug(), resource.rowKey(row), actionId),
-                returnTo).toUrl()),
+            (actionId, row) -> ReturnTarget.bind(
+                CmsRoutes.invokeRow(PANEL, resource.slug(), resource.rowKey(row), actionId), returnTo),
             column -> null,
             row -> recordUrl(resource, row, returnTo),
             row -> resource.updatable() && resource.updatableBy(row, accessContext)
