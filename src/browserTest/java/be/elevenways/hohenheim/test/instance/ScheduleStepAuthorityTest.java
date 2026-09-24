@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.ManageInstanceScheduleStepResource;
 import be.elevenways.hohenheim.server.schedule.InstancePowerAction;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -85,7 +86,7 @@ class ScheduleStepAuthorityTest extends HohenheimTestBase {
         }
         for (Integer id : new Integer[] {instanceId, otherInstanceId}) {
             if (id != null) {
-                Models.get(InstanceModel.class).delete(id);
+                HardDeletes.byId(Models.get(InstanceModel.class), id);
             }
         }
     }

@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.ReleasedClaimResource;
 import be.elevenways.hohenheim.server.cms.SiteResource;
@@ -66,7 +67,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
             for (Row domain : domainModel.find().where(SiteDomainModel.SITE_ID.eq(siteId)).all()) {
                 domainModel.delete(domain);
             }
-            siteModel.delete(site);
+            HardDeletes.row(siteModel, site);
         }
         this.createdSites.clear();
         // Tearing a live site down IS a release, so cleanup itself ledgers quarantine rows.
@@ -276,7 +277,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         //    that stamps deleted_at and deliberately leaves enabled=true.
         new SiteResource().deleteRow(siteModel.findById(original.get(SiteModel.ID)),
             AccessContext.anonymous());
-        Row deleted = siteModel.findById(original.get(SiteModel.ID));
+        Row deleted = StoredRows.byId(siteModel, original.get(SiteModel.ID));
         assertThat((Instant) deleted.get(SiteModel.DELETED_AT))
             .as("step 2: the delete stamped deleted_at").isNotNull();
         assertThat((Boolean) deleted.get(SiteModel.ENABLED))
@@ -468,14 +469,14 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         // 4. RESTORE is a transition into the route table: un-deleting the incumbent
         //    while the successor holds the route must be refused, and the refusal must
         //    write NOTHING -- the incumbent stays trashed and claimless.
-        Row trashed = siteModel.findById(incumbent.get(SiteModel.ID));
+        Row trashed = StoredRows.byId(siteModel, incumbent.get(SiteModel.ID));
         trashed.set(SiteModel.DELETED_AT, (Instant) null);
         assertThatThrownBy(() -> siteModel.save(trashed))
             .as("step 4: restoring into a taken route is refused")
             .isInstanceOfSatisfying(Violations.class, violations ->
                 assertThat(hasViolation(violations, "enabled", "enable_route_conflict"))
                     .as("step 4: the refusal is the enable route conflict").isTrue());
-        assertThat((Instant) siteModel.findById(incumbent.get(SiteModel.ID)).get(SiteModel.DELETED_AT))
+        assertThat((Instant) StoredRows.byId(siteModel, incumbent.get(SiteModel.ID)).get(SiteModel.DELETED_AT))
             .as("step 4: the refused restore left the site trashed").isNotNull();
         assertThat(storedClaimsOn(hostname))
             .as("step 4: the successor is still the single claimant").isEqualTo(1);
@@ -483,7 +484,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         // 5. Once the successor is deleted, the SAME restore succeeds and re-claims.
         new SiteResource().deleteRow(siteModel.findById(successor.get(SiteModel.ID)),
             AccessContext.anonymous());
-        Row restorable = siteModel.findById(incumbent.get(SiteModel.ID));
+        Row restorable = StoredRows.byId(siteModel, incumbent.get(SiteModel.ID));
         restorable.set(SiteModel.DELETED_AT, (Instant) null);
         siteModel.save(restorable);
         assertThat((String) domainModel.findById(incumbentDomain.get(SiteDomainModel.ID))
@@ -822,7 +823,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
 
         // 2. HARD delete the site row (the shape only tests use today -- and the shape that
         //    left the debris).
-        siteModel.delete(doomed);
+        HardDeletes.row(siteModel, doomed);
         this.createdSites.removeIf(site -> doomedId.equals(site.get(SiteModel.ID)));
         assertThat(domainModel.find().where(SiteDomainModel.SITE_ID.eq(doomedId)).count())
             .as("step 2: the delete cascaded to the site's domain rows").isEqualTo(0);
@@ -1045,7 +1046,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
             .as("step 1: the tenant holds the route claim").isEqualTo(1);
 
         // 2. The site row is HARD deleted, cascading to its domain rows.
-        siteModel.delete(tenantSite);
+        HardDeletes.row(siteModel, tenantSite);
         this.createdSites.removeIf(row -> siteId.equals(row.get(SiteModel.ID)));
         assertThat(domainModel.find().where(SiteDomainModel.SITE_ID.eq(siteId)).count())
             .as("step 2: the delete cascaded to the domain rows").isEqualTo(0);

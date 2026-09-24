@@ -107,9 +107,11 @@ public final class TenantScopes {
         }
     }
 
-    /** Live sites; tenants only the ones they manage. */
-    public static final Scope SITES = new Scope(() -> SiteModel.DELETED_AT.isNull(),
-        TenantScopes::siteAccess);
+    /**
+     * Live sites (the site's SoftDeleteBehaviour hides trashed rows from every find, so the
+     * base needs no filter); tenants only the ones they manage.
+     */
+    public static final Scope SITES = new Scope(null, TenantScopes::siteAccess);
 
     /** Domains of live sites; tenants only those of the sites they manage. */
     public static final Scope DOMAINS = new Scope(SiteDomainResource::liveSiteScope,
@@ -183,8 +185,11 @@ public final class TenantScopes {
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(InstanceBackupModel.class),
             InstanceModel.MODEL_ID, HohenheimAccess.BACKUPS, InstanceBackupModel.INSTANCE_ID::in));
 
-    /** Live previews; tenants only those of the APPLICATIONS they manage. */
-    public static final Scope PREVIEWS = new Scope(() -> PreviewDeploymentModel.DELETED_AT.isNull(),
+    /**
+     * Live previews (trashed ones are hidden by the model's SoftDeleteBehaviour); tenants only
+     * those of the APPLICATIONS they manage.
+     */
+    public static final Scope PREVIEWS = new Scope(null,
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(PreviewDeploymentModel.class),
             InstanceModel.MODEL_ID, HohenheimAccess.MANAGE, PreviewDeploymentModel.APPLICATION_ID::in));
 

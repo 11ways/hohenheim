@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -67,8 +68,8 @@ class HostApiTest extends HohenheimTestBase {
     static void cleanUp() {
         Model instances = Models.get(InstanceModel.class);
         GeneratedRows.sweeping("test", () -> {
-            for (Row row : instances.find().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
-                instances.delete(row.get(InstanceModel.ID));
+            for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
+                HardDeletes.byId(instances, row.get(InstanceModel.ID));
             }
         });
         Model servers = Models.get(ServerModel.class);

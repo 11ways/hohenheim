@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
@@ -73,7 +74,6 @@ public final class InstanceDatabaseNetworks {
             }
             Row instance = instances.find()
                 .where(InstanceModel.ID.eq(instanceId))
-                .where(InstanceModel.DELETED_AT.isNull())
                 .first();
             Row database = databases.find().where(DatabaseModel.ID.eq(databaseId)).first();
             if (instance == null || database == null) {
@@ -231,7 +231,9 @@ public final class InstanceDatabaseNetworks {
      *        of surviving rows (the instance-destroy shape)
      */
     public static void sweepFor(int ownerId, boolean everything) {
-        Row owner = Models.get(InstanceModel.class).findById(ownerId);
+        // Trashed included: destroy sweeps AFTER the record is trashed, and a remote owner's
+        // networks live on ITS host, never on the local fallback.
+        Row owner = StoredRows.byId(Models.get(InstanceModel.class), ownerId);
         int serverId = owner != null
             ? ServerModel.canonicalServerId(owner.get(InstanceModel.SERVER_ID))
             : ServerModel.localServerId();

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.orm;
 
+import be.elevenways.hohenheim.model.SoftDeleteWrites;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -162,7 +164,13 @@ public final class GeneratedRows {
                 }
                 return;
             }
-            Row stored = row.has(pkName) ? model.findById(row.get(pkName)) : null;
+            // A soft-deleted model's REMOVAL is this save, so a sweeping scope may make it
+            // exactly as the remove hook below lets it remove -- and nothing else.
+            if (inSystemScope() && SoftDeleteWrites.onlyTrashes(context)) {
+                return;
+            }
+            // Trashed rows included: a generated row stays read-only after its soft delete.
+            Row stored = StoredRows.of(model, row);
             if (stored != null && stored.get(columns.by()) != null) {
                 throw readOnly(columns, stored, readOnlyKey);
             }

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
@@ -16,6 +17,7 @@ import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.database.EngineHandles;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -119,15 +121,15 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         }
         Model instances = Models.get(InstanceModel.class);
         GeneratedRows.sweeping("test", () -> {
-            for (Row row : instances.find().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
-                instances.delete(row.get(InstanceModel.ID));
+            for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
+                HardDeletes.byId(instances, row.get(InstanceModel.ID));
             }
             // The planted engine instances are named after their database record.
-            for (Row row : instances.find()
+            for (Row row : instances.find().withTrashed()
                     .where(InstanceModel.GENERATED_FOR_MODEL.eq(DatabaseModel.MODEL_ID.toString()))
                     .all()) {
                 if (databaseIds.contains((Integer) row.get(InstanceModel.GENERATED_FOR_ID))) {
-                    instances.delete(row.get(InstanceModel.ID));
+                    HardDeletes.byId(instances, row.get(InstanceModel.ID));
                 }
             }
         });
@@ -466,7 +468,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         // 2. A SOFT-DELETED instance is not a live dependant. Destroy soft-deletes, so a
         //    link naming a dead record must not keep the database hostage forever.
         Model instances = Models.get(InstanceModel.class);
-        Row doomed = instances.findById(instanceAId);
+        Row doomed = StoredRows.byId(instances, instanceAId);
         doomed.set(InstanceModel.DELETED_AT, Now.instant());
         be.elevenways.hohenheim.server.auth.TenantWrites.inAuthorizedOperation(
             () -> instances.save(doomed));
@@ -491,7 +493,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
             .isEmpty();
 
         // 5. Restore the instance row so the class's own cleanup can see it.
-        Row revived = instances.find().where(InstanceModel.ID.eq(instanceAId)).first();
+        Row revived = instances.find().withTrashed().where(InstanceModel.ID.eq(instanceAId)).first();
         if (revived != null) {
             revived.set(InstanceModel.DELETED_AT, null);
             be.elevenways.hohenheim.server.auth.TenantWrites.inAuthorizedOperation(

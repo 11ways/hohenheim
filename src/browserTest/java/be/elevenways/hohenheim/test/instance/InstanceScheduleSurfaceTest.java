@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.ManageInstanceScheduleResource;
 import be.elevenways.hohenheim.server.cms.ManageInstanceScheduleStepResource;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -111,7 +112,7 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
             Models.get(RecordScheduleModel.class).delete(scheduleId);
         }
         if (instanceId != null) {
-            Models.get(InstanceModel.class).delete(instanceId);
+            HardDeletes.byId(Models.get(InstanceModel.class), instanceId);
         }
     }
 

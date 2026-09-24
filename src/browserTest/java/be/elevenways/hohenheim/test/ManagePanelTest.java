@@ -730,9 +730,9 @@ class ManagePanelTest extends HohenheimTestBase {
                 HohenheimAccess.MANAGE);
             RecordGrants.revoke(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, innocentId,
                 HohenheimAccess.MANAGE);
-            siteModel.delete(staged);
-            siteModel.delete(innocent);
-            siteModel.delete(victim);
+            HardDeletes.row(siteModel, staged);
+            HardDeletes.row(siteModel, innocent);
+            HardDeletes.row(siteModel, victim);
             domainModel.delete(stagedDomain);
             domainModel.delete(innocentDomain);
             domainModel.delete(victimDomain);

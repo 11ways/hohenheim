@@ -28,7 +28,7 @@ class SiteSlugFoldTest extends HohenheimTestBase {
         for (String name : NAMES) {
             Row site = siteNamed(name);
             if (site != null) {
-                Models.get(SiteModel.class).delete(site);
+                HardDeletes.row(Models.get(SiteModel.class), site);
             }
         }
     }

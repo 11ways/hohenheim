@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.CapabilityScopes;
@@ -161,8 +162,8 @@ class TenantInstanceApiTest extends HohenheimTestBase {
         // The generated fixture is read-only OUTSIDE a system scope by design, so the
         // teardown enters the same sweep scope a product tier's own delete uses.
         GeneratedRows.sweeping(GENERATED_SOURCE, () -> {
-            for (Row row : instances.find().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
-                instances.delete(row.get(InstanceModel.ID));
+            for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
+                HardDeletes.byId(instances, row.get(InstanceModel.ID));
             }
         });
         Model templates = Models.get(InstanceTemplateModel.class);

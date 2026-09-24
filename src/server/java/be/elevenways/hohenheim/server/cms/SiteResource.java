@@ -404,12 +404,6 @@ public class SiteResource extends RowResource {
         return row;
     }
 
-    /** Soft-deleted sites are invisible everywhere. */
-    @Override
-    public @NonNull AccessFunction<Row> accessFunction() {
-        return ctx -> AccessDecision.allow(QueryPredicate.of(SiteModel.DELETED_AT.isNull()));
-    }
-
     /**
      * Create the site and, when the create form carried one, its first hostname -- in the
      * ONE transaction the CMS create submit already wraps this call in.
@@ -517,7 +511,8 @@ public class SiteResource extends RowResource {
     }
 
     /**
-     * Soft delete: reclaim the previews this site routed, then stamp deleted_at.
+     * Soft delete: reclaim the previews this site routed, then trash the record through the
+     * model's delete (SiteModel.SOFT_DELETE stamps deleted_at and records the delete).
      *
      * AIDEV-NOTE: a site delete drops a HOSTNAME and nothing else. Since phase-0 brief 7
      * the site owns no runtime at all -- the application it exposed keeps running, keeps
@@ -532,9 +527,7 @@ public class SiteResource extends RowResource {
         // Previews die WITH the site (explicit for the same reason destroyFor is:
         // the soft delete fires no remove hook that could ever do this).
         be.elevenways.hohenheim.server.preview.PreviewDeployments.destroyForSite(siteId);
-        existing.set(SiteModel.DELETED_AT, Now.instant());
-        ActivityLog.withAction(ActivityLog.ACTION_DELETE, "soft-delete",
-            () -> this.model().save(existing));
+        this.model().delete(existing);
     }
 
     /** A site delete drops a hostname; the record-less dialog can only say that much. */

@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
@@ -58,7 +59,7 @@ class BackupTargetRemovalTest {
 
             // 2. Destroyed (soft-deleted), with a COMPLETE backup it left behind: the backup is
             //    the recovery asset and still refuses; the trashed pointer alone no longer would.
-            Row instance = Models.get(InstanceModel.class).findById(instanceId);
+            Row instance = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
             instance.set(InstanceModel.DELETED_AT, Now.instant());
             Models.get(InstanceModel.class).save(instance);
             int backupId = backupRow(instanceId, targetId, InstanceBackupModel.STATUS_COMPLETE);
@@ -80,7 +81,8 @@ class BackupTargetRemovalTest {
             Models.get(BackupTargetModel.class).delete((Object) targetId);
             assertThat(Models.get(BackupTargetModel.class).findById(targetId))
                 .as("step 3: the target a destroyed instance used is deletable").isNull();
-            Row trashed = Models.get(InstanceModel.class).findById(instanceId);
+            // Trashed: a default find hides it by design, so the kept row is read as stored.
+            Row trashed = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
             assertThat(trashed).as("step 3: the trashed instance row is kept").isNotNull();
             assertThat((Object) trashed.get(InstanceModel.BACKUP_TARGET_ID))
                 .as("step 3: with its destination pointer detached").isNull();

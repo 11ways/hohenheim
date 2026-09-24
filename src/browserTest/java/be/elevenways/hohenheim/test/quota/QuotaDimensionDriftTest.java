@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.quota.ChargedDimension;
 import be.elevenways.hohenheim.server.quota.ChargedModel;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.server.quota.QuotaReconciler;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -206,7 +207,7 @@ class QuotaDimensionDriftTest {
                 .assign(InstanceModel.MIGRATE_RESERVED_MB, (Object) null)
                 .updateAll();
             InstanceCapacity.release(beta, window);
-            Models.get(InstanceModel.class).delete((Object) landedId);
+            HardDeletes.byId(Models.get(InstanceModel.class), (Object) landedId);
         });
     }
 

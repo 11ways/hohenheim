@@ -23,6 +23,7 @@ import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.hohenheim.server.cms.InstanceTemplateResource;
@@ -274,7 +275,8 @@ class RuntimeCascadeTest {
             // 4. The TRASHED instance is history, not an owner: it outlives the template
             //    (its backups hang off it) with only the pointer the foreign key forbids
             //    cleared, so the delete above never reached the constraint.
-            Row trashed = Models.get(InstanceModel.class).findById(instanceId);
+            // Trashed: a default find hides it by design, so the kept row is read as stored.
+            Row trashed = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
             assertThat(trashed).as("step 4: the trashed instance row is kept").isNotNull();
             assertThat((Object) trashed.get(InstanceModel.TEMPLATE_ID))
                 .as("step 4: with its template pointer detached").isNull();
@@ -316,7 +318,8 @@ class RuntimeCascadeTest {
                 Models.get(InstanceTemplateModel.class).findById(templateId));
             images.delete(images.findById(imageId));
             assertThat(images.findById(imageId)).as("step 4: the image is gone").isNull();
-            Row trashed = Models.get(InstanceModel.class).findById(instanceId);
+            // Trashed: a default find hides it by design, so the kept row is read as stored.
+            Row trashed = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
             assertThat(trashed).as("step 4: the trashed instance that used it is kept")
                 .isNotNull();
             assertThat((Object) trashed.get(InstanceModel.RUNTIME_IMAGE_ID))
@@ -694,7 +697,7 @@ class RuntimeCascadeTest {
     }
 
     private static void softDelete(int instanceId) {
-        Row row = Models.get(InstanceModel.class).findById(instanceId);
+        Row row = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
         row.set(InstanceModel.DELETED_AT, Now.instant());
         Models.get(InstanceModel.class).save(row);
     }

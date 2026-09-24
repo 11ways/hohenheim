@@ -82,9 +82,7 @@ class WorkspaceDockerLiveTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        remote = LiveIncusHost.configured();
-        LiveLane.require(LiveLane.Need.REMOTE_HOST, remote != null,
-            "no live host enrolled at " + LiveIncusHost.CONFIG);
+        remote = LiveIncusHost.requireSshLane();
 
         datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();

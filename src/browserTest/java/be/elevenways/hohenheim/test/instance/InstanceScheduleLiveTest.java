@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.TestDatabases;
@@ -301,7 +302,7 @@ class InstanceScheduleLiveTest {
                 // 6. Destroy SOFT-deletes the record (remove hooks never fire), and the
                 //    schedules must die with it anyway.
                 service.destroy(id);
-                assertThat(Models.get(InstanceModel.class).findById(id)
+                assertThat(StoredRows.byId(Models.get(InstanceModel.class), id)
                         .get(InstanceModel.DELETED_AT))
                     .as("step 6: the record is soft-deleted, not removed").isNotNull();
                 assertThat(Models.get(RecordScheduleModel.class)

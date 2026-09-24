@@ -69,7 +69,6 @@ public final class StackCascades {
     private static void refuseWhileRunning(@NonNull RemoveFromDatasource context) {
         Row running = Models.get(InstanceModel.class).find()
             .where(InstanceModel.GENERATED_FOR_MODEL.eq(StackServiceModel.MODEL_ID.toString()))
-            .where(InstanceModel.DELETED_AT.isNull())
             .where(PendingDeletes.dependents(InstanceModel.OWNING_STACK_SERVICE, context))
             .first();
         if (running == null) {

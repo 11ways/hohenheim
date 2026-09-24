@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ArtifactSourceModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
@@ -313,7 +314,7 @@ class ApplicationReleaseContractTest {
                 Integer candidateId = op.get(ReleaseOperationModel.CANDIDATE_INSTANCE_ID);
                 assertThat(candidateId).as("step 4: the candidate was recorded").isNotNull();
                 String candidateHandle = FakeDockerDaemon.handleOf(candidateId);
-                assertThat((Object) Models.get(InstanceModel.class).findById(candidateId)
+                assertThat((Object) StoredRows.byId(Models.get(InstanceModel.class), candidateId)
                         .get(InstanceModel.DELETED_AT))
                     .as("step 4: the refused candidate's record is soft-deleted").isNotNull();
                 assertThat(daemon.exists(candidateHandle))
@@ -406,7 +407,7 @@ class ApplicationReleaseContractTest {
                 await("step 4: the rollback operation completes after the drain window",
                     () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
                         reload(rollbackOp).get(ReleaseOperationModel.STATUS)));
-                assertThat((Object) Models.get(InstanceModel.class).findById(firstId)
+                assertThat((Object) StoredRows.byId(Models.get(InstanceModel.class), firstId)
                         .get(InstanceModel.DELETED_AT))
                     .as("step 4: the older retired release was reclaimed (record)")
                     .isNotNull();
@@ -530,7 +531,7 @@ class ApplicationReleaseContractTest {
                 assertThat(reload(probingOp).get(ReleaseOperationModel.STATUS))
                     .as("step 5: the pre-switch operation is INTERRUPTED, visibly")
                     .isEqualTo(ReleaseOperationModel.STATUS_INTERRUPTED);
-                assertThat((Object) Models.get(InstanceModel.class).findById(probingCandidate)
+                assertThat((Object) StoredRows.byId(Models.get(InstanceModel.class), probingCandidate)
                         .get(InstanceModel.DELETED_AT))
                     .as("step 5: its candidate's record died").isNotNull();
                 assertThat(daemon.exists(FakeDockerDaemon.handleOf(probingCandidate)))

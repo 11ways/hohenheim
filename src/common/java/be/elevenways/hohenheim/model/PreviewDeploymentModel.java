@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.edit.EditView;
+import be.elevenways.zenit.common.orm.behaviour.SoftDeleteBehaviour;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -99,6 +100,13 @@ public class PreviewDeploymentModel extends Model {
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
     public static final DateTimeField DELETED_AT = SCHEMA.addField(DateTimeField.builder().name("deleted_at").build());
 
+    /**
+     * A torn-down preview is soft-deleted (its row is the quota and history record): the
+     * behaviour adopts {@link #DELETED_AT} and hides trashed rows from every default find,
+     * count and updateAll, under the SiteModel.SOFT_DELETE rules.
+     */
+    public static final SoftDeleteBehaviour SOFT_DELETE = SCHEMA.addBehaviour(SoftDeleteBehaviour.create());
+
     /** The application this is a preview OF; its releases and this one share a source. */
     public static final BelongsTo<InstanceModel> APPLICATION = SCHEMA.addRelation(
         BelongsTo.to(InstanceModel.class)
@@ -109,14 +117,12 @@ public class PreviewDeploymentModel extends Model {
 
     static {
         SCHEMA.setDisplayFields(HOSTNAME);
-        SCHEMA.addLifecycleField(DELETED_AT);
     }
 
     /** Live (not torn down) previews of one site, newest first. */
     public List<Row> findLiveByApplicationId(int applicationId) {
         return find()
             .where(APPLICATION_ID.eq(applicationId))
-            .where(DELETED_AT.isNull())
             .orderBy(ID, SortOrder.DESC)
             .all();
     }

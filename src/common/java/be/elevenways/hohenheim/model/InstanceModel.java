@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.orm.behaviour.SoftDeleteBehaviour;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -393,6 +394,20 @@ public class InstanceModel extends Model {
         DateTimeField.builder().name("status_observed_at").build());
 
     /**
+     * When the status reconciler first observed the workload KILLED (out of memory) inside a
+     * container the daemon still reports running; null while no such kill is known.
+     *
+     * AIDEV-NOTE: the one stored form of {@code WorkloadLiveness.WORKLOAD_DEAD}, so the
+     * dashboard can name an OOM-killed database engine without a per-render daemon call.
+     * Only {@code InstanceStatusReconciler} sets it, and only on a daemon answer; every
+     * operation status stamp ({@code InstanceOperationGuard.stamp}) clears it, because a
+     * deploy, stop or restart replaces the container that carried the kill. A kill that
+     * survives an operation is observed again by the next sweep.
+     */
+    public static final DateTimeField WORKLOAD_KILLED_AT = SCHEMA.addField(
+        DateTimeField.builder().name("workload_killed_at").build());
+
+    /**
      * The RESOLVED image identity the workload actually runs (incus: the image
      * fingerprint behind {@code volatile.base_image}), recorded at deploy. A mutable
      * alias is not a deployment identity: recreating an absent workload uses this pin,
@@ -491,6 +506,18 @@ public class InstanceModel extends Model {
     public static final DateTimeField DELETED_AT = SCHEMA.addField(DateTimeField.builder().name("deleted_at").build());
 
     /**
+     * Instances are soft-deleted (destroy trashes the record, the backups and history outlive
+     * it): the behaviour adopts {@link #DELETED_AT} and hides trashed rows from every default
+     * find, count and updateAll.
+     *
+     * AIDEV-NOTE: the SiteModel.SOFT_DELETE rules hold here verbatim: a trashed read says so
+     * ({@code withTrashed()}, {@code onlyTrashed()}, {@link StoredRows}), a physical removal is
+     * {@code forceDelete}, and a {@code Criteria.related} hop into instances spells
+     * {@code SOFT_DELETE.isNotTrashed()} because relation subqueries run no find hooks.
+     */
+    public static final SoftDeleteBehaviour SOFT_DELETE = SCHEMA.addBehaviour(SoftDeleteBehaviour.create());
+
+    /**
      * The host relation, for relational filtering ("host name contains x" in the
      * instance list); {@link #SERVER_ID} stays the written column.
      */
@@ -536,9 +563,9 @@ public class InstanceModel extends Model {
 
     static {
         SCHEMA.setDisplayFields(NAME);
-        // Soft delete by hand (the SiteModel shape): DELETED_AT is lifecycle state, and the
-        // grant declaration's liveWhen predicate keys on it (HohenheimAccess).
-        SCHEMA.addLifecycleField(DELETED_AT);
+        // DELETED_AT is lifecycle state by SOFT_DELETE's own declaration (it used to be a
+        // hand-rolled soft delete with an explicit addLifecycleField here), so a revision or
+        // snapshot replay never undeletes a destroyed record.
         // Fold any host spelling (row id, name, registry key) onto THE canonical servers.id
         // at write time -- a fifth spelling of "which host" is exactly what C3 removed.
         SCHEMA.addBeforeValidateHook(context -> {
@@ -558,7 +585,6 @@ public class InstanceModel extends Model {
     /** Every instance that is not soft-deleted, newest first. */
     public List<Row> findLive() {
         return find()
-            .where(DELETED_AT.isNull())
             .orderBy(CREATED_AT, SortOrder.DESC)
             .all();
     }
@@ -572,7 +598,10 @@ public class InstanceModel extends Model {
      * addressing one.
      */
     public static @NonNull Criteria liveAuthored() {
-        return Criteria.and(DELETED_AT.isNull(), GENERATED_BY.isNull());
+        // AIDEV-NOTE: the trash half stays spelled (through the behaviour) because this
+        // criteria also rides record-source access predicates and relation hops, where no
+        // find hook runs; on a plain find it is redundant and harmless.
+        return Criteria.and(SOFT_DELETE.isNotTrashed(), GENERATED_BY.isNull());
     }
 
     /**
@@ -595,13 +624,14 @@ public class InstanceModel extends Model {
     public static void detachTrashed(@NonNull IntegerField reference, @NonNull Criteria scope) {
         InstanceModel model = Models.get(InstanceModel.class);
         List<Integer> trashed = new ArrayList<>();
-        for (Row row : model.find().where(scope).where(DELETED_AT.isNotNull()).all()) {
+        for (Row row : model.find().onlyTrashed().where(scope).all()) {
             trashed.add(row.get(ID));
         }
         if (trashed.isEmpty()) {
             return;
         }
-        model.find().where(ID.in(trashed)).assign(reference, null).updateAll();
+        // withTrashed: an updateAll is scoped by the find hooks too, and these rows ARE trashed.
+        model.find().withTrashed().where(ID.in(trashed)).assign(reference, null).updateAll();
     }
 
     @Override

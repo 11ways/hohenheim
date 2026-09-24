@@ -25,6 +25,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -132,6 +133,21 @@ class AttachedDatabaseAttentionTest {
                 assertThat(itemFor(PREFIX + "web"))
                     .as("step 5: and a host answering again clears it").isNull();
 
+                // 5b. Stored RUNNING engine whose sweep saw the engine OOM-killed inside the
+                //     still-running container: the stored kill names its own sentence, read
+                //     from the row with no daemon call, and clearing it clears the item.
+                engineKilledAt(engineId, Now.instant());
+                AttentionItem killed = itemFor(PREFIX + "web");
+                assertThat(killed).as("step 5b: an OOM-killed engine raises an item").isNotNull();
+                assertThat(killed.detail().key())
+                    .as("step 5b: naming the kill, never 'running' and never 'not running'")
+                    .isEqualTo("database_workload_dead");
+                assertThat(transport.calls.get())
+                    .as("step 5b: the stored kill surfaced without asking a daemon").isZero();
+                engineKilledAt(engineId, null);
+                assertThat(itemFor(PREFIX + "web"))
+                    .as("step 5b: and a sweep that no longer sees the kill clears it").isNull();
+
                 // 6. The RECORD is not active: the record's own status is the sentence.
                 Model databases = Models.get(DatabaseModel.class);
                 databases.find().where(DatabaseModel.ID.eq(databaseId))
@@ -238,6 +254,14 @@ class AttachedDatabaseAttentionTest {
     private static void engineStatus(int engineId, String status) {
         Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(engineId))
             .assign(InstanceModel.STATUS, status)
+            .bypassBehaviours()
+            .updateAll();
+    }
+
+    /** What the status reconciler stamps when it observes (or stops observing) an OOM kill. */
+    private static void engineKilledAt(int engineId, Instant killedAt) {
+        Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(engineId))
+            .assign(InstanceModel.WORKLOAD_KILLED_AT, killedAt)
             .bypassBehaviours()
             .updateAll();
     }

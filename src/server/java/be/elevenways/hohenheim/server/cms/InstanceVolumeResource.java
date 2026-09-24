@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
@@ -260,7 +261,9 @@ public class InstanceVolumeResource extends RowResource {
     private void destroyVolume(@NonNull Row existing) {
         int instanceId = instanceIdOf(existing);
         String name = String.valueOf((Object) existing.get(InstanceVolumeModel.NAME));
-        Row instance = Models.get(InstanceModel.class).findById(instanceId);
+        // Trashed included: a destroyed instance's volumes survive it, and their directories
+        // live on ITS host -- read as absent, the destroy would target the local daemon.
+        Row instance = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
         if (instance != null
                 && WorkspaceKind.ID.toString().equals(instance.get(InstanceModel.KIND))
                 && WorkspaceKind.HOME_VOLUME.equals(name)) {
@@ -289,7 +292,7 @@ public class InstanceVolumeResource extends RowResource {
         int instanceId = parseId(value);
         Row instance = instanceId > 0
             ? Models.get(InstanceModel.class).findById(instanceId) : null;
-        if (instance == null || instance.get(InstanceModel.DELETED_AT) != null) {
+        if (instance == null) {
             throw Violations.ofField("instance_id", value,
                 CmsSupport.violationText("unknown_instance"));
         }

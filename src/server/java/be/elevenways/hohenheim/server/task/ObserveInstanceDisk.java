@@ -74,7 +74,6 @@ public class ObserveInstanceDisk extends ScheduledTask {
     public static @NonNull List<Observation> sweep() {
         List<Observation> observations = new ArrayList<>();
         for (Row instance : Models.get(InstanceModel.class).find()
-                .where(InstanceModel.DELETED_AT.isNull())
                 .where(InstanceModel.STATUS.eq(InstanceModel.STATUS_RUNNING))
                 .all()) {
             Integer id = instance.get(InstanceModel.ID);

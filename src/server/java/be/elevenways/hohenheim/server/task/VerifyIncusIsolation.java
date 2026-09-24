@@ -133,7 +133,6 @@ public class VerifyIncusIsolation extends ScheduledTask {
     public static @NonNull List<HostOutcome> sweep() {
         Map<Integer, List<Row>> byServer = new LinkedHashMap<>();
         for (Row instance : Models.get(InstanceModel.class).find()
-                .where(InstanceModel.DELETED_AT.isNull())
                 .where(InstanceModel.STATUS.in(InstanceModel.LIVE_GUEST_STATUSES))
                 .all()) {
             Object raw = instance.get(InstanceModel.SERVER_ID);

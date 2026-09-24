@@ -13,6 +13,8 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.time.Instant;
+
 
 /**
  * The settle-then-refuse discipline shared by every instance operation: ONE fenced
@@ -99,7 +101,6 @@ final class InstanceOperationGuard {
                              @NonNull Object instanceName) {
         int matched = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
-            .where(InstanceModel.DELETED_AT.isNull())
             .where(hostScope(serverId))
             .where(Criteria.or(
                 InstanceModel.CLAIM_FENCE.isNull(),
@@ -136,7 +137,6 @@ final class InstanceOperationGuard {
                           @NonNull String role, @NonNull Object instanceName) {
         int matched = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
-            .where(InstanceModel.DELETED_AT.isNull())
             .where(hostScope(serverId))
             .where(Criteria.or(
                 InstanceModel.CLAIM_FENCE.isNull(),
@@ -164,7 +164,6 @@ final class InstanceOperationGuard {
                                  @NonNull Object instanceName) {
         int matched = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
-            .where(InstanceModel.DELETED_AT.isNull())
             .where(hostScope(serverId))
             .where(Criteria.or(
                 InstanceModel.CLAIM_FENCE.isNull(),
@@ -188,6 +187,10 @@ final class InstanceOperationGuard {
      * a shrug: a rival controller with a higher fence owns this record now, so this
      * controller drops its hold and aborts. Cleanup is the winner's job.
      *
+     * AIDEV-NOTE: the {@code deleted_at IS NULL} half of every guard in this class is
+     * InstanceModel.SOFT_DELETE's: an updateAll is scoped by the find hooks, so a trashed
+     * record matches none of these statements without any of them spelling the filter.
+     *
      * @throws Violations {@code instance_fenced_out}
      */
     static void stamp(@NonNull HostLeases leases, int instanceId, int serverId, long fence,
@@ -198,15 +201,18 @@ final class InstanceOperationGuard {
         // (InstanceService.recoverInterrupted) could not tell a status this process just
         // stamped from one a dead controller left behind. The process-start fence rides
         // this column.
+        // AIDEV-NOTE: an operation also CLEARS the observed kill (see
+        // InstanceModel.WORKLOAD_KILLED_AT): a deploy, stop or restart replaces the container
+        // that carried it, and a kill that survives the operation is re-observed next sweep.
         int matched = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
-            .where(InstanceModel.DELETED_AT.isNull())
             .where(hostScope(serverId))
             .where(Criteria.or(
                 InstanceModel.CLAIM_FENCE.isNull(),
                 InstanceModel.CLAIM_FENCE.lte(fence)))
             .assign(InstanceModel.STATUS, status)
             .assign(InstanceModel.UPDATED_AT, Now.instant())
+            .assign(InstanceModel.WORKLOAD_KILLED_AT, null)
             .assign(InstanceModel.CLAIM_FENCE, fence)
             .updateAll();
         if (matched == 0) {
@@ -229,22 +235,24 @@ final class InstanceOperationGuard {
      * leaves {@code updated_at} ALONE when the status is unchanged, so a confirmation
      * cannot look like a state transition to the boot settle's process-start clock.
      *
-     * @param changed whether the status actually moved (an unchanged one still records
-     *                the confirmation, and only that)
+     * @param changed          whether the status actually moved (an unchanged one still
+     *                         records the confirmation, and only that)
+     * @param workloadKilledAt the {@code workload_killed_at} value this observation settles
+     *                         to (the caller passes the stored value when it learned nothing)
      * @throws Violations {@code instance_fenced_out}
      */
     static void stampObserved(@NonNull HostLeases leases, int instanceId, int serverId,
                               long fence, @NonNull String status, boolean changed,
-                              @NonNull Object instanceName) {
+                              @Nullable Instant workloadKilledAt, @NonNull Object instanceName) {
         var statement = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
-            .where(InstanceModel.DELETED_AT.isNull())
             .where(hostScope(serverId))
             .where(Criteria.or(
                 InstanceModel.CLAIM_FENCE.isNull(),
                 InstanceModel.CLAIM_FENCE.lte(fence)))
             .assign(InstanceModel.STATUS, status)
             .assign(InstanceModel.STATUS_OBSERVED_AT, Now.instant())
+            .assign(InstanceModel.WORKLOAD_KILLED_AT, workloadKilledAt)
             .assign(InstanceModel.CLAIM_FENCE, fence);
         if (changed) {
             statement = statement.assign(InstanceModel.UPDATED_AT, Now.instant());
@@ -273,7 +281,6 @@ final class InstanceOperationGuard {
                                @NonNull Object instanceName) {
         int matched = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
-            .where(InstanceModel.DELETED_AT.isNull())
             .where(hostScope(serverId))
             .where(Criteria.or(
                 InstanceModel.CLAIM_FENCE.isNull(),
@@ -315,7 +322,6 @@ final class InstanceOperationGuard {
             Models.get(InstanceModel.class).findById(instanceId));
         int matched = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
-            .where(InstanceModel.DELETED_AT.isNull())
             .where(hostScope(serverId))
             .where(Criteria.or(
                 InstanceModel.CLAIM_FENCE.isNull(),
@@ -373,7 +379,6 @@ final class InstanceOperationGuard {
         long reserved = InstanceCapacity.windowReservedOf(stored);
         int matched = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
-            .where(InstanceModel.DELETED_AT.isNull())
             .where(hostScope(sourceServerId))
             .where(Criteria.or(
                 InstanceModel.CLAIM_FENCE.isNull(),

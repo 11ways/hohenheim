@@ -419,7 +419,6 @@ public class GitWebhookHandler {
         }
         Row application = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(applicationId))
-            .where(InstanceModel.DELETED_AT.isNull())
             .first();
         if (application == null) {
             return null;
@@ -447,7 +446,6 @@ public class GitWebhookHandler {
         return Models.get(PreviewDeploymentModel.class).find()
             .where(PreviewDeploymentModel.APPLICATION_ID.eq(applicationId))
             .where(PreviewDeploymentModel.REF.eq(ref))
-            .where(PreviewDeploymentModel.DELETED_AT.isNull())
             .first() != null;
     }
 

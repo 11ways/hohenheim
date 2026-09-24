@@ -95,9 +95,10 @@ public final class DnsClaimReleases {
             if (!(idValue instanceof Integer siteId)) {
                 return;
             }
-            Row stored = Models.get(SiteModel.class).findById(siteId);
-            if (stored == null || stored.get(SiteModel.DELETED_AT) != null) {
-                return; // a re-save of an already-trashed site releases nothing new
+            // The default find hides a trashed site: a re-save of an already-trashed site
+            // (or a write to a vanished one) releases nothing new.
+            if (Models.get(SiteModel.class).findById(siteId) == null) {
+                return;
             }
             List<Row> domains = Models.get(SiteDomainModel.class).find()
                 .where(SiteDomainModel.SITE_ID.eq(siteId)).all();
@@ -225,8 +226,7 @@ public final class DnsClaimReleases {
      */
     private static @NonNull List<Row> survivingLiveDomains(@NonNull Set<Integer> leavingDomainIds) {
         Set<Integer> liveSiteIds = new HashSet<>();
-        for (Row site : Models.get(SiteModel.class).find()
-                .where(SiteModel.DELETED_AT.isNull()).all()) {
+        for (Row site : Models.get(SiteModel.class).find().all()) {
             liveSiteIds.add(site.get(SiteModel.ID));
         }
         List<Row> survivors = new ArrayList<>();

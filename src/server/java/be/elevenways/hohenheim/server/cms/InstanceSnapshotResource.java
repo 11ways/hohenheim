@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -175,8 +176,9 @@ public class InstanceSnapshotResource extends RowResource {
     }
 
     private static @NonNull String instanceNameOf(@NonNull Row snapshot) {
-        Row instance = Models.get(InstanceModel.class)
-            .findById(snapshot.get(InstanceSnapshotModel.INSTANCE_ID));
+        // Trashed included: a snapshot outlives its instance and still names it.
+        Row instance = StoredRows.byId(Models.get(InstanceModel.class),
+            snapshot.get(InstanceSnapshotModel.INSTANCE_ID));
         return instance != null
             ? String.valueOf((Object) instance.get(InstanceModel.NAME))
             : String.valueOf((Object) snapshot.get(InstanceSnapshotModel.INSTANCE_ID));

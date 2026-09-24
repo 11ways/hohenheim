@@ -58,9 +58,7 @@ class LiveRemoteHostTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        remote = LiveRemoteHost.configured();
-        LiveLane.require(LiveLane.Need.REMOTE_HOST, remote != null,
-            "no live remote host enrolled at " + LiveRemoteHost.CONFIG);
+        remote = LiveRemoteHost.requireAvailable();
         LiveLane.require(LiveLane.Need.SSH_TOOLS,
             Files.isExecutable(Path.of("/usr/bin/ssh"))
                 && Files.isExecutable(Path.of("/usr/bin/ssh-keygen"))

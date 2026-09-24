@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -108,7 +109,7 @@ public final class GameDomains {
                 continue;
             }
             Row proxy = instances.find().where(InstanceModel.ID.eq(proxyId))
-                .where(InstanceModel.DELETED_AT.isNull()).first();
+                .first();
             if (proxy == null) {
                 continue;
             }
@@ -921,7 +922,9 @@ public final class GameDomains {
     }
 
     private static int proxyBindPort(int proxyId) {
-        Row proxy = Models.get(InstanceModel.class).findById(proxyId);
+        // Trashed included: destroy re-renders a dying proxy's config while it deletes the
+        // proxy's mappings, and its own setting is still the port that config binds.
+        Row proxy = StoredRows.byId(Models.get(InstanceModel.class), proxyId);
         if (proxy != null && proxy.get(InstanceModel.SETTINGS) instanceof Map<?, ?> settings
                 && settings.get("container_port") instanceof Number port
                 && port.intValue() > 0) {
@@ -960,7 +963,6 @@ public final class GameDomains {
     private static @NonNull Row requireInstance(int instanceId, @NonNull String fieldName) {
         Row instance = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
-            .where(InstanceModel.DELETED_AT.isNull())
             .first();
         if (instance == null) {
             throw Violations.ofField(fieldName, instanceId,

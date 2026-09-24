@@ -652,8 +652,8 @@ class AdminPagesTest extends HohenheimTestBase {
                 ".cms-record-toolbar pl-button[data-action-id='hohenheim:toggle_site']").innerText().trim())
                 .isEqualTo("Enable");
         } finally {
-            siteModel.delete(suffixSite);
-            siteModel.delete(toggleSite);
+            HardDeletes.row(siteModel, suffixSite);
+            HardDeletes.row(siteModel, toggleSite);
         }
 
         // A site of this test's own, created through the form like an operator's.

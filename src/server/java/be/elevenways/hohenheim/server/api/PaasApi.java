@@ -349,7 +349,7 @@ public final class PaasApi {
      */
     private static @NonNull List<Row> visibleSites(@NonNull AccessContext ctx) {
         var model = Models.get(SiteModel.class);
-        var query = model.find().where(SiteModel.DELETED_AT.isNull());
+        var query = model.find();
         Criteria scope = HohenheimAccess.managedSiteScope(ctx, model, SiteModel.ID::in);
         if (scope != null) {
             query.where(scope);
@@ -368,7 +368,6 @@ public final class PaasApi {
         Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
         Row site = siteId == null ? null : Models.get(SiteModel.class).find()
             .where(SiteModel.ID.eq(siteId))
-            .where(SiteModel.DELETED_AT.isNull())
             .first();
         if (site == null || !HohenheimAccess.canManageSite(ctx, siteId)) {
             conduit.notFound();
@@ -578,7 +577,6 @@ public final class PaasApi {
         }
         Row instance = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
-            .where(InstanceModel.DELETED_AT.isNull())
             .first();
         return instance != null && InstanceKinds.isReleaseManaged(
             instance.get(InstanceModel.KIND)) ? instanceId : null;

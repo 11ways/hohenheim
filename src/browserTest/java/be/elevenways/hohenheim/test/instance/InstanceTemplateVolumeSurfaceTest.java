@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.cms.InstanceTemplateVolumeResource;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.panel.Panel;
@@ -48,11 +49,11 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
     @AfterAll
     static void cleanUp() {
         Model instances = Models.get(InstanceModel.class);
-        for (Row row : instances.find().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
+        for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
             int instanceId = row.get(InstanceModel.ID);
             Models.get(InstanceVolumeModel.class).find()
                 .where(InstanceVolumeModel.INSTANCE_ID.eq(instanceId)).delete();
-            instances.delete(instanceId);
+            HardDeletes.byId(instances, instanceId);
         }
         Model templates = Models.get(InstanceTemplateModel.class);
         for (Row row : templates.find().where(InstanceTemplateModel.NAME.startsWith(PREFIX)).all()) {

@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.flash.FlashEncoding;
@@ -93,7 +94,7 @@ class DeployControlSettleTest extends HohenheimTestBase {
                 .as("step 4: and nothing was minted for the refused rollback")
                 .isEqualTo(opsBefore);
         } finally {
-            Models.get(InstanceModel.class).delete(applicationId);
+            HardDeletes.byId(Models.get(InstanceModel.class), applicationId);
         }
     }
 

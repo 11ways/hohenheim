@@ -185,7 +185,6 @@ public final class InstanceOverviewPage extends RecordDashboardPage<Row> {
         List<WidgetInstance> exposedBy = new ArrayList<>();
         for (Row site : Models.get(SiteModel.class).find()
                 .where(SiteModel.INSTANCE_ID.eq(instanceId))
-                .where(SiteModel.DELETED_AT.isNull())
                 .all()) {
             String siteName = site.get(SiteModel.NAME);
             Microcopy label = Microcopy.of("exposed_by").withFilter("scope", "instance_overview");

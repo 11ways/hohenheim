@@ -118,7 +118,6 @@ public final class HostApi {
         List<Map<String, Object>> workloads = new ArrayList<>();
         for (Row instance : Models.get(InstanceModel.class).find()
                 .where(InstanceModel.SERVER_ID.eq(serverId))
-                .where(InstanceModel.DELETED_AT.isNull())
                 .orderBy(InstanceModel.ID, SortOrder.ASC).all()) {
             Integer instanceId = instance.get(InstanceModel.ID);
             Map<String, Object> entry = new LinkedHashMap<>();

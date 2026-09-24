@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.stack;
 
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.protoblast.common.Blast;
@@ -53,7 +54,7 @@ final class StackServiceSecrets {
      */
     static int sealPlaintext() {
         int sealed = 0;
-        for (Row instance : Models.get(InstanceModel.class).find()
+        for (Row instance : Models.get(InstanceModel.class).find().withTrashed()
                 .where(InstanceModel.KIND.eq(StackServiceKind.ID.toString()))
                 .all()) {
             Map<String, Object> settings = StackInstances.settingsOf(instance);
@@ -76,7 +77,7 @@ final class StackServiceSecrets {
                         new InstanceVariables().storeSecretEnvironment(instanceId, environment);
                         // Re-read right before the whole-row save: the row above may be
                         // stale by now, and a save writes every column it carries.
-                        Row fresh = Models.get(InstanceModel.class).findById(instanceId);
+                        Row fresh = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
                         if (fresh != null) {
                             fresh.set(InstanceModel.SETTINGS, settings);
                             Models.get(InstanceModel.class).save(fresh);

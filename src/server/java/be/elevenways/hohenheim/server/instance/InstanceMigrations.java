@@ -520,8 +520,7 @@ public final class InstanceMigrations {
     }
 
     private static @NonNull List<Row> instancesOn(int serverId) {
-        var query = Models.get(InstanceModel.class).find()
-            .where(InstanceModel.DELETED_AT.isNull());
+        var query = Models.get(InstanceModel.class).find();
         if (serverId == ServerModel.localServerId()) {
             query = query.where(Criteria.or(
                 InstanceModel.SERVER_ID.isNull(), InstanceModel.SERVER_ID.eq(serverId)));
@@ -546,7 +545,6 @@ public final class InstanceMigrations {
      */
     public static void recoverInterrupted() {
         List<Row> stuck = Models.get(InstanceModel.class).find()
-            .where(InstanceModel.DELETED_AT.isNull())
             .where(InstanceModel.STATUS.eq(InstanceModel.STATUS_MIGRATING))
             .all();
         if (stuck.isEmpty()) {

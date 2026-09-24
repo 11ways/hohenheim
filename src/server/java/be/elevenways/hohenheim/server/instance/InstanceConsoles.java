@@ -544,7 +544,7 @@ public final class InstanceConsoles {
                 return;
             }
             Row row = Models.get(InstanceModel.class).findById(instanceId);
-            if (row == null || row.get(InstanceModel.DELETED_AT) != null) {
+            if (row == null) {
                 return;
             }
             if (stopObserved) {

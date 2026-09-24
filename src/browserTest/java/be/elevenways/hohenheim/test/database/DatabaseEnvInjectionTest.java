@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.server.runtime.ContainerState;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
@@ -50,7 +51,8 @@ class DatabaseEnvInjectionTest {
     void cleanRows() {
         // Generated rows are read-only outside a system scope, fixtures included -- the
         // sweeping scope is the lane that exists for "the declaring record is going away".
-        GeneratedRows.sweeping("test", () -> Models.get(InstanceModel.class).find().delete());
+        GeneratedRows.sweeping("test",
+            () -> HardDeletes.where(Models.get(InstanceModel.class), InstanceModel.ID.isNotNull()));
         Models.get(InstanceDatabaseModel.class).find().delete();
         Models.get(DatabaseModel.class).find().delete();
         // Engines last: the write funnel refuses an engine that still hosts a record.

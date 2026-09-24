@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.proxy.RouteClaims;
 import be.elevenways.zenit.auth.CapabilityScopes;
@@ -77,9 +78,9 @@ class SiteApiTest extends HohenheimTestBase {
     @AfterAll
     static void cleanUp() {
         SiteModel sites = Models.get(SiteModel.class);
-        for (Row site : sites.find().where(SiteModel.NAME.startsWith(PREFIX)).all()) {
+        for (Row site : sites.find().withTrashed().where(SiteModel.NAME.startsWith(PREFIX)).all()) {
             // A hard delete cascades the domain rows (SiteModel's remove hook).
-            sites.delete(site.get(SiteModel.ID));
+            HardDeletes.byId(sites, site.get(SiteModel.ID));
         }
     }
 
@@ -305,7 +306,7 @@ class SiteApiTest extends HohenheimTestBase {
         HttpResponse<String> deleted = keyPost(keyAdmin, "/api/v1/sites/" + redirectSiteId + "/delete", "");
         assertThat(deleted.statusCode()).as("step 9: the site is deleted: " + deleted.body())
             .isEqualTo(200);
-        assertThat((Object) Models.get(SiteModel.class).findById(redirectSiteId).get(SiteModel.DELETED_AT))
+        assertThat((Object) StoredRows.byId(Models.get(SiteModel.class), redirectSiteId).get(SiteModel.DELETED_AT))
             .as("step 9: soft-deleted, exactly like the form").isNotNull();
         assertThat(keyGet(keyAdmin, "/api/v1/sites/" + redirectSiteId).statusCode())
             .as("step 9: a trashed site reads as absent").isEqualTo(404);

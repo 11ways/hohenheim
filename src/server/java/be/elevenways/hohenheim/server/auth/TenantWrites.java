@@ -13,6 +13,8 @@ import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.SoftDeleteWrites;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
@@ -259,7 +261,9 @@ public final class TenantWrites {
             }
             if (isTenantOriginated()) {
                 checkSiteWrite(row);
-            } else {
+            } else if (!SoftDeleteWrites.onlyTrashes(context)) {
+                // The baseline is a SHAPE rule: an upstream an older release accepted must
+                // not make the site undeletable.
                 checkProxyUpstream(row);
             }
         });
@@ -738,7 +742,9 @@ public final class TenantWrites {
     private static void checkSiteWrite(@NonNull Row row) {
         Model model = Models.get(SiteModel.class);
         Object idValue = row.has(SiteModel.ID.getName()) ? row.get(SiteModel.ID) : null;
-        Row stored = idValue != null ? model.findById(idValue) : null;
+        // Trashed included: a write to a trashed site is an UPDATE of it (deleted_at is a
+        // frozen column), never a create that skips the frozen-column rule.
+        Row stored = StoredRows.byId(model, idValue);
 
         Object kind = effective(row, stored, SiteModel.UPSTREAM_KIND);
         Object settings = effective(row, stored, SiteModel.SETTINGS);
@@ -898,7 +904,7 @@ public final class TenantWrites {
         if (id == null) {
             return null;
         }
-        Row stored = Models.get(SiteModel.class).findById(id);
+        Row stored = StoredRows.byId(Models.get(SiteModel.class), id);
         return stored != null ? stored.get(SiteModel.UPSTREAM_KIND) : null;
     }
 
@@ -969,7 +975,8 @@ public final class TenantWrites {
         Model model = Models.get(InstanceModel.class);
         Object idValue = row.has(InstanceModel.ID.getName())
             ? row.get(InstanceModel.ID) : null;
-        Row stored = idValue != null ? model.findById(idValue) : null;
+        // Trashed included, for the reason checkSiteWrite gives.
+        Row stored = StoredRows.byId(model, idValue);
         if (stored == null) {
             return;
         }

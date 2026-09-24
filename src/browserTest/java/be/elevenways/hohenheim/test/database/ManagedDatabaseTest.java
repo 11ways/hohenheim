@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -278,6 +279,16 @@ class ManagedDatabaseTest {
         try {
             // 2. Replace the engine container with an UNLABELLED squatter on the same name
             //    (what a force-removing path would have destroyed without a thought).
+            //    AIDEV-NOTE: the engine is STOPPED through the product first, an observed
+            //    stop. Force-removing a RUNNING engine ends its console stream as an
+            //    unobserved exit, which the crash policy answers by redeploying on its own
+            //    thread -- and that redeploy holds the instance's operation lock, so step 3
+            //    raced it and was refused as instance_operation_in_progress instead of
+            //    reaching the attribution gate (the 2026-09-24 --all run).
+            int engineId = Db.supply(datasource, () -> DatabaseInstances.owned(
+                Models.get(DatabaseModel.class).findByName(name).get(DatabaseModel.ID))
+                .get(InstanceModel.ID));
+            Db.run(datasource, () -> new InstanceService().stop(engineId));
             docker.removeContainer(handle, true);
             docker.createContainer(handle, Map.of(
                 "Image", TestImages.ALPINE, "Cmd", List.of("sleep", "300")),

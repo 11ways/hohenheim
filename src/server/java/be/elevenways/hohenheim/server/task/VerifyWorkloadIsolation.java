@@ -278,7 +278,6 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
             return;
         }
         for (Row row : Models.get(InstanceModel.class).find()
-                .where(InstanceModel.DELETED_AT.isNull())
                 .where(InstanceModel.STATUS.in(InstanceModel.LIVE_GUEST_STATUSES))
                 .all()) {
             Integer id = row.get(InstanceModel.ID);

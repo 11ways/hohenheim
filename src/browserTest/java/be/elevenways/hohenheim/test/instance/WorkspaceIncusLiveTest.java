@@ -80,9 +80,7 @@ class WorkspaceIncusLiveTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        remote = LiveIncusHost.configuredSecondary();
-        LiveLane.require(LiveLane.Need.INCUS_HOST, remote != null,
-            "no SECOND live incus host (url_b) enrolled at " + LiveIncusHost.CONFIG);
+        remote = LiveIncusHost.requireSecondary();
 
         datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();

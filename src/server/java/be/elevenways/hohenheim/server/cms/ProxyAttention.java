@@ -121,7 +121,6 @@ public final class ProxyAttention {
         }
         List<Row> sites = Models.get(SiteModel.class).find()
             .where(SiteModel.ENABLED.eq(true))
-            .where(SiteModel.DELETED_AT.isNull())
             .all();
         for (Row site : sites) {
             Integer siteId = site.get(SiteModel.ID);

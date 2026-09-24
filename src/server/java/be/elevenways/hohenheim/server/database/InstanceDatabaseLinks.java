@@ -100,7 +100,8 @@ public final class InstanceDatabaseLinks {
     private static void refuseWhileAttachedToLiveWorkloads(@NonNull RemoveFromDatasource context) {
         List<Row> live = Models.get(InstanceDatabaseModel.class).find()
             .where(PendingDeletes.dependents(InstanceDatabaseModel.DATABASE, context))
-            .where(Criteria.related(InstanceDatabaseModel.INSTANCE, InstanceModel.DELETED_AT.isNull()))
+            // A relation hop runs no find hook, so the trash half is spelled (by the behaviour).
+            .where(Criteria.related(InstanceDatabaseModel.INSTANCE, InstanceModel.SOFT_DELETE.isNotTrashed()))
             .all();
         if (live.isEmpty()) {
             return;
@@ -192,7 +193,6 @@ public final class InstanceDatabaseLinks {
         for (Row link : Models.get(InstanceDatabaseModel.class).findByDatabaseId(databaseId)) {
             Row instance = instances.find()
                 .where(InstanceModel.ID.eq(link.get(InstanceDatabaseModel.INSTANCE_ID)))
-                .where(InstanceModel.DELETED_AT.isNull())
                 .first();
             if (instance != null) {
                 live.add(instance);

@@ -169,6 +169,78 @@ class InstanceStatusReconcileTest {
     }
 
     /**
+     * The OOM kill inside a still-running container is STORED by the sweep, the one fact the
+     * status column cannot carry, so the dashboard can name it without asking a daemon.
+     */
+    @Test
+    void anOomKillInsideARunningContainerIsStoredUntilARestartClearsIt() {
+        Db.run(datasource, () -> {
+            InstanceService service = new InstanceService();
+            InstanceStatusReconciler reconciler = new InstanceStatusReconciler();
+            int id = BackupLaneFixture.instanceRecord("reconcile-oom", hostId);
+            service.deploy(id);
+
+            // 1. A serving workload: the confirmation stores no kill.
+            assertThat(reconciler.reconcile(id).verdict())
+                .as("step 1: a serving workload is confirmed")
+                .isEqualTo(Verdict.CONFIRMED);
+            assertThat(killedAtOf(id))
+                .as("step 1: and no kill is stored")
+                .isNull();
+
+            // 2. The kernel kills the workload; the container (its entrypoint) lives on,
+            //    so the daemon still says RUNNING and the status must not move -- but the
+            //    kill is now a stored fact.
+            FakeNativeDaemons.daemonOf(hostId)
+                .get(FakeNativeDaemons.handleOf(id)).oomKilled = true;
+            assertThat(reconciler.reconcile(id).verdict())
+                .as("step 2: a running container is still a confirmation")
+                .isEqualTo(Verdict.CONFIRMED);
+            assertThat((String) statusOf(id))
+                .as("step 2: the status keeps saying what the daemon says")
+                .isEqualTo(InstanceModel.STATUS_RUNNING);
+            Instant firstKill = killedAtOf(id);
+            assertThat(firstKill)
+                .as("step 2: the OOM kill is stored")
+                .isNotNull();
+
+            // 3. A later sweep keeps the FIRST moment, so the column says since when.
+            assertThat(reconciler.reconcile(id).verdict())
+                .as("step 3: confirmed again")
+                .isEqualTo(Verdict.CONFIRMED);
+            assertThat(killedAtOf(id))
+                .as("step 3: the kill keeps its first-observed moment")
+                .isEqualTo(firstKill);
+
+            // 4. An unanswering daemon writes nothing: the stored kill neither clears nor moves.
+            FakeNativeDaemons.UNREACHABLE_HANDLES.add(FakeNativeDaemons.handleOf(id));
+            try {
+                assertThat(reconciler.reconcile(id).verdict())
+                    .as("step 4: an unreachable daemon is not evidence")
+                    .isEqualTo(Verdict.COULD_NOT_ASK);
+            } finally {
+                FakeNativeDaemons.UNREACHABLE_HANDLES.remove(FakeNativeDaemons.handleOf(id));
+            }
+            assertThat(killedAtOf(id))
+                .as("step 4: so the stored kill stands")
+                .isEqualTo(firstKill);
+
+            // 5. A redeploy replaces the workload: the operation's own stamp clears the kill
+            //    at once, before any sweep, and the next sweep has nothing to re-observe.
+            service.deploy(id);
+            assertThat(killedAtOf(id))
+                .as("step 5: a deploy clears the stored kill")
+                .isNull();
+            assertThat(reconciler.reconcile(id).verdict())
+                .as("step 5: the restarted workload is confirmed")
+                .isEqualTo(Verdict.CONFIRMED);
+            assertThat(killedAtOf(id))
+                .as("step 5: with no kill stored again")
+                .isNull();
+        });
+    }
+
+    /**
      * The sweep must not fight an operation in flight: a deploy that is between its
      * daemon work and its own outcome write legitimately disagrees with the record.
      */
@@ -320,6 +392,11 @@ class InstanceStatusReconcileTest {
     private static Instant observedAtOf(int instanceId) {
         return Models.get(InstanceModel.class).findById(instanceId)
             .get(InstanceModel.STATUS_OBSERVED_AT);
+    }
+
+    private static Instant killedAtOf(int instanceId) {
+        return Models.get(InstanceModel.class).findById(instanceId)
+            .get(InstanceModel.WORKLOAD_KILLED_AT);
     }
 
     private static List<Row> activity(int instanceId, String action) {

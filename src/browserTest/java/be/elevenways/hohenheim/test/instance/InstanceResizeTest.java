@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceResize;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -63,7 +64,7 @@ class InstanceResizeTest {
         InstanceResize.resetRecreaterForTesting();
         Db.run(datasource, () -> {
             for (Integer id : this.instances) {
-                Models.get(InstanceModel.class).delete(id);
+                HardDeletes.byId(Models.get(InstanceModel.class), id);
             }
         });
         this.instances.clear();

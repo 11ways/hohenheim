@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceStatsHandler;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -95,7 +96,7 @@ class InstanceStatsRefusalTest extends HohenheimTestBase {
                 .startsWith("No live stats: ")
                 .contains("has no live-stats lane");
         } finally {
-            Models.get(InstanceModel.class).delete(instanceId);
+            HardDeletes.byId(Models.get(InstanceModel.class), instanceId);
             AuthModels.users().delete(tenantId);
         }
     }

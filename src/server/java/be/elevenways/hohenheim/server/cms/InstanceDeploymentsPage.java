@@ -227,7 +227,6 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
         String url = path;
         Row site = Models.get(SiteModel.class).find()
             .where(SiteModel.INSTANCE_ID.eq(instanceId))
-            .where(SiteModel.DELETED_AT.isNull())
             .first();
         Row domain = site == null ? null : Models.get(SiteDomainModel.class).find()
             .where(SiteDomainModel.SITE_ID.eq(site.get(SiteModel.ID)))

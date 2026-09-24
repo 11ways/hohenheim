@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.server.cms.InstanceAttention;
 import be.elevenways.hohenheim.server.task.BackupControlPlane;
@@ -103,7 +104,7 @@ class InstanceAttentionTest {
 
             // 2. Soft-deleting the crashed instance silences it: an item about a record in
             //    the trash is noise nobody can act on.
-            Row trashed = Models.get(InstanceModel.class).findById(crashed);
+            Row trashed = StoredRows.byId(Models.get(InstanceModel.class), crashed);
             trashed.set(InstanceModel.DELETED_AT, Now.instant());
             Models.get(InstanceModel.class).save(trashed);
             assertThat(raised(InstanceAttention::crashedInstances))
@@ -293,7 +294,7 @@ class InstanceAttentionTest {
     }
 
     private static void trash(int instanceId) {
-        Row row = Models.get(InstanceModel.class).findById(instanceId);
+        Row row = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
         row.set(InstanceModel.DELETED_AT, Now.instant());
         Models.get(InstanceModel.class).save(row);
     }

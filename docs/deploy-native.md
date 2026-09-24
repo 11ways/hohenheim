@@ -393,6 +393,41 @@ verify that line before anything else.
    admitted at all.
 4. Preflight + Admit the Incus row, then create instances against either host.
 
+### Preflight probe images (hosts without registry access)
+
+The Docker preflight's probe container runs exactly
+`alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b`
+(`server/docker/PinnedImages.ALPINE`). It is pulled BY DIGEST and recognized only by
+that digest (a `RepoDigests` entry `alpine@sha256:28bd5fe8...`); the tag is
+informational, and any other alpine on the host (`alpine:latest` included, even the
+same build under another name) does not count. On a host that cannot reach Docker
+Hub the probe then fails `container_kernel` with a detail naming this reference.
+Preload it:
+
+    # on a machine with registry access
+    docker pull alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
+    docker tag alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b alpine:3.24.1
+    docker save -o hohenheim-probe-alpine.tar alpine:3.24.1
+
+    # on the host
+    sudo docker load -i hohenheim-probe-alpine.tar
+    sudo docker image inspect --format '{{json .RepoDigests}}' alpine:3.24.1
+
+The last command must print a list containing
+`alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b`,
+because that entry is the whole presence check. If it prints `[]`, the daemon did not
+keep the registry digest across save/load (Docker's classic, non-containerd image
+store does not); the loaded copy will not satisfy the preflight, and the host needs a
+registry mirror it can reach that serves this digest (`registry-mirrors` in
+`/etc/docker/daemon.json`) or the containerd image store. When `PinnedImages.ALPINE`
+is bumped, preload the new reference before the next Preflight.
+
+The Incus preflight's probe instance is created from `alpine/3.22/default` on
+`https://images.linuxcontainers.org` (`IncusPreflight.PROBE_IMAGE`; its note says why
+that is an alias and not a fingerprint), and the stored report records the fingerprint
+the daemon actually ran as the fact `probe_image_fingerprint`. When the image cannot be
+obtained, every kernel check fails as UNKNOWN with a detail naming that image and server.
+
 ## Verified on daystrom (2026-08-06)
 
 Fresh DB boot with 104 migrations; both preflights green over the local

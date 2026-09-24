@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
@@ -786,7 +787,7 @@ class InstanceMigrationTest {
             // 8. Every booking this journey took goes home.
             service.destroy(hostlessId);
             service.destroy(neighbour);
-            Models.get(InstanceModel.class).delete(sentinel);
+            HardDeletes.byId(Models.get(InstanceModel.class), sentinel);
             assertThat(InstanceCapacity.bookedMbOn(dst))
                 .as("step 8: the destination ends empty").isEqualTo(0);
             assertThat(InstanceCapacity.bookedMbOn(localId))

@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ApplicationUpstreams;
@@ -190,7 +191,7 @@ class InstanceUpstreamStalenessTest {
                     .as("step 5: a destroyed workload leaves no upstream behind")
                     .isNull();
             } finally {
-                Row row = Models.get(InstanceModel.class).findById(instanceId);
+                Row row = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
                 if (row != null && row.get(InstanceModel.DELETED_AT) == null) {
                     service.destroy(instanceId);
                 }
@@ -275,7 +276,7 @@ class InstanceUpstreamStalenessTest {
                     .as("step 6: and nothing about the upstream moved")
                     .isEqualTo(beforeSweep);
             } finally {
-                Row row = Models.get(InstanceModel.class).findById(instanceId);
+                Row row = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
                 if (row != null && row.get(InstanceModel.DELETED_AT) == null) {
                     service.destroy(instanceId);
                 }

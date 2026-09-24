@@ -112,9 +112,12 @@ public final class BanResource extends RowResource {
             FieldAccess.customRecordAware((ctx, record) -> record == null
                 ? FieldAccess.Decision.EDITABLE : FieldAccess.Decision.HIDDEN)));
         for (String stored : STORED_STATE) {
+            // Hidden only on the CREATE form, never on a record: the list still filters and
+            // sorts by these facts (the Active filter), so the cross-record answer is declared.
             bindings.add(ResourceFieldBinding.of(stored,
                 FieldAccess.customRecordAware((ctx, record) -> record == null
-                    ? FieldAccess.Decision.HIDDEN : FieldAccess.Decision.READONLY)));
+                    ? FieldAccess.Decision.HIDDEN : FieldAccess.Decision.READONLY)
+                    .acrossRecords(ctx -> FieldAccess.Decision.READONLY)));
         }
         return bindings;
     }

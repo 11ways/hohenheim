@@ -72,8 +72,8 @@ class TenantDomainDeleteOrderTest extends HohenheimTestBase {
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, own.get(SiteModel.ID),
                 HohenheimAccess.MANAGE);
             domains.find().where(SiteDomainModel.ID.eq(domainId)).delete();
-            sites.delete(victim);
-            sites.delete(own);
+            HardDeletes.row(sites, victim);
+            HardDeletes.row(sites, own);
             ledger.find().where(ReleasedRouteClaimModel.HOSTNAME.eq(HOST)).delete();
         }
     }

@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.TemplatePortability;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
@@ -65,13 +66,13 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
     @AfterAll
     static void cleanUp() {
         Model instances = Models.get(InstanceModel.class);
-        for (Row row : instances.find().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
+        for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
             for (Row variable : Models.get(InstanceVariableModel.class)
                     .findByInstanceId(row.get(InstanceModel.ID))) {
                 Models.get(InstanceVariableModel.class)
                     .delete(variable.get(InstanceVariableModel.ID));
             }
-            instances.delete(row.get(InstanceModel.ID));
+            HardDeletes.byId(instances, row.get(InstanceModel.ID));
         }
         Model templates = Models.get(InstanceTemplateModel.class);
         for (Row row : templates.find().where(InstanceTemplateModel.NAME.startsWith(PREFIX)).all()) {

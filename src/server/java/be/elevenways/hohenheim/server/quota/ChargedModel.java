@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceDeviceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
@@ -14,14 +15,13 @@ import be.elevenways.hohenheim.server.preview.PreviewQuota;
 import be.elevenways.hohenheim.server.quota.ChargedDimension.Charge;
 import be.elevenways.hohenheim.server.quota.ChargedDimension.Transition;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.orm.behaviour.SoftDeleteBehaviour;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.datasource.context.SaveToDatasource;
-import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
-import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.quota.Quotas;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -43,11 +43,18 @@ import java.util.Set;
  * a hard delete releases what every live doomed row held, after the rows are gone.
  *
  * AIDEV-NOTE: the release rides the deleted_at TRANSITION because the destroy paths
- * soft-delete through save() -- the remove hooks never fire there. The remove pairing exists
- * so a hard delete (tests, TenantDatabases.abandon, device detach) cannot leak either. Known
- * bypass, by the ledger's own contract: updateAll() fires no hooks, so a bulk edit that stamps
- * deleted_at set-based skips the release (the migration handoff moves its host charge
- * explicitly for the same reason).
+ * soft-delete through save() -- SoftDeleteBehaviour's delete stamps deleted_at through the
+ * normal save path, and the remove hooks never fire there. The remove pairing exists so a
+ * hard delete (tests, TenantDatabases.abandon, device detach, a forceDelete) cannot leak
+ * either. Known bypass, by the ledger's own contract: updateAll() fires no hooks, so a bulk
+ * edit that stamps deleted_at set-based skips the release (the migration handoff moves its
+ * host charge explicitly for the same reason).
+ *
+ * AIDEV-NOTE: whether a model is soft-deletable, and whether a row is trashed, are the
+ * model's own SoftDeleteBehaviour facts (read off the schema), never a column named here.
+ * The STORED row of a write is read trashed included ({@link StoredRows}): the behaviour's
+ * find hook hides a trashed row, and reading a restore's stored row as absent would book it
+ * as a CREATE instead of a RESTORE.
  *
  * AIDEV-NOTE: ONE before-write hook per model, dimensions in declared order, and a refusal
  * anywhere in it UNWINDS every ledger move the earlier dimensions made. Before this, the
@@ -66,36 +73,33 @@ import java.util.Set;
  */
 public enum ChargedModel {
 
-    /** Instances: the owner's slot and memory, the host's memory, the root disk. */
-    INSTANCES(InstanceModel.class, InstanceModel.SCHEMA, InstanceModel.DELETED_AT,
+    /** Instances (soft-deleted): the owner's slot and memory, the host's memory, the root disk. */
+    INSTANCES(InstanceModel.class, InstanceModel.SCHEMA,
         InstanceQuota.COUNT, InstanceQuota.MEMORY, InstanceCapacity.HOST_MEMORY,
         InstanceRootDiskQuota.ROOT_DISK),
 
     /** Attached devices: disk GB and extra NICs; hard-deleted only. */
-    DEVICES(InstanceDeviceModel.class, InstanceDeviceModel.SCHEMA, null,
+    DEVICES(InstanceDeviceModel.class, InstanceDeviceModel.SCHEMA,
         InstanceDeviceQuota.DISK, InstanceDeviceQuota.NICS),
 
-    /** Preview deployments: one slot per live preview. */
-    PREVIEWS(PreviewDeploymentModel.class, PreviewDeploymentModel.SCHEMA,
-        PreviewDeploymentModel.DELETED_AT, PreviewQuota.PREVIEWS),
+    /** Preview deployments (soft-deleted): one slot per live preview. */
+    PREVIEWS(PreviewDeploymentModel.class, PreviewDeploymentModel.SCHEMA, PreviewQuota.PREVIEWS),
 
-    /** Site records: one slot per live site. */
-    SITES(SiteModel.class, SiteModel.SCHEMA, SiteModel.DELETED_AT, SiteQuota.SITES),
+    /** Site records (soft-deleted): one slot per live site. */
+    SITES(SiteModel.class, SiteModel.SCHEMA, SiteQuota.SITES),
 
     /** Managed databases: one slot per record; hard-deleted only. */
-    DATABASES(DatabaseModel.class, DatabaseModel.SCHEMA, null, DatabaseQuota.DATABASES);
+    DATABASES(DatabaseModel.class, DatabaseModel.SCHEMA, DatabaseQuota.DATABASES);
 
     private final @NonNull Class<? extends Model> modelClass;
     private final @NonNull Schema schema;
-    private final @Nullable DateTimeField deletedAt;
     private final @NonNull List<ChargedDimension> dimensions;
     private volatile boolean installed;
 
     ChargedModel(@NonNull Class<? extends Model> modelClass, @NonNull Schema schema,
-                 @Nullable DateTimeField deletedAt, @NonNull ChargedDimension... dimensions) {
+                 @NonNull ChargedDimension... dimensions) {
         this.modelClass = modelClass;
         this.schema = schema;
-        this.deletedAt = deletedAt;
         this.dimensions = List.of(dimensions);
     }
 
@@ -133,13 +137,9 @@ public enum ChargedModel {
         DoomedRows.handOver(this.schema, this::doomedReleases, this::releaseDoomed);
     }
 
-    /** @return every live row of this model (the reconciler's truth) */
+    /** @return every live row of this model (the reconciler's truth; trashed rows are hidden) */
     public @NonNull List<Row> liveRows() {
-        QueryBuilder<Row> query = this.model().find();
-        if (this.deletedAt != null) {
-            query.where(this.deletedAt.isNull());
-        }
-        return query.all();
+        return this.model().find().all();
     }
 
     // -- the write lifecycle --------------------------------------------------
@@ -281,28 +281,32 @@ public enum ChargedModel {
         return Models.get(this.modelClass);
     }
 
+    /** The stored row a write targets, trashed included, or null on a create. */
     private @Nullable Row storedOf(@NonNull Row row) {
-        Model model = this.model();
-        String key = model.getPrimaryKeyField().getName();
-        if (!row.has(key) || row.get(key) == null) {
-            return null;
-        }
-        return model.findById(row.get(key));
+        return StoredRows.of(this.model(), row);
+    }
+
+    /** The model's soft delete, or null for a model that is only ever hard-deleted. */
+    private @Nullable SoftDeleteBehaviour softDelete() {
+        return this.schema.getBehaviour(SoftDeleteBehaviour.class);
     }
 
     private boolean isLive(@NonNull Row stored) {
-        return this.deletedAt == null || stored.get(this.deletedAt) == null;
+        SoftDeleteBehaviour softDelete = this.softDelete();
+        return softDelete == null || !softDelete.isTrashed(stored);
     }
 
     /** Whether the write leaves the row live: the staged deleted_at when carried, else the stored one. */
     private boolean willBeLive(@NonNull Row row, @Nullable Row stored) {
-        if (this.deletedAt == null) {
+        SoftDeleteBehaviour softDelete = this.softDelete();
+        if (softDelete == null) {
             return true;
         }
-        if (row.has(this.deletedAt.getName())) {
-            return row.get(this.deletedAt.getName()) == null;
+        String deletedAt = softDelete.deletedAtField().getName();
+        if (row.has(deletedAt)) {
+            return row.get(deletedAt) == null;
         }
-        return stored == null || stored.get(this.deletedAt) == null;
+        return stored == null || !softDelete.isTrashed(stored);
     }
 
     private void reportDerived(@NonNull ChargedDimension dimension, @NonNull Row stored,

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.proxy.RouteClaims;
 import be.elevenways.hohenheim.server.proxy.RouteClaims.ClaimConflict;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -87,14 +88,18 @@ public final class SiteEnableInvariant {
     }
 
     /**
-     * The stored site a write targets, or null for a create -- a site with no id has no
-     * domain rows yet and therefore claims nothing.
+     * The stored site a write targets, TRASHED INCLUDED, or null for a create -- a site with
+     * no id has no domain rows yet and therefore claims nothing.
+     *
+     * AIDEV-NOTE: a restore is a trashed-to-live transition and must be judged and re-claimed
+     * like an enable; the behaviour's default find would hide the stored row and wave the
+     * restore through with its domains unclaimed.
      */
     private static @Nullable Row storedSiteOf(@Nullable Row row) {
         if (row == null || !row.has(SiteModel.ID.getName()) || row.get(SiteModel.ID) == null) {
             return null;
         }
-        return Models.get(SiteModel.class).findById(row.get(SiteModel.ID));
+        return StoredRows.byId(Models.get(SiteModel.class), row.get(SiteModel.ID));
     }
 
     /** Whether the site will route traffic AFTER this write, reading through partial rows. */

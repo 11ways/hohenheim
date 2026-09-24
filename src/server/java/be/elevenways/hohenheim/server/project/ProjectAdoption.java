@@ -66,10 +66,9 @@ public final class ProjectAdoption {
         Map<String, List<Object>> sitesByPack = new LinkedHashMap<>();
         Map<String, List<Object>> instancesByPack = new LinkedHashMap<>();
 
-        collect(Models.get(SiteModel.class), SiteModel.MODEL_ID, SiteModel.DELETED_AT.getName(),
-            subjectsByPack, sitesByPack);
+        collect(Models.get(SiteModel.class), SiteModel.MODEL_ID, subjectsByPack, sitesByPack);
         collect(Models.get(InstanceModel.class), InstanceModel.MODEL_ID,
-            InstanceModel.DELETED_AT.getName(), subjectsByPack, instancesByPack);
+            subjectsByPack, instancesByPack);
 
         int projectsCreated = 0;
         int sitesAdopted = 0;
@@ -109,13 +108,11 @@ public final class ProjectAdoption {
     // -- collection -----------------------------------------------------------
 
     private static void collect(@NonNull Model model, @NonNull Identifier modelId,
-                                @NonNull String deletedAtColumn,
                                 @NonNull Map<String, Set<String>> subjectsByPack,
                                 @NonNull Map<String, List<Object>> recordsByPack) {
+        // LIVE rows only: both models soft-delete through SoftDeleteBehaviour, whose find
+        // hook hides a trashed record from this read.
         for (Row row : model.find().all()) {
-            if (row.get(deletedAtColumn) != null) {
-                continue;
-            }
             Object id = row.get(model.getPrimaryKeyField().getName());
             if (id == null) {
                 continue;
@@ -169,7 +166,7 @@ public final class ProjectAdoption {
     private static int moveChargedBucket(@NonNull Object instanceId, @NonNull String newPack) {
         Model instances = Models.get(InstanceModel.class);
         Row row = instances.findById(instanceId);
-        if (row == null || row.get(InstanceModel.DELETED_AT) != null) {
+        if (row == null) {
             return 0;
         }
         int moved = InstanceQuota.moveOwnerCharges(row, newPack);

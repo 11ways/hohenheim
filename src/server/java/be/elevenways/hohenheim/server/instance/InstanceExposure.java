@@ -45,7 +45,6 @@ public final class InstanceExposure {
         return Models.get(SiteModel.class).find()
             .where(SiteModel.INSTANCE_ID.eq(instanceId))
             .where(SiteModel.ENABLED.eq(true))
-            .where(SiteModel.DELETED_AT.isNull())
             .orderBy(SiteModel.NAME, SortOrder.ASC)
             .all();
     }

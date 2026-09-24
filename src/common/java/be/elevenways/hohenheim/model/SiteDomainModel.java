@@ -282,7 +282,7 @@ public class SiteDomainModel extends Model {
                 row.set(MATCH_TYPE, effectiveMatchType(canonical, matchType));
             }
             Integer siteId = (Integer) effective(row, SITE_ID);
-            Row site = siteId != null ? Models.get(SiteModel.class).findById(siteId) : null;
+            Row site = StoredRows.byId(Models.get(SiteModel.class), siteId);
             if (site == null || !SiteModel.UPSTREAM_TLS_PASSTHROUGH
                     .equals(site.get(SiteModel.UPSTREAM_KIND))) return;
             row.set(FORCE_SSL, false);

@@ -185,7 +185,7 @@ public final class HostAdmission {
         }
         for (Row instance : Models.get(InstanceModel.class).find()
                 .where(InstanceModel.SERVER_ID.eq(serverId))
-                .where(InstanceModel.DELETED_AT.isNull()).all()) {
+                .all()) {
             String charged = instance.get(InstanceModel.QUOTA_BUCKET);
             if (charged == null || !charged.equals(ownerBucket)) {
                 throw Violations.ofForm(violation("host_dedicated_to_other")

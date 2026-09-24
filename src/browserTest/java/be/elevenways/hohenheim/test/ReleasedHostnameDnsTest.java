@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService.Status;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -263,16 +262,13 @@ class ReleasedHostnameDnsTest extends HohenheimTestBase {
     }
 
     /**
-     * Soft-delete a site the way the runtime does: stamp deleted_at and save. That is the
-     * exact transition SiteResource.deleteRow performs after teardown (which needs docker),
-     * and the one InstanceService.destroy uses -- a plain save(), which is what fires the
+     * Soft-delete a site the way the runtime does: the model's delete, which the site's
+     * SoftDeleteBehaviour turns into a deleted_at stamp through save() -- the exact transition
+     * SiteResource.deleteRow performs after teardown (which needs docker), and what fires the
      * release hooks (there is no remove hook on the soft-delete path).
      */
     private static void softDeleteSite(int siteId) {
-        Model siteModel = Models.get(SiteModel.class);
-        Row site = siteModel.findById(siteId);
-        site.set(SiteModel.DELETED_AT, Now.instant());
-        siteModel.save(site);
+        Models.get(SiteModel.class).delete(siteId);
     }
 
     private static List<String> servedA(String origin, String owner) {

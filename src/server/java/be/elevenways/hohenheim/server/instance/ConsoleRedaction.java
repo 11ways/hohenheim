@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -69,7 +70,8 @@ public final class ConsoleRedaction {
     public static @NonNull Set<String> secretsOf(int instanceId) {
         Set<String> secrets = new LinkedHashSet<>();
         try {
-            Row instance = Models.get(InstanceModel.class).findById(instanceId);
+            // Trashed included: a destroyed record's logs still carry its environment secrets.
+            Row instance = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
             Integer environmentId = instance == null ? null
                 : instance.get(InstanceModel.ENVIRONMENT_ID);
             if (environmentId != null) {

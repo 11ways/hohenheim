@@ -82,8 +82,9 @@ public final class SiteApi {
             }
             try {
                 // SiteResource.deleteRow is the soft delete the admin form runs, previews
-                // reclaimed and deleted_at stamped; the offered-but-dead lockout (the site
-                // serving this very panel) refuses through ResourceWrites like the form does.
+                // reclaimed and deleted_at stamped by the site's SoftDeleteBehaviour; the
+                // offered-but-dead lockout (the site serving this very panel) refuses
+                // through ResourceWrites like the form does.
                 ResourceWrites.delete(SITES, site, ctx);
                 return ApiConduits.json(Map.of("id", site.get(SiteModel.ID), "status", "deleted"));
             } catch (Violations refused) {

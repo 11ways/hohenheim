@@ -132,6 +132,6 @@ public final class SiteAuthProviderGuards {
     }
 
     private static @NonNull QueryBuilder<Row> liveSites() {
-        return Models.get(SiteModel.class).find().where(SiteModel.DELETED_AT.isNull());
+        return Models.get(SiteModel.class).find();
     }
 }

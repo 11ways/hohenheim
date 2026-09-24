@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.*;
@@ -90,17 +89,16 @@ class SiteHistoryTest extends HohenheimTestBase {
         var again = adminPostForm("/admin/sites/" + siteId, "name=Doomed+Site+Final&" + SITE_FORM);
         assertThat(again.statusCode()).isIn(200, 302, 303);
 
-        // 2. Delete it the way SiteResource does: sites are trashed by hand, so the
-        //    row stays physically present with deleted_at stamped.
+        // 2. Delete it the way SiteResource does: the site's SoftDeleteBehaviour trashes it,
+        //    so the row stays physically present with deleted_at stamped.
         Row live = model.find().where(SiteModel.ID.eq(siteId)).first();
-        live.set(SiteModel.DELETED_AT, Now.instant());
-        model.save(live);
+        model.delete(live);
 
         // 3. Restoring the revision taken while the site was live rewinds the name
         //    and nothing else. A revision restore is not an undelete.
         SiteModel.REVISIONABLE.restore(model, siteId, liveRevision);
 
-        Row after = model.find().where(SiteModel.ID.eq(siteId)).first();
+        Row after = model.find().withTrashed().where(SiteModel.ID.eq(siteId)).first();
         assertThat(after).isNotNull();
         assertThat((String) after.get(SiteModel.NAME)).isEqualTo("Doomed Site Renamed");
         assertThat((Object) after.get(SiteModel.DELETED_AT))

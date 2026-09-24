@@ -3,8 +3,10 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TestDatabases;
@@ -74,7 +76,7 @@ class InstanceCapacityTest {
     void cleanUp() {
         Db.run(datasource, () -> {
             for (Integer id : this.instances) {
-                Models.get(InstanceModel.class).delete(id);
+                HardDeletes.byId(Models.get(InstanceModel.class), id);
             }
             for (Integer id : this.hosts) {
                 Models.get(ServerModel.class).delete(id);
@@ -197,7 +199,7 @@ class InstanceCapacityTest {
             // 5. The SOFT delete -- the only lane InstanceService.destroy takes, and the
             //    one the remove hooks never see -- releases against the host the row was
             //    booked on.
-            Row trashed = Models.get(InstanceModel.class).findById(id);
+            Row trashed = StoredRows.byId(Models.get(InstanceModel.class), id);
             trashed.set(InstanceModel.DELETED_AT, Now.instant());
             Models.get(InstanceModel.class).save(trashed);
             assertThat(InstanceCapacity.bookedMbOn(beta))
@@ -206,14 +208,14 @@ class InstanceCapacityTest {
                 .as("step 5: and does not touch the host it left").isEqualTo(512);
 
             // 6. A restore is a NEW claim on the destination's headroom.
-            Row restored = Models.get(InstanceModel.class).findById(id);
+            Row restored = StoredRows.byId(Models.get(InstanceModel.class), id);
             restored.set(InstanceModel.DELETED_AT, null);
             Models.get(InstanceModel.class).save(restored);
             assertThat(InstanceCapacity.bookedMbOn(beta))
                 .as("step 6: the restore booked its 256 MB again").isEqualTo(256);
 
             // 7. The hard delete releases through the remove-hook pairing.
-            Models.get(InstanceModel.class).delete(id);
+            HardDeletes.byId(Models.get(InstanceModel.class), id);
             this.instances.remove(Integer.valueOf(id));
             assertThat(InstanceCapacity.bookedMbOn(beta))
                 .as("step 7: the hard delete handed it back too").isEqualTo(0);
@@ -299,7 +301,7 @@ class InstanceCapacityTest {
             // 2. POSITIVE ANCHOR: the refusal is about the LAST megabyte, not about the
             //    host. Freeing the winner lets the same size land immediately.
             int winner = landed.get(0).get(InstanceModel.ID);
-            Models.get(InstanceModel.class).delete(winner);
+            HardDeletes.byId(Models.get(InstanceModel.class), winner);
             this.instances.remove(Integer.valueOf(winner));
             int replacement = save(newWorkload(alpha, "after-free", 1024));
             assertThat(InstanceCapacity.bookedMbOn(alpha))

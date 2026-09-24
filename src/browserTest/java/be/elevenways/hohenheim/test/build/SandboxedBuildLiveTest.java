@@ -59,6 +59,9 @@ class SandboxedBuildLiveTest {
     /** Owner of the standalone builds here (a synthetic instance id). */
     private static final int OWNER_ID = 977_101;
 
+    /** The build-context file name of the journey's HTTP answer. */
+    private static final String RESPONDER_FILE = "answer.sh";
+
     private static SqlDatasource datasource;
     private static PrivateNetns netns;
 
@@ -254,13 +257,19 @@ class SandboxedBuildLiveTest {
         // a check that cannot fail. The channel a runtime secret would ACTUALLY leak through
         // is a build ARG, so the test declares the tenant variable as one and requires it to
         // arrive EMPTY -- while a real build argument beside it must arrive populated.
+        // AIDEV-NOTE: the built artifact must SERVE: a release only becomes serving once its
+        // published port answers an HTTP 2xx/3xx (ReleaseEngine.requireHealthy, since the
+        // 2026-09-08 health gate). This journey used to run `sleep 300`, which nothing can
+        // probe, so its converge refused with release_probe_failed before any step ran.
         Path context = createContext("journey", fromAlpine("""
             ARG TENANT_DB_PASSWORD
             ARG HH_CONTROL
             RUN echo "hh-tenant=${TENANT_DB_PASSWORD:-EMPTY}"
             RUN echo "hh-control=${HH_CONTROL:-EMPTY}"
             RUN echo built-by-the-sandbox > /hohenheim-marker
-            """));
+            COPY answer.sh %s
+            """.formatted(TestImages.RESPONDER_SCRIPT)));
+        writeResponder(context);
 
         Db.run(datasource, () -> {
             HostFixtures.admitLocal();
@@ -268,7 +277,7 @@ class SandboxedBuildLiveTest {
                 "build_context", context.toString(),
                 "dockerfile", "Dockerfile",
                 "container_port", 8080,
-                "command", "sleep 300",
+                "command", TestImages.RESPONDER_COMMAND,
                 "build_arguments", Map.of("HH_CONTROL", "control-value"),
                 "environment_variables", Map.of("TENANT_DB_PASSWORD", secret));
 
@@ -408,8 +417,19 @@ class SandboxedBuildLiveTest {
         }
     }
 
+    /** The journey artifact's HTTP answer, beside the Dockerfile that COPYs it in. */
+    private static void writeResponder(Path context) {
+        try {
+            TestImages.writeResponderScript(context.resolve(RESPONDER_FILE), "HTTP/1.1 200 OK",
+                "built-by-the-sandbox");
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     private static void deleteContext(Path context) {
         try {
+            Files.deleteIfExists(context.resolve(RESPONDER_FILE));
             Files.deleteIfExists(context.resolve("Dockerfile"));
             Files.deleteIfExists(context);
         } catch (IOException ignored) {

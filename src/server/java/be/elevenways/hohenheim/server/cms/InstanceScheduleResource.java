@@ -327,7 +327,7 @@ public class InstanceScheduleResource extends RowResource {
         if (instanceId <= 0
                 || Models.get(InstanceModel.class).find()
                     .where(InstanceModel.ID.eq(instanceId))
-                    .where(InstanceModel.DELETED_AT.isNull()).count() == 0) {
+                    .count() == 0) {
             throw Violations.ofField("record_id", recordId,
                 CmsSupport.violationText("unknown_instance"));
         }

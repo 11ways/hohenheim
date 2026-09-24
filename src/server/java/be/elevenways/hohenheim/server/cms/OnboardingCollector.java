@@ -71,7 +71,6 @@ public final class OnboardingCollector {
 
         if (HohenheimRoles.enabled(Role.INSTANCES)) {
             List<Row> instances = Models.get(InstanceModel.class).find()
-                .where(InstanceModel.DELETED_AT.isNull())
                 .limit(1)
                 .all();
             steps.add(instanceCreated(!instances.isEmpty()));
@@ -135,7 +134,6 @@ public final class OnboardingCollector {
 
     private static OnboardingStep instanceRunning() {
         long running = Models.get(InstanceModel.class).find()
-            .where(InstanceModel.DELETED_AT.isNull())
             .where(InstanceModel.STATUS.eq(InstanceModel.STATUS_RUNNING))
             .count();
 

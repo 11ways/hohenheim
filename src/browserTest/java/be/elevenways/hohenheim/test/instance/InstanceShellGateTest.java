@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceShell;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -91,7 +92,7 @@ class InstanceShellGateTest extends HohenheimTestBase {
         Model instances = Models.get(InstanceModel.class);
         for (Row row : instances.find().where(InstanceModel.NAME.startsWith(PREFIX))
                 .withTrashed().all()) {
-            instances.delete(row.get(InstanceModel.ID));
+            HardDeletes.byId(instances, row.get(InstanceModel.ID));
         }
     }
 

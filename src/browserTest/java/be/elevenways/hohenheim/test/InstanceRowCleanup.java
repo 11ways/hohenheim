@@ -21,9 +21,11 @@ import java.util.List;
  * there is no model cascade to lean on and none is wanted: a cascade would silently drop
  * backup and snapshot history. The referencing tables are read from SQLite's own
  * foreign_key_list rather than listed here, so a migration adding a child table is covered
- * without an edit. The instance row itself still goes through its model, so its own remove
- * hooks (the port-ledger release) run; the children are removed with raw statements, which is
- * acceptable ONLY because this is teardown of rows the test created.
+ * without an edit. The instance row itself still goes through its model -- via
+ * {@link HardDeletes} (the behaviour's forceDelete), because a plain model delete of an
+ * instance is a SOFT delete -- so its own remove hooks (the port-ledger release) run; the
+ * children are removed with raw statements, which is acceptable ONLY because this is teardown
+ * of rows the test created.
  *
  * @author Jelle De Loecker
  * @since 0.1.0
@@ -52,7 +54,7 @@ public final class InstanceRowCleanup {
         List<ForeignKey> keys = foreignKeys(datasource);
         String table = Models.get(InstanceModel.class).getTableName();
         deleteReferencing(datasource, keys, table, InstanceModel.ID.getName(), instanceId);
-        Models.get(InstanceModel.class).delete(instanceId);
+        HardDeletes.byId(Models.get(InstanceModel.class), instanceId);
     }
 
     /** Remove, deepest first, every row whose foreign key points at a row of table where column = value. */

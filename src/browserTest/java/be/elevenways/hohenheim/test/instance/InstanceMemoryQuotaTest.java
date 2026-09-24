@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
@@ -87,7 +88,7 @@ class InstanceMemoryQuotaTest extends HohenheimTestBase {
         Model instances = Models.get(InstanceModel.class);
         for (Row row : instances.find().withTrashed()
                 .where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
-            instances.delete(row.get(InstanceModel.ID));
+            HardDeletes.byId(instances, row.get(InstanceModel.ID));
         }
         if (this.previousMemoryCap != null) {
             HohenheimSettings.VALUES.setValue(
@@ -240,7 +241,7 @@ class InstanceMemoryQuotaTest extends HohenheimTestBase {
         // 11. The HARD delete pairing releases too (the criteria-delete lane), and the
         //     count bucket is left exactly as this test found it.
         long countBefore = Quotas.usedOf(COUNT_BUCKET);
-        Models.get(InstanceModel.class).delete(replacement.get(InstanceModel.ID));
+        HardDeletes.byId(Models.get(InstanceModel.class), replacement.get(InstanceModel.ID));
         assertThat(Quotas.usedOf(MEMORY_BUCKET))
             .as("step 11: a hard delete hands the memory back as well")
             .isEqualTo(limit - FOOTPRINT_MB);

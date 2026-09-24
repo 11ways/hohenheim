@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -142,7 +143,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             devices.delete(row.get(InstanceDeviceModel.ID));
         }
         for (Integer id : this.instances) {
-            Models.get(InstanceModel.class).delete(id);
+            HardDeletes.byId(Models.get(InstanceModel.class), id);
             DAEMON.remove(handleOf(id));
         }
         this.instances.clear();

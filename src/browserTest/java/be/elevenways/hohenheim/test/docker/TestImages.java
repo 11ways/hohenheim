@@ -108,27 +108,44 @@ public final class TestImages {
             } finally {
                 docker.removeContainer(sourceName, true);
             }
-            Path answer = layerRoot.resolve("answer.sh");
-            // Read the request headers BEFORE answering: responding and closing while
-            // the client is still writing races into "connection closed" 503s upstream.
-            Files.writeString(answer, "#!/bin/busybox sh\n"
-                + "CR=$(printf '\\r')\n"
-                + "while read -r line; do\n"
-                + "  line=${line%$CR}\n"
-                + "  [ -z \"$line\" ] && break\n"
-                + "done\n"
-                + "printf '" + statusLine
-                + "\\r\\nContent-Length: " + body.getBytes(StandardCharsets.UTF_8).length
-                + "\\r\\nConnection: close\\r\\n\\r\\n" + body + "'\n");
-            Files.setPosixFilePermissions(answer,
-                java.nio.file.attribute.PosixFilePermissions.fromString("rwxr-xr-x"));
+            writeResponderScript(layerRoot.resolve(RESPONDER_SCRIPT.substring(1)), statusLine, body);
 
             return buildAndLoad(docker, work, layerRoot, tag,
-                "[\"/bin/busybox\",\"nc\",\"-lk\",\"-p\",\"8080\",\"-e\",\"/answer.sh\"]",
+                "[\"/bin/busybox\",\"nc\",\"-lk\",\"-p\",\"8080\",\"-e\",\"" + RESPONDER_SCRIPT + "\"]",
                 statusLine + " " + body);
         } finally {
             deleteRecursively(work);
         }
+    }
+
+    /** Where {@link #writeResponderScript}'s script lives inside an image. */
+    public static final String RESPONDER_SCRIPT = "/answer.sh";
+
+    /**
+     * The command that serves {@link #RESPONDER_SCRIPT} on port 8080, whitespace-separated the
+     * way a workload's {@code command} setting is split.
+     */
+    public static final String RESPONDER_COMMAND = "/bin/busybox nc -lk -p 8080 -e " + RESPONDER_SCRIPT;
+
+    /**
+     * Write the executable one-response HTTP answer {@code busybox nc -e} runs per connection.
+     *
+     * AIDEV-NOTE: it reads the request headers BEFORE answering: responding and closing while
+     * the client is still writing races into "connection closed" 503s upstream.
+     */
+    public static void writeResponderScript(Path file, String statusLine, String body)
+            throws IOException {
+        Files.writeString(file, "#!/bin/busybox sh\n"
+            + "CR=$(printf '\\r')\n"
+            + "while read -r line; do\n"
+            + "  line=${line%$CR}\n"
+            + "  [ -z \"$line\" ] && break\n"
+            + "done\n"
+            + "printf '" + statusLine
+            + "\\r\\nContent-Length: " + body.getBytes(StandardCharsets.UTF_8).length
+            + "\\r\\nConnection: close\\r\\n\\r\\n" + body + "'\n");
+        Files.setPosixFilePermissions(file,
+            java.nio.file.attribute.PosixFilePermissions.fromString("rwxr-xr-x"));
     }
 
     private static String buildAndLoad(DockerClient docker, Path work, Path layerRoot,

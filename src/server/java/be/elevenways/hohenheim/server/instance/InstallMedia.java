@@ -247,7 +247,7 @@ public final class InstallMedia {
                 .all()) {
             Row instance = Models.get(InstanceModel.class)
                 .findById(device.get(InstanceDeviceModel.INSTANCE_ID));
-            if (instance == null || instance.get(InstanceModel.DELETED_AT) != null) {
+            if (instance == null) {
                 continue;
             }
             int instanceHost = ServerModel.canonicalServerId(

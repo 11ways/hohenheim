@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
@@ -172,7 +173,7 @@ class InstanceRuntimeLiveTest {
                         e -> assertThat(e.isNotFound()).isTrue());
                 assertThat(PortLedger.claimsOf(InstanceModel.MODEL_ID, id))
                     .as("step 6: no port claim survives a verified destroy").isEmpty();
-                Row record = Models.get(InstanceModel.class).findById(id);
+                Row record = StoredRows.byId(Models.get(InstanceModel.class), id);
                 assertThat((Object) record.get(InstanceModel.DELETED_AT))
                     .as("step 6: the record is soft-deleted, not erased").isNotNull();
                 assertThat(inspectVolume(docker, volumeName))

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.ports;
 
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -295,7 +296,7 @@ class PortLedgerTest {
                 .as("step 1: the instance holds its claim").hasSize(1);
 
             // 2. Hard-delete the record (the criteria-only remove path every delete takes).
-            Models.get(InstanceModel.class).delete(instanceId);
+            HardDeletes.byId(Models.get(InstanceModel.class), instanceId);
             Row survivor = PortLedger.holderOf(
                 PortLedger.claimKeyOf(localId, "127.0.0.1", 8340, "tcp"));
             assertThat(survivor)
@@ -358,7 +359,7 @@ class PortLedgerTest {
             assertThat(PortLedger.holderOf(PortLedger.claimKeyOf(localId, "", 8350, "udp")))
                 .as("step 3: the verified destroy releases the reservation")
                 .isNull();
-            Models.get(InstanceModel.class).delete(oneId);
+            HardDeletes.byId(Models.get(InstanceModel.class), oneId);
         });
 
         // 4. TWO CONCURRENT pre-allocations of one tuple: exactly one row wins, the
@@ -417,8 +418,8 @@ class PortLedgerTest {
                 .contains(winnerName);
             PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, ids[0]);
             PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, ids[1]);
-            Models.get(InstanceModel.class).delete(ids[0]);
-            Models.get(InstanceModel.class).delete(ids[1]);
+            HardDeletes.byId(Models.get(InstanceModel.class), ids[0]);
+            HardDeletes.byId(Models.get(InstanceModel.class), ids[1]);
         });
     }
 

@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -108,7 +109,7 @@ class InstancePlacementTest {
     void cleanUp() {
         Db.run(datasource, () -> {
                 for (Integer id : this.instances) {
-                    Models.get(InstanceModel.class).delete(id);
+                    HardDeletes.byId(Models.get(InstanceModel.class), id);
                 }
                 for (Integer id : this.hosts) {
                     Models.get(ServerModel.class).delete(id);

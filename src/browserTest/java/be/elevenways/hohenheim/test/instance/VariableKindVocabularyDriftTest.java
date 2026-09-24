@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.InstanceApi;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -87,7 +88,7 @@ class VariableKindVocabularyDriftTest extends HohenheimTestBase {
             for (Row row : Models.get(InstanceVariableModel.class).findByInstanceId(instanceId)) {
                 Models.get(InstanceVariableModel.class).delete(row.get(InstanceVariableModel.ID));
             }
-            Models.get(InstanceModel.class).delete(instanceId);
+            HardDeletes.byId(Models.get(InstanceModel.class), instanceId);
         }
     }
 }

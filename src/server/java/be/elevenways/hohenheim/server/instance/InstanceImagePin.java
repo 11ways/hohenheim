@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -34,7 +35,7 @@ public final class InstanceImagePin {
                     || row.get(InstanceModel.ID) == null) {
                 return;   // a create has no pin to invalidate
             }
-            Row stored = Models.get(InstanceModel.class).findById(row.get(InstanceModel.ID));
+            Row stored = StoredRows.byId(Models.get(InstanceModel.class), row.get(InstanceModel.ID));
             if (stored == null || stored.get(InstanceModel.IMAGE_FINGERPRINT) == null) {
                 return;
             }

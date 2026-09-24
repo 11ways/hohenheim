@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstallSupport;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
@@ -99,9 +100,7 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
      */
     @BeforeAll
     static void setUp() {
-        remote = LiveIncusHost.configured();
-        LiveLane.require(LiveLane.Need.INCUS_HOST, remote != null,
-            "no live incus host enrolled at " + LiveIncusHost.CONFIG);
+        remote = LiveIncusHost.requirePrimary();
         LiveLane.require(LiveLane.Need.INCUS_HOST, preparedImagePublished(),
             "prepared image '" + PREPARED_ALIAS + "' is not published on the live host;"
             + " build it with docs/prepare-windows-template.md");
@@ -356,7 +355,7 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
             RecordGrants.revoke(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, id,
                 HohenheimAccess.MANAGE);
             for (int record : List.of(id, agentlessId, absentId)) {
-                Models.get(InstanceModel.class).delete(record);
+                HardDeletes.byId(Models.get(InstanceModel.class), record);
             }
             AuthModels.users().delete(userId);
             // Give back both working credentials borrowed from a real machine, and PRINT
