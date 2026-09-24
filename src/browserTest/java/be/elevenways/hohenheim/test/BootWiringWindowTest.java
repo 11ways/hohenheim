@@ -56,7 +56,7 @@ class BootWiringWindowTest {
         TestDatabases.freshDatabase();
 
         ZenitAuth.init(HohenheimDatabase.datasource());
-        AuthSettings.VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
+        Zenit.SETTINGS_VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
         ServerMain.installAuthBaselines();
 
         // 2. Bind for real: this test is about what the listener serves, so the

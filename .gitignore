@@ -26,11 +26,6 @@ public/cms.css
 settings/local.dry
 settings/hohenheim.dry
 
-# Comms settings context: HohenheimCommsSettings.load() creates it empty on first
-# boot and the settings page's comms mount persists a host's transport chain into
-# it, so it is per-host exactly like local.dry and hohenheim.dry above.
-settings/comms.dry
-
 # Field-encryption keyring: auto-generated on first use (also by a local test
 # run), holds the keys for every .encrypted() column. Never commit it.
 settings/field-encryption.keys

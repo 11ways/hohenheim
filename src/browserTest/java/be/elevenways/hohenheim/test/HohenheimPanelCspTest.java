@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.cms.common.CmsSettings;
+import be.elevenways.zenit.common.Zenit;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
@@ -35,7 +36,7 @@ class HohenheimPanelCspTest extends HohenheimTestBase {
 
     @Test
     void hohenheimPanelsCarryTheAdminCspAndBootstrapExactlyOnce() throws Exception {
-        String expected = CmsSettings.VALUES.getValue(CmsSettings.CSP);
+        String expected = Zenit.SETTINGS_VALUES.getValue(CmsSettings.CSP);
         assertThat(expected).as("the admin CSP default forbids inline script")
             .contains("script-src 'self'");
 
