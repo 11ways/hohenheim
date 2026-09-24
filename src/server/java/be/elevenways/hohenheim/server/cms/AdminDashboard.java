@@ -3,7 +3,9 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.OnboardingStep;
+import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.BanModel;
+import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.HohenheimRoles;
@@ -13,20 +15,20 @@ import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.protoblast.common.typed.rule.Condition;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.DashboardPanelPeer;
-import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.data.RecordSourceRegistry;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
-import be.elevenways.zenit.widget.common.data.NoticeData;
 import be.elevenways.zenit.widget.common.builtin.AlertVariant;
 import be.elevenways.zenit.widget.common.builtin.AlertWidget;
-import be.elevenways.zenit.widget.common.builtin.ChartWidget;
 import be.elevenways.zenit.widget.common.builtin.ColumnsWidget;
 import be.elevenways.zenit.widget.common.builtin.RecordsWidget;
 import be.elevenways.zenit.widget.common.builtin.SectionWidget;
 import be.elevenways.zenit.widget.common.builtin.StatWidget;
+import be.elevenways.zenit.widget.common.data.NoticeData;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -66,16 +68,16 @@ public final class AdminDashboard extends DashboardPanelPeer {
         // never how many grids there are.
         List<WidgetInstance> tiles = new ArrayList<>();
         if (proxy) {
-            tiles.add(stat("site", "hohenheim.site", "sites", "globe"));
-            tiles.add(stat("certificate", "hohenheim.certificate", "certificates", "lock"));
-            tiles.add(stat("access_list", "hohenheim.access_list", "access-lists", "shield-halved"));
+            tiles.add(stat("site", SiteModel.MODEL_ID, "sites", "globe"));
+            tiles.add(stat("certificate", CertificateModel.MODEL_ID, "certificates", "lock"));
+            tiles.add(stat("access_list", AccessListModel.MODEL_ID, "access-lists", "shield-halved"));
         }
         if (firewall) {
             // The active-ban count (event analytics live in spamservice now, so bans are
             // the only security records here).
             tiles.add(new WidgetInstance(StatWidget.ID, Map.of(
                 "label", HohenheimWidgetCopy.localized("active_bans", "dashboard"),
-                "source", "hohenheim.ban",
+                "source", sourceToken(BanModel.MODEL_ID),
                 "rules", Condition.all(Condition.test(BanModel.ACTIVE.getName(), CoreTypes.IS_TRUE)),
                 "icon", "ban",
                 // StatWidget's stored "link" is a String, so the typed target renders here.
@@ -147,13 +149,21 @@ public final class AdminDashboard extends DashboardPanelPeer {
     }
 
     /** The tile label resolves the model's "plural" microcopy per content locale. */
-    private static @NonNull WidgetInstance stat(@NonNull String modelScope, @NonNull String sourceToken,
+    private static @NonNull WidgetInstance stat(@NonNull String modelScope, @NonNull Identifier modelId,
                                                 @NonNull String resourceSlug, @NonNull String icon) {
         return new WidgetInstance(StatWidget.ID, Map.of(
             "label", HohenheimWidgetCopy.localized("plural", modelScope),
-            "source", sourceToken,
+            "source", sourceToken(modelId),
             "icon", icon,
             "link", CmsRoutes.list(ADMIN, resourceSlug).toUrl()));
+    }
+
+    /**
+     * The token a tile names its source by: the source registered over the model (a default source's id IS
+     * its model's), spelled by that source, so a renamed model can never leave a tile counting nothing.
+     */
+    private static @NonNull String sourceToken(@NonNull Identifier modelId) {
+        return RecordSourceRegistry.INSTANCE.requireById(modelId).idToken();
     }
 
     private static @NonNull WidgetInstance section(@NonNull WidgetInstance child) {
