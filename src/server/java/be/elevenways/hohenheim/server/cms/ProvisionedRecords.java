@@ -69,7 +69,8 @@ final class ProvisionedRecords {
 
     /**
      * The failure reason, shown ONLY on a record that carries one: the create form (null record)
-     * and a healthy record never render an empty failure box.
+     * and a healthy record never render an empty failure box. Presentation per record, so the
+     * list still sorts and filters by it (the cross-record answer is declared).
      */
     static @NonNull ResourceFieldBinding failureReasonWhenSet(@NonNull Field<String, ?> failureReason) {
         return ResourceFieldBinding.of(failureReason.getName(),
@@ -77,7 +78,7 @@ final class ProvisionedRecords {
                 String reason = record instanceof Row row ? row.get(failureReason) : null;
                 return reason != null && !reason.isBlank()
                     ? FieldAccess.Decision.READONLY : FieldAccess.Decision.HIDDEN;
-            }));
+            }).acrossRecords(ctx -> FieldAccess.Decision.READONLY));
     }
 
     /**
