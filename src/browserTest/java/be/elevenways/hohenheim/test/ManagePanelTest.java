@@ -15,6 +15,7 @@ import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.data.BucketSize;
 import be.elevenways.zenit.common.data.RecordSourceBucketQuery;
 import be.elevenways.zenit.common.data.RecordSourceQuery;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -450,7 +451,7 @@ class ManagePanelTest extends HohenheimTestBase {
 
         String query = Zenit.DRY.stringify(RecordSourceQuery.matchAll());
         String buckets = Zenit.DRY.stringify(
-            new RecordSourceBucketQuery(null, "created_at", 7, null));
+            new RecordSourceBucketQuery(null, "created_at", BucketSize.DAY, 7, null, null, null, null));
 
         // Every installation-wide source is admin-gated. Unauthorized and unknown
         // refuse IDENTICALLY with 404 (RecordSourceGate: no existence oracle).
