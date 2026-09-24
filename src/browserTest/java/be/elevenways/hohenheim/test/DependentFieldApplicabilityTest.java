@@ -206,11 +206,12 @@ class DependentFieldApplicabilityTest extends HohenheimTestBase {
     }
 
     /**
-     * Step 1-2: the instance pick is absent from a site whose upstream resolves to no
-     * instance, and still offered where a kind has yet to be chosen.
+     * Step 1-2: the instance pick is offered on the edit form of a site that serves files
+     * and on the create form alike, because a site must be able to move to an instance
+     * upstream (SiteResource.fieldBindings explains the one-way door hiding it caused).
      */
     @Test
-    void aSiteThatServesFilesHasNoInstanceField() throws Exception {
+    void theInstancePickIsOfferedOnEveryForm() throws Exception {
         var sites = Models.get(SiteModel.class);
         Row site = sites.createEmptyRow();
         site.set(SiteModel.NAME, "applicability-static-site");
@@ -221,12 +222,13 @@ class DependentFieldApplicabilityTest extends HohenheimTestBase {
         site.set(SiteModel.ENABLED, true);
         sites.save(site);
 
-        // 1. The stored kind serves files: the instance pick is not a property of it.
+        // 1. The stored kind serves files, yet the pick stays: choosing the instance kind
+        //    must be completable from this very form, the narrowing keeps it inert until then.
         String stored = adminGet("/admin/sites/" + site.get(SiteModel.ID)).body();
         assertThat(stored).as("step 1: the site's own form renders")
             .contains("applicability-static-site");
-        assertThat(stored).as("step 1: without the instance pick it can never use")
-            .doesNotContain("instance_id");
+        assertThat(stored).as("step 1: the edit form still offers the instance pick")
+            .contains("instance_id");
 
         // 2. The CREATE form has no stored kind yet, and the Expose journey prefills this
         //    very field: hiding it there would break a working path.
