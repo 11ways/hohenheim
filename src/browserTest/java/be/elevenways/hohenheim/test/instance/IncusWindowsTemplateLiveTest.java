@@ -15,14 +15,13 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstallSupport;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
@@ -31,6 +30,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.validation.Violations;
+import java.time.Duration;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -49,7 +49,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -82,6 +81,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  */
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
+
+    /** The interval of every wait here: each probe is a daemon or database round trip. */
+    private static final Duration POLL_INTERVAL = Duration.ofMillis(2000);
 
     private static final String HOST = "live-incus-windows";
 
@@ -228,7 +230,7 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
                 HohenheimAccess.MANAGE, true);
             RecordingClient client = new RecordingClient();
             ws = HttpClient.newHttpClient().newWebSocketBuilder()
-                .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionFor(userId).token())
+                .header("Cookie", sessionCookieHeader(sessionFor(userId).token()))
                 .buildAsync(URI.create("ws://localhost:" + getServerPort()
                     + "/ws/instance-framebuffer/" + id), client)
                 .join();
@@ -271,11 +273,11 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
             //    injected virtio NIC; RDP accepting a connection is the prepared
             //    template's own DECLARED readiness (RDP pre-enabled).
             String[] guestIp = new String[1];
-            awaitTrue("the Windows guest takes a DHCP lease", 600_000, () -> {
+            Poll.until("the Windows guest takes a DHCP lease", Duration.ofMillis(600_000), POLL_INTERVAL, () -> {
                 guestIp[0] = ipv4Of(incus, handle);
                 return guestIp[0] != null;
             });
-            awaitTrue("the Windows guest accepts RDP on 3389", 600_000,
+            Poll.until("the Windows guest accepts RDP on 3389", Duration.ofMillis(600_000), POLL_INTERVAL,
                 () -> tcpOpen(guestIp[0], 3389));
             assertThat(tcpOpen(guestIp[0], 3389))
                 .as("step 7: the prepared template's RDP is reachable at %s", guestIp[0])
@@ -332,7 +334,7 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
 
             // 9. Destroy, with the daemon asked whether the workload is really gone.
             service.destroy(id);
-            awaitTrue("the daemon forgets the destroyed handle", 120_000,
+            Poll.until("the daemon forgets the destroyed handle", Duration.ofMillis(120_000), POLL_INTERVAL,
                 () -> instanceInfoOrError(handle).contains("ERROR"));
             assertThat(instanceInfoOrError(handle))
                 .as("step 9: the daemon no longer knows the handle after destroy")
@@ -420,31 +422,7 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
     }
 
     private static int user(String label) {
-        Row row = AuthModels.users().createEmptyRow();
-        row.set(UserModel.EMAIL, label + "@hohenheim.local");
-        row.set(UserModel.DISPLAY_NAME, "Windows " + label);
-        row.set(UserModel.ENABLED, true);
-        row.set(UserModel.CREATED_AT, Now.instant());
-        row.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(row);
-        return row.get(UserModel.ID);
-    }
-
-    /** Bounded poll: never assert a fresh workload's state with zero retry. */
-    private static void awaitTrue(String what, long timeoutMs, Supplier<Boolean> probe) {
-        long deadline = Now.millis() + timeoutMs;
-        while (Now.millis() < deadline) {
-            if (Boolean.TRUE.equals(probe.get())) {
-                return;
-            }
-            try {
-                Thread.sleep(2000);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
-        throw new AssertionError("timed out after " + timeoutMs + "ms waiting for: " + what);
+        return ApiSupport.user(label + "@hohenheim.local", "Windows " + label);
     }
 
     /**

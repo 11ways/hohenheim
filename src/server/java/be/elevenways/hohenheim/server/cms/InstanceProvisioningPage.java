@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
@@ -59,8 +60,8 @@ public final class InstanceProvisioningPage implements RecordScopedPage<Row> {
 
         List<Map<String, Object>> variables = new ArrayList<>();
         for (Row variable : Models.get(InstanceVariableModel.class).findByInstanceId(instanceId)) {
-            boolean secret = InstanceVariableModel.KIND_SECRET
-                .equals(variable.get(InstanceVariableModel.KIND));
+            // Fail closed: a kind nobody recognizes renders as a secret, value withheld.
+            boolean secret = VariableKind.of(variable.get(InstanceVariableModel.KIND)).isSecret();
             Map<String, Object> entry = new HashMap<>();
             entry.put("key", variable.get(InstanceVariableModel.KEY));
             entry.put("secret", secret);

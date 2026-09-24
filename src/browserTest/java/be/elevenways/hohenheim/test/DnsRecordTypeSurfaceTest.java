@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.server.cms.DnsRecordResource;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -12,9 +11,6 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import org.junit.jupiter.api.Test;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -84,31 +80,15 @@ class DnsRecordTypeSurfaceTest extends HohenheimTestBase {
 
         // 3. Invoke-time enforcement is the same predicate: a direct POST against the
         //    TXT record answers 404, never a minted credential or an error toast.
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpResponse<String> refused = client.send(HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort()
-                + "/admin/dns-records/" + txt.get(DnsRecordModel.ID)
-                + "/action/dyndns_token"))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .header("X-Csrf-Token", csrfToken)
-            .POST(HttpRequest.BodyPublishers.ofString(""))
-            .build(), HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> refused = adminPostForm(
+            "/admin/dns-records/" + txt.get(DnsRecordModel.ID) + "/action/dyndns_token", "");
         assertThat(refused.statusCode())
             .as("3. minting a dyndns token on a TXT record is not-found, not an error toast")
             .isEqualTo(404);
 
         // 4. The A record's invoke still works end to end and stays type-scoped.
-        HttpResponse<String> minted = client.send(HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort()
-                + "/admin/dns-records/" + a.get(DnsRecordModel.ID)
-                + "/action/dyndns_token"))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .header("X-Csrf-Token", csrfToken)
-            .POST(HttpRequest.BodyPublishers.ofString(""))
-            .build(), HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> minted = adminPostForm(
+            "/admin/dns-records/" + a.get(DnsRecordModel.ID) + "/action/dyndns_token", "");
         assertThat(minted.statusCode())
             .as("4. minting on an A record still succeeds (redirect back to the list)")
             .isIn(302, 303);

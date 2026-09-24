@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.zenit.common.conduit.Conduit;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Dynamic DNS: the public dyndns2 update endpoint (/nic/update). The update token
@@ -35,26 +37,17 @@ final class DynamicDnsHandlers {
     }
 
     /** The update token from HTTP Basic auth (password preferred, username fallback); no query fallback. */
-    private static @org.checkerframework.checker.nullness.qual.Nullable String dyndnsToken(Conduit conduit) {
-        String authorization = conduit.getRequestHeader("Authorization");
-        if (authorization != null && authorization.regionMatches(true, 0, "Basic ", 0, 6)) {
-            try {
-                String decoded = new String(java.util.Base64.getDecoder()
-                    .decode(authorization.substring(6).trim()), java.nio.charset.StandardCharsets.UTF_8);
-                int colon = decoded.indexOf(':');
-                String user = colon >= 0 ? decoded.substring(0, colon) : decoded;
-                String pass = colon >= 0 ? decoded.substring(colon + 1) : "";
-                // dyndns2 puts the credential in the password; tolerate clients that
-                // send it as the username with an empty password.
-                if (pass.startsWith(DynamicDnsService.TOKEN_MARKER)) {
-                    return pass;
-                }
-                if (user.startsWith(DynamicDnsService.TOKEN_MARKER)) {
-                    return user;
-                }
+    private static @Nullable String dyndnsToken(Conduit conduit) {
+        BasicCredentials.Presented presented =
+            BasicCredentials.parseAllowingBareUser(conduit.getRequestHeader("Authorization"));
+        if (presented != null) {
+            // dyndns2 puts the credential in the password; tolerate clients that send it as
+            // the username with an empty password.
+            if (presented.password().startsWith(DynamicDnsService.TOKEN_MARKER)) {
+                return presented.password();
             }
-            catch (IllegalArgumentException ignored) {
-                // Malformed base64: no credential to use.
+            if (presented.username().startsWith(DynamicDnsService.TOKEN_MARKER)) {
+                return presented.username();
             }
         }
         // Deliberately NO ?token= fallback: a DNS-write credential must never ride the query

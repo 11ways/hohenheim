@@ -3,11 +3,9 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.SourceBuildDetail;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -93,7 +91,7 @@ class SourceDeclarationGateTest extends HohenheimTestBase {
             .isPositive();
 
         // 4. Once a tenant owns the record, the same path can no longer be written.
-        RecordGrants.grant(GrantSubjectType.USER, user("gate-tenant@hohenheim.local"),
+        RecordGrants.grant(GrantSubjectType.USER, ApiSupport.user("gate-tenant@hohenheim.local"),
             InstanceModel.MODEL_ID, applicationId, HohenheimAccess.MANAGE, true);
         Row owned = Models.get(InstanceModel.class).findById(applicationId);
         owned.set(InstanceModel.SETTINGS, source("file:///srv/repos/app.git"));
@@ -127,16 +125,5 @@ class SourceDeclarationGateTest extends HohenheimTestBase {
         application.set(InstanceModel.SETTINGS, new LinkedHashMap<>(settings));
         instances.save(application);
         return application.get(InstanceModel.ID);
-    }
-
-    private static int user(String email) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, email);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
     }
 }

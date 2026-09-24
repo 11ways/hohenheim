@@ -9,11 +9,9 @@ import be.elevenways.hohenheim.server.source.GitProviders;
 import be.elevenways.hohenheim.server.source.GitRepository;
 import be.elevenways.hohenheim.server.source.GiteaProviderKind;
 import be.elevenways.hohenheim.source.GitRefNames;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -138,7 +136,7 @@ class GitSourceReachTest extends HohenheimTestBase {
         assertThat(marker).as("step 2: and nothing it asked for ran").doesNotExist();
 
         // 3. A tenant takes ownership: the SAME stored path is now refused at checkout.
-        RecordGrants.grant(GrantSubjectType.USER, user("reach-tenant@hohenheim.local"),
+        RecordGrants.grant(GrantSubjectType.USER, ApiSupport.user("reach-tenant@hohenheim.local"),
             InstanceModel.MODEL_ID, applicationId, HohenheimAccess.MANAGE, true);
         File tenantCheckout = checkouts.resolve("tenant").toFile();
         Throwable local = catchThrowable(() -> GitCheckout.materialize(InstanceModel.MODEL_ID,
@@ -187,7 +185,7 @@ class GitSourceReachTest extends HohenheimTestBase {
 
             // 2. A tenant owns it now: the loopback address is refused BEFORE any connect,
             //    so a "Test connection" cannot probe the controller's own ports.
-            RecordGrants.grant(GrantSubjectType.USER, user("reach-forge@hohenheim.local"),
+            RecordGrants.grant(GrantSubjectType.USER, ApiSupport.user("reach-forge@hohenheim.local"),
                 GitProviderModel.MODEL_ID, providerId, HohenheimAccess.MANAGE, true);
             Throwable refused = catchThrowable(() -> GitProviders.clientFor(providerId)
                 .listRepositories());
@@ -222,17 +220,6 @@ class GitSourceReachTest extends HohenheimTestBase {
         row.set(GitProviderModel.ACCESS_TOKEN, "token-" + name);
         providers.save(row);
         return row.get(GitProviderModel.ID);
-    }
-
-    private static int user(String email) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, email);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
     }
 
     private static void git(Path repo, String... args) throws Exception {

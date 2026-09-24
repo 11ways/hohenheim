@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -75,11 +76,10 @@ public final class InstanceDevicesPage implements RecordScopedPage<Row> {
             entry.put("id", device.get(InstanceDeviceModel.ID));
             entry.put("name", device.get(InstanceDeviceModel.NAME));
             entry.put("type", device.get(InstanceDeviceModel.TYPE));
-            entry.put("disk", InstanceDeviceModel.TYPE_DISK.equals(
-                device.get(InstanceDeviceModel.TYPE)));
+            DeviceType type = DeviceType.parse(device.get(InstanceDeviceModel.TYPE));
+            entry.put("disk", type == DeviceType.DISK);
             entry.put("sizeGb", device.get(InstanceDeviceModel.SIZE_GB));
-            entry.put("cdrom", InstanceDeviceModel.TYPE_CDROM.equals(
-                device.get(InstanceDeviceModel.TYPE)));
+            entry.put("cdrom", type == DeviceType.CDROM);
             entry.put("sourceMedia", device.get(InstanceDeviceModel.SOURCE_MEDIA));
             entry.put("editTarget", CmsRoutes.detail(panel, "instance-devices",
                 device.get(InstanceDeviceModel.ID)));
@@ -103,29 +103,29 @@ public final class InstanceDevicesPage implements RecordScopedPage<Row> {
         // element renders it, so an ungated target would publish an editor route to a
         // viewer who may not edit (the certificates-request leak SiteDomainsPage hit).
         vars.put("addDiskTarget", canEdit
-            ? newDeviceTarget(panel, InstanceDeviceModel.TYPE_DISK, instanceId) : null);
+            ? newDeviceTarget(panel, DeviceType.DISK, instanceId) : null);
         vars.put("addNicTarget", canEdit
-            ? newDeviceTarget(panel, InstanceDeviceModel.TYPE_NIC, instanceId) : null);
+            ? newDeviceTarget(panel, DeviceType.NIC, instanceId) : null);
         // Install media is OPERATOR-ONLY (InstanceDevices.attachCdrom refuses a tenant
         // with the uniform refusal) and VM-only -- both gates repeated here so the
         // affordance is offered exactly where the funnel would accept it.
         InstanceKindHandler handler = InstanceKinds.getHandler(instance.get(InstanceModel.KIND));
         boolean canAttachMedia = handler != null && handler.supportsInstallMedia()
-            && HohenheimAccess.isAdmin(accessContext);
+            && (!DeviceType.CDROM.operatorOnly() || HohenheimAccess.isAdmin(accessContext));
         vars.put("addMediaTarget", canAttachMedia
-            ? newDeviceTarget(panel, InstanceDeviceModel.TYPE_CDROM, instanceId) : null);
+            ? newDeviceTarget(panel, DeviceType.CDROM, instanceId) : null);
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-devices"), vars);
     }
 
     /** The device create form, opened with its kind and owning instance prefilled. */
     private static @NonNull RouteTarget newDeviceTarget(@NonNull String panel,
-                                                        @NonNull String type,
+                                                        @NonNull DeviceType type,
                                                         @NonNull Integer instanceId) {
         return CmsEndpoints.CREATE_FORM
             .with(CmsEndpoints.PANEL_PARAM, panel)
             .with(CmsEndpoints.RESOURCE_PARAM, "instance-devices")
-            .with(HohenheimParams.DEVICE_TYPE_PREFILL, type)
+            .with(HohenheimParams.DEVICE_TYPE_PREFILL, type.token())
             .with(HohenheimParams.INSTANCE_ID_PREFILL, instanceId);
     }
 }

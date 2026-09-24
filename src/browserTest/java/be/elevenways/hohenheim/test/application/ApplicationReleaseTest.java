@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ApplicationUpstreams;
@@ -20,7 +21,6 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -31,6 +31,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -361,18 +362,6 @@ class ApplicationReleaseTest {
 
     /** Bounded wait: the drain completes on a virtual thread, not inline. */
     private static void await(String what, BooleanSupplier condition) {
-        long deadline = Now.millis() + 15_000;
-        while (Now.millis() < deadline) {
-            if (condition.getAsBoolean()) {
-                return;
-            }
-            try {
-                Thread.sleep(50);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
-        assertThat(condition.getAsBoolean()).as(what).isTrue();
+        Poll.until(what, Duration.ofSeconds(15), Duration.ofMillis(50), condition);
     }
 }

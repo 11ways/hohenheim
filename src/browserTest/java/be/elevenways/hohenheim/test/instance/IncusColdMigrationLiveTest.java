@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -19,20 +19,18 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
+import java.time.Duration;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.function.Supplier;
 import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -53,6 +51,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class IncusColdMigrationLiveTest {
 
+    /** The interval of every wait here: each probe is a daemon or database round trip. */
+    private static final Duration POLL_INTERVAL = Duration.ofMillis(2000);
+
     private static final String HOST_A = "live-mig-a";
     private static final String HOST_B = "live-mig-b";
     private static final String VM_IMAGE = "alpine/3.22/cloud";
@@ -61,7 +62,7 @@ class IncusColdMigrationLiveTest {
 
     private static LiveIncusHost remoteA;
     private static LiveIncusHost remoteB;
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static String fingerprintA;
     private static String fingerprintB;
 
@@ -74,16 +75,11 @@ class IncusColdMigrationLiveTest {
         LiveLane.require(LiveLane.Need.INCUS_HOST, remoteB != null,
             "no SECOND live incus host (url_b) enrolled at " + LiveIncusHost.CONFIG);
 
-        File db = File.createTempFile("hohenheim-incus-migration-live", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
         // ONE database per test class: the controller identity (and therefore every
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
 
         Db.run(datasource, () -> {
@@ -148,7 +144,7 @@ class IncusColdMigrationLiveTest {
                 assertThat(service.deploy(vmId).running())
                     .as("step 1: the VM deploys and runs on " + HOST_A)
                     .isTrue();
-                awaitTrue("VM agent up on " + HOST_A, AGENT_TIMEOUT_MS,
+                Poll.until("VM agent up on " + HOST_A, Duration.ofMillis(AGENT_TIMEOUT_MS), POLL_INTERVAL,
                     () -> "ready".equals(execQuietly(remoteA, handle, "echo ready")));
 
                 // 2. Distinguishable state: marker v1, a daemon-side snapshot, an
@@ -220,7 +216,7 @@ class IncusColdMigrationLiveTest {
                 }
 
                 // 7. Data intact ON THE DESTINATION, snapshots carried, agent up.
-                awaitTrue("migrated VM agent up on " + HOST_B, AGENT_TIMEOUT_MS,
+                Poll.until("migrated VM agent up on " + HOST_B, Duration.ofMillis(AGENT_TIMEOUT_MS), POLL_INTERVAL,
                     () -> "ready".equals(execQuietly(remoteB, handle, "echo ready")));
                 assertThat(exec(remoteB, handle, "cat /root/marker"))
                     .as("step 7: the data written on the source (v2, post-backup) is"
@@ -247,7 +243,7 @@ class IncusColdMigrationLiveTest {
                 // and routes; the probes below measure POLICY, so they wait for a NIC
                 // that demonstrably works first (an address, then the internet).
                 addressOf(remoteB, peerHandle);
-                awaitTrue("peer egress to 1.1.1.1 on " + HOST_B, 120_000,
+                Poll.until("peer egress to 1.1.1.1 on " + HOST_B, Duration.ofMillis(120_000), POLL_INTERVAL,
                     () -> canReach(remoteB, peerHandle, "1.1.1.1"));
 
                 // 8. KERNEL truth on the destination: nft names the LIVE tap of the
@@ -317,7 +313,7 @@ class IncusColdMigrationLiveTest {
                         + " the operator named")
                     .isEqualTo(hostAId);
                 String rh = restoredHandle;
-                awaitTrue("restored VM agent up on " + HOST_A, AGENT_TIMEOUT_MS,
+                Poll.until("restored VM agent up on " + HOST_A, Duration.ofMillis(AGENT_TIMEOUT_MS), POLL_INTERVAL,
                     () -> "ready".equals(execQuietly(remoteA, rh, "echo ready")));
                 assertThat(exec(remoteA, restoredHandle, "cat /root/marker"))
                     .as("step 10: the restore carries the BACKED-UP state (v1), not"
@@ -482,18 +478,11 @@ class IncusColdMigrationLiveTest {
     }
 
     private static String addressOf(LiveIncusHost remote, String handle) {
-        long deadline = Now.millis() + 60_000;
-        while (true) {
+        return Poll.value("an IPv4 on " + handle, Duration.ofSeconds(60), POLL_INTERVAL, () -> {
             String out = execQuietly(remote, handle,
                 "ip -o -f inet addr show eth0 | awk '{print $4}' | cut -d/ -f1 | head -1");
-            if (out != null && !out.isBlank()) {
-                return out.trim();
-            }
-            if (Now.millis() >= deadline) {
-                throw new AssertionError("no IPv4 ever appeared on " + handle);
-            }
-            sleep();
-        }
+            return out == null || out.isBlank() ? null : out.trim();
+        });
     }
 
     private static boolean canReach(LiveIncusHost remote, String fromHandle,
@@ -517,26 +506,6 @@ class IncusColdMigrationLiveTest {
             return remote.exec(handle, command);
         } catch (IOException notReady) {
             return null;
-        }
-    }
-
-    private static void awaitTrue(String what, long timeoutMs, Supplier<Boolean> probe) {
-        long deadline = Now.millis() + timeoutMs;
-        while (Now.millis() < deadline) {
-            if (Boolean.TRUE.equals(probe.get())) {
-                return;
-            }
-            sleep();
-        }
-        throw new AssertionError("timed out after " + timeoutMs + "ms waiting for: " + what);
-    }
-
-    private static void sleep() {
-        try {
-            Thread.sleep(2000);
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new AssertionError("interrupted while waiting");
         }
     }
 

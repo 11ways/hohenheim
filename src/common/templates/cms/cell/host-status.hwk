@@ -1,14 +1,14 @@
 {#- Structured host-list status cell: a status dot, a short state word and a live
     relative time -- never a fully-resolved sentence. Quarantine wins and is LOUD.
-    The dot and the wording are FACTS on HostState, so no state can render green by
-    falling through a branch this template forgot. -#}
+    The dot, the wording and its emphasis are FACTS on HostState, so no state can render
+    green (or quiet) by falling through a branch this template forgot. -#}
 {% declare value: HostStatusCell %}
 {% if value != null %}
 <span class="hh-host-state" data-host-state={% value.stateToken %}>
     <pl-status-dot status={% value.dot %}></pl-status-dot>
-    {% if value.stateToken == "quarantined" %}
+    {% if value.loud %}
     <strong class="hh-host-state-quarantined">{{ value.stateText }}</strong>
-    {% elseif value.stateToken == "silent" %}
+    {% elseif value.namesDaemon %}
     <span>{{ value.daemon }} {{ value.stateText }}</span>
     {% elseif value.stateText != null %}
     <span>{{ value.stateText }}</span>

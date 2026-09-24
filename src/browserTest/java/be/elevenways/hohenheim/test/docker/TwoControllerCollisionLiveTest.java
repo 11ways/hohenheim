@@ -47,7 +47,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class TwoControllerCollisionLiveTest {
 
     private static final Path SOCKET = Path.of("/var/run/docker.sock");
-    private static final String IMAGE = "alpine:latest";
+    private static final String IMAGE = TestImages.ALPINE;
 
     /** The record id BOTH controllers allocate: the collision's whole premise. */
     private static final int SHARED_RECORD_ID = 1;
@@ -188,6 +188,13 @@ class TwoControllerCollisionLiveTest {
 
     // -- helpers --------------------------------------------------------------
 
+    /**
+     * A second control-plane database beside the first.
+     *
+     * AIDEV-NOTE: deliberately hand-rolled, not TestDatabases.freshDatasource(): the subject
+     * is TWO controllers alive at once over one daemon, and a swap closes the database it
+     * replaces, so each controller keeps a file of its own.
+     */
     private static SqliteDatasource freshController(String suffix) throws Exception {
         File db = File.createTempFile("hohenheim-two-controller-" + suffix, ".db");
         db.delete();

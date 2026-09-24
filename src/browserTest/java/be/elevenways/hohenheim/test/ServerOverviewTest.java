@@ -5,20 +5,13 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
@@ -40,10 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * preflight report {@code HostPreflight.store} persists was rendered NOWHERE -- the
  * overview subpage answering 404 was the literal proof. All three failed pre-fix.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ServerOverviewTest extends HohenheimTestBase {
-
-    private static Integer hostId;
 
     /** The quarantine alert's own title copy, which identifies the band. */
     private static final String QUARANTINE_TITLE = "This host is quarantined";
@@ -55,21 +45,16 @@ class ServerOverviewTest extends HohenheimTestBase {
      * {@code not_pinned} onto a freshly enrolled host just because somebody LOOKED at it.
      */
     @Test
-    @Order(1)
     void renderingTheServerDetailFormIsSideEffectFree() throws Exception {
         // 1. Enroll a remote host that has never been probed: health columns clean.
-        var create = postForm("/admin/servers/new",
-            "name=overview-dark&ssh_target=nobody%40overview-dark.hohenheim-test.invalid");
-        assertThat(create.statusCode()).as("step 1: host enrolls").isIn(200, 302, 303);
-        Row host = Models.get(ServerModel.class).findByName("overview-dark");
-        assertThat(host).isNotNull();
-        hostId = host.get(ServerModel.ID);
+        int hostId = enrollHost("overview-side-effect");
+        Row host = Models.get(ServerModel.class).findById(hostId);
         assertThat((String) host.get(ServerModel.LAST_ERROR_KIND))
             .as("step 1: a never-probed host carries no error kind").isNull();
 
         // 2. THE DEFECT. Render the detail form and read the record back.
         long constructions = DockerClient.constructionCount();
-        HttpResponse<String> detail = get("/admin/servers/" + hostId);
+        HttpResponse<String> detail = adminGet("/admin/servers/" + hostId);
         assertThat(detail.statusCode()).as("step 2: the detail form renders").isEqualTo(200);
 
         Row after = Models.get(ServerModel.class).findById(hostId);
@@ -95,9 +80,9 @@ class ServerOverviewTest extends HohenheimTestBase {
      * of masquerading as form inputs.
      */
     @Test
-    @Order(2)
     void theEditFormCarriesOnlyEditableFields() throws Exception {
-        HttpResponse<String> detail = get("/admin/servers/" + hostId);
+        int hostId = enrollHost("overview-edit-form");
+        HttpResponse<String> detail = adminGet("/admin/servers/" + hostId);
         assertThat(detail.statusCode()).isEqualTo(200);
         for (String fake : List.of("live_overview", "host_key_state", "identity_public_key",
                 "kernel_isolation_state", "incus_cert_state", "incus_client_cert")) {
@@ -119,16 +104,16 @@ class ServerOverviewTest extends HohenheimTestBase {
      * field carried no visibleIn declaration and rendered on the EDIT form too.
      */
     @Test
-    @Order(3)
     void theTrustNoticeRendersOnCreateOnly() throws Exception {
-        HttpResponse<String> detail = get("/admin/servers/" + hostId);
+        int hostId = enrollHost("overview-trust-notice");
+        HttpResponse<String> detail = adminGet("/admin/servers/" + hostId);
         assertThat(detail.statusCode()).isEqualTo(200);
         assertThat(detail.body())
             .withFailMessage("the EDIT form still renders the 'trust_notice' pseudo-field"
                 + " -- consent copy belongs on the enrolment form only")
             .doesNotContain("data-path=\"trust_notice\"");
 
-        HttpResponse<String> create = get("/admin/servers/new");
+        HttpResponse<String> create = adminGet("/admin/servers/new");
         assertThat(create.statusCode()).as("the create form renders").isEqualTo(200);
         assertThat(create.body())
             .as("positive anchor: the CREATE form still states what enrolling grants,"
@@ -142,14 +127,14 @@ class ServerOverviewTest extends HohenheimTestBase {
      * {@code HostPreflight.store} and rendered NOWHERE: the overview URL answered 404.
      */
     @Test
-    @Order(4)
     void storedPreflightEvidenceReachesTheOverviewPage() throws Exception {
+        int hostId = enrollHost("overview-evidence");
         // 1. Store a realistic report the way both batteries do.
         Instant checkedAt = Instant.parse("2026-08-10T09:15:30Z");
         Map<String, Object> facts = new LinkedHashMap<>();
         facts.put(HostPreflight.MEM_TOTAL_FACT, 16L * 1024 * 1024 * 1024);
         facts.put("docker_version", "27.1.1");
-        HostPreflight.store("overview-dark", new HostPreflight.Report(List.of(
+        HostPreflight.store("overview-evidence", new HostPreflight.Report(List.of(
             new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true,
                 "Docker 27.1.1 reachable"),
             new HostPreflight.Check("cgroup_pids_controller", HostPreflight.STATUS_FAIL, true,
@@ -160,7 +145,7 @@ class ServerOverviewTest extends HohenheimTestBase {
 
         // 2. THE DEFECT: pre-fix this page did not exist (404), so the evidence above
         //    was stored and readable by no operator.
-        HttpResponse<String> overview = get("/admin/servers/" + hostId + "/page/overview");
+        HttpResponse<String> overview = adminGet("/admin/servers/" + hostId + "/page/overview");
         assertThat(overview.statusCode())
             .withFailMessage("step 2: the server overview page does not exist -- the"
                 + " stored preflight report is rendered nowhere (HTTP %s)",
@@ -193,7 +178,7 @@ class ServerOverviewTest extends HohenheimTestBase {
         Object theirs = latestActivityId(String.valueOf(hostId + 100000));
         assertThat(mine).as("step 5: this host has an activity row").isNotNull();
 
-        String withBand = get("/admin/servers/" + hostId + "/page/overview").body();
+        String withBand = adminGet("/admin/servers/" + hostId + "/page/overview").body();
         assertThat(withBand).as("step 5: the overview carries a recent-activity band")
             .contains("Recent activity");
         assertThat(withBand).as("step 5: it links this host's own entry")
@@ -217,14 +202,14 @@ class ServerOverviewTest extends HohenheimTestBase {
      * stale shows a named "unmeasured" state, never a zero bar that reads as "empty host".
      */
     @Test
-    @Order(5)
     void capacityShowsAnExplicitUnmeasuredStateNeverAZeroBar() throws Exception {
+        int hostId = enrollHost("overview-capacity");
         // 1. Make the stored reading STALE by re-storing it with an old measurement
         //    stamp (the merge keeps per-fact provenance).
-        HostPreflight.store("overview-dark", new HostPreflight.Report(List.of(),
+        HostPreflight.store("overview-capacity", new HostPreflight.Report(List.of(),
             Map.of(HostPreflight.MEM_TOTAL_FACT, 16L * 1024 * 1024 * 1024),
             true, Now.instant().minus(Duration.ofDays(365)), null));
-        HttpResponse<String> stale = get("/admin/servers/" + hostId + "/page/overview");
+        HttpResponse<String> stale = adminGet("/admin/servers/" + hostId + "/page/overview");
         assertThat(stale.statusCode()).isEqualTo(200);
         // The unmeasured posture is the usage widget's own built-in state now (the page
         // used to spell it in a bespoke template branch); the SEMANTIC assertion is
@@ -237,10 +222,10 @@ class ServerOverviewTest extends HohenheimTestBase {
             .doesNotContain("<pl-usage-bar");
 
         // 2. A fresh measurement turns into a real usage bar with the booked numbers.
-        HostPreflight.store("overview-dark", new HostPreflight.Report(List.of(),
+        HostPreflight.store("overview-capacity", new HostPreflight.Report(List.of(),
             Map.of(HostPreflight.MEM_TOTAL_FACT, 16L * 1024 * 1024 * 1024),
             true, Now.instant(), null));
-        HttpResponse<String> fresh = get("/admin/servers/" + hostId + "/page/overview");
+        HttpResponse<String> fresh = adminGet("/admin/servers/" + hostId + "/page/overview");
         assertThat(fresh.body())
             .as("step 2: a fresh measurement renders a real usage bar")
             .doesNotContain("widget-usage-unmeasured")
@@ -252,8 +237,8 @@ class ServerOverviewTest extends HohenheimTestBase {
      * so drain/cordon/delete refusals are legible BEFORE they fire.
      */
     @Test
-    @Order(6)
     void theOverviewListsTheWorkloadsThatHoldTheHost() throws Exception {
+        int hostId = enrollHost("overview-workloads");
         InstanceModel instances = Models.get(InstanceModel.class);
         Row row = instances.createEmptyRow();
         row.set(InstanceModel.NAME, "overview-holder");
@@ -264,7 +249,7 @@ class ServerOverviewTest extends HohenheimTestBase {
         Integer instanceId = instances.find()
             .where(InstanceModel.NAME.eq("overview-holder")).first().get(InstanceModel.ID);
 
-        HttpResponse<String> overview = get("/admin/servers/" + hostId + "/page/overview");
+        HttpResponse<String> overview = adminGet("/admin/servers/" + hostId + "/page/overview");
         assertThat(overview.body())
             .as("the workload renders by name").contains("overview-holder");
         assertThat(overview.body())
@@ -282,14 +267,14 @@ class ServerOverviewTest extends HohenheimTestBase {
      * out-of-band verification IS the only clearing ceremony, and the banner says so.
      */
     @Test
-    @Order(7)
     void theQuarantineBannerIsLoudAndOffersOnlyTheRepinCeremony() throws Exception {
+        int hostId = enrollHost("overview-quarantine");
         Row host = Models.get(ServerModel.class).findById(hostId);
         host.set(ServerModel.QUARANTINED_AT, Now.instant());
         host.set(ServerModel.QUARANTINE_REASON, "host key contradicted the pinned identity");
         Models.get(ServerModel.class).save(host);
 
-        HttpResponse<String> overview = get("/admin/servers/" + hostId + "/page/overview");
+        HttpResponse<String> overview = adminGet("/admin/servers/" + hostId + "/page/overview");
         String body = overview.body();
         // The banner is the framework's alert widget now, so it is identified by the
         // copy it carries rather than by a hand-written data attribute.
@@ -304,7 +289,7 @@ class ServerOverviewTest extends HohenheimTestBase {
         cleared.set(ServerModel.QUARANTINED_AT, (Instant) null);
         cleared.set(ServerModel.QUARANTINE_REASON, (String) null);
         Models.get(ServerModel.class).save(cleared);
-        assertThat(get("/admin/servers/" + hostId + "/page/overview").body())
+        assertThat(adminGet("/admin/servers/" + hostId + "/page/overview").body())
             .as("positive anchor: an unquarantined host renders no banner")
             .doesNotContain(QUARANTINE_TITLE);
     }
@@ -314,9 +299,8 @@ class ServerOverviewTest extends HohenheimTestBase {
      * not the old fully-resolved English sentence.
      */
     @Test
-    @Order(8)
     void theServersListRendersAStructuredStatusCell() throws Exception {
-        HttpResponse<String> list = get("/admin/servers");
+        HttpResponse<String> list = adminGet("/admin/servers");
         assertThat(list.statusCode()).isEqualTo(200);
         assertThat(list.body())
             .as("the host_status cell renders the structured partial")
@@ -326,28 +310,13 @@ class ServerOverviewTest extends HohenheimTestBase {
             .contains("<pl-status-dot");
     }
 
-    // -- plumbing -----------------------------------------------------------------
-
-    private HttpResponse<String> get(String path) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .GET().build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
-
-    private HttpResponse<String> postForm(String path, String body) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .header("X-Csrf-Token", csrfToken)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    /** Enroll a never-probed remote host through the create form; each test owns its own. */
+    private int enrollHost(String name) throws Exception {
+        var create = adminPostForm("/admin/servers/new",
+            "name=" + name + "&ssh_target=nobody%40" + name + ".hohenheim-test.invalid");
+        assertThat(create.statusCode()).as("host %s enrolls", name).isIn(200, 302, 303);
+        Row host = Models.get(ServerModel.class).findByName(name);
+        assertThat(host).as("host %s exists after enrolment", name).isNotNull();
+        return host.get(ServerModel.ID);
     }
 }

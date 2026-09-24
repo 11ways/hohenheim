@@ -1,20 +1,27 @@
 package be.elevenways.hohenheim.test.preview;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.docker.ReleaseKind;
+import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.preview.PreviewDomains;
+import be.elevenways.hohenheim.server.preview.PreviewQuota;
+import be.elevenways.hohenheim.server.quota.OwnerQuota;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -26,9 +33,12 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -174,9 +184,17 @@ class PreviewMechanicsTest extends HohenheimTestBase {
     void thePreviewQuotaBindsAtomicallyAndReleasesOnTeardown() {
         Integer savedCap = HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Previews.MAX_PER_OWNER);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Previews.MAX_PER_OWNER, 1);
+        // AIDEV-NOTE: the cap is ONE slot above what the owner already holds, never a bare 1.
+        // The application here has no grant, so its owner is the operator, whose bucket every
+        // ungranted preview in this JVM shares: a preview another test left live used to fill
+        // it and refuse step 1 before the quota under test was ever reached.
+        String owner = Objects.requireNonNull(
+            OwnerQuota.currentOwnerPack(InstanceModel.MODEL_ID, applicationId),
+            "the application's owner is readable");
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Previews.MAX_PER_OWNER,
+            Math.toIntExact(PreviewQuota.usedBy(owner) + 1));
         try {
-            // 1. The first preview of this owner fits.
+            // 1. The next preview of this owner fits.
             Row first = newPreviewRow("quota-a", "prev-mech--quota-a.preview.test", null);
             assertThat((String) first.get(PreviewDeploymentModel.QUOTA_BUCKET))
                 .as("step 1: the charge is stamped on the row")
@@ -234,7 +252,8 @@ class PreviewMechanicsTest extends HohenheimTestBase {
         assertThat((String) dead.get(PreviewDeploymentModel.STATUS))
             .as("step 3: expiry is stamped as EXPIRED, visibly")
             .isEqualTo(PreviewDeploymentModel.STATUS_EXPIRED);
-        assertThat((Object) dead.get(PreviewDeploymentModel.DELETED_AT)).isNotNull();
+        assertThat((Object) dead.get(PreviewDeploymentModel.DELETED_AT))
+            .as("the reached preview is soft-deleted").isNotNull();
         assertThat(generatedDomainOf(previewId))
             .as("step 3: its generated hostname row is gone").isNull();
         assertThat(schedulesOf(previewId))
@@ -289,7 +308,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
             //    an owner to record that is not the operator's empty set. The domain row
             //    hangs off the SITE, which is why the grant stays site-keyed here while
             //    the preview's own quota charge follows the APPLICATION.
-            int owner = tenantUser("preview-owner@test");
+            int owner = ApiSupport.user("preview-owner@test");
             RecordGrants.grant(GrantSubjectType.USER, owner, SiteModel.MODEL_ID, siteId,
                 HohenheimAccess.MANAGE, true);
 
@@ -328,7 +347,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
             raider.set(SiteModel.STATUS, "active");
             raider.set(SiteModel.ENABLED, true);
             sites.save(raider);
-            RecordGrants.grant(GrantSubjectType.USER, tenantUser("preview-raider@test"), SiteModel.MODEL_ID,
+            RecordGrants.grant(GrantSubjectType.USER, ApiSupport.user("preview-raider@test"), SiteModel.MODEL_ID,
                 raider.get(SiteModel.ID), HohenheimAccess.MANAGE, true);
             Row seize = domains.createEmptyRow();
             seize.set(SiteDomainModel.SITE_ID, raider.get(SiteModel.ID));
@@ -361,31 +380,16 @@ class PreviewMechanicsTest extends HohenheimTestBase {
         }
     }
 
-    /** A user holding manage on the site, so the ledger records a tenant, not the operator. */
-    private static int tenantUser(String email) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, email);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
-    }
-
     /**
      * The ambient minute sweeper can win the lease race for a due one-shot; whoever
      * fires it, the destroyed STATE is what matters -- await it briefly.
      */
-    private static Row awaitDestroyed(int previewId) throws InterruptedException {
-        for (int i = 0; i < 100; i++) {
-            Row row = Models.get(PreviewDeploymentModel.class).findById(previewId);
-            if (row != null && row.get(PreviewDeploymentModel.DELETED_AT) != null) {
-                return row;
-            }
-            Thread.sleep(100);
-        }
-        return Models.get(PreviewDeploymentModel.class).findById(previewId);
+    private static Row awaitDestroyed(int previewId) {
+        return Poll.value("preview " + previewId + " is soft-deleted", Duration.ofSeconds(10),
+            Duration.ofMillis(100), () -> {
+                Row row = Models.get(PreviewDeploymentModel.class).findById(previewId);
+                return row != null && row.get(PreviewDeploymentModel.DELETED_AT) != null ? row : null;
+            });
     }
 
     private static List<Row> schedulesOf(int previewId) {
@@ -394,6 +398,103 @@ class PreviewMechanicsTest extends HohenheimTestBase {
     }
 
     // -- helpers --------------------------------------------------------------
+
+    /**
+     * A preview's environment is stored as its instance's SECRET variables, never in
+     * instances.settings: the deploy lane's own instance write does so, and the boot
+     * backfill seals the plaintext copy an older controller left behind.
+     */
+    @Test
+    void thePreviewEnvironmentIsSecretAndLegacyPlaintextIsSealed() throws Exception {
+        Row preview = newPreviewRow("env-ref", "prev-mech--env-ref.preview.test", null);
+        int previewId = preview.get(PreviewDeploymentModel.ID);
+        GeneratedRows.Attribution attribution = new GeneratedRows.Attribution(PreviewDomains.SOURCE,
+            PreviewDeploymentModel.MODEL_ID.toString(), previewId);
+        Map<String, String> environment = Map.of("API_TOKEN", "preview-token-value", "MODE", "preview");
+        Map<String, Object> desired = new LinkedHashMap<>();
+        desired.put("image", "sha256:" + "a".repeat(64));
+        desired.put("container_port", 8080);
+        desired.put("environment_variables", environment);
+        try {
+            assertEnvironmentIsSealed(attribution, desired, environment);
+        } finally {
+            // A live preview holds a slot of its owner's preview quota: tear it down, or the
+            // next test of this owner meets a bucket this one filled.
+            PreviewDeployments.destroy(previewId, "operator");
+        }
+    }
+
+    private static void assertEnvironmentIsSealed(GeneratedRows.Attribution attribution,
+                                                  Map<String, Object> desired,
+                                                  Map<String, String> environment) throws Exception {
+        // 1. The deploy lane's instance write: the settings keep the spec, the environment
+        //    lands in SECRET variables only.
+        int[] instanceId = new int[1];
+        GeneratedRows.as(attribution, () -> {
+            Row instance = Models.get(InstanceModel.class).createEmptyRow();
+            instance.set(InstanceModel.NAME, "preview-prev-mech--env-ref.preview.test");
+            instance.set(InstanceModel.KIND, ReleaseKind.ID.toString());
+            instance.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+            instance.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_SERVING);
+            instanceId[0] = PreviewDeployments.persistInstance(instance, desired);
+        });
+        assertThat(settingsOf(instanceId[0]))
+            .as("step 1: no environment in instances.settings").doesNotContainKey("environment_variables")
+            .as("step 1: the rest of the spec is stored").containsKey("container_port");
+        assertSecretEnvironment(instanceId[0], environment, "step 1");
+
+        // 2. An older controller's row: the environment copied into the settings in the clear.
+        GeneratedRows.as(attribution, () -> {
+            Row legacy = Models.get(InstanceModel.class).findById(instanceId[0]);
+            Map<String, Object> settings = new LinkedHashMap<>(settingsOf(instanceId[0]));
+            settings.put("environment_variables", environment);
+            legacy.set(InstanceModel.SETTINGS, settings);
+            Models.get(InstanceModel.class).save(legacy);
+        });
+        assertThat(settingsOf(instanceId[0])).as("step 2: the legacy shape is in place")
+            .containsKey("environment_variables");
+
+        // 3. The boot backfill seals it: the settings lose the environment, the values stay secret.
+        assertThat(PreviewDeployments.sealPlaintextEnvironments())
+            .as("step 3: at least this preview instance was sealed").isGreaterThanOrEqualTo(1);
+        assertThat(settingsOf(instanceId[0]))
+            .as("step 3: the plaintext environment is gone").doesNotContainKey("environment_variables")
+            .as("step 3: and the spec survived the rewrite").containsKey("container_port");
+        assertSecretEnvironment(instanceId[0], environment, "step 3");
+
+        // 4. A second pass finds nothing left on this instance and rewrites none of its rows.
+        List<Object> before = variableIds(instanceId[0]);
+        PreviewDeployments.sealPlaintextEnvironments();
+        assertThat(variableIds(instanceId[0])).as("step 4: the sealed rows are left alone").isEqualTo(before);
+    }
+
+    private static Map<String, Object> settingsOf(int instanceId) {
+        Map<String, Object> copy = new LinkedHashMap<>();
+        if (Models.get(InstanceModel.class).findById(instanceId).get(InstanceModel.SETTINGS)
+                instanceof Map<?, ?> map) {
+            map.forEach((key, value) -> copy.put(String.valueOf(key), value));
+        }
+        return copy;
+    }
+
+    private static void assertSecretEnvironment(int instanceId, Map<String, String> environment,
+                                                String step) {
+        assertThat(new InstanceVariables().valuesFor(instanceId))
+            .as(step + ": the container environment is exactly the preview's")
+            .containsExactlyInAnyOrderEntriesOf(environment);
+        for (Row variable : Models.get(InstanceVariableModel.class).findByInstanceId(instanceId)) {
+            assertThat((Object) variable.get(InstanceVariableModel.KIND))
+                .as(step + ": every value is stored SECRET").isEqualTo(InstanceVariableModel.KIND_SECRET);
+        }
+    }
+
+    private static List<Object> variableIds(int instanceId) {
+        List<Object> ids = new ArrayList<>();
+        for (Row variable : Models.get(InstanceVariableModel.class).findByInstanceId(instanceId)) {
+            ids.add(variable.get(InstanceVariableModel.ID));
+        }
+        return ids;
+    }
 
     private static Row newPreviewRow(String ref, String hostname, Instant expiresAt) {
         var model = Models.get(PreviewDeploymentModel.class);

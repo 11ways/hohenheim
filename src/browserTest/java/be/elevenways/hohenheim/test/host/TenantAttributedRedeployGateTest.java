@@ -10,11 +10,10 @@ import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -59,7 +58,7 @@ class TenantAttributedRedeployGateTest extends HohenheimTestBase {
         //    operator-authored, generated-only kind. This is the exact shape the old gate
         //    skipped, and the ownership lives on the SITE, never on the instance row.
         int siteId = site();
-        int tenantId = user("redeploy-tenant@hohenheim.local");
+        int tenantId = ApiSupport.user("redeploy-tenant@hohenheim.local");
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId,
             HohenheimAccess.MANAGE, true);
         int instanceId = releaseContainer(siteId, hostId);
@@ -182,17 +181,6 @@ class TenantAttributedRedeployGateTest extends HohenheimTestBase {
             created[0] = row.get(InstanceModel.ID);
         });
         return created[0];
-    }
-
-    private static int user(String email) {
-        Row row = AuthModels.users().createEmptyRow();
-        row.set(UserModel.EMAIL, email);
-        row.set(UserModel.DISPLAY_NAME, email);
-        row.set(UserModel.ENABLED, true);
-        row.set(UserModel.CREATED_AT, Now.instant());
-        row.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(row);
-        return row.get(UserModel.ID);
     }
 
     /** Every violation key a refusal carries; a non-Violations failure yields none. */

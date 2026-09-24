@@ -12,20 +12,19 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
+import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -56,7 +55,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class StackNetworkIsolationTest {
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static PrivateNetns installed;
 
     /** nft table and container names are controller-namespaced, so this needs an identity. */
@@ -64,12 +63,7 @@ class StackNetworkIsolationTest {
     static void bootRecords() throws Exception {
         FieldEncryption.installKeyring(EncryptionKeyring.loadOrCreate(
             Files.createTempDirectory("hh-stackiso-enc").resolve("keys.dry")));
-        File db = File.createTempFile("hohenheim-stackiso-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
     }
 
@@ -81,7 +75,7 @@ class StackNetworkIsolationTest {
 
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
-    private static final String TEST_IMAGE = "alpine:latest";
+    private static final String TEST_IMAGE = TestImages.ALPINE;
 
     /** The cloud metadata address: instance credentials for the whole host. */
     private static final String METADATA = "169.254.169.254";

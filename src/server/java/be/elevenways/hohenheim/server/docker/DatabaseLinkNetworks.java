@@ -15,9 +15,10 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
+import java.util.Set;
 import java.util.function.IntPredicate;
 
 /**
@@ -149,21 +150,38 @@ final class DatabaseLinkNetworks {
     static void refreshInstancePort(@NonNull StatusOf statuses, int serverId,
                                     @Nullable Integer instanceId, @NonNull String handle) {
         InstanceStatus status = statuses.status(handle);
-        Integer fresh = status.publishedPort();
-        if (!status.running() || fresh == null || instanceId == null) {
+        if (!status.running() || status.publishedPorts().isEmpty() || instanceId == null) {
             return;
         }
-        Integer recorded = null;
+        // AIDEV-NOTE: the WHOLE sets are compared, never the first claim row against the
+        // first published port. A multi-publication workload used to compare one arbitrary
+        // pair, so a moved second port was never corrected, and the correction wrote ONE
+        // port through recordObserved, whose supersession then deleted every other observed
+        // claim of the owner. Pre-allocated claims are the operator's stable reservations and
+        // stay out of both sides, exactly as the deploy's record-after lane leaves them.
+        Set<Integer> preallocated = new LinkedHashSet<>();
+        Set<Integer> recorded = new LinkedHashSet<>();
         for (Row claim : PortLedger.claimsOf(InstanceModel.MODEL_ID, instanceId)) {
-            if (!PortLedger.isReleasing(claim)) {
-                recorded = claim.get(PortAllocationModel.PORT);
-                break;
+            Integer port = claim.get(PortAllocationModel.PORT);
+            if (port == null) {
+                continue;
+            }
+            if (PortLedger.isPreallocated(claim)) {
+                preallocated.add(port);
+            } else if (!PortLedger.isReleasing(claim)) {
+                recorded.add(port);
             }
         }
-        if (Objects.equals(recorded, fresh)) {
+        Set<Integer> published = new LinkedHashSet<>();
+        for (InstanceStatus.PublishedPort port : status.publishedPorts()) {
+            if (!preallocated.contains(port.hostPort())) {
+                published.add(port.hostPort());
+            }
+        }
+        if (published.isEmpty() || published.equals(recorded)) {
             return;
         }
-        PortLedger.recordObserved(serverId, "127.0.0.1", fresh, "tcp",
+        PortLedger.recordObservedAll(serverId, "127.0.0.1", new ArrayList<>(published), "tcp",
             InstanceModel.MODEL_ID, instanceId, null);
     }
 }

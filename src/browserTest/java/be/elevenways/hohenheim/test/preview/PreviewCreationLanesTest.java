@@ -5,6 +5,8 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
+import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.ManagePreviewDeploymentResource;
@@ -14,11 +16,8 @@ import be.elevenways.hohenheim.server.preview.PreviewBranches;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -27,6 +26,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -171,8 +171,8 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
      */
     @Test
     void manualCreationFromManageRequiresManageOnTheChosenApplication() throws Exception {
-        int strangerId = tenantUser("preview-stranger@test");
-        int managerId = tenantUser("preview-manager@test");
+        int strangerId = ApiSupport.user("preview-stranger@test");
+        int managerId = ApiSupport.user("preview-manager@test");
         RecordGrants.grant(GrantSubjectType.USER, managerId, InstanceModel.MODEL_ID,
             applicationId, HohenheimAccess.MANAGE, true);
         AccessContext stranger = contextOf(strangerId, "Stranger");
@@ -284,25 +284,11 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
         return AccessContext.of(TenantConduits.stubFor(new UserPrincipal(userId, name)));
     }
 
-    private static int tenantUser(String email) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, email);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
-    }
-
-    private static void awaitStatus(int previewId, String status) throws InterruptedException {
-        for (int i = 0; i < 200; i++) {
-            Row row = Models.get(PreviewDeploymentModel.class).findById(previewId);
-            if (row != null && status.equals(row.get(PreviewDeploymentModel.STATUS))) {
-                return;
-            }
-            Thread.sleep(100);
-        }
-        throw new AssertionError("preview " + previewId + " never reached status " + status);
+    private static void awaitStatus(int previewId, String status) {
+        Poll.until("preview " + previewId + " reaches status " + status, Duration.ofSeconds(20),
+            Duration.ofMillis(100), () -> {
+                Row row = Models.get(PreviewDeploymentModel.class).findById(previewId);
+                return row != null && status.equals(row.get(PreviewDeploymentModel.STATUS));
+            });
     }
 }

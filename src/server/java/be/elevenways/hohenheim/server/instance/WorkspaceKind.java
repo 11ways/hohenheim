@@ -61,7 +61,7 @@ import java.util.Set;
  * is a HOST uid; Incus reaches it through the image's {@code hohenheim-init}, where it is a
  * NAMESPACE id and the host-side owner of the volume is {@code WorkspaceUids.incusHostUid}
  * of it. That difference is the runtimes', not a choice: the two AIDEV-NOTEs on
- * {@code IncusInstanceRuntime.applyRunUser} record what was measured and why parity was
+ * {@code IncusDefinitions.applyRunUser} record what was measured and why parity was
  * not worth what it costs the rest of the host.
  */
 public final class WorkspaceKind implements InstanceKindHandler {

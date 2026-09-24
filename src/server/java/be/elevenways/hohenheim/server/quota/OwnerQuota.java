@@ -2,7 +2,10 @@ package be.elevenways.hohenheim.server.quota;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -13,6 +16,8 @@ import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+
+import java.util.Set;
 
 /**
  * The three answers every per-owner quota dimension needs, in ONE place: how a packed
@@ -63,19 +68,38 @@ public final class OwnerQuota {
     /**
      * The cap for one owner in one dimension: the per-owner override column when the row
      * carries a value (0 included -- nothing allowed), else the global default, where 0 or
-     * less means no cap at all.
+     * less means no cap at all. A budget without an override column reads the default only.
      *
      * @return the cap, or null for uncapped
      */
     public static @Nullable Integer limitOf(@NonNull String packedSubjects,
-                                            @NonNull IntegerField overrideColumn,
+                                            @Nullable IntegerField overrideColumn,
                                             @NonNull SettingDefinition<Integer> fallback) {
-        Integer override = overrideOf(packedSubjects, overrideColumn);
+        Integer override = overrideColumn == null ? null : overrideOf(packedSubjects, overrideColumn);
         if (override != null) {
             return override;
         }
         Integer value = HohenheimSettings.VALUES.getValue(fallback);
         return value != null && value > 0 ? value : null;
+    }
+
+    /**
+     * WHO a brand-new record is charged to: the creation owner of the acting write context,
+     * packed -- the same derivation the creator's manage grant is planted from a moment later.
+     */
+    public static @NonNull String creationOwnerPack() {
+        return HohenheimAccess.packSubjects(HohenheimAccess.creationOwnerSubjects(
+            TenantWrites.isTenantOriginated() ? TenantWrites.acting() : null));
+    }
+
+    /**
+     * The packed owner of an existing record as derived NOW from its manage grants.
+     *
+     * @return the pack, or null when the grants are unreadable (callers fall back or refuse)
+     */
+    public static @Nullable String currentOwnerPack(@NonNull Identifier model, @NonNull Object recordId) {
+        Set<String> subjects = HohenheimAccess.manageSubjectsOf(model, recordId);
+        return subjects == null ? null : HohenheimAccess.packSubjects(subjects);
     }
 
     /** The override value of one column for one owner, or null when there is no row/value. */

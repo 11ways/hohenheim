@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.project;
 
+import be.elevenways.hohenheim.model.DoomedRows;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
@@ -11,11 +12,7 @@ import be.elevenways.zenit.auth.model.PermissionGroupModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
-import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.QueryBuilder;
-import be.elevenways.zenit.common.orm.query.QueryContext;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -33,9 +30,6 @@ import java.util.Set;
  * whose project OWNS it -- grouping may never disagree with the grants.
  */
 public final class ProjectGuards {
-
-    /** Where the project remove hooks stash the doomed group ids. */
-    private static final String DOOMED_GROUPS = "hohenheim.project.doomed-groups";
 
     private static boolean installed;
 
@@ -83,8 +77,8 @@ public final class ProjectGuards {
 
         // Delete guard + explicit auth-footprint teardown (hard deletes; projects
         // have no soft delete).
-        ProjectModel.SCHEMA.addBeforeRemoveHook(ProjectGuards::refuseNonEmptyAndCapture);
-        ProjectModel.SCHEMA.addAfterRemoveHook(ProjectGuards::removeDoomedGroups);
+        DoomedRows.handOver(ProjectModel.SCHEMA, ProjectGuards::refuseNonEmptyAndCapture,
+            ProjectGuards::removeDoomedGroups);
 
         // The other direction of the same invariant: /admin/roles offers a plain Delete on
         // every group, including the ones this tier creates, and taking one out there left
@@ -132,7 +126,7 @@ public final class ProjectGuards {
         // and silently drop its variables out of every future deploy. The refusal NAMES
         // the holders: "instances or variables" left the operator guessing which.
         EnvironmentModel.SCHEMA.addBeforeRemoveHook(context -> {
-            for (Row doomed : doomedRows(context)) {
+            for (Row doomed : context.doomedRows()) {
                 Integer id = doomed.get(EnvironmentModel.ID);
                 if (id == null) {
                     continue;
@@ -147,7 +141,7 @@ public final class ProjectGuards {
         // THE grouping-follows-ownership invariant: an instance may only sit in an
         // environment whose project owns it (owner subject set == {project group}).
         // beforeValidate, NOT beforeWrite: the quota reservation fires in beforeWrite
-        // (InstanceQuota installs first), so a beforeWrite refusal here would spend a
+        // (ChargedModel.INSTANCES installs first), so a beforeWrite refusal here would spend a
         // slot the aborted create never hands back -- the InstanceImagePolicy lesson.
         InstanceModel.SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
@@ -252,7 +246,7 @@ public final class ProjectGuards {
 
     /** A permission group a live project still points at cannot be deleted on its own. */
     private static void refuseProjectOwnedGroup(@NonNull RemoveFromDatasource context) {
-        for (Row group : doomedRows(context)) {
+        for (Row group : context.doomedRows()) {
             Integer groupId = group.get(PermissionGroupModel.ID);
             if (groupId == null) {
                 continue;
@@ -265,9 +259,13 @@ public final class ProjectGuards {
         }
     }
 
-    private static void refuseNonEmptyAndCapture(@NonNull RemoveFromDatasource context) {
+    /**
+     * @return the auth groups of the doomed projects, torn down once they are gone
+     * @throws Violations {@code project_not_empty}
+     */
+    private static @Nullable List<Integer> refuseNonEmptyAndCapture(@NonNull RemoveFromDatasource context) {
         List<Integer> doomedGroups = new ArrayList<>();
-        for (Row project : doomedRows(context)) {
+        for (Row project : context.doomedRows()) {
             Integer id = project.get(ProjectModel.ID);
             Integer groupId = project.get(ProjectModel.GROUP_ID);
             if (groupId != null && Projects.ownedRecordCount(groupId) > 0) {
@@ -280,40 +278,19 @@ public final class ProjectGuards {
                 doomedGroups.add(groupId);
             }
         }
-        if (!doomedGroups.isEmpty()) {
-            context.setAttribute(DOOMED_GROUPS, doomedGroups);
-        }
+        return doomedGroups.isEmpty() ? null : doomedGroups;
     }
 
-    private static void removeDoomedGroups(@NonNull RemoveFromDatasource context) {
-        if (!(context.getAttribute(DOOMED_GROUPS) instanceof List<?> doomed)) {
-            return;
-        }
-        for (Object groupId : doomed) {
-            if (groupId instanceof Integer id) {
-                Projects.removeGroupFor(id);
-            }
+    private static void removeDoomedGroups(@NonNull RemoveFromDatasource context,
+                                           @NonNull List<Integer> doomedGroups) {
+        for (Integer groupId : doomedGroups) {
+            Projects.removeGroupFor(groupId);
         }
     }
 
     private static @Nullable Row storedProject(@NonNull Row row) {
         Object id = row.has(ProjectModel.ID.getName()) ? row.get(ProjectModel.ID) : null;
         return id == null ? null : Models.get(ProjectModel.class).findById(id);
-    }
-
-    /** The rows a criteria remove is about to delete (the PortLedger pairing shape). */
-    private static @NonNull List<Row> doomedRows(@NonNull RemoveFromDatasource context) {
-        Model model = context.getModel();
-        if (model == null) {
-            return List.of();
-        }
-        QueryContext queryContext = context.getQueryContext();
-        Criteria criteria = queryContext != null ? queryContext.getCriteria() : null;
-        QueryBuilder<Row> builder = model.find();
-        if (criteria != null) {
-            builder.where(criteria);
-        }
-        return builder.all();
     }
 
     private static Microcopy violation(String key) {

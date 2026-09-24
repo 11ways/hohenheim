@@ -4,19 +4,12 @@ import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -36,41 +29,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * The literals are written out on purpose. A test that rebuilt its expectation from
  * CmsRoutes would assert that CmsRoutes equals itself and would pin no URL at all.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class RoutedLinkTargetsTest extends HohenheimTestBase {
-
-    private static Integer siteId;
-    private static Integer domainId;
 
     @BeforeAll
     static void discoverListenAddresses() {
         // The listen_on select validates against discovered addresses; the boot task
         // that populates them does not run in the test JVM.
         UpdateSystemIpAddresses.discover();
-    }
-
-    private HttpResponse<String> get(String path) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .GET().build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
-
-    private HttpResponse<String> postForm(String path, String body) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .header("X-Csrf-Token", csrfToken)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     /** The href of the element carrying {@code id}, as the server actually rendered it. */
@@ -89,30 +54,37 @@ class RoutedLinkTargetsTest extends HohenheimTestBase {
         return href.group(1);
     }
 
+    /**
+     * The Domains tab serves the exact links it used to concatenate, and a wrong route
+     * argument would have produced a URL these assertions reject.
+     *
+     * AIDEV-NOTE: ONE journey on purpose: the counterfactual is only meaningful against the
+     * site id the page really rendered, which used to cross from one @Order test to the next
+     * through a static field (so the counterfactual NPE'd when run alone).
+     */
     @Test
-    @Order(1)
     void domainsTabServesTheExactLinksItUsedToConcatenate() throws Exception {
         // 1. A site with one domain, so the tab has both header links and a row.
-        var siteResponse = postForm("/admin/sites/new",
+        var siteResponse = adminPostForm("/admin/sites/new",
             "name=Routed+Link+Site&upstream_kind=hohenheim%3Aaddress"
             + "&settings.forward_host=127.0.0.1&settings.forward_port=9091");
         assertThat(siteResponse.statusCode()).as("step 1: the site is created").isIn(200, 302, 303);
         Row site = Models.get(SiteModel.class).find()
             .where(SiteModel.NAME.eq("Routed Link Site")).first();
         assertThat(site).as("step 1: the site exists").isNotNull();
-        siteId = site.get(SiteModel.ID);
+        int siteId = site.get(SiteModel.ID);
 
-        var domainResponse = postForm("/admin/domains/new",
+        var domainResponse = adminPostForm("/admin/domains/new",
             "site_id=" + siteId + "&hostname=routed-link.example.com&match_type=exact");
         assertThat(domainResponse.statusCode()).as("step 1: the domain is created")
             .isIn(200, 302, 303);
         Row domain = Models.get(SiteDomainModel.class).find()
             .where(SiteDomainModel.HOSTNAME.eq("routed-link.example.com")).first();
         assertThat(domain).as("step 1: the domain exists").isNotNull();
-        domainId = domain.get(SiteDomainModel.ID);
+        int domainId = domain.get(SiteDomainModel.ID);
 
         // 2. The Domains tab renders.
-        HttpResponse<String> tab = get("/admin/sites/" + siteId + "/page/domains");
+        HttpResponse<String> tab = adminGet("/admin/sites/" + siteId + "/page/domains");
         assertThat(tab.statusCode()).as("step 2: the Domains tab renders").isEqualTo(200);
         String html = tab.body();
 
@@ -133,6 +105,9 @@ class RoutedLinkTargetsTest extends HohenheimTestBase {
         assertThat(html)
             .as("step 4: the row links at the domain's own record page, bound back to this tab")
             .contains("href=\"/admin/domains/" + domainId + "?_return=");
+
+        // 5. The counterfactual below, against the very site this page rendered.
+        aWrongRouteArgumentProducesAUrlThePageAssertionRejects(siteId);
     }
 
     /**
@@ -141,49 +116,47 @@ class RoutedLinkTargetsTest extends HohenheimTestBase {
      * turn replaced by a plausible mistake and proves each one produces a URL the test
      * would have rejected.
      */
-    @Test
-    @Order(2)
-    void aWrongRouteArgumentProducesAUrlThePageAssertionRejects() {
+    private static void aWrongRouteArgumentProducesAUrlThePageAssertionRejects(int siteId) {
         String expected = "/admin/domains/new?site_id=" + siteId;
 
-        // 1. The correct composition is what the page emitted -- the baseline.
+        // 5.1. The correct composition is what the page emitted -- the baseline.
         assertThat(CmsEndpoints.CREATE_FORM
                 .with(CmsEndpoints.PANEL_PARAM, "admin")
                 .with(CmsEndpoints.RESOURCE_PARAM, "domains")
                 .with(HohenheimParams.SITE_ID_PREFILL, siteId).toUrl())
-            .as("step 1: the composition under test reproduces the asserted URL")
+            .as("step 5.1: the composition under test reproduces the asserted URL")
             .isEqualTo(expected);
 
-        // 2. Wrong PANEL: the /manage variant is a real, reachable, WRONG destination.
+        // 5.2. Wrong PANEL: the /manage variant is a real, reachable, WRONG destination.
         assertThat(CmsEndpoints.CREATE_FORM
                 .with(CmsEndpoints.PANEL_PARAM, "manage")
                 .with(CmsEndpoints.RESOURCE_PARAM, "domains")
                 .with(HohenheimParams.SITE_ID_PREFILL, siteId).toUrl())
-            .as("step 2: a wrong panel slug fails the step-3 assertion")
+            .as("step 5.2: a wrong panel slug fails the step-3 assertion above")
             .isNotEqualTo(expected);
 
-        // 3. Wrong RESOURCE: a singular slug is the classic typo, and 404s on click.
+        // 5.3. Wrong RESOURCE: a singular slug is the classic typo, and 404s on click.
         assertThat(CmsEndpoints.CREATE_FORM
                 .with(CmsEndpoints.PANEL_PARAM, "admin")
                 .with(CmsEndpoints.RESOURCE_PARAM, "domain")
                 .with(HohenheimParams.SITE_ID_PREFILL, siteId).toUrl())
-            .as("step 3: a wrong resource slug fails the step-3 assertion")
+            .as("step 5.3: a wrong resource slug fails the step-3 assertion above")
             .isNotEqualTo(expected);
 
-        // 4. DROPPED prefill: renders fine, opens an unbound create form.
+        // 5.4. DROPPED prefill: renders fine, opens an unbound create form.
         assertThat(CmsEndpoints.CREATE_FORM
                 .with(CmsEndpoints.PANEL_PARAM, "admin")
                 .with(CmsEndpoints.RESOURCE_PARAM, "domains").toUrl())
-            .as("step 4: dropping the prefill parameter fails the step-3 assertion")
+            .as("step 5.4: dropping the prefill parameter fails the step-3 assertion above")
             .isNotEqualTo(expected);
 
-        // 5. Wrong PARAMETER: binding the certificate page's ?site= instead of the create
+        // 5.5. Wrong PARAMETER: binding the certificate page's ?site= instead of the create
         //    form's site_id= is the exact confusion these two neighbouring links invite.
         assertThat(CmsEndpoints.CREATE_FORM
                 .with(CmsEndpoints.PANEL_PARAM, "admin")
                 .with(CmsEndpoints.RESOURCE_PARAM, "domains")
                 .with(HohenheimParams.CERTIFICATE_REQUEST_SITE, siteId).toUrl())
-            .as("step 5: binding the wrong parameter definition fails the step-3 assertion")
+            .as("step 5.5: binding the wrong parameter definition fails the step-3 assertion above")
             .isNotEqualTo(expected);
     }
 }

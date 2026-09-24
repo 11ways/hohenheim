@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
@@ -84,7 +85,7 @@ class DatabaseApiTest extends HohenheimTestBase {
 
         // The delegate: the /manage door plus view AND destroy on this one record, so the
         // 403s below can only be about the ADMIN-only verbs and never about a missing grant.
-        int tenantId = user(PREFIX + "tenant@surface.test", "Database API Tenant");
+        int tenantId = ApiSupport.user(PREFIX + "tenant@surface.test", "Database API Tenant");
         GrantService.createDirectGrant(GrantSubjectType.USER, tenantId, MANAGE_ACCESS, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantId, DatabaseModel.MODEL_ID, databaseId,
             HohenheimAccess.VIEW, true);
@@ -223,17 +224,6 @@ class DatabaseApiTest extends HohenheimTestBase {
     }
 
     // -- fixtures -------------------------------------------------------------
-
-    private static int user(String email, String name) {
-        Row row = AuthModels.users().createEmptyRow();
-        row.set(UserModel.EMAIL, email);
-        row.set(UserModel.DISPLAY_NAME, name);
-        row.set(UserModel.ENABLED, true);
-        row.set(UserModel.CREATED_AT, Now.instant());
-        row.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(row);
-        return row.get(UserModel.ID);
-    }
 
     private static int host(String name) {
         Model servers = Models.get(ServerModel.class);

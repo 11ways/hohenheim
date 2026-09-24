@@ -6,16 +6,13 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.host.HostCapacityView;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.quota.ChargedDimension;
+import be.elevenways.hohenheim.server.quota.ChargedModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
-import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.QueryBuilder;
-import be.elevenways.zenit.common.orm.query.QueryContext;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.orm.quota.QuotaExceeded;
 import be.elevenways.zenit.common.orm.quota.Quotas;
 import be.elevenways.zenit.common.validation.Violations;
@@ -86,24 +83,19 @@ import java.util.function.Supplier;
  * of whether the record still declares the lane.
  *
  * AIDEV-NOTE: every terminating path must release, and InstanceService.destroy soft-
- * deletes through save() so the remove hooks NEVER fire there. The transitions handled
- * below are therefore the whole contract: create, soft-delete, restore, HOST CHANGE (an
- * admin repointing InstanceModel.SERVER_ID through the CMS form -- NOT the migration
- * handoff, which is a fenced updateAll that fires no hooks at all and moves its charge
- * explicitly through openMigrationWindow), footprint change, and hard delete. A create
- * refused AFTER this hook spent the reservation unwinds with it, because the ledger rides
- * the caller's transaction and because every later refusal in the create funnel throws
- * before save() returns.
+ * deletes through save() so the remove hooks NEVER fire there. The transitions
+ * {@link ChargedModel} runs for {@link #HOST_MEMORY} are therefore the whole contract:
+ * create, soft-delete, restore, HOST CHANGE (an admin repointing InstanceModel.SERVER_ID
+ * through the CMS form -- NOT the migration handoff, which is a fenced updateAll that fires
+ * no hooks at all and moves its charge explicitly through openMigrationWindow), footprint
+ * change, and hard delete. A refusal later in the same charge hook (the root disk) unwinds
+ * this booking; a refusal after the hook does so only inside an ambient transaction, and
+ * the QuotaReconciler repairs the rest.
  */
 public final class InstanceCapacity {
 
     /** Consumer-namespaced bucket prefix; the host id follows it. */
     static final String BUCKET_PREFIX = "hohenheim:host_mem_mb:";
-
-    /** Where the before-remove hook stashes what the after-remove hook releases. */
-    private static final String DOOMED = "hohenheim.capacity.doomed";
-
-    private static boolean installed;
 
     private InstanceCapacity() {
     }
@@ -354,11 +346,11 @@ public final class InstanceCapacity {
      * THE migration ledger contract, and the reason it is a pair of explicit calls rather
      * than a hook: {@link InstanceOperationGuard#handoff} repoints the host with a FENCED
      * {@code updateAll}, which by the ORM's own contract fires no write hooks -- so
-     * {@link #rebook} never ran on a migration or a drain. The source kept its charge
+     * the host-memory rebook never ran on a migration or a drain. The source kept its charge
      * forever (a fully drained host read as fully booked and {@code chooseForBucket} then
      * refused it {@code no_placement_capacity} -- draining a host removed it from the pool
      * permanently), the destination booked nothing, and a later {@code save()} could not
-     * heal it because rebook returns early when host and amount both match.
+     * heal it because a rebook moves nothing when host and amount both match.
      *
      * ORDERING, which is the real question, since the ledger move and the fenced write can
      * never be one statement: the destination is booked when the migration WINDOW OPENS
@@ -386,8 +378,8 @@ public final class InstanceCapacity {
      * of recomputing it. The recompute was the drift bug: a window is minutes long, and
      * any change to the row's booked amount inside it (a footprint edit, a kind default
      * changing across an upgrade) made the settle release a number the window never
-     * reserved -- the over-release shape the paragraph above names. The rebook refusal
-     * ({@link #rebook}) closes the editing lane; the stamp closes every other one.
+     * reserved -- the over-release shape the paragraph above names. The mid-window freeze
+     * ({@link #refuseMidWindowMove}) closes the editing lane; the stamp closes every other one.
      *
      * @return the amount (MB) reserved on the destination
      * @throws Violations {@code host_capacity_reached} when the destination has no room
@@ -443,110 +435,113 @@ public final class InstanceCapacity {
         return name != null ? name : "#" + serverId;
     }
 
-    // -- installation ---------------------------------------------------------
-
-    /** Install the book/release hooks on the instance write funnel (MODULES stage). */
-    public static synchronized void install() {
-        if (installed) {
-            return;
-        }
-        installed = true;
-
-        InstanceModel.SCHEMA.addBeforeWriteHook(context -> {
-            Row row = context.getRow();
-            if (row == null) {
-                return;
-            }
-            Row stored = storedOf(row);
-            boolean storedLive = stored != null && stored.get(InstanceModel.DELETED_AT) == null;
-            boolean willBeLive = effectiveDeletedAt(row, stored) == null;
-
-            if (stored == null) {
-                if (willBeLive) {
-                    book(row, effectiveServerId(row, null));
-                }
-            } else if (storedLive && !willBeLive) {
-                releaseStored(stored);
-            } else if (!storedLive && willBeLive) {
-                book(row, effectiveServerId(row, stored));
-            } else if (storedLive) {
-                rebook(row, stored);
-            }
-        });
-
-        InstanceModel.SCHEMA.addBeforeRemoveHook(InstanceCapacity::captureDoomed);
-        InstanceModel.SCHEMA.addAfterRemoveHook(InstanceCapacity::releaseDoomed);
-    }
-
-    // -- hook internals -------------------------------------------------------
+    // -- the dimension ----------------------------------------------------------
 
     /**
-     * Book a live row's footprint on its host and STAMP the booked amount, so the release
+     * The host-memory dimension of {@link ChargedModel#INSTANCES}: a live row's footprint on
+     * the host it names, the booked amount stamped as {@code capacity_mb} so the release
      * always hands back exactly what was taken even after the settings change.
+     *
+     * AIDEV-NOTE: the bucket FOLLOWS the row's host, so a host change is a bucket move --
+     * ChargedModel releases the source first and then reserves the destination. The reverse
+     * would need the destination's headroom while the source still holds the charge, so
+     * migrating between two equally full hosts would refuse itself; a refused destination
+     * now also unwinds the source release, so the record neither moves nor loses its booking.
+     * A row with no host (the implicit local daemon's null spelling) was never booked.
      */
-    private static void book(@NonNull Row row, @Nullable Integer serverId) {
-        if (serverId == null) {
-            return;
+    public static final ChargedDimension HOST_MEMORY = new ChargedDimension() {
+
+        @Override
+        public @NonNull String key() {
+            return "host_memory";
         }
-        int amount = effectiveFootprintMb(row, storedOf(row));
-        if (amount <= 0) {
-            row.set(InstanceModel.CAPACITY_MB, 0);
-            return;
+
+        @Override
+        public @NonNull String prefix() {
+            return BUCKET_PREFIX;
         }
-        reserve(serverId, amount);
-        row.set(InstanceModel.CAPACITY_MB, amount);
-    }
+
+        @Override
+        public @Nullable Charge held(@NonNull Row stored) {
+            Integer serverId = stored.get(InstanceModel.SERVER_ID);
+            if (serverId == null) {
+                return null;
+            }
+            return new Charge(bucketOf(serverId), bookedMbOf(stored),
+                stored.get(InstanceModel.CAPACITY_MB) == null);
+        }
+
+        @Override
+        public @Nullable Charge claim(@NonNull Row row, @Nullable Row stored,
+                                      @NonNull Transition transition) {
+            Integer serverId = effectiveServerId(row, stored);
+            Charge claim = serverId == null ? null
+                : new Charge(bucketOf(serverId), effectiveFootprintMb(row, stored), false);
+            if (transition == Transition.REBOOK && stored != null) {
+                refuseMidWindowMove(stored, claim);
+            }
+            return claim;
+        }
+
+        @Override
+        public void reserve(@NonNull String bucket, long amount) {
+            InstanceCapacity.reserve(serverIdOf(bucket), amount);
+        }
+
+        @Override
+        public void stamp(@NonNull Row row, @Nullable Charge charge) {
+            row.set(InstanceModel.CAPACITY_MB, charge == null ? 0 : (int) charge.amount());
+        }
+
+        /**
+         * A live row mid-migration holds its booking on the SOURCE and the open window's on
+         * the DESTINATION ({@code migrate_reserved_mb}); the reconcile must count both, or it
+         * releases the window's booking as drift and the settle then over-releases.
+         */
+        @Override
+        public @NonNull List<Charge> reconciled(@NonNull Row live) {
+            List<Charge> charges = new ArrayList<>();
+            Charge held = this.held(live);
+            if (held != null) {
+                charges.add(held);
+            }
+            Integer target = live.get(InstanceModel.MIGRATE_TARGET_ID);
+            if (target != null) {
+                Integer reserved = live.get(InstanceModel.MIGRATE_RESERVED_MB);
+                charges.add(new Charge(bucketOf(target),
+                    reserved != null ? Math.max(0, reserved) : bookedMbOf(live), reserved == null));
+            }
+            return charges;
+        }
+    };
 
     /**
-     * A live row that stays live: the host and the footprint may both have changed, and a
-     * migration handoff is exactly the case where they change TOGETHER.
+     * THE mid-window freeze (fix decision 2026-08-10, paired with the MIGRATE_RESERVED_MB
+     * stamp).
      *
-     * AIDEV-NOTE: the move is release-then-reserve on purpose, and in that order. The
-     * reverse would need the destination's headroom while the source still holds the
-     * charge, so migrating between two equally-full hosts would refuse itself. Losing the
-     * source's charge and then failing to book the destination leaves the budget too
-     * GENEROUS on the source for one write -- the safe direction, and the write refuses so
-     * the record never moves.
+     * AIDEV-NOTE: the charge hook runs on ANY save of a live row -- a plain CMS form edit
+     * included -- and a migration window is minutes long. Letting a footprint or host change
+     * land mid-window restamps CAPACITY_MB and shifts the source bucket while the window's
+     * destination booking stays at the OLD amount, so the settle's arithmetic can no longer
+     * match what was reserved. Amount-neutral edits (a rename) stay allowed; requireOperable
+     * cannot cover this lane because it guards only the service funnels.
+     *
+     * @throws Violations {@code instance_busy} when the write would move a mid-window booking
      */
-    private static void rebook(@NonNull Row row, @NonNull Row stored) {
-        Integer storedServer = stored.get(InstanceModel.SERVER_ID);
-        Integer targetServer = effectiveServerId(row, stored);
-        // A row that never had a host was never booked, so it has no missing stamp to
-        // complain about -- reading one would slog a false accounting alarm on every edit.
-        long booked = storedServer == null ? 0 : bookedOf(stored);
-        int amount = effectiveFootprintMb(row, stored);
-        boolean sameHost = targetServer != null && targetServer.equals(storedServer);
-        if (sameHost && booked == amount) {
-            return;
-        }
-        // AIDEV-NOTE: THE mid-window freeze (fix decision 2026-08-10, paired with the
-        // MIGRATE_RESERVED_MB stamp). This hook runs on ANY save of a live row -- a plain
-        // CMS form edit included -- and a migration window is minutes long. Letting a
-        // footprint or host change land mid-window restamps CAPACITY_MB and shifts the
-        // source bucket while the window's destination booking stays at the OLD amount,
-        // so the settle's arithmetic can no longer match what was reserved. Amount-
-        // neutral edits (a rename) return above and stay allowed; requireOperable cannot
-        // cover this lane because it guards only the service funnels.
-        if (InstanceModel.STATUS_MIGRATING.equals(stored.get(InstanceModel.STATUS))) {
+    private static void refuseMidWindowMove(@NonNull Row stored,
+                                            ChargedDimension.@Nullable Charge claim) {
+        ChargedDimension.Charge held = HOST_MEMORY.held(stored);
+        boolean moves = held == null ? claim != null : !held.sameBooking(claim);
+        if (moves && InstanceModel.STATUS_MIGRATING.equals(stored.get(InstanceModel.STATUS))) {
             throw Violations.ofForm(violation("instance_busy")
                 .withArg("name", String.valueOf((Object) stored.get(InstanceModel.NAME)))
                 .withArg("status", InstanceModel.STATUS_MIGRATING));
         }
-        if (storedServer != null && booked > 0) {
-            release(storedServer, booked);
-        }
-        if (targetServer != null && amount > 0) {
-            reserve(targetServer, amount);
-        }
-        row.set(InstanceModel.CAPACITY_MB, targetServer == null ? 0 : amount);
     }
 
-    private static void releaseStored(@NonNull Row stored) {
-        Integer serverId = stored.get(InstanceModel.SERVER_ID);
-        if (serverId == null) {
-            return;
-        }
-        release(serverId, bookedOf(stored));
+    /** The host id behind one of this dimension's buckets -- the inverse of {@link #bucketOf}. */
+    private static int serverIdOf(@NonNull String bucket) {
+        return Integer.parseInt(bucket.substring(BUCKET_PREFIX.length()));
     }
 
     /**
@@ -610,65 +605,6 @@ public final class InstanceCapacity {
             row.has(InstanceModel.SETTINGS.getName()) || stored == null
                 ? settingsOf(row) : settingsOf(stored);
         return footprintMbOf(handler, settings);
-    }
-
-    private static @Nullable Object effectiveDeletedAt(@NonNull Row row, @Nullable Row stored) {
-        if (row.has(InstanceModel.DELETED_AT.getName())) {
-            return row.get(InstanceModel.DELETED_AT.getName());
-        }
-        return stored != null ? stored.get(InstanceModel.DELETED_AT) : null;
-    }
-
-    private static @Nullable Row storedOf(@NonNull Row row) {
-        if (!row.has(InstanceModel.ID.getName()) || row.get(InstanceModel.ID) == null) {
-            return null;
-        }
-        return Models.get(InstanceModel.class).findById(row.get(InstanceModel.ID));
-    }
-
-    /** One doomed row's release: the host it was booked on and the booked amount. */
-    private record Doomed(int serverId, long amountMb) {}
-
-    private static void captureDoomed(@NonNull RemoveFromDatasource context) {
-        Model model = context.getModel();
-        if (model == null) {
-            return;
-        }
-        QueryContext queryContext = context.getQueryContext();
-        Criteria criteria = queryContext != null ? queryContext.getCriteria() : null;
-        QueryBuilder<Row> builder = model.find();
-        if (criteria != null) {
-            builder.where(criteria);
-        }
-        List<Doomed> doomed = new ArrayList<>();
-        for (Row row : builder.all()) {
-            // Trashed rows already released on their soft-delete transition.
-            if (row.get(InstanceModel.DELETED_AT) != null) {
-                continue;
-            }
-            Integer serverId = row.get(InstanceModel.SERVER_ID);
-            if (serverId == null) {
-                continue;
-            }
-            long booked = bookedOf(row);
-            if (booked > 0) {
-                doomed.add(new Doomed(serverId, booked));
-            }
-        }
-        if (!doomed.isEmpty()) {
-            context.setAttribute(DOOMED, doomed);
-        }
-    }
-
-    private static void releaseDoomed(@NonNull RemoveFromDatasource context) {
-        if (!(context.getAttribute(DOOMED) instanceof List<?> doomed)) {
-            return;
-        }
-        for (Object entry : doomed) {
-            if (entry instanceof Doomed release) {
-                release(release.serverId(), release.amountMb());
-            }
-        }
     }
 
     private static Microcopy violation(String key) {

@@ -8,8 +8,9 @@ import be.elevenways.zenit.common.setting.SettingsContext;
 import be.elevenways.zenit.common.setting.SettingsRule;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.validation.PathKind;
-import be.elevenways.hohenheim.security.IpAddressSyntax;
+import be.elevenways.hohenheim.net.IpLiterals;
 import be.elevenways.protoblast.common.util.BlastString;
+import be.elevenways.hohenheim.net.Hostnames;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -98,7 +99,7 @@ public class HohenheimSettings {
             }
             ArrayList<String> result = new ArrayList<>();
             for (Object item : list) {
-                if (!(item instanceof String value) || !IpAddressSyntax.isNetwork(value)) {
+                if (!(item instanceof String value) || !IpLiterals.isNetwork(value)) {
                     return SettingDefinition.CoercionResult.rejected();
                 }
                 result.add(value.trim());
@@ -351,10 +352,7 @@ public class HohenheimSettings {
                 if (!(item instanceof String value)) {
                     return SettingDefinition.CoercionResult.rejected();
                 }
-                String name = BlastString.lower(value.trim());
-                while (name.endsWith(".")) {
-                    name = name.substring(0, name.length() - 1);
-                }
+                String name = Hostnames.stripTrailingDots(BlastString.lower(value.trim()));
                 if (name.isEmpty()) {
                     continue;
                 }

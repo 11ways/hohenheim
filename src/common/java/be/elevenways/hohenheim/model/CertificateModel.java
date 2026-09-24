@@ -83,7 +83,7 @@ public class CertificateModel extends Model {
         .help(HohenheimFormCopy.help("cert_private_key_pem")).build());
     public static final DateTimeField EXPIRES_ON = SCHEMA.addField(DateTimeField.builder().name("expires_on").build());
     public static final BooleanField AUTO_RENEW = SCHEMA.addField(BooleanField.builder("auto_renew").defaultValue(true)
-        .visibleIn(EditView.EDIT)
+        .visibleIn(EditView.EDIT, EditView.DETAIL)
         .label(HohenheimFormCopy.label("cert_auto_renew"))
         .help(HohenheimFormCopy.help("cert_auto_renew")).build());
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
@@ -105,7 +105,7 @@ public class CertificateModel extends Model {
         .attribute(FieldAttributes.GROUP, "renewal")
         .label(HohenheimFormCopy.label("cert_renewal_error")).build());
     public static final IntegerField ERROR_COUNT = SCHEMA.addField(IntegerField.builder().name("error_count")
-        .visibleIn(EditView.EDIT)
+        .visibleIn(EditView.EDIT, EditView.DETAIL)
         .attribute(FieldAttributes.GROUP, "renewal")
         .label(HohenheimFormCopy.label("cert_error_count")).build());
     public static final DateTimeField NEXT_ATTEMPT_AT = SCHEMA.addField(DateTimeField.builder().name("next_attempt_at")

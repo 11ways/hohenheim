@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.source.GitPickerFormEntries;
+import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.hohenheim.server.database.DatabaseContainerKind;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
@@ -11,6 +12,7 @@ import be.elevenways.hohenheim.server.instance.VmKind;
 import be.elevenways.hohenheim.server.instance.WorkspaceKind;
 import be.elevenways.hohenheim.server.stack.StackServiceKind;
 import be.elevenways.hohenheim.server.upstream.kinds.AddressUpstreamKind;
+import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.edit.FormSpec;
@@ -227,5 +229,27 @@ class InstanceSettingsSectionTest {
             schema.addField(StringField.builder().name(name).build());
         }
         return schema;
+    }
+
+    /**
+     * poll_interval is RETIRED: nothing reads it, so no form offers it, while the schema
+     * still declares it so a stored value reads and an API request sending it is accepted.
+     */
+    @Test
+    void theRetiredPollIntervalIsDeclaredButOfferedByNoForm() {
+        for (Schema schema : List.of(WorkspaceKind.SETTINGS_SCHEMA, ApplicationKind.SETTINGS_SCHEMA)) {
+            // 1. Still declared: the closed-world settings coercion keeps accepting the key.
+            assertThat(schema.getFields()).as("step 1: the schema still declares poll_interval")
+                .containsKey(GitSourceSchema.POLL_INTERVAL);
+            FormSpec derived = FieldFormEntryRegistry.INSTANCE.deriveSpec(schema);
+            assertThat(derived.findEntry(GitSourceSchema.POLL_INTERVAL))
+                .as("step 1: and the coercion spec still carries its entry").isNotNull();
+
+            // 2. But no view renders it: create, edit and detail all leave it out.
+            for (EditView view : EditView.values()) {
+                assertThat(derived.forView(view).findEntry(GitSourceSchema.POLL_INTERVAL))
+                    .as("step 2: the %s view offers no poll_interval", view).isNull();
+            }
+        }
     }
 }

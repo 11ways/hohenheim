@@ -15,9 +15,11 @@ import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.http.HttpConduit;
 import be.elevenways.zenit.server.http.RedirectResult;
 import be.elevenways.zenit.server.http.ReturnTarget;
+import be.elevenways.zenit.server.http.ServeStreamResult;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 
@@ -101,11 +103,30 @@ public final class HandlerSupport {
     public static void download(@NonNull Conduit conduit, @NonNull String contentType,
                                 @NonNull String filename, byte[] body) {
         if (conduit instanceof HttpConduit http) {
-            String safeName = filename.replaceAll("[^a-zA-Z0-9._-]", "_");
             http.setResponseHeader("Content-Type", contentType);
-            http.setResponseHeader("Content-Disposition", "attachment; filename=\"" + safeName + "\"");
+            http.setResponseHeader("Content-Disposition", attachmentDisposition(filename));
         }
         conduit.endWithBytes(contentType, body);
+    }
+
+    /**
+     * Serve a body of known size as a downloadable attachment WITHOUT buffering it: zenit's
+     * ServeStreamResult copies it to the wire (any size, a long) and always closes it.
+     */
+    @SuppressWarnings("unchecked")
+    public static @NonNull ActionResult<Object> downloadStream(@NonNull String contentType,
+                                                               @NonNull String filename,
+                                                               @NonNull InputStream body, long size) {
+        return (ActionResult<Object>) (ActionResult<?>) new ServeStreamResult(body, size)
+            .contentType(contentType)
+            .cacheControl("no-store")
+            .contentDisposition(attachmentDisposition(filename));
+    }
+
+    /** THE attachment header of every download: the filename reduced to a safe token set. */
+    private static @NonNull String attachmentDisposition(@NonNull String filename) {
+        String safeName = filename.replaceAll("[^a-zA-Z0-9._-]", "_");
+        return "attachment; filename=\"" + safeName + "\"";
     }
 
     /** An untyped JSON answer; the one spelling of the generic cast every handler needs. */

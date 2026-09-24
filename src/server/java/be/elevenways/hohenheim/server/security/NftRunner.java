@@ -2,12 +2,14 @@ package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostKeys;
+import be.elevenways.hohenheim.server.process.BoundedProcess;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * THE {@code nft} invocation seam of the application: one interface, one production
@@ -48,6 +50,14 @@ public interface NftRunner {
     long SSH_TIMEOUT_SECONDS = 15;
 
     /**
+     * Cap on each captured nft stream; a listed ban set is the largest thing nft prints.
+     *
+     * AIDEV-NOTE: generous on purpose. A policy owner PARSES the listed chains, and a
+     * silently truncated listing would read as rules that are not in the kernel.
+     */
+    int OUTPUT_CAP_CHARS = 64 * 1024 * 1024;
+
+    /**
      * THE runner for one inventoried host: local sudo, or the same sudo command over the
      * pinned+identified ssh lane for an SSH-mode host.
      *
@@ -70,7 +80,7 @@ public interface NftRunner {
                     List<String> argv = new ArrayList<>(HostKeys.sshArgv(server,
                         List.of("sudo", "-n", "--", "nft")));
                     argv.addAll(args);
-                    return BoundedCommand.run(argv, stdin, SSH_TIMEOUT_SECONDS);
+                    return Result.of(argv, stdin, SSH_TIMEOUT_SECONDS);
                 }
 
                 @Override
@@ -83,6 +93,22 @@ public interface NftRunner {
     }
 
     record Result(int exitCode, @NonNull String stdout, @NonNull String stderr) {
+
+        /**
+         * Run {@code argv} through {@link BoundedProcess} and answer in this seam's shape: a
+         * timeout, a start failure or an interruption is exit -1 with the reason as stderr.
+         */
+        public static @NonNull Result of(@NonNull List<String> argv, @Nullable String stdin,
+                                         long timeoutSeconds) {
+            BoundedProcess.Result run = BoundedProcess.execute(argv, stdin,
+                TimeUnit.SECONDS.toMillis(timeoutSeconds), OUTPUT_CAP_CHARS);
+            if (run.timedOut()) {
+                return new Result(-1, run.stdout(), "timed out after " + timeoutSeconds + "s"
+                    + (run.stderr().isBlank() ? "" : ": " + run.stderr().trim()));
+            }
+            return new Result(run.exitCode(), run.stdout(), run.stderr());
+        }
+
         public boolean ok() {
             return exitCode == 0;
         }
@@ -107,19 +133,7 @@ public interface NftRunner {
         public @NonNull Result run(@NonNull List<String> nftArgs, @Nullable String stdin) {
             List<String> argv = new ArrayList<>(List.of("/usr/bin/sudo", "-n", "--", "nft"));
             argv.addAll(nftArgs);
-            return BoundedCommand.run(argv, stdin, COMMAND_TIMEOUT_SECONDS);
-        }
-
-        /**
-         * Run an arbitrary argv, WITHOUT sudo, never blocking longer than the timeout.
-         *
-         * @deprecated the name lied (it runs ssh-keygen, ssh-keyscan and openssl without
-         *             sudo) and it could hang forever; call {@link BoundedCommand#run}
-         */
-        @Deprecated
-        public static @NonNull Result execute(@NonNull List<String> argv, @Nullable String stdin,
-                                              long timeoutSeconds) {
-            return BoundedCommand.run(argv, stdin, timeoutSeconds);
+            return Result.of(argv, stdin, COMMAND_TIMEOUT_SECONDS);
         }
     }
 }

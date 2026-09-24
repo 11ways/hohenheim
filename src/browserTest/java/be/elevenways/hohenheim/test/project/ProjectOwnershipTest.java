@@ -13,35 +13,24 @@ import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.project.Projects;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.GrantService;
-import be.elevenways.zenit.auth.server.ZenitAuth;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.csrf.CsrfTokens;
-import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.LinkedHashMap;
@@ -56,8 +45,12 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * derivation stays ONE (sameOwner, quota bucket and the planted grant all follow the
  * project subject), quota binds PER PROJECT, and environments group without ever
  * disagreeing with the grants.
+ *
+ * AIDEV-NOTE: membership, the one-derivation create and the project quota are ONE journey
+ * on purpose: the create needs the admitted host and the create grant, and admitting that
+ * host (or joining project two) would change what the membership phase proves. They used
+ * to be three @Order'ed tests coupled through that state; the other tests stand alone.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ProjectOwnershipTest extends HohenheimTestBase {
 
     private static final String PREFIX = "proj-own-";
@@ -83,16 +76,13 @@ class ProjectOwnershipTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        memberAId = user("member-a@project.test", "Member A");
-        memberBId = user("member-b@project.test", "Member B");
+        memberAId = ApiSupport.user("member-a@project.test", "Member A");
+        memberBId = ApiSupport.user("member-b@project.test", "Member B");
         principalA = new UserPrincipal(memberAId, "Member A");
 
-        Session session = Zenit.getSessionStore().create();
-        session.set(be.elevenways.zenit.auth.AuthKeys.USER_ID, memberAId.longValue());
-        csrfA = ZenitAuth.randomToken();
-        session.set(CsrfTokens.TOKEN, csrfA);
-        Zenit.getSessionStore().save(session);
-        sessionA = session.token().secret();
+        TestSession member = sessionFor(memberAId);
+        sessionA = member.token();
+        csrfA = member.csrf();
 
         projectOneId = project(PREFIX + "one");
         projectTwoId = project(PREFIX + "two");
@@ -160,17 +150,6 @@ class ProjectOwnershipTest extends HohenheimTestBase {
 
     // -- fixtures -------------------------------------------------------------
 
-    private static int user(String email, String name) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, name);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
-    }
-
     private static int project(String name) {
         Row row = Models.get(ProjectModel.class).createEmptyRow();
         row.set(ProjectModel.NAME, name);
@@ -221,24 +200,11 @@ class ProjectOwnershipTest extends HohenheimTestBase {
     }
 
     private HttpResponse<String> memberGet(String path) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER).build();
-        return client.send(HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionA)
-            .build(), HttpResponse.BodyHandlers.ofString());
+        return httpGet(path, sessionA);
     }
 
     private HttpResponse<String> memberPost(String path, String body) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER).build();
-        return client.send(HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionA)
-            .header("X-Csrf-Token", csrfA)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build(), HttpResponse.BodyHandlers.ofString());
+        return httpPostForm(path, body, sessionA, csrfA);
     }
 
     private static String violationKeys(Throwable thrown) {
@@ -253,14 +219,26 @@ class ProjectOwnershipTest extends HohenheimTestBase {
     // -- the journeys ---------------------------------------------------------
 
     /**
+     * Membership is authorization, a create into the project charges, places and grants
+     * from one derivation, and the project's quota binds it and no other project.
+     */
+    @Test
+    void aProjectMembershipAuthorizesCreatesIntoAndIsCappedByItsProject() throws Exception {
+        // 1. Membership is authorization across list, detail and action.
+        membershipIsAuthorizationAcrossListDetailAndAction();
+        // 2. A member's create into the project rides the one ownership derivation.
+        createIntoAProjectChargesPlacesAndGrantsFromOneDerivation();
+        // 3. The project's quota binds that project and no other.
+        projectQuotaBindsItsOwnProjectAndNoOther();
+    }
+
+    /**
      * COUNTERFACTUAL 1 -- membership is authorization, not decoration: a member of
      * project ONE sees and acts on project ONE's records through the GROUP grant
      * alone, and project TWO's records answer as if they did not exist, asserted on
      * CONTENT, not status codes.
      */
-    @Test
-    @Order(1)
-    void membershipIsAuthorizationAcrossListDetailAndAction() throws Exception {
+    private void membershipIsAuthorizationAcrossListDetailAndAction() throws Exception {
         // 1. Ownership derives to exactly the project subject -- no user grant exists.
         assertThat(HohenheimAccess.manageSubjectsOf(InstanceModel.MODEL_ID, alphaId))
             .as("step 1: the record's one manage subject is the project group")
@@ -282,7 +260,8 @@ class ProjectOwnershipTest extends HohenheimTestBase {
 
         // 3. A foreign project's record is indistinguishable from a missing one.
         int absentId = 900_000_100;
-        assertThat(Models.get(InstanceModel.class).findById(absentId)).isNull();
+        assertThat(Models.get(InstanceModel.class).findById(absentId))
+            .as("step 3: fixture: the absent id really is absent").isNull();
         HttpResponse<String> foreign = memberGet("/manage/instances/" + gammaId);
         HttpResponse<String> absent = memberGet("/manage/instances/" + absentId);
         assertThat(foreign.statusCode())
@@ -316,9 +295,7 @@ class ProjectOwnershipTest extends HohenheimTestBase {
      * quota bucket charged by a real create and the planted grant all answer from the
      * project subject, through one funnel.
      */
-    @Test
-    @Order(2)
-    void createIntoAProjectChargesPlacesAndGrantsFromOneDerivation() throws Exception {
+    private void createIntoAProjectChargesPlacesAndGrantsFromOneDerivation() throws Exception {
         // 1. sameOwner agrees within and disagrees across projects.
         assertThat(HohenheimAccess.sameOwner(InstanceModel.MODEL_ID, alphaId, betaId))
             .as("step 1: two records of one project are one owner").isTrue();
@@ -369,9 +346,7 @@ class ProjectOwnershipTest extends HohenheimTestBase {
      * COUNTERFACTUAL 3 -- quota is enforced at the PROJECT level: exhausting project
      * one refuses its next create while project two is untouched.
      */
-    @Test
-    @Order(3)
-    void projectQuotaBindsItsOwnProjectAndNoOther() throws Exception {
+    private void projectQuotaBindsItsOwnProjectAndNoOther() throws Exception {
         String packOne = HohenheimAccess.packSubjects(Projects.ownerSubjectsOf(projectOne));
         Row cap = Models.get(InstanceQuotaModel.class).createEmptyRow();
         cap.set(InstanceQuotaModel.SUBJECTS, packOne);
@@ -411,7 +386,6 @@ class ProjectOwnershipTest extends HohenheimTestBase {
 
     /** Environments group ONLY what their project owns, and their variables merge under. */
     @Test
-    @Order(4)
     void environmentsGroupOwnedRecordsAndLayerVariables() {
         // 1. Attaching a project-one instance to a project-one environment is fine.
         Row alpha = Models.get(InstanceModel.class).findById(alphaId);
@@ -498,9 +472,8 @@ class ProjectOwnershipTest extends HohenheimTestBase {
 
     /** A project that still owns records refuses deletion; an emptied one cleans up. */
     @Test
-    @Order(5)
     void projectDeletionIsGuardedAndTearsDownItsAuthFootprint() {
-        // 1. Project two owns gamma (and the test-3 create): deletion is refused.
+        // 1. Project two owns gamma: deletion is refused.
         Throwable refused = catchThrowable(() ->
             Models.get(ProjectModel.class).delete(projectTwoId));
         assertThat(violationKeys(refused))
@@ -551,7 +524,6 @@ class ProjectOwnershipTest extends HohenheimTestBase {
      * and offers no delete at all, while an operator-created role keeps both.
      */
     @Test
-    @Order(6)
     void projectOwnedRolesAreNamedAndUndeletableOnTheRolesSurface() throws Exception {
         int ownedProjectId = project(PREFIX + "surface");
         Row surfaceProject = Models.get(ProjectModel.class).findById(ownedProjectId);

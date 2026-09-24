@@ -6,27 +6,18 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.KnownCapabilities;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer.OrderAnnotation;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.List;
@@ -38,9 +29,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * Certificate issuance authority: a request must name hostnames this installation actually
  * serves, on sites the caller manages, and a renewal must re-decide that instead of
- * inheriting the fact that issuance once succeeded.
+ * inheriting the fact that issuance once succeeded. The tests are independent: the one
+ * that revokes the tenant's grant restores it in a finally.
  */
-@TestMethodOrder(OrderAnnotation.class)
 class CertificateAuthorityTest extends HohenheimTestBase {
 
     /** Every hostname here ends in this, so no other class in the shared fork can cover it. */
@@ -64,14 +55,7 @@ class CertificateAuthorityTest extends HohenheimTestBase {
         seedLegacyIllegalDomain(ownedSiteId, ILLEGAL_HOST);
         seedDomain(foreignSiteId, "foreign." + ZONE, SiteDomainModel.MATCH_EXACT);
 
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, "certauth-tenant@hohenheim.local");
-        user.set(UserModel.DISPLAY_NAME, "Certauth Tenant");
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        tenantUserId = user.get(UserModel.ID);
+        tenantUserId = ApiSupport.user("certauth-tenant@hohenheim.local", "Certauth Tenant");
 
         RecordGrants.grant(GrantSubjectType.USER, tenantUserId, SiteModel.MODEL_ID, ownedSiteId,
             HohenheimAccess.MANAGE, true);
@@ -97,7 +81,6 @@ class CertificateAuthorityTest extends HohenheimTestBase {
      * and the refusal leaves no order behind.
      */
     @Test
-    @Order(1)
     void aHostnameThisInstallationDoesNotServeIsRefusedEvenForAnAdmin() throws Exception {
         String unserved = "nobody-serves-this." + ZONE;
 
@@ -147,7 +130,6 @@ class CertificateAuthorityTest extends HohenheimTestBase {
      * sit on does not exist yet when the request is made.
      */
     @Test
-    @Order(2)
     void theCertificateVocabularyOffersOnlyTheCapabilityThatIsActuallyRead() {
         // 1. THE STRUCK ONE: `request` is not a certificate capability, so no grant
         //    column for it is drawn and no operator can tick a box that does nothing.
@@ -178,7 +160,6 @@ class CertificateAuthorityTest extends HohenheimTestBase {
 
     /** A name served by a site the caller cannot manage is refused, and creates no order. */
     @Test
-    @Order(3)
     void aNameServedByAnUnmanagedSiteIsRefused() {
         String foreign = "foreign." + ZONE;
 
@@ -203,7 +184,6 @@ class CertificateAuthorityTest extends HohenheimTestBase {
      * sibling host.
      */
     @Test
-    @Order(4)
     void aWildcardRequestNeedsAWildcardClaim() {
         assertThatThrownBy(() -> CertificateAuthority.authorize(tenant, List.of("*." + ZONE)))
             .isInstanceOf(CertificateAuthority.Refused.class)
@@ -219,7 +199,6 @@ class CertificateAuthorityTest extends HohenheimTestBase {
 
     /** The legitimate lane opens: the owner's own hostname authorizes and the order starts. */
     @Test
-    @Order(5)
     void theSiteOwnerGetsThroughForItsOwnHostname() {
         String owned = "owned." + ZONE;
 
@@ -234,11 +213,14 @@ class CertificateAuthorityTest extends HohenheimTestBase {
         // End to end through the service: the gate opens, the order is created and stamped
         // with the requester, and the failure that follows is a HOSTNAME failure -- not an
         // authority refusal -- which is as far as an offline test can honestly go.
-        int certId = acme().requestCertificate(List.of(ILLEGAL_HOST),
+        AcmeService.RequestOutcome outcome = acme().requestCertificate(List.of(ILLEGAL_HOST),
             "Certauth Legit", null, tenant);
-        assertThat(certId)
+        assertThat(outcome.issued())
             .describedAs("the order was placed and only then failed on the hostname")
-            .isEqualTo(-1);
+            .isFalse();
+        assertThat(outcome.certificateId())
+            .describedAs("and the failure names the row it wrote")
+            .isNotNull();
 
         Row cert = Models.get(CertificateModel.class).find()
             .where(CertificateModel.NICE_NAME.eq("Certauth Legit")).first();
@@ -257,7 +239,6 @@ class CertificateAuthorityTest extends HohenheimTestBase {
      * re-granted site heals itself on the next sweep).
      */
     @Test
-    @Order(6)
     void revokingTheGrantStopsTheRenewal() {
         var certModel = Models.get(CertificateModel.class);
         Row cert = certModel.createEmptyRow();
@@ -270,7 +251,23 @@ class CertificateAuthorityTest extends HohenheimTestBase {
         cert.set(CertificateModel.REQUESTED_BY_USER_ID, tenantUserId);
         certModel.save(cert);
 
-        // 1. The authority that issued it is withdrawn.
+        // 1. The authority that issued it is withdrawn (and restored whatever happens, since
+        //    every other test here authorizes through it).
+        try {
+            renewalAfterRevocation(cert, certModel);
+        } finally {
+            RecordGrants.grant(GrantSubjectType.USER, tenantUserId, SiteModel.MODEL_ID, ownedSiteId,
+                HohenheimAccess.MANAGE, true);
+        }
+
+        // 3. Restoring the grant makes the certificate renewable again, so the refusal was
+        //    about live authority and not a permanent poisoning.
+        assertThat(CertificateAuthority.authorize(tenant, List.of("owned." + ZONE)))
+            .describedAs("step 3: the restored grant authorizes the owned hostname again")
+            .containsKey("owned." + ZONE);
+    }
+
+    private void renewalAfterRevocation(Row cert, CertificateModel certModel) {
         assertThat(RecordGrants.revoke(GrantSubjectType.USER, tenantUserId, SiteModel.MODEL_ID, ownedSiteId,
                 HohenheimAccess.MANAGE))
             .describedAs("the manage grant that authorized issuance is revoked")
@@ -298,13 +295,6 @@ class CertificateAuthorityTest extends HohenheimTestBase {
         assertThat((Instant) after.get(CertificateModel.NEXT_ATTEMPT_AT))
             .describedAs("the ordinary escalating backoff applies")
             .isNotNull();
-
-        // 3. Restoring the grant makes the certificate renewable again, so the refusal was
-        //    about live authority and not a permanent poisoning.
-        RecordGrants.grant(GrantSubjectType.USER, tenantUserId, SiteModel.MODEL_ID, ownedSiteId,
-            HohenheimAccess.MANAGE, true);
-        assertThat(CertificateAuthority.authorize(tenant, List.of("owned." + ZONE)))
-            .containsKey("owned." + ZONE);
     }
 
     // -----------------------------------------------------------------------
@@ -371,15 +361,6 @@ class CertificateAuthorityTest extends HohenheimTestBase {
     }
 
     private HttpResponse<String> adminPost(String body) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + "/admin/certificates-request"))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .header("X-Csrf-Token", csrfToken)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
+        return adminPostForm("/admin/certificates-request", body);
     }
 }

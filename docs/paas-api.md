@@ -431,7 +431,9 @@ Settings per kind (every key optional unless said otherwise):
   `console_kind`.
 - git source (workspace and application): `repository_url`, `provider_id`,
   `repository`, `branch`, `build_command`, `build_directory`, `build_timeout`,
-  `auto_deploy` (default true), `poll_interval`, `webhook_secret` (secret),
+  `auto_deploy` (default true), `poll_interval` (RETIRED: still accepted and stored so an
+  existing client keeps working, but nothing reads it; a new revision arrives by the webhook),
+  `webhook_secret` (secret),
   `shallow_clone` (default true), `submodules`, `build_environment_variables`
   (secret), `previews_enabled`, `preview_branches`,
   `preview_environment_variables` (secret).

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.docker;
 
+import be.elevenways.hohenheim.model.HostMode;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostProbe;
@@ -40,29 +41,12 @@ public class ServerService extends DatasourceScoped {
     /**
      * The NAME of the implicit local host row -- a host name, never a mode.
      *
-     * AIDEV-NOTE: it is spelled like {@link HostMode#LOCAL}'s token because
-     * {@code ServerModel.localServerId} stamps the row's name and mode from the same
-     * constant, but the two answer different questions: compare a host NAME against this,
-     * and read a MODE through {@link HostMode#of}.
+     * AIDEV-NOTE: {@link ServerModel#LOCAL_HOST_NAME} is its one home; it is spelled like
+     * {@link HostMode#LOCAL}'s token because production rows carry it that way, but the
+     * two answer different questions: compare a host NAME against this, and read a MODE
+     * through {@link HostMode#of}.
      */
-    public static final String LOCAL_HOST_NAME = ServerModel.MODE_LOCAL;
-
-    /**
-     * Legacy alias of {@link #LOCAL_HOST_NAME}, kept for the call sites outside the docker
-     * package that still compare host names against it.
-     *
-     * @deprecated compare host names against {@link #LOCAL_HOST_NAME}
-     */
-    @Deprecated
-    public static final String LOCAL = LOCAL_HOST_NAME;
-
-    /** @deprecated read a host's mode through {@link HostMode}; this is its token */
-    @Deprecated
-    public static final String MODE_LOCAL = HostMode.LOCAL.token();
-
-    /** @deprecated read a host's mode through {@link HostMode}; this is its token */
-    @Deprecated
-    public static final String MODE_SSH = HostMode.SSH.token();
+    public static final String LOCAL_HOST_NAME = ServerModel.LOCAL_HOST_NAME;
 
     // Short deadline for an explicit reachability probe so a down remote can't hang long.
     private static final long PING_TIMEOUT_MS = 8000;

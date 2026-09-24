@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -15,10 +14,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer.OrderAnnotation;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
 import java.net.InetAddress;
 import java.net.URI;
@@ -44,7 +40,6 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  * for tenants); the upstream judgement still speaks first with the precise refusal and is
  * the defence that survives a later widening of that allow-list.
  */
-@TestMethodOrder(OrderAnnotation.class)
 class ProxyUpstreamSsrfTest extends HohenheimTestBase {
 
     /** The cloud-metadata service: link-local, unauthenticated, the canonical SSRF target. */
@@ -55,7 +50,6 @@ class ProxyUpstreamSsrfTest extends HohenheimTestBase {
 
     private static Integer tenantId;
     private static Integer tenantSiteId;
-    private static Integer operatorSiteId;
     private static UserPrincipal tenantPrincipal;
     private static UserPrincipal adminPrincipal;
 
@@ -67,14 +61,7 @@ class ProxyUpstreamSsrfTest extends HohenheimTestBase {
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         adminPrincipal = new UserPrincipal(admin.get(UserModel.ID), "Test Admin");
 
-        Row tenant = AuthModels.users().createEmptyRow();
-        tenant.set(UserModel.EMAIL, "tenant-ssrf@hohenheim.local");
-        tenant.set(UserModel.DISPLAY_NAME, "SSRF Tenant");
-        tenant.set(UserModel.ENABLED, true);
-        tenant.set(UserModel.CREATED_AT, Now.instant());
-        tenant.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(tenant);
-        tenantId = tenant.get(UserModel.ID);
+        tenantId = ApiSupport.user("tenant-ssrf@hohenheim.local", "SSRF Tenant");
         tenantPrincipal = new UserPrincipal(tenantId, "SSRF Tenant");
 
         // The tenant's OWN proxy site, pointed at a public host to begin with.
@@ -100,6 +87,13 @@ class ProxyUpstreamSsrfTest extends HohenheimTestBase {
         return row;
     }
 
+    /** A proxy site the OPERATOR aims straight at the cloud-metadata service. */
+    private static int operatorMetadataProxy(Model model, String name, String slug) {
+        Row site = proxySite(model, name, slug, METADATA_IP);
+        TenantConduits.as(adminPrincipal, () -> model.save(site));
+        return site.get(SiteModel.ID);
+    }
+
     private static Violation refusalOf(Runnable body) {
         Violations violations = catchThrowableOfType(
             () -> TenantConduits.as(tenantPrincipal, body), Violations.class);
@@ -112,7 +106,6 @@ class ProxyUpstreamSsrfTest extends HohenheimTestBase {
     }
 
     @Test
-    @Order(1)
     void anOperatorMayStillProxyToAnyAddressAndItActuallyReachesIt() {
         Model model = Models.get(SiteModel.class);
 
@@ -122,7 +115,7 @@ class ProxyUpstreamSsrfTest extends HohenheimTestBase {
         assertThatCode(() -> TenantConduits.as(adminPrincipal, () -> model.save(site)))
             .as("step 1: an operator may point a proxy at a LAN/metadata address")
             .doesNotThrowAnyException();
-        operatorSiteId = site.get(SiteModel.ID);
+        int operatorSiteId = site.get(SiteModel.ID);
 
         // 2. And the stored config genuinely resolves to that forbidden upstream -- this is
         //    the request a proxied hit would issue, aimed at the metadata service.
@@ -134,7 +127,6 @@ class ProxyUpstreamSsrfTest extends HohenheimTestBase {
     }
 
     @Test
-    @Order(2)
     void aTenantCannotReAimItsSiteButMayStillRenameOne() {
         Model model = Models.get(SiteModel.class);
 
@@ -164,6 +156,7 @@ class ProxyUpstreamSsrfTest extends HohenheimTestBase {
         // 3. A site the OPERATOR aimed at the metadata service and then delegated keeps
         //    working for its tenant: a rename does not re-aim the upstream, so the SSRF
         //    judgement never runs on the operator's choice (it used to refuse the rename).
+        int operatorSiteId = operatorMetadataProxy(model, "Delegated LAN Proxy", "delegated-lan");
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, operatorSiteId,
             HohenheimAccess.MANAGE, true);
         assertThatCode(() -> TenantConduits.as(tenantPrincipal, () -> {
@@ -177,7 +170,6 @@ class ProxyUpstreamSsrfTest extends HohenheimTestBase {
     }
 
     @Test
-    @Order(3)
     void aTenantCannotProxyToLoopbackOrPrivateAddresses() {
         Model model = Models.get(SiteModel.class);
 
@@ -202,7 +194,6 @@ class ProxyUpstreamSsrfTest extends HohenheimTestBase {
     }
 
     @Test
-    @Order(4)
     void anUpstreamWithEmbeddedCredentialsIsRefusedForEveryone() {
         Model model = Models.get(SiteModel.class);
         Violations refused = catchThrowableOfType(() -> TenantConduits.as(adminPrincipal, () -> {
@@ -220,7 +211,6 @@ class ProxyUpstreamSsrfTest extends HohenheimTestBase {
      * and a public-looking NAME that resolves to a private address.
      */
     @Test
-    @Order(5)
     void everyDialTargetIsJudgedNotOnlyTheLiteralForwardHost() {
         Model model = Models.get(SiteModel.class);
 

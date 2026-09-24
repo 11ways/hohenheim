@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import com.microsoft.playwright.assertions.PlaywrightAssertions;
@@ -12,10 +11,6 @@ import org.junit.jupiter.api.*;
 import com.sun.net.httpserver.HttpServer;
 
 import java.net.InetSocketAddress;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Map;
@@ -26,28 +21,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Auth-provider CRUD through the zenit-cms resource routes, including the
  * type-discriminated config sub-form and editable Basic credentials.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class AuthProviderAdminTest extends HohenheimTestBase {
-
-    private HttpResponse<String> postForm(String path, String body) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
-
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .header("X-Csrf-Token", csrfToken)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
 
     /** The create form's type selector, its config placeholder, and the known-permission combobox. */
     @Test
-    @Order(1)
     void createFormOffersTypeSelectorAndPermissionVocabulary() {
         navigateToApp("/admin/auth-providers/new");
         waitForHydration();
@@ -98,10 +75,9 @@ class AuthProviderAdminTest extends HohenheimTestBase {
 
     /** A created Basic provider shows up in the list; its passwords are stored hashed and edited write-only. */
     @Test
-    @Order(2)
     void basicProviderRoundTripsThroughListAndEditForm() throws Exception {
         // KeyValueField transport: config.credentials indexed row scopes.
-        var response = postForm("/admin/auth-providers/new",
+        var response = adminPostForm("/admin/auth-providers/new",
             "name=Staff+Gate&provider_type=hohenheim%3Abasic"
             + "&config.credentials.0.key=alice&config.credentials.0.value=secret123");
         assertThat(response.statusCode()).isIn(200, 302, 303);
@@ -167,7 +143,7 @@ class AuthProviderAdminTest extends HohenheimTestBase {
 
         // A blank password on save KEEPS the stored hash, which still verifies.
         String path = "/admin/auth-providers/" + row.get(SiteAuthProviderModel.ID);
-        var kept = postForm(path, "name=Staff+Gate&provider_type=hohenheim%3Abasic"
+        var kept = adminPostForm(path, "name=Staff+Gate&provider_type=hohenheim%3Abasic"
             + "&config.credentials.0.key=alice&config.credentials.0.value=");
         assertThat(kept.statusCode()).as("a blank-password save succeeds: " + kept.body())
             .isIn(200, 302, 303);
@@ -178,7 +154,7 @@ class AuthProviderAdminTest extends HohenheimTestBase {
             .as("and the kept password still verifies").isEqualTo("alice");
 
         // A typed password REPLACES it, hashed again.
-        var replaced = postForm(path, "name=Staff+Gate&provider_type=hohenheim%3Abasic"
+        var replaced = adminPostForm(path, "name=Staff+Gate&provider_type=hohenheim%3Abasic"
             + "&config.credentials.0.key=alice&config.credentials.0.value=newpass456");
         assertThat(replaced.statusCode()).as("a new-password save succeeds: " + replaced.body())
             .isIn(200, 302, 303);
@@ -207,7 +183,6 @@ class AuthProviderAdminTest extends HohenheimTestBase {
 
     /** A Proteus provider merges its realm's vocabulary into the suggestions; sites can pick providers. */
     @Test
-    @Order(3)
     void proteusProviderSuggestsTheAssignedRealmsVocabulary() throws Exception {
         // A stub Proteus answers the realm-client known_permissions call; the
         // edit form must merge the realm's vocabulary into the suggestions.

@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
 import be.elevenways.hohenheim.server.runtime.PtySupport;
+import be.elevenways.hohenheim.server.util.Watchdog;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
@@ -28,9 +29,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
@@ -105,13 +103,6 @@ public final class InstanceShell {
     public static final String ACTIVITY_CLOSE = "shell_close";
 
     private static final Map<Integer, List<Session>> LIVE = new ConcurrentHashMap<>();
-
-    private static final ScheduledExecutorService SWEEPER =
-        Executors.newSingleThreadScheduledExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "hohenheim-shell-idle-sweep");
-            thread.setDaemon(true);
-            return thread;
-        });
 
     private static final AtomicBoolean SWEEPING = new AtomicBoolean();
 
@@ -396,12 +387,17 @@ public final class InstanceShell {
 
     private static void startSweeper() {
         if (SWEEPING.compareAndSet(false, true)) {
-            SWEEPER.scheduleWithFixedDelay(InstanceShell::sweepIdle,
-                SWEEP_INTERVAL_MS, SWEEP_INTERVAL_MS, TimeUnit.MILLISECONDS);
+            Watchdog.every(InstanceShell::sweepIdle, SWEEP_INTERVAL_MS);
         }
     }
 
-    /** Close abandoned terminals and forget finished ones. */
+    /**
+     * Close abandoned terminals and forget finished ones.
+     *
+     * AIDEV-NOTE: runs on the shared {@link Watchdog} threads, so the close itself (an
+     * activity-log write) goes to its own virtual thread; close is exactly-once, so a
+     * finished session still counted open by the next sweep is closed at most once.
+     */
     static void sweepIdle() {
         long now = Now.millis();
         for (Map.Entry<Integer, List<Session>> entry : LIVE.entrySet()) {
@@ -409,7 +405,7 @@ public final class InstanceShell {
             for (Session session : sessions) {
                 if (session instanceof LiveSession live && live.isOpen()
                         && now - live.lastInputAt() > IDLE_TIMEOUT_MS) {
-                    live.close(EndReason.IDLE);
+                    JobRunner.startVirtualThread(() -> live.close(EndReason.IDLE));
                 }
             }
             sessions.removeIf(session -> !session.isOpen());

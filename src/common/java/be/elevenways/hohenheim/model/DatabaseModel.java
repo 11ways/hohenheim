@@ -365,12 +365,10 @@ public class DatabaseModel extends Model {
             }
         });
         // A database's published host port is recorded in the ledger after the container
-        // hands it out (DatabaseService), so the record's death must release it. Via the
-        // before/after pairing because a remove context carries CRITERIA, not a row --
-        // see PortLedger.captureDoomedOwners. Without this, deleting the record through
-        // ANY path other than DatabaseService.destroy leaves the port unclaimable forever.
-        SCHEMA.addBeforeRemoveHook(PortLedger::captureDoomedOwners);
-        SCHEMA.addAfterRemoveHook(PortLedger::releaseDoomedOwners);
+        // hands it out (DatabaseService), so the record's death must release it -- see
+        // PortLedger.parkClaimsOnRemove. Without this, deleting the record through ANY path
+        // other than DatabaseService.destroy leaves the port unclaimable forever.
+        PortLedger.parkClaimsOnRemove(SCHEMA);
     }
 
     /** The database with this unique name, or null if none. */

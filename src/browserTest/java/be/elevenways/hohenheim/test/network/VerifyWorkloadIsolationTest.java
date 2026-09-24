@@ -1,8 +1,9 @@
 package be.elevenways.hohenheim.test.network;
 
+import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -31,16 +32,14 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -70,7 +69,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class VerifyWorkloadIsolationTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
-    private static final String TEST_IMAGE = "alpine:latest";
+    private static final String TEST_IMAGE = TestImages.ALPINE;
 
     /** The cloud metadata address: instance credentials for the whole host. */
     private static final String METADATA = "169.254.169.254";
@@ -80,7 +79,7 @@ class VerifyWorkloadIsolationTest {
 
     private static final int PEER_PORT = 80;
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static PrivateNetns netns;
     private static DockerClient docker;
 
@@ -88,16 +87,11 @@ class VerifyWorkloadIsolationTest {
     static void setUp() throws Exception {
         FieldEncryption.installKeyring(EncryptionKeyring.loadOrCreate(
             Files.createTempDirectory("hh-verify-iso").resolve("keys.dry")));
-        File db = File.createTempFile("hohenheim-verify-isolation-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
         // ONE database per test class: the controller identity (and therefore every
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
         netns = PrivateNetns.installEnforcing();
         docker = new DockerClient();
@@ -422,8 +416,7 @@ class VerifyWorkloadIsolationTest {
 
     private static int instanceRecord(String name) {
         Map<String, Object> settings = new LinkedHashMap<>();
-        settings.put("image", "alpine");
-        settings.put("tag", "latest");
+        settings.put("image", TestImages.ALPINE);
         settings.put("command", "sleep 600");
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, name + "-" + System.nanoTime());

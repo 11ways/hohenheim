@@ -5,9 +5,7 @@ import be.elevenways.hohenheim.server.auth.GrantSubjects;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -18,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 import java.util.Set;
 
+import static be.elevenways.hohenheim.test.ApiSupport.user;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -30,17 +29,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * lapsed was still "the owner" for sameOwner, the quota bucket and the released-claim ledger.
  */
 class OwnerSubjectsTest extends HohenheimTestBase {
-
-    private static int user(String email, String name) {
-        Row row = AuthModels.users().createEmptyRow();
-        row.set(UserModel.EMAIL, email);
-        row.set(UserModel.DISPLAY_NAME, name);
-        row.set(UserModel.ENABLED, true);
-        row.set(UserModel.CREATED_AT, Now.instant());
-        row.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(row);
-        return row.get(UserModel.ID);
-    }
 
     private static int site(String slug) {
         Model model = Models.get(SiteModel.class);

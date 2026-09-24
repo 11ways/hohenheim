@@ -62,8 +62,17 @@ public class BackupTargetModel extends Model {
     }
 
     /**
-     * Refuse deleting a target that backup rows still point at, that an instance (live or
-     * trashed) declares as its destination, or that the control-plane backup setting names.
+     * Refuse deleting a target that backup rows still point at, that a LIVE instance declares
+     * as its destination, or that the control-plane backup setting names; once the refusal
+     * passed, detach the trashed instances and FAILED backups that still point at it.
+     *
+     * AIDEV-NOTE: a TRASHED instance does not refuse the removal (the ServerModel lesson,
+     * 2026-09-24). Counting it made every target a destroyed workload ever backed up to
+     * permanently undeletable under enforced foreign keys: nothing purges a trashed row. Its
+     * backup_target_id is a DESTINATION for future backups, and a trashed instance takes
+     * none, so it is cleared (InstanceModel.detachTrashed). Its existing backups are
+     * untouched: restore resolves {@code instance_backups.target_id}, never the instance's
+     * pointer, and a COMPLETE or UPLOADING backup still refuses the delete below.
      *
      * AIDEV-NOTE: FAILED backup rows do NOT block. They are evidence rows whose error
      * text already carries the possibly-surviving key; counting them would make a target
@@ -78,8 +87,8 @@ public class BackupTargetModel extends Model {
      * {@code backup_targets(id)} with no delete action, so the DELETE itself now refuses a
      * target anything still points at -- as a raw "FOREIGN KEY constraint failed". This hook
      * stays THE readable refusal (it names the target and counts what holds it, at the point
-     * of decision) and counts every row the constraint would count, trashed instances
-     * included, so the raw error is never what an operator sees. The count-then-delete race
+     * of decision); every other row the constraint would count is detached first, so the raw
+     * error is never what an operator sees. The count-then-delete race
      * this note used to describe is closed by the constraint: a backup that starts between
      * the count and the delete makes the delete fail instead of orphaning the backup.
      *
@@ -100,18 +109,9 @@ public class BackupTargetModel extends Model {
      *                    {@code backup_target_control_plane}
      */
     static void refuseRemovalWhileReferenced(@NonNull RemoveFromDatasource context) {
-        Model model = context.getModel();
-        if (model == null) {
-            return;
-        }
-        var builder = model.find();
-        var queryContext = context.getQueryContext();
-        if (queryContext != null && queryContext.getCriteria() != null) {
-            builder.where(queryContext.getCriteria());
-        }
         String controlPlane = HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET);
-        for (Row doomed : builder.all()) {
+        for (Row doomed : context.doomedRows()) {
             Integer targetId = doomed.get(ID);
             if (targetId == null) {
                 continue;
@@ -133,18 +133,15 @@ public class BackupTargetModel extends Model {
                 .where(InstanceModel.BACKUP_TARGET_ID.eq(targetId))
                 .where(InstanceModel.DELETED_AT.isNull())
                 .count();
-            long trashed = Models.get(InstanceModel.class).find()
-                .where(InstanceModel.BACKUP_TARGET_ID.eq(targetId))
-                .where(InstanceModel.DELETED_AT.isNotNull())
-                .count();
-            if (backups > 0 || instances > 0 || trashed > 0) {
+            if (backups > 0 || instances > 0) {
                 throw Violations.ofForm(Microcopy.of("backup_target_in_use")
                     .withFilter("scope", "violations")
                     .withArg("name", name)
                     .withArg("backups", backups)
-                    .withArg("instances", instances)
-                    .withArg("trashed", trashed));
+                    .withArg("instances", instances));
             }
+            InstanceModel.detachTrashed(InstanceModel.BACKUP_TARGET_ID,
+                InstanceModel.BACKUP_TARGET_ID.eq(targetId));
             Models.get(InstanceBackupModel.class).find()
                 .where(InstanceBackupModel.TARGET_ID.eq(targetId))
                 .where(InstanceBackupModel.STATUS.eq(InstanceBackupModel.STATUS_FAILED))

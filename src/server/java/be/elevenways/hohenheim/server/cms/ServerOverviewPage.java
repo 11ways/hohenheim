@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HostTrustLane;
+import be.elevenways.hohenheim.WorkloadTier;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.host.HostCapacityView;
@@ -259,17 +261,17 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
     private static @NonNull List<TrustLaneView> trustLanes(@NonNull Row server) {
         List<TrustLaneView> lanes = new ArrayList<>();
         if (ServerModel.isIncusHttps(server)) {
-            lanes.add(laneView(server, "incus_cert", HostTrustSlot.INCUS_TLS,
+            lanes.add(laneView(server, HostTrustLane.INCUS, HostTrustSlot.INCUS_TLS,
                 IncusTrust::fingerprintOf));
         }
         if (ServerModel.hasSshLane(server)) {
-            lanes.add(laneView(server, "host_key", HostTrustSlot.SSH,
+            lanes.add(laneView(server, HostTrustLane.SSH, HostTrustSlot.SSH,
                 HostKeys::fingerprintOf));
         }
         return lanes;
     }
 
-    private static @NonNull TrustLaneView laneView(@NonNull Row server, @NonNull String laneId,
+    private static @NonNull TrustLaneView laneView(@NonNull Row server, @NonNull HostTrustLane lane,
                                                    @NonNull HostTrustSlot slot,
                                                    @NonNull UnaryOperator<String> digest) {
         String fingerprint = server.get(slot.fingerprint());
@@ -277,7 +279,7 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
         String client = server.get(slot.clientPublic());
         Instant pinnedAt = server.get(slot.pinnedAt());
         return new TrustLaneView(
-            laneId,
+            lane,
             slot.isPinned(server),
             fingerprint != null ? fingerprint : "",
             Boolean.TRUE.equals(server.get(slot.verified())),
@@ -436,7 +438,7 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
                 .where(InstanceModel.DELETED_AT.isNull()).all()) {
             workloads.add(new WorkloadView(
                 String.valueOf((Object) instance.get(InstanceModel.NAME)),
-                "instance",
+                WorkloadTier.INSTANCE,
                 badgeOf(InstanceModel.STATUS, instance.get(InstanceModel.STATUS)),
                 instance.get(InstanceModel.CAPACITY_MB),
                 CmsRoutes.detail(panel, HohenheimSlugs.INSTANCES, instance.get(InstanceModel.ID))));
@@ -445,7 +447,7 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
                 .where(StackModel.SERVER_ID.eq(serverId)).all()) {
             workloads.add(new WorkloadView(
                 String.valueOf((Object) stack.get(StackModel.NAME)),
-                "stack",
+                WorkloadTier.STACK,
                 badgeOf(StackModel.STATUS, stack.get(StackModel.STATUS)),
                 null,
                 CmsRoutes.detail(panel, "stacks", stack.get(StackModel.ID))));
@@ -454,7 +456,7 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
                 .where(DatabaseModel.SERVER_ID.eq(serverId)).all()) {
             workloads.add(new WorkloadView(
                 String.valueOf((Object) database.get(DatabaseModel.NAME)),
-                "database",
+                WorkloadTier.DATABASE,
                 badgeOf(DatabaseModel.STATUS, database.get(DatabaseModel.STATUS)),
                 database.get(DatabaseModel.MEMORY_LIMIT_MB),
                 CmsRoutes.detail(panel, "databases", database.get(DatabaseModel.ID))));
@@ -466,7 +468,7 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
                 .where(DatabaseEngineModel.SERVER_ID.eq(serverId)).all()) {
             workloads.add(new WorkloadView(
                 String.valueOf((Object) engine.get(DatabaseEngineModel.NAME)),
-                "database_engine",
+                WorkloadTier.DATABASE_ENGINE,
                 badgeOf(DatabaseEngineModel.STATUS, engine.get(DatabaseEngineModel.STATUS)),
                 engine.get(DatabaseEngineModel.MEMORY_LIMIT_MB),
                 CmsRoutes.detail(panel, DatabaseEngineResource.SLUG,

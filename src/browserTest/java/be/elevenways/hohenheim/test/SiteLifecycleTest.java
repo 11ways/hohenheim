@@ -2,17 +2,12 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 
 import org.junit.jupiter.api.*;
 import static org.assertj.core.api.Assertions.*;
 
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.net.URI;
 import java.util.List;
 import java.util.Map;
 
@@ -21,24 +16,7 @@ import java.util.Map;
  * type-discriminated settings, nested env-var/api-key transports, git source
  * settings with webhook-secret generation, relation picks, and soft delete.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SiteLifecycleTest extends HohenheimTestBase {
-
-    private HttpResponse<String> postForm(String path, String body) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
-
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .header("X-Csrf-Token", csrfToken)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
 
     private Row site(String name) {
         return Models.get(SiteModel.class).find().where(SiteModel.NAME.eq(name)).first();
@@ -54,9 +32,8 @@ class SiteLifecycleTest extends HohenheimTestBase {
 
     /** Creating and editing an upstream-discriminated shape: the address upstream. */
     @Test
-    @Order(1)
     void addressSiteCreatesAndEdits() throws Exception {
-        var response = postForm("/admin/sites/new",
+        var response = adminPostForm("/admin/sites/new",
             "name=Test+Backend&upstream_kind=hohenheim%3Aaddress"
             + "&settings.forward_host=127.0.0.1&settings.forward_port=8080");
         assertThat(response.statusCode()).isIn(200, 302, 303);
@@ -81,9 +58,8 @@ class SiteLifecycleTest extends HohenheimTestBase {
 
     /** Redirect and git-sourced creation, the access-list relation pick, the row actions and soft delete. */
     @Test
-    @Order(2)
     void redirectAndGitSitesThroughActionsToDeletion() throws Exception {
-        var response = postForm("/admin/sites/new",
+        var response = adminPostForm("/admin/sites/new",
             "name=Old+Domain&upstream_kind=hohenheim%3Aredirect"
             + "&settings.target_url=https%3A%2F%2Fexample.com&settings.http_status=301");
         assertThat(response.statusCode()).isIn(200, 302, 303);
@@ -93,7 +69,7 @@ class SiteLifecycleTest extends HohenheimTestBase {
         // upstream rename (phase-0 design section 3): a repository is a property of the
         // application instance a site exposes, not of the site. The create form no longer
         // accepts source keys at all, which is what this asserts instead.
-        response = postForm("/admin/sites/new",
+        response = adminPostForm("/admin/sites/new",
             "name=Git+App&upstream_kind=hohenheim%3Astatic&source=git"
             + "&settings.root_path=%2Fvar%2Fwww%2Fgitapp"
             + "&source_settings.repository_url=https%3A%2F%2Fexample.com%2Frepo.git");
@@ -106,7 +82,7 @@ class SiteLifecycleTest extends HohenheimTestBase {
         assertThat(gitRow.get(SiteModel.INSTANCE_ID))
             .as("and a static site exposes no instance").isNull();
 
-        response = postForm("/admin/access-lists/new",
+        response = adminPostForm("/admin/access-lists/new",
             "name=Office+Only&satisfy=any&allowed_ips=10.0.0.0%2F8");
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
@@ -117,7 +93,7 @@ class SiteLifecycleTest extends HohenheimTestBase {
 
         Row redirectRow = site("Old Domain");
         Integer redirectId = redirectRow.get(SiteModel.ID);
-        response = postForm("/admin/sites/" + redirectId,
+        response = adminPostForm("/admin/sites/" + redirectId,
             "name=Old+Domain&upstream_kind=hohenheim%3Aredirect"
             + "&settings.target_url=https%3A%2F%2Fexample.com"
             + "&access_list_id=" + listId);
@@ -128,15 +104,15 @@ class SiteLifecycleTest extends HohenheimTestBase {
 
         // Switching a site off is a confirmed action (it takes its hostnames out of the
         // route table), so the POST carries the confirmation proof like every other one.
-        postForm("/admin/sites/" + redirectId + "/action/toggle_site", confirmed(""));
+        adminPostForm("/admin/sites/" + redirectId + "/action/toggle_site", confirmed(""));
         assertThat((Boolean) Models.get(SiteModel.class).findById(redirectId).get(SiteModel.ENABLED))
             .isEqualTo(false);
 
-        postForm("/admin/sites/" + redirectId + "/action/toggle_site", confirmed(""));
+        adminPostForm("/admin/sites/" + redirectId + "/action/toggle_site", confirmed(""));
         assertThat((Boolean) Models.get(SiteModel.class).findById(redirectId).get(SiteModel.ENABLED))
             .isEqualTo(true);
 
-        response = postForm("/admin/sites/" + redirectId + "/action/clone_site", confirmed(""));
+        response = adminPostForm("/admin/sites/" + redirectId + "/action/clone_site", confirmed(""));
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         Row clone = site("Old Domain (copy)");
@@ -150,7 +126,7 @@ class SiteLifecycleTest extends HohenheimTestBase {
         // section 7) -- no upstream kind carries api_keys any more.
 
         Integer gitId = gitRow.get(SiteModel.ID);
-        response = postForm("/admin/sites/" + gitId + "/delete", confirmed(""));
+        response = adminPostForm("/admin/sites/" + gitId + "/delete", confirmed(""));
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         Row after = Models.get(SiteModel.class).findById(gitId);
@@ -161,10 +137,12 @@ class SiteLifecycleTest extends HohenheimTestBase {
         assertThat(popFlash()).as("the delete reports itself as a toast").isNotNull()
             .extracting(flash -> flash.message().key()).isEqualTo("deleted");
 
-        // One list render proves both the live site is listed and the soft-deleted one is hidden.
+        // One list render proves both the live site is listed and the soft-deleted one is
+        // hidden. The live anchor is this journey's own redirect site, so the assertion
+        // never depends on the address-site test having run first.
         navigateToApp("/admin/sites");
         waitForHydration();
-        assertThat(page.content()).contains("Test Backend");
-        assertThat(page.content()).doesNotContain("Git App");
+        assertThat(page.content()).as("the live site is listed").contains("Old Domain");
+        assertThat(page.content()).as("the soft-deleted site is hidden").doesNotContain("Git App");
     }
 }

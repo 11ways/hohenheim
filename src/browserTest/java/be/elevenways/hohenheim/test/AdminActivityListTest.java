@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.activity.ActivityRecordCell;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.AdminActivityResource;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.panel.Panel;
@@ -35,6 +36,7 @@ class AdminActivityListTest extends HohenheimTestBase {
     private static final String BACKGROUND_TITLE = "hh-activity-background-subject";
     private static final String UNLINKABLE_TITLE = "hh-activity-unlinkable-subject";
     private static final String NARROWED_TITLE = "hh-activity-narrowed-subject";
+    private static final String SITE_TITLE = "hh-activity-site-subject";
 
     /** A verb no catalog declares anywhere, so its cell must fall open to this text. */
     private static final String UNREGISTERED_VERB = "hh_unregistered_verb";
@@ -43,6 +45,7 @@ class AdminActivityListTest extends HohenheimTestBase {
     private static final String BACKGROUND_RECORD_ID = "4243";
     private static final String UNLINKABLE_RECORD_ID = "4244";
     private static final String NARROWED_RECORD_ID = "918273";
+    private static final String SITE_RECORD_ID = "4246";
 
     @Test
     void activityListJourney() throws Exception {
@@ -153,6 +156,19 @@ class AdminActivityListTest extends HohenheimTestBase {
             .as("step 7: and points at that record's admin page")
             .isEqualTo("/admin/servers/" + OPERATOR_RECORD_ID);
 
+        // 7b. A model BOTH panels mount (sites: the admin resource and its /manage narrowing)
+        //     still links into THIS panel: the admin activity list never sends an operator to
+        //     /manage, whatever order the framework's panel registry iterates in.
+        ActivityRecordCell siteCell = (ActivityRecordCell) resource.cellValue(
+            rowFor(SITE_RECORD_ID), column(resource, ActivityModel.RECORD_ID.getName()));
+        assertThat(siteCell.url())
+            .as("step 7b: a site row links to the admin site page")
+            .isEqualTo("/admin/sites/" + SITE_RECORD_ID);
+        assertThat(defaultList.body())
+            .as("step 7b: and the rendered list carries that /admin link")
+            .contains("/admin/sites/" + SITE_RECORD_ID)
+            .doesNotContain("/manage/sites/" + SITE_RECORD_ID);
+
         // 8. A record no resource serves stays plain text -- named, but not linked.
         ActivityRecordCell orphan = (ActivityRecordCell) resource.cellValue(
             rowFor(UNLINKABLE_RECORD_ID), column(resource, ActivityModel.RECORD_ID.getName()));
@@ -219,6 +235,8 @@ class AdminActivityListTest extends HohenheimTestBase {
             Accountability.ORIGIN_WEB, Instant.parse("2999-01-01T00:00:02Z"));
         write(serverModel, NARROWED_RECORD_ID, NARROWED_TITLE, "created",
             Accountability.ORIGIN_WEB, Instant.parse("2999-01-01T00:00:01Z"));
+        write(SiteModel.MODEL_ID.toString(), SITE_RECORD_ID, SITE_TITLE, "updated",
+            Accountability.ORIGIN_WEB, Instant.parse("2999-01-01T00:00:05Z"));
     }
 
     private static void write(String model, String recordId, String title, String action,

@@ -8,10 +8,13 @@ import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
+import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.application.ApplicationDeploys;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
@@ -19,7 +22,6 @@ import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.preview.PreviewDomains;
 import be.elevenways.hohenheim.server.preview.PreviewQuota;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
@@ -38,6 +40,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -94,10 +97,10 @@ class PreviewDeploymentLiveTest {
         zone.set(be.elevenways.hohenheim.model.DnsZoneModel.ORIGIN, "preview.test");
         zone.set(be.elevenways.hohenheim.model.DnsZoneModel.ENABLED, true);
         zones.save(zone);
-        if (PrivateNetns.available()) {
-            netns = new PrivateNetns();
-            WorkloadNetworkPolicy.overrideForTest(netns.enforcingPolicy());
-        }
+        // PreviewDomains.zoneFor reads the store's primary-zone view, which only a reload
+        // refreshes: without it the preview lane finds no zone and materializes no record.
+        DnsZoneStore.INSTANCE.reload();
+        netns = PrivateNetns.installEnforcing();
 
         upstreamRepo = Files.createTempDirectory("hohenheim-preview-upstream");
         gitIn(upstreamRepo, "init", "-q", "-b", "main");
@@ -108,11 +111,11 @@ class PreviewDeploymentLiveTest {
         // the site's production artifact (a different digest) is untouched.
         Files.writeString(upstreamRepo.resolve("answer.sh"), answerScript("main-one"));
         Files.writeString(upstreamRepo.resolve("Dockerfile"), """
-            FROM alpine:latest
+            FROM %s
             COPY answer.sh /answer.sh
             RUN chmod +x /answer.sh
             CMD ["/bin/busybox","nc","-lk","-p","8080","-e","/answer.sh"]
-            """);
+            """.formatted(TestImages.ALPINE));
         gitIn(upstreamRepo, "add", ".");
         gitIn(upstreamRepo, "commit", "-q", "-m", "preview fixture");
         gitIn(upstreamRepo, "checkout", "-q", "-b", "feature-x");
@@ -172,17 +175,12 @@ class PreviewDeploymentLiveTest {
             proxy.stop();
             proxy = null;
         }
-        WorkloadNetworkPolicy.overrideForTest(null);
-        if (netns != null) {
-            netns.close();
-            netns = null;
-        }
+        PrivateNetns.uninstall(netns);
     }
 
     private static Map<String, Object> dockerSettings() {
         Map<String, Object> settings = new LinkedHashMap<>();
-        settings.put("image", "alpine");
-        settings.put("tag", "latest");
+        settings.put("image", TestImages.ALPINE);
         settings.put("container_port", 8080);
         // Production runtime environment a preview must NEVER inherit.
         settings.put("environment_variables",
@@ -287,7 +285,8 @@ class PreviewDeploymentLiveTest {
         Row dead = awaitDeleted(previewId);
         assertThat((String) dead.get(PreviewDeploymentModel.STATUS))
             .as("step 6: stamped EXPIRED").isEqualTo(PreviewDeploymentModel.STATUS_EXPIRED);
-        assertThat((Object) dead.get(PreviewDeploymentModel.DELETED_AT)).isNotNull();
+        assertThat((Object) dead.get(PreviewDeploymentModel.DELETED_AT))
+            .as("the reached preview is soft-deleted").isNotNull();
         Row deadInstance = Models.get(InstanceModel.class).findById(instanceId);
         assertThat((Object) deadInstance.get(InstanceModel.DELETED_AT))
             .as("step 6: the instance record is soft-deleted").isNotNull();
@@ -324,15 +323,12 @@ class PreviewDeploymentLiveTest {
      * The ambient minute sweeper can win the lease race for the due one-shot; whoever
      * fires it, the reclaimed STATE is what the test asserts -- await it briefly.
      */
-    private static Row awaitDeleted(int previewId) throws InterruptedException {
-        for (int i = 0; i < 100; i++) {
-            Row row = Models.get(PreviewDeploymentModel.class).findById(previewId);
-            if (row != null && row.get(PreviewDeploymentModel.DELETED_AT) != null) {
-                return row;
-            }
-            Thread.sleep(100);
-        }
-        return Models.get(PreviewDeploymentModel.class).findById(previewId);
+    private static Row awaitDeleted(int previewId) {
+        return Poll.value("preview " + previewId + " is soft-deleted", Duration.ofSeconds(10),
+            Duration.ofMillis(100), () -> {
+                Row row = Models.get(PreviewDeploymentModel.class).findById(previewId);
+                return row != null && row.get(PreviewDeploymentModel.DELETED_AT) != null ? row : null;
+            });
     }
 
     private static Row generatedDomainOf(int previewId) {

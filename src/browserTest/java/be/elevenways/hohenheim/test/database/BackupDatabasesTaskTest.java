@@ -9,14 +9,13 @@ import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.hohenheim.server.task.BackupDatabases;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
+import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -55,13 +54,14 @@ class BackupDatabasesTaskTest {
     private static final String PG_IMAGE = "postgres:17-alpine";
 
     @Test
-    void backsUpRunningDatabaseAndPrunesToRetention() throws IOException {
+    void backsUpRunningDatabaseAndPrunesToRetention() throws Exception {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, PG_IMAGE);
 
-        SqliteDatasource datasource = freshDatasource();
+        SqlDatasource datasource = TestDatabases.freshDatasource();
+        HohenheimTestRuntime.ensureBooted();
         DatabaseService service = new DatabaseService(datasource);
 
         Path backupRoot = Files.createTempDirectory("hohenheim-backups");
@@ -113,16 +113,6 @@ class BackupDatabasesTaskTest {
             }
             deleteRecursively(backupRoot);
         }
-    }
-
-    private static SqliteDatasource freshDatasource() throws IOException {
-        File db = File.createTempFile("hohenheim-backup-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        SqliteDatasource ds = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(ds).migrate().requireSuccess();
-        HohenheimTestRuntime.ensureBooted();
-        return ds;
     }
 
     private static void deleteRecursively(Path root) throws IOException {

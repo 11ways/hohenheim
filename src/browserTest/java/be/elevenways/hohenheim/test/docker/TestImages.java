@@ -29,6 +29,19 @@ import java.util.stream.Stream;
  */
 public final class TestImages {
 
+    /**
+     * THE base image of every live test that runs a plain container: alpine 3.24.1, pinned
+     * by the digest of its multi-arch index.
+     *
+     * AIDEV-NOTE: this replaced a floating {@code alpine:latest} spelled in ~20 live
+     * classes, which let the image under every live test change between two runs with no
+     * commit. The compose-style {@code repo:tag@digest} spelling is what
+     * {@code DockerClient.ensureImage} pulls by digest and what LiveLane.requireImage checks
+     * for; bump both halves together, never the tag alone.
+     */
+    public static final String ALPINE =
+        "alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b";
+
     private TestImages() {}
 
     /**
@@ -79,7 +92,7 @@ public final class TestImages {
 
             // Borrow /bin (busybox + applet links) and /lib (musl) from local alpine.
             docker.createContainer(sourceName,
-                new LinkedHashMap<>(Map.of("Image", "alpine:latest")),
+                new LinkedHashMap<>(Map.of("Image", ALPINE)),
                 ContainerHardening.SERVICE);
             try {
                 Path binTar = work.resolve("bin.tar");

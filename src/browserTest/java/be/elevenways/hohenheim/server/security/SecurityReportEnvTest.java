@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.security;
 
+import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -158,12 +160,9 @@ class SecurityReportEnvTest {
         ensured.clear();
 
         SecurityReportEnv.reconcilePersistedReporters();
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         String expectedPrefix = SpamserviceManager.siteExternalId(siteId) + "|";
-        while (ensured.stream().noneMatch(value -> value.startsWith(expectedPrefix))
-                && System.nanoTime() < deadline) {
-            Thread.sleep(20);
-        }
+        Poll.until("the persisted reporter of the site is ensured", Duration.ofSeconds(5),
+            Duration.ofMillis(20), () -> ensured.stream().anyMatch(value -> value.startsWith(expectedPrefix)));
         assertThat(ensured).anySatisfy(value -> assertThat(value)
             .startsWith(expectedPrefix).endsWith("|" + key));
     }

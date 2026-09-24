@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.docker;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostMode;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;

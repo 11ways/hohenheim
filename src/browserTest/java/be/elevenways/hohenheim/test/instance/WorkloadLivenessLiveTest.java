@@ -8,22 +8,20 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -58,31 +56,20 @@ class WorkloadLivenessLiveTest {
     /** Small enough that a runaway child hits it in under a second, big enough for alpine. */
     private static final int MEMORY_LIMIT_MB = 64;
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static PrivateNetns netns;
 
     @BeforeAll
     static void setUp() throws Exception {
-        File db = File.createTempFile("hohenheim-liveness-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
-        if (PrivateNetns.available()) {
-            netns = new PrivateNetns();
-            WorkloadNetworkPolicy.overrideForTest(netns.enforcingPolicy());
-        }
+        netns = PrivateNetns.installEnforcing();
     }
 
     @AfterAll
     static void tearDown() {
-        WorkloadNetworkPolicy.overrideForTest(null);
-        if (netns != null) {
-            netns.close();
-            netns = null;
-        }
+        PrivateNetns.uninstall(netns);
+        netns = null;
     }
 
     @Test
@@ -90,7 +77,7 @@ class WorkloadLivenessLiveTest {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
-        LiveLane.requireImage(docker, "alpine:latest");
+        LiveLane.requireImage(docker, TestImages.ALPINE);
         LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: the instance tier refuses to deploy unprotected");
 
@@ -98,8 +85,7 @@ class WorkloadLivenessLiveTest {
             HostFixtures.admitLocal();
             ServerModel.localServerId();
             Map<String, Object> settings = new LinkedHashMap<>();
-            settings.put("image", "alpine");
-            settings.put("tag", "latest");
+            settings.put("image", TestImages.ALPINE);
             settings.put("command", "sleep 600");
             settings.put("memory_limit_mb", MEMORY_LIMIT_MB);
             int id = instanceRecord("liveness-oom", settings);

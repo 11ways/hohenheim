@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.proxy;
 
+import be.elevenways.hohenheim.test.Poll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -12,6 +13,7 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -97,25 +99,19 @@ class PublicTcpListenerRecoveryTest {
         // that parked accept to be OBSERVED rather than assumed: under CPU starvation the
         // loop can still be between iterations, in which case arming would fail the very
         // next accept instead of the one after it.
-        assertThat(awaitParkedInAccept(acceptState))
-            .as("step 2: the accept loop is parked inside accept() before the burst is armed")
-            .isTrue();
+        awaitParkedInAccept(acceptState,
+            "step 2: the accept loop is parked inside accept() before the burst is armed");
         failNext.set(3);
         assertThat(exchange(port))
             .as("step 2: the pre-armed accept still serves while the burst arms")
             .isEqualTo("pong");
         // Poll rather than sleep: the backoffs are 5/10/20ms, but the first failure log
         // can pay one-time logging-init costs, so a fixed sleep is a race.
-        for (int i = 0; i < 400 && failNext.get() > 0; i++) {
-            Thread.sleep(25);
-        }
-
-        // Step 3: the listener SURVIVED the burst. Pre-fix this assertion fails: the very
+        // Step 3: the listener SURVIVED the burst. Pre-fix this wait fails: the very
         // first accept IOException called the failure handler and closed the socket forever.
-        assertThat(failNext.get())
-            .as("step 3: the transient burst was actually consumed by retries"
-                + " (a leftover count means the accept loop stopped retrying)")
-            .isZero();
+        Poll.until("step 3: the transient burst was actually consumed by retries"
+                + " (a leftover count means the accept loop stopped retrying)",
+            Duration.ofSeconds(10), () -> failNext.get() == 0);
         assertThat(exchange(port))
             .as("step 3: the listener survives a transient accept burst and keeps serving")
             .isEqualTo("pong");
@@ -127,44 +123,31 @@ class PublicTcpListenerRecoveryTest {
         // to the failure handler and closes the listener -- recovery is then the
         // ProxyServer supervisor's job, not this loop's. Same observed-state rule as step 2:
         // the "one last exchange" below is only true of an accept that is ALREADY parked.
-        assertThat(awaitParkedInAccept(acceptState))
-            .as("step 4: the accept loop is parked inside accept() before sustained failure is armed")
-            .isTrue();
+        awaitParkedInAccept(acceptState,
+            "step 4: the accept loop is parked inside accept() before sustained failure is armed");
         failNext.set(1_000);
         assertThat(exchange(port))
             .as("step 4: the pre-armed accept serves one last time while sustained failure arms")
             .isEqualTo("pong");
-        for (int i = 0; i < 200 && escalated.get() == null; i++) {
-            Thread.sleep(25);
-        }
-        assertThat(escalated.get())
-            .as("step 4: sustained accept failure escalates to the listener failure handler")
-            .isNotNull();
-        boolean refused = false;
-        for (int i = 0; i < 200 && !refused; i++) {
-            try (Socket probe = new Socket()) {
-                probe.connect(new InetSocketAddress("127.0.0.1", port), 500);
-            } catch (IOException e) {
-                refused = true;
-            }
-            if (!refused) Thread.sleep(25);
-        }
-        assertThat(refused)
-            .as("step 4: after escalation the server socket is closed, so connects are refused")
-            .isTrue();
+        Poll.until("step 4: sustained accept failure escalates to the listener failure handler",
+            Duration.ofSeconds(5), () -> escalated.get() != null);
+        Poll.until("step 4: after escalation the server socket is closed, so connects are refused",
+            Duration.ofSeconds(10), () -> {
+                try (Socket probe = new Socket()) {
+                    probe.connect(new InetSocketAddress("127.0.0.1", port), 500);
+                    return false;
+                } catch (IOException refused) {
+                    return true;
+                }
+            });
     }
 
     /**
      * Waits for the accept loop to signal it is parked inside {@code accept()} (an odd
      * state), which is stable until a client connects because the test is the only client.
-     *
-     * @return false when the loop never parked within the wait budget
      */
-    private static boolean awaitParkedInAccept(AtomicInteger acceptState) throws InterruptedException {
-        for (int i = 0; i < 200 && acceptState.get() % 2 == 0; i++) {
-            Thread.sleep(25);
-        }
-        return acceptState.get() % 2 != 0;
+    private static void awaitParkedInAccept(AtomicInteger acceptState, String what) {
+        Poll.until(what, Duration.ofSeconds(5), () -> acceptState.get() % 2 != 0);
     }
 
     private static String exchange(int port) throws IOException {

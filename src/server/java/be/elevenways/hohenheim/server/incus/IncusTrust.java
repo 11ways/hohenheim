@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPins;
-import be.elevenways.hohenheim.server.security.NftRunner;
+import be.elevenways.hohenheim.server.process.BoundedProcess;
 import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -42,7 +42,8 @@ import java.util.Map;
  */
 public final class IncusTrust {
 
-    private static final long OPENSSL_TIMEOUT_SECONDS = 20;
+    private static final long OPENSSL_TIMEOUT_MILLIS = 20_000;
+    private static final int OPENSSL_OUTPUT_CAP_CHARS = 64 * 1024;
 
     private IncusTrust() {
     }
@@ -123,13 +124,13 @@ public final class IncusTrust {
             directory = Files.createTempDirectory("hohenheim-incus-identity");
             Path key = directory.resolve("client.key");
             Path cert = directory.resolve("client.crt");
-            NftRunner.Result result = NftRunner.Sudo.execute(List.of("openssl", "req",
+            BoundedProcess.Result result = BoundedProcess.execute(List.of("openssl", "req",
                 "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1",
                 "-sha384", "-days", "3650", "-nodes",
                 "-subj", "/CN=" + ControllerScope.scoped(name),
                 "-keyout", key.toString(), "-out", cert.toString()),
-                null, OPENSSL_TIMEOUT_SECONDS);
-            if (!result.ok() || !Files.exists(key) || !Files.exists(cert)) {
+                null, OPENSSL_TIMEOUT_MILLIS, OPENSSL_OUTPUT_CAP_CHARS);
+            if (!result.succeeded() || !Files.exists(key) || !Files.exists(cert)) {
                 throw Violations.ofForm(violation("identity_generation_failed")
                     .withArg("detail", result.failureText()));
             }

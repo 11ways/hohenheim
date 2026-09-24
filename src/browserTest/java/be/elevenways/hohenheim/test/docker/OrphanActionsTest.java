@@ -1,7 +1,8 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -17,12 +18,9 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -43,20 +41,15 @@ class OrphanActionsTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
 
     @BeforeAll
     static void setUp() throws Exception {
-        File db = File.createTempFile("hohenheim-orphan-actions-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
         // ONE database per test class: the controller identity (and therefore every
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
     }
 
@@ -65,7 +58,7 @@ class OrphanActionsTest {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
-        LiveLane.requireImage(docker, "alpine:latest");
+        LiveLane.requireImage(docker, TestImages.ALPINE);
 
         Db.run(datasource, () -> {
             ServerModel.localServerId();
@@ -175,7 +168,7 @@ class OrphanActionsTest {
     private static void create(DockerClient docker, String name, Map<String, String> labels)
             throws IOException {
         docker.createContainer(name, Map.of(
-            "Image", "alpine:latest",
+            "Image", TestImages.ALPINE,
             "Cmd", List.of("sleep", "120"),
             "Labels", labels), ContainerHardening.STRICT);
     }

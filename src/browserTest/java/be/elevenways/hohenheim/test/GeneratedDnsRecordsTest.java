@@ -15,13 +15,8 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer.OrderAnnotation;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
-import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
@@ -34,7 +29,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Attribution for DNS rows a system authored: derived in the write pipeline, refused when a
  * caller submits it, and carried by the real ACME challenge publisher.
  */
-@TestMethodOrder(OrderAnnotation.class)
 class GeneratedDnsRecordsTest extends HohenheimTestBase {
 
     private static final String ORIGIN = "generated.test";
@@ -62,7 +56,6 @@ class GeneratedDnsRecordsTest extends HohenheimTestBase {
      * while the same write inside the system scope has it DERIVED.
      */
     @Test
-    @Order(1)
     void attributionIsDerivedAndNeverSubmitted() throws Exception {
         var model = Models.get(DnsRecordModel.class);
 
@@ -120,7 +113,6 @@ class GeneratedDnsRecordsTest extends HohenheimTestBase {
 
     /** The real ACME publisher writes an attributed row under the system origin. */
     @Test
-    @Order(2)
     void theAcmeChallengeRowIsAttributedAndSystemOriginated() throws Exception {
         var model = Models.get(DnsRecordModel.class);
         DnsTxtRecord challenge = new DnsTxtRecord("_acme-challenge." + ORIGIN, "digest-value");
@@ -157,7 +149,6 @@ class GeneratedDnsRecordsTest extends HohenheimTestBase {
      * system that authored it still removes its own row.
      */
     @Test
-    @Order(3)
     void aGeneratedRowIsImmutableToCallersButNotToItsAuthor() throws Exception {
         var model = Models.get(DnsRecordModel.class);
         DnsTxtRecord challenge = new DnsTxtRecord("_acme-challenge." + ORIGIN, "immutable-value");
@@ -214,15 +205,12 @@ class GeneratedDnsRecordsTest extends HohenheimTestBase {
             .isNull();
     }
 
+    /** A key POST through the Bearer header (keyPost sends X-Api-Key; this lane proves the other one). */
     private HttpResponse<String> apiPost(String apiKey, String path, String body) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER).build();
-        return client.send(HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
+        return sendRequest(requestTo(path)
             .header("Authorization", "Bearer " + apiKey)
             .header("Content-Type", "application/x-www-form-urlencoded")
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build(), HttpResponse.BodyHandlers.ofString());
+            .POST(HttpRequest.BodyPublishers.ofString(body)));
     }
 
     private static Row txtRow(String name, String value) {

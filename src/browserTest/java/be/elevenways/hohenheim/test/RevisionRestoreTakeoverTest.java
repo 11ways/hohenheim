@@ -9,21 +9,12 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.auth.server.ZenitAuth;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.behaviour.RevisionableBehaviour;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.csrf.CsrfTokens;
-import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import com.sun.net.httpserver.HttpServer;
@@ -33,9 +24,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -54,19 +42,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class RevisionRestoreTakeoverTest extends HohenheimTestBase {
 
     private static final String CONTESTED_HOST = "restore-takeover.example.com";
-
-    private HttpResponse<String> post(String path, String body, String session, String csrf)
-            throws Exception {
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session)
-            .header("X-Csrf-Token", csrf)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
 
     /** Persist an active site of the static type; enabled per the flag. */
     private static Row site(String name, String slug, boolean enabled) {
@@ -163,28 +138,18 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
             .as("exactly one enabled owner of the hostname: B").isEqualTo(1);
 
         // 4. A delegated operator is granted MANAGE over A (a tenant's own staged site).
-        Row operator = AuthModels.users().createEmptyRow();
-        operator.set(UserModel.EMAIL, "restore-operator@hohenheim.local");
-        operator.set(UserModel.DISPLAY_NAME, "Restore Operator");
-        operator.set(UserModel.ENABLED, true);
-        operator.set(UserModel.CREATED_AT, Now.instant());
-        operator.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(operator);
-        int operatorId = operator.get(UserModel.ID);
-        Session operatorSession = Zenit.getSessionStore().create();
-        operatorSession.set(AuthKeys.USER_ID, (long) operatorId);
-        String operatorCsrf = ZenitAuth.randomToken();
-        operatorSession.set(CsrfTokens.TOKEN, operatorCsrf);
-        Zenit.getSessionStore().save(operatorSession);
+        int operatorId = ApiSupport.user("restore-operator@hohenheim.local", "Restore Operator");
+        TestSession operatorSession = sessionFor(operatorId);
+        String operatorCsrf = operatorSession.csrf();
         RecordGrants.grant(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, aId, HohenheimAccess.MANAGE, true);
 
         try {
             // 5. The attack: the tenant POSTs the real /manage revision-restore route to
             //    replay A's enabled snapshot. It must be REFUSED, not a 500 -- A stays
             //    disabled and the hostname keeps its single owner (B).
-            HttpResponse<String> manageRestore = post(
+            HttpResponse<String> manageRestore = httpPostForm(
                 "/manage/sites/" + aId + "/revision/" + enabledRevA + "/restore",
-                confirmed(""), operatorSession.token().secret(), operatorCsrf);
+                confirmed(""), operatorSession.token(), operatorCsrf);
             // 404, not a redirect: ManageSiteResource.subpages() deliberately omits the
             // revision history, and the revision ROUTES are now bound to that
             // declaration (they used to consult the model's behaviour alone and served
@@ -202,7 +167,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
                 .isEqualTo(1);
 
             // 6. /admin reaches the same generic endpoint; it is refused identically.
-            HttpResponse<String> adminRestore = post(
+            HttpResponse<String> adminRestore = httpPostForm(
                 "/admin/sites/" + aId + "/revision/" + enabledRevA + "/restore",
                 confirmed(""), sessionToken, csrfToken);
             assertThat(adminRestore.statusCode())
@@ -240,7 +205,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
             //     tier rather than the live-conflict tier. Prove that, then lift the
             //     quarantine the way an administrator does, so step 8's positive control
             //     still proves what it claims.
-            HttpResponse<String> quarantinedRestore = post(
+            HttpResponse<String> quarantinedRestore = httpPostForm(
                 "/admin/sites/" + aId + "/revision/" + enabledRevA + "/restore",
                 confirmed(""), sessionToken, csrfToken);
             assertThat(quarantinedRestore.statusCode())
@@ -250,7 +215,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
                 .as("a different owner cannot restore onto a just-released hostname").isFalse();
             Models.get(ReleasedRouteClaimModel.class).find().delete();
 
-            HttpResponse<String> cleanRestore = post(
+            HttpResponse<String> cleanRestore = httpPostForm(
                 "/admin/sites/" + aId + "/revision/" + enabledRevA + "/restore",
                 confirmed(""), sessionToken, csrfToken);
             assertThat(cleanRestore.statusCode())
@@ -328,6 +293,9 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
         // "ungated" -- which is the real-world shape and the attackable one.
         site.set(SiteModel.AUTH_PROVIDER_ID, null);
         site.set(SiteModel.ACCESS_LIST_ID, null);
+        // The operator pointed this site at a loopback backend on purpose and vouches for it,
+        // so the manage grant below does not make the dial refuse it (TenantUpstreams).
+        site.set(SiteModel.TRUSTED_UPSTREAM, true);
         siteModel.save(site);
         int siteId = site.get(SiteModel.ID);
         int ungatedRevision = SiteModel.REVISIONABLE.latestRevisionOf(siteModel, siteId);
@@ -345,19 +313,10 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
         site.set(SiteModel.ACCESS_LIST_ID, accessListId);
         siteModel.save(site);
 
-        Row operator = AuthModels.users().createEmptyRow();
-        operator.set(UserModel.EMAIL, "restore-gate-operator@hohenheim.local");
-        operator.set(UserModel.DISPLAY_NAME, "Restore Gate Operator");
-        operator.set(UserModel.ENABLED, true);
-        operator.set(UserModel.CREATED_AT, Now.instant());
-        operator.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(operator);
-        int operatorId = operator.get(UserModel.ID);
-        Session tenantSession = Zenit.getSessionStore().create();
-        tenantSession.set(AuthKeys.USER_ID, (long) operatorId);
-        String tenantCsrf = ZenitAuth.randomToken();
-        tenantSession.set(CsrfTokens.TOKEN, tenantCsrf);
-        Zenit.getSessionStore().save(tenantSession);
+        int operatorId = ApiSupport.user("restore-gate-operator@hohenheim.local",
+            "Restore Gate Operator");
+        TestSession tenantSession = sessionFor(operatorId);
+        String tenantCsrf = tenantSession.csrf();
         RecordGrants.grant(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, siteId,
             HohenheimAccess.MANAGE, true);
 
@@ -374,9 +333,9 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
                 .isEqualTo(401);
 
             // 4. THE ATTACK: an ordinary manage grant replays the pre-gate revision.
-            HttpResponse<String> attack = post(
+            HttpResponse<String> attack = httpPostForm(
                 "/manage/sites/" + siteId + "/revision/" + ungatedRevision + "/restore",
-                confirmed(""), tenantSession.token().secret(), tenantCsrf);
+                confirmed(""), tenantSession.token(), tenantCsrf);
 
             // 5. The SERVED effect first, because that is what the attack is FOR: the
             //    hostname must still be challenged. A refusal that left the site
@@ -403,7 +362,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
             //    a surface that DOES offer the revisions subpage and whose form exposes
             //    both columns -- still succeeds, and the effect is real. So step 5
             //    refused for the declared reason, not because restore stopped working.
-            HttpResponse<String> adminRestore = post(
+            HttpResponse<String> adminRestore = httpPostForm(
                 "/admin/sites/" + siteId + "/revision/" + ungatedRevision + "/restore",
                 confirmed(""), sessionToken, csrfToken);
             assertThat(adminRestore.statusCode())
@@ -417,15 +376,13 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
                 .as("step 7: the admin restore really did rewind the access list")
                 .isNull();
 
-            // The gate is gone, so the request is no longer challenged; it reaches the
-            // dial stage, where this site's manage grant makes it TENANT-owned and its
-            // loopback backend is refused (TenantUpstreams) -- 503 rather than 200 is that
-            // refusal, not the gate.
+            // The gate is gone, so the request is served: the site is tenant-owned, but its
+            // operator marked the loopback upstream trusted, so the dial reaches it.
             proxy.reload();
             assertThat(proxyStatus(proxyPort, GATED_HOST))
-                .as("step 7: with the gate rewound by an admin, the hostname is no longer "
-                    + "challenged and meets the tenant dial refusal instead")
-                .isEqualTo(503);
+                .as("step 7: with the gate rewound by an admin, the hostname is served "
+                    + "straight through to the operator's trusted backend")
+                .isEqualTo(200);
         } finally {
             proxy.stop();
             upstream.stop(0);

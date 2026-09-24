@@ -6,22 +6,28 @@ import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.hohenheim.server.auth.SiteAuthGate;
 import be.elevenways.hohenheim.server.proxy.auth.CredentialOwner;
+import be.elevenways.hohenheim.server.proxy.auth.ProxyAuthThrottle;
 import be.elevenways.hohenheim.server.proxy.auth.ProxySessionSupport;
 import be.elevenways.hohenheim.server.proxy.auth.SessionAuthority;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.cache.Cache;
 import be.elevenways.zenit.common.net.IpRanges;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.session.SessionStore;
+import be.elevenways.zenit.server.security.SecureTokens;
 import io.undertow.server.HttpServerExchange;
+import io.undertow.util.AttachmentKey;
 import io.undertow.util.Headers;
 import io.undertow.util.HttpString;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * An access list's rule tree, compiled once at route load and evaluated per request.
@@ -107,7 +113,7 @@ public final class AccessRuleTree {
 
     /** Evaluate the tree for one request; see the class docs for the semantics. */
     public @NonNull Result evaluate(@NonNull HttpServerExchange exchange, @Nullable String clientIp) {
-        return this.root.evaluate(new Evaluation(exchange, IpRanges.parseLiteral(clientIp)));
+        return this.root.evaluate(new Evaluation(exchange, clientIp, IpRanges.parseLiteral(clientIp)));
     }
 
     /**
@@ -217,7 +223,7 @@ public final class AccessRuleTree {
                 return new BasicAuthNode(
                     AccessRuleModel.text(data.get(AccessRuleModel.BASIC_AUTH_USERNAME.getName())),
                     AccessRuleModel.text(data.get(AccessRuleModel.BASIC_AUTH_PASSWORD.getName())),
-                    context.realm());
+                    context.realm(), context.siteId());
             }
             case AccessRuleModel.TYPE_AUTH_PROVIDER -> {
                 facts.blocking = true;
@@ -290,7 +296,8 @@ public final class AccessRuleTree {
     }
 
     /** Per-request state shared by every node of one evaluation. */
-    private record Evaluation(@NonNull HttpServerExchange exchange, byte @Nullable [] clientAddress) {
+    private record Evaluation(@NonNull HttpServerExchange exchange, @Nullable String clientIp,
+                              byte @Nullable [] clientAddress) {
     }
 
     private sealed interface Node
@@ -374,24 +381,94 @@ public final class AccessRuleTree {
         }
     }
 
-    private record BasicAuthNode(@Nullable String username, @Nullable String passwordHash,
-                                 @NonNull String realm) implements Node, CredentialNode {
+    /**
+     * A basic-auth leaf. It holds no session (Basic re-sends the header on every request), so
+     * without help every request carrying the header would pay one argon2 verification.
+     *
+     * AIDEV-NOTE: two bounds keep that from being an amplifier. A credential that VERIFIED is
+     * remembered for {@link #VERIFIED_TTL_MILLIS} under a digest of the leaf's binding (site,
+     * username, stored hash; ProxySessionSupport.binding, the digest the provider gates bind
+     * their sessions to) plus the presented pair, so a changed password or username can never
+     * hit an old entry, and a recompile at route reload drops the whole cache with the node.
+     * Every verification that does run first spends a ProxyAuthThrottle token, exactly like the
+     * provider gates, so failures are bounded per client and site and a spent budget answers
+     * 429 instead of 401. A request that re-evaluates the tree (AccessListGate's pass loop)
+     * never verifies the same refused pair twice.
+     */
+    private static final class BasicAuthNode implements Node, CredentialNode {
+
+        /** How long one verified credential skips argon2. */
+        private static final long VERIFIED_TTL_MILLIS = 60_000;
+
+        /** Bound on remembered credentials per leaf; LRU past it. */
+        private static final int VERIFIED_MAX = 256;
+
+        /** The throttle's retry-after for this exchange, set when a leaf's verification was refused. */
+        private static final AttachmentKey<Long> THROTTLED = AttachmentKey.create(Long.class);
+
+        /** The credential digests this exchange already failed to verify, across re-evaluations. */
+        private static final AttachmentKey<Set<String>> REFUSED = AttachmentKey.create(Set.class);
+
+        private final @Nullable String username;
+        private final @Nullable String passwordHash;
+        private final @NonNull String realm;
+        private final int siteId;
+        private final @NonNull String binding;
+        private final Cache<String, Boolean> verified = new Cache<>(VERIFIED_MAX, VERIFIED_TTL_MILLIS);
+
+        private BasicAuthNode(@Nullable String username, @Nullable String passwordHash,
+                              @NonNull String realm, int siteId) {
+            this.username = username;
+            this.passwordHash = passwordHash;
+            this.realm = realm;
+            this.siteId = siteId;
+            this.binding = ProxySessionSupport.binding("access_rule:basic_auth", String.valueOf(siteId),
+                username, passwordHash, SecureTokens.randomToken(16));
+        }
 
         @Override
         public @NonNull Result evaluate(@NonNull Evaluation evaluation) {
             if (this.username == null || this.passwordHash == null) {
                 return new Result(Verdict.FAIL, null);
             }
-            String header = evaluation.exchange().getRequestHeaders().getFirst(Headers.AUTHORIZATION);
-            boolean matches = BasicCredentials.matchesHeader(header, this.username,
-                this.passwordHash, this.realm);
-            return matches
-                ? new Result(Verdict.PASS, null)
-                : new Result(Verdict.PENDING, this);
+            HttpServerExchange exchange = evaluation.exchange();
+            String header = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
+            BasicCredentials.Presented presented = BasicCredentials.parse(header);
+            if (presented == null) {
+                // Nothing presented costs nothing: no argon2, no budget.
+                return new Result(Verdict.PENDING, this);
+            }
+            String key = ProxySessionSupport.binding(this.binding, presented.username(), presented.password());
+            if (this.verified.get(key) != null) {
+                return new Result(Verdict.PASS, null);
+            }
+            Set<String> refused = exchange.getAttachment(REFUSED);
+            if (refused != null && refused.contains(key)) {
+                return new Result(Verdict.PENDING, this);
+            }
+            Long retryAfter = ProxyAuthThrottle.spendFor(evaluation.clientIp(), this.siteId);
+            if (retryAfter != null) {
+                exchange.putAttachment(THROTTLED, retryAfter);
+                return new Result(Verdict.PENDING, this);
+            }
+            if (BasicCredentials.matchesHeader(header, this.username, this.passwordHash, this.realm)) {
+                this.verified.set(key, Boolean.TRUE);
+                return new Result(Verdict.PASS, null);
+            }
+            if (refused == null) {
+                refused = new HashSet<>();
+                exchange.putAttachment(REFUSED, refused);
+            }
+            refused.add(key);
+            return new Result(Verdict.PENDING, this);
         }
 
         @Override
         public @Nullable SiteAuthDecision challenge(@NonNull HttpServerExchange exchange) {
+            Long retryAfter = exchange.getAttachment(THROTTLED);
+            if (retryAfter != null) {
+                return ProxyAuthThrottle.refusal(exchange, retryAfter);
+            }
             exchange.getResponseHeaders().put(new HttpString("WWW-Authenticate"),
                 "Basic realm=\"" + this.realm.replace("\"", "") + "\"");
             return SiteAuthDecision.deny(401, "Unauthorized");

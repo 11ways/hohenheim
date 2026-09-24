@@ -8,32 +8,18 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.ManageInstanceBackupResource;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
-import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.auth.server.ZenitAuth;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.csrf.CsrfTokens;
-import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.Map;
@@ -51,7 +37,6 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * ONLY console on the record must reach neither tab, and restore-to-new must stay off
  * the delegated surface entirely.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class InstanceArtifactTabsTest extends HohenheimTestBase {
 
     private static Integer instanceId;
@@ -93,22 +78,11 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
 
         // A delegate holding ONLY console: enough to see the record, not enough for
         // either artifact tab.
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, "artifact-console@hohenheim.local");
-        user.set(UserModel.DISPLAY_NAME, "Console Only");
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        consoleUserId = user.get(UserModel.ID);
+        consoleUserId = ApiSupport.user("artifact-console@hohenheim.local", "Console Only");
         RecordGrants.grant(GrantSubjectType.USER, consoleUserId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.CONSOLE, true);
 
-        Session session = Zenit.getSessionStore().create();
-        session.set(AuthKeys.USER_ID, (long) consoleUserId);
-        session.set(CsrfTokens.TOKEN, ZenitAuth.randomToken());
-        Zenit.getSessionStore().save(session);
-        consoleSession = session.token().secret();
+        consoleSession = sessionFor(consoleUserId).token();
     }
 
     /**
@@ -116,15 +90,14 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
      * actions instead of hand-rolling a second restore button.
      */
     @Test
-    @Order(1)
     void bothTabsScopeTheResourcesRowsToThisRecordAndRelayItsActions() throws Exception {
         // 1. THE ABSENCE: pre-fix both slugs answered 404.
-        HttpResponse<String> snapshots = get(url("snapshots"), sessionToken);
+        HttpResponse<String> snapshots = httpGet(url("snapshots"), sessionToken);
         assertThat(snapshots.statusCode())
             .withFailMessage("step 1: the per-instance snapshots tab does not exist (HTTP %s)",
                 snapshots.statusCode())
             .isEqualTo(200);
-        HttpResponse<String> backups = get(url("backups"), sessionToken);
+        HttpResponse<String> backups = httpGet(url("backups"), sessionToken);
         assertThat(backups.statusCode())
             .withFailMessage("step 1: the per-instance backups tab does not exist (HTTP %s)",
                 backups.statusCode())
@@ -160,10 +133,9 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
      * route as well as on the tab strip.
      */
     @Test
-    @Order(2)
     void aConsoleOnlyDelegateReachesNeitherTab() throws Exception {
         // 1. The delegate genuinely reaches the record -- without this the rest is vacuous.
-        HttpResponse<String> record = get("/manage/instances/" + instanceId, consoleSession);
+        HttpResponse<String> record = httpGet("/manage/instances/" + instanceId, consoleSession);
         assertThat(record.statusCode()).as("step 1: the console delegate sees the record")
             .isEqualTo(200);
 
@@ -176,11 +148,11 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
             .doesNotContain("/page/backups");
 
         // 3. Nor reachable by hand: an unoffered slug 404s.
-        assertThat(get("/manage/instances/" + instanceId + "/page/snapshots", consoleSession)
+        assertThat(httpGet("/manage/instances/" + instanceId + "/page/snapshots", consoleSession)
                 .statusCode())
             .withFailMessage("step 3: the snapshots route is open to a console-only delegate")
             .isEqualTo(404);
-        assertThat(get("/manage/instances/" + instanceId + "/page/backups", consoleSession)
+        assertThat(httpGet("/manage/instances/" + instanceId + "/page/backups", consoleSession)
                 .statusCode())
             .withFailMessage("step 3: the backups route is open to a console-only delegate")
             .isEqualTo(404);
@@ -197,7 +169,6 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
      * a restore-to-new added as a subpage or a bulk action.
      */
     @Test
-    @Order(3)
     void restoreToNewRefusesTheTenantAndStaysOffTheDelegatedSurface() {
         // 1. A resolvable target, so the tenant call reaches the authority instead of
         //    dying on an unresolvable one -- the refusal must be the OPERATOR gate.
@@ -210,52 +181,50 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         Row backup = Models.get(InstanceBackupModel.class).findById(backupId);
         backup.set(InstanceBackupModel.TARGET_ID, target.get(BackupTargetModel.ID));
         Models.get(InstanceBackupModel.class).save(backup);
+        try {
+            // 2. THE CLAIM: the delegate drives restore-to-new directly, bypassing every
+            //    surface -- the authority refuses it BY NAME. Restore-to-new creates an
+            //    instance outside the creation funnel: no create authority, no placement
+            //    decision, no creator grant.
+            long instancesBefore = Models.get(InstanceModel.class).find().count();
+            Throwable[] thrown = new Throwable[1];
+            TenantConduits.as(new UserPrincipal(consoleUserId, "Console Only"),
+                () -> thrown[0] = catchThrowable(() ->
+                    new InstanceBackups().restoreToNew(backupId, "not-yours", null)));
+            assertThat(thrown[0])
+                .withFailMessage("step 2: a tenant-originated restore-to-new was not refused"
+                    + " by the authority -- the missing row action would be the ONLY thing"
+                    + " standing between a delegate and an off-funnel instance")
+                .isInstanceOf(Violations.class);
+            assertThat(((Violations) thrown[0]).all())
+                .as("step 2: and the refusal is the operator-only one, not an incidental"
+                    + " failure that happens to look like a gate")
+                .anyMatch(violation ->
+                    violation.message().key().equals("backup_restore_operator_only"));
+            assertThat(Models.get(InstanceModel.class).find().count())
+                .as("step 2: STATE -- the refused restore created nothing")
+                .isEqualTo(instancesBefore);
 
-        // 2. THE CLAIM: the delegate drives restore-to-new directly, bypassing every
-        //    surface -- the authority refuses it BY NAME. Restore-to-new creates an
-        //    instance outside the creation funnel: no create authority, no placement
-        //    decision, no creator grant.
-        long instancesBefore = Models.get(InstanceModel.class).find().count();
-        Throwable[] thrown = new Throwable[1];
-        TenantConduits.as(new UserPrincipal(consoleUserId, "Console Only"),
-            () -> thrown[0] = catchThrowable(() ->
-                new InstanceBackups().restoreToNew(backupId, "not-yours", null)));
-        assertThat(thrown[0])
-            .withFailMessage("step 2: a tenant-originated restore-to-new was not refused"
-                + " by the authority -- the missing row action would be the ONLY thing"
-                + " standing between a delegate and an off-funnel instance")
-            .isInstanceOf(Violations.class);
-        assertThat(((Violations) thrown[0]).all())
-            .as("step 2: and the refusal is the operator-only one, not an incidental"
-                + " failure that happens to look like a gate")
-            .anyMatch(violation ->
-                violation.message().key().equals("backup_restore_operator_only"));
-        assertThat(Models.get(InstanceModel.class).find().count())
-            .as("step 2: STATE -- the refused restore created nothing")
-            .isEqualTo(instancesBefore);
-
-        // 3. Secondary anchor: the delegated resource offers no row action either, so the
-        //    tenant is never shown a button that could only fail.
-        assertThat(new ManageInstanceBackupResource().rowActions())
-            .withFailMessage("step 3: the delegated backup resource declares a row action;"
-                + " restore-to-new is refused underneath it, so a rendered button here"
-                + " could only fail")
-            .isEmpty();
+            // 3. Secondary anchor: the delegated resource offers no row action either, so the
+            //    tenant is never shown a button that could only fail.
+            assertThat(new ManageInstanceBackupResource().rowActions())
+                .withFailMessage("step 3: the delegated backup resource declares a row action;"
+                    + " restore-to-new is refused underneath it, so a rendered button here"
+                    + " could only fail")
+                .isEmpty();
+        } finally {
+            // Hand the shared backup row back untargeted, so the tab journeys never meet
+            // a target this one introduced, whatever order they run in.
+            Row untargeted = Models.get(InstanceBackupModel.class).findById(backupId);
+            untargeted.set(InstanceBackupModel.TARGET_ID, (Integer) null);
+            Models.get(InstanceBackupModel.class).save(untargeted);
+            Models.get(BackupTargetModel.class).delete(target.get(BackupTargetModel.ID));
+        }
     }
 
     // -- plumbing -----------------------------------------------------------------
 
     private static String url(String slug) {
         return "/admin/instances/" + instanceId + "/page/" + slug;
-    }
-
-    private HttpResponse<String> get(String path, String session) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session)
-            .GET().build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 }

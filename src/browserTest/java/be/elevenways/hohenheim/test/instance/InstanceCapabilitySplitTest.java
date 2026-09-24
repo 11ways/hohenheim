@@ -5,38 +5,27 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceExec;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.GrantAdministration;
 import be.elevenways.zenit.auth.server.GrantAdministration.RecordGrantChange;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.auth.server.ZenitAuth;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.KnownCapabilities;
 import be.elevenways.zenit.common.security.RecordCapabilityDecision;
-import be.elevenways.zenit.common.security.csrf.CsrfTokens;
-import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -60,7 +49,6 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * anchor is asserted through the DISTINCT next-gate violation, which is what separates
  * "the capability gate let this through" from "nothing ran".
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class InstanceCapabilitySplitTest extends HohenheimTestBase {
 
     private static final String PREFIX = "capsplit-";
@@ -77,18 +65,14 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        consoleUserId = tenant("console-only@capsplit.test", "Console Only");
-        powerUserId = tenant("power-only@capsplit.test", "Power Only");
-        managerUserId = tenant("manager@capsplit.test", "Manager");
+        consoleUserId = ApiSupport.user("console-only@capsplit.test", "Console Only");
+        powerUserId = ApiSupport.user("power-only@capsplit.test", "Power Only");
+        managerUserId = ApiSupport.user("manager@capsplit.test", "Manager");
         consolePrincipal = new UserPrincipal(consoleUserId, "Console Only");
         powerPrincipal = new UserPrincipal(powerUserId, "Power Only");
         managerPrincipal = new UserPrincipal(managerUserId, "Manager");
 
-        Session session = Zenit.getSessionStore().create();
-        session.set(be.elevenways.zenit.auth.AuthKeys.USER_ID, (long) consoleUserId);
-        session.set(CsrfTokens.TOKEN, ZenitAuth.randomToken());
-        Zenit.getSessionStore().save(session);
-        consoleSession = session.token().secret();
+        consoleSession = sessionFor(consoleUserId).token();
 
         instanceId = instance(PREFIX + "alpha");
 
@@ -111,17 +95,6 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
     }
 
     // -- fixtures -------------------------------------------------------------
-
-    private static int tenant(String email, String name) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, name);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
-    }
 
     private static int instance(String name) {
         Model instances = Models.get(InstanceModel.class);
@@ -163,15 +136,6 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
             .where(InstanceModel.ID.eq(instanceId)).withTrashed().first();
     }
 
-    private HttpResponse<String> get(String path, String session) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER).build();
-        return client.send(HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session)
-            .build(), HttpResponse.BodyHandlers.ofString());
-    }
-
     // -- the journeys ---------------------------------------------------------
 
     /**
@@ -179,7 +143,6 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
      * matter for security are structural rather than conventional.
      */
     @Test
-    @Order(1)
     void theVocabularyDeclaresExecUnreachableAndTheNarrowVerbsDelegable() {
         // Step 1: every narrow verb the gates name exists and is delegable, so an
         // operator can hand out console ALONE.
@@ -227,7 +190,6 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
      * needed migrating.
      */
     @Test
-    @Order(2)
     void aManageGrantStillCarriesTheFiveVerbsItAlwaysDidAndNothingMore() {
         AccessContext manager = contextOf(managerPrincipal);
 
@@ -258,12 +220,16 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
         // can hand out manage-minus-one.
         RecordGrants.grant(GrantSubjectType.USER, managerUserId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.DESTROY, false);
-        assertThat(contextOf(managerPrincipal)
-                .capabilityDecision(InstanceModel.MODEL_ID, instanceId, HohenheimAccess.DESTROY))
-            .as("step 4: an explicit deny must beat the manage umbrella")
-            .isEqualTo(RecordCapabilityDecision.GRANT_DENIED);
-        RecordGrants.revoke(GrantSubjectType.USER, managerUserId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.DESTROY);
+        try {
+            assertThat(contextOf(managerPrincipal)
+                    .capabilityDecision(InstanceModel.MODEL_ID, instanceId, HohenheimAccess.DESTROY))
+                .as("step 4: an explicit deny must beat the manage umbrella")
+                .isEqualTo(RecordCapabilityDecision.GRANT_DENIED);
+        } finally {
+            // In a finally: a deny left behind would decide what another journey sees.
+            RecordGrants.revoke(GrantSubjectType.USER, managerUserId, InstanceModel.MODEL_ID,
+                instanceId, HohenheimAccess.DESTROY);
+        }
         assertThat(contextOf(managerPrincipal)
                 .hasCapability(InstanceModel.MODEL_ID, instanceId, HohenheimAccess.DESTROY))
             .as("step 4: revoking the deny restores the umbrella exactly").isTrue();
@@ -271,7 +237,6 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
 
     /** POSITIVE ANCHOR: the console-only delegate really can see and console the box. */
     @Test
-    @Order(3)
     void theConsoleDelegateCanSeeTheInstanceAndReachItsConsole() throws Exception {
         AccessContext delegate = contextOf(consolePrincipal);
 
@@ -284,7 +249,7 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
 
         // Step 2: which is what makes /manage reachable and the record listed. The list
         // CONTENT is the assertion; a status-only check would pass on an empty list.
-        HttpResponse<String> list = get("/manage/instances", consoleSession);
+        HttpResponse<String> list = httpGet("/manage/instances", consoleSession);
         assertThat(list.statusCode()).as("step 2: the scoped list renders").isEqualTo(200);
         assertThat(list.body())
             .as("step 2: a console-only delegate sees the instance it may console")
@@ -311,7 +276,6 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
      * destroy or exec -- asserted on the resulting STATE, not on a status code.
      */
     @Test
-    @Order(4)
     void theConsoleDelegateCannotChangeConfigDestroyOrExec() throws Exception {
         String originalName = storedInstance().get(InstanceModel.NAME);
 
@@ -362,7 +326,7 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
         // Step 5: the exec TAB is not reachable either -- the admin panel gate answers
         // first here, which is stated rather than relied on: the enforcing check is the
         // funnel in step 4 plus InstanceExecPage.visibleFor.
-        assertThat(get("/admin/instances/" + instanceId + "/page/exec", consoleSession)
+        assertThat(httpGet("/admin/instances/" + instanceId + "/page/exec", consoleSession)
                 .statusCode())
             .as("step 5: the exec tab is not reachable for the delegate")
             .isNotEqualTo(200);
@@ -374,7 +338,6 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
      * refusal that still wrote the grant would pass a message-only test.
      */
     @Test
-    @Order(5)
     void theConsoleDelegateCannotDelegateConfigDestroyOrExec() {
         AccessContext delegate = contextOf(consolePrincipal);
 
@@ -440,7 +403,6 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
 
     /** The power-only delegate: the mirror journey, so neither verb is a synonym. */
     @Test
-    @Order(6)
     void thePowerDelegateCanPowerButCannotConsole() {
         // Step 1: POSITIVE ANCHOR -- the power gate is passed and the refusal that
         // follows belongs to host admission, a DIFFERENT gate entirely.
@@ -485,7 +447,6 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
      * completely broken instance tier.
      */
     @Test
-    @Order(7)
     void anAdministratorStillHoldsEveryVerbIncludingExec() {
         // The suite's seeded admin holds "*", which is the hohenheim admin permission.
         Row admin = AuthModels.users().find()
@@ -509,30 +470,42 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
         // Step 2: and the tenant-write invariant never fires for an operator, so the
         // config edit the delegates were refused genuinely lands.
         Row row = Models.get(InstanceModel.class).findById(instanceId);
+        String originalName = row.get(InstanceModel.NAME);
         row.set(InstanceModel.NAME, PREFIX + "renamed-by-admin");
         Models.get(InstanceModel.class).save(row);
-        assertThat(storedInstance().get(InstanceModel.NAME))
-            .as("step 2 (STATE): the operator's edit landed")
-            .isEqualTo(PREFIX + "renamed-by-admin");
+        try {
+            assertThat(storedInstance().get(InstanceModel.NAME))
+                .as("step 2 (STATE): the operator's edit landed")
+                .isEqualTo(PREFIX + "renamed-by-admin");
+        } finally {
+            // The console journey finds the record by its seeded name in the tenant list.
+            Row renamed = Models.get(InstanceModel.class).findById(instanceId);
+            renamed.set(InstanceModel.NAME, originalName);
+            Models.get(InstanceModel.class).save(renamed);
+        }
 
         // Step 3: an admin may plant exec deliberately (the operator choice the plan
         // describes) -- and the recipient STILL cannot pass it on.
         RecordGrants.grant(GrantSubjectType.USER, consoleUserId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.EXEC, true);
-        assertThat(contextOf(consolePrincipal)
-                .hasCapability(InstanceModel.MODEL_ID, instanceId, HohenheimAccess.EXEC))
-            .as("step 3: an operator-planted exec grant is effective").isTrue();
-        Throwable relay = catchThrowable(() -> GrantAdministration.requireAuthorizedRecordDiff(
-            contextOf(consolePrincipal), InstanceModel.MODEL_ID, instanceId, "grants",
-            List.of(new RecordGrantChange(GrantSubjectType.USER, powerUserId, HohenheimAccess.EXEC,
-                Boolean.TRUE))));
-        assertThat(refusalTargets(relay))
-            .as("step 3: a HOLDER of exec still cannot re-delegate it")
-            .contains("record_delegate");
-        assertThat(contextOf(powerPrincipal)
-                .hasCapability(InstanceModel.MODEL_ID, instanceId, HohenheimAccess.EXEC))
-            .as("step 3 (STATE): and no exec row was written for the third party").isFalse();
-        RecordGrants.revoke(GrantSubjectType.USER, consoleUserId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.EXEC);
+        try {
+            assertThat(contextOf(consolePrincipal)
+                    .hasCapability(InstanceModel.MODEL_ID, instanceId, HohenheimAccess.EXEC))
+                .as("step 3: an operator-planted exec grant is effective").isTrue();
+            Throwable relay = catchThrowable(() -> GrantAdministration.requireAuthorizedRecordDiff(
+                contextOf(consolePrincipal), InstanceModel.MODEL_ID, instanceId, "grants",
+                List.of(new RecordGrantChange(GrantSubjectType.USER, powerUserId,
+                    HohenheimAccess.EXEC, Boolean.TRUE))));
+            assertThat(refusalTargets(relay))
+                .as("step 3: a HOLDER of exec still cannot re-delegate it")
+                .contains("record_delegate");
+            assertThat(contextOf(powerPrincipal)
+                    .hasCapability(InstanceModel.MODEL_ID, instanceId, HohenheimAccess.EXEC))
+                .as("step 3 (STATE): and no exec row was written for the third party").isFalse();
+        } finally {
+            // In a finally: the console journey asserts the delegate holds no exec.
+            RecordGrants.revoke(GrantSubjectType.USER, consoleUserId, InstanceModel.MODEL_ID,
+                instanceId, HohenheimAccess.EXEC);
+        }
     }
 }

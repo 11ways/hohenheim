@@ -151,14 +151,13 @@ public final class StackVolumes {
         if (stackName.equals(labels.get(StackInstances.LEGACY_LABEL_STACK))) {
             return true;
         }
+        // Both owner shapes are asked through the ONE ownership test, controller token
+        // included: another controller's stack or instance #N is not ours to remove.
         OwnerLabels.Owner owner = OwnerLabels.parse(labels);
-        if (owner == null) {
-            return false;
+        if (OwnerLabels.matches(owner, StackModel.MODEL_ID, stackId)) {
+            return true;
         }
-        if (owner.model().equals(StackModel.MODEL_ID)) {
-            return owner.id().equals(String.valueOf(stackId));
-        }
-        Integer instanceId = OwnerLabels.instanceIdOf(owner);
+        Integer instanceId = OwnerLabels.isOurs(owner) ? OwnerLabels.instanceIdOf(owner) : null;
         if (instanceId == null) {
             return false;
         }

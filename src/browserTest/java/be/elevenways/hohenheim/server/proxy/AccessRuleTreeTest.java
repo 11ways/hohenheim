@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.hohenheim.server.auth.SiteAuthGate;
 import be.elevenways.hohenheim.server.proxy.auth.CredentialOwner;
+import be.elevenways.hohenheim.server.proxy.auth.ProxyAuthThrottle;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.session.InMemorySessionStore;
@@ -17,6 +18,7 @@ import io.undertow.util.Headers;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -51,6 +53,79 @@ class AccessRuleTreeTest {
         list.set(AccessListModel.SATISFY, AccessListModel.SATISFY_ANY);
         Models.get(AccessListModel.class).save(list);
         listId = list.get(AccessListModel.ID);
+    }
+
+    /** Every journey starts from a full verification budget: the throttle is process-wide. */
+    @BeforeEach
+    void fullBudget() {
+        ProxyAuthThrottle.clearForTests();
+    }
+
+    /**
+     * A basic_auth leaf holds no session, so it bounds its own argon2 work: a verified pair is
+     * remembered briefly, every verification that runs spends a ProxyAuthThrottle token, a
+     * spent budget answers 429, and a recompiled tree (a changed password) remembers nothing.
+     */
+    @Test
+    void basicLeafRemembersVerifiedCredentialsAndThrottlesVerification() {
+        String hash = BasicCredentials.hashIfNeeded("s3cret");
+        AccessRuleTree tree = tree(AccessListModel.SATISFY_ANY, List.of(credentialLeaf("operator", hash)));
+        String client = "198.51.100.7";
+
+        // 1. The right pair verifies once and passes.
+        assertThat(verdict(tree, client, basic("operator", "s3cret")))
+            .as("step 1: the right credentials pass").isEqualTo(AccessRuleTree.Verdict.PASS);
+
+        // 2. Spend the rest of this client's budget. The remembered pair still passes, which
+        //    it could not if it were verified again: a verification now would be refused.
+        for (int i = 1; i < ProxyAuthThrottle.POLICY.requests(); i++) {
+            assertThat(ProxyAuthThrottle.spendFor(client, 1)).as("step 2: token %d is available", i).isNull();
+        }
+        assertThat(verdict(tree, client, basic("operator", "s3cret")))
+            .as("step 2: a remembered pair passes without spending a token").isEqualTo(AccessRuleTree.Verdict.PASS);
+
+        // 3. A pair that is not remembered needs a verification, the budget is spent, and the
+        //    answer is 429 with Retry-After rather than another password prompt.
+        HttpServerExchange throttled = exchange(basic("operator", "guess"));
+        AccessRuleTree.Result throttledResult = tree.evaluate(throttled, client);
+        assertThat(throttledResult.verdict()).as("step 3: the leaf stays pending").isEqualTo(AccessRuleTree.Verdict.PENDING);
+        SiteAuthDecision tooMany = throttledResult.refusal(throttled);
+        assertThat(((SiteAuthDecision.Deny) tooMany).statusCode()).as("step 3: answered 429").isEqualTo(429);
+        assertThat(throttled.getResponseHeaders().getFirst(Headers.RETRY_AFTER))
+            .as("step 3: carrying Retry-After").isNotNull();
+        assertThat(throttled.getResponseHeaders().getFirst("WWW-Authenticate"))
+            .as("step 3: and no password prompt").isNull();
+
+        // 4. The budget is per client: another client still gets an ordinary 401 for a wrong pair.
+        HttpServerExchange other = exchange(basic("operator", "guess"));
+        AccessRuleTree.Result otherResult = tree.evaluate(other, "198.51.100.8");
+        assertThat(((SiteAuthDecision.Deny) otherResult.refusal(other)).statusCode())
+            .as("step 4: another client's budget is untouched").isEqualTo(401);
+
+        // 5. A failed verification spends a token, and re-evaluating the SAME request (the
+        //    gate's pass loop) never verifies that pair again.
+        ProxyAuthThrottle.clearForTests();
+        for (int i = 1; i < ProxyAuthThrottle.POLICY.requests(); i++) {
+            ProxyAuthThrottle.spendFor(client, 1);
+        }
+        HttpServerExchange failing = exchange(basic("operator", "wrong"));
+        assertThat(tree.evaluate(failing, client).verdict())
+            .as("step 5: a wrong pair is pending").isEqualTo(AccessRuleTree.Verdict.PENDING);
+        AccessRuleTree.Result again = tree.evaluate(failing, client);
+        assertThat(((SiteAuthDecision.Deny) again.refusal(failing)).statusCode())
+            .as("step 5: the same request re-evaluated is still a 401, not a second spend").isEqualTo(401);
+        assertThat(ProxyAuthThrottle.spendFor(client, 1))
+            .as("step 5: the one failed verification spent the last token").isNotNull();
+
+        // 6. A changed password recompiles the tree, and the new leaf remembers nothing: the old
+        //    pair is refused, the new one verifies.
+        ProxyAuthThrottle.clearForTests();
+        AccessRuleTree changed = tree(AccessListModel.SATISFY_ANY,
+            List.of(credentialLeaf("operator", BasicCredentials.hashIfNeeded("n3w-secret"))));
+        assertThat(verdict(changed, client, basic("operator", "s3cret")))
+            .as("step 6: the old password is not remembered across the change").isEqualTo(AccessRuleTree.Verdict.PENDING);
+        assertThat(verdict(changed, client, basic("operator", "n3w-secret")))
+            .as("step 6: the new password verifies").isEqualTo(AccessRuleTree.Verdict.PASS);
     }
 
     @Test

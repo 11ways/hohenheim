@@ -1,24 +1,21 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.host.HostPreflight;
-import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -37,13 +34,16 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class InstanceStatsChartPlotTest extends HohenheimTestBase {
 
+    /** Bounded wait: the stats stream is pumped by a thread of its own. */
+    private static final Duration WAIT = Duration.ofSeconds(15);
+
     private static int instanceId;
     private static String handle;
 
     @BeforeAll
     static void seed() {
         FakeNativeDaemons.register();
-        int hostId = fakeHost("statschart-host");
+        int hostId = HostFixtures.admittedIncusHost("statschart-host");
 
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, "statschart-web");
@@ -78,7 +78,7 @@ class InstanceStatsChartPlotTest extends HohenheimTestBase {
             stream.push(sample(1_000_000_000L, 10_000_000_000L, 300, 400) + "\n");
             stream.push(sample(1_100_000_000L, 10_400_000_000L, 500, 600) + "\n");
             stream.push(sample(1_200_000_000L, 10_800_000_000L, 700, 800) + "\n");
-            await("step 1: three samples reached the ring", () -> seen.size() >= 3);
+            Poll.until("step 1: three samples reached the ring", WAIT, () -> seen.size() >= 3);
             assertThat(InstanceStats.history(instanceId))
                 .as("step 1: and the ring retained them for the next reader")
                 .hasSizeGreaterThanOrEqualTo(3);
@@ -115,7 +115,7 @@ class InstanceStatsChartPlotTest extends HohenheimTestBase {
             //    changed path proves socket, admission, fold and repaint in one assertion.
             String before = lineOf(0);
             stream.push(sample(2_000_000_000L, 12_000_000_000L, 900, 1000) + "\n");
-            await("step 4: the pushed sample repainted the cpu series",
+            Poll.until("step 4: the pushed sample repainted the cpu series", WAIT,
                 () -> !before.equals(lineOf(0)));
         } finally {
             viewer.close();
@@ -136,39 +136,5 @@ class InstanceStatsChartPlotTest extends HohenheimTestBase {
             + "\"memory_stats\":{\"usage\":536870912,\"limit\":1073741824},"
             + "\"networks\":{\"eth0\":{\"rx_bytes\":" + rx + ",\"tx_bytes\":" + tx + "},"
             + "\"eth1\":{\"rx_bytes\":7,\"tx_bytes\":9}}}";
-    }
-
-    /** An admitted, tenant-accepting host the fake native kind answers for. */
-    private static int fakeHost(String name) {
-        Row row = Models.get(ServerModel.class).createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        Models.get(ServerModel.class).save(row);
-        HostFixtures.acknowledgePosture(row);
-        HostPreflight.store(name, new HostPreflight.Report(List.of(
-            new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon"),
-            new HostPreflight.Check(IncusPreflight.KERNEL_LANE_CHECK,
-                HostPreflight.STATUS_PASS, true, "fake kernel-truth lane")),
-            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
-        return Models.get(ServerModel.class).findByName(name).get(ServerModel.ID);
-    }
-
-    /** Bounded wait: the stats stream is pumped by a thread of its own. */
-    private static void await(String what, BooleanSupplier condition) {
-        long deadline = Now.millis() + 15_000;
-        while (Now.millis() < deadline) {
-            if (condition.getAsBoolean()) {
-                return;
-            }
-            try {
-                Thread.sleep(50);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
-        throw new AssertionError("Timed out waiting for: " + what);
     }
 }

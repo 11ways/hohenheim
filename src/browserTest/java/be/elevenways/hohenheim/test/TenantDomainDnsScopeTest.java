@@ -11,36 +11,24 @@ import be.elevenways.hohenheim.server.cms.ManageDnsRecordResource;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.schema.TableView;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.data.RecordSourceQuery;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Principal;
-import be.elevenways.zenit.common.security.csrf.CsrfTokens;
-import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer.OrderAnnotation;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
-import java.net.URI;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -57,7 +45,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * surface, and cannot reach past the delegated column set or the DNS type allow-list on ANY
  * writer -- including a direct model save, which no form or resource method sees.
  */
-@TestMethodOrder(OrderAnnotation.class)
 class TenantDomainDnsScopeTest extends HohenheimTestBase {
 
     private static final String ZONE_ORIGIN = "tenantscope.test";
@@ -156,26 +143,16 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         recordModel.save(foreignRecord);
         foreignRecordId = foreignRecord.get(DnsRecordModel.ID);
 
-        Row tenant = AuthModels.users().createEmptyRow();
-        tenant.set(UserModel.EMAIL, "tenant-scope@hohenheim.local");
-        tenant.set(UserModel.DISPLAY_NAME, "Scope Tenant");
-        tenant.set(UserModel.ENABLED, true);
-        tenant.set(UserModel.CREATED_AT, Now.instant());
-        tenant.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(tenant);
-        tenantId = tenant.get(UserModel.ID);
+        tenantId = ApiSupport.user("tenant-scope@hohenheim.local", "Scope Tenant");
         tenantPrincipal = new UserPrincipal(tenantId, "Scope Tenant");
 
         Row admin = AuthModels.users().find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         adminPrincipal = new UserPrincipal(admin.get(UserModel.ID), "Test Admin");
 
-        Session session = Zenit.getSessionStore().create();
-        session.set(AuthKeys.USER_ID, tenantId.longValue());
-        tenantCsrf = ZenitAuth.randomToken();
-        session.set(CsrfTokens.TOKEN, tenantCsrf);
-        Zenit.getSessionStore().save(session);
-        tenantSession = session.token().secret();
+        TestSession session = sessionFor(tenantId);
+        tenantCsrf = session.csrf();
+        tenantSession = session.token();
 
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, ownSiteId,
             HohenheimAccess.MANAGE, true);
@@ -195,15 +172,6 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
 
     // --- HTTP helpers -----------------------------------------------------------------
 
-    private HttpResponse<String> get(String path, String session) throws Exception {
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest.Builder request = HttpRequest.newBuilder().uri(URI.create(baseUrl() + path));
-        if (session != null) {
-            request.header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session);
-        }
-        return client.send(request.build(), HttpResponse.BodyHandlers.ofString());
-    }
-
     /**
      * A dyndns2 update, credential in HTTP Basic auth.
      *
@@ -216,36 +184,21 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
     private HttpResponse<String> nicUpdate(String token, String query) throws Exception {
         String basic = Base64.getEncoder().encodeToString(
             ("dyndns:" + token).getBytes(StandardCharsets.UTF_8));
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
-        return client.send(HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + "/nic/update?" + query))
+        return sendRequest(requestTo("/nic/update?" + query)
             .header("Authorization", "Basic " + basic)
-            .build(), HttpResponse.BodyHandlers.ofString());
-    }
-
-    private HttpResponse<String> post(String path, String body, String session, String csrf,
-                                      String contentType) throws Exception {
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
-            .header("Content-Type", contentType)
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session)
-            .header("X-Csrf-Token", csrf)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
+            .GET());
     }
 
     private HttpResponse<String> tenantGet(String path) throws Exception {
-        return get(path, tenantSession);
+        return httpGet(path, tenantSession);
     }
 
     private HttpResponse<String> tenantPost(String path, String body) throws Exception {
-        return post(path, body, tenantSession, tenantCsrf, "application/x-www-form-urlencoded");
+        return httpPostForm(path, body, tenantSession, tenantCsrf);
     }
 
     private HttpResponse<String> tenantDry(String path, String body) throws Exception {
-        return post(path, body, tenantSession, tenantCsrf, "application/dry");
+        return httpPostDry(path, body, tenantSession, tenantCsrf);
     }
 
     private static Row domainByHostname(String hostname) {
@@ -261,7 +214,6 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
      * scoping did not cost the feature.
      */
     @Test
-    @Order(1)
     void aTenantBindsEditsAndUnbindsHostnamesOnTheSiteItManages() throws Exception {
         // 1. The delegated list shows exactly the managed site's domains.
         HttpResponse<String> list = tenantGet("/manage/domains");
@@ -310,7 +262,6 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
      * independent readers and BOTH have to answer missing.
      */
     @Test
-    @Order(2)
     void anotherTenantsDomainIsMissingThroughTheResourceAndThroughTheSource() throws Exception {
         // 1. The resource route: missing, not forbidden, and leaking nothing in the body.
         HttpResponse<String> foreign = tenantGet("/manage/domains/" + foreignDomainId);
@@ -344,7 +295,6 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
      * writes nothing at all.
      */
     @Test
-    @Order(3)
     void aForgedSubmitCannotSetFrozenColumnsOrClaimAnotherTenantsSite() throws Exception {
         // 1. Every frozen column at once, in one direct POST that never renders a form.
         assertThat(tenantPost("/manage/domains/new",
@@ -404,7 +354,6 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
      * tenant-scoped and not a blanket ban.
      */
     @Test
-    @Order(4)
     void theFrozenColumnsAreRefusedOnADirectModelSaveAndAllowedForAnAdmin() {
         Model model = Models.get(SiteDomainModel.class);
 
@@ -494,7 +443,6 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
      * who manages a row stay refused; the same writes as an operator are unaffected.
      */
     @Test
-    @Order(5)
     void tenantDnsWritesNeedNameAuthorityAndStayInsideTheTypeAllowList() {
         Model model = Models.get(DnsRecordModel.class);
 
@@ -602,7 +550,6 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
      * own dnserr is what a mistakenly-dynamic non-address record now gets instead of a 500.
      */
     @Test
-    @Order(6)
     void dynamicDnsKeepsWorkingAndANonAddressDynamicRecordAnswersDnserr() throws Exception {
         Model model = Models.get(DnsRecordModel.class);
 
@@ -696,7 +643,6 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
      * the record/certificate tiers answer only for what the tenant is scoped to.
      */
     @Test
-    @Order(7)
     void everyZoneSurfaceStaysClosedAndTheScopedTiersLeakNothing() throws Exception {
         String matchAll = Zenit.DRY.stringify(RecordSourceQuery.matchAll());
 
@@ -733,13 +679,12 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         //    operator's own reads through the source cannot resolve it.
         Row account = Models.get(CertificateModel.class).find()
             .where(CertificateModel.PROVIDER.eq(CertificateModel.PROVIDER_ACME_ACCOUNT)).first();
-        HttpResponse<String> adminAccount = get(
-            "/zn/records/hohenheim.certificate/item/" + account.get(CertificateModel.ID),
-            sessionToken);
+        HttpResponse<String> adminAccount = adminGet(
+            "/zn/records/hohenheim.certificate/item/" + account.get(CertificateModel.ID));
         assertThat(adminAccount.statusCode())
             .as("the ACME account key row is not a resolvable certificate").isEqualTo(404);
-        HttpResponse<String> adminCerts = post("/zn/records/hohenheim.certificate/query",
-            matchAll, sessionToken, csrfToken, "application/dry");
+        HttpResponse<String> adminCerts = adminPostDry("/zn/records/hohenheim.certificate/query",
+            matchAll);
         assertThat(adminCerts.statusCode()).isEqualTo(200);
         assertThat(adminCerts.body())
             .contains("Foreign tenant certificate")
@@ -798,7 +743,6 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
      * fourth peer must not multiply this number by the number of times it is asked.
      */
     @Test
-    @Order(8)
     void theDomainScopeStaysWithinTheManagedSiteQueryBudget() throws Exception {
         RecordGrantFinds.Result finds = RecordGrantFinds.during(() ->
             assertThat(tenantGet("/manage/domains").statusCode()).isEqualTo(200));
@@ -843,7 +787,6 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
      * the resource route and the record source.
      */
     @Test
-    @Order(9)
     void aTenantAuthorsEditsAndDeletesRecordsUnderTheHostnamesItServes() throws Exception {
         Model model = Models.get(DnsRecordModel.class);
 
@@ -933,7 +876,6 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
      * and the delegated surface never carries key material or a way to obtain it.
      */
     @Test
-    @Order(10)
     void aTenantSeesOnlyItsOwnCertificatesAndNeverAPrivateKey() throws Exception {
         var certModel = Models.get(CertificateModel.class);
 
@@ -993,7 +935,6 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
      * explicitly.
      */
     @Test
-    @Order(11)
     void searchingAHostedOriginReturnsItsMatchesAndNoOtherZonesApex() {
         var zoneModel = Models.get(DnsZoneModel.class);
         var recordModel = Models.get(DnsRecordModel.class);
@@ -1010,6 +951,10 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         searchRecord(recordModel, outerId, "www", "10.5.0.74");
         Row aliasOuter = searchAlias(recordModel, outerId, "alias-outer", "searchscope.test");
         Row aliasNested = searchAlias(recordModel, outerId, "alias-nested", "sub.searchscope.test");
+        // The search rewrite resolves the typed name in the SERVED primary view, which every
+        // production zone writer (DnsZoneResource) reloads on commit; these zones were written
+        // straight through the model, so they are published the same way.
+        DnsZoneStore.INSTANCE.reload();
 
         try {
             // 1. A term EQUAL to a hosted origin: the genuine value hit comes back...
@@ -1039,9 +984,10 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
                 .as("an ordinary absolute name still resolves to its stored relative owner")
                 .contains("www");
 
-            // 5. And the term is resolved through an INDEXED origin lookup rather than a walk
-            //    over every hosted zone: the rewrite used to read the whole dns_zones table on
-            //    every searched render, including zones the caller cannot see.
+            // 5. And the term is resolved in the served primary view plus one re-read of the
+            //    matched zone rather than a walk over every hosted zone: the rewrite used to
+            //    read the whole dns_zones table on every searched render, including zones the
+            //    caller cannot see.
             assertThat(zoneModel.find().count())
                 .as("the budget below is only meaningful against several hosted zones")
                 .isGreaterThanOrEqualTo(4);

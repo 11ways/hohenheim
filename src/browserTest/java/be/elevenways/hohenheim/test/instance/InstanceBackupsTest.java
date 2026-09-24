@@ -10,12 +10,11 @@ import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -31,7 +30,6 @@ import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -188,7 +186,7 @@ class InstanceBackupsTest {
                 .where(InstanceModel.ID.eq(instanceId))
                 .assign(InstanceModel.BACKUP_TARGET_ID, broken.get(BackupTargetModel.ID))
                 .updateAll();
-            int viewerId = tenant("viewer@backup-gate.test", "Viewer");
+            int viewerId = ApiSupport.user("viewer@backup-gate.test", "Viewer");
             RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceId,
                 HohenheimAccess.VIEW, true);
             UserPrincipal viewer = new UserPrincipal(viewerId, "Viewer");
@@ -239,7 +237,7 @@ class InstanceBackupsTest {
             int backupId = backups.backupNow(instanceId, targetId, target);
             Row backup = Models.get(InstanceBackupModel.class).findById(backupId);
 
-            int managerId = tenant("manager@backup-restore.test", "Manager");
+            int managerId = ApiSupport.user("manager@backup-restore.test", "Manager");
             RecordGrants.grant(GrantSubjectType.USER, managerId, InstanceModel.MODEL_ID, instanceId,
                 HohenheimAccess.MANAGE, true);
             UserPrincipal manager = new UserPrincipal(managerId, "Manager");
@@ -599,17 +597,6 @@ class InstanceBackupsTest {
             keys.append(violation.message().key()).append(' ');
         }
         return keys.toString();
-    }
-
-    private static int tenant(String email, String name) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, name);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
     }
 
     private static int instanceRecord(String name, int serverId) {

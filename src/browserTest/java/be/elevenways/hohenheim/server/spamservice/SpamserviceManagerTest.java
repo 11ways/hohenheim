@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.spamservice;
 
 import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.process.ProcessGroupSupport;
+import be.elevenways.hohenheim.test.Poll;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
@@ -17,12 +18,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.UnaryOperator;
@@ -247,6 +250,9 @@ class SpamserviceManagerTest {
     @Test
     void failedProcessGroupCleanupBlocksEveryRestart() throws Exception {
         List<List<String>> commands = new ArrayList<>();
+        ScheduledThreadPoolExecutor lifecycle = new ScheduledThreadPoolExecutor(1, runnable ->
+            Thread.ofPlatform().daemon().name("spamservice-manager-test").unstarted(runnable));
+        lifecycle.setRemoveOnCancelPolicy(true);
         ProcessGroupSupport.Operator failedCleanup = new ProcessGroupSupport.Operator() {
             @Override public ProcessGroupSupport.SignalResult signal(SystemUsers.RunAsUser runAs,
                                                                       long processGroupId,
@@ -273,13 +279,21 @@ class SpamserviceManagerTest {
             () -> new ByteArrayInputStream("artifact".getBytes(StandardCharsets.UTF_8)), launcher,
             (base, process, nonce, timeout, cancelled) -> false, (path, runAs) -> {},
             new RecordingSink(), () -> this.temp.resolve("blocked-cleanup"), () -> {},
-            port -> {}, scheduler());
+            port -> {}, lifecycle);
         try {
             manager.start();
             await(() -> "failed".equals(manager.snapshot().state()), 5_000);
             assertThat(manager.snapshot().pid()).isNotNull();
-            Thread.sleep(1_200);
-            assertThat(commands).hasSize(2);
+            // "Nothing restarts" proven on the scheduler itself instead of after a fixed
+            // sleep: every restart rides a scheduled retry on this executor, so once the
+            // work already handed to it has run, an empty queue means none is pending.
+            lifecycle.submit(() -> { }).get(5, TimeUnit.SECONDS);
+            assertThat(lifecycle.getQueue())
+                .as("a blocked cleanup leaves no restart scheduled")
+                .isEmpty();
+            assertThat(commands)
+                .as("only the migration and the one server launch ever ran")
+                .hasSize(2);
         } finally {
             manager.shutdown();
         }
@@ -420,12 +434,9 @@ class SpamserviceManagerTest {
         exchange.close();
     }
 
-    private static void await(Check condition, long timeoutMs) throws Exception {
-        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
-        while (!condition.ok() && System.nanoTime() < deadline) {
-            Thread.sleep(20);
-        }
-        assertThat(condition.ok()).isTrue();
+    private static void await(Check condition, long timeoutMs) {
+        Poll.until("the manager reaches the awaited condition", Duration.ofMillis(timeoutMs),
+            Duration.ofMillis(20), condition::ok);
     }
 
     private final class RecordingLauncher implements SpamserviceManager.ProcessLauncher {

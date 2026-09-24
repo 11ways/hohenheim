@@ -221,7 +221,7 @@ public final class UidMappedNetns implements AutoCloseable {
     }
 
     private static NftRunner.Result run(List<String> argv, String stdin) {
-        return NftRunner.Sudo.execute(argv, stdin, COMMAND_TIMEOUT_SECONDS);
+        return NftRunner.Result.of(argv, stdin, COMMAND_TIMEOUT_SECONDS);
     }
 
     private record Range(int start, int count) {}

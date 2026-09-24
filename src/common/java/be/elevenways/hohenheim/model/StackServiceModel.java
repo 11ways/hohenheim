@@ -240,12 +240,10 @@ public class StackServiceModel extends Model {
         // one layer down at deploy.
         //
         // Remove hooks fire ONCE for the whole delete with a CRITERIA-only context
-        // (getRow() is null) -- for delete(id), criteria deletes and deleteAll alike. The
-        // doomed ids are therefore read in the BEFORE hook and released in the AFTER hook;
-        // an afterRemove-only hook reading getRow() releases nothing. This stays so a
-        // pre-lowering service's leftover claims are released when its row goes.
-        SCHEMA.addBeforeRemoveHook(PortLedger::captureDoomedOwners);
-        SCHEMA.addAfterRemoveHook(PortLedger::releaseDoomedOwners);
+        // (getRow() is null) -- for delete(id), criteria deletes and deleteAll alike, which
+        // PortLedger.parkClaimsOnRemove handles. This stays so a pre-lowering service's
+        // leftover claims are released when its row goes.
+        PortLedger.parkClaimsOnRemove(SCHEMA);
     }
 
     /** All services of a stack, declaration order by id. */

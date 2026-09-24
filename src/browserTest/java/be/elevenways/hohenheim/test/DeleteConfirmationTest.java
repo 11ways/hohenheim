@@ -301,7 +301,7 @@ class DeleteConfirmationTest {
             assertThat(local).as("step 5: the local host row exists").isNotNull();
             assertThat(local.get(ServerModel.NAME))
                 .as("step 5: and it is the reserved local name")
-                .isEqualTo(ServerService.LOCAL);
+                .isEqualTo(ServerService.LOCAL_HOST_NAME);
             assertThat(servers.deleteUnavailableReason(local, operator))
                 .as("step 5: the local host explains itself instead of failing on click")
                 .isNotNull()

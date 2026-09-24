@@ -1,28 +1,27 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
+import java.time.Duration;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -49,38 +48,30 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class InstanceStatsLiveTest {
 
+    /** The interval of every wait here: each probe is a daemon or database round trip. */
+    private static final Duration POLL_INTERVAL = Duration.ofMillis(200);
+
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static PrivateNetns netns;
 
     @BeforeAll
     static void setUp() throws Exception {
-        File db = File.createTempFile("hohenheim-instance-stats-live-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
         // ONE database per test class: the controller identity (and therefore every
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
-        if (PrivateNetns.available()) {
-            netns = new PrivateNetns();
-            WorkloadNetworkPolicy.overrideForTest(netns.enforcingPolicy());
-        }
+        netns = PrivateNetns.installEnforcing();
     }
 
     @AfterAll
     static void tearDown() {
         InstanceStats.shutdown();
-        WorkloadNetworkPolicy.overrideForTest(null);
-        if (netns != null) {
-            netns.close();
-            netns = null;
-        }
+        PrivateNetns.uninstall(netns);
+        netns = null;
     }
 
     @Test
@@ -88,7 +79,7 @@ class InstanceStatsLiveTest {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
-        LiveLane.requireImage(docker, "alpine:latest");
+        LiveLane.requireImage(docker, TestImages.ALPINE);
         LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: the instance tier refuses to deploy unprotected");
 
@@ -98,8 +89,7 @@ class InstanceStatsLiveTest {
                 HostFixtures.admitLocal();
                 // A busy loop, so the CPU reading has something real to report.
                 Map<String, Object> settings = new LinkedHashMap<>();
-                settings.put("image", "alpine");
-                settings.put("tag", "latest");
+                settings.put("image", TestImages.ALPINE);
                 // The command setting splits on whitespace, so the burn loop carries none.
                 settings.put("command", "sh -c yes>/dev/null");
                 int id = instanceRecord("stats-live", settings);
@@ -113,7 +103,8 @@ class InstanceStatsLiveTest {
                 try {
                     // 1. A viewer attaches and real samples arrive within a few seconds.
                     firstView = InstanceStats.subscribe(id, first::add);
-                    waitFor(() -> first.size() >= 3, 25_000);
+                    Poll.until("step 1: the daemon's stats stream really delivers samples",
+                        Duration.ofMillis(25_000), POLL_INTERVAL, () -> first.size() >= 3);
                     assertThat(first.size())
                         .as("step 1: the daemon's stats stream really delivers samples")
                         .isGreaterThanOrEqualTo(3);
@@ -140,7 +131,8 @@ class InstanceStatsLiveTest {
                         .as("step 3: a joining viewer is replayed the retained ring")
                         .isGreaterThanOrEqualTo(3);
                     int beforeShared = first.size();
-                    waitFor(() -> first.size() > beforeShared, 15_000);
+                    Poll.until("step 3: and the original viewer keeps receiving (one shared stream)",
+                        Duration.ofMillis(15_000), POLL_INTERVAL, () -> first.size() > beforeShared);
                     assertThat(first.size())
                         .as("step 3: and the original viewer keeps receiving (one shared stream)")
                         .isGreaterThan(beforeShared);
@@ -173,18 +165,6 @@ class InstanceStatsLiveTest {
     }
 
     // -- plumbing -------------------------------------------------------------
-
-    private static void waitFor(java.util.function.BooleanSupplier condition, long timeoutMs) {
-        long deadline = Now.millis() + timeoutMs;
-        while (Now.millis() < deadline && !condition.getAsBoolean()) {
-            try {
-                Thread.sleep(200);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            }
-        }
-    }
 
     private static int instanceRecord(String name, Map<String, Object> settings) {
         Row row = Models.get(InstanceModel.class).createEmptyRow();

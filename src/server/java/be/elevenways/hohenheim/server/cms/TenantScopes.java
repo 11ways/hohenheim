@@ -139,10 +139,9 @@ public final class TenantScopes {
      *
      * AIDEV-NOTE: GENERATED rows (database engines, stack services, releases) are managed
      * through their owning record's surface and never through a picker or the /manage
-     * list -- the same clause InstanceApi.visibleInstances applies.
+     * list -- THE {@link InstanceModel#liveAuthored} clause the instance and file APIs read too.
      */
-    public static final Scope INSTANCES = new Scope(
-        () -> Criteria.and(InstanceModel.DELETED_AT.isNull(), InstanceModel.GENERATED_BY.isNull()),
+    public static final Scope INSTANCES = new Scope(InstanceModel::liveAuthored,
         ctx -> HohenheimAccess.instanceScope(ctx, HohenheimAccess.VIEW));
 
     /** The template catalog: operators browse everything, everyone else only APPROVED rows. */

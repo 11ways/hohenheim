@@ -83,6 +83,12 @@ class HostRuntimeTest {
                 .as("step 1: incus-over-unix does not").isFalse();
             assertThat(ServerModel.requiresPinnedIdentity(dockerLocal))
                 .as("step 1: the local docker daemon does not").isFalse();
+            Row modeless = Models.get(ServerModel.class).createEmptyRow();
+            modeless.set(ServerModel.NAME, "rt-modeless");
+            modeless.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
+            assertThat(ServerModel.requiresPinnedIdentity(modeless))
+                .as("step 1: a docker host whose mode is unknown fails closed and needs a pin")
+                .isTrue();
 
             // 2. The admission identity gate follows that declaration: an unpinned
             //    https incus host is refused BY NAME, the unix one passes.

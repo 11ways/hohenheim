@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.auth.HostnameAuthority;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -23,12 +24,10 @@ import java.util.function.Function;
  * is held by a foreign site or covered by a foreign wildcard -- the only way to make
  * existence unobservable. Every refusal that names a foreign site routes through here so
  * the two cases cannot drift; the quarantine refusal (route_quarantined) never named an
- * owner and stays where it is.
+ * owner and stays where it is. The neutral hostname key itself has ONE home,
+ * {@link HostnameAuthority#HOSTNAME_UNAVAILABLE}, shared with the tenant claim refusal.
  */
 final class ClaimRefusals {
-
-    /** The neutral hostname refusal, anchored on the hostname a tenant typed. */
-    static final String HOSTNAME_UNAVAILABLE = "hostname_unavailable";
 
     /** The neutral site-enable refusal, naming only the tenant's OWN hostname. */
     static final String ENABLE_HOSTNAME_UNAVAILABLE = "enable_hostname_unavailable";

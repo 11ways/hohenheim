@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -57,7 +58,7 @@ class HostApiTest extends HohenheimTestBase {
 
         // Scopes NARROW authority, they never grant it: a wildcard-scoped key whose owner
         // holds no admin permission must still be refused.
-        int outsiderId = user(PREFIX + "outsider@surface.test", "Host API Outsider");
+        int outsiderId = ApiSupport.user(PREFIX + "outsider@surface.test", "Host API Outsider");
         keyOutsider = ApiKeyService.create(outsiderId, PREFIX + "outsider",
             List.of("hohenheim.*"), null).plaintext();
     }
@@ -139,17 +140,6 @@ class HostApiTest extends HohenheimTestBase {
     }
 
     // -- fixtures -------------------------------------------------------------
-
-    private static int user(String email, String name) {
-        Row row = AuthModels.users().createEmptyRow();
-        row.set(UserModel.EMAIL, email);
-        row.set(UserModel.DISPLAY_NAME, name);
-        row.set(UserModel.ENABLED, true);
-        row.set(UserModel.CREATED_AT, Now.instant());
-        row.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(row);
-        return row.get(UserModel.ID);
-    }
 
     private static int host(String name) {
         Model servers = Models.get(ServerModel.class);

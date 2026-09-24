@@ -47,6 +47,8 @@ import be.elevenways.zenit.auth.server.identity.proteus.ProteusClient;
 import be.elevenways.zenit.auth.server.identity.proteus.ProteusIdentityProvider;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.server.ServerZenitRuntime;
+import be.elevenways.zenit.server.cli.HostConsole;
+import be.elevenways.zenit.server.cli.ServerCli;
 import be.elevenways.zenit.server.task.TaskRuntime;
 import be.elevenways.zenit.server.task.TaskService;
 
@@ -263,6 +265,23 @@ public class ServerMain {
      * @return true when a command ran and {@code main} must stop
      */
     public static boolean runCommandLineOnly(String[] args) {
+        return runCommandLineOnly(args, HostConsole.SYSTEM);
+    }
+
+    /**
+     * {@link #runCommandLineOnly(String[])} over a console the caller hands in, so the argv
+     * gate's refusal (stderr, exit 1) is testable without ending the JVM.
+     *
+     * @return true when a command ran, or the invocation was refused, and {@code main} must stop
+     */
+    public static boolean runCommandLineOnly(String[] args, @NonNull HostConsole console) {
+        // AIDEV-NOTE: the argv gate FIRST, the OfflineBoot precedent: a typo'd or undeclared
+        // flag is refused in words (stderr, exit 1) before the migration lane opens the
+        // database, and --help answers without touching anything. It used to run only after
+        // the migration lane, so `--run-migrations --typo` migrated first and refused after.
+        if (ServerCli.answerProbeArguments(args, console)) {
+            return true;
+        }
         if (ServerZenitRuntime.runMigrationsIfRequested(args,
                 ServerMain::openDatabaseForCommandLine)) {
             return true;
@@ -271,7 +290,7 @@ public class ServerMain {
         // The break-glass lane: control-plane archives, field-encryption key rotation and
         // zenit-auth's --set-password all run here with the datasource open and no HTTP
         // boot; --offline-help lists everything discovered.
-        return OfflineBoot.runIfRequested(args);
+        return OfflineBoot.runIfRequested(args, console);
     }
 
     /**

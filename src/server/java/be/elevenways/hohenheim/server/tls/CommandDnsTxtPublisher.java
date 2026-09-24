@@ -2,11 +2,9 @@ package be.elevenways.hohenheim.server.tls;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.server.process.BoundedProcess;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 /** DNS-01 publisher backed by an operator-owned executable hook. */
@@ -15,6 +13,7 @@ public final class CommandDnsTxtPublisher implements DnsTxtPublisher {
     /** The stored column's member, never a second spelling of it. */
     public static final String ID = CertificateModel.DNS_PUBLISHER_COMMAND;
     private static final long TIMEOUT_SECONDS = 60;
+    private static final int OUTPUT_CAP_CHARS = 64 * 1024;
 
     @Override public @NonNull String id() { return ID; }
 
@@ -38,26 +37,17 @@ public final class CommandDnsTxtPublisher implements DnsTxtPublisher {
         if (command == null || command.isBlank()) {
             throw new IllegalStateException("DNS hook command is not configured");
         }
-        Process process = new ProcessBuilder(command.trim(), action, record.name(), record.value())
-            .redirectErrorStream(true)
-            .start();
-        // Drain concurrently: a hook writing more than the OS pipe buffer
-        // would otherwise block forever and be misreported as a timeout.
-        CompletableFuture<byte[]> drained = CompletableFuture.supplyAsync(() -> {
-            try {
-                return process.getInputStream().readAllBytes();
-            } catch (IOException e) {
-                return new byte[0];
-            }
-        }, runnable -> Thread.ofVirtual().start(runnable));
-        if (!process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-            process.destroyForcibly();
+        BoundedProcess.Result result = BoundedProcess.run(
+            new ProcessBuilder(command.trim(), action, record.name(), record.value())
+                .redirectErrorStream(true),
+            TimeUnit.SECONDS.toMillis(TIMEOUT_SECONDS), OUTPUT_CAP_CHARS);
+        if (result.timedOut()) {
             throw new IllegalStateException("DNS hook timed out during " + action);
         }
-        String output = new String(drained.get(TIMEOUT_SECONDS, TimeUnit.SECONDS), StandardCharsets.UTF_8).trim();
-        if (process.exitValue() != 0) {
+        String output = result.stdout().trim();
+        if (!result.succeeded()) {
             throw new IllegalStateException("DNS hook " + action + " failed (exit "
-                + process.exitValue() + ")" + (output.isEmpty() ? "" : ": " + output));
+                + result.exitCode() + ")" + (output.isEmpty() ? "" : ": " + output));
         }
     }
 }

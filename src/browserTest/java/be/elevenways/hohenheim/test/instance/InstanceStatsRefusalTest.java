@@ -4,8 +4,9 @@ import be.elevenways.hohenheim.HohenheimChannels;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceStatsHandler;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -32,7 +33,24 @@ class InstanceStatsRefusalTest extends HohenheimTestBase {
 
     @Test
     void aDelegatedViewerNeverReadsTheDaemonsFailureText() {
-        // An instance whose workload was never created: the daemon has nothing to stream.
+        // AIDEV-NOTE: the workload runs on the hermetic FakeDockerDaemon, whose runtime has
+        // no live-stats lane, so opening the stream fails at once with the DRIVER's own text.
+        // This used to ask the host's real Docker daemon for a container that never existed:
+        // silently non-hermetic, and the daemon's 404 on the stats stream held each open for
+        // the full 60s stream timeout (120s per run). The subject -- whose eyes the failure
+        // text reaches -- is the same for any failure text.
+        FakeDockerDaemon daemon = new FakeDockerDaemon();
+        daemon.installContainerKind();
+        try {
+            refusalJourney();
+        } finally {
+            FakeDockerDaemon.restore();
+            daemon.close();
+        }
+    }
+
+    private void refusalJourney() {
+        // An instance whose workload was never created: the driver has nothing to stream.
         Row instance = Models.get(InstanceModel.class).createEmptyRow();
         instance.set(InstanceModel.NAME, "stats-refusal");
         instance.set(InstanceModel.KIND, "hohenheim:docker_container");
@@ -42,14 +60,8 @@ class InstanceStatsRefusalTest extends HohenheimTestBase {
         Models.get(InstanceModel.class).save(instance);
         int instanceId = instance.get(InstanceModel.ID);
 
-        Row tenant = AuthModels.users().createEmptyRow();
-        tenant.set(UserModel.EMAIL, "stats-refusal-tenant@hohenheim.local");
-        tenant.set(UserModel.DISPLAY_NAME, "Stats Refusal Tenant");
-        tenant.set(UserModel.ENABLED, true);
-        tenant.set(UserModel.CREATED_AT, Now.instant());
-        tenant.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(tenant);
-        Integer tenantId = tenant.get(UserModel.ID);
+        Integer tenantId = ApiSupport.user("stats-refusal-tenant@hohenheim.local",
+            "Stats Refusal Tenant");
         try {
             RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID,
                 instanceId, HohenheimAccess.VIEW, true);
@@ -79,8 +91,9 @@ class InstanceStatsRefusalTest extends HohenheimTestBase {
                 .as("step 2: the operator's link is refused too")
                 .isInstanceOf(ChannelException.class);
             assertThat(adminRefusal.getMessage())
-                .as("step 2: and the operator reads the daemon's reason")
-                .startsWith("No live stats: ");
+                .as("step 2: and the operator reads the driver's own reason")
+                .startsWith("No live stats: ")
+                .contains("has no live-stats lane");
         } finally {
             Models.get(InstanceModel.class).delete(instanceId);
             AuthModels.users().delete(tenantId);

@@ -44,9 +44,19 @@ public record HostStatusCell(
         return this.state.dot();
     }
 
-    /** The stable state token, for {@code data-host-state} and template branching. */
+    /** The stable state token, rendered as {@code data-host-state}. */
     public @NonNull String stateToken() {
         return this.state.token();
+    }
+
+    /** {@link HostState#loud}, in property spelling for the cell template. */
+    public boolean loud() {
+        return this.state.loud();
+    }
+
+    /** {@link HostState#namesDaemon}, in property spelling for the cell template. */
+    public boolean namesDaemon() {
+        return this.state.namesDaemon();
     }
 
     /**

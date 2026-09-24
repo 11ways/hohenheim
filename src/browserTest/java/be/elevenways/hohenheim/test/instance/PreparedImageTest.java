@@ -13,14 +13,12 @@ import be.elevenways.hohenheim.server.runtime.ImageOrigin;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.IncusWorkloadType;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
-import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -56,14 +54,7 @@ class PreparedImageTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seedActor() {
-        Row tenant = AuthModels.users().createEmptyRow();
-        tenant.set(UserModel.EMAIL, "prep-img-tenant@hohenheim.local");
-        tenant.set(UserModel.DISPLAY_NAME, "Prepared Image Tenant");
-        tenant.set(UserModel.ENABLED, true);
-        tenant.set(UserModel.CREATED_AT, Now.instant());
-        tenant.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(tenant);
-        tenantId = tenant.get(UserModel.ID);
+        tenantId = ApiSupport.user("prep-img-tenant@hohenheim.local", "Prepared Image Tenant");
         tenantPrincipal = new UserPrincipal(tenantId, "Prepared Image Tenant");
     }
 

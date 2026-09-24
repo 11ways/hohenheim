@@ -102,9 +102,10 @@ class AcmeReissueContractTest {
             answerHttpChallenges();
 
             // 1. A perfectly ordinary certificate exists first: one name, HTTP-01.
-            int certId = acme.requestCertificate(List.of("one." + ZONE), "Reissue subject",
-                null, CertificateAuthority.Requester.SYSTEM);
-            assertThat(certId).as("step 1: the initial order produced a row").isGreaterThan(0);
+            AcmeService.RequestOutcome initial = acme.requestCertificate(List.of("one." + ZONE),
+                "Reissue subject", null, CertificateAuthority.Requester.SYSTEM);
+            assertThat(initial.issued()).as("step 1: the initial order produced a row").isTrue();
+            int certId = initial.certificateId();
             Row cert = certModel.findById(certId);
             String firstPem = cert.get(CertificateModel.CERTIFICATE_PEM);
             // A stored requester the re-issue must overwrite with the actor that re-issued.
@@ -222,10 +223,11 @@ class AcmeReissueContractTest {
             domain(siteId, "served." + ZONE);
             answerHttpChallenges();
 
-            int certId = acme.requestCertificate(List.of("served." + ZONE), "Reissue refusals",
-                null, CertificateAuthority.Requester.SYSTEM);
-            assertThat(certId).as("precondition: there is a certificate to re-issue")
-                .isGreaterThan(0);
+            AcmeService.RequestOutcome initial = acme.requestCertificate(List.of("served." + ZONE),
+                "Reissue refusals", null, CertificateAuthority.Requester.SYSTEM);
+            assertThat(initial.issued()).as("precondition: there is a certificate to re-issue")
+                .isTrue();
+            int certId = initial.certificateId();
             Map<String, Object> before = snapshot(certModel.findById(certId));
 
             // 1. AN ADDED NAME THIS INSTALLATION DOES NOT SERVE is refused, even though the

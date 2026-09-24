@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -43,14 +42,7 @@ class TenantSiteColumnsTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, "site-columns@hohenheim.local");
-        user.set(UserModel.DISPLAY_NAME, "Site Columns Tenant");
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        int tenantId = user.get(UserModel.ID);
+        int tenantId = ApiSupport.user("site-columns@hohenheim.local", "Site Columns Tenant");
         tenant = new UserPrincipal(tenantId, "Site Columns Tenant");
         Row adminRow = AuthModels.users().find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();

@@ -10,30 +10,28 @@ import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
-import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
+import java.time.Duration;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Supplier;
 import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -49,6 +47,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class InstanceConsoleRedactionLiveTest {
 
+    /** The interval of every wait here: each probe is a daemon or database round trip. */
+    private static final Duration POLL_INTERVAL = Duration.ofMillis(100);
+
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
 
     /** Planted before the console opens: the value the redactor is seeded with. */
@@ -57,37 +58,26 @@ class InstanceConsoleRedactionLiveTest {
     /** Planted while the console already streams: the live-registration lane. */
     private static final String LATE_SECRET = "hh-late-secret-8bd3e05a";
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static PrivateNetns netns;
 
     @BeforeAll
     static void setUp() throws Exception {
-        File db = File.createTempFile("hohenheim-console-redaction-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
-        if (PrivateNetns.available()) {
-            netns = new PrivateNetns();
-            WorkloadNetworkPolicy.overrideForTest(netns.enforcingPolicy());
-        }
+        netns = PrivateNetns.installEnforcing();
     }
 
     @AfterAll
     static void tearDown() {
-        WorkloadNetworkPolicy.overrideForTest(null);
-        if (netns != null) {
-            netns.close();
-            netns = null;
-        }
+        PrivateNetns.uninstall(netns);
+        netns = null;
     }
 
     private static void assumeLiveDaemon() {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
-        LiveLane.requireImage(new DockerClient(), "alpine:latest");
+        LiveLane.requireImage(new DockerClient(), TestImages.ALPINE);
         LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: the instance tier refuses to deploy unprotected");
     }
@@ -111,7 +101,7 @@ class InstanceConsoleRedactionLiveTest {
             row.set(InstanceModel.NAME, "console-redaction");
             row.set(InstanceModel.KIND, "hohenheim:docker_container");
             row.set(InstanceModel.SETTINGS,
-                new LinkedHashMap<>(Map.of("image", "alpine", "tag", "latest")));
+                new LinkedHashMap<>(Map.of("image", TestImages.ALPINE)));
             row.set(InstanceModel.TEMPLATE_ID, template.get(InstanceTemplateModel.ID));
             row.set(InstanceModel.CRASH_POLICY, InstanceModel.CRASH_NONE);
             Models.get(InstanceModel.class).save(row);
@@ -144,8 +134,8 @@ class InstanceConsoleRedactionLiveTest {
                 // 3. THE LEAK, staged for real: the workload echoes the secret to stdout,
                 //    the way a deploy script printing an env var or a crash dump would.
                 InstanceConsoles.sendCommand(id, "echo token=" + DEPLOY_SECRET + " ready");
-                assertThat(await(15_000, () -> seen(viewer).contains("token=")))
-                    .as("step 3: the echoed line reached the viewer").isTrue();
+                Poll.until("step 3: the echoed line reached the viewer",
+                    Duration.ofMillis(15_000), POLL_INTERVAL, () -> seen(viewer).contains("token="));
                 assertThat(seen(viewer))
                     .as("step 3: and the SECRET ITSELF did not")
                     .doesNotContain(DEPLOY_SECRET);
@@ -156,17 +146,17 @@ class InstanceConsoleRedactionLiveTest {
                 // 4. POSITIVE ANCHOR: ordinary output is not touched at all. A redactor
                 //    that mangles legitimate text is as broken as one that leaks.
                 InstanceConsoles.sendCommand(id, "echo plain-output-unchanged-1234");
-                assertThat(await(15_000,
-                        () -> seen(viewer).contains("plain-output-unchanged-1234")))
-                    .as("step 4: unrelated output arrives byte for byte").isTrue();
+                Poll.until("step 4: unrelated output arrives byte for byte",
+                    Duration.ofMillis(15_000), POLL_INTERVAL,
+                    () -> seen(viewer).contains("plain-output-unchanged-1234"));
 
                 // 5. A value declared secret while the console is ALREADY streaming is
                 //    redacted from that moment -- the write funnel tells the live session.
                 new InstanceVariables().setValue(id, null, "LATE_TOKEN",
                     InstanceVariableModel.KIND_SECRET, LATE_SECRET);
                 InstanceConsoles.sendCommand(id, "echo late=" + LATE_SECRET + " done");
-                assertThat(await(15_000, () -> seen(viewer).contains("late=")))
-                    .as("step 5: the late line reached the viewer").isTrue();
+                Poll.until("step 5: the late line reached the viewer",
+                    Duration.ofMillis(15_000), POLL_INTERVAL, () -> seen(viewer).contains("late="));
                 assertThat(seen(viewer))
                     .as("step 5: and the value written mid-session was redacted too")
                     .doesNotContain(LATE_SECRET);
@@ -210,22 +200,6 @@ class InstanceConsoleRedactionLiveTest {
         synchronized (buffer) {
             return buffer.toString();
         }
-    }
-
-    private static boolean await(long timeoutMs, Supplier<Boolean> condition) {
-        long deadline = Now.millis() + timeoutMs;
-        while (Now.millis() < deadline) {
-            if (Boolean.TRUE.equals(condition.get())) {
-                return true;
-            }
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return false;
-            }
-        }
-        return Boolean.TRUE.equals(condition.get());
     }
 
     private static void cleanup(DockerClient docker, String handle) {

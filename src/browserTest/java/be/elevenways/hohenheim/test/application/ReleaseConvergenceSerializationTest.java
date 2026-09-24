@@ -11,11 +11,11 @@ import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -25,6 +25,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -455,18 +456,6 @@ class ReleaseConvergenceSerializationTest {
 
     /** Bounded wait: the drain and the rival thread both settle off this thread. */
     private static void await(String what, BooleanSupplier condition) {
-        long deadline = Now.millis() + 30_000;
-        while (Now.millis() < deadline) {
-            if (condition.getAsBoolean()) {
-                return;
-            }
-            try {
-                Thread.sleep(20);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
-        assertThat(condition.getAsBoolean()).as(what).isTrue();
+        Poll.until(what, Duration.ofSeconds(30), Duration.ofMillis(20), condition);
     }
 }

@@ -1,7 +1,8 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.test.Poll;
+import java.time.Duration;
 import be.elevenways.hohenheim.server.ControllerScope;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.runtime.NetworkPosture;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -98,7 +99,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class ContainerHardeningTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
-    private static final String TEST_IMAGE = "alpine:latest";
+    private static final String TEST_IMAGE = TestImages.ALPINE;
     private static final String REDIS_IMAGE = "redis:7-alpine";
 
     /** The chown-then-drop-privileges image shape the instance tier must run out of the box. */
@@ -142,19 +143,13 @@ class ContainerHardeningTest {
     @BeforeAll
     static void bootRuntime() throws IOException {
         HohenheimTestRuntime.ensureBooted();
-        if (PrivateNetns.available()) {
-            classNetns = new PrivateNetns();
-            WorkloadNetworkPolicy.overrideForTest(classNetns.enforcingPolicy());
-        }
+        classNetns = PrivateNetns.installEnforcing();
     }
 
     @AfterAll
     static void tearDown() {
-        WorkloadNetworkPolicy.overrideForTest(null);
-        if (classNetns != null) {
-            classNetns.close();
-            classNetns = null;
-        }
+        PrivateNetns.uninstall(classNetns);
+        classNetns = null;
     }
 
     /**
@@ -181,7 +176,7 @@ class ContainerHardeningTest {
         //    instanceTierRunsAChownThenDropPrivilegesImage for the workload proof).
         int instanceId = 999_101;
         InstanceSpec spec = new DockerContainerKind().specFor(instanceId, Map.of(
-            "image", "alpine", "tag", "latest", "command", "sleep 600"));
+            "image", TEST_IMAGE, "command", "sleep 600"));
         PrivateNetns netns = new PrivateNetns();
         DockerInstanceRuntime runtime = new DockerInstanceRuntime(docker, netns.enforcingPolicy());
         String handle = runtime.create(spec);
@@ -1006,19 +1001,16 @@ class ContainerHardeningTest {
         return (Map<?, ?>) docker.inspectContainer(container).get("HostConfig");
     }
 
-    private static void waitForExit(DockerClient docker, String container) throws IOException {
-        for (int attempt = 0; attempt < 60; attempt++) {
-            Object state = docker.inspectContainer(container).get("State");
-            if (state instanceof Map<?, ?> map && !Boolean.TRUE.equals(map.get("Running"))) {
-                return;
-            }
-            try {
-                Thread.sleep(250);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            }
-        }
-        throw new AssertionError("container " + container + " never exited");
+    private static void waitForExit(DockerClient docker, String container) {
+        Poll.until("container " + container + " exiting", Duration.ofSeconds(15),
+            Duration.ofMillis(250), () -> {
+                try {
+                    return docker.inspectContainer(container).get("State") instanceof Map<?, ?> map
+                        && !Boolean.TRUE.equals(map.get("Running"));
+                } catch (IOException inspectFailed) {
+                    throw new IllegalStateException("inspecting " + container + " failed",
+                        inspectFailed);
+                }
+            });
     }
 }

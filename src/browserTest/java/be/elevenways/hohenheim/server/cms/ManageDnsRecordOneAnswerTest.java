@@ -3,9 +3,9 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -50,14 +50,8 @@ class ManageDnsRecordOneAnswerTest extends HohenheimTestBase {
         zones.save(zone);
         DnsZoneStore.INSTANCE.reload();
 
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, "one-answer-tenant@hohenheim.local");
-        user.set(UserModel.DISPLAY_NAME, "One Answer Tenant");
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        tenant = new UserPrincipal(user.get(UserModel.ID), "One Answer Tenant");
+        int userId = ApiSupport.user("one-answer-tenant@hohenheim.local", "One Answer Tenant");
+        tenant = new UserPrincipal(userId, "One Answer Tenant");
 
         Row admin = AuthModels.users().find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();

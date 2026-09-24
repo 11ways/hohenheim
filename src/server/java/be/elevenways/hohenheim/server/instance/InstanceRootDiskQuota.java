@@ -1,31 +1,22 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.auth.TenantWrites;
-import be.elevenways.protoblast.common.Blast;
+import be.elevenways.hohenheim.server.quota.ChargedDimension;
+import be.elevenways.hohenheim.server.quota.ChargedModel;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
+import be.elevenways.hohenheim.server.quota.OwnerDimension;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
-import be.elevenways.zenit.common.orm.model.Model;
-import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.QueryBuilder;
-import be.elevenways.zenit.common.orm.query.QueryContext;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
-import be.elevenways.zenit.common.orm.quota.QuotaExceeded;
-import be.elevenways.zenit.common.orm.quota.Quotas;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * The ROOT disk's charge, into the very same owner disk-GB bucket the attached
- * {@code instance_devices} rows use ({@link InstanceDeviceQuota#diskBucketOf}). Without
+ * {@code instance_devices} rows use ({@link OwnerBudget#DISK_GB}), booked through
+ * {@link ChargedModel#INSTANCES}. Without
  * it {@code diskLimitFor} would ration only the disks an owner attaches and ignore the
  * one every workload already has, which is a hole in the cap, not a smaller cap.
  *
@@ -47,65 +38,44 @@ import java.util.Set;
  */
 public final class InstanceRootDiskQuota {
 
-    /** Where the before-remove hook stashes what the after-remove hook releases. */
-    private static final String DOOMED = "hohenheim.root-disk-quota.doomed";
+    /**
+     * The declared root GB of a live instance, in the owner disk bucket stamped as
+     * {@code root_disk_bucket}; the stamp lands even for a zero charge, so a later grow books
+     * against the bucket the row was born into.
+     */
+    public static final ChargedDimension ROOT_DISK =
+        new OwnerDimension("root_disk", OwnerBudget.DISK_GB, InstanceModel.ROOT_DISK_BUCKET) {
 
-    private static boolean installed;
-
-    private InstanceRootDiskQuota() {
-    }
-
-    /** Install the reserve/release hooks on the instance write funnel (MODULES stage). */
-    public static synchronized void install() {
-        if (installed) {
-            return;
-        }
-        installed = true;
-
-        InstanceModel.SCHEMA.addBeforeWriteHook(context -> {
-            Row row = context.getRow();
-            if (row == null) {
-                return;
+            @Override
+            protected long heldAmount(@NonNull Row stored) {
+                return declaredGbOf(stored);
             }
-            Row stored = storedOf(row);
-            boolean storedLive = stored != null && stored.get(InstanceModel.DELETED_AT) == null;
-            boolean willBeLive = effectiveDeletedAt(row, stored) == null;
 
-            // Only a write that leaves the record LIVE has a declaration to judge: a
-            // soft delete releases the whole charge, so it must never be refused for
-            // "shrinking" the very thing it is handing back.
-            if (willBeLive) {
+            @Override
+            public @Nullable Charge claim(@NonNull Row row, @Nullable Row stored,
+                                          @NonNull Transition transition) {
+                int amount = effectiveGb(row, stored);
+                return switch (transition) {
+                    // Charged to the owner the create is ABOUT TO HAVE -- the same derivation
+                    // the manage grant that follows uses.
+                    case CREATE -> this.forCreationOwner(amount);
+                    case RESTORE -> this.forCurrentOwner(InstanceModel.MODEL_ID, stored,
+                        stored.get(InstanceModel.ID), amount);
+                    case REBOOK -> new Charge(this.held(stored).bucket(), amount, false);
+                };
+            }
+
+            /**
+             * Only a write that leaves the record LIVE is judged: a soft delete releases the
+             * whole charge, so it is never refused for "shrinking" what it hands back.
+             */
+            @Override
+            public void validate(@NonNull Row row, @Nullable Row stored) {
                 requireDeclarable(row, stored);
             }
+        };
 
-            if (stored == null) {
-                if (willBeLive) {
-                    // Charged to the owner the create is ABOUT TO HAVE -- the same
-                    // derivation the manage grant that follows uses (InstanceQuota).
-                    reserveInto(row, effectiveGb(row, null), HohenheimAccess.packSubjects(
-                        HohenheimAccess.creationOwnerSubjects(
-                            TenantWrites.isTenantOriginated() ? TenantWrites.acting() : null)));
-                }
-            } else if (storedLive && !willBeLive) {
-                releaseStored(stored);
-            } else if (!storedLive && willBeLive) {
-                // The restore transition: a new claim on headroom, judged against the
-                // owner as derived NOW; unreadable grants fail toward the charged bucket.
-                Set<String> subjects = HohenheimAccess.manageSubjectsOf(
-                    InstanceModel.MODEL_ID, stored.get(InstanceModel.ID));
-                if (subjects == null) {
-                    reserveIntoBucket(row, effectiveGb(row, stored), chargedBucketOf(stored));
-                } else {
-                    reserveInto(row, effectiveGb(row, stored),
-                        HohenheimAccess.packSubjects(subjects));
-                }
-            } else if (storedLive) {
-                rebook(row, stored);
-            }
-        });
-
-        InstanceModel.SCHEMA.addBeforeRemoveHook(InstanceRootDiskQuota::captureDoomed);
-        InstanceModel.SCHEMA.addAfterRemoveHook(InstanceRootDiskQuota::releaseDoomed);
+    private InstanceRootDiskQuota() {
     }
 
     // -- declaration validity -------------------------------------------------
@@ -165,69 +135,7 @@ public final class InstanceRootDiskQuota {
         }
     }
 
-    // -- hook internals -------------------------------------------------------
-
-    private static void reserveInto(@NonNull Row row, int amount, @NonNull String packed) {
-        reserveIntoBucket(row, amount, InstanceDeviceQuota.diskBucketOf(packed));
-    }
-
-    /**
-     * Reserve the GB and stamp the bucket -- the stamp lands even for a zero charge, so a
-     * later grow releases and re-reserves against the bucket the row was born into.
-     */
-    private static void reserveIntoBucket(@NonNull Row row, int amount, @NonNull String bucket) {
-        reserve(bucket, amount);
-        row.set(InstanceModel.ROOT_DISK_BUCKET, bucket);
-    }
-
-    private static void reserve(@NonNull String bucket, long amount) {
-        if (amount <= 0) {
-            return;
-        }
-        String packed = InstanceDeviceQuota.packOfDiskBucket(bucket);
-        Integer limit = InstanceDeviceQuota.diskLimitFor(packed);
-        try {
-            Quotas.reserve(bucket, amount, limit == null ? Long.MAX_VALUE : limit);
-        } catch (QuotaExceeded full) {
-            throw Violations.ofForm(violation("disk_quota_reached")
-                .withArg("used", full.getUsed())
-                .withArg("limit", full.getLimit()));
-        }
-    }
-
-    /** A live row staying live: charge or release the DELTA against the stamped bucket. */
-    private static void rebook(@NonNull Row row, @NonNull Row stored) {
-        int before = declaredGbOf(stored);
-        int after = effectiveGb(row, stored);
-        if (before == after) {
-            return;
-        }
-        String bucket = chargedBucketOf(stored);
-        if (after > before) {
-            reserve(bucket, after - before);
-        } else {
-            Quotas.release(bucket, before - after);
-        }
-        row.set(InstanceModel.ROOT_DISK_BUCKET, bucket);
-    }
-
-    private static void releaseStored(@NonNull Row stored) {
-        int amount = declaredGbOf(stored);
-        if (amount > 0) {
-            Quotas.release(chargedBucketOf(stored), amount);
-        }
-    }
-
-    /** The bucket a stored row was charged to; a stampless row falls to the operator's. */
-    private static @NonNull String chargedBucketOf(@NonNull Row stored) {
-        String bucket = stored.get(InstanceModel.ROOT_DISK_BUCKET);
-        if (bucket != null && !bucket.isBlank()) {
-            return bucket;
-        }
-        Blast.log("QUOTA: instance", stored.get(InstanceModel.ID),
-            "carries no charged root-disk bucket; falling back to the operator bucket");
-        return InstanceDeviceQuota.diskBucketOf("");
-    }
+    // -- amounts -------------------------------------------------------------
 
     /** The declared root GB of a stored row (0 = none declared). */
     private static int declaredGbOf(@NonNull Row instance) {
@@ -258,61 +166,6 @@ public final class InstanceRootDiskQuota {
     private static @NonNull Map<String, Object> settingsOf(@NonNull Row instance) {
         return instance.get(InstanceModel.SETTINGS) instanceof Map<?, ?> map
             ? (Map<String, Object>) map : Map.of();
-    }
-
-    private static @Nullable Object effectiveDeletedAt(@NonNull Row row, @Nullable Row stored) {
-        if (row.has(InstanceModel.DELETED_AT.getName())) {
-            return row.get(InstanceModel.DELETED_AT.getName());
-        }
-        return stored != null ? stored.get(InstanceModel.DELETED_AT) : null;
-    }
-
-    private static @Nullable Row storedOf(@NonNull Row row) {
-        if (!row.has(InstanceModel.ID.getName()) || row.get(InstanceModel.ID) == null) {
-            return null;
-        }
-        return Models.get(InstanceModel.class).findById(row.get(InstanceModel.ID));
-    }
-
-    /** One doomed row's release: the charged bucket and the charged GB. */
-    private record Doomed(@NonNull String bucket, long amount) {}
-
-    private static void captureDoomed(@NonNull RemoveFromDatasource context) {
-        Model model = context.getModel();
-        if (model == null) {
-            return;
-        }
-        QueryContext queryContext = context.getQueryContext();
-        Criteria criteria = queryContext != null ? queryContext.getCriteria() : null;
-        QueryBuilder<Row> builder = model.find();
-        if (criteria != null) {
-            builder.where(criteria);
-        }
-        List<Doomed> doomed = new ArrayList<>();
-        for (Row row : builder.all()) {
-            // Trashed rows already released on their soft-delete transition.
-            if (row.get(InstanceModel.DELETED_AT) != null) {
-                continue;
-            }
-            long amount = declaredGbOf(row);
-            if (amount > 0) {
-                doomed.add(new Doomed(chargedBucketOf(row), amount));
-            }
-        }
-        if (!doomed.isEmpty()) {
-            context.setAttribute(DOOMED, doomed);
-        }
-    }
-
-    private static void releaseDoomed(@NonNull RemoveFromDatasource context) {
-        if (!(context.getAttribute(DOOMED) instanceof List<?> doomed)) {
-            return;
-        }
-        for (Object entry : doomed) {
-            if (entry instanceof Doomed release) {
-                Quotas.release(release.bucket(), release.amount());
-            }
-        }
     }
 
     private static Microcopy violation(String key) {

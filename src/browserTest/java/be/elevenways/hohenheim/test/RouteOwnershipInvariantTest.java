@@ -13,7 +13,6 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.cms.common.action.ActionContext;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -31,9 +30,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
@@ -144,6 +140,31 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         return owners;
     }
 
+    /**
+     * Wait until {@code writer} is blocked OPENING its write transaction, i.e. queued on the
+     * database write lock another transaction holds.
+     *
+     * AIDEV-NOTE: this replaced a fixed 150ms sleep followed by isAlive(), which proved
+     * nothing: a thread that has not even been scheduled yet is also alive, and a writer that
+     * only starts AFTER the winner commits trivially sees its claim, so the race was never
+     * exercised. SqliteDatasource.withTransaction opens every write with
+     * Connection.setAutoCommit(false), which issues BEGIN IMMEDIATE and waits on busy_timeout
+     * (5s) while another connection holds the lock; seeing the writer inside that sqlite-jdbc
+     * frame IS the queueing, observed rather than hoped for. The wait stays well inside
+     * busy_timeout so the queued writer never gives up with SQLITE_BUSY.
+     */
+    private static void awaitQueuedOnWriteLock(Thread writer, String what) {
+        Poll.until(what, Duration.ofSeconds(3), () -> {
+            for (StackTraceElement frame : writer.getStackTrace()) {
+                if ("setAutoCommit".equals(frame.getMethodName())
+                        && frame.getClassName().startsWith("org.sqlite.")) {
+                    return true;
+                }
+            }
+            return false;
+        });
+    }
+
     private static boolean hasViolation(Violations violations, String field, String key) {
         for (Violation violation : violations.all()) {
             if (field.equals(violation.fieldName()) && key.equals(violation.message().key())) {
@@ -200,9 +221,10 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         }, "race-enable-b");
         enableB.setUncaughtExceptionHandler((thread, error) -> failureOfB[0] = error);
         enableB.start();
-        Thread.sleep(150);
+        awaitQueuedOnWriteLock(enableB,
+            "step 3: tenant B must queue behind A's write transaction, not slip inside it");
         assertThat(enableB.isAlive())
-            .as("step 3: tenant B must queue behind A's write transaction, not slip inside it")
+            .as("step 3: tenant B is still waiting while A holds the write lock")
             .isTrue();
 
         // 4. Release A: it entered first, so it wins -- its scan and its claim were one
@@ -379,7 +401,10 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         }, "overlap-write-pinned");
         writeB.setUncaughtExceptionHandler((thread, error) -> failureOfB[0] = error);
         writeB.start();
-        Thread.sleep(150);
+        awaitQueuedOnWriteLock(writeB,
+            "step 3: writer B must be contending for the write lock A holds, not arrive late");
+        assertThat(writeB.isAlive())
+            .as("step 3: writer B is still waiting while A holds the write lock").isTrue();
 
         // 4. Release A and let both writers finish (promptly: a queued writer times out
         //    on SQLite's busy_timeout if the winner parks too long).
@@ -495,14 +520,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
 
     /** A tenant subject holding manage on the site, so the two sites have different owners. */
     private static int tenantOf(Row site, String email) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, email);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        int userId = user.get(UserModel.ID);
+        int userId = ApiSupport.user(email);
         grantManage(site, userId);
         return userId;
     }
@@ -689,7 +707,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
             .as("step 4: a non-admin invoke lifted NOTHING").isNotNull();
 
         // 5. The admin lifts it through the real invoke route, and the row is gone.
-        HttpResponse<String> lifted = adminPost("/admin/released-claims/"
+        HttpResponse<String> lifted = adminPostForm("/admin/released-claims/"
             + quarantine.get(ReleasedRouteClaimModel.ID) + "/action/lift_quarantine",
             confirmed("", hostname));
         assertThat(lifted.statusCode()).as("step 5: the admin lift is accepted")
@@ -715,16 +733,6 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         assertThat((String) domainModel.findById(claimed.get(SiteDomainModel.ID))
                 .get(SiteDomainModel.LIVE_ROUTE_KEY))
             .as("step 6: the successor now holds the route").isNotNull();
-    }
-
-    private HttpResponse<String> adminPost(String path, String body) throws Exception {
-        return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
-            .send(HttpRequest.newBuilder().uri(URI.create(baseUrl() + path))
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-                .header("X-Csrf-Token", csrfToken)
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build(), HttpResponse.BodyHandlers.ofString());
     }
 
     /**

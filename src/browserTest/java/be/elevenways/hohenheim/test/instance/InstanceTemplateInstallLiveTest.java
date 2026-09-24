@@ -1,8 +1,9 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -17,21 +18,18 @@ import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -56,35 +54,24 @@ class InstanceTemplateInstallLiveTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static PrivateNetns netns;
 
     @BeforeAll
     static void setUp() throws Exception {
-        File db = File.createTempFile("hohenheim-template-live-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
         // ONE database per test class: the controller identity (and therefore every
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
-        if (PrivateNetns.available()) {
-            netns = new PrivateNetns();
-            WorkloadNetworkPolicy.overrideForTest(netns.enforcingPolicy());
-        }
+        netns = PrivateNetns.installEnforcing();
     }
 
     @AfterAll
     static void tearDown() {
-        WorkloadNetworkPolicy.overrideForTest(null);
-        if (netns != null) {
-            netns.close();
-            netns = null;
-        }
+        PrivateNetns.uninstall(netns);
+        netns = null;
     }
 
     @Test
@@ -92,7 +79,7 @@ class InstanceTemplateInstallLiveTest {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
-        LiveLane.requireImage(docker, "alpine:latest");
+        LiveLane.requireImage(docker, TestImages.ALPINE);
         LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: the instance tier refuses to deploy unprotected");
 
@@ -224,8 +211,7 @@ class InstanceTemplateInstallLiveTest {
 
     private static int template() {
         Map<String, Object> settings = new LinkedHashMap<>();
-        settings.put("image", "alpine");
-        settings.put("tag", "latest");
+        settings.put("image", TestImages.ALPINE);
         settings.put("command", "sleep 300");
         settings.put("volumes", Map.of("data", "/data"));
 
@@ -233,7 +219,7 @@ class InstanceTemplateInstallLiveTest {
         template.set(InstanceTemplateModel.NAME, "template-live-fixture");
         template.set(InstanceTemplateModel.KIND, "hohenheim:docker_container");
         template.set(InstanceTemplateModel.SETTINGS, settings);
-        template.set(InstanceTemplateModel.INSTALL_IMAGE, "alpine");
+        template.set(InstanceTemplateModel.INSTALL_IMAGE, TestImages.ALPINE);
         // printf, not echo -n: BusyBox echo has no portable -n contract in sh.
         template.set(InstanceTemplateModel.INSTALL_SCRIPT,
             "if [ -s /data/runs ]; then printf '\\ninstall-ran' >> /data/runs;"

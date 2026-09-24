@@ -30,12 +30,10 @@ import com.sun.net.httpserver.HttpServer;
  * Tests proxy dispatch features: custom response headers,
  * WebSocket upgrade gating, and the boolean checkbox fix.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ProxyDispatchTest {
 
     private static boolean initialized = false;
     private static ProxyServer proxy;
-    private static int httpPort;
 
     @BeforeAll
     static void initRuntime() throws Exception {
@@ -96,7 +94,6 @@ class ProxyDispatchTest {
     }
 
     @Test
-    @Order(1)
     void customHeadersModifyUpstreamRequest() throws Exception {
         // Reset DB
         File db = TestDatabases.freshDatabase();
@@ -133,7 +130,7 @@ class ProxyDispatchTest {
 
         var info = proxy.getHttpListenerInfo();
         assertThat(info).isNotNull();
-        httpPort = ((InetSocketAddress) info.getAddress()).getPort();
+        int httpPort = ((InetSocketAddress) info.getAddress()).getPort();
 
         try (Socket socket = new Socket("127.0.0.1", httpPort)) {
             socket.setSoTimeout(3000);
@@ -155,7 +152,6 @@ class ProxyDispatchTest {
     }
 
     @Test
-    @Order(2)
     void hstsHeaderOnResponse() throws Exception {
         File db = TestDatabases.freshDatabase();
 
@@ -229,7 +225,6 @@ class ProxyDispatchTest {
     }
 
     @Test
-    @Order(3)
     void websocketUpgradeBlockedWhenDisabled() throws Exception {
         File db = TestDatabases.freshDatabase();
 
@@ -243,7 +238,7 @@ class ProxyDispatchTest {
         proxy.start();
 
         var info = proxy.getHttpListenerInfo();
-        httpPort = ((InetSocketAddress) info.getAddress()).getPort();
+        int httpPort = ((InetSocketAddress) info.getAddress()).getPort();
 
         // Send a WebSocket upgrade request
         try (Socket socket = new Socket("127.0.0.1", httpPort)) {
@@ -265,7 +260,6 @@ class ProxyDispatchTest {
     }
 
     @Test
-    @Order(4)
     void websocketUpgradeAllowedWhenEnabled() throws Exception {
         File db = TestDatabases.freshDatabase();
 
@@ -279,7 +273,7 @@ class ProxyDispatchTest {
         proxy.start();
 
         var info = proxy.getHttpListenerInfo();
-        httpPort = ((InetSocketAddress) info.getAddress()).getPort();
+        int httpPort = ((InetSocketAddress) info.getAddress()).getPort();
 
         // Send a WebSocket upgrade request
         try (Socket socket = new Socket("127.0.0.1", httpPort)) {
@@ -301,7 +295,6 @@ class ProxyDispatchTest {
     }
 
     @Test
-    @Order(5)
     void booleanSettingCanBeToggledOff() throws Exception {
         File db = TestDatabases.freshDatabase();
 
@@ -329,7 +322,6 @@ class ProxyDispatchTest {
     }
 
     @Test
-    @Order(6)
     void regexRouteMatchesHostname() throws Exception {
         File db = TestDatabases.freshDatabase();
 
@@ -358,7 +350,7 @@ class ProxyDispatchTest {
         proxy.start();
 
         var info = proxy.getHttpListenerInfo();
-        httpPort = ((InetSocketAddress) info.getAddress()).getPort();
+        int httpPort = ((InetSocketAddress) info.getAddress()).getPort();
 
         try (Socket socket = new Socket("127.0.0.1", httpPort)) {
             socket.setSoTimeout(3000);
@@ -398,7 +390,6 @@ class ProxyDispatchTest {
     }
 
     @Test
-    @Order(8)
     void locationHeaderRewrittenToPublicHost() throws Exception {
         File db = TestDatabases.freshDatabase();
 
@@ -421,7 +412,7 @@ class ProxyDispatchTest {
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();
-        httpPort = ((InetSocketAddress) proxy.getHttpListenerInfo().getAddress()).getPort();
+        int httpPort = ((InetSocketAddress) proxy.getHttpListenerInfo().getAddress()).getPort();
 
         String response = rawRequest(httpPort, "rewrite.test", "/");
         assertThat(response).contains("Location: http://rewrite.test/after?x=1");
@@ -436,7 +427,6 @@ class ProxyDispatchTest {
     }
 
     @Test
-    @Order(9)
     void locationRewriteCanBeDisabled() throws Exception {
         File db = TestDatabases.freshDatabase();
 
@@ -457,7 +447,7 @@ class ProxyDispatchTest {
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();
-        httpPort = ((InetSocketAddress) proxy.getHttpListenerInfo().getAddress()).getPort();
+        int httpPort = ((InetSocketAddress) proxy.getHttpListenerInfo().getAddress()).getPort();
 
         String response = rawRequest(httpPort, "norewrite.test", "/");
         assertThat(response).contains("Location: http://127.0.0.1:" + upstreamPort + "/after");
@@ -468,7 +458,6 @@ class ProxyDispatchTest {
     }
 
     @Test
-    @Order(10)
     void responseHeadersInjectedAndRemoved() throws Exception {
         File db = TestDatabases.freshDatabase();
 
@@ -493,7 +482,7 @@ class ProxyDispatchTest {
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();
-        httpPort = ((InetSocketAddress) proxy.getHttpListenerInfo().getAddress()).getPort();
+        int httpPort = ((InetSocketAddress) proxy.getHttpListenerInfo().getAddress()).getPort();
 
         String response = rawRequest(httpPort, "respheaders.test", "/");
         assertThat(response).contains("200");
@@ -506,7 +495,6 @@ class ProxyDispatchTest {
     }
 
     @Test
-    @Order(11)
     void httpsListenerNegotiatesH2() throws Exception {
         File db = TestDatabases.freshDatabase();
 
@@ -556,7 +544,6 @@ class ProxyDispatchTest {
     }
 
     @Test
-    @Order(7)
     void listenOnBlocksMismatchedListenerAddress() throws Exception {
         TestDatabases.freshDatabase();
 
@@ -568,7 +555,7 @@ class ProxyDispatchTest {
         proxy.start();
 
         var info = proxy.getHttpListenerInfo();
-        httpPort = ((InetSocketAddress) info.getAddress()).getPort();
+        int httpPort = ((InetSocketAddress) info.getAddress()).getPort();
 
         try (Socket socket = new Socket("127.0.0.1", httpPort)) {
             socket.setSoTimeout(3000);

@@ -1,5 +1,7 @@
-{#- Install media tab on an Incus host: the ISO volumes of its managed pool, a
-    fetch-from-URL form and per-medium delete forms. -#}
+{#- Install media tab on an Incus host: the ISO volumes of its managed pool, the
+    stored state of the background URL fetches, a fetch-from-URL form and per-medium
+    delete forms. While a fetch runs the tab reloads itself (hh-refresh-after), so a
+    download's progress and its ending appear without the operator asking. -#}
 {% declare title: String %}
 {% declare serverName: String %}
 {% declare media: List %}
@@ -8,6 +10,8 @@
 {% declare deleteTarget: RouteTarget %}
 {% declare uploadUrl: String %}
 {% declare maxIsoGb: Long %}
+{% declare fetches: List %}
+{% declare refreshUrl: String = null %}
 {% declare recordTabs: List<RecordTabState> %}
 {% extend "zenitcms:shell" var:title=title %}
 
@@ -21,6 +25,48 @@
 
     {% if loadError %}
     <pl-alert variant="destructive">{{ t("load_error", scope: "server_media", reason: loadError) }}</pl-alert>
+    {% /if %}
+
+    {% if refreshUrl != null %}
+    <hh-refresh-after url={% refreshUrl %} delayMs={% 4000 %}></hh-refresh-after>
+    {% /if %}
+
+    {% if fetches %}
+    <pl-card id="media-fetches">
+        <pl-card-header>
+            <pl-card-title>{{ t("fetches_title", scope: "server_media") }}</pl-card-title>
+        </pl-card-header>
+        <pl-card-content>
+            <pl-table>
+                <pl-table-header><pl-table-row>
+                    <pl-table-head>{{ t("name", scope: "field") }}</pl-table-head>
+                    <pl-table-head>{{ t("fetch_state", scope: "server_media") }}</pl-table-head>
+                    <pl-table-head></pl-table-head>
+                </pl-table-row></pl-table-header>
+                <pl-table-body>
+                    {% each fetches as index, fetch %}
+                    <pl-table-row data-fetch-name={% fetch.get("name") %}>
+                        <pl-table-cell>{{ fetch.get("name") }}</pl-table-cell>
+                        <pl-table-cell>
+                            <pl-badge variant={% fetch.get("variant") %}>{{ fetch.get("state") }}</pl-badge>
+                        </pl-table-cell>
+                        <pl-table-cell>
+                            {% if fetch.get("percent") != null %}
+                            <pl-progress value={% fetch.get("percent") %} max={% 100 %}
+                                         ariaLabel={% t("fetch_progress", scope: "server_media", name: fetch.get("name")) %}></pl-progress>
+                            {% elseif fetch.get("active") == true %}
+                            <pl-progress indeterminate={% true %}
+                                         ariaLabel={% t("fetch_progress", scope: "server_media", name: fetch.get("name")) %}></pl-progress>
+                            {% elseif fetch.get("reason") != null %}
+                            <span class="hh-fetch-reason">{{ fetch.get("reason") }}</span>
+                            {% /if %}
+                        </pl-table-cell>
+                    </pl-table-row>
+                    {% /each %}
+                </pl-table-body>
+            </pl-table>
+        </pl-card-content>
+    </pl-card>
     {% /if %}
 
     {% if media %}

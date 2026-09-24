@@ -12,27 +12,25 @@ import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.wordpress.WordPressPhp;
 import be.elevenways.hohenheim.server.wordpress.WordPressTemplateSeeder;
+import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.orm.seed.Seeds;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -61,33 +59,21 @@ class WordPressTemplateLiveTest {
     private static final String WORDPRESS_IMAGE = WordPressPhp.IMAGE + ":" + WordPressPhp.recommended().tag();
     private static final String MYSQL_IMAGE = "mysql:8.0";
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static PrivateNetns netns;
 
     @BeforeAll
     static void setUp() throws Exception {
-        File db = File.createTempFile("hohenheim-wordpress-live-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
         // One database per class: the controller identity resolves through the CURRENT
         // datasource and the provisioning pool thread reads the record on its own.
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
-        if (PrivateNetns.available()) {
-            netns = new PrivateNetns();
-            WorkloadNetworkPolicy.overrideForTest(netns.enforcingPolicy());
-        }
+        netns = PrivateNetns.installEnforcing();
     }
 
     @AfterAll
     static void tearDown() {
-        WorkloadNetworkPolicy.overrideForTest(null);
-        if (netns != null) {
-            netns.close();
-            netns = null;
-        }
+        PrivateNetns.uninstall(netns);
     }
 
     @Test
@@ -176,16 +162,13 @@ class WordPressTemplateLiveTest {
     // -- plumbing -------------------------------------------------------------
 
     private static String awaitDatabase(int databaseId, Duration limit) {
-        Instant deadline = Now.instant().plus(limit);
-        while (true) {
-            Row row = Models.get(DatabaseModel.class).findById(databaseId);
-            String status = row == null ? null : row.get(DatabaseModel.STATUS);
-            if (DatabaseModel.STATUS_ACTIVE.equals(status) || DatabaseModel.STATUS_FAILED.equals(status)
-                    || Now.instant().isAfter(deadline)) {
-                return status;
-            }
-            pause(2000);
-        }
+        return Poll.value("database " + databaseId + " settles ACTIVE or FAILED", limit,
+            Duration.ofSeconds(2), () -> {
+                Row row = Models.get(DatabaseModel.class).findById(databaseId);
+                String status = row == null ? null : row.get(DatabaseModel.STATUS);
+                return DatabaseModel.STATUS_ACTIVE.equals(status)
+                    || DatabaseModel.STATUS_FAILED.equals(status) ? status : null;
+            });
     }
 
     private static void pause(long millis) {

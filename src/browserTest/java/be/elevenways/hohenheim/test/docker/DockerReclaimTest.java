@@ -31,7 +31,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DockerReclaimTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
-    private static final String BASE_IMAGE = "alpine:latest";
     // Built the same way production builds it, so the set is hub-normalized.
     private static final Set<String> MANAGED =
         DockerReclaim.repositoriesOf(Set.of("ghcr.io/org/app", "alpine"));
@@ -126,7 +125,7 @@ class DockerReclaimTest {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
-        LiveLane.requireImage(docker, BASE_IMAGE);
+        LiveLane.requireImage(docker, TestImages.ALPINE);
 
         String repository = "hohenheim-reclaim-test-" + System.nanoTime();
         String supersededTag = repository + ":one";

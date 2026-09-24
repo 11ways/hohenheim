@@ -181,8 +181,7 @@ public final class ReleaseEngine {
         Row latest = Models.get(ReleaseOperationModel.class).find()
             .where(ReleaseOperationModel.FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
             .where(ReleaseOperationModel.FOR_ID.eq(applicationId))
-            .where(ReleaseOperationModel.STATUS.in(ReleaseOperationModel.STATUS_SWITCHING,
-                ReleaseOperationModel.STATUS_DRAINING, ReleaseOperationModel.STATUS_SUCCEEDED))
+            .where(ReleaseOperationModel.STATUS.in(ReleaseOperationModel.TRAFFIC_TAKEN_STATUSES))
             .orderBy(ReleaseOperationModel.ID, SortOrder.DESC)
             .first();
         return latest != null
@@ -642,9 +641,7 @@ public final class ReleaseEngine {
     public static void recoverInterrupted() {
         ReleaseOperationModel ops = Models.get(ReleaseOperationModel.class);
         List<Row> inFlight = ops.find()
-            .where(ReleaseOperationModel.STATUS.in(ReleaseOperationModel.STATUS_PENDING,
-                ReleaseOperationModel.STATUS_DEPLOYING, ReleaseOperationModel.STATUS_PROBING,
-                ReleaseOperationModel.STATUS_SWITCHING, ReleaseOperationModel.STATUS_DRAINING))
+            .where(ReleaseOperationModel.STATUS.in(ReleaseOperationModel.IN_FLIGHT_STATUSES))
             .orderBy(ReleaseOperationModel.ID, SortOrder.ASC)
             .all();
         List<Integer> answered = new ArrayList<>();

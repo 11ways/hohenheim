@@ -69,7 +69,7 @@ public final class DnsZoneCascades {
             Row zone = zoneId != null ? Models.get(DnsZoneModel.class).findById(zoneId) : null;
             if (zone != null && DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
                 throw Violations.ofField(DnsRecordModel.ZONE_ID.getName(), zoneId,
-                    Microcopy.of("import_secondary_zone").withFilter("scope", "violations"));
+                    Microcopy.of("record_secondary_zone").withFilter("scope", "violations"));
             }
         });
     }

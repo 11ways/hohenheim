@@ -4,23 +4,20 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.FramebufferSource;
 import be.elevenways.hohenheim.server.instance.VmFramebufferHandler;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.EndpointRoute;
 import be.elevenways.zenit.common.routing.WebSocketEndpoint;
-import be.elevenways.zenit.common.session.Session;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.junit.jupiter.api.Test;
 
@@ -28,6 +25,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +51,9 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
 
     private static final long TEST_REVALIDATION_MS = 100;
 
+    /** How long a keystroke may take to cross the socket into the recording source. */
+    private static final Duration KEY_WAIT = Duration.ofSeconds(5);
+
     private static final AtomicReference<Integer> WS_INSTANCE_ID = new AtomicReference<>();
     private static final RecordingSource WS_SOURCE = new RecordingSource();
 
@@ -69,7 +70,7 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
 
     @Test
     void framebufferFlowsThenRevocationClosesTheSocketWith1008() throws Exception {
-        int userId = user("fb-reval-socket");
+        int userId = ApiSupport.user("fb-reval-socket@hohenheim.local", "FB fb-reval-socket");
         int instanceId = runningVm("fb-reval-socket-vm");
         WS_INSTANCE_ID.set(instanceId);
         RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
@@ -87,7 +88,8 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
 
             // Clause 1: input reaches the source (a keystroke lands on the console).
             ws.sendText("{\"t\":\"k\",\"c\":\"KeyA\",\"d\":true}", true).join();
-            awaitTrue(() -> WS_SOURCE.keys.contains("KeyA:true"));
+            Poll.until("the granted viewer's keystroke KeyA reached the source", KEY_WAIT,
+                () -> WS_SOURCE.keys.contains("KeyA:true"));
             assertThat(WS_SOURCE.keys).contains("KeyA:true");
 
             // Clause 2: revoke the grant; the OPEN socket must be closed 1008.
@@ -118,8 +120,8 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
      */
     @Test
     void consoleAloneOpensTheFramebufferAndViewAloneDoesNot() throws Exception {
-        int consoleUserId = user("fb-console-only");
-        int viewUserId = user("fb-view-only");
+        int consoleUserId = ApiSupport.user("fb-console-only@hohenheim.local", "FB fb-console-only");
+        int viewUserId = ApiSupport.user("fb-view-only@hohenheim.local", "FB fb-view-only");
         int instanceId = runningVm("fb-console-only-vm");
         WS_INSTANCE_ID.set(instanceId);
         RecordGrants.grant(GrantSubjectType.USER, consoleUserId, InstanceModel.MODEL_ID, instanceId,
@@ -140,7 +142,8 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
             // 2. Input too -- the framebuffer is a two-way rescue console, and a read-only
             //    half would be a different (and useless) thing to have proven.
             consoleSocket.sendText("{\"t\":\"k\",\"c\":\"KeyB\",\"d\":true}", true).join();
-            awaitTrue(() -> WS_SOURCE.keys.contains("KeyB:true"));
+            Poll.until("the console holder's keystroke KeyB reached the source", KEY_WAIT,
+                () -> WS_SOURCE.keys.contains("KeyB:true"));
             assertThat(WS_SOURCE.keys).contains("KeyB:true");
 
             // 3. THE OTHER SIDE, so step 1 is a floor and not "any grant will do": VIEW is
@@ -181,24 +184,6 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
             .buildAsync(URI.create("ws://localhost:" + getServerPort() + "/test-framebuffer-reval"),
                 client)
             .join();
-    }
-
-    private static void awaitTrue(java.util.function.BooleanSupplier probe) throws Exception {
-        long deadline = Now.millis() + 5000;
-        while (!probe.getAsBoolean() && Now.millis() < deadline) {
-            Thread.sleep(10);
-        }
-    }
-
-    private static int user(String label) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, label + "@hohenheim.local");
-        user.set(UserModel.DISPLAY_NAME, "FB " + label);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
     }
 
     private static int runningVm(String name) {

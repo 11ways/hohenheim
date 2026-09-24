@@ -269,8 +269,8 @@ class PortLedgerTest {
     // binding. The replacement journey is StackInstancesTest
     // #loweredServicesGainTheLedgerClaimAndTheCapacityCap, which asserts the claim, its
     // owner, the daemon binding, the contested-port refusal and the release on destroy.
-    // What stays exercised here is the remove-hook pairing (captureDoomedOwners /
-    // releaseDoomedOwners), which still releases a PRE-lowering service's leftover claims.
+    // What stays exercised here is the remove-hook pairing (PortLedger.parkClaimsOnRemove),
+    // which still releases a PRE-lowering service's leftover claims.
 
     /**
      * The instance tier's remove hooks: deleting an instance record must PARK its port

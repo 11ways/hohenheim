@@ -1,19 +1,15 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -94,7 +90,7 @@ class EngineMemoryCeilingTest {
     }
 
     @Test
-    void postgresRunsUnderItsOwnEngineFootprintWithHeadroomToSpare() throws IOException {
+    void postgresRunsUnderItsOwnEngineFootprintWithHeadroomToSpare() throws Exception {
         journey(ManagedDatabase.Engine.POSTGRES, "postgres:17-alpine", "42",
             (docker, container) -> value(docker, container,
                 List.of("psql", "-U", USER, "-d", DATABASE, "-tAc", "select 42"),
@@ -102,7 +98,7 @@ class EngineMemoryCeilingTest {
     }
 
     @Test
-    void redisRunsUnderItsOwnEngineFootprintWithHeadroomToSpare() throws IOException {
+    void redisRunsUnderItsOwnEngineFootprintWithHeadroomToSpare() throws Exception {
         journey(ManagedDatabase.Engine.REDIS, "redis:7-alpine", "42", (docker, container) -> {
             List<String> auth = List.of("REDISCLI_AUTH=" + PASSWORD);
             // The engine's own reply, never the exit code: redis-cli exits 0 while
@@ -120,7 +116,7 @@ class EngineMemoryCeilingTest {
     }
 
     @Test
-    void mysqlRunsUnderItsOwnEngineFootprintWithHeadroomToSpare() throws IOException {
+    void mysqlRunsUnderItsOwnEngineFootprintWithHeadroomToSpare() throws Exception {
         journey(ManagedDatabase.Engine.MYSQL, "mysql:8.0", "42",
             (docker, container) -> value(docker, container,
                 List.of("mysql", "-u", USER, "-D", DATABASE, "-N", "-B", "-e", "select 42"),
@@ -128,7 +124,7 @@ class EngineMemoryCeilingTest {
     }
 
     @Test
-    void mongoRunsUnderItsOwnEngineFootprintWithHeadroomToSpare() throws IOException {
+    void mongoRunsUnderItsOwnEngineFootprintWithHeadroomToSpare() throws Exception {
         journey(ManagedDatabase.Engine.MONGO, "mongo:7", "1", (docker, container) -> {
             mongo(docker, container, "db.getSiblingDB('appdb').ceiling.insertOne({ x: 42 })");
             return mongo(docker, container,
@@ -142,13 +138,13 @@ class EngineMemoryCeilingTest {
      * engine's own cgroup recorded reaching readiness, and whether it serves.
      */
     private void journey(ManagedDatabase.Engine engine, String image, String expectedValue,
-                         ServeCheck serve) throws IOException {
+                         ServeCheck serve) throws Exception {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, image);
 
-        DatabaseService service = new DatabaseService(freshDatasource());
+        DatabaseService service = new DatabaseService(TestDatabases.freshBootedDatasource());
         String name = engine.token() + "mem" + System.nanoTime();
         try {
             // The real funnel, with no memory_limit_mb: the kind's per-engine default is
@@ -249,16 +245,5 @@ class EngineMemoryCeilingTest {
         return value(docker, container, List.of(
             "mongosh", "--username", USER, "--password", PASSWORD,
             "--authenticationDatabase", "admin", "--quiet", "--eval", eval), List.of());
-    }
-
-    private static SqliteDatasource freshDatasource() throws IOException {
-        File db = File.createTempFile("hohenheim-enginemem-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        SqliteDatasource ds = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(ds).migrate().requireSuccess();
-        Datasources.register(Datasources.DEFAULT, ds);
-        HohenheimTestRuntime.ensureBooted();
-        return ds;
     }
 }

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.DoomedRows;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
@@ -8,10 +9,7 @@ import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.orm.PendingDeletes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
-import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.QueryBuilder;
-import be.elevenways.zenit.common.orm.query.QueryContext;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.validation.Violations;
@@ -34,8 +32,6 @@ import java.util.Set;
  * both tiers. DETACHING is NOT the mirror of that and never was: see {@link #install}.
  */
 public final class InstanceDatabaseLinks {
-
-    private static final String DETACHED_INSTANCES = "hohenheim.instance-db-links.detached";
 
     private static boolean installed;
 
@@ -71,36 +67,18 @@ public final class InstanceDatabaseLinks {
         // Captured BEFORE the delete because the sweep runs AFTER it: the sweep reads
         // the surviving rows to decide what stays, and the doomed row must be gone by
         // then or it would vote to keep its own network.
-        InstanceDatabaseModel.SCHEMA.addBeforeRemoveHook(context -> {
-            Model model = context.getModel();
-            if (model == null) {
-                return;
-            }
-            QueryContext query = context.getQueryContext();
-            Criteria criteria = query != null ? query.getCriteria() : null;
-            QueryBuilder<Row> builder = model.find();
-            if (criteria != null) {
-                builder.where(criteria);
-            }
-            Set<Integer> doomed = new LinkedHashSet<>();
-            for (Row row : builder.all()) {
+        DoomedRows.handOver(InstanceDatabaseModel.SCHEMA, context -> {
+            Set<Integer> detached = new LinkedHashSet<>();
+            for (Row row : context.doomedRows()) {
                 Integer instanceId = row.get(InstanceDatabaseModel.INSTANCE_ID);
                 if (instanceId != null) {
-                    doomed.add(instanceId);
+                    detached.add(instanceId);
                 }
             }
-            if (!doomed.isEmpty()) {
-                context.setAttribute(DETACHED_INSTANCES, doomed);
-            }
-        });
-        InstanceDatabaseModel.SCHEMA.addAfterRemoveHook(context -> {
-            if (!(context.getAttribute(DETACHED_INSTANCES) instanceof Set<?> doomed)) {
-                return;
-            }
-            for (Object instanceId : doomed) {
-                if (instanceId instanceof Integer id) {
-                    InstanceDatabaseNetworks.sweepFor(id, false);
-                }
+            return detached.isEmpty() ? null : detached;
+        }, (context, detached) -> {
+            for (Integer instanceId : detached) {
+                InstanceDatabaseNetworks.sweepFor(instanceId, false);
             }
         });
         // The DATABASE side of the same rows: a database still attached to a LIVE workload

@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
 import be.elevenways.hohenheim.server.cms.ServerMediaPage;
 import be.elevenways.hohenheim.server.instance.InstallMedia;
+import be.elevenways.hohenheim.server.instance.InstallMediaFetches;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -24,8 +25,8 @@ import java.nio.file.Path;
 import java.util.Map;
 
 /**
- * Install media on an Incus host: URL fetch + delete forms of the server record's
- * Install media tab. Both endpoints declare the admin permission; the service refuses
+ * Install media on an Incus host: URL fetch (a background job, see InstallMediaFetches), upload
+ * and delete forms of the server record's Install media tab. Both endpoints declare the admin permission; the service refuses
  * non-Incus hosts by name.
  */
 final class ServerMediaHandlers {
@@ -48,18 +49,21 @@ final class ServerMediaHandlers {
             String name = form.getOrDefault("name", "").trim();
             String url = form.getOrDefault("url", "").trim();
             try {
-                // The fetch downloads and re-uploads a multi-GB ISO synchronously (the
-                // backup lane's contract), public addresses only and bounded by
-                // InstallMedia.FETCH_DEADLINE; the endpoint's rate limit bounds abuse.
-                // AIDEV-TODO: move it off the request thread once the Install media tab
-                // can show a running fetch and its outcome (see InstallMedia.fetch).
-                media.fetch(server, name, url);
+                // Every refusal an operator must read now is decided HERE, on the request
+                // thread; the download and the import then run as a background job whose
+                // stored state the Install media tab renders (and refreshes while it runs).
+                // The public-address guard, the ISO cap and the deadline are the fetcher's
+                // own and did not move.
+                media.requireFetchable(server, name, url);
+                InstallMediaFetches.start(server, name, progress ->
+                    media.transfer(server, name, url, progress, progress::importing));
             } catch (Violations refused) {
                 HohenheimFlash.error(conduit, HandlerSupport.violationMessage(refused));
                 return HandlerSupport.redirect(tab);
             }
-            ActivityLog.record(Models.get(ServerModel.class), serverId, "media_fetched", name);
-            HohenheimFlash.success(conduit, mediaMessage("media_fetched", name));
+            // The activity row ("media_fetched") is written by the job when the medium reads
+            // back on the host, never for a fetch that is merely accepted.
+            HohenheimFlash.success(conduit, mediaMessage("media_fetch_started", name));
             return HandlerSupport.redirect(tab);
         });
 

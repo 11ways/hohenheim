@@ -14,19 +14,14 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import com.sun.net.httpserver.HttpServer;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 import org.xbill.DNS.TSIG;
 
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
-import java.net.URI;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
@@ -44,12 +39,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * viewing instance's read-through + edit-forwarding on a secondary zone's
  * Records tab (against a scripted peer over real HTTP).
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class DnsCentralEditTest extends HohenheimTestBase {
 
+    /** The admin's API key: a class-wide, read-only credential every API call here rides. */
     private static String apiKey;
-    private static int ownedZoneId;
-    private static PeerStub stub;
 
     /** One recorded call on the scripted peer. */
     record StubCall(String method, String path, String authorization, String body) {}
@@ -60,6 +53,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         final List<StubCall> calls = new CopyOnWriteArrayList<>();
         volatile int status = 200;
         volatile String body = "{}";
+        private boolean closed;
 
         PeerStub() throws Exception {
             server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -83,18 +77,22 @@ class DnsCentralEditTest extends HohenheimTestBase {
             return "http://127.0.0.1:" + server.getAddress().getPort();
         }
 
+        /** Idempotent: a journey may stop the peer on purpose before its own cleanup runs. */
         @Override
-        public void close() {
-            server.stop(0);
+        public synchronized void close() {
+            if (!closed) {
+                closed = true;
+                server.stop(0);
+            }
         }
     }
 
-    @AfterAll
-    static void stopStub() {
-        if (stub != null) {
-            stub.close();
-            stub = null;
-        }
+    @BeforeAll
+    static void mintApiKey() {
+        Row user = AuthModels.users().find()
+            .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        apiKey = ApiKeyService.create(user.get(UserModel.ID), "dns-central-test",
+            List.of("hohenheim.*"), null).plaintext();
     }
 
     // ------------------------------------------------------------------
@@ -103,17 +101,11 @@ class DnsCentralEditTest extends HohenheimTestBase {
 
     /** Full record CRUD over the owner API, plus its refusals on secondary and unknown zones. */
     @Test
-    @Order(1)
     void ownerSideRecordApiJourney() throws Exception {
-        ownedZoneId = createZone("owned.example", DnsZoneModel.ROLE_PRIMARY, null);
-
-        Row user = AuthModels.users().find()
-            .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
-        apiKey = ApiKeyService.create(user.get(UserModel.ID), "dns-central-test",
-            List.of("hohenheim.*"), null).plaintext();
+        int ownedZoneId = createZone("owned.example", DnsZoneModel.ROLE_PRIMARY, null);
 
         // A session cookie must NOT be able to act on the csrf-exempt API route.
-        var sessionAttempt = postForm("/api/dns/zones/owned.example/records",
+        var sessionAttempt = adminPostForm("/api/dns/zones/owned.example/records",
             "name=www&type=A&value=192.0.2.1");
         assertThat(sessionAttempt.statusCode()).isEqualTo(403);
 
@@ -202,9 +194,13 @@ class DnsCentralEditTest extends HohenheimTestBase {
 
     /** The viewing instance reads through the owning peer, forwards edits, and degrades gracefully. */
     @Test
-    @Order(2)
     void centralEditThroughTheOwningPeerJourney() throws Exception {
-        stub = new PeerStub();
+        try (PeerStub stub = new PeerStub()) {
+            centralEditThroughTheOwningPeer(stub);
+        }
+    }
+
+    private void centralEditThroughTheOwningPeer(PeerStub stub) throws Exception {
         int centralPeerId = apiPeer("central-peer", stub.baseUrl());
         int zoneId = createZone("central.example", DnsZoneModel.ROLE_SECONDARY, centralPeerId);
 
@@ -238,7 +234,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         stub.calls.clear();
         stub.status = 200;
         stub.body = "{\"id\":6}";
-        var created = postForm("/admin/dns-zones/" + zoneId + "/remote-records",
+        var created = adminPostForm("/admin/dns-zones/" + zoneId + "/remote-records",
             "name=api&type=CNAME&value=owned.example.&ttl=&priority=&weight=&port=&enabled=true");
         assertThat(created.statusCode()).isEqualTo(302);
         assertThat(created.headers().firstValue("Location").orElse(""))
@@ -258,7 +254,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         // Update and delete address the owner's record id.
         stub.calls.clear();
         stub.body = "";
-        var updated = postForm("/admin/dns-zones/" + zoneId + "/remote-records",
+        var updated = adminPostForm("/admin/dns-zones/" + zoneId + "/remote-records",
             "record_id=6&name=api&type=CNAME&value=other.example.&enabled=true");
         assertThat(updated.headers().firstValue("Location").orElse("")).doesNotContain("saved");
         assertThat(popFlash()).isNotNull()
@@ -266,7 +262,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         assertThat(stub.calls.get(0).path()).isEqualTo("/api/dns/zones/central.example/records/6");
 
         stub.calls.clear();
-        var deleted = postForm("/admin/dns-zones/" + zoneId + "/remote-records",
+        var deleted = adminPostForm("/admin/dns-zones/" + zoneId + "/remote-records",
             "action=delete&record_id=6");
         assertThat(deleted.headers().firstValue("Location").orElse("")).doesNotContain("saved");
         assertThat(popFlash()).isNotNull()
@@ -314,7 +310,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         stub.calls.clear();
         stub.status = 422;
         stub.body = "{\"error\":\"validation\",\"field\":\"value\",\"key\":\"dns_record_duplicate\"}";
-        var refused = postForm("/admin/dns-zones/" + zoneId + "/remote-records",
+        var refused = adminPostForm("/admin/dns-zones/" + zoneId + "/remote-records",
             "name=www&type=A&value=198.51.100.9&enabled=true");
         String location = refused.headers().firstValue("Location").orElse("");
         assertThat(location)
@@ -341,9 +337,13 @@ class DnsCentralEditTest extends HohenheimTestBase {
      * assertion fails and the cancel branch already finds the delete call on the stub.
      */
     @Test
-    @Order(3)
     void remoteRecordDeleteConfirmsThroughTheShellDialog() throws Exception {
-        stub = new PeerStub();
+        try (PeerStub stub = new PeerStub()) {
+            remoteRecordDeleteConfirms(stub);
+        }
+    }
+
+    private void remoteRecordDeleteConfirms(PeerStub stub) throws Exception {
         int peerId = apiPeer("confirm-peer", stub.baseUrl());
         int zoneId = createZone("confirm.example", DnsZoneModel.ROLE_SECONDARY, peerId);
 
@@ -356,21 +356,38 @@ class DnsCentralEditTest extends HohenheimTestBase {
         String deleteButton = "form:has(input[name='action'][value='delete']) pl-button";
         waitForSelector(deleteButton);
         stub.calls.clear();
+        // Every write the PAGE issues towards the forwarding route, in issue order.
+        List<String> pagePosts = new CopyOnWriteArrayList<>();
+        page.onRequest(request -> {
+            if ("POST".equals(request.method()) && request.url().contains("/remote-records")) {
+                pagePosts.add(request.url());
+            }
+        });
 
-        // Cancel does NOT forward a delete to the owner.
+        // 1. Cancel closes the dialog.
         click(deleteButton);
         assertIsVisible(".pl-alertdialog-modal[data-open]");
         click("[data-cms-confirm-cancel]");
         assertIsNotVisible(".pl-alertdialog-modal");
-        page.waitForTimeout(400);
-        assertThat(stub.calls).as("cancel must not forward the delete").isEmpty();
 
-        // Confirm forwards the delete to the owning peer.
+        // 2. Confirm forwards the delete to the owning peer.
         click(deleteButton);
         assertIsVisible(".pl-alertdialog-modal[data-open]");
         click("[data-cms-confirm-ok]");
+        String deletePath = "/api/dns/zones/confirm.example/records/7/delete";
         page.waitForCondition(() -> stub.calls.stream()
-            .anyMatch(call -> "/api/dns/zones/confirm.example/records/7/delete".equals(call.path())));
+            .anyMatch(call -> deletePath.equals(call.path())));
+
+        // 3. Cancel forwarded nothing. AIDEV-NOTE: this used to sleep 400ms and assert an
+        //    empty stub, which proves nothing. The proof is ORDER: one page issues its
+        //    requests in the order its clicks queued them, so by the time the confirmed
+        //    delete has reached the peer, any request the earlier cancel click had queued
+        //    was issued BEFORE it. Exactly one page POST and exactly one forwarded delete
+        //    therefore means the cancel sent nothing.
+        assertThat(pagePosts)
+            .as("step 3: the only write the page issued is the confirmed one").hasSize(1);
+        assertThat(stub.calls.stream().filter(call -> deletePath.equals(call.path())).count())
+            .as("step 3: and the owner received exactly one delete").isEqualTo(1);
     }
 
     /**
@@ -382,12 +399,13 @@ class DnsCentralEditTest extends HohenheimTestBase {
      * change that breaks the symmetry fails one of the two here.
      */
     @Test
-    @Order(4)
     void transferKeyNegotiationJourney() throws Exception {
-        if (stub != null) {
-            stub.close();
+        try (PeerStub stub = new PeerStub()) {
+            transferKeyNegotiation(stub);
         }
-        stub = new PeerStub();
+    }
+
+    private void transferKeyNegotiation(PeerStub stub) throws Exception {
         int peerId = apiPeer("negotiate-peer", stub.baseUrl());
         DnsPeerModel peers = Models.get(DnsPeerModel.class);
 
@@ -400,7 +418,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         stub.body = "{\"status\":\"ok\",\"key_name\":\"" + keyName + "\",\"peer\":\"us\","
             + "\"transfer_host\":\"198.51.100.7\",\"transfer_port\":53,\"transfer_kept\":false}";
 
-        var negotiated = postForm("/admin/dns-peers/" + peerId + "/action/negotiate_transfer_key", confirmed(""));
+        var negotiated = adminPostForm("/admin/dns-peers/" + peerId + "/action/negotiate_transfer_key", confirmed(""));
         assertThat(negotiated.statusCode()).describedAs("the action runs").isIn(200, 302, 303);
 
         // 2. The peer was called on the symmetric endpoint, with the API key.
@@ -429,7 +447,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         // 4. Falsification -- a peer confirming a DIFFERENT key name stores nothing: the
         //    two sides would look each other up under names that never match.
         stub.body = "{\"status\":\"ok\",\"key_name\":\"xfer-somebody-else\",\"peer\":\"us\"}";
-        postForm("/admin/dns-peers/" + peerId + "/action/negotiate_transfer_key", confirmed(""));
+        adminPostForm("/admin/dns-peers/" + peerId + "/action/negotiate_transfer_key", confirmed(""));
         assertThat((String) peers.findById(peerId).get(DnsPeerModel.TSIG_SECRET))
             .describedAs("a mismatched confirmation must not rotate the working key")
             .isEqualTo(sentSecret);
@@ -437,7 +455,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         // 5. Falsification -- a peer that refuses leaves the working key alone too.
         stub.status = 500;
         stub.body = "nope";
-        postForm("/admin/dns-peers/" + peerId + "/action/negotiate_transfer_key", confirmed(""));
+        adminPostForm("/admin/dns-peers/" + peerId + "/action/negotiate_transfer_key", confirmed(""));
         assertThat((String) peers.findById(peerId).get(DnsPeerModel.TSIG_SECRET))
             .isEqualTo(sentSecret);
 
@@ -509,7 +527,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
             "peer=bad&key_name=xfer-bad&algorithm=rot13&secret="
             + URLEncoder.encode(DnsFederationKeys.mintSecret(), StandardCharsets.UTF_8))
             .statusCode()).isEqualTo(422);
-        assertThat(postForm("/api/dns/peer-key",
+        assertThat(adminPostForm("/api/dns/peer-key",
             "peer=bad&key_name=xfer-bad&algorithm=hmac-sha256&secret="
             + URLEncoder.encode(DnsFederationKeys.mintSecret(), StandardCharsets.UTF_8))
             .statusCode()).isEqualTo(403);
@@ -559,26 +577,17 @@ class DnsCentralEditTest extends HohenheimTestBase {
         return record.get(DnsRecordModel.ID);
     }
 
+    /** A bearer-token GET: the peer API's own credential shape, not X-Api-Key. */
     private HttpResponse<String> apiGet(String path) throws Exception {
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
-        return client.send(HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
+        return sendRequest(requestTo(path)
             .header("Authorization", "Bearer " + apiKey)
-            .build(), HttpResponse.BodyHandlers.ofString());
+            .GET());
     }
 
     private HttpResponse<String> apiPost(String path, String body) throws Exception {
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
-        return client.send(HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
+        return sendRequest(requestTo(path)
             .header("Authorization", "Bearer " + apiKey)
             .header("Content-Type", "application/x-www-form-urlencoded")
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build(), HttpResponse.BodyHandlers.ofString());
-    }
-
-    /** The admin session's form POST, which every session-authenticated call here uses. */
-    private HttpResponse<String> postForm(String path, String body) throws Exception {
-        return httpPostForm(path, body, sessionToken, csrfToken);
+            .POST(HttpRequest.BodyPublishers.ofString(body)));
     }
 }

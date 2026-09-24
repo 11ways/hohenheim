@@ -1,9 +1,7 @@
 package be.elevenways.hohenheim.test;
 
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import org.junit.jupiter.api.Test;
 
-import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -79,17 +77,17 @@ class AdminRenderBudgetTest extends HohenheimTestBase {
             .isLessThan(8L * 1024 * 1024);
     }
 
+    // AIDEV-NOTE: ONE client for the whole measurement, deliberately not the base's
+    // sendRequest (a fresh HttpClient per call): a new client pays a TCP connect per sample,
+    // which would time connection setup instead of the server's render.
     private long fetchSize(HttpClient client, String path) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .GET().build();
+        HttpRequest request = requestTo(path).GET().build();
         return client.send(request, HttpResponse.BodyHandlers.ofByteArray()).body().length;
     }
 
     private long fetch(HttpClient client, String path) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
+        HttpRequest request = requestTo(path)
+            .header("Cookie", sessionCookieHeader(sessionToken))
             .GET().build();
         long start = System.nanoTime();
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());

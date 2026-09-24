@@ -10,7 +10,6 @@ import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.upstream.kinds.DevNamespaceUpstreamKind;
 import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.EndpointRoute;
@@ -41,6 +40,7 @@ import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -192,12 +192,9 @@ class DevTunnelTest {
         return client;
     }
 
-    private static void awaitRegistered(DevTunnelClient client) throws InterruptedException {
-        long deadline = Now.millis() + 10_000;
-        while (!client.isRegistered() && Now.millis() < deadline) {
-            Thread.sleep(20);
-        }
-        assertThat(client.isRegistered()).as("client registered").isTrue();
+    private static void awaitRegistered(DevTunnelClient client) {
+        Poll.until("client registered", Duration.ofSeconds(10), Duration.ofMillis(20),
+            client::isRegistered);
     }
 
     /** Raw HTTP GET through the proxy with an explicit Host header; returns status line + body. */
@@ -466,9 +463,7 @@ class DevTunnelTest {
             // 4. The next revalidation tick resolves that and closes the tunnel, so
             //    the proxy falls back to the offline page. Without revalidation the
             //    lease survives until the client or the transport ends it.
-            assertThat(awaitOffline("rotating." + BASE))
-                .as("step 4: a rotated token must close the live tunnel")
-                .isTrue();
+            awaitOffline("step 4: a rotated token must close the live tunnel", "rotating." + BASE);
         } finally {
             setNamespaceToken(TOKEN);
         }
@@ -485,16 +480,15 @@ class DevTunnelTest {
     }
 
     /** Poll the proxy until the name no longer resolves to a live tunnel. */
-    private static boolean awaitOffline(String host) throws Exception {
-        long deadline = Now.millis()
-            + (HohenheimEndpoints.DEV_TUNNEL_REVALIDATION_INTERVAL_MS * 4);
-        while (Now.millis() < deadline) {
-            if (proxyGet(host, "/")[0].contains("503")) {
-                return true;
-            }
-            Thread.sleep(500);
-        }
-        return false;
+    private static void awaitOffline(String what, String host) {
+        Poll.until(what, Duration.ofMillis(HohenheimEndpoints.DEV_TUNNEL_REVALIDATION_INTERVAL_MS * 4),
+            Duration.ofMillis(500), () -> {
+                try {
+                    return proxyGet(host, "/")[0].contains("503");
+                } catch (Exception unreachable) {
+                    throw new IllegalStateException("the proxy did not answer " + host, unreachable);
+                }
+            });
     }
 
     @Test

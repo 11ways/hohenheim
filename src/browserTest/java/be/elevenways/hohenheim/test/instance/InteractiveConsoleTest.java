@@ -2,21 +2,17 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.host.HostPreflight;
-import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceConsoleHandler;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -31,11 +27,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -50,6 +46,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class InteractiveConsoleTest {
 
+    /** Bounded wait: the console output and stdin are pumped by threads of their own. */
+    private static final Duration WAIT = Duration.ofSeconds(10);
+
     private static SqlDatasource datasource;
     private static int hostId;
     private static final String HOST = "interactive-console-host";
@@ -59,7 +58,7 @@ class InteractiveConsoleTest {
         datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
         FakeNativeDaemons.register();
-        Db.run(datasource, () -> hostId = incusHost(HOST));
+        Db.run(datasource, () -> hostId = HostFixtures.admittedIncusHost(HOST));
     }
 
     @AfterEach
@@ -93,7 +92,7 @@ class InteractiveConsoleTest {
             //    and escape sequences, and re-translating them would corrupt the TUI.
             String painted = "[2J[Hready\r\n";
             stream.push(painted);
-            await("step 3: the output reached the viewer", () -> !session.texts.isEmpty());
+            Poll.until("step 3: the output reached the viewer", WAIT, () -> !session.texts.isEmpty());
             assertThat(String.join("", session.texts))
                 .as("step 3: raw terminal bytes, no newline translation")
                 .isEqualTo(painted);
@@ -101,7 +100,7 @@ class InteractiveConsoleTest {
             // 4. Keystrokes reach the workload's stdin exactly as typed: no newline is
             //    appended (a terminal gets \r from the Enter key, not a line).
             handler.onTextMessage("ls\r");
-            await("step 4: the keystrokes reached stdin", () -> !stream.stdinWrites().isEmpty());
+            Poll.until("step 4: the keystrokes reached stdin", WAIT, () -> !stream.stdinWrites().isEmpty());
             assertThat(stream.stdinWrites())
                 .as("step 4: keystrokes are written verbatim").containsExactly("ls\r");
 
@@ -141,7 +140,7 @@ class InteractiveConsoleTest {
 
             // 2. A pipe's bare \n leaves the terminal cursor mid-line: translated.
             stream.push("line one\nline two\n");
-            await("step 2: the output reached the viewer", () -> !session.texts.isEmpty());
+            Poll.until("step 2: the output reached the viewer", WAIT, () -> !session.texts.isEmpty());
             assertThat(String.join("", session.texts))
                 .as("step 2: the plain console translates \\n to \\r\\n")
                 .isEqualTo("line one\r\nline two\r\n");
@@ -189,33 +188,10 @@ class InteractiveConsoleTest {
 
     /** A user holding {@code manage} on the record, which implies {@code console}. */
     private static Principal grantedViewer(String label, int instanceId) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, label + "@hohenheim.local");
-        user.set(UserModel.DISPLAY_NAME, "Console " + label);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        int userId = user.get(UserModel.ID);
+        int userId = ApiSupport.user(label + "@hohenheim.local", "Console " + label);
         RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.MANAGE, true);
         return new UserPrincipal(userId, "Console " + label);
-    }
-
-    private static int incusHost(String name) {
-        Row row = Models.get(ServerModel.class).createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        Models.get(ServerModel.class).save(row);
-        HostFixtures.acknowledgePosture(row);
-        HostPreflight.store(name, new HostPreflight.Report(List.of(
-            new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon"),
-            new HostPreflight.Check(IncusPreflight.KERNEL_LANE_CHECK,
-                HostPreflight.STATUS_PASS, true, "fake kernel-truth lane")),
-            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
-        return Models.get(ServerModel.class).findByName(name).get(ServerModel.ID);
     }
 
     private static int instanceRecord(String name, @Nullable String consoleKind) {
@@ -230,22 +206,6 @@ class InteractiveConsoleTest {
         row.set(InstanceModel.SERVER_ID, hostId);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
-    }
-
-    private static void await(String what, BooleanSupplier condition) {
-        long deadline = Now.millis() + 10_000;
-        while (Now.millis() < deadline) {
-            if (condition.getAsBoolean()) {
-                return;
-            }
-            try {
-                Thread.sleep(25);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
-        assertThat(condition.getAsBoolean()).as(what).isTrue();
     }
 
     /** A minimal in-process session that records what the handler did to it. */

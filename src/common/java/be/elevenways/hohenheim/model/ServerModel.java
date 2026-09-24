@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.net.IpLiterals;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.orm.datasource.DuplicateKeyException;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.datasource.context.SaveToDatasource;
@@ -28,11 +29,20 @@ public class ServerModel extends Model {
     public static final Identifier MODEL_ID = Identifier.of("hohenheim", "server");
     public static final Schema SCHEMA = new Schema();
 
-    /** {@link #MODE} value for the implicit local Docker daemon. */
+    /** {@link #MODE} token of {@link HostMode#LOCAL}: the implicit local Docker daemon. */
     public static final String MODE_LOCAL = "local";
 
-    /** {@link #MODE} value for a remote daemon reached over SSH. */
+    /** {@link #MODE} token of {@link HostMode#SSH}: a remote daemon reached over SSH. */
     public static final String MODE_SSH = "ssh";
+
+    /**
+     * The NAME of the implicit local host row, a host-name fact rather than a mode.
+     *
+     * AIDEV-NOTE: spelled like {@link #MODE_LOCAL} because production rows carry it that
+     * way, but it is a different fact: compare host NAMES against this and read a MODE
+     * through {@link HostMode}.
+     */
+    public static final String LOCAL_HOST_NAME = "local";
 
     /** {@link #RUNTIME}: the host runs a Docker daemon (unix socket locally, ssh remotely). */
     public static final String RUNTIME_DOCKER = "docker";
@@ -63,15 +73,18 @@ public class ServerModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name").build());
-    public static final EnumField MODE = SCHEMA.addField(EnumField.builder("mode")
-        .value(MODE_LOCAL, v -> v.displayName("Local")
-            .label(Microcopy.of(MODE_LOCAL).withFilter("scope", "host_mode"))
-            .icon("house").color("teal"))
-        .value(MODE_SSH, v -> v.displayName("SSH")
-            .label(Microcopy.of(MODE_SSH).withFilter("scope", "host_mode"))
-            .icon("terminal").color("indigo"))
-        .build());
+    public static final EnumField MODE = SCHEMA.addField(modeField());
     public static final StringField SSH_TARGET = SCHEMA.addField(StringField.builder().name("ssh_target").build());
+
+    /** The mode field, one value per {@link HostMode} member and nothing else. */
+    private static EnumField modeField() {
+        EnumField.Builder builder = EnumField.builder("mode");
+        for (HostMode mode : HostMode.values()) {
+            builder.value(mode.token(), v -> v.displayName(mode.displayName())
+                .label(mode.label()).icon(mode.icon()).color(mode.color()));
+        }
+        return builder.build();
+    }
 
     /**
      * The DECLARED runtime this host runs, the discriminator every per-host dispatch
@@ -421,9 +434,9 @@ public class ServerModel extends Model {
         // and detaches the one reference that is history rather than ownership: a trashed
         // instance's server_id.
         //
-        // AIDEV-NOTE: the old parking lane (PortLedger.captureDoomedOwners before the delete,
-        // markDoomedServersReleasing after it) can no longer run: parking a claim keeps a row
-        // referencing the server, which is exactly what makes the delete fail. Port claims
+        // AIDEV-NOTE: the old parking lane (capture the doomed servers before the delete, park
+        // their claims after it) was removed: parking a claim keeps a row referencing the
+        // server, which is exactly what makes the delete fail. Port claims
         // are therefore counted in the refusal like every other reference; the claims of a
         // host whose owners are gone are released by the observer or by the operator first.
         SCHEMA.addBeforeRemoveHook(ServerModel::refuseRemovalWhileOwned);
@@ -540,16 +553,7 @@ public class ServerModel extends Model {
      * @throws Violations naming the server and what still owns it
      */
     static void refuseRemovalWhileOwned(@NonNull RemoveFromDatasource context) {
-        Model model = context.getModel();
-        if (model == null) {
-            return;
-        }
-        var builder = model.find();
-        var queryContext = context.getQueryContext();
-        if (queryContext != null && queryContext.getCriteria() != null) {
-            builder.where(queryContext.getCriteria());
-        }
-        for (Row doomed : builder.all()) {
+        for (Row doomed : context.doomedRows()) {
             Integer serverId = doomed.get(ID);
             if (serverId == null) {
                 continue;
@@ -561,30 +565,68 @@ public class ServerModel extends Model {
                     .withArg("name", String.valueOf((Object) doomed.get(NAME)))
                     .withArg("instance", String.valueOf((Object) migrating.get(InstanceModel.NAME))));
             }
-            long stacks = Models.get(StackModel.class).find()
-                .where(StackModel.SERVER_ID.eq(serverId)).count();
-            long databases = Models.get(DatabaseModel.class).find()
-                .where(DatabaseModel.SERVER_ID.eq(serverId)).count();
-            long engines = Models.get(DatabaseEngineModel.class).find()
-                .where(DatabaseEngineModel.SERVER_ID.eq(serverId)).count();
-            long instances = Models.get(InstanceModel.class).find()
-                .where(InstanceModel.SERVER_ID.eq(serverId))
-                .where(InstanceModel.DELETED_AT.isNull()).count();
-            long ports = Models.get(PortAllocationModel.class).find()
-                .where(PortAllocationModel.SERVER_ID.eq(serverId)).count();
-            if (stacks > 0 || databases > 0 || engines > 0 || instances > 0 || ports > 0) {
-                throw Violations.ofForm(Microcopy.of("server_in_use")
+            References references = referencesOf(serverId);
+            if (references.any()) {
+                throw Violations.ofForm(references.describe(Microcopy.of("server_in_use")
                     .withFilter("scope", "violations")
-                    .withArg("name", String.valueOf((Object) doomed.get(NAME)))
-                    .withArg("stacks", stacks)
-                    .withArg("databases", databases)
-                    .withArg("engines", engines)
-                    .withArg("instances", instances)
-                    .withArg("ports", ports));
+                    .withArg("name", String.valueOf((Object) doomed.get(NAME)))));
             }
             InstanceModel.detachTrashed(InstanceModel.SERVER_ID,
                 InstanceModel.SERVER_ID.eq(serverId));
         }
+    }
+
+    /**
+     * Everything that still references one host and therefore holds it in the inventory.
+     *
+     * @param stacks    stacks placed on the host
+     * @param databases managed databases placed on the host
+     * @param engines   shared database engines placed on the host
+     * @param instances LIVE instances on the host; a trashed one is history, detached on removal
+     * @param ports     port claims recorded against the host, releasing ones included
+     */
+    public record References(long stacks, long databases, long engines, long instances, long ports) {
+
+        /** @return how many rows reference the host in total */
+        public long total() {
+            return this.stacks + this.databases + this.engines + this.instances + this.ports;
+        }
+
+        /** @return whether anything still references the host */
+        public boolean any() {
+            return this.total() > 0;
+        }
+
+        /** @return {@code message} carrying every count as an argument, the total as {@code workloads} */
+        public @NonNull Microcopy describe(@NonNull Microcopy message) {
+            return message
+                .withArg("stacks", this.stacks)
+                .withArg("databases", this.databases)
+                .withArg("engines", this.engines)
+                .withArg("instances", this.instances)
+                .withArg("ports", this.ports)
+                .withArg("workloads", this.total());
+        }
+    }
+
+    /**
+     * THE count of what still references a host -- the removal refusal above and the admin
+     * resource's dead delete both read it, so the button can never look available for a host
+     * the delete then refuses.
+     */
+    public static @NonNull References referencesOf(int serverId) {
+        return new References(
+            Models.get(StackModel.class).find()
+                .where(StackModel.SERVER_ID.eq(serverId)).count(),
+            Models.get(DatabaseModel.class).find()
+                .where(DatabaseModel.SERVER_ID.eq(serverId)).count(),
+            Models.get(DatabaseEngineModel.class).find()
+                .where(DatabaseEngineModel.SERVER_ID.eq(serverId)).count(),
+            Models.get(InstanceModel.class).find()
+                .where(InstanceModel.SERVER_ID.eq(serverId))
+                .where(InstanceModel.DELETED_AT.isNull()).count(),
+            Models.get(PortAllocationModel.class).find()
+                .where(PortAllocationModel.SERVER_ID.eq(serverId)).count());
     }
 
     /**
@@ -718,13 +760,15 @@ public class ServerModel extends Model {
      * Whether connecting to this host requires a pinned, operator-CONFIRMED identity:
      * every remote transport does (docker over ssh, incus over https), only the two
      * local-socket shapes do not. THE gate admission and placement key on -- never
-     * re-derive from MODE alone, which says nothing about an Incus host.
+     * re-derive from MODE alone, which says nothing about an Incus host. An unknown or
+     * missing docker mode FAILS CLOSED: it requires a pin.
      */
     public static boolean requiresPinnedIdentity(@NonNull Row server) {
         if (isIncus(server)) {
             return isIncusHttps(server);
         }
-        return MODE_SSH.equals(server.get(MODE));
+        HostMode mode = HostMode.parse(server.get(MODE));
+        return mode == null || mode.remote();
     }
 
     // -- THE canonical host-key derivation -----------------------------------
@@ -743,7 +787,7 @@ public class ServerModel extends Model {
      */
     public static @NonNull String canonicalSpelling(@Nullable Object raw) {
         if (raw == null) {
-            return MODE_LOCAL;
+            return LOCAL_HOST_NAME;
         }
         String spelling = String.valueOf(raw).trim();
         if (spelling.indexOf(':') >= 0) {
@@ -752,7 +796,7 @@ public class ServerModel extends Model {
                 spelling = key.getPath().trim();
             }
         }
-        return spelling.isEmpty() ? MODE_LOCAL : spelling;
+        return spelling.isEmpty() ? LOCAL_HOST_NAME : spelling;
     }
 
     /**
@@ -767,7 +811,7 @@ public class ServerModel extends Model {
             return requireExisting(number.intValue());
         }
         String spelling = canonicalSpelling(raw);
-        if (MODE_LOCAL.equals(spelling)) {
+        if (LOCAL_HOST_NAME.equals(spelling)) {
             return localServerId();
         }
         Row byName = Models.get(ServerModel.class).findByName(spelling);
@@ -780,24 +824,42 @@ public class ServerModel extends Model {
         throw new IllegalArgumentException("No server named '" + spelling + "'");
     }
 
-    /** The implicit local daemon's row id, creating its row when absent (idempotent). */
-    public static int localServerId() {
+    /**
+     * The implicit local daemon's row id, creating its row when absent (idempotent, and safe
+     * under concurrent first calls).
+     *
+     * AIDEV-NOTE: two first calls used to both miss the read and both insert; the loser hit
+     * {@code servers_name_unique} and surfaced a raw duplicate-key failure from whatever
+     * caller happened to resolve the local host first (a deploy, a seed, an API read). The
+     * JVM lock serializes this process's callers; the unique index stays the arbiter across
+     * processes, and losing that race reads the winner's row instead of failing.
+     */
+    public static synchronized int localServerId() {
         ServerModel model = Models.get(ServerModel.class);
-        Row row = model.findByName(MODE_LOCAL);
-        if (row == null) {
-            row = model.createEmptyRow();
-            row.set(NAME, MODE_LOCAL);
-            row.set(MODE, MODE_LOCAL);
-            model.save(row);
+        Row row = model.findByName(LOCAL_HOST_NAME);
+        if (row != null) {
+            return row.get(ID);
         }
-        return row.get(ID);
+        Row created = model.createEmptyRow();
+        created.set(NAME, LOCAL_HOST_NAME);
+        created.set(MODE, HostMode.LOCAL.token());
+        try {
+            model.save(created);
+            return created.get(ID);
+        } catch (DuplicateKeyException lost) {
+            Row winner = model.find().noCache().where(NAME.eq(LOCAL_HOST_NAME)).first();
+            if (winner == null) {
+                throw lost;
+            }
+            return winner.get(ID);
+        }
     }
 
     /** The display/transport name of a server id; a null id means the local daemon. */
     public static @NonNull String nameOf(@Nullable Integer serverId) {
         if (serverId == null) {
             Models.get(ServerModel.class);   // fail fast on an unbooted model registry
-            return MODE_LOCAL;
+            return LOCAL_HOST_NAME;
         }
         Row row = Models.get(ServerModel.class).findById(serverId);
         if (row == null) {

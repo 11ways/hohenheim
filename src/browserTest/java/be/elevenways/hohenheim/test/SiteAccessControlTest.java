@@ -4,26 +4,15 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.auth.server.ZenitAuth;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.csrf.CsrfTokens;
-import be.elevenways.zenit.common.session.Session;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Map;
 
@@ -89,46 +78,18 @@ class SiteAccessControlTest extends HohenheimTestBase {
 
         // A dedicated NON-admin user with its own session; the shared admin
         // session stays untouched.
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, "limited@hohenheim.local");
-        user.set(UserModel.DISPLAY_NAME, "Limited User");
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        limitedUserId = user.get(UserModel.ID);
-
-        Session session = Zenit.getSessionStore().create();
-        session.set(AuthKeys.USER_ID, limitedUserId.longValue());
-        limitedCsrf = ZenitAuth.randomToken();
-        session.set(CsrfTokens.TOKEN, limitedCsrf);
-        Zenit.getSessionStore().save(session);
-        limitedSession = session.token().secret();
+        limitedUserId = ApiSupport.user("limited@hohenheim.local", "Limited User");
+        TestSession session = sessionFor(limitedUserId);
+        limitedCsrf = session.csrf();
+        limitedSession = session.token();
     }
 
     private HttpResponse<String> limitedGet(String path) throws Exception {
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + port() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + limitedSession)
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
+        return httpGet(path, limitedSession);
     }
 
     private HttpResponse<String> limitedPost(String path) throws Exception {
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + port() + path))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + limitedSession)
-            .header("X-Csrf-Token", limitedCsrf)
-            .POST(HttpRequest.BodyPublishers.ofString(""))
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
-
-    private int port() {
-        return getServerPort();
+        return httpPostForm(path, "", limitedSession, limitedCsrf);
     }
 
     /**

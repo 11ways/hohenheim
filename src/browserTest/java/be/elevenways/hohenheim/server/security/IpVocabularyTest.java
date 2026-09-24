@@ -6,6 +6,7 @@ import java.util.List;
 
 import static be.elevenways.hohenheim.net.IpLiterals.isIpv4;
 import static be.elevenways.hohenheim.net.IpLiterals.isIpv6;
+import static be.elevenways.hohenheim.net.IpLiterals.isNetwork;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -87,5 +88,22 @@ class IpVocabularyTest {
             .as("step 4: embedded dotted quad").isFalse();
         assertThat(isIpv6("1:2:3:4:5:6:7"))
             .as("step 4: too few groups without compression").isFalse();
+    }
+
+    @Test
+    void theTrustedSourceSyntaxKeepsAcceptingWhatProductionStored() {
+        // 1. Every shape the retired IpAddressSyntax accepted still coerces: a stored
+        //    trusted-source list must survive the upgrade.
+        for (String accepted : List.of("203.0.113.9", " 203.0.113.0/24 ", "10.0.0.0/8",
+                "0.0.0.0/0", "2001:db8::/32", "::1", "::/0", "::ffff:10.0.0.0/104",
+                "2001:db8::1.2.3.4", "1.2.3.4 /32", "10.0.0.0/+8", "010.0.0.1")) {
+            assertThat(isNetwork(accepted)).as("step 1: '" + accepted + "' is accepted").isTrue();
+        }
+
+        // 2. Hostnames, zone ids, shorthand and out-of-family prefixes are still refused.
+        for (String refused : new String[] {"example.com", "fe80::1%eth0", "1.2.3", "1.2.3.4/33",
+                "2001:db8::/129", "10.0.0.0/-1", "10.0.0.0/x", "10.0.0.0/8/8", "", " ", null}) {
+            assertThat(isNetwork(refused)).as("step 2: '" + refused + "' is refused").isFalse();
+        }
     }
 }

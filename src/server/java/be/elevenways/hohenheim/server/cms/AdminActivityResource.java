@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.activity.ActivityRecordCell;
+import be.elevenways.hohenheim.server.auth.GrantSubjects;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.zenit.cms.common.page.CmsRecordLinks;
 import be.elevenways.zenit.common.routing.BoundEndpoint;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.render.activity.ActivityPresentation;
@@ -13,6 +13,7 @@ import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.FilterState;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ActivityText;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -140,8 +141,16 @@ public final class AdminActivityResource extends ActivityResource {
             return value;
         }
         String actor = row.get(ActivityModel.ACTOR);
-        return actor == null || actor.isBlank() ? value
-            : HohenheimAccess.subjectLabel("user:" + actor);
+        if (actor == null || actor.isBlank()) {
+            return value;
+        }
+        // The actor column is a free-form principal id: a numeric one is a user, spelled
+        // through the one subject-token home; anything else renders as itself.
+        PrimitiveCoercion.Result<Long> userId = PrimitiveCoercion.toLong(actor,
+            PrimitiveCoercion.NumberRule.EXACT_VALUE, PrimitiveCoercion.TextRule.TRIMMED_BLANK_IS_NULL);
+        return userId.ok() && userId.value() != null
+            ? HohenheimAccess.subjectLabel(GrantSubjects.userToken(userId.value()))
+            : actor;
     }
 
     /**
@@ -183,9 +192,10 @@ public final class AdminActivityResource extends ActivityResource {
         }
         String title = row.get(ActivityModel.RECORD_TITLE);
         String label = title != null && !title.isBlank() ? title : recordId;
-        // The shared walk (CmsRecordLinks): first registered resource over the
-        // model wins, activity resources skipped, absence answers null.
-        BoundEndpoint<?> target = CmsRecordLinks.detailForToken(
+        // The admin-panel walk (AdminRecordLinks): this list lives in /admin, so the record
+        // links into /admin -- never into the /manage narrowing of the same model, which the
+        // framework's panel-blind CmsRecordLinks picked by hash order.
+        BoundEndpoint<?> target = AdminRecordLinks.detailForToken(
             row.get(ActivityModel.MODEL), recordId);
         return new ActivityRecordCell(label, target != null ? target.toUrl() : null);
     }

@@ -320,7 +320,9 @@ class TlsPassthroughTest {
         try (Socket slow = new Socket("127.0.0.1", proxy.getHttpsAddress().getPort())) {
             slow.getOutputStream().write(hello[0]);
             slow.getOutputStream().flush();
-            Thread.sleep(100);
+            // No wait needed: the listener's ONE accept loop takes the pending permit at
+            // accept time, and the kernel's accept queue is FIFO, so the slow connection
+            // (connected first) holds the only permit before the excess one is accepted.
             try (Socket excess = new Socket("127.0.0.1", proxy.getHttpsAddress().getPort())) {
                 excess.setSoTimeout(3_000);
                 excess.getOutputStream().write(hello);

@@ -2,30 +2,21 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.model.GameDomainModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.host.HostPreflight;
-import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.hohenheim.test.TestDatabases;
-import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
-import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -56,22 +47,6 @@ class InstanceVolumeMigrationTest {
         FakeNativeDaemons.register();
     }
 
-    private static int host(String name) {
-        Row row = Models.get(ServerModel.class).createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        Models.get(ServerModel.class).save(row);
-        HostFixtures.acknowledgePosture(row);
-        HostPreflight.store(name, new HostPreflight.Report(List.of(
-            new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon"),
-            new HostPreflight.Check(IncusPreflight.KERNEL_LANE_CHECK,
-                HostPreflight.STATUS_PASS, true, "fake kernel-truth lane")),
-            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
-        return Models.get(ServerModel.class).findByName(name).get(ServerModel.ID);
-    }
-
     /** A volume-kind instance with two declared logical volumes. */
     private static int volumeInstance(String name, int serverId) {
         Row row = Models.get(InstanceModel.class).createEmptyRow();
@@ -98,8 +73,8 @@ class InstanceVolumeMigrationTest {
     @Test
     void coldVolumeMigrationMovesDataOwnershipAndTheChargeInOneDirection() {
         Db.run(datasource, () -> {
-            int src = host("vmig-src");
-            int dst = host("vmig-dst");
+            int src = HostFixtures.admittedIncusHost("vmig-src");
+            int dst = HostFixtures.admittedIncusHost("vmig-dst");
             InstanceService service = new InstanceService();
             int id = volumeInstance("vol-mover", src);
             String handle = FakeNativeDaemons.handleOf(id);
@@ -179,8 +154,8 @@ class InstanceVolumeMigrationTest {
     @Test
     void thePairAndPublicationLocksRefuseByNameAndReachTheSurvey() {
         Db.run(datasource, () -> {
-            int src = host("vref-src");
-            int dst = host("vref-dst");
+            int src = HostFixtures.admittedIncusHost("vref-src");
+            int dst = HostFixtures.admittedIncusHost("vref-dst");
             InstanceService service = new InstanceService();
             int backend = volumeInstance("vol-backend", src);
             int proxy = volumeInstance("vol-proxy", src);
@@ -269,8 +244,8 @@ class InstanceVolumeMigrationTest {
     @Test
     void killedControllerSettlesBothVolumeCrashWindowsWithoutSplitOwnership() {
         Db.run(datasource, () -> {
-            int src = host("vcrash-src");
-            int dst = host("vcrash-dst");
+            int src = HostFixtures.admittedIncusHost("vcrash-src");
+            int dst = HostFixtures.admittedIncusHost("vcrash-dst");
             InstanceService service = new InstanceService();
             int id = volumeInstance("vol-crasher", src);
             String handle = FakeNativeDaemons.handleOf(id);
@@ -346,8 +321,8 @@ class InstanceVolumeMigrationTest {
     @Test
     void aForeignDestinationVolumeRefusesTheMoveAndTheSourceRecovers() {
         Db.run(datasource, () -> {
-            int src = host("vfor-src");
-            int dst = host("vfor-dst");
+            int src = HostFixtures.admittedIncusHost("vfor-src");
+            int dst = HostFixtures.admittedIncusHost("vfor-dst");
             InstanceService service = new InstanceService();
             int id = volumeInstance("vol-collide", src);
             String handle = FakeNativeDaemons.handleOf(id);

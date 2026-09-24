@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthRegistry;
 import be.elevenways.zenit.common.flash.FlashLevel;
 import be.elevenways.zenit.common.routing.Endpoint;
@@ -10,12 +9,10 @@ import be.elevenways.zenit.common.routing.EndpointRoute;
 import be.elevenways.zenit.common.routing.PageEndpoint;
 import be.elevenways.zenit.server.setting.ServerSettings;
 import com.microsoft.playwright.Locator;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
 /**
@@ -25,7 +22,6 @@ import java.net.http.HttpResponse;
  * {@code debugging.expose_error_details}. The throwing endpoint is registered by
  * THIS test class -- production no longer ships a /_test/error route.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ErrorHandlingTest extends HohenheimTestBase {
 
     /** The path prefix of the test-owned route. */
@@ -75,7 +71,6 @@ class ErrorHandlingTest extends HohenheimTestBase {
     }
 
     @Test
-    @Order(1)
     void plainHttpErrorReturns500AndSaysNothingAboutTheExceptionUntilAskedTo()
             throws Exception {
         // 1. PRODUCTION posture (what this installation runs): a real 500 with a real
@@ -118,20 +113,10 @@ class ErrorHandlingTest extends HohenheimTestBase {
     }
 
     private HttpResponse<String> errorResponse(boolean signedIn) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
-        HttpRequest.Builder request = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + TEST_ERROR_PREFIX + "/error"))
-            .GET();
-        if (signedIn) {
-            request.header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken);
-        }
-        return client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+        return httpGet(TEST_ERROR_PREFIX + "/error", signedIn ? sessionToken : null);
     }
 
     @Test
-    @Order(2)
     void softNavErrorStaysVisibleKeepsTheShellAndRecovers() {
         navigateToApp("/admin");
         waitForHydration();

@@ -37,6 +37,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.time.Duration;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -153,9 +154,10 @@ class HohenheimTaskBootstrapTest {
             .isNotEmpty();
 
         for (String type : bootTypes) {
-            assertThat(awaitHistory(type))
-                .as("BOOT_AND_CRON task should have a history row shortly after boot: " + type)
-                .isTrue();
+            // Boot fires run async on virtual threads, so the row may land shortly after.
+            Poll.until("BOOT_AND_CRON task should have a history row shortly after boot: " + type,
+                Duration.ofSeconds(5), Duration.ofMillis(100),
+                () -> !service.historyModel().findRecentForType(type, 5).isEmpty());
         }
     }
 
@@ -207,14 +209,5 @@ class HohenheimTaskBootstrapTest {
                 .anyMatch(kind -> kind == ScheduleKind.BOOT_AND_CRON) == withBoot)
             .map(TaskDescriptor::typePath)
             .toList();
-    }
-
-    /** Poll for up to ~5s because boot fires run async on virtual threads. */
-    private static boolean awaitHistory(String type) throws InterruptedException {
-        for (int i = 0; i < 50; i++) {
-            if (!service.historyModel().findRecentForType(type, 5).isEmpty()) return true;
-            Thread.sleep(100);
-        }
-        return false;
     }
 }

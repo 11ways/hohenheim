@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.security;
 
+import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BanModel;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -176,14 +178,9 @@ class NeverBanHostnamesTest {
         // listener). Asserting immediately raced that publish and lost under fork load
         // (2026-08-10, 43ms failure) -- so poll for the publish; the assertion itself
         // is unchanged.
-        String problem = null;
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        while (problem == null && System.nanoTime() < deadline) {
-            problem = BanService.protectionProblem("203.0.113.91");
-            if (problem == null) {
-                Thread.sleep(10);
-            }
-        }
+        String problem = Poll.value("the refreshed never-ban snapshot protects the address",
+            Duration.ofSeconds(5), Duration.ofMillis(10),
+            () -> BanService.protectionProblem("203.0.113.91"));
         assertThat(problem).contains("never_ban");
     }
 }

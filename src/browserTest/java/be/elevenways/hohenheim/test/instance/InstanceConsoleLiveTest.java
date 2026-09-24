@@ -1,8 +1,9 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.instance.ConsoleKind;
@@ -12,27 +13,25 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
+import java.time.Duration;
+import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Supplier;
 import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -47,44 +46,36 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class InstanceConsoleLiveTest {
 
+    /** The interval of every wait here: each probe is a daemon or database round trip. */
+    private static final Duration POLL_INTERVAL = Duration.ofMillis(100);
+
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static PrivateNetns netns;
 
     @BeforeAll
     static void setUp() throws Exception {
-        File db = File.createTempFile("hohenheim-console-live-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
         // ONE database per test class: the controller identity (and therefore every
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
-        if (PrivateNetns.available()) {
-            netns = new PrivateNetns();
-            WorkloadNetworkPolicy.overrideForTest(netns.enforcingPolicy());
-        }
+        netns = PrivateNetns.installEnforcing();
     }
 
     @AfterAll
     static void tearDown() {
         InstanceConsoles.overrideTimingsForTest(null, null);
-        WorkloadNetworkPolicy.overrideForTest(null);
-        if (netns != null) {
-            netns.close();
-            netns = null;
-        }
+        PrivateNetns.uninstall(netns);
+        netns = null;
     }
 
     private static void assumeLiveDaemon() {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
-        LiveLane.requireImage(new DockerClient(), "alpine:latest");
+        LiveLane.requireImage(new DockerClient(), TestImages.ALPINE);
         LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: the instance tier refuses to deploy unprotected");
     }
@@ -107,7 +98,7 @@ class InstanceConsoleLiveTest {
         row.set(InstanceModel.KIND, "hohenheim:docker_container");
         // No command: alpine's default CMD is /bin/sh, which reads console lines from
         // the OpenStdin stdin the runtime now opens -- the scriptable stand-in.
-        row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine", "tag", "latest")));
+        row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", TestImages.ALPINE)));
         row.set(InstanceModel.TEMPLATE_ID, templateId);
         row.set(InstanceModel.CRASH_POLICY, crashPolicy);
         Models.get(InstanceModel.class).save(row);
@@ -116,22 +107,6 @@ class InstanceConsoleLiveTest {
 
     private static String status(int instanceId) {
         return Models.get(InstanceModel.class).findById(instanceId).get(InstanceModel.STATUS);
-    }
-
-    private static boolean await(long timeoutMs, Supplier<Boolean> condition) {
-        long deadline = Now.millis() + timeoutMs;
-        while (Now.millis() < deadline) {
-            if (Boolean.TRUE.equals(condition.get())) {
-                return true;
-            }
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return false;
-            }
-        }
-        return Boolean.TRUE.equals(condition.get());
     }
 
     private static boolean containerRunning(DockerClient docker, String handle) {
@@ -185,15 +160,15 @@ class InstanceConsoleLiveTest {
                     .as("step 1: while the container itself is already up").isTrue();
 
                 // 2. The line has not appeared, so the record STAYS starting.
-                assertThat(await(2_000, () -> !InstanceModel.STATUS_STARTING.equals(status(id))))
+                assertThat(within(Duration.ofMillis(2_000), () -> !InstanceModel.STATUS_STARTING.equals(status(id))))
                     .as("step 2: no readiness line, no Running").isFalse();
 
                 // 3. Make the workload print its readiness line: the matcher flips the
                 //    record to RUNNING while the container is still alive -- output
                 //    observed DURING the run, which a single-shot transport cannot do.
                 InstanceConsoles.sendCommand(id, "echo SERVER READY");
-                assertThat(await(15_000, () -> InstanceModel.STATUS_RUNNING.equals(status(id))))
-                    .as("step 3: the observed readiness line flips starting -> running").isTrue();
+                Poll.until("step 3: the observed readiness line flips starting -> running",
+                    Duration.ofMillis(15_000), POLL_INTERVAL, () -> InstanceModel.STATUS_RUNNING.equals(status(id)));
                 assertThat(containerRunning(docker, handle))
                     .as("step 3: and the container is still running at the flip").isTrue();
 
@@ -207,7 +182,7 @@ class InstanceConsoleLiveTest {
                 assertThat(containerExitCode(docker, handle))
                     .as("step 4: the workload exited by ITS OWN stop command (exit 0),"
                         + " not the daemon's kill").isZero();
-                assertThat(await(4_000, () -> containerRunning(docker, handle)))
+                assertThat(within(Duration.ofMillis(4_000), () -> containerRunning(docker, handle)))
                     .as("step 4: the observed stop suppressed the restart policy").isFalse();
                 assertThat(status(id))
                     .as("step 4: and the record still says stopped")
@@ -220,33 +195,32 @@ class InstanceConsoleLiveTest {
                 //    old container lingering).
                 service.deploy(id);
                 InstanceConsoles.sendCommand(id, "echo SERVER READY");
-                assertThat(await(15_000, () -> InstanceModel.STATUS_RUNNING.equals(status(id))))
-                    .as("step 5: ready again after redeploy").isTrue();
+                Poll.until("step 5: ready again after redeploy",
+                    Duration.ofMillis(15_000), POLL_INTERVAL, () -> InstanceModel.STATUS_RUNNING.equals(status(id)));
                 String beforeCrash = containerId(docker, handle);
                 InstanceConsoles.sendCommand(id, "exit 7");
-                assertThat(await(25_000, () -> !beforeCrash.equals(containerId(docker, handle))
-                        && containerRunning(docker, handle)))
-                    .as("step 5: an unobserved exit was crash-redeployed into a NEW container")
-                    .isTrue();
+                Poll.until("step 5: an unobserved exit was crash-redeployed into a NEW container",
+                    Duration.ofMillis(25_000), POLL_INTERVAL, () -> !beforeCrash.equals(containerId(docker, handle))
+                        && containerRunning(docker, handle));
 
                 // 6. Flap protection: two more rapid crashes hit the threshold (3 inside
                 //    the window); the watcher gives up, stamps ERROR and stops restarting.
-                assertThat(await(10_000, () -> InstanceConsoles.peek(id) != null
-                        && containerRunning(docker, handle)))
-                    .as("step 6: the replacement runs and has a console session").isTrue();
+                Poll.until("step 6: the replacement runs and has a console session",
+                    Duration.ofMillis(10_000), POLL_INTERVAL, () -> InstanceConsoles.peek(id) != null
+                        && containerRunning(docker, handle));
                 String beforeSecond = containerId(docker, handle);
                 InstanceConsoles.sendCommand(id, "exit 7");
-                assertThat(await(25_000, () -> !beforeSecond.equals(containerId(docker, handle))
-                        && containerRunning(docker, handle)))
-                    .as("step 6: crash two still restarts").isTrue();
-                assertThat(await(10_000, () -> InstanceConsoles.peek(id) != null
-                        && containerRunning(docker, handle)))
-                    .as("step 6: and runs with a console session again").isTrue();
+                Poll.until("step 6: crash two still restarts",
+                    Duration.ofMillis(25_000), POLL_INTERVAL, () -> !beforeSecond.equals(containerId(docker, handle))
+                        && containerRunning(docker, handle));
+                Poll.until("step 6: and runs with a console session again",
+                    Duration.ofMillis(10_000), POLL_INTERVAL, () -> InstanceConsoles.peek(id) != null
+                        && containerRunning(docker, handle));
                 String beforeThird = containerId(docker, handle);
                 InstanceConsoles.sendCommand(id, "exit 7");
-                assertThat(await(20_000, () -> InstanceModel.STATUS_ERROR.equals(status(id))))
-                    .as("step 6: crash three trips flap protection and stamps error").isTrue();
-                assertThat(await(4_000, () -> containerRunning(docker, handle)))
+                Poll.until("step 6: crash three trips flap protection and stamps error",
+                    Duration.ofMillis(20_000), POLL_INTERVAL, () -> InstanceModel.STATUS_ERROR.equals(status(id)));
+                assertThat(within(Duration.ofMillis(4_000), () -> containerRunning(docker, handle)))
                     .as("step 6: and nothing restarts it any more").isFalse();
                 assertThat(containerId(docker, handle))
                     .as("step 6: the crashed container was not replaced")
@@ -256,8 +230,8 @@ class InstanceConsoleLiveTest {
                 service.destroy(id);
                 assertThat(InstanceConsoles.peek(id))
                     .as("step 7: no console session survives destroy").isNull();
-                assertThat(await(5_000, () -> InstanceConsoles.liveSessionCount() == 0))
-                    .as("step 7: the hub holds zero live sessions (counted)").isTrue();
+                Poll.until("step 7: the hub holds zero live sessions (counted)",
+                    Duration.ofMillis(5_000), POLL_INTERVAL, () -> InstanceConsoles.liveSessionCount() == 0);
             } finally {
                 cleanup(docker, handle);
             }
@@ -285,8 +259,8 @@ class InstanceConsoleLiveTest {
                     .isEqualTo(InstanceModel.STATUS_STARTING);
 
                 // 2. The record NEVER reaches Running; the timeout stamps error.
-                assertThat(await(10_000, () -> InstanceModel.STATUS_ERROR.equals(status(id))))
-                    .as("step 2: an unobserved readiness line times out into error").isTrue();
+                Poll.until("step 2: an unobserved readiness line times out into error",
+                    Duration.ofMillis(10_000), POLL_INTERVAL, () -> InstanceModel.STATUS_ERROR.equals(status(id)));
                 assertThat(status(id))
                     .as("step 2: and Running was never stamped")
                     .isNotEqualTo(InstanceModel.STATUS_RUNNING);
@@ -342,13 +316,13 @@ class InstanceConsoleLiveTest {
                 // 3. The viewer's geometry reaches the terminal: the shell reports it.
                 viewer.resize(120, 40);
                 viewer.write("stty size\r");
-                assertThat(await(15_000, () -> text(seen).contains("40 120")))
+                assertThat(within(Duration.ofMillis(15_000), () -> text(seen).contains("40 120")))
                     .as("step 3: `stty size` reports the geometry the viewer set: "
                         + text(seen)).isTrue();
 
                 // 4. Typed input echoes (a terminal echoes; a pipe never does) and runs.
                 viewer.write("echo tty-o''k\r");
-                assertThat(await(15_000, () -> text(seen).contains("tty-ok")))
+                assertThat(within(Duration.ofMillis(15_000), () -> text(seen).contains("tty-ok")))
                     .as("step 4: the typed command ran and printed: " + text(seen)).isTrue();
                 assertThat(text(seen))
                     .as("step 4: and the keystrokes themselves were echoed back")
@@ -357,15 +331,14 @@ class InstanceConsoleLiveTest {
                 // 5. A second geometry is honoured live, mid-session.
                 viewer.resize(80, 24);
                 viewer.write("stty size\r");
-                assertThat(await(15_000, () -> text(seen).contains("24 80")))
-                    .as("step 5: a live resize reaches the running process: " + text(seen))
-                    .isTrue();
+                assertThat(within(Duration.ofMillis(15_000), () -> text(seen).contains("24 80")))
+                    .as("step 5: a live resize reaches the running process: " + text(seen)).isTrue();
                 viewer.close();
 
                 // 6. Destroy tears it down with the workload.
                 service.destroy(id);
-                assertThat(await(5_000, () -> InstanceConsoles.liveSessionCount() == 0))
-                    .as("step 6: no session survives destroy").isTrue();
+                Poll.until("step 6: no session survives destroy",
+                    Duration.ofMillis(5_000), POLL_INTERVAL, () -> InstanceConsoles.liveSessionCount() == 0);
             } catch (IOException e) {
                 throw new AssertionError("the daemon could not be asked: " + e.getMessage(), e);
             } finally {
@@ -381,7 +354,7 @@ class InstanceConsoleLiveTest {
         // alpine's /bin/sh on a TTY is an interactive shell: it echoes, prompts and
         // answers `stty size` -- the smallest stand-in for a TUI workload.
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of(
-            "image", "alpine", "tag", "latest", "command", "sh",
+            "image", TestImages.ALPINE, "command", "sh",
             ConsoleKind.SETTING, ConsoleKind.TTY.token())));
         row.set(InstanceModel.CRASH_POLICY, InstanceModel.CRASH_NONE);
         Models.get(InstanceModel.class).save(row);
@@ -404,6 +377,22 @@ class InstanceConsoleLiveTest {
             docker.removeNetwork(WorkloadNetworks.networkName(handle));
         } catch (IOException ignored) {
             // already gone
+        }
+    }
+
+    /**
+     * Whether {@code condition} comes to hold inside {@code window}, polled through {@link Poll}.
+     *
+     * AIDEV-NOTE: kept for the assertions that need the boolean -- a message built from
+     * output read AFTER the wait, or a timed NEGATIVE observation (a live daemon offers no
+     * deterministic "this will never restart" probe, so those stay bounded windows).
+     */
+    private static boolean within(Duration window, BooleanSupplier condition) {
+        try {
+            Poll.until("the condition", window, POLL_INTERVAL, condition);
+            return true;
+        } catch (AssertionError timedOut) {
+            return false;
         }
     }
 }

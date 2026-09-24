@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.async.ProgressSink;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -112,19 +113,14 @@ public final class InstallMedia {
     }
 
     /**
-     * Fetch an ISO from {@code url} and import it into the host's managed pool as an
-     * ISO volume named {@code name}. The download lands in a controller temp file
-     * first (capped), then STREAMS to the daemon; the temp file is always removed.
-     *
-     * AIDEV-NOTE: synchronous on the request thread, bounded by {@link #FETCH_DEADLINE}.
-     * A background job would free the thread, but the Install media tab (cms) has no
-     * status lane to show a running fetch or its failure on, and a failure only a log
-     * line knows about is invisible; moving it off-thread is a page change first.
+     * The request-thread half of a fetch: every refusal an operator must read straight away, BEFORE a
+     * background job is started -- the name, the URL policy, the public-address check and a medium of
+     * that name already on the host.
      *
      * @throws Violations {@code media_name_invalid}, {@code media_url_invalid},
      *         {@code media_url_not_public}, {@code media_exists}, {@code media_fetch_failed}
      */
-    public void fetch(@NonNull Row server, @NonNull String name, @NonNull String url) {
+    public void requireFetchable(@NonNull Row server, @NonNull String name, @NonNull String url) {
         requireName(name);
         String problem = FETCH_POLICY.problemOf(url);
         if (problem != null) {
@@ -137,18 +133,9 @@ public final class InstallMedia {
         }
         try {
             IncusClient incus = clientOf(server);
-            String pool = IncusInstanceRuntime.managedPoolNameOf(incus);
-            requireAbsent(incus, pool, name);
-            Path temp = Files.createTempFile("hohenheim-media-", ".iso");
-            try {
-                download(url, temp);
-                incus.importIsoVolume(pool, name, temp);
-            } finally {
-                Files.deleteIfExists(temp);
-            }
-            requirePresent(incus, pool, name);
+            requireAbsent(incus, IncusInstanceRuntime.managedPoolNameOf(incus), name);
         } catch (IOException e) {
-            Blast.log("MEDIA: fetching", name, "onto",
+            Blast.log("MEDIA: checking", name, "on",
                 server.get(ServerModel.NAME), "failed -", e.getMessage());
             throw Violations.ofForm(violationText("media_fetch_failed")
                 .withArg("media", name)
@@ -157,10 +144,45 @@ public final class InstallMedia {
     }
 
     /**
+     * The background half of a fetch: download {@code url} and import it into the host's managed pool
+     * as an ISO volume named {@code name}. The download lands in a controller temp file first (capped),
+     * then STREAMS to the daemon; the temp file is always removed.
+     *
+     * AIDEV-NOTE: runs on a background job ({@code InstallMediaFetches}), never on the request thread:
+     * a 16 GiB ISO under the 2 h {@link #FETCH_DEADLINE} held a request thread for the whole exchange.
+     * The security properties are unchanged by the move -- the SAME pinned public-internet fetcher,
+     * cap and deadline; only the waiting moved. Callers run {@link #requireFetchable} first.
+     *
+     * @param progress  told the downloaded fraction whenever the body's size is known
+     * @param importing told once, when the download is complete and the import begins
+     * @throws IOException naming what failed, the stored reason of the fetch
+     */
+    public void transfer(@NonNull Row server, @NonNull String name, @NonNull String url,
+                         @NonNull ProgressSink progress, @NonNull Runnable importing) throws IOException {
+        requireName(name);
+        IncusClient incus = clientOf(server);
+        String pool = IncusInstanceRuntime.managedPoolNameOf(incus);
+        // Checked again: the request's check is minutes old by now, and an upload of the same
+        // name may have landed meanwhile.
+        if (incus.customVolume(pool, name) != null) {
+            throw new IOException("media '" + name + "' already exists on this host");
+        }
+        Path temp = Files.createTempFile("hohenheim-media-", ".iso");
+        try {
+            download(url, temp, progress);
+            importing.run();
+            incus.importIsoVolume(pool, name, temp);
+        } finally {
+            Files.deleteIfExists(temp);
+        }
+        requirePresent(incus, pool, name);
+    }
+
+    /**
      * Import an ISO ALREADY on the controller's disk (an operator's upload) into the
      * host's managed pool as an ISO volume named {@code name}.
      *
-     * The caller owns {@code source} and its removal: this is the half of {@link #fetch}
+     * The caller owns {@code source} and its removal: this is the half of {@link #transfer}
      * below the download, split out so an upload never has to invent a URL for a file
      * the operator already has.
      *
@@ -238,19 +260,20 @@ public final class InstallMedia {
     }
 
     /** Stream one URL into {@code destination} through {@link #FETCHER}; a partial file is the caller's to delete. */
-    private static void download(@NonNull String url, @NonNull Path destination)
-            throws IOException {
-        long[] total = {0};
+    private static void download(@NonNull String url, @NonNull Path destination,
+                                 @NonNull ProgressSink progress) throws IOException {
+        SuccessSink sink;
         FetchOutcome outcome;
         try (OutputStream out = Files.newOutputStream(destination)) {
-            outcome = FETCHER.fetch(FetchRequest.get(url), new SuccessSink(out, total));
+            sink = new SuccessSink(out, progress);
+            outcome = FETCHER.fetch(FetchRequest.get(url), sink);
         }
         switch (outcome) {
             case FetchOutcome.Fetched fetched -> {
                 if (fetched.status() < 200 || fetched.status() >= 300) {
                     throw new IOException("download answered HTTP " + fetched.status());
                 }
-                if (total[0] == 0) {
+                if (sink.total == 0) {
                     throw new IOException("download carried no body");
                 }
             }
@@ -265,19 +288,54 @@ public final class InstallMedia {
         }
     }
 
-    /** Writes a 2xx body to the temp file, counting it; any other status is skipped unread. */
-    private record SuccessSink(@NonNull OutputStream out, long @NonNull [] total)
-            implements BodySink {
+    /**
+     * Writes a 2xx body to the temp file, counting it and reporting the fraction when the response
+     * declared its length; any other status is skipped unread.
+     */
+    private static final class SuccessSink implements BodySink {
+
+        private final @NonNull OutputStream out;
+        private final @NonNull ProgressSink progress;
+        private long total;
+        private long expected = -1;
+
+        SuccessSink(@NonNull OutputStream out, @NonNull ProgressSink progress) {
+            this.out = out;
+            this.progress = progress;
+        }
 
         @Override
         public boolean accepts(int status, @NonNull Map<String, List<String>> headers) {
-            return status >= 200 && status < 300;
+            if (status < 200 || status >= 300) {
+                return false;
+            }
+            this.expected = declaredLength(headers);
+            return true;
         }
 
         @Override
         public void write(byte @NonNull [] bytes, int offset, int length) throws IOException {
-            this.total[0] += length;
+            this.total += length;
             this.out.write(bytes, offset, length);
+            if (this.expected > 0) {
+                this.progress.reportProgress(Math.min(1.0, (double) this.total / this.expected));
+            }
+        }
+
+        /** The Content-Length the response declared, or -1 (absent, malformed or chunked). */
+        private static long declaredLength(@NonNull Map<String, List<String>> headers) {
+            for (Map.Entry<String, List<String>> header : headers.entrySet()) {
+                if (header.getKey() == null || !header.getKey().equalsIgnoreCase("Content-Length")
+                        || header.getValue() == null || header.getValue().isEmpty()) {
+                    continue;
+                }
+                try {
+                    return Long.parseLong(header.getValue().get(0).trim());
+                } catch (NumberFormatException malformed) {
+                    return -1;
+                }
+            }
+            return -1;
         }
     }
 

@@ -3,53 +3,29 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.docker.ContainerHardening;
-import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
-import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
-import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
-import be.elevenways.hohenheim.server.runtime.ImageIdentity;
-import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
-import be.elevenways.hohenheim.server.runtime.InstanceSpec;
-import be.elevenways.hohenheim.server.runtime.InstanceStatus;
-import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
-import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
-import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -78,38 +54,16 @@ class InstanceMigrationTest {
         HohenheimTestRuntime.ensureBooted();
         FakeNativeDaemons.register();
         Db.run(datasource, () -> {
-            alphaId = incusHost("mig-alpha");
-            betaId = incusHost("mig-beta");
+            // AIDEV-NOTE: the stored preflight report of these hosts is not decoration.
+            // Since kernel-truth verification became an admission requirement, a
+            // tenant-accepting host with no proven lane is refused at placement by name
+            // (`host_kernel_lane_unproven`) -- which is what an ADMITTED record with no
+            // preflight at all always was in production: impossible, because
+            // `requireAdmittable` demands `preflight_ok`. HostFixtures.admittedIncusHost goes
+            // through the real store funnel rather than hand-writing the capabilities shape.
+            alphaId = HostFixtures.admittedIncusHost("mig-alpha");
+            betaId = HostFixtures.admittedIncusHost("mig-beta");
         });
-    }
-
-    /**
-     * A daemon-free host record in the state placement demands: admitted, accepting
-     * tenant workloads, and carrying a stored preflight that PROVED its kernel-truth lane.
-     *
-     * AIDEV-NOTE: the stored report is not decoration. Since kernel-truth verification
-     * became an admission requirement, a tenant-accepting host with no proven lane is
-     * refused at placement by name (`host_kernel_lane_unproven`) -- which is what an
-     * ADMITTED record with no preflight at all always was in production: impossible,
-     * because `requireAdmittable` demands `preflight_ok`. It goes through the real store
-     * funnel rather than hand-writing the capabilities shape here.
-     */
-    private static int incusHost(String name) {
-        Row row = Models.get(ServerModel.class).createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        Models.get(ServerModel.class).save(row);
-        HostFixtures.acknowledgePosture(row);
-        HostPreflight.store(name, new HostPreflight.Report(List.of(
-            new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon"),
-            new HostPreflight.Check(IncusPreflight.KERNEL_LANE_CHECK,
-                HostPreflight.STATUS_PASS, true, "fake kernel-truth lane")),
-            // mem_total is what the capacity budget is read from: an admitted host
-            // always carries it in production, and placement skips one that does not.
-            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
-        return Models.get(ServerModel.class).findByName(name).get(ServerModel.ID);
     }
 
     private static int instanceRecord(String name, int serverId, String kind) {
@@ -395,7 +349,7 @@ class InstanceMigrationTest {
         Db.run(datasource, () -> {
             InstanceService service = new InstanceService();
             InstanceMigrations migrations = migrations();
-            int gammaId = incusHost("mig-gamma");
+            int gammaId = HostFixtures.admittedIncusHost("mig-gamma");
             int movable1 = instanceRecord("drain-a", gammaId, FakeNativeDaemons.FakeNativeKind.ID.toString());
             int movable2 = instanceRecord("drain-b", gammaId, FakeNativeDaemons.FakeNativeKind.ID.toString());
             int held = instanceRecord("drain-held", gammaId, FakeNativeDaemons.FakeNativeKind.ID.toString());
@@ -522,8 +476,8 @@ class InstanceMigrationTest {
         Db.run(datasource, () -> {
             // Its OWN pair of hosts: a neighbouring test's live instance would move the
             // very numbers this journey asserts.
-            int src = incusHost("cap-src");
-            int dst = incusHost("cap-dst");
+            int src = HostFixtures.admittedIncusHost("cap-src");
+            int dst = HostFixtures.admittedIncusHost("cap-dst");
             InstanceService service = new InstanceService();
             InstanceMigrations migrations = migrations();
 
@@ -681,8 +635,8 @@ class InstanceMigrationTest {
     @Test
     void theWindowAmountIsSettledExactlyAndMidWindowFootprintEditsRefuse() {
         Db.run(datasource, () -> {
-            int src = incusHost("win-src");
-            int dst = incusHost("win-dst");
+            int src = HostFixtures.admittedIncusHost("win-src");
+            int dst = HostFixtures.admittedIncusHost("win-dst");
             InstanceService service = new InstanceService();
 
             // 1. A neighbour lives on the destination (its 128 MB booking is the canary

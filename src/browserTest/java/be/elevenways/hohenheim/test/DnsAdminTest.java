@@ -4,19 +4,11 @@ import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DnsPeerApi;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import org.junit.jupiter.api.MethodOrderer.OrderAnnotation;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
-import java.net.URI;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,29 +21,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * record validation through the codec, zone-file export/import, and the
  * certificate-request page's hosted-DNS option gating.
  */
-@TestMethodOrder(OrderAnnotation.class)
 class DnsAdminTest extends HohenheimTestBase {
-
-    private static int zoneId;
-    private static int recordId;
-
-    private HttpResponse<String> postForm(String path, String body) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .header("X-Csrf-Token", csrfToken)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
 
     /** Zone creation with validation, record CRUD through the codec, and the records/zone-file tabs. */
     @Test
-    @Order(1)
     void zoneAndRecordAdminJourney() throws Exception {
         navigateToApp("/admin/dns-zones/new");
         waitForHydration();
@@ -63,7 +36,7 @@ class DnsAdminTest extends HohenheimTestBase {
             .contains("Owning peer");
 
         // Creating a zone normalizes the origin.
-        var response = postForm("/admin/dns-zones/new",
+        var response = adminPostForm("/admin/dns-zones/new",
             "origin=Admin-Zone.Example.&soa_primary_ns=&soa_contact="
             + "&default_ttl=3600&negative_ttl=300&soa_refresh=7200&soa_retry=3600&soa_expire=1209600"
             + "&enabled=on");
@@ -72,10 +45,10 @@ class DnsAdminTest extends HohenheimTestBase {
         Row zone = Models.get(DnsZoneModel.class).findByOrigin("admin-zone.example");
         assertThat(zone).isNotNull();
         assertThat((Boolean) zone.get(DnsZoneModel.ENABLED)).isTrue();
-        zoneId = zone.get(DnsZoneModel.ID);
+        int zoneId = zone.get(DnsZoneModel.ID);
 
         // Invalid origins are refused with a violation.
-        var invalidOrigin = postForm("/admin/dns-zones/new",
+        var invalidOrigin = adminPostForm("/admin/dns-zones/new",
             "origin=*.bad-origin&default_ttl=3600&negative_ttl=300"
             + "&soa_refresh=7200&soa_retry=3600&soa_expire=1209600");
         assertThat(invalidOrigin.statusCode()).isEqualTo(200);
@@ -83,18 +56,18 @@ class DnsAdminTest extends HohenheimTestBase {
         assertThat(Models.get(DnsZoneModel.class).findByOrigin("*.bad-origin")).isNull();
 
         // Duplicate origins are refused too.
-        var duplicate = postForm("/admin/dns-zones/new",
+        var duplicate = adminPostForm("/admin/dns-zones/new",
             "origin=admin-zone.example&default_ttl=3600&negative_ttl=300"
             + "&soa_refresh=7200&soa_retry=3600&soa_expire=1209600");
         assertThat(duplicate.statusCode()).isEqualTo(200);
         assertThat(duplicate.body()).contains("already exists");
 
-        var bad = postForm("/admin/dns-records/new",
+        var bad = adminPostForm("/admin/dns-records/new",
             "zone_id=" + zoneId + "&name=www&type=A&value=not-an-ip");
         assertThat(bad.statusCode()).isEqualTo(200);
         assertThat(bad.body()).contains("IPv4");
 
-        var good = postForm("/admin/dns-records/new",
+        var good = adminPostForm("/admin/dns-records/new",
             "zone_id=" + zoneId + "&name=WWW&type=A&value=192.0.2.10&enabled=on");
         assertThat(good.statusCode()).isIn(200, 302, 303);
 
@@ -102,18 +75,18 @@ class DnsAdminTest extends HohenheimTestBase {
         assertThat(records).hasSize(1);
         Row record = records.get(0);
         assertThat((String) record.get(DnsRecordModel.NAME)).isEqualTo("www");
-        recordId = record.get(DnsRecordModel.ID);
+        int recordId = record.get(DnsRecordModel.ID);
 
         Row savedZone = Models.get(DnsZoneModel.class).find().where(DnsZoneModel.ID.eq(zoneId)).first();
         assertThat((int) savedZone.get(DnsZoneModel.SERIAL)).isGreaterThan(1);
 
         // Type-specific fields ride the data sub-schema: an MX without its priority is
         // refused by the codec, and one WITH data.priority saves it into the data map.
-        var mxNoPriority = postForm("/admin/dns-records/new",
+        var mxNoPriority = adminPostForm("/admin/dns-records/new",
             "zone_id=" + zoneId + "&name=mail&type=MX&value=mx.admin-zone.example.");
         assertThat(mxNoPriority.statusCode()).isEqualTo(200);
         assertThat(mxNoPriority.body()).contains("priority");
-        var mxGood = postForm("/admin/dns-records/new",
+        var mxGood = adminPostForm("/admin/dns-records/new",
             "zone_id=" + zoneId + "&name=mail&type=MX&value=mx.admin-zone.example."
             + "&data.priority=10&enabled=on");
         assertThat(mxGood.statusCode()).isIn(200, 302, 303);
@@ -126,7 +99,7 @@ class DnsAdminTest extends HohenheimTestBase {
         Models.get(DnsRecordModel.class).delete(mx);
 
         // CNAME exclusivity is enforced.
-        var cname = postForm("/admin/dns-records/new",
+        var cname = adminPostForm("/admin/dns-records/new",
             "zone_id=" + zoneId + "&name=www&type=CNAME&value=other.admin-zone.example");
         assertThat(cname.statusCode()).isEqualTo(200);
         assertThat(cname.body()).contains("CNAME");
@@ -135,7 +108,7 @@ class DnsAdminTest extends HohenheimTestBase {
         // A CNAME at the zone apex is refused: the SOA (and NS/DNSKEY) live there and are
         // SYNTHESIZED in the serving snapshot, not stored rows, so the sibling scan never
         // sees the conflict -- the exclusivity check has to refuse "@" by name.
-        var apexCname = postForm("/admin/dns-records/new",
+        var apexCname = adminPostForm("/admin/dns-records/new",
             "zone_id=" + zoneId + "&name=@&type=CNAME&value=other.admin-zone.example");
         assertThat(apexCname.statusCode()).isEqualTo(200);
         assertThat(apexCname.body()).contains("CNAME");
@@ -192,13 +165,13 @@ class DnsAdminTest extends HohenheimTestBase {
         // policy -- swap the file's apex NS set for the declared one -- has nothing to put in
         // its place and REFUSES rather than publishing the zone under nobody's names: the
         // records are untouched. Keeping the file's NS rows is the explicit option.
-        var refused = postForm("/admin/dns-zones/" + zoneId + "/zonefile",
+        var refused = adminPostForm("/admin/dns-zones/" + zoneId + "/zonefile",
             "zone_text=" + URLEncoder.encode(zoneText, StandardCharsets.UTF_8));
         assertThat(refused.statusCode()).isIn(302, 303);
         assertThat(Models.get(DnsRecordModel.class).findByZoneId(zoneId))
             .as("an undeclared controller refuses a foreign apex NS set and leaves the rows alone")
             .hasSize(1);
-        var imported = postForm("/admin/dns-zones/" + zoneId + "/zonefile",
+        var imported = adminPostForm("/admin/dns-zones/" + zoneId + "/zonefile",
             "zone_text=" + URLEncoder.encode(zoneText, StandardCharsets.UTF_8) + "&keep_ns=on");
         assertThat(imported.statusCode()).isIn(302, 303);
 
@@ -214,7 +187,6 @@ class DnsAdminTest extends HohenheimTestBase {
 
     /** The certificate-request page only offers hosted DNS when a DNS server is serving. */
     @Test
-    @Order(2)
     void certificateRequestOffersHostedDnsOnlyWhenServing() {
         navigateToApp("/admin/certificates-request");
         waitForHydration();
@@ -229,6 +201,7 @@ class DnsAdminTest extends HohenheimTestBase {
         assertThat(internal.getAttribute("aria-disabled")).isEqualTo("true");
         page.keyboard().press("Escape");
     }
+
     /**
      * The zone list's record-count column costs ONE query no matter how many zones it shows.
      *
@@ -239,7 +212,6 @@ class DnsAdminTest extends HohenheimTestBase {
      * small fixture.
      */
     @Test
-    @Order(3)
     void theZoneListCountsRecordsWithoutAQueryPerRow() throws Exception {
         var zones = Models.get(DnsZoneModel.class);
         List<Row> extra = new ArrayList<>();
@@ -284,12 +256,11 @@ class DnsAdminTest extends HohenheimTestBase {
      * forwarding edits. That is the assertion that fails without DnsPeerModel.isHohenheim.
      */
     @Test
-    @Order(4)
     void dnsPeerTypeDrivesTheFormAndItsValidation() throws Exception {
         DnsPeerModel peers = Models.get(DnsPeerModel.class);
 
         // 1. A Hohenheim peer without admin credentials is refused.
-        var noCredentials = postForm("/admin/dns-peers/new",
+        var noCredentials = adminPostForm("/admin/dns-peers/new",
             "name=peer-incomplete&peer_type=hohenheim&transfer_host=&transfer_port="
             + "&tsig_key_name=&tsig_algorithm=&tsig_secret=&base_url=&api_key=&enabled=on");
         assertThat(noCredentials.statusCode()).isEqualTo(200);
@@ -298,7 +269,7 @@ class DnsAdminTest extends HohenheimTestBase {
 
         // 2. A plain nameserver peer with no transfer host is refused too: nothing here
         //    could ever reach it.
-        var noHost = postForm("/admin/dns-peers/new",
+        var noHost = adminPostForm("/admin/dns-peers/new",
             "name=peer-hostless&peer_type=nameserver&transfer_host=&transfer_port="
             + "&tsig_key_name=&tsig_algorithm=&tsig_secret=&base_url=&api_key=&enabled=on");
         assertThat(noHost.statusCode()).isEqualTo(200);
@@ -306,12 +277,12 @@ class DnsAdminTest extends HohenheimTestBase {
         assertThat(peers.findByName("peer-hostless")).isNull();
 
         // 3. Both complete shapes are accepted.
-        assertThat(postForm("/admin/dns-peers/new",
+        assertThat(adminPostForm("/admin/dns-peers/new",
             "name=peer-hohenheim&peer_type=hohenheim&transfer_host=ns1.peer.example"
             + "&transfer_port=53&tsig_key_name=&tsig_algorithm=&tsig_secret="
             + "&base_url=https%3A%2F%2Fpeer.example&api_key=znit_secret&enabled=on")
             .statusCode()).isIn(200, 302, 303);
-        assertThat(postForm("/admin/dns-peers/new",
+        assertThat(adminPostForm("/admin/dns-peers/new",
             "name=peer-nameserver&peer_type=nameserver&transfer_host=ns1.other.example"
             + "&transfer_port=53&tsig_key_name=&tsig_algorithm=&tsig_secret="
             + "&base_url=&api_key=&enabled=on")
@@ -330,7 +301,7 @@ class DnsAdminTest extends HohenheimTestBase {
         //    resolves field access without the record, so the inputs still appear on the
         //    page; the type is enforced when the form comes back.
         int nameserverId = nameserverPeer.get(DnsPeerModel.ID);
-        assertThat(postForm("/admin/dns-peers/" + nameserverId,
+        assertThat(adminPostForm("/admin/dns-peers/" + nameserverId,
             "name=peer-nameserver&peer_type=nameserver&transfer_host=ns1.other.example"
             + "&transfer_port=53&tsig_key_name=&tsig_algorithm=&tsig_secret="
             + "&base_url=https%3A%2F%2Fsmuggled.example&api_key=znit_smuggled&enabled=on")

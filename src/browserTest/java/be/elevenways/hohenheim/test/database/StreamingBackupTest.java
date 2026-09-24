@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.database.DatabaseService;
@@ -12,19 +14,15 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
 import be.elevenways.hohenheim.server.task.BackupDatabases;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -70,13 +68,13 @@ class StreamingBackupTest {
      * a partial dump passing for a backup is worse than no dump.
      */
     @Test
-    void aDumpLargerThanTheCapIsRefusedNamingTheSettingAndLeavesNoFile() throws IOException {
+    void aDumpLargerThanTheCapIsRefusedNamingTheSettingAndLeavesNoFile() throws Exception {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, PG_IMAGE);
 
-        SqliteDatasource datasource = freshDatasource();
+        SqlDatasource datasource = TestDatabases.freshBootedDatasource();
         DatabaseService service = new DatabaseService(datasource);
         String name = "cap" + System.nanoTime();
         Path dir = Files.createTempDirectory("hohenheim-cap-bk");
@@ -357,16 +355,6 @@ class StreamingBackupTest {
         return new DatabaseService.Summary(name, "postgres", "postgres:17-alpine", "appdb",
             "appuser", false, "local", "active", true, ContainerState.RUNNING, 5432,
             WorkloadLiveness.SERVING, DatabaseModel.PLACEMENT_DEDICATED, null);
-    }
-
-    private static SqliteDatasource freshDatasource() throws IOException {
-        File db = File.createTempFile("hohenheim-streaming-bk", ".db");
-        db.delete();
-        db.deleteOnExit();
-        SqliteDatasource ds = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(ds).migrate().requireSuccess();
-        HohenheimTestRuntime.ensureBooted();
-        return ds;
     }
 
     private static void deleteRecursively(Path root) {

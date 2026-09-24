@@ -46,16 +46,19 @@ public class BanModel extends Model {
      * WHICH traffic this ban refuses; the vocabulary lives on {@link BanScope}, never as a
      * second list of tokens here.
      */
-    public static final EnumField SCOPE = SCHEMA.addField(EnumField.builder("scope")
-        .value(BanScope.WEB.token(), v -> v.displayName("Web")
-            .label(BanScope.WEB.label())
-            .icon("globe").color("blue"))
-        .value(BanScope.SSH.token(), v -> v.displayName("SSH")
-            .label(BanScope.SSH.label())
-            .icon("terminal").color("purple"))
-        .defaultValue(BanScope.WEB.token())
-        .label(HohenheimFormCopy.label("ban_scope"))
-        .build());
+    public static final EnumField SCOPE = SCHEMA.addField(scopeField());
+
+    /** The scope field, one value per {@link BanScope} member and nothing else. */
+    private static EnumField scopeField() {
+        EnumField.Builder builder = EnumField.builder("scope");
+        for (BanScope scope : BanScope.values()) {
+            builder.value(scope.token(), v -> v.displayName(scope.displayName())
+                .label(scope.label()).icon(scope.icon()).color(scope.color()));
+        }
+        return builder.defaultValue(BanScope.WEB.token())
+            .label(HohenheimFormCopy.label("ban_scope"))
+            .build();
+    }
     public static final StringField EVENT_TYPE = SCHEMA.addField(StringField.builder().name("event_type")
         .label(HohenheimFormCopy.label("event_type"))
         .build());

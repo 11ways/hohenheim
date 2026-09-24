@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
+import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.InstanceResource;
@@ -231,8 +232,8 @@ public final class InstanceApi {
                 // The SAME funnel the create page posts to: create authority, template
                 // approval, placement, typed variable coercion, image policy and quota.
                 int instanceId = new InstanceTemplates().createFromTemplate(template,
-                    InstanceTemplates.submittedString(form, "name"),
-                    InstanceTemplates.submittedInteger(form, "server_id"), form, ctx);
+                    HandlerSupport.submittedString(form, "name"),
+                    HandlerSupport.submittedInteger(form, "server_id"), form, ctx);
                 Row created = reload(instanceId);
                 ActivityLog.record(Models.get(InstanceModel.class), instanceId, "created",
                     created.get(InstanceModel.NAME));
@@ -390,8 +391,8 @@ public final class InstanceApi {
             }
             int instanceId = row.get(InstanceModel.ID);
             Map<String, Object> form = FormSubmissionRawValues.fromConduit(conduit);
-            String name = InstanceTemplates.submittedString(form, "name");
-            String type = InstanceTemplates.submittedString(form, "type");
+            String name = HandlerSupport.submittedString(form, "name");
+            String type = HandlerSupport.submittedString(form, "type");
             try {
                 DeviceType parsed = DeviceType.parse(type);
                 if (parsed == null) {
@@ -399,7 +400,7 @@ public final class InstanceApi {
                 }
                 switch (parsed) {
                     case DISK -> {
-                        Integer sizeGb = InstanceTemplates.submittedInteger(form, "size_gb");
+                        Integer sizeGb = HandlerSupport.submittedInteger(form, "size_gb");
                         // Null (absent or unparseable) reaches the model's own size invariant
                         // as 0, so "no size" and "size 0" answer with the same named refusal.
                         new InstanceDevices().attachDisk(instanceId, name,
@@ -432,8 +433,8 @@ public final class InstanceApi {
             }
             int instanceId = row.get(InstanceModel.ID);
             Map<String, Object> form = FormSubmissionRawValues.fromConduit(conduit);
-            String name = InstanceTemplates.submittedString(form, "name");
-            Integer sizeGb = InstanceTemplates.submittedInteger(form, "size_gb");
+            String name = HandlerSupport.submittedString(form, "name");
+            Integer sizeGb = HandlerSupport.submittedInteger(form, "size_gb");
             try {
                 new InstanceDevices().resizeDisk(instanceId, name,
                     sizeGb != null ? sizeGb : 0);
@@ -529,8 +530,7 @@ public final class InstanceApi {
         // Generated (product-tier-owned) instances are managed through their owning
         // record's surface; the automation API never lists or drives them.
         var query = Models.get(InstanceModel.class).find()
-            .where(InstanceModel.DELETED_AT.isNull())
-            .where(InstanceModel.GENERATED_BY.isNull());
+            .where(InstanceModel.liveAuthored());
         Criteria scope = HohenheimAccess.instanceScope(ctx, HohenheimAccess.VIEW);
         if (scope != null) {
             query.where(scope);
@@ -553,8 +553,7 @@ public final class InstanceApi {
         Integer instanceId = conduit.getParameter(HohenheimEndpoints.INSTANCE_ID);
         Row row = instanceId == null ? null : Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
-            .where(InstanceModel.DELETED_AT.isNull())
-            .where(InstanceModel.GENERATED_BY.isNull())
+            .where(InstanceModel.liveAuthored())
             .first();
         if (row == null || !HohenheimAccess.hasInstanceCapability(ctx, instanceId,
                 HohenheimAccess.VIEW)) {

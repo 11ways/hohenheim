@@ -17,10 +17,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
 import java.net.http.HttpResponse;
 import java.util.LinkedHashMap;
@@ -41,7 +38,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * template funnel, and the doors are the panels' (create admin-only, destroy behind the
  * {@code destroy} capability the teardown service itself demands).
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class InstanceApiTest extends HohenheimTestBase {
 
     private static final String PREFIX = "instance-api-";
@@ -55,12 +51,6 @@ class InstanceApiTest extends HohenheimTestBase {
 
     private static int tenantId;
 
-    /** A pre-existing workload the tenant may SEE and must not be able to destroy. */
-    private static Integer viewOnlyId;
-
-    /** Filled by the create journey, consumed by the delete journey. */
-    private static Integer createdId;
-
     /** A Docker host the application kind's picker rules accept. */
     private static Integer hostId;
 
@@ -68,11 +58,6 @@ class InstanceApiTest extends HohenheimTestBase {
     static void seed() {
         hostId = host(PREFIX + "docker-host");
         tenantId = user("instance-api-tenant@surface.test", "Instance Api Tenant");
-        viewOnlyId = instance(PREFIX + "view-only");
-        // VIEW and nothing else: the capability the read lane asks, deliberately not the
-        // one a destroy asks.
-        RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, viewOnlyId,
-            HohenheimAccess.VIEW, true);
 
         int adminId = AuthModels.users().find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first().get(UserModel.ID);
@@ -124,6 +109,31 @@ class InstanceApiTest extends HohenheimTestBase {
         return row.get(ServerModel.ID);
     }
 
+    /**
+     * A pre-existing workload the tenant may SEE and must not be able to destroy: VIEW and
+     * nothing else, the capability the read lane asks, deliberately not the one a destroy
+     * asks. Each test takes its own, so a test that grants or deletes cannot leak.
+     */
+    private static int viewOnlyInstance(String name) {
+        int id = instance(name);
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, id,
+            HohenheimAccess.VIEW, true);
+        return id;
+    }
+
+    /** A release-managed application created through the admin key, the create journey's shape. */
+    private int createdThroughTheApi(String name) throws Exception {
+        HttpResponse<String> created = keyPost(keyAdmin, "/api/v1/instances", form(
+            "name", name, "kind", "hohenheim:application",
+            "server_id", String.valueOf(hostId),
+            "settings.repository_url", "https://example.test/" + name + ".git",
+            "settings.branch", "main", "settings.container_port", "3000"));
+        assertThat(created.statusCode())
+            .as("fixture: the instance " + name + " is created: " + created.body())
+            .isEqualTo(200);
+        return idOf(created.body());
+    }
+
     private static int instance(String name) {
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, name);
@@ -139,7 +149,6 @@ class InstanceApiTest extends HohenheimTestBase {
 
     /** A workload lands through the admin form's pipeline, in the state a create leaves. */
     @Test
-    @Order(1)
     void aWorkloadLandsThroughTheCreateFormsOwnPipeline() throws Exception {
         // 1. A release-managed application with its git source: name, kind, host and the
         //    kind's own settings schema, exactly the create form's entries.
@@ -148,10 +157,10 @@ class InstanceApiTest extends HohenheimTestBase {
             "server_id", String.valueOf(hostId),
             "settings.repository_url", "https://example.test/earl.git",
             "settings.branch", "main", "settings.container_port", "3000",
-            "settings.console_kind", "tty"));
+            "settings.console_kind", "tty", "settings.poll_interval", "60"));
         assertThat(created.statusCode()).as("step 1: the instance is created: " + created.body())
             .isEqualTo(200);
-        createdId = idOf(created.body());
+        int createdId = idOf(created.body());
         Row row = Models.get(InstanceModel.class).findById(createdId);
         assertThat((Object) row.get(InstanceModel.KIND))
             .as("step 1: the kind was coerced against the authorable registry")
@@ -163,6 +172,9 @@ class InstanceApiTest extends HohenheimTestBase {
             .as("step 1: the settings were coerced against the kind's own schema")
             .contains("branch=main").contains("container_port=3000")
             .contains("console_kind=tty");
+        assertThat(String.valueOf(row.get(InstanceModel.SETTINGS)))
+            .as("step 1: the RETIRED poll_interval is still accepted and stored, never refused")
+            .contains("poll_interval=60");
         assertThat((Object) row.get(InstanceModel.SERVER_ID))
             .as("step 1: an operator's explicit host is honoured verbatim").isEqualTo(hostId);
         assertThat((Object) row.get(InstanceModel.TEMPLATE_ID))
@@ -241,8 +253,10 @@ class InstanceApiTest extends HohenheimTestBase {
 
     /** The doors are the panels': create is admin-only, destroy asks the record. */
     @Test
-    @Order(2)
     void theDoorsAreExactlyThePanelsDoors() throws Exception {
+        int viewOnlyId = viewOnlyInstance(PREFIX + "doors-view-only");
+        int foreignId = instance(PREFIX + "doors-foreign");
+
         // 1. No tenant create lane exists at all (ManageInstanceResource is not creatable),
         //    and a key narrowed away from the admin permission is refused the same way.
         assertThat(keyPost(keyTenant, "/api/v1/instances", form(
@@ -274,16 +288,21 @@ class InstanceApiTest extends HohenheimTestBase {
             .as("step 2: the record is untouched").isNull();
 
         // 3. A workload the tenant holds nothing on is the uniform 404, never an oracle.
-        assertThat(keyGet(keyTenant, "/api/v1/instances/" + createdId).statusCode())
+        assertThat(keyGet(keyTenant, "/api/v1/instances/" + foreignId).statusCode())
             .as("step 3: a foreign workload does not read").isEqualTo(404);
-        assertThat(keyPost(keyTenant, "/api/v1/instances/" + createdId + "/delete", "")
+        assertThat(keyPost(keyTenant, "/api/v1/instances/" + foreignId + "/delete", "")
             .statusCode()).as("step 3: nor delete").isEqualTo(404);
+        assertThat((Object) Models.get(InstanceModel.class).findById(foreignId)
+                .get(InstanceModel.DELETED_AT))
+            .as("step 3: the foreign record is untouched").isNull();
     }
 
     /** Deleting a workload is the form's own destroy: torn down, trashed, gone from the API. */
     @Test
-    @Order(3)
     void deletingAWorkloadTrashesIt() throws Exception {
+        int createdId = createdThroughTheApi(PREFIX + "doomed");
+        int viewOnlyId = viewOnlyInstance(PREFIX + "delete-bystander");
+
         HttpResponse<String> deleted = keyPost(keyAdmin,
             "/api/v1/instances/" + createdId + "/delete", "");
         assertThat(deleted.statusCode()).as("step 1: the instance is deleted: " + deleted.body())
@@ -313,8 +332,8 @@ class InstanceApiTest extends HohenheimTestBase {
      * no reason at all, which is the answer this defect had before.
      */
     @Test
-    @Order(4)
     void oneResolverAnswersTheDeleteAffordanceAndThePost() throws Exception {
+        int viewOnlyId = viewOnlyInstance(PREFIX + "resolver-view-only");
         InstanceResource resource = new InstanceResource();
         Row viewOnly = Models.get(InstanceModel.class).findById(viewOnlyId);
         AccessContext tenant = AccessContext.of(TenantConduits.stubFor(

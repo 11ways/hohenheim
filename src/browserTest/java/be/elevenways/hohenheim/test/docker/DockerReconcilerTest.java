@@ -1,9 +1,10 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.HostTrustSlot;
@@ -33,12 +34,9 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -62,20 +60,15 @@ class DockerReconcilerTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
 
     @BeforeAll
     static void setUp() throws Exception {
-        File db = File.createTempFile("hohenheim-reconciler-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
         // ONE database per test class: the controller identity (and therefore every
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
     }
 
@@ -586,7 +579,7 @@ class DockerReconcilerTest {
             ServerService servers = new ServerService(datasource);
             assertThat(servers.dockerNames())
                 .as("step 1: the docker host inventory keeps the docker hosts")
-                .contains(ServerService.LOCAL)
+                .contains(ServerService.LOCAL_HOST_NAME)
                 .doesNotContain("sweep-incus");
 
             // 2. A full sweep leaves the incus host's stored verdict exactly as it was.
@@ -655,12 +648,12 @@ class DockerReconcilerTest {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
-        LiveLane.requireImage(docker, "alpine:latest");
+        LiveLane.requireImage(docker, TestImages.ALPINE);
 
         // 1. Plant a container claiming a site record that does not exist.
         String name = "hohenheim-reconciler-orphan-" + Long.toHexString(System.nanoTime());
         Map<String, Object> spec = new LinkedHashMap<>();
-        spec.put("Image", "alpine:latest");
+        spec.put("Image", TestImages.ALPINE);
         spec.put("Cmd", List.of("sleep", "60"));
         // AIDEV-NOTE: minted INSIDE this class's datasource scope on purpose. The owner
         // labels now carry the controller identity, and this class has two databases in

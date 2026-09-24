@@ -151,13 +151,18 @@ class MigrationIntegrityTest {
     /**
      * The upgrade every deployed install meets: its own stream applied through the version it
      * shipped, everything appended since pending, migrated under the strict integrity posture.
-     * Checked from the production commit 91191333 (which shipped through 009) and from the
-     * deployed high-water mark, so an appended migration that sorts or depends wrongly fails
-     * here instead of refusing a real boot as out of order.
+     * Checked from the production commit 91191333 (which shipped through 009) and from EVERY
+     * later version but the newest, because a release may ship any prefix of the appended
+     * migrations: an appended migration that sorts or depends wrongly fails here instead of
+     * refusing a real boot as out of order.
      */
     @Test
     void aDeployedInstallUpgradesThroughEveryAppendedMigrationUnderStrictIntegrity() throws Exception {
-        for (String shipped : List.of(PRODUCTION_91191333_THROUGH, DEPLOYED_THROUGH)) {
+        List<String> points = installPoints();
+        assertThat(points)
+            .as("the production install is among the checked ones")
+            .startsWith(PRODUCTION_91191333_THROUGH);
+        for (String shipped : points) {
             // 1. The install as it is: the discovered set with this stream cut at `shipped`.
             File file = File.createTempFile("hohenheim-migration-deployed-" + shipped, ".db");
             file.delete();
@@ -194,6 +199,39 @@ class MigrationIntegrityTest {
                 .containsAll(own);
             datasource.close();
         }
+    }
+
+    /**
+     * This stream runs in version order inside zenit's one cross-stream dependency order, which
+     * is what the strict out-of-order check judges an upgraded install against.
+     *
+     * AIDEV-NOTE: this pins the CAUSE the intermediate-install upgrades above observe. The
+     * runner breaks ties by version text, and "0xx" sorts before every zenit timestamp, so a
+     * migration without an edge runs at the front while 012 waits behind zenit-auth's M007.
+     * An appended migration that forgets its dependsOn(predecessor) lands before 012 here.
+     */
+    @Test
+    void thisStreamRunsInVersionOrderInsideTheDependencyOrder() throws Exception {
+        SqliteDatasource datasource = emptyDatabase("order");
+
+        // 1. A fresh install runs the whole discovered set in the runner's one order.
+        MigrationRunnerResult fresh = new MigrationRunner(datasource).migrate();
+        assertThat(fresh.isSuccess()).as("step 1: fresh migrate failed: %s", failureDetail(fresh))
+            .isTrue();
+
+        // 2. This stream's slice of that order is exactly its version order, and complete.
+        List<String> executed = fresh.getResults().stream()
+            .filter(result -> HohenheimMigration.STREAM.equals(result.getKey().stream()))
+            .map(MigrationResult::getVersion)
+            .toList();
+        List<String> versions = InstallsAt.hohenheimMigrations(datasource.getDatasourceIdentifier())
+            .stream().map(Migration::getVersion).toList();
+        assertThat(executed)
+            .as("step 2: the %s migrations run in version order; a migration appended after 012"
+                + " must declare dependsOn(<its predecessor>) (see HohenheimMigration)",
+                HohenheimMigration.STREAM)
+            .containsExactlyElementsOf(versions);
+        datasource.close();
     }
 
     /**
@@ -424,6 +462,24 @@ class MigrationIntegrityTest {
     }
 
     // -- helpers --------------------------------------------------------------
+
+    /**
+     * @return the production version followed by every later version of this stream except the
+     *         newest: each is a state a release shipping a prefix of the appended migrations leaves
+     */
+    private static List<String> installPoints() throws Exception {
+        SqliteDatasource probe = emptyDatabase("points");
+        List<Migration> own = InstallsAt.hohenheimMigrations(probe.getDatasourceIdentifier());
+        probe.close();
+        List<String> points = new ArrayList<>();
+        points.add(PRODUCTION_91191333_THROUGH);
+        for (Migration migration : own.subList(0, own.size() - 1)) {
+            if (migration.getVersion().compareTo(PRODUCTION_91191333_THROUGH) > 0) {
+                points.add(migration.getVersion());
+            }
+        }
+        return points;
+    }
 
     /**
      * Whether a version is at or below {@link #DEPLOYED_THROUGH}, comparing zero-padded so

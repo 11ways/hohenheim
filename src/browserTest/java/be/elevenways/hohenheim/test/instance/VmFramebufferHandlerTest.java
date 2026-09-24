@@ -3,10 +3,9 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.VmFramebufferHandler;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -127,14 +126,7 @@ class VmFramebufferHandlerTest extends HohenheimTestBase {
     // -----------------------------------------------------------------------
 
     private static int user(String label) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, label + "@hohenheim.local");
-        user.set(UserModel.DISPLAY_NAME, "FB " + label);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
+        return ApiSupport.user(label + "@hohenheim.local", "FB " + label);
     }
 
     private static int vmInstance(String name, String status) {

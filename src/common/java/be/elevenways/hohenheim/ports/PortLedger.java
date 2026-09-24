@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.ports;
 
+import be.elevenways.hohenheim.model.DoomedRows;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -12,10 +13,8 @@ import be.elevenways.zenit.common.orm.lease.Lease;
 import be.elevenways.zenit.common.orm.lease.Leases;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.QueryBuilder;
-import be.elevenways.zenit.common.orm.query.QueryContext;
+import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -53,9 +52,6 @@ public final class PortLedger {
 
     /** How long a claim waits for a concurrent claim of the same resource to finish. */
     private static final int CLAIM_LEASE_WAIT_SECONDS = 5;
-
-    /** Where the before-remove hook stashes the ids the after-remove hook must release. */
-    private static final String DOOMED_SERVICES = "hohenheim.ports.doomed-services";
 
     private PortLedger() {
     }
@@ -566,91 +562,45 @@ public final class PortLedger {
     }
 
     /**
-     * A delete carries only CRITERIA -- {@code Model.delete(id)}, a criteria delete and
-     * {@code deleteAll} all fire the remove hooks ONCE with a criteria-only context whose
-     * row is null -- so the doomed owners' primary keys are read here, before the rows
-     * disappear, and consumed by {@link #releaseDoomedOwners} on the SAME context instance.
+     * Park every claim of the records a delete removes, on every delete lane of
+     * {@code ownerSchema}: stack services, managed databases and instances are the same "the
+     * owning record is going away" case, so they share this one registration.
      *
-     * AIDEV-NOTE: this before/after pairing is the framework's documented seam
-     * (RemoveFromDatasource's own docblock; zenit-auth's RecordGrantCleanup is the
-     * reference consumer). An afterRemove-only hook reading {@code context.getRow()}
-     * silently releases NOTHING -- the claims outlive their owner and the port stays
-     * permanently unclaimable. Model-agnostic on purpose: stack services and managed
-     * databases are the same "the owning record is going away" case, and a second copy
-     * of this pairing per model is how one of them silently stops releasing.
+     * AIDEV-NOTE: a record delete is not an observation of the port being free -- the
+     * container (or process) it described may outlive it -- so the claims are parked in
+     * {@code releasing} and survive their owner, still blocking rival claims, until an
+     * observer deletes them. Verified teardown paths (DatabaseService.destroy) call
+     * {@link #releaseOwnerObserved} BEFORE deleting the record, so this only ever parks what
+     * no observer vouched for. The doomed ids are read BEFORE the delete and the claims
+     * parked AFTER it ({@link DoomedRows}): an after-remove-only hook reading
+     * {@code context.getRow()} silently parked NOTHING, and the ports stayed permanently
+     * unclaimable.
      */
-    public static void captureDoomedOwners(@NonNull RemoveFromDatasource context) {
+    public static void parkClaimsOnRemove(@NonNull Schema ownerSchema) {
+        DoomedRows.handOver(ownerSchema, PortLedger::doomedOwnerIds, PortLedger::parkClaimsOf);
+    }
+
+    /** The integer ids of the owners a pending delete removes, or null when there are none. */
+    private static @Nullable List<Integer> doomedOwnerIds(@NonNull RemoveFromDatasource context) {
+        List<Integer> ids = new ArrayList<>();
+        for (Object key : context.doomedPrimaryKeys()) {
+            if (key instanceof Integer ownerId) {
+                ids.add(ownerId);
+            }
+        }
+        return ids.isEmpty() ? null : ids;
+    }
+
+    /** Park every claim the removed owners of the context's model held. */
+    private static void parkClaimsOf(@NonNull RemoveFromDatasource context, @NonNull List<Integer> ownerIds) {
         Model model = context.getModel();
         if (model == null) {
             return;
         }
-        String primaryKey = model.getPrimaryKeyField().getName();
-        QueryContext queryContext = context.getQueryContext();
-        Criteria criteria = queryContext != null ? queryContext.getCriteria() : null;
-        QueryBuilder<Row> builder = model.find();
-        if (criteria != null) {
-            builder.where(criteria);
-        }
-        List<Integer> doomed = new ArrayList<>();
-        for (Row owner : builder.all()) {
-            if (owner.get(primaryKey) instanceof Integer ownerId) {
-                doomed.add(ownerId);
-            }
-        }
-        if (!doomed.isEmpty()) {
-            context.setAttribute(DOOMED_SERVICES, doomed);
-        }
-    }
-
-    /**
-     * Park every claim of the records the paired before-hook doomed in {@code releasing}.
-     * A record delete is not an observation of the port being free -- the container (or
-     * process) it described may outlive it -- so the rows survive their owner, still
-     * blocking rival claims, until an observer deletes them. Verified teardown paths
-     * (DatabaseService.destroy) call {@link #releaseOwnerObserved} BEFORE deleting the
-     * record, so this hook only ever parks what no observer vouched for.
-     */
-    public static void releaseDoomedOwners(@NonNull RemoveFromDatasource context) {
-        Model model = context.getModel();
-        if (model == null
-            || !(context.getAttribute(DOOMED_SERVICES) instanceof List<?> doomed) || doomed.isEmpty()) {
-            return;
-        }
-        List<Integer> ids = new ArrayList<>();
-        for (Object id : doomed) {
-            if (id instanceof Integer ownerId) {
-                ids.add(ownerId);
-            }
-        }
-        if (!ids.isEmpty()) {
-            markReleasing(Models.get(PortAllocationModel.class).find()
-                .where(PortAllocationModel.OWNER_MODEL.eq(model.getModelId().toString()))
-                .and(PortAllocationModel.OWNER_ID.in(ids))
-                .all());
-        }
-    }
-
-    /**
-     * Park every claim of the SERVERS the paired before-hook doomed ({@code servers} rows
-     * share {@link #captureDoomedOwners}). A host we removed from the inventory is exactly
-     * the host we can no longer observe, and a {@code servers} row vanishing does not free
-     * ports on the physical machine -- so removal may never delete its claims.
-     */
-    public static void markDoomedServersReleasing(@NonNull RemoveFromDatasource context) {
-        if (!(context.getAttribute(DOOMED_SERVICES) instanceof List<?> doomed) || doomed.isEmpty()) {
-            return;
-        }
-        List<Integer> ids = new ArrayList<>();
-        for (Object id : doomed) {
-            if (id instanceof Integer serverId) {
-                ids.add(serverId);
-            }
-        }
-        if (!ids.isEmpty()) {
-            markReleasing(Models.get(PortAllocationModel.class).find()
-                .where(PortAllocationModel.SERVER_ID.in(ids))
-                .all());
-        }
+        markReleasing(Models.get(PortAllocationModel.class).find()
+            .where(PortAllocationModel.OWNER_MODEL.eq(model.getModelId().toString()))
+            .and(PortAllocationModel.OWNER_ID.in(ownerIds))
+            .all());
     }
 
     private static @NonNull PortConflict conflictFor(@NonNull String key,

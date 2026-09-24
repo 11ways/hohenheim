@@ -3,13 +3,13 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
+import be.elevenways.hohenheim.model.HostMode;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.PortPublication;
 import be.elevenways.hohenheim.server.util.PortProbe;
-import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -258,31 +258,48 @@ final class PortPublications {
 
     private static boolean isLocalServer(int serverId) {
         Row server = Models.get(ServerModel.class).findById(serverId);
-        return server != null && ServerModel.MODE_LOCAL.equals(server.get(ServerModel.MODE));
+        return HostMode.LOCAL.declaredBy(server);
     }
 
     /** The configured public window's first port, or the built-in 30000 when unusable. */
+    /**
+     * The configured first port of the pre-allocation window.
+     *
+     * AIDEV-NOTE: NO substitution any more. A privileged first port used to be swapped for
+     * 30000 (said out loud on every allocation), which gave the operator a window they never
+     * asked for: DNS and firewall rules written against their number pointed nowhere. The
+     * SettingsRule on HohenheimSettings.Instances now refuses a missing, privileged or
+     * overflowing window at every save and at boot, so an out-of-range value cannot reach
+     * this read; if one somehow does, the allocation fails loudly instead of guessing.
+     *
+     * @throws IllegalStateException when the stored value is outside what the rule admits
+     */
     private static int windowFirst() {
         Integer first = HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Instances.PUBLIC_PORT_FIRST);
-        if (first != null && first <= 1024) {
-            // AIDEV-NOTE: the substitution below is NOT a silent default: an operator who
-            // configured a privileged first port gets a window they never asked for, and
-            // DNS/firewall rules written against their number would point nowhere. Until a
-            // SettingsRule refuses the value at save and at boot, it is said out loud on
-            // every allocation that reads it.
-            Blast.log("PORTS: instances.public_port_first =", first, "is a privileged port"
-                + " (<= 1024) and is IGNORED; public publications allocate from 30000 instead."
-                + " Set a first port above 1024.");
-            return 30000;
+        if (first == null || first <= 1024 || first > HohenheimSettings.Instances.MAX_PORT) {
+            throw new IllegalStateException("instances.public_port_first = " + first
+                + " is outside 1025-" + HohenheimSettings.Instances.MAX_PORT
+                + ", which the settings rule refuses at save and at boot");
         }
-        return first == null ? 30000 : first;
+        return first;
     }
 
+    /**
+     * The configured size of the pre-allocation window; see {@link #windowFirst} for why an
+     * out-of-range value fails instead of being replaced.
+     *
+     * @throws IllegalStateException when the stored value is outside what the rule admits
+     */
     private static int windowCount() {
         Integer count = HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Instances.PUBLIC_PORT_COUNT);
-        return count == null || count <= 0 ? 2000 : count;
+        if (count == null || count < 1) {
+            throw new IllegalStateException("instances.public_port_count = " + count
+                + " is not a positive window size, which the settings rule refuses at save"
+                + " and at boot");
+        }
+        return count;
     }
 
     private static Microcopy violationText(String key) {

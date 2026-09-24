@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -77,7 +78,9 @@ public final class ManageInstanceDeviceResource extends InstanceDeviceResource {
         List<FieldOption<String>> options = new ArrayList<>();
         for (Map.Entry<String, EnumField.EnumValue> value
                 : InstanceDeviceModel.TYPE.getValues().entrySet()) {
-            if (InstanceDeviceModel.TYPE_CDROM.equals(value.getKey())) {
+            // Fail closed: a token that is no member is never offered either.
+            DeviceType type = DeviceType.parse(value.getKey());
+            if (type == null || type.operatorOnly()) {
                 continue;
             }
             options.add(FieldOption.of(value.getKey(), value.getValue().getLabel()));
@@ -91,7 +94,8 @@ public final class ManageInstanceDeviceResource extends InstanceDeviceResource {
      */
     @Override
     public boolean deletableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
-        if (InstanceDeviceModel.TYPE_CDROM.equals(record.get(InstanceDeviceModel.TYPE))) {
+        DeviceType type = DeviceType.parse(record.get(InstanceDeviceModel.TYPE));
+        if (type == null || type.operatorOnly()) {
             return false;
         }
         return super.deletableBy(record, accessContext);

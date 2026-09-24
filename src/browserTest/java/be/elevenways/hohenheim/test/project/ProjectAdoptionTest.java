@@ -9,22 +9,18 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.project.ProjectAdoption;
 import be.elevenways.hohenheim.server.project.Projects;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -38,8 +34,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * user who could reach a record before, operator-owned records stay untouched, and
  * everything keyed on the old owner packing (quota override rows, charged buckets,
  * the released-claim ledger) follows in the same pass. Counts are asserted exactly.
+ *
+ * AIDEV-NOTE: one journey: the idempotence check is only meaningful AFTER the first heal,
+ * and it used to be a second @Order'ed test that could not run alone.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ProjectAdoptionTest extends HohenheimTestBase {
 
     private static final String PREFIX = "proj-adopt-";
@@ -60,13 +58,11 @@ class ProjectAdoptionTest extends HohenheimTestBase {
     private static Integer quotaOverrideId;
     private static Integer claimId;
 
-    private static ProjectAdoption.Result result;
-
     @BeforeAll
     static void seedLegacyLandscape() {
-        userXId = user("adopt-x@project.test", "Adopt X");
-        userYId = user("adopt-y@project.test", "Adopt Y");
-        userZId = user("adopt-z@project.test", "Adopt Z");
+        userXId = ApiSupport.user("adopt-x@project.test", "Adopt X");
+        userYId = ApiSupport.user("adopt-y@project.test", "Adopt Y");
+        userZId = ApiSupport.user("adopt-z@project.test", "Adopt Z");
         principalX = new UserPrincipal(userXId, "Adopt X");
         principalY = new UserPrincipal(userYId, "Adopt Y");
 
@@ -143,17 +139,6 @@ class ProjectAdoptionTest extends HohenheimTestBase {
         }
     }
 
-    private static int user(String email, String name) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, name);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
-    }
-
     private static int instance(String name) {
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, name);
@@ -209,17 +194,25 @@ class ProjectAdoptionTest extends HohenheimTestBase {
 
     // -- the journey ----------------------------------------------------------
 
-    /** The heal itself, with EXACT counts derived from the landscape it saw. */
+    /**
+     * The heal itself, with EXACT counts derived from the landscape it saw, and then a
+     * second run that moves nothing.
+     */
     @Test
-    @Order(1)
-    void adoptionCreatesOneProjectPerDistinctOwnerSetWithExactCounts() {
+    void adoptionCreatesOneProjectPerDistinctOwnerSetWithExactCountsAndIsIdempotent() {
         // 1. Reach BEFORE, through the real precedence walk.
-        assertThat(HohenheimAccess.canManageInstance(principalX, instanceX1)).isTrue();
-        assertThat(HohenheimAccess.canManageInstance(principalX, instanceX2)).isTrue();
-        assertThat(HohenheimAccess.canManageSite(principalX, siteSharedId)).isTrue();
-        assertThat(HohenheimAccess.canManageSite(principalX, siteXId)).isTrue();
-        assertThat(HohenheimAccess.canManageInstance(principalY, instanceY1)).isTrue();
-        assertThat(HohenheimAccess.canManageSite(principalY, siteSharedId)).isTrue();
+        assertThat(HohenheimAccess.canManageInstance(principalX, instanceX1))
+            .as("step 1: X reaches x1 before the heal").isTrue();
+        assertThat(HohenheimAccess.canManageInstance(principalX, instanceX2))
+            .as("step 1: X reaches x2 before the heal").isTrue();
+        assertThat(HohenheimAccess.canManageSite(principalX, siteSharedId))
+            .as("step 1: X reaches the shared site before the heal").isTrue();
+        assertThat(HohenheimAccess.canManageSite(principalX, siteXId))
+            .as("step 1: X reaches its own site before the heal").isTrue();
+        assertThat(HohenheimAccess.canManageInstance(principalY, instanceY1))
+            .as("step 1: Y reaches y1 before the heal").isTrue();
+        assertThat(HohenheimAccess.canManageSite(principalY, siteSharedId))
+            .as("step 1: Y reaches the shared site before the heal").isTrue();
         assertThat(HohenheimAccess.canManageInstance(principalX, instanceY1))
             .as("step 1: X never reached Y's instance").isFalse();
 
@@ -239,7 +232,7 @@ class ProjectAdoptionTest extends HohenheimTestBase {
         //    sets ({X}, {Y}, {X,Y}, {Z}); a shared server may carry more from
         //    neighbours, so the exact assertions below are on THIS class's sets and
         //    records.
-        result = ProjectAdoption.run();
+        ProjectAdoption.Result result = ProjectAdoption.run();
         assertThat(result.projectsCreated())
             .as("step 2: at least the four distinct owner sets became projects")
             .isGreaterThanOrEqualTo(4);
@@ -358,24 +351,19 @@ class ProjectAdoptionTest extends HohenheimTestBase {
         assertThat((String) claim.get(ReleasedRouteClaimModel.FORMER_SUBJECTS))
             .as("step 9: the ledger's former-owner column was rewritten")
             .isEqualTo(packX);
-    }
 
-    /** Running the heal again moves NOTHING: adopted sets are recognized, not re-adopted. */
-    @Test
-    @Order(2)
-    void adoptionIsIdempotent() {
-        Row projectX = Projects.projectOf(InstanceModel.MODEL_ID, instanceX1);
-        String packX = HohenheimAccess.packSubjects(Projects.ownerSubjectsOf(projectX));
+        // 10. Running the heal again moves NOTHING: adopted sets are recognized, not
+        //     re-adopted.
         long memoryBefore = InstanceQuota.memoryUsedBy(packX);
         ProjectAdoption.Result second = ProjectAdoption.run();
         assertThat(second.projectsCreated())
-            .as("step 1: a second run creates no projects").isZero();
+            .as("step 10: a second run creates no projects").isZero();
         assertThat(second.recordsAdopted())
-            .as("step 1: and adopts no records").isZero();
+            .as("step 10: and adopts no records").isZero();
         assertThat(second.bucketsMoved())
-            .as("step 1: and moves no reservations").isZero();
+            .as("step 10: and moves no reservations").isZero();
         assertThat(InstanceQuota.memoryUsedBy(packX))
-            .as("step 1: the memory charge is not re-reserved either -- a heal that ran"
+            .as("step 10: the memory charge is not re-reserved either -- a heal that ran"
                 + " twice would double-charge the project")
             .isEqualTo(memoryBefore);
     }

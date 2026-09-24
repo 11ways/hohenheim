@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.model.WebhookDeliveryModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
+import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -20,13 +21,18 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,8 +52,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * back, and still unobservable here because nothing in this class ever completes a deploy:
  * replay-once, the GitLab/Gitea shared-token lanes, the no-ref lane and the webhook-driven
  * preview lifecycle. What remains asserts ABSENCE and therefore needs no pipeline at all.
+ * The tests are independent: each asserts the absence it owns (its application's release
+ * operations, its own delivery ids, a delivery count taken before it posts).
  */
-@org.junit.jupiter.api.TestMethodOrder(org.junit.jupiter.api.MethodOrderer.OrderAnnotation.class)
 class GitWebhookSecurityTest extends HohenheimTestBase {
 
     private static Path upstreamRepo;
@@ -111,9 +118,9 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
     }
 
     @Test
-    @org.junit.jupiter.api.Order(1)
     void unsignedAndWrongSignedDeliveriesDeployNothingAndLeakNothing() throws Exception {
         String body = pushPayload("acme/repo-a", "refs/heads/main", "cafe1111");
+        int claimedBefore = deliveryRows().size();
 
         // 1. Unsigned delivery: refused, and NOTHING happened -- no delivery claim, no
         //    deployment. The refusal is the proof the endpoint's only authentication is
@@ -146,10 +153,11 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
         //    wait is needed: every refusal above is answered BEFORE the delivery claim, and
         //    a deploy is only ever queued after one, so the response is the proof.
         assertThat(deliveryRows())
-            .as("step 4: refused deliveries claim no delivery id").isEmpty();
+            .as("step 4: refused deliveries claim no delivery id").hasSize(claimedBefore);
         assertThat(releaseOperationsOf(appAId))
             .as("step 4: refused deliveries deploy nothing").isEmpty();
-        assertThat(releaseOperationsOf(appBId)).isEmpty();
+        assertThat(releaseOperationsOf(appBId))
+            .as("step 4: nor on the application whose secret signed step 2").isEmpty();
     }
 
     /**
@@ -162,7 +170,6 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
      * it on a deploying delivery would need a repository, a build and a daemon.
      */
     @Test
-    @org.junit.jupiter.api.Order(2)
     void aReplayedDeliveryIsClaimedOnceAndAnEventWithoutARefIsNotAPush() throws Exception {
 
         String deliveryId = UUID.randomUUID().toString();
@@ -213,7 +220,6 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
     }
 
     @Test
-    @org.junit.jupiter.api.Order(3)
     void aDeliveryForAnotherRepositoryIsRefusedEvenWithAValidSignature() throws Exception {
         // Site B's webhook, correctly signed with B's secret, but the payload names
         // repo-a: a webhook must authorize exactly the repository binding it was
@@ -238,7 +244,6 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
     }
 
     @Test
-    @org.junit.jupiter.api.Order(4)
     void aPushToAnotherBranchIsIgnored() throws Exception {
         int before = releaseOperationsOf(appBId).size();
         String body = pushPayload("acme/repo-b", "refs/heads/feature-x", "cafe4444");
@@ -256,7 +261,6 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
     }
 
     @Test
-    @org.junit.jupiter.api.Order(5)
     void pullRequestEventsAreIgnoredUntilPreviewsAreOptedIn() throws Exception {
         String body = "{\"action\":\"opened\",\"repository\":{\"full_name\":\"acme/repo-b\"},"
             + "\"pull_request\":{\"number\":7,\"head\":{\"ref\":\"feature-x\","
@@ -278,7 +282,6 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
      * the read times out; only a handler that stops reading AT the cap can answer 413.
      */
     @Test
-    @org.junit.jupiter.api.Order(6)
     void aChunkedBodyPastTheCapIsRefusedWithoutWaitingForItsEnd() throws Exception {
         try (Socket socket = new Socket("127.0.0.1", proxyPort)) {
             socket.setSoTimeout(15000);
@@ -324,9 +327,89 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
             .as("step 3: a refused body deploys nothing").isEmpty();
     }
 
+    /**
+     * A client that sends its WHOLE oversized body before reading reliably reads the 413.
+     *
+     * AIDEV-NOTE: the refusal used to close the connection while the rest of the body was
+     * still arriving, and a close over unread bytes is a TCP RESET: depending on timing the
+     * client got "connection reset" instead of the 413. The handler now answers, drains what
+     * is left (bounded) and closes on a fully read request, so every round must read the
+     * whole response, body included, and a clean end of stream. Several rounds, because a
+     * reset was a race, not a certainty.
+     */
+    @Test
+    void anOversizedBodyIsDrainedSoItsSenderReadsThe413() throws Exception {
+        GitWebhookHandler.limiter().clear();
+        byte[] body = new byte[2 * 1024 * 1024 + 256 * 1024];
+        Arrays.fill(body, (byte) 'b');
+        for (int round = 1; round <= 5; round++) {
+            for (boolean chunked : List.of(false, true)) {
+                String response = sendWholeBody(hookUrl(appAId), body, chunked);
+                assertThat(response)
+                    .as("round %d (%s): the refusal is read, never a reset", round,
+                        chunked ? "chunked" : "content-length")
+                    .startsWith("HTTP/1.1 413")
+                    .contains("payload too large");
+            }
+        }
+        assertThat(releaseOperationsOf(appAId))
+            .as("a refused body deploys nothing").isEmpty();
+    }
+
+    /**
+     * Write the whole body (beside the reader, so a full socket buffer cannot wedge the test),
+     * then read the response to its end.
+     *
+     * @return the full response text, or the text read before a reset (which then fails the caller)
+     */
+    private static String sendWholeBody(String path, byte[] body, boolean chunked) throws Exception {
+        try (Socket socket = new Socket("127.0.0.1", proxyPort)) {
+            socket.setSoTimeout(15000);
+            OutputStream out = socket.getOutputStream();
+            String framing = chunked ? "Transfer-Encoding: chunked\r\n"
+                : "Content-Length: " + body.length + "\r\n";
+            out.write(("POST " + path + " HTTP/1.1\r\n"
+                + "Host: webhook.test\r\n"
+                + "Content-Type: application/json\r\n"
+                + framing
+                + "X-GitHub-Event: push\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+            Thread writer = Thread.ofVirtual().start(() -> {
+                try {
+                    if (chunked) {
+                        int slice = 64 * 1024;
+                        for (int offset = 0; offset < body.length; offset += slice) {
+                            int length = Math.min(slice, body.length - offset);
+                            out.write((Integer.toHexString(length) + "\r\n").getBytes(StandardCharsets.UTF_8));
+                            out.write(body, offset, length);
+                            out.write("\r\n".getBytes(StandardCharsets.UTF_8));
+                        }
+                        out.write("0\r\n\r\n".getBytes(StandardCharsets.UTF_8));
+                    } else {
+                        out.write(body);
+                    }
+                    out.flush();
+                } catch (IOException writeFailed) {
+                    // Surfaces as a short or reset read on the reader side.
+                }
+            });
+            ByteArrayOutputStream received = new ByteArrayOutputStream();
+            byte[] chunk = new byte[8192];
+            try {
+                int read;
+                while ((read = socket.getInputStream().read(chunk)) != -1) {
+                    received.write(chunk, 0, read);
+                }
+            } catch (SocketException reset) {
+                // A reset before the response was read leaves it short; the caller's
+                // assertion names what was missing.
+            }
+            writer.join(15000);
+            return received.toString(StandardCharsets.UTF_8);
+        }
+    }
+
     /** A change request whose branch name git could read as an option never builds. */
     @Test
-    @org.junit.jupiter.api.Order(7)
     void aPullRequestWithAnOptionShapedBranchIsIgnored() throws Exception {
         String uuid = UUID.randomUUID().toString();
         String body = "{\"action\":\"opened\",\"repository\":{\"full_name\":\"acme/repo-c\"},"
@@ -562,14 +645,7 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
         return output;
     }
 
-    private static void await(String what, BooleanSupplier condition)
-            throws InterruptedException {
-        for (int i = 0; i < 240; i++) {
-            if (condition.getAsBoolean()) {
-                return;
-            }
-            Thread.sleep(250);
-        }
-        throw new AssertionError("Timed out waiting for: " + what);
+    private static void await(String what, BooleanSupplier condition) {
+        Poll.until(what, Duration.ofSeconds(60), Duration.ofMillis(250), condition);
     }
 }

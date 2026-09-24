@@ -499,14 +499,14 @@ public class ProxyServer {
     private void maybeAlertListenerDown() {
         if (!httpDownAlertSent && httpState == State.FAILED && httpRestartAttempts >= 2) {
             httpDownAlertSent = true;
-            Alerts.send(NotificationEvents.PROXY_LISTENER_DOWN,
+            Alerts.trySend(NotificationEvents.PROXY_LISTENER_DOWN,
                 "Proxy HTTP listener is down", httpFailureReason);
         }
         boolean httpsDown = httpsState == State.FAILED
             || (httpsState == State.RUNNING && httpsFailureReason != null);
         if (!httpsDownAlertSent && httpsDown && httpsRestartAttempts >= 2) {
             httpsDownAlertSent = true;
-            Alerts.send(NotificationEvents.PROXY_LISTENER_DOWN,
+            Alerts.trySend(NotificationEvents.PROXY_LISTENER_DOWN,
                 "Proxy HTTPS listener is down", httpsFailureReason);
         }
     }

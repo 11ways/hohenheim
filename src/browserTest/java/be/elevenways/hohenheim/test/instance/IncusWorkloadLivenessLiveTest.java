@@ -10,19 +10,17 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -60,7 +58,7 @@ class IncusWorkloadLivenessLiveTest {
     /** Small enough that a runaway child hits it in under a second, big enough for alpine. */
     private static final int MEMORY_LIMIT_MB = 64;
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static LiveIncusHost remote;
 
     @BeforeAll
@@ -69,12 +67,7 @@ class IncusWorkloadLivenessLiveTest {
         LiveLane.require(LiveLane.Need.INCUS_HOST, remote != null,
             "no live incus host enrolled at " + LiveIncusHost.CONFIG);
 
-        File db = File.createTempFile("hohenheim-incus-liveness-live", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
 
         Db.run(datasource, () ->

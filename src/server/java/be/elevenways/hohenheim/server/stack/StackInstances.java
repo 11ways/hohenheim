@@ -422,9 +422,7 @@ public final class StackInstances {
             Object labels = existing.get("Labels");
             OwnerLabels.Owner owner = labels instanceof Map<?, ?> map
                 ? OwnerLabels.parse(map) : null;
-            boolean ours = owner != null && owner.model().equals(StackModel.MODEL_ID)
-                && owner.id().equals(String.valueOf(spec.stackId()));
-            if (!ours) {
+            if (!OwnerLabels.matches(owner, StackModel.MODEL_ID, spec.stackId())) {
                 return;   // adopted or foreign: we never remove what we did not create
             }
             WorkloadNetworkPolicy.forServer(spec.serverName()).remove(name);

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.dns;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.util.Watchdog;
 import be.elevenways.protoblast.common.Blast;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -22,10 +23,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
 
 import org.xbill.DNS.Flags;
 import org.xbill.DNS.Message;
@@ -93,7 +92,6 @@ public final class DnsServer {
     private @Nullable DatagramSocket udpSocket;
     private @Nullable ServerSocket tcpSocket;
     private @Nullable ExecutorService workers;
-    private @Nullable ScheduledExecutorService deadlines;
 
     /** @return true when the server is enabled in settings and both listeners bound */
     public boolean startIfEnabled() {
@@ -154,11 +152,6 @@ public final class DnsServer {
         this.udpSocket = udpBound;
         this.tcpSocket = tcpBound;
         this.workers = Executors.newVirtualThreadPerTaskExecutor();
-        this.deadlines = Executors.newSingleThreadScheduledExecutor(task -> {
-            Thread thread = new Thread(task, "hohenheim-dns-tcp-deadline");
-            thread.setDaemon(true);
-            return thread;
-        });
         this.running = true;
         this.startupError = null;
 
@@ -185,10 +178,6 @@ public final class DnsServer {
         if (this.workers != null) {
             this.workers.shutdown();
             this.workers = null;
-        }
-        if (this.deadlines != null) {
-            this.deadlines.shutdownNow();
-            this.deadlines = null;
         }
     }
 
@@ -322,15 +311,16 @@ public final class DnsServer {
             }
 
             ExecutorService pool = this.workers;
-            ScheduledExecutorService reaper = this.deadlines;
-            if (pool == null || reaper == null) {
+            if (pool == null) {
                 this.releaseTcpSlot(peer);
                 closeSocketQuietly(socket);
                 return;
             }
             try {
-                ScheduledFuture<?> deadline = reaper.schedule(() -> closeSocketQuietly(socket),
-                    this.tcpConnectionDeadlineMs, TimeUnit.MILLISECONDS);
+                // The shared watchdog, so a connection still in flight when stop() runs
+                // keeps its deadline.
+                ScheduledFuture<?> deadline = Watchdog.schedule(() -> closeSocketQuietly(socket),
+                    this.tcpConnectionDeadlineMs);
                 pool.execute(() -> {
                     try {
                         this.handleTcpConnection(socket);
@@ -343,7 +333,8 @@ public final class DnsServer {
                 });
             }
             catch (RejectedExecutionException stopping) {
-                // stop() shut the pools down between the accept and here.
+                // stop() shut the pool down between the accept and here; the pending
+                // deadline only closes the socket closed below.
                 this.releaseTcpSlot(peer);
                 closeSocketQuietly(socket);
                 return;

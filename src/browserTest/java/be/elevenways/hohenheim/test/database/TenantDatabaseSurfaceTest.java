@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -27,37 +28,25 @@ import be.elevenways.hohenheim.test.InstanceRowCleanup;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.auth.server.ZenitAuth;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.quota.Quotas;
-import be.elevenways.zenit.common.security.csrf.CsrfTokens;
-import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -72,70 +61,29 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * work is scheduled to run after the transaction commits and is irrelevant to the
  * boundary being tested.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class TenantDatabaseSurfaceTest extends HohenheimTestBase {
 
     private static final String PREFIX = "tenant-db-";
 
-    private static Integer tenantAId;
-    private static Integer tenantBId;
-    private static Integer viewerId;
-    private static UserPrincipal principalA;
-    private static UserPrincipal principalB;
-    private static String sessionA;
-    private static String csrfA;
-    private static String sessionB;
-    private static String csrfB;
-    private static String sessionViewer;
+    private static final String CREATE_URL = "/manage/databases/new";
 
-    private static Integer siteAId;
-    private static Integer siteBId;
-    private static Integer applicationAId;
-    private static Integer applicationBId;
+    /** Numbers each test's own tenancy, so no two tests share a tenant, site or quota bucket. */
+    private static final AtomicInteger FIXTURES = new AtomicInteger();
+
+    /** The admitted host placement chooses; read-only for every test. */
     private static Integer admittedHostId;
-    private static Integer capRowId;
 
-    private static Integer databaseAId;
-    private static String databaseAName;
-    /** The operator's shared engine every tenant record of this class lands on. */
-    private static Integer sharedEngineId;
+    /** Every quota row a test capped, removed after the class. */
+    private static final List<Integer> capRowIds = new ArrayList<>();
 
     @BeforeAll
     static void seed() {
-        tenantAId = tenant("tenant-a@" + PREFIX + "test", "Database Tenant A");
-        tenantBId = tenant("tenant-b@" + PREFIX + "test", "Database Tenant B");
-        viewerId = tenant("viewer@" + PREFIX + "test", "Database Viewer");
-        principalA = new UserPrincipal(tenantAId, "Database Tenant A");
-        principalB = new UserPrincipal(tenantBId, "Database Tenant B");
-
-        sessionA = session(tenantAId);
-        csrfA = lastCsrf;
-        sessionB = session(tenantBId);
-        csrfB = lastCsrf;
-        sessionViewer = session(viewerId);
-
-        siteAId = site(PREFIX + "site-a");
-        siteBId = site(PREFIX + "site-b");
-        RecordGrants.grant(GrantSubjectType.USER, tenantAId, SiteModel.MODEL_ID, siteAId,
-            HohenheimAccess.MANAGE, true);
-        RecordGrants.grant(GrantSubjectType.USER, tenantBId, SiteModel.MODEL_ID, siteBId,
-            HohenheimAccess.MANAGE, true);
-
-        // A database attaches to the WORKLOAD that consumes it, which since brief 7 is an
-        // application instance rather than a site.
-        applicationAId = application(PREFIX + "app-a");
-        applicationBId = application(PREFIX + "app-b");
-        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID,
-            applicationAId, HohenheimAccess.MANAGE, true);
-        RecordGrants.grant(GrantSubjectType.USER, tenantBId, InstanceModel.MODEL_ID,
-            applicationBId, HohenheimAccess.MANAGE, true);
-
         admittedHostId = admittedHost();
     }
 
     @AfterAll
     static void cleanUp() {
-        if (capRowId != null) {
+        for (Integer capRowId : capRowIds) {
             Models.get(InstanceQuotaModel.class).delete(capRowId);
         }
         // Everything this class allocated landed on its OWN admitted host, so that is
@@ -181,26 +129,68 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
 
     // -- fixtures -------------------------------------------------------------
 
-    private static String lastCsrf;
-
-    private static int tenant(String email, String name) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, name);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
+    /**
+     * One test's own cast: two tenants, each managing its own site and application, plus a
+     * teammate holding no grant yet.
+     *
+     * AIDEV-NOTE: every test builds its own, so a test runs alone and a failure in one can
+     * never leave another without its database. This class used to thread tenant A's
+     * database through eight @Order-ed tests in static fields.
+     */
+    private record Tenancy(int tenantA, int tenantB, int viewer,
+                           UserPrincipal principalA, UserPrincipal principalB,
+                           TestSession sessionA, TestSession sessionB, TestSession sessionViewer,
+                           int applicationA, int applicationB) {
     }
 
-    private static String session(int userId) {
-        Session session = Zenit.getSessionStore().create();
-        session.set(be.elevenways.zenit.auth.AuthKeys.USER_ID, (long) userId);
-        lastCsrf = ZenitAuth.randomToken();
-        session.set(CsrfTokens.TOKEN, lastCsrf);
-        Zenit.getSessionStore().save(session);
-        return session.token().secret();
+    /** @param mayAllocate whether both tenants already hold the database-create permission */
+    private static Tenancy tenancy(boolean mayAllocate) {
+        int n = FIXTURES.incrementAndGet();
+        int tenantA = ApiSupport.user("tenant-a-" + n + "@" + PREFIX + "test", "Database Tenant A");
+        int tenantB = ApiSupport.user("tenant-b-" + n + "@" + PREFIX + "test", "Database Tenant B");
+        int viewer = ApiSupport.user("viewer-" + n + "@" + PREFIX + "test", "Database Viewer");
+
+        int siteA = site(PREFIX + n + "-site-a");
+        int siteB = site(PREFIX + n + "-site-b");
+        RecordGrants.grant(GrantSubjectType.USER, tenantA, SiteModel.MODEL_ID, siteA,
+            HohenheimAccess.MANAGE, true);
+        RecordGrants.grant(GrantSubjectType.USER, tenantB, SiteModel.MODEL_ID, siteB,
+            HohenheimAccess.MANAGE, true);
+
+        // A database attaches to the WORKLOAD that consumes it, which since brief 7 is an
+        // application instance rather than a site.
+        int applicationA = application(PREFIX + n + "-app-a");
+        int applicationB = application(PREFIX + n + "-app-b");
+        RecordGrants.grant(GrantSubjectType.USER, tenantA, InstanceModel.MODEL_ID,
+            applicationA, HohenheimAccess.MANAGE, true);
+        RecordGrants.grant(GrantSubjectType.USER, tenantB, InstanceModel.MODEL_ID,
+            applicationB, HohenheimAccess.MANAGE, true);
+
+        if (mayAllocate) {
+            grantAllocation(tenantA);
+            grantAllocation(tenantB);
+        }
+        return new Tenancy(tenantA, tenantB, viewer,
+            new UserPrincipal(tenantA, "Database Tenant A"),
+            new UserPrincipal(tenantB, "Database Tenant B"),
+            sessionFor(tenantA), sessionFor(tenantB), sessionFor(viewer),
+            applicationA, applicationB);
+    }
+
+    private static void grantAllocation(int userId) {
+        GrantService.createDirectGrant(GrantSubjectType.USER, userId,
+            TenantDatabases.DATABASES_CREATE.value(), true);
+    }
+
+    /** Allocate {@code label} as a tenant through the manage surface; the stored record. */
+    private Row allocate(TestSession session, int tenantId, String label) throws Exception {
+        HttpResponse<String> created = httpPostForm(CREATE_URL,
+            "name=" + label + "&engine=postgres", session.token(), session.csrf());
+        assertThat(created.statusCode())
+            .as("fixture: tenant " + tenantId + " allocates " + label).isIn(302, 303);
+        Row database = databaseNamed("u" + tenantId + "-" + label);
+        assertThat(database).as("fixture: the allocation of " + label + " is stored").isNotNull();
+        return database;
     }
 
     private static int site(String name) {
@@ -241,24 +231,15 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         return row.get(ServerModel.ID);
     }
 
+    /** A session GET, in the (session, path) order this class's journeys read in. */
     private HttpResponse<String> get(String session, String path) throws Exception {
-        return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
-            .send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl() + path))
-                .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session)
-                .build(), HttpResponse.BodyHandlers.ofString());
+        return httpGet(path, session);
     }
 
+    /** A session form POST, in the (session, csrf, path, body) order this class's journeys read in. */
     private HttpResponse<String> post(String session, String csrf, String path, String body)
             throws Exception {
-        return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
-            .send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl() + path))
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session)
-                .header("X-Csrf-Token", csrf)
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build(), HttpResponse.BodyHandlers.ofString());
+        return httpPostForm(path, body, session, csrf);
     }
 
     private static Row databaseNamed(String name) {
@@ -304,9 +285,15 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
      * and the quota bucket the engine is charged to.
      */
     @Test
-    @Order(1)
     void allocationDerivesNamePlacementOwnershipAndChargesTheTenantsOwnQuota() throws Exception {
-        String createUrl = "/manage/databases/new";
+        Tenancy cast = tenancy(false);
+        int tenantAId = cast.tenantA();
+        int tenantBId = cast.tenantB();
+        String sessionA = cast.sessionA().token();
+        String csrfA = cast.sessionA().csrf();
+        String sessionB = cast.sessionB().token();
+        String csrfB = cast.sessionB().csrf();
+        String createUrl = CREATE_URL;
 
         // 1. Without hohenheim.databases.create the tenant is not even eligible, and the
         //    submit persists nothing. (The /manage panel itself is reachable: tenant A
@@ -320,10 +307,8 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
             .isNotIn(302, 303);
 
         // 2. With the permission the allocation lands.
-        GrantService.createDirectGrant(GrantSubjectType.USER, tenantAId,
-            TenantDatabases.DATABASES_CREATE.value(), true);
-        GrantService.createDirectGrant(GrantSubjectType.USER, tenantBId,
-            TenantDatabases.DATABASES_CREATE.value(), true);
+        grantAllocation(tenantAId);
+        grantAllocation(tenantBId);
         HttpResponse<String> created = post(sessionA, csrfA, createUrl,
             "name=blog&engine=postgres");
         assertThat(created.statusCode()).as("step 2: the allocation lands").isIn(302, 303);
@@ -331,13 +316,13 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         // 3. THE NAME IS NAMESPACED. The tenant asked for "blog"; the stored name -- which
         //    is also the container handle, the data volume and the backup directory -- is
         //    private to this owner.
-        databaseAName = "u" + tenantAId + "-blog";
+        String databaseAName = "u" + tenantAId + "-blog";
         Row database = databaseNamed(databaseAName);
         assertThat(database).as("step 3: the record is stored under the namespaced name")
             .isNotNull();
         assertThat(databaseNamed("blog"))
             .as("step 3: and the bare label was NOT taken installation-wide").isNull();
-        databaseAId = database.get(DatabaseModel.ID);
+        int databaseAId = database.get(DatabaseModel.ID);
 
         // 4. PLACEMENT chose the admitted host; the tenant named none and could not.
         assertThat((Integer) database.get(DatabaseModel.SERVER_ID))
@@ -368,7 +353,7 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
                 + " construction -- a fixed \"app\" re-credentialed the neighbour tenant")
             .isEqualTo(database.get(DatabaseModel.DB_NAME))
             .isNotEqualTo("app");
-        sharedEngineId = database.get(DatabaseModel.ENGINE_ID);
+        Integer sharedEngineId = database.get(DatabaseModel.ENGINE_ID);
         assertThat(sharedEngineId).as("step 6: it names its engine").isNotNull();
         Row engine = Models.get(DatabaseEngineModel.class).findById(sharedEngineId);
         assertThat(engine).as("step 6: and that engine row exists").isNotNull();
@@ -414,8 +399,14 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
 
     /** Cross-tenant reads: absence and denial are one answer, on every surface. */
     @Test
-    @Order(2)
     void anotherTenantsDatabaseIsIndistinguishableFromOneThatDoesNotExist() throws Exception {
+        Tenancy cast = tenancy(true);
+        int tenantBId = cast.tenantB();
+        String sessionB = cast.sessionB().token();
+        int databaseAId = allocate(cast.sessionA(), cast.tenantA(), "blog").get(DatabaseModel.ID);
+        String databaseAName = "u" + cast.tenantA() + "-blog";
+        allocate(cast.sessionB(), tenantBId, "blog");
+
         int absentId = 900_000_000;
         assertThat(Models.get(DatabaseModel.class).findById(absentId))
             .as("step 1: the control id really does not exist").isNull();
@@ -450,8 +441,13 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
      * the password.
      */
     @Test
-    @Order(3)
     void aViewOnlyTeammateSeesTheRecordButNeverTheCredentials() throws Exception {
+        Tenancy cast = tenancy(true);
+        int viewerId = cast.viewer();
+        String sessionA = cast.sessionA().token();
+        String sessionViewer = cast.sessionViewer().token();
+        int databaseAId = allocate(cast.sessionA(), cast.tenantA(), "blog").get(DatabaseModel.ID);
+
         String credentialsUrl = "/manage/databases/" + databaseAId + "/page/credentials";
         String password = String.valueOf(
             (Object) Models.get(DatabaseModel.class).findById(databaseAId)
@@ -503,8 +499,21 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
 
     /** The backup download answers to the capability, and never says which name exists. */
     @Test
-    @Order(4)
     void theBackupDownloadAnswersToItsCapabilityAndLeaksNoName() throws Exception {
+        Tenancy cast = tenancy(true);
+        String sessionA = cast.sessionA().token();
+        String sessionB = cast.sessionB().token();
+        String sessionViewer = cast.sessionViewer().token();
+        int databaseAId = allocate(cast.sessionA(), cast.tenantA(), "blog").get(DatabaseModel.ID);
+        String databaseAName = "u" + cast.tenantA() + "-blog";
+        // The teammate holds VIEW on the record, so step 4's "not offered" is judged on a
+        // list that really shows them the row.
+        RecordGrants.grant(GrantSubjectType.USER, cast.viewer(), DatabaseModel.MODEL_ID,
+            databaseAId, HohenheimAccess.VIEW, true);
+        assertThat(get(sessionViewer, "/manage/databases").body())
+            .as("fixture: the view-only teammate's list shows the database")
+            .contains(databaseAName);
+
         String url = "/databases/" + databaseAName + "/backup";
 
         // 1. THE ATTACK: tenant B knows (or guesses) the name and asks for the dump. The
@@ -546,8 +555,11 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
 
     /** Every load-bearing column is frozen for a tenant, on the WRITE PIPELINE. */
     @Test
-    @Order(5)
-    void aTenantCannotWriteThePlacementTheImageTheCapsOrTheEphemeralFlag() {
+    void aTenantCannotWriteThePlacementTheImageTheCapsOrTheEphemeralFlag() throws Exception {
+        Tenancy cast = tenancy(true);
+        UserPrincipal principalA = cast.principalA();
+        int databaseAId = allocate(cast.sessionA(), cast.tenantA(), "blog").get(DatabaseModel.ID);
+
         Model databases = Models.get(DatabaseModel.class);
         Row stored = databases.findById(databaseAId);
         int storedServer = stored.get(DatabaseModel.SERVER_ID);
@@ -609,8 +621,14 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
 
     /** Attaching a database to an application needs authority over BOTH sides. */
     @Test
-    @Order(6)
-    void attachingADatabaseToAnApplicationNeedsAuthorityOverBothRecords() {
+    void attachingADatabaseToAnApplicationNeedsAuthorityOverBothRecords() throws Exception {
+        Tenancy cast = tenancy(true);
+        UserPrincipal principalA = cast.principalA();
+        UserPrincipal principalB = cast.principalB();
+        int applicationAId = cast.applicationA();
+        int applicationBId = cast.applicationB();
+        int databaseAId = allocate(cast.sessionA(), cast.tenantA(), "blog").get(DatabaseModel.ID);
+
         InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
 
         // 1. THE ATTACK: tenant B points THEIR OWN application at tenant A's database,
@@ -673,8 +691,15 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
      * cap could not bind a tenant's database count even in principle.
      */
     @Test
-    @Order(7)
     void racingAllocationsCannotOverspendTheTenantsLastSlot() throws Exception {
+        Tenancy cast = tenancy(true);
+        int tenantAId = cast.tenantA();
+        String sessionA = cast.sessionA().token();
+        String csrfA = cast.sessionA().csrf();
+        // The tenant's first database: the race must JOIN its engine, not mint a second.
+        Integer sharedEngineId = allocate(cast.sessionA(), tenantAId, "blog")
+            .get(DatabaseModel.ENGINE_ID);
+
         String packed = packedOf(tenantAId);
         long used = Quotas.usedOf(databaseBucketOf(tenantAId));
         long instancesUsed = Quotas.usedOf(instanceBucketOf(tenantAId));
@@ -737,13 +762,16 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
 
     /** Destroy is the tenant's own verb, and only over their own database. */
     @Test
-    @Order(8)
     void onlyTheOwnerDestroysAndTheSlotComesBack() throws Exception {
-        // The link from journey 6 blocks a destroy by design (a live workload depends on
-        // the injected credentials); remove it as the owner first.
-        InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
-        TenantConduits.as(principalA, () ->
-            links.find().where(InstanceDatabaseModel.DATABASE_ID.eq(databaseAId)).delete());
+        Tenancy cast = tenancy(true);
+        UserPrincipal principalA = cast.principalA();
+        UserPrincipal principalB = cast.principalB();
+        int tenantAId = cast.tenantA();
+        Row databaseA = allocate(cast.sessionA(), tenantAId, "blog");
+        String databaseAName = "u" + tenantAId + "-blog";
+        Integer sharedEngineId = databaseA.get(DatabaseModel.ENGINE_ID);
+        // Tenant B's database keeps the shared engine serving someone after A's destroy.
+        allocate(cast.sessionB(), cast.tenantB(), "blog");
 
         // 1. THE ATTACK: tenant B destroys tenant A's database through the service every
         //    surface funnels into.
@@ -798,6 +826,6 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         }
         row.set(InstanceQuotaModel.MAX_DATABASES, maximum);
         quotas.save(row);
-        capRowId = row.get(InstanceQuotaModel.ID);
+        capRowIds.add(row.get(InstanceQuotaModel.ID));
     }
 }

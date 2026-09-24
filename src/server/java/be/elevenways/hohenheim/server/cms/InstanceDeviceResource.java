@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
@@ -157,11 +158,10 @@ public class InstanceDeviceResource extends RowResource {
         if (instanceId != null) {
             values.put("instance_id", instanceId);
         }
-        String type = CmsSupport.prefill(conduit, HohenheimParams.DEVICE_TYPE_PREFILL);
-        if (InstanceDeviceModel.TYPE_DISK.equals(type)
-                || InstanceDeviceModel.TYPE_NIC.equals(type)
-                || InstanceDeviceModel.TYPE_CDROM.equals(type)) {
-            values.put("type", type);
+        DeviceType type = DeviceType.parse(
+            CmsSupport.prefill(conduit, HohenheimParams.DEVICE_TYPE_PREFILL));
+        if (type != null) {
+            values.put("type", type.token());
         }
         return Map.copyOf(values);
     }
@@ -171,18 +171,11 @@ public class InstanceDeviceResource extends RowResource {
                                       @NonNull AccessContext accessContext) {
         int instanceId = requireInstance(coerced.get("instance_id"));
         String name = String.valueOf(coerced.get("name"));
-        String type = String.valueOf(coerced.get("type"));
-
-        if (InstanceDeviceModel.TYPE_DISK.equals(type)) {
-            this.devices.attachDisk(instanceId, name, sizeOf(coerced, null));
-        } else if (InstanceDeviceModel.TYPE_NIC.equals(type)) {
-            this.devices.attachNic(instanceId, name);
-        } else if (InstanceDeviceModel.TYPE_CDROM.equals(type)) {
-            this.devices.attachCdrom(instanceId, name,
+        switch (DeviceType.require(coerced.get("type"))) {
+            case DISK -> this.devices.attachDisk(instanceId, name, sizeOf(coerced, null));
+            case NIC -> this.devices.attachNic(instanceId, name);
+            case CDROM -> this.devices.attachCdrom(instanceId, name,
                 String.valueOf(coerced.getOrDefault("source_media", "")).trim());
-        } else {
-            throw Violations.ofField("type", type,
-                CmsSupport.violationText("device_type_unknown"));
         }
         ActivityLog.record(Models.get(InstanceModel.class), instanceId, "device_attached", null);
 
@@ -239,7 +232,7 @@ public class InstanceDeviceResource extends RowResource {
             throw Violations.ofField("source_media", submittedMedia,
                 CmsSupport.violationText("device_media_change_unsupported"));
         }
-        if (!InstanceDeviceModel.TYPE_DISK.equals(type)) {
+        if (DeviceType.parse(type) != DeviceType.DISK) {
             throw Violations.ofForm(CmsSupport.violationText("device_resize_not_a_disk"));
         }
         this.devices.resizeDisk(instanceId, name, sizeOf(coerced, existing));

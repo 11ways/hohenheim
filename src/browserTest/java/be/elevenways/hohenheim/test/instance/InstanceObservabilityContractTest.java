@@ -3,38 +3,33 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.host.HostPreflight;
-import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.server.instance.ConsoleRedaction;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.hohenheim.server.task.CleanOldInstanceLogs;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -59,6 +54,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class InstanceObservabilityContractTest {
 
+    /** Bounded wait: every stream here is pumped by a thread of its own. */
+    private static final Duration WAIT = Duration.ofSeconds(10);
+
     private static SqlDatasource datasource;
     private static int hostId;
 
@@ -69,7 +67,7 @@ class InstanceObservabilityContractTest {
         // resource name resolves through reads the CURRENT datasource.
         HohenheimTestRuntime.ensureBooted();
         FakeNativeDaemons.register();
-        Db.run(datasource, () -> hostId = incusHost("observability-host"));
+        Db.run(datasource, () -> hostId = HostFixtures.admittedIncusHost("observability-host"));
     }
 
     @AfterEach
@@ -109,7 +107,7 @@ class InstanceObservabilityContractTest {
             //    honestly reports no CPU -- reporting the lifetime average here is the
             //    exact lie the decode's own note forbids.
             stream.push(sample(1_000_000_000L, 10_000_000_000L, 300, 400) + "\n");
-            await("step 1: the first sample arrives", () -> first.size() >= 1);
+            Poll.until("step 1: the first sample arrives", WAIT, () -> first.size() >= 1);
             assertThat(first.get(0).cpuPercent())
                 .as("step 1: the first sample reports 0% CPU, not a lifetime average")
                 .isEqualTo(0d);
@@ -126,7 +124,7 @@ class InstanceObservabilityContractTest {
             // 2. THE ARITHMETIC, which a live container cannot be made to produce on
             //    demand: 0.1s of CPU over 0.4s of system time on 4 cores is 100%.
             stream.push(sample(1_100_000_000L, 10_400_000_000L, 500, 600) + "\n");
-            await("step 2: the second sample arrives", () -> first.size() >= 2);
+            Poll.until("step 2: the second sample arrives", WAIT, () -> first.size() >= 2);
             assertThat(first.get(1).cpuPercent())
                 .as("step 2: cpu is usageDelta/systemDelta * cores * 100, exactly")
                 .isEqualTo(100.0d);
@@ -139,7 +137,7 @@ class InstanceObservabilityContractTest {
             assertThat(first.size())
                 .as("step 3: half a sample decodes to nothing at all").isEqualTo(2);
             stream.push(third.substring(half));
-            await("step 3: the reassembled sample arrives", () -> first.size() >= 3);
+            Poll.until("step 3: the reassembled sample arrives", WAIT, () -> first.size() >= 3);
             assertThat(first.get(2).cpuPercent())
                 .as("step 3: and it decodes to the SAME reading a whole frame would")
                 .isEqualTo(100.0d);
@@ -148,7 +146,7 @@ class InstanceObservabilityContractTest {
             //    must not end an operator's live chart.
             stream.push("this is not a stats object\n");
             stream.push(sample(1_300_000_000L, 11_200_000_000L, 900, 1000) + "\n");
-            await("step 4: the stream survived the garbage", () -> first.size() >= 4);
+            Poll.until("step 4: the stream survived the garbage", WAIT, () -> first.size() >= 4);
             assertThat(first.size())
                 .as("step 4: the garbage line produced no sample of its own").isEqualTo(4);
 
@@ -168,7 +166,7 @@ class InstanceObservabilityContractTest {
                 .as("step 5: and NO second driver stream was opened for it")
                 .isSameAs(stream);
             stream.push(sample(1_400_000_000L, 11_600_000_000L, 1100, 1200) + "\n");
-            await("step 5: both viewers keep receiving from the one stream",
+            Poll.until("step 5: both viewers keep receiving from the one stream", WAIT,
                 () -> first.size() >= 5 && second.size() >= 5);
 
             // 6. The ring is BOUNDED: history never exceeds the declared window however
@@ -180,7 +178,7 @@ class InstanceObservabilityContractTest {
                 system += 400_000_000L;
                 stream.push(sample(usage, system, 1, 1) + "\n");
             }
-            await("step 6: every pushed sample was consumed",
+            Poll.until("step 6: every pushed sample was consumed", WAIT,
                 () -> InstanceStats.history(instanceId).size() == InstanceStats.HISTORY);
             assertThat(InstanceStats.history(instanceId))
                 .as("step 6: retained history stays inside the declared window")
@@ -192,7 +190,7 @@ class InstanceObservabilityContractTest {
             assertThat(stream.isClosed())
                 .as("step 7: one viewer leaving keeps the shared stream alive").isFalse();
             secondView.close();
-            await("step 7: the last viewer leaving closes the driver stream",
+            Poll.until("step 7: the last viewer leaving closes the driver stream", WAIT,
                 stream::isClosed);
             assertThat(InstanceStats.history(instanceId))
                 .as("step 7: and the session is dropped entirely").isEmpty();
@@ -266,7 +264,7 @@ class InstanceObservabilityContractTest {
 
             // 1. Redaction is BY KNOWN VALUE and happens before any viewer sees the text.
             stream.push("connecting with " + secret + " now\n");
-            await("step 1: the console output reached the viewer", () -> !seen.isEmpty());
+            Poll.until("step 1: the console output reached the viewer", WAIT, () -> !seen.isEmpty());
             assertThat(String.join("", seen))
                 .as("step 1: the declared secret never reaches a viewer")
                 .doesNotContain(secret)
@@ -275,7 +273,7 @@ class InstanceObservabilityContractTest {
             // 2. The STORED row is the redacted ring, not the raw stream: storing raw text
             //    and redacting on read would leave a secret at rest.
             InstanceConsoles.flushLogNow(instanceId);
-            await("step 2: the episode's history row exists", () -> logsOf(instanceId).size() == 1);
+            Poll.until("step 2: the episode's history row exists", WAIT, () -> logsOf(instanceId).size() == 1);
             Row stored = logsOf(instanceId).get(0);
             assertThat((String) stored.get(InstanceLogModel.LOG_TEXT))
                 .as("step 2: nothing secret is ever written to instance_logs")
@@ -286,10 +284,10 @@ class InstanceObservabilityContractTest {
 
             // 3. One EPISODE is one row: a second flush upserts, never appends a row.
             stream.push("second line of the same episode\n");
-            await("step 3: the second line arrived",
+            Poll.until("step 3: the second line arrived", WAIT,
                 () -> String.join("", seen).contains("second line"));
             InstanceConsoles.flushLogNow(instanceId);
-            await("step 3: the row was rewritten", () -> {
+            Poll.until("step 3: the row was rewritten", WAIT, () -> {
                 Row row = logsOf(instanceId).get(0);
                 String text = row.get(InstanceLogModel.LOG_TEXT);
                 return text != null && text.contains("second line");
@@ -306,7 +304,7 @@ class InstanceObservabilityContractTest {
             String late = "late-rotated-token-value";
             InstanceConsoles.registerSecret(instanceId, late);
             stream.push("rotated to " + late + " ok\n");
-            await("step 4: the later line arrived",
+            Poll.until("step 4: the later line arrived", WAIT,
                 () -> String.join("", seen).contains("rotated to"));
             assertThat(String.join("", seen))
                 .as("step 4: a secret declared mid-stream is redacted from there on")
@@ -402,23 +400,6 @@ class InstanceObservabilityContractTest {
             + "\"eth1\":{\"rx_bytes\":7,\"tx_bytes\":9}}}";
     }
 
-    /** An admitted, tenant-accepting host with the stored preflight placement demands. */
-    private static int incusHost(String name) {
-        Row row = Models.get(ServerModel.class).createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        Models.get(ServerModel.class).save(row);
-        HostFixtures.acknowledgePosture(row);
-        HostPreflight.store(name, new HostPreflight.Report(List.of(
-            new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon"),
-            new HostPreflight.Check(IncusPreflight.KERNEL_LANE_CHECK,
-                HostPreflight.STATUS_PASS, true, "fake kernel-truth lane")),
-            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
-        return Models.get(ServerModel.class).findByName(name).get(ServerModel.ID);
-    }
-
     private static int instanceRecord(String name,
                                       be.elevenways.protoblast.common.registry.Identifier kind) {
         Row row = Models.get(InstanceModel.class).createEmptyRow();
@@ -454,22 +435,5 @@ class InstanceObservabilityContractTest {
         return Models.get(InstanceLogModel.class).find()
             .where(InstanceLogModel.INSTANCE_ID.eq(instanceId))
             .all();
-    }
-
-    /** Bounded wait: every stream here is pumped by a thread of its own. */
-    private static void await(String what, BooleanSupplier condition) {
-        long deadline = Now.millis() + 10_000;
-        while (Now.millis() < deadline) {
-            if (condition.getAsBoolean()) {
-                return;
-            }
-            try {
-                Thread.sleep(25);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
-        assertThat(condition.getAsBoolean()).as(what).isTrue();
     }
 }

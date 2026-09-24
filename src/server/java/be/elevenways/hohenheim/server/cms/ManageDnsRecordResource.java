@@ -6,6 +6,8 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.HostnameAuthority;
 import be.elevenways.hohenheim.server.dns.DnsNames;
+import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
+import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
@@ -152,35 +154,30 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
      * The hosted zone whose origin is the longest suffix of {@code fqdn}, and the owner the
      * name resolves to inside it.
      *
-     * AIDEV-NOTE: the candidates are the SUFFIXES of the typed name -- at most one per label,
-     * resolved through the {@code dns_zones_origin_unique} index. Both callers used to read
-     * the WHOLE dns_zones table instead: on the search path that was a full table scan per
-     * rendered list, walking zones the caller has no access to in order to compute a string
-     * prefix.
+     * AIDEV-NOTE: resolved in the in-memory PRIMARY view (one findById per call, never a
+     * table scan). Both callers used to read the WHOLE dns_zones table: on the search path
+     * that was a full table scan per rendered list, walking zones the caller has no access
+     * to in order to compute a string prefix; a later suffix-index lookup fixed the cost but
+     * still matched secondary zones.
      */
     private static @Nullable ZoneMatch hostingZone(@NonNull String fqdn) {
         String name = DnsNames.canonicalName(fqdn);
-        List<String> origins = DnsNames.candidateOrigins(name);
-        if (origins.isEmpty()) {
+        // AIDEV-NOTE: THE write-path lookup (DnsZoneStore.findPrimaryZoneFor), never the
+        // dns_zones table: that table also holds SECONDARY zones, and a row written into a
+        // replica publishes nothing (the next AXFR overwrites it) and is refused by the record
+        // model anyway. The snapshot's row is re-read so a zone disabled or flipped to
+        // secondary since the last reload fails closed -- the GameDomains.zoneFor shape.
+        DnsZoneSnapshot primary = DnsZoneStore.INSTANCE.findPrimaryZoneFor(name);
+        if (primary == null) {
             return null;
         }
-
-        Row best = null;
-        int bestLength = -1;
-        for (Row zone : Models.get(DnsZoneModel.class).find()
-                .where(DnsZoneModel.ORIGIN.in(origins)).all()) {
-            String origin = zone.get(DnsZoneModel.ORIGIN);
-            // Longest matching origin wins: a delegated child zone owns its own names.
-            if (origin != null && origin.length() > bestLength) {
-                best = zone;
-                bestLength = origin.length();
-            }
-        }
-        if (best == null) {
+        Row zone = Models.get(DnsZoneModel.class).findById(primary.getZoneId());
+        if (zone == null || !Boolean.TRUE.equals(zone.get(DnsZoneModel.ENABLED))
+                || !DnsZoneModel.ROLE_PRIMARY.equals(DnsZoneModel.roleOf(zone))) {
             return null;
         }
-        String owner = DnsNames.relative(best.get(DnsZoneModel.ORIGIN), name);
-        return owner == null ? null : new ZoneMatch(best, owner);
+        String owner = DnsNames.relative(zone.get(DnsZoneModel.ORIGIN), name);
+        return owner == null ? null : new ZoneMatch(zone, owner);
     }
 
     /** The list renders the absolute name; a tenant has no relative-to-what to read it against. */

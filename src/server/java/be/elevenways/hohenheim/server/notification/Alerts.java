@@ -119,6 +119,13 @@ public final class Alerts {
         }
     }
 
+    /** {@link #send(NotificationEvents, String, String)} that never throws; see the Microcopy form. */
+    public static int trySend(@NonNull NotificationEvents event, @NonNull String subject,
+                              @Nullable String message) {
+        return trySend(event, Microcopy.literal(subject),
+            message == null ? null : Microcopy.literal(message));
+    }
+
     /**
      * The panel inbox of every enabled administrator, as comms recipients.
      *

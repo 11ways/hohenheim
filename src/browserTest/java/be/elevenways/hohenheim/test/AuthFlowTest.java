@@ -12,8 +12,6 @@ import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.server.http.ReturnTarget;
 import org.junit.jupiter.api.*;
 
-import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
@@ -24,7 +22,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * offers password login, an authenticated session reaches the dashboard, and assets stay public.
  * The login/logout/setup mechanics themselves are owned and tested by zenit-auth.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class AuthFlowTest extends HohenheimTestBase {
 
     /**
@@ -32,21 +29,17 @@ class AuthFlowTest extends HohenheimTestBase {
      * visitor with the login card instead of the bare refusal an API caller reads.
      */
     private HttpResponse<String> get(String path, boolean followRedirects) throws Exception {
-        return send(path, followRedirects, "text/html");
+        return anonymous(path, followRedirects, "text/html");
     }
 
-    private HttpResponse<String> send(String path, boolean followRedirects, String accept) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(followRedirects ? HttpClient.Redirect.NORMAL : HttpClient.Redirect.NEVER)
-            .build();
-        return client.send(HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Accept", accept).GET().build(),
-            HttpResponse.BodyHandlers.ofString());
+    /** A cookie-less request: the anonymous visitor this class is about. */
+    private HttpResponse<String> anonymous(String path, boolean followRedirects, String accept)
+            throws Exception {
+        HttpRequest.Builder request = requestTo(path).header("Accept", accept).GET();
+        return followRedirects ? sendFollowingRedirects(request) : sendRequest(request);
     }
 
     @Test
-    @Order(1)
     void anonymousSurfaceGatesTheAdminOffersLoginAndServesAssets() throws Exception {
         // 1. An anonymous browser navigation is sent to the login card.
         HttpResponse<String> response = get("/", false);   // no session cookie
@@ -57,7 +50,7 @@ class AuthFlowTest extends HohenheimTestBase {
 
         // 2. A caller that reads no HTML (an API client, a script) gets the refusal itself,
         //    never a redirect into a page it would not render (zenit-auth's loginRequired split).
-        response = send("/", false, "application/json");
+        response = anonymous("/", false, "application/json");
         assertThat(response.statusCode()).as("step 2: an anonymous API caller reads 401").isEqualTo(401);
 
         response = get("/login", false);
@@ -71,7 +64,6 @@ class AuthFlowTest extends HohenheimTestBase {
     }
 
     @Test
-    @Order(2)
     void authenticatedShellOffersAccountAndSignsOut() {
         // Sign out on a THROWAWAY session: the class-shared one must survive
         // for every later test class in this JVM.

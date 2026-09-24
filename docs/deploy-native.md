@@ -97,6 +97,16 @@ What each step does, in order:
    touch. `--panel-bind <addr>` is the escape hatch for the rare host that wants
    otherwise; anything but loopback prints a warning, because it puts a login
    page on a raw port.
+   The control-plane database is named the framework's way on a FRESH install
+   (neither settings file exists yet): zenit's `database.url =
+   jdbc:sqlite:<prefix>/hohenheim.db` in `settings/local.dry`. An existing host
+   is never re-pointed: its `hohenheim.dry` keeps the deprecated
+   `database.path` (and the dropped `database.engine`) the installer used to
+   seed, and the server still honours that path as the fallback when
+   `database.url` is unset. Moving such a host onto `database.url` is a hand
+   edit of `local.dry` naming the SAME file; the installer never writes one
+   beside an existing `hohenheim.dry`, because a url silently wins over a path
+   the operator may have changed.
 10. **Port 53** -- with the dns role: switches systemd-resolved's stub listener
     off through a `/etc/systemd/resolved.conf.d/hohenheim.conf` drop-in and
     points `/etc/resolv.conf` at `/run/systemd/resolve/resolv.conf` (the uplink

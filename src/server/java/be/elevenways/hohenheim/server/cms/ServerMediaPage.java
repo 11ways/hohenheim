@@ -2,11 +2,15 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.instance.InstallMediaFetchState;
+import be.elevenways.hohenheim.model.InstallMediaFetchModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.instance.InstallMedia;
+import be.elevenways.hohenheim.server.instance.InstallMediaFetches;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -26,8 +30,8 @@ import java.util.Map;
 
 /**
  * Install media tab on an Incus host: the ISO volumes of its managed pool (LIVE
- * daemon truth, the store the cdrom device rows reference by name), a fetch-from-URL
- * form and per-medium delete. Hidden and 404d on Docker hosts -- their daemon has no
+ * daemon truth, the store the cdrom device rows reference by name), the stored state of
+ * the background fetches (InstallMediaFetches), a fetch-from-URL form and per-medium delete. Hidden and 404d on Docker hosts -- their daemon has no
  * ISO volume to hold (the devices-tab hide-AND-enforce shape).
  */
 public final class ServerMediaPage implements RecordScopedPage<Row> {
@@ -77,9 +81,35 @@ public final class ServerMediaPage implements RecordScopedPage<Row> {
             loadError = unreachable.getMessage();
         }
 
+        // The fetch lane runs in the background: its stored rows are the only place a running
+        // download, its progress or its failure reason can be read, so they render here and the
+        // tab reloads itself while any of them is still in flight.
+        List<Map<String, Object>> fetches = new ArrayList<>();
+        boolean fetching = false;
+        for (Row fetch : InstallMediaFetches.shownFor(serverId)) {
+            InstallMediaFetchState state = InstallMediaFetches.stateOf(fetch);
+            Double progress = fetch.get(InstallMediaFetchModel.PROGRESS);
+            Map<String, Object> entry = new HashMap<>();
+            entry.put("name", fetch.get(InstallMediaFetchModel.NAME));
+            entry.put("state", state.label());
+            entry.put("variant", state.variant());
+            entry.put("active", state.active());
+            entry.put("percent", state.active() && progress != null
+                ? Integer.valueOf((int) Math.floor(progress * 100)) : null);
+            entry.put("reason", fetch.get(InstallMediaFetchModel.ERROR));
+            fetches.add(entry);
+            fetching |= state.active();
+        }
+
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", CmsSupport.pageTitle(conduit, "server_media",
             server.get(ServerModel.NAME)));
+        vars.put("fetches", fetches);
+        // Declared only while something runs: the reload element is then the one thing that
+        // keeps the tab current, and a settled tab never polls.
+        vars.put("refreshUrl", fetching
+            ? CmsRoutes.subpage(CmsSupport.panelSlug(conduit), "servers", serverId, SLUG).toUrl()
+            : null);
         vars.put("serverName", server.get(ServerModel.NAME));
         vars.put("media", media);
         vars.put("loadError", loadError);

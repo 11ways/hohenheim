@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.test.build;
 
 import be.elevenways.hohenheim.server.build.BuildCredentials;
 import be.elevenways.hohenheim.server.build.BuildLog;
+import be.elevenways.hohenheim.test.Poll;
+import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -55,7 +57,9 @@ class BuildCredentialsTest {
         //    what covers a controller that died mid-build.
         BuildCredentials.Lease expired = BuildCredentials.issue(build,
             BuildCredentials.Purpose.REGISTRY_AUTH, secret, 1);
-        sleep(20);
+        // Polled, not slept: the 1ms TTL passes whenever the clock moves on.
+        Poll.until("step 4: the expired lease to resolve to nothing", Duration.ofSeconds(5),
+            () -> BuildCredentials.resolve(build, expired.token()) == null);
         assertThat(BuildCredentials.resolve(build, expired.token()))
             .as("step 4: an expired lease resolves to nothing").isNull();
 
@@ -106,13 +110,5 @@ class BuildCredentialsTest {
             .contains("truncated");
         assertThat(bounded.text().length())
             .as("step 3: memory stayed bounded").isLessThan(2048);
-    }
-
-    private static void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-        }
     }
 }

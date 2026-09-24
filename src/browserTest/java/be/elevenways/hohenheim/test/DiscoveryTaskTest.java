@@ -16,7 +16,6 @@ import static org.assertj.core.api.Assertions.*;
  * Verifies the UpdateSystemUsers task reconciles discovered host state with the
  * system_users table -- including obsolete-marking of entries that no longer exist.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class DiscoveryTaskTest {
 
     private static boolean initialized = false;
@@ -33,7 +32,6 @@ class DiscoveryTaskTest {
     }
 
     @Test
-    @Order(1)
     void updateSystemUsersPopulatesTable() {
         UpdateSystemUsers.reconcile();
 
@@ -50,7 +48,6 @@ class DiscoveryTaskTest {
     }
 
     @Test
-    @Order(2)
     void updateSystemUsersMarksUnseenRowsObsolete() {
         var model = Models.get(SystemUserModel.class);
 
@@ -65,13 +62,19 @@ class DiscoveryTaskTest {
         ghost.set(SystemUserModel.LAST_SEEN_AT, Now.instant());
         model.save(ghost);
 
-        UpdateSystemUsers.reconcile();
+        try {
+            UpdateSystemUsers.reconcile();
 
-        Row reloaded = model.find()
-            .where(SystemUserModel.NAME.eq("hh-phantom-user-does-not-exist"))
-            .first();
-        assertThat(reloaded).describedAs("ghost row should still exist after reconciliation").isNotNull();
-        assertThat((Boolean) reloaded.get(SystemUserModel.OBSOLETE))
-            .describedAs("unseen rows should be marked obsolete, not deleted").isTrue();
+            Row reloaded = model.find()
+                .where(SystemUserModel.NAME.eq("hh-phantom-user-does-not-exist"))
+                .first();
+            assertThat(reloaded).describedAs("ghost row should still exist after reconciliation").isNotNull();
+            assertThat((Boolean) reloaded.get(SystemUserModel.OBSOLETE))
+                .describedAs("unseen rows should be marked obsolete, not deleted").isTrue();
+        } finally {
+            // The obsolete ghost must not outlive this test: the populate test asserts that
+            // a reconcile of real host state marks NOTHING obsolete, in whatever order.
+            model.delete(ghost);
+        }
     }
 }

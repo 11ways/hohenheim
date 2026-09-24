@@ -15,19 +15,14 @@ import be.elevenways.hohenheim.server.dns.DnsClaimReleases;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.instance.GeneratedInstanceFiles;
-import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceCatalogGuards;
 import be.elevenways.hohenheim.server.stack.StackCascades;
 import be.elevenways.hohenheim.server.tls.CertificateCascades;
 import be.elevenways.hohenheim.server.instance.InstanceDeclarations;
-import be.elevenways.hohenheim.server.instance.InstanceDeviceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceImagePin;
 import be.elevenways.hohenheim.server.instance.InstanceImagePolicy;
-import be.elevenways.hohenheim.server.instance.InstanceQuota;
-import be.elevenways.hohenheim.server.instance.InstanceRootDiskQuota;
 import be.elevenways.hohenheim.server.project.ProjectGuards;
-import be.elevenways.hohenheim.server.quota.DatabaseQuota;
-import be.elevenways.hohenheim.server.quota.SiteQuota;
+import be.elevenways.hohenheim.server.quota.ChargedModel;
 import be.elevenways.zenit.common.ZenitModule;
 
 /**
@@ -56,6 +51,14 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // No git provider row can store an undeclared kind, an unusable base URL, or a
         // blank one on a kind that has no public host (form, delegated form, restore).
         be.elevenways.hohenheim.server.source.GitProviders.installKindInvariant();
+        // A delegated tenant may set only the delegated domain columns, and may author only
+        // the allow-listed DNS record types -- on every writer, not just the /manage forms.
+        // AIDEV-NOTE: BEFORE the route invariant and every domain/record cascade below. Hooks
+        // run in registration order, and the route invariant's REMOVE hook ledgers a
+        // released-claim quarantine row: registered first, a tenant delete that TenantWrites
+        // then refused had already written that row (and would have written the DNS release
+        // and game-domain teardown after it). Authority is asked before any consequence.
+        TenantWrites.install();
         // No domain row can take a route an enabled site already owns, and every row
         // stamps the live-route claim its unique index arbitrates (form, clone, seeder,
         // API writeback, direct model save).
@@ -76,9 +79,6 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // A game-domains mapping dies with its domain row, and its generated output
         // (forced-hosts config, DNS rows) dies with it.
         GameDomains.install();
-        // A delegated tenant may set only the delegated domain columns, and may author only
-        // the allow-listed DNS record types -- on every writer, not just the /manage forms.
-        TenantWrites.install();
         // A site's upstream kind and its instance link agree, and a TLS passthrough site
         // carries no HTTP gate -- AFTER TenantWrites so a tenant writing one of those frozen
         // operator columns is refused as frozen, not by the shape rule.
@@ -125,19 +125,15 @@ public final class HohenheimWriteHooks implements ZenitModule {
         be.elevenways.hohenheim.server.database.DatabaseEngineGuards.install();
         // Concurrent instance creates cannot both spend the last quota slot, and the
         // soft-delete transition hands the slot back (the remove hooks never fire on
-        // the destroy path -- it soft-deletes through save()).
-        InstanceQuota.install();
-        // Per-HOST memory bookings charge adjacent to the same write: a migration moves
-        // the charge between host buckets, and the soft-delete transition hands it back.
-        InstanceCapacity.install();
+        // the destroy path -- it soft-deletes through save()). ONE hook books the owner's
+        // slot and memory, the HOST's memory (a host change moves it between host buckets)
+        // and the ROOT disk (the same owner disk-GB bucket attached devices use, and the
+        // surface that refuses an unusable root-disk declaration by name) -- in that order,
+        // and a refusal in any of them unwinds the others.
+        ChargedModel.INSTANCES.install();
         // Disk-GB and extra-NIC reservations charge adjacent to the device-row write;
         // hard deletes (detach, destroy cleanup) release through the remove pairing.
-        InstanceDeviceQuota.install();
-        // The ROOT disk charges the SAME owner disk-GB bucket the attached devices do:
-        // a cap that rationed only attached disks would ignore the one disk every
-        // workload already has. Also the surface that refuses an unusable or
-        // unenforceable root-disk declaration by name.
-        InstanceRootDiskQuota.install();
+        ChargedModel.DEVICES.install();
         // A change to the DECLARED image invalidates the pinned resolved fingerprint,
         // so a recreate after an image change resolves fresh instead of silently
         // reviving the old pin.
@@ -159,15 +155,15 @@ public final class HohenheimWriteHooks implements ZenitModule {
         be.elevenways.hohenheim.server.preview.PreviewDomains.install();
         // Concurrent preview creates cannot both spend an owner's last preview slot, and
         // the soft-delete transition (destroy/expiry) hands the slot back.
-        be.elevenways.hohenheim.server.preview.PreviewQuota.install();
+        ChargedModel.PREVIEWS.install();
         // A site RECORD is one owner slot whether or not it lowers a container (eight of
         // eleven site types run none), released on the deleted_at transition SiteResource
         // stamps -- there is no hard site delete outside tests.
-        SiteQuota.install();
+        ChargedModel.SITES.install();
         // A managed database is one owner slot ON TOP of the instance slot its engine
         // container spends; databases have no deleted_at, so the remove pairing is the one
         // release lane (TenantDatabases.abandon's compensating delete included).
-        DatabaseQuota.install();
+        ChargedModel.DATABASES.install();
         // Detaching a database from an INSTANCE revokes the workload's reachability at
         // the daemon in the same breath as the row delete; the instance tier has no
         // release switch to defer the sweep to, so deferring it would fail open.

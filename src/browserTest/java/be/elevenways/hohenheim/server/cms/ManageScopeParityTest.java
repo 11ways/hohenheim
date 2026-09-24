@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
@@ -55,14 +56,7 @@ class ManageScopeParityTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, PREFIX + "tenant@hohenheim.local");
-        user.set(UserModel.DISPLAY_NAME, "Scope Parity Tenant");
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        tenantId = user.get(UserModel.ID);
+        tenantId = ApiSupport.user(PREFIX + "tenant@hohenheim.local", "Scope Parity Tenant");
 
         authoredInstanceId = instance(PREFIX + "authored");
         int[] generated = new int[1];

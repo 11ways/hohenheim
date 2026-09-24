@@ -128,7 +128,7 @@ class SharedDatabaseEngineTest {
 
         // 1. A mongo record created with the default placement lands SHARED and bound.
         Row first = service.insertRecord("shareda", ManagedDatabase.Engine.MONGO, null,
-            "usera", "passworda", "dba", false, ServerService.LOCAL, ResourceLimits.none(),
+            "usera", "passworda", "dba", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
             DatabaseModel.STATUS_PROVISIONING);
         Db.run(datasource, () -> {
             Row stored = Models.get(DatabaseModel.class).findByName("shareda");
@@ -191,7 +191,7 @@ class SharedDatabaseEngineTest {
         // 4. A SECOND mongo record on the same host binds to the SAME engine -- no second
         //    engine row and no second container. That is the entire saving.
         service.insertRecord("sharedb", ManagedDatabase.Engine.MONGO, null,
-            "userb", "passwordb", "dbb", false, ServerService.LOCAL, ResourceLimits.none(),
+            "userb", "passwordb", "dbb", false, ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
             DatabaseModel.STATUS_PROVISIONING);
         Db.run(datasource, () -> {
             Integer engineA = Models.get(DatabaseModel.class).findByName("shareda")
@@ -221,13 +221,13 @@ class SharedDatabaseEngineTest {
             //     are refused by name BEFORE any row is written.
             assertThat(refusalOf(() -> service.insertRecord("sharedc",
                     ManagedDatabase.Engine.MONGO, null, "userc", "passwordc", "dba", false,
-                    ServerService.LOCAL, ResourceLimits.none(),
+                    ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
                     DatabaseModel.STATUS_PROVISIONING)))
                 .as("step 4b: a taken logical database name is refused by name")
                 .isEqualTo("database_logical_name_taken");
             assertThat(refusalOf(() -> service.insertRecord("sharedc",
                     ManagedDatabase.Engine.MONGO, null, "usera", "passwordc", "dbc", false,
-                    ServerService.LOCAL, ResourceLimits.none(),
+                    ServerService.LOCAL_HOST_NAME, ResourceLimits.none(),
                     DatabaseModel.STATUS_PROVISIONING)))
                 .as("step 4b: a taken logical user is refused by name")
                 .isEqualTo("database_logical_user_taken");
@@ -239,7 +239,7 @@ class SharedDatabaseEngineTest {
             // 5. A DEDICATED record beside them is unaffected: it owns nothing on the
             //    engine and the engine's own instance is still the only one.
             service.insertRecord("dedicatedc", ManagedDatabase.Engine.MONGO, null,
-                "userc", "passwordc", "dbc", false, ServerService.LOCAL,
+                "userc", "passwordc", "dbc", false, ServerService.LOCAL_HOST_NAME,
                 ResourceLimits.of(256, null), DatabaseModel.STATUS_PROVISIONING,
                 DatabaseModel.PLACEMENT_DEDICATED, null);
             Row dedicated = Models.get(DatabaseModel.class).findByName("dedicatedc");

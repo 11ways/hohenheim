@@ -5,32 +5,23 @@ import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.project.Projects;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
-import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.ApiKeyService;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
-import be.elevenways.zenit.auth.server.ZenitAuth;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.security.csrf.CsrfTokens;
-import be.elevenways.zenit.common.session.Session;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.List;
 
@@ -66,13 +57,15 @@ class ManageProjectSurfaceTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        memberAId = user("mps-a@project.test", PREFIX + "Member Alpha");
-        memberBId = user("mps-b@project.test", PREFIX + "Member Bravo");
-        outsiderId = user("mps-out@project.test", PREFIX + "Outsider");
+        memberAId = ApiSupport.user("mps-a@project.test", PREFIX + "Member Alpha");
+        memberBId = ApiSupport.user("mps-b@project.test", PREFIX + "Member Bravo");
+        outsiderId = ApiSupport.user("mps-out@project.test", PREFIX + "Outsider");
 
-        sessionA = session(memberAId, csrf -> csrfA = csrf);
-        sessionB = session(memberBId, csrf -> { });
-        sessionOutsider = session(outsiderId, csrf -> { });
+        TestSession memberA = sessionFor(memberAId);
+        sessionA = memberA.token();
+        csrfA = memberA.csrf();
+        sessionB = sessionFor(memberBId).token();
+        sessionOutsider = sessionFor(outsiderId).token();
 
         // Both projects own NOTHING. That is deliberate: the only thing that can put
         // member A inside /manage is the project membership itself, so step 1 is also
@@ -107,7 +100,7 @@ class ManageProjectSurfaceTest extends HohenheimTestBase {
         // 1. POSITIVE ANCHOR and the eligibility proof in one: a member of a project
         //    that owns no site and no instance still reaches the delegated panel, and
         //    the list is exactly their project.
-        HttpResponse<String> list = get("/manage/projects", sessionA);
+        HttpResponse<String> list = httpGet("/manage/projects", sessionA);
         assertThat(list.statusCode())
             .as("step 1: membership alone admits a tenant to /manage").isEqualTo(200);
         assertThat(list.body()).as("step 1: their own project is listed")
@@ -117,7 +110,7 @@ class ManageProjectSurfaceTest extends HohenheimTestBase {
 
         // 2. The membership roster is scoped by the SAME enumeration: A learns who is
         //    in project one, and nothing about who is in project two.
-        HttpResponse<String> members = get("/manage/project-members", sessionA);
+        HttpResponse<String> members = httpGet("/manage/project-members", sessionA);
         assertThat(members.statusCode()).as("step 2: the roster renders").isEqualTo(200);
         assertThat(members.body()).as("step 2: A sees themselves in their project")
             .contains(PREFIX + "Member Alpha").contains(PREFIX + "one");
@@ -132,17 +125,17 @@ class ManageProjectSurfaceTest extends HohenheimTestBase {
 
         // 3. The mirror image, so step 2 is not just "A sees the first row of everything":
         //    B sees exactly the other side.
-        HttpResponse<String> mirror = get("/manage/project-members", sessionB);
+        HttpResponse<String> mirror = httpGet("/manage/project-members", sessionB);
         assertThat(mirror.body()).as("step 3: B sees their own membership")
             .contains(PREFIX + "Member Bravo");
         assertThat(mirror.body()).as("step 3: and not A's").doesNotContain(PREFIX + "Member Alpha");
 
         // 4. An out-of-scope record reads as MISSING, not as forbidden.
-        assertThat(get("/manage/projects/" + projectTwoId, sessionA).statusCode())
+        assertThat(httpGet("/manage/projects/" + projectTwoId, sessionA).statusCode())
             .as("step 4: another project's id 404s for a non-member").isEqualTo(404);
 
         // 5. A principal in no project at all is refused the panel outright.
-        assertThat(get("/manage/projects", sessionOutsider).statusCode())
+        assertThat(httpGet("/manage/projects", sessionOutsider).statusCode())
             .as("step 5: no membership, no panel").isEqualTo(403);
     }
 
@@ -221,7 +214,7 @@ class ManageProjectSurfaceTest extends HohenheimTestBase {
 
         // 1. The delegated surface offers no rename: a project's name is mirrored onto
         //    its backing permission group, which is auth-tier state.
-        HttpResponse<String> update = post("/manage/projects/" + projectOneId,
+        HttpResponse<String> update = httpPostForm("/manage/projects/" + projectOneId,
             "name=" + PREFIX + "renamed-by-tenant", sessionA, csrfA);
         assertThat(update.statusCode())
             .as("step 1: the update route does not exist on the delegated surface")
@@ -234,9 +227,9 @@ class ManageProjectSurfaceTest extends HohenheimTestBase {
             .as("step 2: the stored name is untouched").isEqualTo(before);
 
         // 3. Creation and deletion are off the same surface.
-        assertThat(get("/manage/projects/new", sessionA).statusCode())
+        assertThat(httpGet("/manage/projects/new", sessionA).statusCode())
             .as("step 3: no create form").isEqualTo(404);
-        assertThat(post("/manage/projects/" + projectOneId + "/delete", "",
+        assertThat(httpPostForm("/manage/projects/" + projectOneId + "/delete", "",
             sessionA, csrfA).statusCode())
             .as("step 3: no delete route").isEqualTo(404);
         assertThat(Models.get(ProjectModel.class).findById(projectOneId))
@@ -244,47 +237,6 @@ class ManageProjectSurfaceTest extends HohenheimTestBase {
     }
 
     // -- fixtures -------------------------------------------------------------
-
-    private HttpResponse<String> get(String path, String session) throws Exception {
-        return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
-            .send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl() + path))
-                .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session)
-                .build(), HttpResponse.BodyHandlers.ofString());
-    }
-
-    private HttpResponse<String> post(String path, String body, String session, String csrf)
-            throws Exception {
-        return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
-            .send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl() + path))
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session)
-                .header("X-Csrf-Token", csrf)
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build(), HttpResponse.BodyHandlers.ofString());
-    }
-
-    private static String session(int userId, java.util.function.Consumer<String> csrfSink) {
-        Session session = Zenit.getSessionStore().create();
-        session.set(AuthKeys.USER_ID, (long) userId);
-        String csrf = ZenitAuth.randomToken();
-        session.set(CsrfTokens.TOKEN, csrf);
-        Zenit.getSessionStore().save(session);
-        csrfSink.accept(csrf);
-        return session.token().secret();
-    }
-
-    private static int user(String email, String name) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, name);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
-    }
 
     private static int project(String name) {
         Row row = Models.get(ProjectModel.class).createEmptyRow();

@@ -25,28 +25,33 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public enum HostState {
 
     /** Security verdict, read off {@code quarantined_at} and winning over everything. */
-    QUARANTINED("quarantined", "error", "state_quarantined"),
+    QUARANTINED("quarantined", "error", "state_quarantined", true, false),
 
     /** The last probe failed; the typed failure class travels beside it. */
-    ERROR("error", "error", "state_error"),
+    ERROR("error", "error", "state_error", false, false),
 
     /** Reached once, but the last contact is older than the placement bound. */
-    SILENT("silent", "warning", "state_silent"),
+    SILENT("silent", "warning", "state_silent", false, true),
 
     /** Enrolled but never reached, so nothing about it is known yet. */
-    NEVER_PROBED("never_probed", "idle", "state_never_probed"),
+    NEVER_PROBED("never_probed", "idle", "state_never_probed", false, false),
 
     /** Reached recently with no error: the ONLY state that is allowed to look green. */
-    OK("ok", "online", null);
+    OK("ok", "online", null, false, false);
 
     private final String token;
     private final String dot;
     private final @Nullable String wordingKey;
+    private final boolean loud;
+    private final boolean namesDaemon;
 
-    HostState(String token, String dot, @Nullable String wordingKey) {
+    HostState(String token, String dot, @Nullable String wordingKey, boolean loud,
+              boolean namesDaemon) {
         this.token = token;
         this.dot = dot;
         this.wordingKey = wordingKey;
+        this.loud = loud;
+        this.namesDaemon = namesDaemon;
     }
 
     /** The stable token rendered as {@code data-host-state} and branched on in templates. */
@@ -57,6 +62,16 @@ public enum HostState {
     /** The pl-status-dot token: online, warning, error or idle. */
     public @NonNull String dot() {
         return this.dot;
+    }
+
+    /** Whether the wording renders emphasized: a security verdict must not read like weather. */
+    public boolean loud() {
+        return this.loud;
+    }
+
+    /** Whether the daemon label is shown BESIDE the wording (a silent host still names what it runs). */
+    public boolean namesDaemon() {
+        return this.namesDaemon;
     }
 
     /**

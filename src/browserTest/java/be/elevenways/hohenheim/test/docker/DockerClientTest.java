@@ -1,10 +1,11 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.test.Poll;
+import java.time.Duration;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ProcessDockerTransport;
 import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.protoblast.common.time.Now;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -24,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DockerClientTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
-    private static final String TEST_IMAGE = "alpine:latest";
+    private static final String TEST_IMAGE = TestImages.ALPINE;
 
     @Test
     void pingReturnsTrueWhenDaemonReachable() {
@@ -163,21 +164,17 @@ class DockerClientTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private static void waitForExit(DockerClient docker, String id, long timeoutMillis) throws IOException {
-        long deadline = Now.millis() + timeoutMillis;
-        while (Now.millis() < deadline) {
-            Map<String, Object> state = (Map<String, Object>) docker.inspectContainer(id).get("State");
-            if (Boolean.FALSE.equals(state.get("Running"))) {
-                return;
-            }
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IOException("interrupted waiting for container exit");
-            }
-        }
+    /** Wait for the container to stop running; a timeout fails instead of reading on. */
+    private static void waitForExit(DockerClient docker, String id, long timeoutMillis) {
+        Poll.until("container " + id + " exiting", Duration.ofMillis(timeoutMillis),
+            Duration.ofMillis(100), () -> {
+                try {
+                    return docker.inspectContainer(id).get("State") instanceof Map<?, ?> state
+                        && Boolean.FALSE.equals(state.get("Running"));
+                } catch (IOException inspectFailed) {
+                    throw new IllegalStateException("inspecting " + id + " failed", inspectFailed);
+                }
+            });
     }
 
     @Test
@@ -417,16 +414,18 @@ class DockerClientTest {
         LiveLane.requireImage(docker, TEST_IMAGE);
 
         // Find the locally-present alpine's digest and ensure it: must be a no-op
-        // (no network), proving digest refs are matched against RepoDigests.
+        // (no network), proving digest refs are matched against RepoDigests. The pinned
+        // image is found by its DIGEST: pulled by digest it may carry no RepoTag at all.
+        String pinnedDigest = TEST_IMAGE.substring(TEST_IMAGE.indexOf('@') + 1);
         String digestRef = null;
         for (Object image : docker.listImages()) {
-            Object tags = ((Map<?, ?>) image).get("RepoTags");
-            if (tags instanceof List<?> list && list.contains(TEST_IMAGE)) {
-                Object digests = ((Map<?, ?>) image).get("RepoDigests");
-                if (digests instanceof List<?> refs && !refs.isEmpty()) {
-                    digestRef = String.valueOf(refs.get(0));
+            Object digests = ((Map<?, ?>) image).get("RepoDigests");
+            if (digests instanceof List<?> refs) {
+                for (Object ref : refs) {
+                    if (String.valueOf(ref).endsWith("@" + pinnedDigest)) {
+                        digestRef = String.valueOf(ref);
+                    }
                 }
-                break;
             }
         }
         LiveLane.require(LiveLane.Need.DOCKER_IMAGE, digestRef != null,

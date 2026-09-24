@@ -152,7 +152,7 @@ public final class OwnedInstances {
      * OWNING product record when the row carries an attribution, else of the instance
      * record itself. The empty set is the operator.
      *
-     * AIDEV-NOTE: the stored twin of {@code InstanceQuota.creationOwnerOf}, which asks the
+     * AIDEV-NOTE: the stored twin of {@code InstanceQuota.creationOwnerPackOf}, which asks the
      * same question about a write in flight (from the ambient GeneratedRows attribution)
      * rather than about a record that exists. Two derivations of "who owns this workload"
      * that could disagree is exactly what the QUOTA_BUCKET note warns about, so this one

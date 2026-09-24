@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
@@ -217,10 +218,10 @@ public final class EnvironmentVariableResource extends RowResource {
         return List.of(
             ResourceFieldBinding.of(InstanceVariableModel.PLAIN_VALUE.getName(),
                 FieldAccess.customRecordAware((ctx, record) ->
-                    carrierAccess(record, InstanceVariableModel.KIND_PLAIN))),
+                    carrierAccess(record, VariableKind.PLAIN))),
             ResourceFieldBinding.of(InstanceVariableModel.SECRET_VALUE.getName(),
                 FieldAccess.customRecordAware((ctx, record) ->
-                    carrierAccess(record, InstanceVariableModel.KIND_SECRET))));
+                    carrierAccess(record, VariableKind.SECRET))));
     }
 
     /**
@@ -242,8 +243,7 @@ public final class EnvironmentVariableResource extends RowResource {
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
         String plainName = InstanceVariableModel.PLAIN_VALUE.getName();
-        if (!InstanceVariableModel.KIND_SECRET.equals(
-                String.valueOf(coerced.get(InstanceVariableModel.KIND.getName())))
+        if (!declaredKind(coerced.get(InstanceVariableModel.KIND.getName())).isSecret()
                 || !coerced.containsKey(plainName)) {
             return super.persistRow(coerced, accessContext);
         }
@@ -271,14 +271,14 @@ public final class EnvironmentVariableResource extends RowResource {
         Object submitted = coerced.containsKey(kindName) ? coerced.get(kindName) : null;
         String requestedKind = submitted == null ? "" : String.valueOf(submitted).trim();
 
-        if (requestedKind.isEmpty() || requestedKind.equals(storedKind(existing))) {
+        if (requestedKind.isEmpty() || VariableKind.of(requestedKind) == storedKind(existing)) {
             super.updateRow(existing, coerced, accessContext);
             return;
         }
 
         Map<String, Object> withRetiredCarrierCleared = new LinkedHashMap<>(coerced);
         withRetiredCarrierCleared.put(
-            InstanceVariableModel.KIND_SECRET.equals(requestedKind)
+            VariableKind.of(requestedKind).isSecret()
                 ? InstanceVariableModel.PLAIN_VALUE.getName()
                 : InstanceVariableModel.SECRET_VALUE.getName(),
             null);
@@ -287,15 +287,22 @@ public final class EnvironmentVariableResource extends RowResource {
 
     /** EDITABLE only for the carrier the record's kind actually stores. */
     private static FieldAccess.@NonNull Decision carrierAccess(@Nullable Object record,
-                                                               @NonNull String carrierKind) {
-        return carrierKind.equals(record instanceof Row row ? storedKind(row) : InstanceVariableModel.KIND_PLAIN)
+                                                               @NonNull VariableKind carrierKind) {
+        return carrierKind == (record instanceof Row row ? storedKind(row) : VariableKind.PLAIN)
             ? FieldAccess.Decision.EDITABLE
             : FieldAccess.Decision.HIDDEN;
     }
 
-    /** The row's kind, falling back to the field's default for a row that carries none. */
-    private static @NonNull String storedKind(@NonNull Row row) {
-        String stored = row.get(InstanceVariableModel.KIND);
-        return stored == null || stored.isEmpty() ? InstanceVariableModel.KIND_PLAIN : stored;
+    /** The row's kind; one that carries none reads as the field's default, an unknown one as secret. */
+    private static @NonNull VariableKind storedKind(@NonNull Row row) {
+        return declaredKind(row.get(InstanceVariableModel.KIND));
+    }
+
+    /**
+     * One kind token read through {@link VariableKind#of}: absent or blank is the column's
+     * default ({@code plain}), anything unrecognized fails closed as a secret.
+     */
+    private static @NonNull VariableKind declaredKind(@Nullable Object token) {
+        return token == null || token.toString().isBlank() ? VariableKind.PLAIN : VariableKind.of(token);
     }
 }

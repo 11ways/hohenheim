@@ -1,7 +1,8 @@
 package be.elevenways.hohenheim.test.network;
 
+import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -13,14 +14,13 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
+import java.time.Duration;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -51,7 +51,7 @@ class IncusNetworkIsolationLiveTest {
     private static final String HOST = "live-incus-net";
     private static final String IMAGE = "alpine/3.22";
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static LiveIncusHost remote;
     private static String enrolledFingerprint;
 
@@ -61,16 +61,11 @@ class IncusNetworkIsolationLiveTest {
         LiveLane.require(LiveLane.Need.INCUS_HOST, remote != null,
             "no live incus host enrolled at " + LiveIncusHost.CONFIG);
 
-        File db = File.createTempFile("hohenheim-incus-net-live", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
         // ONE database per test class: the controller identity (and therefore every
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
 
         Db.run(datasource, () -> enrolledFingerprint =
@@ -196,23 +191,14 @@ class IncusNetworkIsolationLiveTest {
         // daystrom; blank at 1s), while deploy() returns as soon as the instance runs.
         // A single immediate read raced that window and failed on a warm host, so poll
         // bounded instead -- the assertion still fails loudly when no address ever comes.
-        String out = "";
-        long deadline = System.nanoTime() + 30_000_000_000L;
-        while (true) {
-            // Global-scope address of eth0, one per family on a stock alpine image.
-            out = remoteExec(handle, "ip -o -f " + (v6 ? "inet6" : "inet")
-                + " addr show eth0 | awk '{print $4}' | cut -d/ -f1"
-                + (v6 ? " | grep -v '^fe80'" : "") + " | head -1");
-            if (!out.isBlank() || System.nanoTime() >= deadline) {
-                break;
-            }
-            try {
-                Thread.sleep(500L);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
+        String out = Poll.value(family + " address of " + handle, Duration.ofSeconds(30),
+            Duration.ofMillis(500), () -> {
+                // Global-scope address of eth0, one per family on a stock alpine image.
+                String read = remoteExec(handle, "ip -o -f " + family
+                    + " addr show eth0 | awk '{print $4}' | cut -d/ -f1"
+                    + (v6 ? " | grep -v '^fe80'" : "") + " | head -1");
+                return read.isBlank() ? null : read;
+            });
         assertThat(out).as(family + " address of " + handle).isNotBlank();
         return out.trim();
     }

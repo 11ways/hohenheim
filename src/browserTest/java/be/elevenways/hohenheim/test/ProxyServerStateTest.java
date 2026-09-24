@@ -6,7 +6,8 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.server.ServerZenitRuntime;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
 import java.io.File;
@@ -15,7 +16,6 @@ import java.io.File;
  * Tests the ProxyServer lifecycle state machine.
  * Does not use Playwright -- pure server-side tests.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ProxyServerStateTest {
 
     private static boolean initialized = false;
@@ -35,7 +35,6 @@ class ProxyServerStateTest {
     }
 
     @Test
-    @Order(1)
     void newProxyServerIsInStoppedState() {
         ProxyServer proxy = new ProxyServer();
         assertThat(proxy.getState()).isEqualTo(ProxyServer.State.STOPPED);
@@ -43,7 +42,6 @@ class ProxyServerStateTest {
     }
 
     @Test
-    @Order(2)
     void startOnPrivilegedPortTransitionsToFailed() {
         // Port 80 requires root -- will fail in non-root test environment
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 80);
@@ -57,7 +55,6 @@ class ProxyServerStateTest {
     }
 
     @Test
-    @Order(3)
     void startOnAvailablePortTransitionsToRunning() {
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
 
@@ -71,7 +68,6 @@ class ProxyServerStateTest {
     }
 
     @Test
-    @Order(4)
     void stopTransitionsRunningToStopped() {
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
 
@@ -85,7 +81,6 @@ class ProxyServerStateTest {
     }
 
     @Test
-    @Order(5)
     void reloadOnFailedStateAttemptsRestart() {
         // Start on port 80 (fails)
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 80);
@@ -102,7 +97,6 @@ class ProxyServerStateTest {
     }
 
     @Test
-    @Order(6)
     void failureReasonIsDescriptive() {
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 80);
 

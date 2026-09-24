@@ -4,9 +4,9 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.ManageInstanceScheduleResource;
 import be.elevenways.hohenheim.server.cms.ManageInstanceScheduleStepResource;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -57,8 +57,8 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        ownerId = user("schedsurf-owner@surface.test", "Schedule Owner");
-        viewerId = user("schedsurf-viewer@surface.test", "Schedule Viewer");
+        ownerId = ApiSupport.user("schedsurf-owner@surface.test", "Schedule Owner");
+        viewerId = ApiSupport.user("schedsurf-viewer@surface.test", "Schedule Viewer");
 
         viewerHttp = sessionFor(viewerId);
 
@@ -113,17 +113,6 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
         if (instanceId != null) {
             Models.get(InstanceModel.class).delete(instanceId);
         }
-    }
-
-    private static int user(String email, String name) {
-        Row row = AuthModels.users().createEmptyRow();
-        row.set(UserModel.EMAIL, email);
-        row.set(UserModel.DISPLAY_NAME, name);
-        row.set(UserModel.ENABLED, true);
-        row.set(UserModel.CREATED_AT, Now.instant());
-        row.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(row);
-        return row.get(UserModel.ID);
     }
 
     private static AccessContext contextOf(int userId, String name) {

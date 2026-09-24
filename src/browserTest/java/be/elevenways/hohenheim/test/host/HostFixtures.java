@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.host;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostPostureAcknowledgement;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -119,6 +120,33 @@ public final class HostFixtures {
             }
             Models.get(ServerModel.class).save(row);
         }
+    }
+
+    /**
+     * A new admitted, acknowledged and measured incus host record whose preflight passed on
+     * a fake daemon and a fake kernel-truth lane.
+     *
+     * AIDEV-NOTE: nine classes carried this block verbatim. mem_total is what the capacity
+     * budget is read from: an admitted host always carries it in production, and placement
+     * skips one that does not.
+     *
+     * @return the new server's id
+     */
+    public static int admittedIncusHost(@NonNull String name) {
+        Row row = Models.get(ServerModel.class).createEmptyRow();
+        row.set(ServerModel.NAME, name);
+        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
+        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
+        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
+        Models.get(ServerModel.class).save(row);
+        acknowledgePosture(row);
+        HostPreflight.store(name, new HostPreflight.Report(List.of(
+            new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon"),
+            new HostPreflight.Check(IncusPreflight.KERNEL_LANE_CHECK,
+                HostPreflight.STATUS_PASS, true, "fake kernel-truth lane")),
+            Map.of(HostPreflight.MEM_TOTAL_FACT, 16L * 1024 * 1024 * 1024), true, Now.instant(),
+            null));
+        return Models.get(ServerModel.class).findByName(name).get(ServerModel.ID);
     }
 
     /** Admit the implicit local host for tenant placement (posture shared_container). */

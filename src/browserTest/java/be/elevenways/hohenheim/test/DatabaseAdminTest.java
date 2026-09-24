@@ -17,12 +17,10 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * sidebar link, and the restore tab. Provisioning itself is covered by
  * DatabaseServiceTest; this stays fast and Docker-free.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class DatabaseAdminTest extends HohenheimTestBase {
 
     /** The list, the sidebar entry and the create form's engine/storage fields. */
     @Test
-    @Order(1)
     void databaseListAndCreateFormRender() {
         navigateToApp("/admin/databases");
         waitForHydration();
@@ -45,7 +43,6 @@ class DatabaseAdminTest extends HohenheimTestBase {
 
     /** An existing database is a read-only detail with a delete form and a restore tab. */
     @Test
-    @Order(2)
     void existingDatabaseDetailAndRestoreTab() {
         // Insert a record directly (no real container) so the render test stays fast.
         DatabaseModel model = Models.get(DatabaseModel.class);
@@ -126,7 +123,6 @@ class DatabaseAdminTest extends HohenheimTestBase {
      * passed against the broken code.
      */
     @Test
-    @Order(3)
     void creatingADatabaseWithATakenNameRefusesInsteadOfSeizingTheExistingOne() {
         DatabaseModel model = Models.get(DatabaseModel.class);
         DatabaseService service = new DatabaseService();

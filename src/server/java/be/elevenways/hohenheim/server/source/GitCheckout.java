@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.source;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.source.GitRefNames;
 import be.elevenways.hohenheim.source.GitSourceSchema;
+import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -11,6 +12,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Map;
 
 /**
@@ -136,19 +138,22 @@ public final class GitCheckout {
         return commit;
     }
 
-    /** Remove a directory tree; a checkout that cannot be replaced is cloned fresh. */
+    /**
+     * Remove a checkout tree; a checkout that cannot be replaced is cloned fresh.
+     *
+     * AIDEV-NOTE: through {@link FileTrees}, which never follows a symlink. The File-based
+     * walk this replaced listed a symlinked directory's TARGET, so a repository committing
+     * a link to a directory outside its checkout had that directory's contents deleted the
+     * next time the checkout was replaced.
+     */
     public static void deleteTree(@Nullable File directory) {
-        if (directory == null || !directory.exists()) {
+        if (directory == null) {
             return;
         }
-        File[] children = directory.listFiles();
-        if (children != null) {
-            for (File child : children) {
-                deleteTree(child);
-            }
-        }
-        if (!directory.delete()) {
-            Blast.log("CHECKOUT: could not remove", directory.getAbsolutePath());
+        IOException failure = FileTrees.delete(directory.toPath());
+        if (failure != null) {
+            Blast.log("CHECKOUT: could not remove", directory.getAbsolutePath(), "-",
+                failure.getMessage());
         }
     }
 

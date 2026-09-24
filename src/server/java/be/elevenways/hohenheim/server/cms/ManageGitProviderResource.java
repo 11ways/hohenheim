@@ -106,9 +106,9 @@ public final class ManageGitProviderResource extends GitProviderResource {
      * AIDEV-NOTE: the form omits SHARED, and coercion only carries form entries -- but that
      * made the omission the WHOLE gate, so any lane handing this resource a wider map (a
      * programmatic ResourceWrites call, a future quick-add) published a tenant credential
-     * installation-wide. This is the resource's own refusal. The model-level gate belongs in
-     * TenantWrites beside the identical AccessListModel.SHARED freeze, which covers every
-     * writer; until it lands there, this is what holds on /manage.
+     * installation-wide. This is the resource's own EARLY refusal; the gate every writer
+     * answers to is the model-level freeze in TenantWrites (checkGitProviderWrite), beside
+     * the identical AccessListModel.SHARED freeze.
      *
      * @throws Violations anchored on the shared field
      */

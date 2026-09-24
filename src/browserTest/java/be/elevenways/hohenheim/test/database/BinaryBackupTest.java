@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.runtime.NetworkPosture;
@@ -8,16 +9,11 @@ import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -61,13 +57,13 @@ class BinaryBackupTest {
     private static final String MONGO_IMAGE = "mongo:7";
 
     @Test
-    void redisBackupProducesRdbSnapshot() throws IOException {
+    void redisBackupProducesRdbSnapshot() throws Exception {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, REDIS_IMAGE);
 
-        DatabaseService service = new DatabaseService(freshDatasource());
+        DatabaseService service = new DatabaseService(TestDatabases.freshBootedDatasource());
         String name = "redis" + System.nanoTime();
         Path dir = Files.createTempDirectory("hohenheim-redis-bk");
         try {
@@ -97,13 +93,13 @@ class BinaryBackupTest {
     }
 
     @Test
-    void mongoBackupRestoreRoundTrips() throws IOException {
+    void mongoBackupRestoreRoundTrips() throws Exception {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, MONGO_IMAGE);
 
-        DatabaseService service = new DatabaseService(freshDatasource());
+        DatabaseService service = new DatabaseService(TestDatabases.freshBootedDatasource());
         String name = "mongo" + System.nanoTime();
         Path dir = Files.createTempDirectory("hohenheim-mongo-bk");
         try {
@@ -131,13 +127,13 @@ class BinaryBackupTest {
     }
 
     @Test
-    void redisBackupRestoreRoundTrips() throws IOException {
+    void redisBackupRestoreRoundTrips() throws Exception {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, REDIS_IMAGE);
 
-        DatabaseService service = new DatabaseService(freshDatasource());
+        DatabaseService service = new DatabaseService(TestDatabases.freshBootedDatasource());
         String name = "redisrt" + System.nanoTime();
         Path dir = Files.createTempDirectory("hohenheim-redis-rt");
         try {
@@ -160,7 +156,7 @@ class BinaryBackupTest {
     }
 
     @Test
-    void redisRestoreRejectsEphemeralData() throws IOException {
+    void redisRestoreRejectsEphemeralData() throws Exception {
         // The restore restarts the container, and a tmpfs data dir is wiped by that restart --
         // so an ephemeral redis must reject the restore up-front.
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
@@ -168,7 +164,7 @@ class BinaryBackupTest {
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, REDIS_IMAGE);
 
-        DatabaseService service = new DatabaseService(freshDatasource());
+        DatabaseService service = new DatabaseService(TestDatabases.freshBootedDatasource());
         String name = "redisep" + System.nanoTime();
         Path dir = Files.createTempDirectory("hohenheim-redis-ep");
         try {
@@ -245,19 +241,5 @@ class BinaryBackupTest {
                 }
             });
         }
-    }
-
-    private static SqliteDatasource freshDatasource() throws IOException {
-        File db = File.createTempFile("hohenheim-binbackup-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        SqliteDatasource ds = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(ds).migrate().requireSuccess();
-        // The controller identity (and every daemon resource name derived from it) and
-        // the owned-instance lookups both resolve through the CURRENT datasource, so this
-        // one has to BE the current one for the whole test.
-        Datasources.register(Datasources.DEFAULT, ds);
-        HohenheimTestRuntime.ensureBooted();
-        return ds;
     }
 }

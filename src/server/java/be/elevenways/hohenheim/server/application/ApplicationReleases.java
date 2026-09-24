@@ -598,8 +598,7 @@ public final class ApplicationReleases {
             OwnerLabels.Owner owner = OwnerLabels.parse(
                 config instanceof Map<?, ?> c && c.get("Labels") instanceof Map<?, ?> labels
                     ? labels : null);
-            boolean ours = owner != null && owner.model().equals(InstanceModel.MODEL_ID)
-                && owner.id().equals(String.valueOf(instanceId));
+            boolean ours = OwnerLabels.matches(owner, InstanceModel.MODEL_ID, instanceId);
             Map<?, ?> state = inspect.get("State") instanceof Map<?, ?> s ? s : Map.of();
             boolean running = Boolean.TRUE.equals(state.get("Running"));
             // A container whose cgroup lost a process to the OOM killer is NOT reusable,

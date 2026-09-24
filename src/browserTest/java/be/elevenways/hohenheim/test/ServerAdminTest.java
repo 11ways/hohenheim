@@ -1,16 +1,11 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
+import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import com.microsoft.playwright.assertions.PlaywrightAssertions;
 import org.junit.jupiter.api.*;
-
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -18,7 +13,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Server inventory through the zenit-cms resource routes: the seeded local
  * host, SSH-target validation, and the local-host edit/delete guards.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ServerAdminTest extends HohenheimTestBase {
 
     /**
@@ -32,7 +26,6 @@ class ServerAdminTest extends HohenheimTestBase {
      * why the row count is asserted AROUND the navigation and not merely the status.
      */
     @Test
-    @Order(1)
     void serverInventoryRendersTheLocalHost() {
         // 1. The local host exists BEFORE anything rendered it: the seeder made it at boot.
         Row seeded = Models.get(ServerModel.class).find()
@@ -78,9 +71,8 @@ class ServerAdminTest extends HohenheimTestBase {
 
     /** SSH-target round trip, argument-injection refusal and the implicit local host's guards. */
     @Test
-    @Order(2)
     void serverWritesRoundTripAndGuardTheLocalHost() throws Exception {
-        var create = postForm("/admin/servers/new", "name=edge-9&ssh_target=deploy%40edge9.example");
+        var create = adminPostForm("/admin/servers/new", "name=edge-9&ssh_target=deploy%40edge9.example");
         assertThat(create.statusCode()).isIn(200, 302, 303);
 
         Row row = Models.get(ServerModel.class).find()
@@ -90,14 +82,14 @@ class ServerAdminTest extends HohenheimTestBase {
         assertThat((String) row.get(ServerModel.MODE)).isEqualTo("ssh");
         Integer id = row.get(ServerModel.ID);
 
-        var update = postForm("/admin/servers/" + id, "name=edge-9&ssh_target=ops%40edge9.example");
+        var update = adminPostForm("/admin/servers/" + id, "name=edge-9&ssh_target=ops%40edge9.example");
         assertThat(update.statusCode()).isIn(200, 302, 303);
 
         Row updated = Models.get(ServerModel.class).findById(id);
         assertThat((String) updated.get(ServerModel.SSH_TARGET)).isEqualTo("ops@edge9.example");
 
         // An argument-injecting SSH target is refused outright.
-        postForm("/admin/servers/new", "name=evil&ssh_target=-oProxyCommand%3Dcalc");
+        adminPostForm("/admin/servers/new", "name=evil&ssh_target=-oProxyCommand%3Dcalc");
         Row evil = Models.get(ServerModel.class).find()
             .where(ServerModel.NAME.eq("evil")).first();
         assertThat(evil).isNull();
@@ -107,13 +99,13 @@ class ServerAdminTest extends HohenheimTestBase {
         assertThat(local).isNotNull();
         Integer localId = local.get(ServerModel.ID);
 
-        postForm("/admin/servers/" + localId, "name=local&ssh_target=evil%40host");
+        adminPostForm("/admin/servers/" + localId, "name=local&ssh_target=evil%40host");
         Row after = Models.get(ServerModel.class).findById(localId);
         assertThat((Object) after.get(ServerModel.SSH_TARGET))
             .as("the implicit local host must not accept an SSH target")
             .isNull();
 
-        postForm("/admin/servers/" + localId + "/delete", confirmed(""));
+        adminPostForm("/admin/servers/" + localId + "/delete", confirmed(""));
         assertThat(Models.get(ServerModel.class).findById(localId))
             .as("the implicit local host must not be deletable")
             .isNotNull();
@@ -126,21 +118,36 @@ class ServerAdminTest extends HohenheimTestBase {
      * the posture silently while the form reported success. Identity stays immutable.
      */
     @Test
-    @Order(3)
     void postureEditThroughTheFormLandsOnTheLocalHost() throws Exception {
-        // 1. Remote hosts: posture rides the ordinary update path.
+        // 1. Remote hosts: posture rides the ordinary update path. The host is this test's
+        //    own, so the journey never depends on another test having run first.
+        var edgeCreate = adminPostForm("/admin/servers/new",
+            "name=edge-posture&ssh_target=deploy%40edge-posture.example");
+        assertThat(edgeCreate.statusCode()).as("step 1: the remote host is created")
+            .isIn(200, 302, 303);
         Row edge = Models.get(ServerModel.class).find()
-            .where(ServerModel.NAME.eq("edge-9")).first();
-        assertThat(edge).as("step 1 rides the edge-9 host created in step 2").isNotNull();
-        var edgeUpdate = postForm("/admin/servers/" + edge.get(ServerModel.ID),
-            "name=edge-9&ssh_target=ops%40edge9.example&posture=dedicated");
+            .where(ServerModel.NAME.eq("edge-posture")).first();
+        assertThat(edge).as("step 1: the created remote host exists").isNotNull();
+        var edgeUpdate = adminPostForm("/admin/servers/" + edge.get(ServerModel.ID),
+            "name=edge-posture&ssh_target=ops%40edge-posture.example&posture=dedicated");
         assertThat(edgeUpdate.statusCode()).isIn(200, 302, 303);
         assertThat((String) Models.get(ServerModel.class)
             .findById(edge.get(ServerModel.ID)).get(ServerModel.POSTURE))
             .as("step 1: a remote host's submitted posture is stored")
             .isEqualTo(ServerModel.POSTURE_DEDICATED);
 
-        // 2. The LOCAL host: the identity guard must not swallow the posture.
+        // 2. The LOCAL host: the identity guard must not swallow the posture. The local row
+        //    is shared by every class in this JVM, so it is handed back unchanged below.
+        HostFixtures.LocalHostState localBefore = HostFixtures.captureLocal();
+        try {
+            localPostureLands();
+        } finally {
+            localBefore.restore();
+        }
+    }
+
+    /** Steps 2 and 3 of {@link #postureEditThroughTheFormLandsOnTheLocalHost}, on the shared local row. */
+    private void localPostureLands() throws Exception {
         Row local = Models.get(ServerModel.class).find()
             .where(ServerModel.NAME.eq("local")).first();
         assertThat(local).isNotNull();
@@ -149,7 +156,7 @@ class ServerAdminTest extends HohenheimTestBase {
             .as("step 2 precondition: the local host still carries the default posture")
             .isEqualTo(ServerModel.POSTURE_TRUSTED_ONLY);
 
-        var update = postForm("/admin/servers/" + localId,
+        var update = adminPostForm("/admin/servers/" + localId,
             "name=local&ssh_target=evil%40intruder.example&posture=shared_container");
         assertThat(update.statusCode()).isIn(200, 302, 303);
 
@@ -175,19 +182,5 @@ class ServerAdminTest extends HohenheimTestBase {
         assertThat((String) updated.get(ServerModel.MODE))
             .as("step 3: the local host's mode stays local")
             .isEqualTo("local");
-    }
-
-    private HttpResponse<String> postForm(String path, String body) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .header("X-Csrf-Token", csrfToken)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 }

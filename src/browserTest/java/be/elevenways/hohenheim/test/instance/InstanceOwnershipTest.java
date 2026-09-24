@@ -2,11 +2,10 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -51,17 +50,6 @@ class InstanceOwnershipTest extends HohenheimTestBase {
         return row;
     }
 
-    private static int tenant(String email) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, email);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
-    }
-
     @Test
     void instanceOwnershipIsGrantDerivedAndTheCheckCanActuallyFail() {
         // 1. Two operator-owned instances: no grants at all, so both carry the EMPTY
@@ -82,7 +70,7 @@ class InstanceOwnershipTest extends HohenheimTestBase {
         //    without the KnownCapabilities/declareGrantable registration for
         //    InstanceModel, the grant cannot exist, both sets stay empty, and this check
         //    CANNOT fail -- exactly the security theater the plan names.
-        int tenantA = tenant("instance-tenant-a@test");
+        int tenantA = ApiSupport.user("instance-tenant-a@test");
         RecordGrants.grant(GrantSubjectType.USER, tenantA, InstanceModel.MODEL_ID, firstId,
             HohenheimAccess.MANAGE, true);
         assertThat(HohenheimAccess.manageSubjectsOf(InstanceModel.MODEL_ID, firstId))
@@ -94,7 +82,7 @@ class InstanceOwnershipTest extends HohenheimTestBase {
 
         // 3. A second tenant on the second instance: still different owners (equality of
         //    sets, never overlap).
-        int tenantB = tenant("instance-tenant-b@test");
+        int tenantB = ApiSupport.user("instance-tenant-b@test");
         RecordGrants.grant(GrantSubjectType.USER, tenantB, InstanceModel.MODEL_ID, secondId,
             HohenheimAccess.MANAGE, true);
         assertThat(HohenheimAccess.sameOwner(InstanceModel.MODEL_ID, firstId, secondId))
