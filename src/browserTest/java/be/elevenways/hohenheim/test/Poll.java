@@ -51,6 +51,53 @@ public final class Poll {
     }
 
     /**
+     * Assert {@code violation} stays false for the whole {@code window}, sampling every
+     * {@link #DEFAULT_INTERVAL}; see {@link #never(String, Duration, Duration, BooleanSupplier)}.
+     *
+     * @throws AssertionError naming {@code what} on the first sample that saw it happen
+     */
+    public static void never(@NonNull String what, @NonNull Duration window,
+                             @NonNull BooleanSupplier violation) {
+        never(what, window, DEFAULT_INTERVAL, violation);
+    }
+
+    /**
+     * Assert {@code violation} stays false for the whole {@code window}, sampling every
+     * {@code interval} and failing on the FIRST sample that sees it true.
+     *
+     * AIDEV-NOTE: the LAST resort for "nothing happened", for a negative with no
+     * deterministic signal to wait on (the class docblock's latch or lock query). It
+     * replaced fixed sleeps followed by one look, which saw only the window's final instant:
+     * a violation that happened and undid itself inside the sleep read as a pass, and a
+     * violation early in the window still cost the whole sleep. It samples throughout,
+     * fails fast, and probes once more AT the window's end. A window proves only what it
+     * covers, so size it to the thing that must NOT arrive, never to what makes CI green.
+     *
+     * @throws AssertionError naming {@code what} on the first violating sample, or when the
+     *         sampling thread is interrupted
+     */
+    public static void never(@NonNull String what, @NonNull Duration window,
+                             @NonNull Duration interval, @NonNull BooleanSupplier violation) {
+        long deadline = Now.millis() + window.toMillis();
+        while (true) {
+            if (violation.getAsBoolean()) {
+                throw new AssertionError("happened within the " + window.toMillis()
+                    + "ms window, but must not: " + what);
+            }
+            long remaining = deadline - Now.millis();
+            if (remaining <= 0) {
+                return;
+            }
+            try {
+                Thread.sleep(Math.min(interval.toMillis(), remaining));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError("interrupted while watching for: " + what, interrupted);
+            }
+        }
+    }
+
+    /**
      * Wait until {@code probe} answers a non-null value, and return it.
      *
      * @throws AssertionError naming {@code what} when the deadline passes first

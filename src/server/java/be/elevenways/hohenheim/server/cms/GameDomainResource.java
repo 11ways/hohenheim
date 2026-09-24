@@ -30,6 +30,9 @@ import java.util.Map;
  */
 public final class GameDomainResource extends RowResource {
 
+    /** This resource's slug, which the instance list names as a related page. */
+    public static final String SLUG = "game-domains";
+
     private final FormSpec formSpec = FormSpec.builder()
         .add(RelationPick.of(GameDomainModel.SITE_DOMAIN_ID, SiteDomainModel.MODEL_ID).build())
         .add(RelationPick.of(GameDomainModel.BACKEND_INSTANCE_ID, InstanceModel.MODEL_ID).build())
@@ -58,7 +61,7 @@ public final class GameDomainResource extends RowResource {
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "game_domain"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "game_domain"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "game_domain"); }
-    @Override public @NonNull String slug() { return "game-domains"; }
+    @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Model model() { return Models.get(GameDomainModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }

@@ -10,6 +10,8 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.lease.Lease;
+import be.elevenways.zenit.common.orm.lease.Leases;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -30,9 +32,21 @@ import java.util.List;
  *
  * AIDEV-NOTE: a job that dies with its controller cannot write its own ending, and a sweep that settles
  * "rows written before this process started" is wrong across several controllers over one database
- * (the BootSettle caveat). So an in-flight row is settled ON READ instead, by a bound no live job can
- * outlast: {@link #LIVE_BOUND} past its creation it can only be a corpse and reads as INTERRUPTED. A
- * job that somehow outlived the bound still writes its real ending afterwards, which wins.
+ * (the BootSettle caveat). So an in-flight row is settled ON READ, and the authority is a core
+ * {@link Leases} lease the running job holds for its whole life ({@link #leaseKey}, taken in
+ * {@link #start} BEFORE the row exists): the holder heartbeats it, so an in-flight row whose lease a
+ * reader can take has no live job anywhere and reads as INTERRUPTED within one lease TTL of the crash,
+ * whichever controller ran it. Only when the lease cannot be consulted (inside a single-writer
+ * transaction, or a lease statement failing) does the old clock bound decide: {@link #LIVE_BOUND} past
+ * its creation a row can only be a corpse. A job that somehow outlived either still writes its real
+ * ending afterwards, which wins.
+ *
+ * AIDEV-NOTE: re-assessed 2026-09-24 (wave 3): a fetch row stamped with {@code ControllerIdentity} and a
+ * boot sweep of "this controller's own stale fetches" was considered and REJECTED. The identity is one
+ * token per CONTROL-PLANE DATABASE, shared by every process over it (several processes over one
+ * database is a supported deployment, HohenheimRoles splitting the roles), so it cannot tell this
+ * process's corpse from a sibling's live download, and a boot sweep keyed on it would interrupt the
+ * sibling's fetch. The lease is per holding PROCESS and dies with it, which is the fact the sweep needed.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -57,6 +71,9 @@ public final class InstallMediaFetches {
     /** Serializes the running-check-then-insert of {@link #start} within this process. */
     private static final Object START_LOCK = new Object();
 
+    /** Every fetch lease key starts with this; the rest is the host id and the medium name. */
+    private static final String LEASE_PREFIX = "hohenheim:media_fetch:";
+
     /** The work of one fetch, told where to report progress. */
     @FunctionalInterface
     public interface Transfer {
@@ -73,10 +90,11 @@ public final class InstallMediaFetches {
      * background job. The caller has already run every synchronous refusal
      * ({@link InstallMedia#requireFetchable}).
      *
-     * AIDEV-NOTE: the running-check and the insert are one step only within THIS process; two
-     * controllers accepting the same name in the same instant both start, and the second import then
-     * fails by name at the daemon ({@code already exists}), which the tab shows. The cap is a resource
-     * bound, not a security boundary.
+     * AIDEV-NOTE: one fetch per (host, name) is decided by the fetch's LEASE, so it holds across
+     * controllers too: the lease is taken before the row is written and held by the job until its
+     * ending is stored. The installation-wide cap is still counted within THIS process's view of the
+     * rows, so two controllers starting in the same instant can briefly exceed it; the cap is a
+     * resource bound, not a security boundary.
      *
      * @return the stored fetch id
      * @throws Violations {@code media_fetch_running} while one of that name runs on the host,
@@ -86,34 +104,68 @@ public final class InstallMediaFetches {
         int serverId = server.get(ServerModel.ID);
         InstallMediaFetchModel model = Models.get(InstallMediaFetchModel.class);
         int fetchId;
+        Lease lease;
         synchronized (START_LOCK) {
+            // Settled FIRST: a corpse of this very name must read as ended before this attempt
+            // takes the name's lease, or its own probe would find the lease held (by us).
             List<Row> active = settled(model.find()
                 .where(InstallMediaFetchModel.STATE.in(activeTokens())));
             for (Row row : active) {
                 if (Integer.valueOf(serverId).equals(row.get(InstallMediaFetchModel.SERVER_ID))
                         && name.equals(row.get(InstallMediaFetchModel.NAME))) {
-                    throw Violations.ofField("name", name, violationText("media_fetch_running")
-                        .withArg("media", name));
+                    throw running(name);
                 }
             }
             if (active.size() >= MAX_ACTIVE) {
                 throw Violations.ofForm(violationText("media_fetch_busy")
                     .withArg("count", String.valueOf(MAX_ACTIVE)));
             }
-            // An earlier ending of the same name is superseded by this attempt.
-            model.find()
-                .where(InstallMediaFetchModel.SERVER_ID.eq(serverId))
-                .where(InstallMediaFetchModel.NAME.eq(name))
-                .delete();
-            Row row = model.createEmptyRow();
-            row.set(InstallMediaFetchModel.SERVER_ID, serverId);
-            row.set(InstallMediaFetchModel.NAME, name);
-            row.set(InstallMediaFetchModel.STATE, InstallMediaFetchState.PENDING.token());
-            model.save(row);
-            fetchId = row.get(InstallMediaFetchModel.ID);
+            // Another controller running this name holds its lease even when its row is not
+            // visible here yet: the lease, not this process's row list, is the arbiter.
+            lease = leases().tryAcquire(leaseKey(serverId, name));
+            if (lease == null) {
+                throw running(name);
+            }
+            try {
+                // An earlier ending of the same name is superseded by this attempt.
+                model.find()
+                    .where(InstallMediaFetchModel.SERVER_ID.eq(serverId))
+                    .where(InstallMediaFetchModel.NAME.eq(name))
+                    .delete();
+                Row row = model.createEmptyRow();
+                row.set(InstallMediaFetchModel.SERVER_ID, serverId);
+                row.set(InstallMediaFetchModel.NAME, name);
+                row.set(InstallMediaFetchModel.STATE, InstallMediaFetchState.PENDING.token());
+                model.save(row);
+                fetchId = row.get(InstallMediaFetchModel.ID);
+            } catch (RuntimeException unstored) {
+                lease.release();
+                throw unstored;
+            }
         }
-        HandlerSupport.inBackground(() -> run(fetchId, serverId, name, transfer));
+        Lease held = lease;
+        try {
+            HandlerSupport.inBackground(() -> {
+                try {
+                    run(fetchId, serverId, name, transfer);
+                } finally {
+                    held.release();
+                }
+            });
+        } catch (RuntimeException notStarted) {
+            // No job will ever own the row: dropping the lease lets the next read settle it.
+            held.release();
+            throw notStarted;
+        }
         return fetchId;
+    }
+
+    /**
+     * THE lease key of the fetch of {@code name} onto one host: held by the job running it, from before its
+     * row exists until its ending is stored.
+     */
+    public static @NonNull String leaseKey(int serverId, @NonNull String name) {
+        return LEASE_PREFIX + serverId + ":" + name;
     }
 
     /**
@@ -245,13 +297,12 @@ public final class InstallMediaFetches {
         }
     }
 
-    /** The query's rows, with every in-flight row past {@link #LIVE_BOUND} settled to INTERRUPTED. */
+    /** The query's rows, with every in-flight row no live job owns settled to INTERRUPTED. */
     private static @NonNull List<Row> settled(@NonNull QueryBuilder<Row> query) {
         Instant deadline = Now.instant().minus(LIVE_BOUND);
         List<Row> rows = new ArrayList<>();
         for (Row row : query.all()) {
-            Instant created = row.get(InstallMediaFetchModel.CREATED_AT);
-            if (stateOf(row).active() && (created == null || created.isBefore(deadline))) {
+            if (stateOf(row).active() && orphaned(row, deadline)) {
                 int fetchId = row.get(InstallMediaFetchModel.ID);
                 write(fetchId, InstallMediaFetchState.INTERRUPTED, null, null, true);
                 row = Models.get(InstallMediaFetchModel.class).findById(fetchId);
@@ -262,6 +313,39 @@ public final class InstallMediaFetches {
             rows.add(row);
         }
         return rows;
+    }
+
+    /**
+     * Whether an in-flight row has no live job: its lease is free (taken and handed straight back, the
+     * BootSettle borrow), or, when the lease cannot be consulted, it is older than any live job can be.
+     */
+    private static boolean orphaned(@NonNull Row row, @NonNull Instant deadline) {
+        Integer serverId = row.get(InstallMediaFetchModel.SERVER_ID);
+        String name = row.get(InstallMediaFetchModel.NAME);
+        Leases leases = leases();
+        if (serverId != null && name != null && leases.canAcquireHere()) {
+            try {
+                Lease probe = leases.tryAcquire(leaseKey(serverId, name));
+                if (probe == null) {
+                    return false;
+                }
+                probe.release();
+                return true;
+            } catch (RuntimeException unreadable) {
+                Blast.log("MEDIA: could not consult the lease of fetch", row.get(InstallMediaFetchModel.ID),
+                    "-", unreadable.getMessage());
+            }
+        }
+        Instant created = row.get(InstallMediaFetchModel.CREATED_AT);
+        return created == null || created.isBefore(deadline);
+    }
+
+    private static @NonNull Leases leases() {
+        return Leases.of(Models.get(InstallMediaFetchModel.class).getResolvedDatasource());
+    }
+
+    private static @NonNull Violations running(@NonNull String name) {
+        return Violations.ofField("name", name, violationText("media_fetch_running").withArg("media", name));
     }
 
     private static @NonNull List<String> activeTokens() {

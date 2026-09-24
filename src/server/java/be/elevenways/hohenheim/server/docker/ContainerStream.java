@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.server.runtime.ConsoleStream;
 import be.elevenways.hohenheim.server.util.Watchdog;
 import be.elevenways.protoblast.common.time.Now;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ScheduledFuture;
@@ -29,7 +30,7 @@ public final class ContainerStream implements ConsoleStream {
     /** Cap on an error-response body read at open time (protects the heap, not UX). */
     private static final int MAX_ERROR_BODY = 64 * 1024;
 
-    /** How long the error-body drain keeps asking a silent connection for more. */
+    /** How long the error-body drain may take in total, blocked reads included. */
     private static final long ERROR_BODY_TIMEOUT_MS = 2_000;
 
     /** Pause between zero-byte reads, so "nothing yet" never becomes a busy loop. */
@@ -109,6 +110,14 @@ public final class ContainerStream implements ConsoleStream {
             if (evidence.isEmpty()) {
                 throw e;
             }
+            if (e instanceof DockerClient.ApiException refused) {
+                // Keep the TYPE: a caller asking isNotFound() must get the same answer over
+                // an ssh transport (which has evidence) as over the local socket.
+                DockerClient.ApiException withEvidence = new DockerClient.ApiException(
+                    refused.status(), refused.getMessage() + " (" + evidence + ")");
+                withEvidence.initCause(refused);
+                throw withEvidence;
+            }
             throw new IOException(e.getMessage() + " (" + evidence + ")", e);
         } finally {
             watchdog.cancel(false);
@@ -135,10 +144,17 @@ public final class ContainerStream implements ConsoleStream {
             throw new IOException("Bad status line from Docker daemon: " + statusLine);
         }
         boolean chunkedHeader = false;
+        long contentLength = -1;
         for (String line : head.split("\r\n")) {
             String lower = line.toLowerCase(java.util.Locale.ROOT);
             if (lower.startsWith("transfer-encoding:") && lower.contains("chunked")) {
                 chunkedHeader = true;
+            } else if (lower.startsWith("content-length:")) {
+                try {
+                    contentLength = Long.parseLong(lower.substring("content-length:".length()).trim());
+                } catch (NumberFormatException unreadable) {
+                    contentLength = -1;
+                }
             }
         }
         this.chunked = chunkedHeader;
@@ -146,7 +162,7 @@ public final class ContainerStream implements ConsoleStream {
         // 101 = the daemon honored an Upgrade; the raw stream follows either way.
         if ((status < 200 || status >= 300) && status != 101) {
             throw new DockerClient.ApiException(status, "Docker API returned HTTP " + status
-                + ": " + this.readErrorBody().trim());
+                + ": " + this.readErrorBody(this.chunked ? -1 : contentLength).trim());
         }
     }
 
@@ -233,32 +249,48 @@ public final class ContainerStream implements ConsoleStream {
         return n;
     }
 
-    /** Drain a (bounded) error body so the ApiException carries the daemon's reason. */
-    private @NonNull String readErrorBody() {
-        StringBuilder body = new StringBuilder();
-        long deadline = Now.millis() + ERROR_BODY_TIMEOUT_MS;
+    /**
+     * Drain a (bounded) error body so the ApiException carries the daemon's reason.
+     *
+     * AIDEV-NOTE: the body ends at its OWN framing -- {@code contentLength} bytes, or the
+     * last chunk (dechunked through {@link #fillBody}, so no size lines leak into the
+     * message) -- and only an unframed body reads to EOF. A stream request carries no
+     * {@code Connection: close}, so the daemon keeps the connection ALIVE after an error
+     * answer: the old read-to-EOF then sat in a blocking socket read (its 2s deadline was
+     * only consulted between ZERO-byte reads, which a blocking read never returns) until
+     * open()'s header watchdog closed the connection -- a whole stream timeout per refused
+     * open, ~60s for every stats 404. The watchdog below bounds every shape, a mute
+     * keep-alive included, to {@link #ERROR_BODY_TIMEOUT_MS}.
+     *
+     * @param contentLength the declared body length, or -1 when the body is chunked or unframed
+     */
+    private @NonNull String readErrorBody(long contentLength) {
+        ByteArrayOutputStream body = new ByteArrayOutputStream();
+        ScheduledFuture<?> deadline = Watchdog.schedule(this.connection::close, ERROR_BODY_TIMEOUT_MS);
         try {
-            while (body.length() < MAX_ERROR_BODY) {
-                int filled = this.fill();
+            long wanted = contentLength < 0 ? MAX_ERROR_BODY : Math.min(contentLength, MAX_ERROR_BODY);
+            while (body.size() < wanted) {
+                int filled = this.fillBody();
                 if (filled == -1) {
                     break;
                 }
                 if (filled == 0) {
-                    if (Now.millis() >= deadline) {
+                    if (deadline.isDone()) {
                         break;
                     }
                     idle();
                     continue;
                 }
-                body.append(new String(this.buffer, this.bufferStart,
-                    this.bufferEnd - this.bufferStart, StandardCharsets.UTF_8));
-                this.bufferStart = this.bufferEnd;
+                int take = (int) Math.min(this.payloadAvailable(), wanted - body.size());
+                body.write(this.buffer, this.bufferStart, take);
+                this.consumePayload(take);
             }
         } catch (IOException ignored) {
-            // whatever was read is the evidence
+            // whatever was read is the evidence (the deadline closing the connection included)
+        } finally {
+            deadline.cancel(false);
         }
-        // A chunked error body keeps its framing noise; strip the obvious size lines.
-        return body.toString();
+        return body.toString(StandardCharsets.UTF_8);
     }
 
     /** Ensure at least one unconsumed byte is buffered; -1 at EOF. */

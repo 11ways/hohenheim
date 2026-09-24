@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HostTrustLane;
 import be.elevenways.hohenheim.WorkloadTier;
 import be.elevenways.hohenheim.HohenheimWidgets;
-import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.host.HostCapacityView;
 import be.elevenways.hohenheim.host.HostFactView;
 import be.elevenways.hohenheim.host.HostPreflightReportView;
@@ -441,7 +440,9 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
                 WorkloadTier.INSTANCE,
                 badgeOf(InstanceModel.STATUS, instance.get(InstanceModel.STATUS)),
                 instance.get(InstanceModel.CAPACITY_MB),
-                CmsRoutes.detail(panel, HohenheimSlugs.INSTANCES, instance.get(InstanceModel.ID))));
+                // A release row is not served by the instance list; the route sends it to
+                // its application's Deploys tab instead of a 404.
+                InstanceResource.recordRoute(panel, instance, null)));
         }
         for (Row stack : Models.get(StackModel.class).find()
                 .where(StackModel.SERVER_ID.eq(serverId)).all()) {

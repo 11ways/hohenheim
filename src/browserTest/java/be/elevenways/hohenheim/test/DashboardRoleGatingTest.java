@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
+import be.elevenways.hohenheim.server.cms.HostAttention;
 import be.elevenways.hohenheim.server.cms.OnboardingCollector;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -125,7 +126,7 @@ class DashboardRoleGatingTest {
                     throw new IllegalStateException("connect ECONNREFUSED /var/run/docker.sock");
                 });
                 dead.probe();
-                AttentionItem daemon = AttentionCollector.dockerUnreachable(dead);
+                AttentionItem daemon = HostAttention.dockerUnreachable(dead);
                 assertThat(daemon)
                     .as("step 5: an unreachable daemon is a red item carrying the reason")
                     .isNotNull();
@@ -142,7 +143,7 @@ class DashboardRoleGatingTest {
                 assertThat(notNeeded.probe())
                     .as("step 5: so its probe declares docker DISABLED without a client")
                     .isEqualTo(DockerHealth.Status.DISABLED);
-                assertThat(AttentionCollector.dockerUnreachable(notNeeded))
+                assertThat(HostAttention.dockerUnreachable(notNeeded))
                     .as("step 5: and no item is raised")
                     .isNull();
             } finally {

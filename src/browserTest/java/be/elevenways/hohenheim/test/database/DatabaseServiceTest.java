@@ -186,12 +186,18 @@ class DatabaseServiceTest {
                 assertThat((String) created.get(DatabaseModel.STATUS))
                     .as("step 1: the record is born provisioning")
                     .isEqualTo(DatabaseModel.STATUS_PROVISIONING);
-                pause(2_000);
-                assertThat(service.detail(name).status())
-                    .as("step 1: nothing flipped the status while the create was"
-                        + " uncommitted (a pool thread that could not find the row"
-                        + " used to leave it here for ever)")
-                    .isEqualTo(DatabaseModel.STATUS_PROVISIONING);
+                // No deterministic signal exists for "the pool has not started": the job is
+                // an after-commit hook the datasource holds privately. So the record and
+                // the daemon are WATCHED for the whole window, never looked at once after
+                // a sleep -- a pool thread reached the row within ~100 ms before F4.
+                Poll.never("step 1: the status left provisioning or a container appeared"
+                        + " while the create was uncommitted (a pool thread that could not"
+                        + " find the row used to leave it here for ever)",
+                    Duration.ofSeconds(2), Duration.ofMillis(200), () -> {
+                        DatabaseService.Detail watched = service.detail(name);
+                        return !DatabaseModel.STATUS_PROVISIONING.equals(watched.status())
+                            || watched.containerState() != ContainerState.ABSENT;
+                    });
                 // No engine instance row and no container: the record owns nothing
                 // yet, so the live status is ABSENT (EngineHandles.of would refuse to
                 // even name a handle here).
@@ -256,15 +262,6 @@ class DatabaseServiceTest {
             Duration.ofMillis(timeoutMs), Duration.ofMillis(500),
             () -> wanted.equals(service.detail(name).status()));
         return service.detail(name).status();
-    }
-
-    private static void pause(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new AssertionError("interrupted while waiting");
-        }
     }
 
     /**

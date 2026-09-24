@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.cms.AttentionCollector;
+import be.elevenways.hohenheim.server.cms.InstanceAttention;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceStatusReconciler;
@@ -129,7 +129,7 @@ class InstanceStatusReconcileTest {
             // 4b. And the dashboard SEES it: the crashedInstances attention item reads
             //     exactly the status this correction stamped, and links to this record.
             List<AttentionItem> attention = new ArrayList<>();
-            AttentionCollector.crashedInstances(attention);
+            InstanceAttention.crashedInstances(attention);
             assertThat(attention)
                 .as("step 4b: the crashed workload is a dashboard attention item")
                 .anySatisfy(item -> assertThat(item.target().toUrl())

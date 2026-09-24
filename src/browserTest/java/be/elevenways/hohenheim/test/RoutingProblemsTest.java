@@ -1,15 +1,22 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.AttentionItem;
+import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.cms.ProxyAttention;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.proxy.RoutingProblem;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -110,5 +117,65 @@ class RoutingProblemsTest {
             .as("step 3: the healthy site still routes").contains("Location: https://example.com/");
         assertThat(rawRequest(port, "failing.problems.test", "/"))
             .as("step 3: the failed site is unrouted, not half-served").contains("404");
+
+        // Step 4: the dashboard projects the SAME recorded problems, one item each: the
+        //         unrouted site is an error naming it and its cause, linked to its record.
+        List<AttentionItem> items = new ArrayList<>();
+        ProxyAttention.routingProblems(items, problems);
+        assertThat(items).as("step 4: one attention item per recorded problem")
+            .hasSize(problems.size());
+        AttentionItem unknownItem = items.stream()
+            .filter(item -> "Problems Unknown".equals(item.title().args().get("name")))
+            .findFirst().orElseThrow(() -> new AssertionError("step 4: no item names the unknown-kind site"));
+        assertThat(unknownItem.severity()).as("step 4: missing from routing is an error")
+            .isEqualTo(AttentionSeverity.ERROR);
+        assertThat(unknownItem.title().key()).as("step 4: titled as missing from routing")
+            .isEqualTo("site_unrouted");
+        assertThat(unknownItem.detail()).as("step 4: the detail explains itself").isNotNull();
+        assertThat(unknownItem.detail().key()).as("step 4: the detail is the reason's own sentence")
+            .isEqualTo("unknown_kind");
+        assertThat(unknownItem.detail().args().get("detail"))
+            .as("step 4: carrying the kind this build does not know").isEqualTo("hohenheim:retired_kind");
+        assertThat(unknownItem.target()).as("step 4: the item links somewhere").isNotNull();
+        assertThat(unknownItem.target().toUrl()).as("step 4: to the site's own record")
+            .endsWith("/admin/sites/" + unknown.get(SiteModel.ID));
+        assertThat(items).as("step 4: the healthy site raises nothing")
+            .noneMatch(item -> "Problems Healthy".equals(item.title().args().get("name")));
+    }
+
+    /**
+     * Every routing-problem reason reads as a sentence in both shipped locales, and its
+     * severity is the reason's own unrouted fact.
+     *
+     * AIDEV-NOTE: the detail key is DERIVED from the member's name, which the manifest and
+     * Java key scans cannot see, so this walk over the enum is the gate: a reason added
+     * tomorrow fails here until it has copy.
+     */
+    @Test
+    void everyRoutingReasonReadsAsASentenceInBothLocales() {
+        DefaultCatalogLoader catalogs = new DefaultCatalogLoader();
+        List<String> missing = new ArrayList<>();
+        for (RoutingProblem.Reason reason : RoutingProblem.Reason.values()) {
+            List<AttentionItem> items = new ArrayList<>();
+            ProxyAttention.routingProblems(items,
+                List.of(new RoutingProblem(7, "Reason Site", reason, "the cause")));
+
+            // 1. One item, whose severity is the reason's own fact.
+            assertThat(items).as("step 1: %s raises exactly one item", reason).hasSize(1);
+            AttentionItem item = items.get(0);
+            assertThat(item.severity()).as("step 1: %s severity follows unrouted()", reason)
+                .isEqualTo(reason.unrouted() ? AttentionSeverity.ERROR : AttentionSeverity.WARNING);
+
+            // 2. Title and detail both resolve to real copy in en AND nl.
+            for (String tag : List.of("en", "nl")) {
+                for (Microcopy copy : List.of(item.title(), item.detail())) {
+                    String resolved = copy.resolve(LocaleChain.ofTags(tag), catalogs);
+                    if (resolved.equals(copy.key())) {
+                        missing.add(tag + " " + reason + " -> " + copy.key());
+                    }
+                }
+            }
+        }
+        assertThat(missing).as("step 2: every routing reason has copy in en and nl").isEmpty();
     }
 }

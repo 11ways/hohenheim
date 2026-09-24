@@ -97,13 +97,12 @@ public final class ManageInstanceResource extends InstanceResource {
 
     /**
      * Power, the two artifact actions and the in-place app update, each carrying the
-     * capability gate it declared on the base resource -- inherited verbatim, so
-     * /manage and /admin can never drift on what an action requires.
+     * capability gate it declares in {@link InstanceRowActions} -- the same builders the
+     * operator panel offers, so /manage and /admin can never drift on what an action requires.
      */
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
-        return List.of(this.deployAction(), this.stopAction(),
-            this.snapshotAction(), this.backupAction(), this.appUpdateAction());
+        return this.rowActionSet.delegated();
     }
 
     @Override

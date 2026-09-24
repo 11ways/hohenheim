@@ -515,7 +515,7 @@ public class DatabaseService extends DatasourceScoped {
                 setStatus(recordId, DatabaseModel.STATUS_ACTIVE, null);
             } catch (Exception e) {
                 // TERMINAL and visible: the status is what the list badge, the detail
-                // page and AttentionCollector.failedDatabases read; the reason rides the
+                // page and DatabaseAttention.failedDatabases read; the reason rides the
                 // record so the operator learns WHY without the journal.
                 String reason = e.getMessage() != null ? e.getMessage() : e.toString();
                 setStatus(recordId, DatabaseModel.STATUS_FAILED, reason);

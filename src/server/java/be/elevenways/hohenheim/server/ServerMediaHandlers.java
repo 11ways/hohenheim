@@ -1,6 +1,9 @@
 package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.instance.InstallMediaLive;
+import be.elevenways.hohenheim.model.InstallMediaFetchModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
 import be.elevenways.hohenheim.server.cms.ServerMediaPage;
@@ -10,10 +13,13 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.live.LiveFeed;
+import be.elevenways.zenit.common.live.LiveFeeds;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
+import be.elevenways.zenit.common.result.DryResult;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.http.HttpConduit;
@@ -26,8 +32,8 @@ import java.util.Map;
 
 /**
  * Install media on an Incus host: URL fetch (a background job, see InstallMediaFetches), upload
- * and delete forms of the server record's Install media tab. Both endpoints declare the admin permission; the service refuses
- * non-Incus hosts by name.
+ * and delete forms of the server record's Install media tab, and the live re-read of its region. Every
+ * endpoint declares the media permission; the service refuses non-Incus hosts by name.
  */
 final class ServerMediaHandlers {
 
@@ -36,6 +42,26 @@ final class ServerMediaHandlers {
 
     static void init() {
         InstallMedia media = new InstallMedia();
+
+        // The tab's live region watches this feed: every committed write of a fetch row (a state, a
+        // stored fraction, an ending) pings it, and the region re-reads SERVERS_MEDIA_VIEW. Gated by
+        // the tab's own permission, so a viewer the tab refuses never hears a fetch move. Replaced,
+        // never stacked, because a test JVM runs this init once per server boot.
+        LiveFeeds.INSTANCE.unregister(InstallMediaLive.FEED);
+        LiveFeeds.INSTANCE.register(InstallMediaLive.FEED, LiveFeed.of(
+            access -> access.hasPermission(HohenheimSources.MEDIA_MANAGE),
+            InstallMediaFetchModel.MODEL_ID));
+
+        HohenheimEndpoints.SERVERS_MEDIA_VIEW.setHandler(conduit -> {
+            Integer serverId = conduit.getParameter(HohenheimEndpoints.SERVER_ID);
+            Row server = Models.get(ServerModel.class).findById(serverId);
+            // The same refusal the tab gives a host that has no ISO pool: not found.
+            if (server == null || !ServerModel.isIncus(server)) {
+                conduit.notFound();
+                return null;
+            }
+            return new DryResult<>(ServerMediaPage.view(server));
+        });
 
         HohenheimEndpoints.SERVERS_MEDIA_FETCH.setHandler(conduit -> {
             Integer serverId = conduit.getParameter(HohenheimEndpoints.SERVER_ID);

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.routing.Endpoint;
@@ -14,6 +15,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -82,10 +84,6 @@ class StreamedDownloadTest extends HohenheimTestBase {
         assertThat(response.headers().firstValue("Cache-Control").orElse(""))
             .as("step 3: a dump is never cached").contains("no-store");
         // The close follows the last write, so it may land a moment after the client read it.
-        long deadline = System.nanoTime() + 5_000_000_000L;
-        while (!CLOSED.get() && System.nanoTime() < deadline) {
-            Thread.sleep(10);
-        }
-        assertThat(CLOSED.get()).as("step 3: the source was closed after serving").isTrue();
+        Poll.until("step 3: the source was closed after serving", Duration.ofSeconds(5), CLOSED::get);
     }
 }

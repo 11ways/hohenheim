@@ -19,17 +19,4 @@ public record AttentionItem(
         @Nullable Microcopy detail,
         @Nullable RouteTarget target
 ) {
-
-    /**
-     * The legacy string spelling of the severity.
-     *
-     * AIDEV-NOTE: kept so collectors still passing "error"/"warning"/"info" compile unchanged;
-     * new code passes an {@link AttentionSeverity} member. Remove once no caller spells a string.
-     *
-     * @throws IllegalArgumentException for a severity {@link AttentionSeverity#of} does not know
-     */
-    public AttentionItem(@NonNull String severity, String icon, Microcopy title,
-                         @Nullable Microcopy detail, @Nullable RouteTarget target) {
-        this(AttentionSeverity.of(severity), icon, title, detail, target);
-    }
 }

@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.host.PreflightStatus;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.PinnedImages;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.protoblast.common.Blast;
@@ -288,9 +289,10 @@ public final class HostPreflight {
         String name = "hohenheim-preflight-" + System.nanoTime();
         int expectedPids = ContainerHardening.pidsLimit();
         try {
-            docker.ensureImage("alpine", "latest");
+            // Pinned by digest: the verdict this probe feeds must not move with a floating tag.
+            docker.ensureImage(PinnedImages.ALPINE, null);
             docker.createContainer(name, Map.of(
-                "Image", "alpine:latest",
+                "Image", PinnedImages.ALPINE,
                 "Cmd", List.of("sleep", "60")), ContainerHardening.STRICT);
             docker.startContainer(name);
             DockerClient.ExecResult result = docker.exec(name, List.of("sh", "-c",

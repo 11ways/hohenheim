@@ -1,17 +1,16 @@
 {#- Install media tab on an Incus host: the ISO volumes of its managed pool, the
     stored state of the background URL fetches, a fetch-from-URL form and per-medium
-    delete forms. While a fetch runs the tab reloads itself (hh-refresh-after), so a
-    download's progress and its ending appear without the operator asking. -#}
+    delete forms. The media and the fetches are ONE live region (hh-install-media): it
+    re-reads itself whenever a fetch row changes, so a download's progress and its ending
+    appear without the operator asking and without a navigation touching the forms. -#}
 {% declare title: String %}
+{% declare serverId: Integer %}
 {% declare serverName: String %}
-{% declare media: List %}
-{% declare loadError: String = null %}
+{% declare view: InstallMediaView %}
 {% declare fetchTarget: RouteTarget %}
 {% declare deleteTarget: RouteTarget %}
 {% declare uploadUrl: String %}
 {% declare maxIsoGb: Long %}
-{% declare fetches: List %}
-{% declare refreshUrl: String = null %}
 {% declare recordTabs: List<RecordTabState> %}
 {% extend "zenitcms:shell" var:title=title %}
 
@@ -23,82 +22,7 @@
 
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
 
-    {% if loadError %}
-    <pl-alert variant="destructive">{{ t("load_error", scope: "server_media", reason: loadError) }}</pl-alert>
-    {% /if %}
-
-    {% if refreshUrl != null %}
-    <hh-refresh-after url={% refreshUrl %} delayMs={% 4000 %}></hh-refresh-after>
-    {% /if %}
-
-    {% if fetches %}
-    <pl-card id="media-fetches">
-        <pl-card-header>
-            <pl-card-title>{{ t("fetches_title", scope: "server_media") }}</pl-card-title>
-        </pl-card-header>
-        <pl-card-content>
-            <pl-table>
-                <pl-table-header><pl-table-row>
-                    <pl-table-head>{{ t("name", scope: "field") }}</pl-table-head>
-                    <pl-table-head>{{ t("fetch_state", scope: "server_media") }}</pl-table-head>
-                    <pl-table-head></pl-table-head>
-                </pl-table-row></pl-table-header>
-                <pl-table-body>
-                    {% each fetches as index, fetch %}
-                    <pl-table-row data-fetch-name={% fetch.get("name") %}>
-                        <pl-table-cell>{{ fetch.get("name") }}</pl-table-cell>
-                        <pl-table-cell>
-                            <pl-badge variant={% fetch.get("variant") %}>{{ fetch.get("state") }}</pl-badge>
-                        </pl-table-cell>
-                        <pl-table-cell>
-                            {% if fetch.get("percent") != null %}
-                            <pl-progress value={% fetch.get("percent") %} max={% 100 %}
-                                         ariaLabel={% t("fetch_progress", scope: "server_media", name: fetch.get("name")) %}></pl-progress>
-                            {% elseif fetch.get("active") == true %}
-                            <pl-progress indeterminate={% true %}
-                                         ariaLabel={% t("fetch_progress", scope: "server_media", name: fetch.get("name")) %}></pl-progress>
-                            {% elseif fetch.get("reason") != null %}
-                            <span class="hh-fetch-reason">{{ fetch.get("reason") }}</span>
-                            {% /if %}
-                        </pl-table-cell>
-                    </pl-table-row>
-                    {% /each %}
-                </pl-table-body>
-            </pl-table>
-        </pl-card-content>
-    </pl-card>
-    {% /if %}
-
-    {% if media %}
-    <pl-table id="media-table">
-        <pl-table-header><pl-table-row>
-            <pl-table-head>{{ t("name", scope: "field") }}</pl-table-head>
-            <pl-table-head>{{ t("description", scope: "field") }}</pl-table-head>
-            <pl-table-head></pl-table-head>
-        </pl-table-row></pl-table-header>
-        <pl-table-body>
-            {% each media as index, medium %}
-            <pl-table-row>
-                <pl-table-cell>{{ medium.get("name") }}</pl-table-cell>
-                <pl-table-cell>{{ medium.get("description") }}</pl-table-cell>
-                <pl-table-cell>
-                    <form use:Zenit.form={% deleteTarget %} use:CmsConfirm.destructive={% t("delete_confirm", scope: "server_media") %}>
-                        <input type="hidden" name="name" value={% medium.get("name") %}>
-                        <pl-button variant={% "destructive" %} type={% "submit" %} size="sm">{{ t("delete", scope: "server_media") }}</pl-button>
-                    </form>
-                </pl-table-cell>
-            </pl-table-row>
-            {% /each %}
-        </pl-table-body>
-    </pl-table>
-    {% else %}
-    {% if loadError == null %}
-    <pl-empty-state icon="compact-disc">
-        <pl-empty-state-title>{{ t("empty", scope: "server_media") }}</pl-empty-state-title>
-        <pl-empty-state-description>{{ t("empty_description", scope: "server_media") }}</pl-empty-state-description>
-    </pl-empty-state>
-    {% /if %}
-    {% /if %}
+    <hh-install-media serverId={% serverId %} view={% view %} deleteTarget={% deleteTarget %}></hh-install-media>
 
     {#- The UPLOAD lane: the file IS the request body (use:CmsUpload.to), so this form
         posts no multipart part -- an ISO cannot survive being buffered twice in heap.

@@ -57,11 +57,15 @@ class ApplicationPushPolicyTest {
     private static Integer savedProbeInterval;
     private static Integer savedDrain;
 
-    /** The panel's own action builders are protected; the panel is a subject here. */
-    private static final class ExposedInstanceResource extends InstanceResource {
-        @Override public RowAction<Row> deployAction() {
-            return super.deployAction();
+    /** One of the panel's own row actions, found by id the way the record page finds it. */
+    @SuppressWarnings("unchecked")
+    private static RowAction.Invoke<Row> panelAction(InstanceResource panel, String path) {
+        for (RowAction<Row> action : panel.rowActions()) {
+            if (path.equals(action.id().getPath())) {
+                return (RowAction.Invoke<Row>) action;
+            }
         }
+        throw new AssertionError("the instance panel offers no " + path);
     }
 
     @BeforeAll
@@ -216,8 +220,8 @@ class ApplicationPushPolicyTest {
             int applicationId = application("row-action-app");
             try {
                 // 1. The panel's OWN row action, invoked directly: no HTTP, no markup.
-                ExposedInstanceResource panel = new ExposedInstanceResource();
-                RowAction.Invoke<Row> deploy = (RowAction.Invoke<Row>) panel.deployAction();
+                InstanceResource panel = new InstanceResource();
+                RowAction.Invoke<Row> deploy = panelAction(panel, "deploy_instance");
                 Row row = Models.get(InstanceModel.class).findById(applicationId);
                 Accountability.runAs(operator("42"), () -> deploy.handler().apply(row,
                     ActionContext.of(AccessContext.anonymous())));

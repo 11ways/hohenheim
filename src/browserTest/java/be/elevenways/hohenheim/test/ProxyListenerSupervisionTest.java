@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.ServerMain;
-import be.elevenways.hohenheim.server.cms.AttentionCollector;
+import be.elevenways.hohenheim.server.cms.ProxyAttention;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.task.SuperviseProxyListeners;
@@ -133,12 +133,12 @@ class ProxyListenerSupervisionTest {
             ServerMain.adoptProxyServer(proxy);
             try {
                 List<AttentionItem> oldSurface = new ArrayList<>();
-                AttentionCollector.httpsUnavailableWithForceSsl(oldSurface);
+                ProxyAttention.httpsUnavailableWithForceSsl(oldSurface);
                 assertThat(oldSurface)
                     .as("step 2: the force_ssl-gated item stays silent without force_ssl sites")
                     .isEmpty();
                 List<AttentionItem> newSurface = new ArrayList<>();
-                AttentionCollector.failedProxyListeners(newSurface);
+                ProxyAttention.failedProxyListeners(newSurface);
                 assertThat(newSurface)
                     .as("step 2: the listener item fires on listener state alone")
                     .hasSize(1);
@@ -216,7 +216,7 @@ class ProxyListenerSupervisionTest {
         ServerMain.adoptProxyServer(proxy);
         try {
             List<AttentionItem> healed = new ArrayList<>();
-            AttentionCollector.failedProxyListeners(healed);
+            ProxyAttention.failedProxyListeners(healed);
             assertThat(healed).as("step 5: the attention item clears").isEmpty();
         } finally {
             ServerMain.adoptProxyServer(null);

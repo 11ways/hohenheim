@@ -1,0 +1,109 @@
+{% tag HhInstallMedia {
+    /* The live region of an Incus host's Install media tab: the stored fetches with their progress,
+       and the pool's media with their delete forms. The server render seeds the view; while the
+       element is connected it watches the install-media live feed, and every change re-reads the
+       SAME view (InstallMediaLive.read, the viewer's own gated request) into this element alone.
+       No navigation happens: no history entry, no scroll jump, and the fetch and upload forms
+       beside the region are never re-rendered under the operator's hands.
+       The watch belongs to the MOUNTED element (Live.watch registers its own teardown on the
+       element's disconnect), never to a render expression -- hydration revives values without
+       re-running lets, so a render-time watch would not exist after a hard load. */
+    public required serverId: Integer
+    public view: InstallMediaView = null
+    public deleteTarget: RouteTarget = null
+
+    style {
+        display: contents;
+    }
+
+    @mount
+    function connect() {
+        Live.watch(this, InstallMediaLive.feed(), () => { reread() })
+    }
+
+    function reread() {
+        let fresh = InstallMediaLive.read(serverId)
+        if fresh != null { view = fresh }
+    }
+
+    template {
+        {% each [view{:}] as shown %}
+        {% if shown != null %}
+
+        {% if shown.loadError %}
+        <pl-alert variant="destructive">{{ t("load_error", scope: "server_media", reason: shown.loadError) }}</pl-alert>
+        {% /if %}
+
+        {% if shown.fetches %}
+        <pl-card id="media-fetches">
+            <pl-card-header>
+                <pl-card-title>{{ t("fetches_title", scope: "server_media") }}</pl-card-title>
+            </pl-card-header>
+            <pl-card-content>
+                <pl-table>
+                    <pl-table-header><pl-table-row>
+                        <pl-table-head>{{ t("name", scope: "field") }}</pl-table-head>
+                        <pl-table-head>{{ t("fetch_state", scope: "server_media") }}</pl-table-head>
+                        <pl-table-head></pl-table-head>
+                    </pl-table-row></pl-table-header>
+                    <pl-table-body>
+                        {% each shown.fetches as fetch %}
+                        <pl-table-row data-fetch-name={% fetch.name %}>
+                            <pl-table-cell>{{ fetch.name }}</pl-table-cell>
+                            <pl-table-cell>
+                                <pl-badge variant={% fetch.variant %}>{{ fetch.state }}</pl-badge>
+                            </pl-table-cell>
+                            <pl-table-cell>
+                                {% if fetch.percent != null %}
+                                <pl-progress value={% fetch.percent %} max={% 100 %}
+                                             ariaLabel={% t("fetch_progress", scope: "server_media", name: fetch.name) %}></pl-progress>
+                                {% elseif fetch.active %}
+                                <pl-progress indeterminate={% true %}
+                                             ariaLabel={% t("fetch_progress", scope: "server_media", name: fetch.name) %}></pl-progress>
+                                {% elseif fetch.reason != null %}
+                                <span class="hh-fetch-reason">{{ fetch.reason }}</span>
+                                {% /if %}
+                            </pl-table-cell>
+                        </pl-table-row>
+                        {% /each %}
+                    </pl-table-body>
+                </pl-table>
+            </pl-card-content>
+        </pl-card>
+        {% /if %}
+
+        {% if shown.media %}
+        <pl-table id="media-table">
+            <pl-table-header><pl-table-row>
+                <pl-table-head>{{ t("name", scope: "field") }}</pl-table-head>
+                <pl-table-head>{{ t("description", scope: "field") }}</pl-table-head>
+                <pl-table-head></pl-table-head>
+            </pl-table-row></pl-table-header>
+            <pl-table-body>
+                {% each shown.media as medium %}
+                <pl-table-row data-medium-name={% medium.name %}>
+                    <pl-table-cell>{{ medium.name }}</pl-table-cell>
+                    <pl-table-cell>{{ medium.description }}</pl-table-cell>
+                    <pl-table-cell>
+                        <form use:Zenit.form={% deleteTarget %} use:CmsConfirm.destructive={% t("delete_confirm", scope: "server_media") %}>
+                            <input type="hidden" name="name" value={% medium.name %}>
+                            <pl-button variant={% "destructive" %} type={% "submit" %} size="sm">{{ t("delete", scope: "server_media") }}</pl-button>
+                        </form>
+                    </pl-table-cell>
+                </pl-table-row>
+                {% /each %}
+            </pl-table-body>
+        </pl-table>
+        {% else %}
+        {% if shown.loadError == null %}
+        <pl-empty-state icon="compact-disc">
+            <pl-empty-state-title>{{ t("empty", scope: "server_media") }}</pl-empty-state-title>
+            <pl-empty-state-description>{{ t("empty_description", scope: "server_media") }}</pl-empty-state-description>
+        </pl-empty-state>
+        {% /if %}
+        {% /if %}
+
+        {% /if %}
+        {% /each %}
+    }
+} %}

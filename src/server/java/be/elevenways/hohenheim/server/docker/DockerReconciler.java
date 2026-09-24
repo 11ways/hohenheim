@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.AttentionItem;
+import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.HostMode;
@@ -634,7 +635,7 @@ public final class DockerReconciler {
                 .withArg("count", names.size())
                 .withArg("names", listed);
             // No destination: a reconciler finding names a HOST, not a record page.
-            items.add(new AttentionItem("warning", "cubes", title, detail, null));
+            items.add(new AttentionItem(AttentionSeverity.WARNING, "cubes", title, detail, null));
         });
     }
 }

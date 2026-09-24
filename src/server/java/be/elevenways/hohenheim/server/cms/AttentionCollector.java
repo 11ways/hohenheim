@@ -1,51 +1,36 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.AttentionItem;
-import be.elevenways.hohenheim.model.CertificateModel;
-import be.elevenways.hohenheim.model.DatabaseEngineModel;
-import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.InstanceDatabaseModel;
-import be.elevenways.hohenheim.model.ReleaseOperationModel;
-import be.elevenways.hohenheim.model.InstanceBackupModel;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.PortAllocationModel;
-import be.elevenways.hohenheim.model.ReconcileFindingModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.HohenheimRoles;
-import be.elevenways.hohenheim.server.HohenheimRoles.Role;
-import be.elevenways.hohenheim.server.ServerMain;
-import be.elevenways.hohenheim.server.docker.DockerHealth;
-import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.hohenheim.server.docker.DockerReconciler;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.dns.DelegationVerdict;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
-import be.elevenways.hohenheim.server.dns.DnsSecondaryFreshness;
-import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
-import be.elevenways.hohenheim.server.dns.DnsZoneStore;
+import be.elevenways.hohenheim.model.InstanceDatabaseModel;
+import be.elevenways.hohenheim.model.ReconcileFindingModel;
+import be.elevenways.hohenheim.model.ReleaseOperationModel;
+import be.elevenways.hohenheim.server.HohenheimRoles.Role;
+import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.server.database.DatabaseService;
-import be.elevenways.hohenheim.server.instance.ApplicationKind;
-import be.elevenways.hohenheim.server.database.ManagedDatabase;
-import be.elevenways.hohenheim.server.sitetype.SiteHealth;
-import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
+import be.elevenways.hohenheim.server.docker.DockerHealth;
+import be.elevenways.hohenheim.server.docker.DockerReconciler;
+import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.security.SshAuthWatcher;
-import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.server.task.BackupControlPlane;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.rules.Rule;
 import be.elevenways.zenit.common.orm.query.rules.RuleGroup;
 import be.elevenways.zenit.common.orm.query.rules.RuleOperator;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.server.page.SettingsPage;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.rules.RuleText;
-import be.elevenways.hohenheim.server.task.BackupControlPlane;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.task.TaskCatalog;
@@ -53,8 +38,6 @@ import be.elevenways.zenit.common.task.TaskDescriptor;
 import be.elevenways.zenit.common.task.TaskStatus;
 import be.elevenways.zenit.common.task.orm.SystemTaskHistoryModel;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
-import org.xbill.DNS.Type;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -63,12 +46,20 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static be.elevenways.hohenheim.server.cms.AttentionItems.copy;
+import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
+
 /**
- * Gathers the dashboard attention items: certificates in error, sites whose
- * live handler reports DOWN/DEGRADED, failed managed databases, git sites
- * whose LATEST deploy failed, and scheduled tasks whose latest run failed.
- * Server reachability is deliberately NOT probed here (it would SSH/dial
- * every host per dashboard render); the Servers list owns that.
+ * THE entry point of the dashboard attention items: gates each role's collector on the role
+ * that runs what it watches, and owns the role-free ones (task runs, the control-plane backup)
+ * and the foreign-resource row.
+ *
+ * AIDEV-NOTE: NOTHING reached from here dials a daemon or a host. Every projection reads
+ * stored rows, a boot probe's recorded answer or in-memory runtime state, so rendering the
+ * dashboard costs queries and never an SSH/HTTPS round trip per workload; reachability and
+ * liveness are observed by their own scheduled sweeps (InstanceStatusReconciler, the host
+ * probe) and read back here. The per-role collectors are ProxyAttention, DatabaseAttention,
+ * HostAttention, InstanceAttention, DnsAttention and FirewallAttention.
  *
  * @author Jelle De Loecker
  * @since 0.2.0
@@ -79,7 +70,7 @@ public final class AttentionCollector {
      * Every attention item points into the OPERATOR panel: this widget is an
      * installation-health surface, so its links keep the panel slug they always had.
      */
-    private static final String ADMIN = "admin";
+    private static final String ADMIN = HohenheimSlugs.ADMIN;
 
     private AttentionCollector() {}
 
@@ -92,18 +83,19 @@ public final class AttentionCollector {
     public static @NonNull List<AttentionItem> collect() {
         List<AttentionItem> items = new ArrayList<>();
         if (HohenheimRoles.enabled(Role.PROXY)) {
-            errorCertificates(items);
-            failedProxyListeners(items);
-            httpsUnavailableWithForceSsl(items);
-            unhealthySites(items);
-            failedDeployments(items);
+            ProxyAttention.errorCertificates(items);
+            ProxyAttention.failedProxyListeners(items);
+            ProxyAttention.httpsUnavailableWithForceSsl(items);
+            ProxyAttention.unhealthySites(items);
+            ProxyAttention.routingProblems(items);
+            InstanceAttention.failedDeployments(items);
         }
         if (HohenheimRoles.enabled(Role.DATABASES)) {
-            failedDatabases(items);
-            unavailableAttachedDatabases(items);
+            DatabaseAttention.failedDatabases(items);
+            DatabaseAttention.unavailableAttachedDatabases(items);
         }
         if (HohenheimRoles.dockerRequired()) {
-            AttentionItem daemon = dockerUnreachable(DockerHealth.instance());
+            AttentionItem daemon = HostAttention.dockerUnreachable(DockerHealth.instance());
             if (daemon != null) {
                 items.add(daemon);
             }
@@ -119,28 +111,29 @@ public final class AttentionCollector {
             // link 404s and which no enabled role could ever act on.
             items.addAll(DockerReconciler.attentionItems());
             dockerForeignResources(items);
-            stuckReleasingPorts(items, Now.instant().minus(RELEASING_STUCK_AFTER));
+            HostAttention.stuckReleasingPorts(items,
+                Now.instant().minus(HostAttention.RELEASING_STUCK_AFTER));
         }
         failedTasks(items);
         controlPlaneBackupDestination(items);
         if (HohenheimRoles.enabled(Role.DNS)) {
-            dnsIssues(items);
+            DnsAttention.dnsIssues(items);
         }
         if (HohenheimRoles.enabled(Role.FIREWALL)) {
-            spamserviceIssue(items);
-            AttentionItem sshWatch = sshWatchIssue(SshAuthWatcher.INSTANCE.snapshot());
+            FirewallAttention.spamserviceIssue(items);
+            AttentionItem sshWatch = FirewallAttention.sshWatchIssue(SshAuthWatcher.INSTANCE.snapshot());
             if (sshWatch != null) {
                 items.add(sshWatch);
             }
         }
         if (HohenheimRoles.hostWorkloadsEnabled()) {
-            hostsNotAdmitted(items);
+            HostAttention.hostsNotAdmitted(items);
         }
         if (HohenheimRoles.enabled(Role.INSTANCES)) {
-            crashedInstances(items);
-            failedInstanceBackups(items);
-            staleInstanceBackups(items);
-            instancesLowOnDisk(items);
+            InstanceAttention.crashedInstances(items);
+            InstanceAttention.failedInstanceBackups(items);
+            InstanceAttention.staleInstanceBackups(items);
+            InstanceAttention.instancesLowOnDisk(items);
         }
         return items;
     }
@@ -160,7 +153,7 @@ public final class AttentionCollector {
                 .all()) {
             countByServer.merge(row.get(ReconcileFindingModel.SERVER_NAME), 1, Integer::sum);
         }
-        countByServer.forEach((server, count) -> items.add(item("info", "cubes",
+        countByServer.forEach((server, count) -> items.add(item(AttentionSeverity.INFO, "cubes",
             copy("docker_foreign", "attention_title", "server", server),
             copy("docker_foreign", "attention_detail",
                 "count", count, "page", ReconcileFindingResource.LABEL),
@@ -204,219 +197,6 @@ public final class AttentionCollector {
     }
 
     /**
-     * Enrolled hosts that are not admitted for placement.
-     *
-     * AIDEV-NOTE: this list used to say "All clear" directly beneath the onboarding card
-     * naming a host the deploy lane would refuse -- the checklist watched admission and
-     * this collector did not, so the dashboard contradicted itself on one screen. Gated
-     * on the same roles that put the Servers list in the panel, so the link always exists.
-     * CORDONED is deliberately absent: an operator drained that host on purpose, and a
-     * permanent warning over a deliberate state is how a warning stops being read.
-     */
-    public static void hostsNotAdmitted(List<AttentionItem> items) {
-        for (Row server : Models.get(ServerModel.class).find()
-                .where(ServerModel.ADMISSION.eq(ServerModel.ADMISSION_BLOCKED))
-                .all()) {
-            items.add(item("warning", "server",
-                copy("host_not_admitted", "attention_title",
-                    "name", server.get(ServerModel.NAME)),
-                copy("host_not_admitted", "attention_detail"),
-                CmsRoutes.detail(ADMIN, "servers", server.get(ServerModel.ID))));
-        }
-    }
-
-    // AIDEV-NOTE: the three instance collectors are PUBLIC for the same reason
-    // stuckReleasingPorts is -- a test proves each projection directly, positive and
-    // negative, instead of asserting against whatever the whole dashboard happens to hold.
-
-    /**
-     * Instances the runtime gave up on: the status CRASH DETECTION already stamped
-     * (an unobserved exit under crash policy none, or a crash loop that tripped flap
-     * protection). A stored fact, deliberately -- asking every daemon whether each
-     * workload is alive is what the class-level rule about per-render probes forbids.
-     */
-    public static void crashedInstances(List<AttentionItem> items) {
-        for (Row instance : Models.get(InstanceModel.class).find()
-                .where(InstanceModel.DELETED_AT.isNull())
-                .where(InstanceModel.STATUS.eq(InstanceModel.STATUS_ERROR))
-                .all()) {
-            items.add(item("error", "box",
-                copy("instance_crashed", "attention_title",
-                    "name", instance.get(InstanceModel.NAME)),
-                copy("instance_crashed", "attention_detail"),
-                CmsRoutes.subpage(ADMIN, "instances", instance.get(InstanceModel.ID), "console")));
-        }
-    }
-
-    /**
-     * Instances whose LATEST backup failed -- the failedDeployments shape: only the most
-     * recent attempt per instance speaks, so one old failure followed by successes is not
-     * an alarm and a currently-failing schedule is.
-     */
-    public static void failedInstanceBackups(List<AttentionItem> items) {
-        var backups = Models.get(InstanceBackupModel.class);
-        for (Row instance : Models.get(InstanceModel.class).find()
-                .where(InstanceModel.DELETED_AT.isNull())
-                .all()) {
-            Integer id = instance.get(InstanceModel.ID);
-            if (id == null) {
-                continue;
-            }
-            Row latest = backups.find()
-                .where(InstanceBackupModel.INSTANCE_ID.eq(id))
-                .orderBy(InstanceBackupModel.ID, SortOrder.DESC)
-                .first();
-            if (latest == null || !InstanceBackupModel.STATUS_FAILED
-                    .equals(latest.get(InstanceBackupModel.STATUS))) {
-                continue;
-            }
-            items.add(item("error", "box-archive",
-                copy("instance_backup", "attention_title",
-                    "name", instance.get(InstanceModel.NAME)),
-                literal(latest.get(InstanceBackupModel.ERROR)),
-                CmsRoutes.subpage(ADMIN, "instances", id, "backups")));
-        }
-    }
-
-    /**
-     * Instances whose backup signal has degraded to SILENCE: a backup target is declared
-     * on the record (the operator's statement that this instance is supposed to be backed
-     * up) but no COMPLETE backup exists, or the newest one is older than
-     * {@code backup.stale_after_days}. The latest-FAILED collector above answers "is it
-     * failing right now"; this one answers the question that collector structurally
-     * cannot -- "when did it last SUCCEED" -- so an instance never backed up, or failing
-     * so long its failures predate its rows, stops reading as green. Both may fire for
-     * one instance (failing nightly AND stale); that is escalation, not duplication.
-     */
-    public static void staleInstanceBackups(List<AttentionItem> items) {
-        Integer days = HohenheimSettings.VALUES.getValue(
-            HohenheimSettings.Backup.STALE_AFTER_DAYS);
-        if (days == null || days <= 0) {
-            return;
-        }
-        Instant threshold = Now.instant().minus(Duration.ofDays(days));
-        var backups = Models.get(InstanceBackupModel.class);
-        for (Row instance : Models.get(InstanceModel.class).find()
-                .where(InstanceModel.DELETED_AT.isNull())
-                .where(InstanceModel.BACKUP_TARGET_ID.isNotNull())
-                .all()) {
-            Integer id = instance.get(InstanceModel.ID);
-            if (id == null) {
-                continue;
-            }
-            Row newestComplete = backups.find()
-                .where(InstanceBackupModel.INSTANCE_ID.eq(id))
-                .where(InstanceBackupModel.STATUS.eq(InstanceBackupModel.STATUS_COMPLETE))
-                .orderBy(InstanceBackupModel.ID, SortOrder.DESC)
-                .first();
-            if (newestComplete == null) {
-                items.add(item("warning", "box-archive",
-                    copy("instance_backup_never", "attention_title",
-                        "name", instance.get(InstanceModel.NAME)),
-                    copy("instance_backup_never", "attention_detail"),
-                    CmsRoutes.subpage(ADMIN, "instances", id, "backups")));
-                continue;
-            }
-            Instant completedAt = newestComplete.get(InstanceBackupModel.CREATED_AT);
-            if (completedAt == null || completedAt.isBefore(threshold)) {
-                long age = completedAt == null
-                    ? -1 : Duration.between(completedAt, Now.instant()).toDays();
-                items.add(item("warning", "box-archive",
-                    copy("instance_backup_stale", "attention_title",
-                        "name", instance.get(InstanceModel.NAME)),
-                    copy("instance_backup_stale", "attention_detail", "days", age),
-                    CmsRoutes.subpage(ADMIN, "instances", id, "backups")));
-            }
-        }
-    }
-
-    /** Above this fraction of an ENFORCED root-disk ceiling an instance needs attention. */
-    private static final double DISK_HIGH = 0.85;
-
-    /** ... and above this it is about to break rather than merely worth watching. */
-    private static final double DISK_CRITICAL = 0.95;
-
-    /**
-     * Instances close to filling their root disk, from the STORED observation
-     * ({@code ObserveInstanceDisk}).
-     *
-     * AIDEV-NOTE: a null observation is silence, never zero, and a zero LIMIT is silence
-     * too. Both mean "nothing is rationing this disk, or nothing measured it" -- Docker's
-     * whole tier is in that state by design, because it enforces no root quota at all. An
-     * item here therefore always names a real ceiling a real number is approaching.
-     */
-    public static void instancesLowOnDisk(List<AttentionItem> items) {
-        for (Row instance : Models.get(InstanceModel.class).find()
-                .where(InstanceModel.DELETED_AT.isNull())
-                .where(InstanceModel.DISK_OBSERVED_AT.isNotNull())
-                .all()) {
-            Long used = instance.get(InstanceModel.DISK_USED_BYTES);
-            Long limit = instance.get(InstanceModel.DISK_LIMIT_BYTES);
-            if (used == null || limit == null || limit <= 0) {
-                continue;
-            }
-            double fraction = (double) used / limit;
-            if (fraction < DISK_HIGH) {
-                continue;
-            }
-            items.add(item(fraction >= DISK_CRITICAL ? "error" : "warning", "hard-drive",
-                copy("instance_disk", "attention_title",
-                    "name", instance.get(InstanceModel.NAME)),
-                copy("instance_disk", "attention_detail",
-                    "percent", Math.round(fraction * 100),
-                    "limit", Math.round(limit / (1024.0 * 1024 * 1024))),
-                CmsRoutes.detail(ADMIN, "instances", instance.get(InstanceModel.ID))));
-        }
-    }
-
-    /** How long a claim may sit in {@code releasing} before it is an alarm: two hourly
-     *  reconciler sweeps should have observed and freed it by then. */
-    private static final Duration RELEASING_STUCK_AFTER = Duration.ofHours(2);
-
-    /**
-     * Port claims stuck in {@code releasing} past the age threshold -- the ledger's
-     * never-cleared alarm. A row lands there when a teardown could not verify itself
-     * (or a host was removed); the reconciler deletes it once it OBSERVES the port
-     * free, so one that lingers means the port is genuinely still bound by something
-     * we no longer manage, or the host is unobservable. The flip time is updated_at:
-     * releasing rows are never re-saved (the park is idempotent). The threshold is a
-     * parameter only so a test can prove the projection without forging timestamps.
-     */
-    public static void stuckReleasingPorts(List<AttentionItem> items, Instant threshold) {
-        Map<String, List<String>> stuckByServer = new LinkedHashMap<>();
-        List<Row> releasing = Models.get(PortAllocationModel.class).find()
-            .where(PortAllocationModel.STATUS.eq(PortAllocationModel.STATUS_RELEASING))
-            .all();
-        for (Row claim : releasing) {
-            Instant parkedAt = claim.get(PortAllocationModel.UPDATED_AT);
-            if (parkedAt == null || parkedAt.isAfter(threshold)) {
-                continue;
-            }
-            stuckByServer.computeIfAbsent(serverNameOf(claim.get(PortAllocationModel.SERVER_ID)),
-                    k -> new ArrayList<>())
-                .add(claim.get(PortAllocationModel.PORT) + "/"
-                    + claim.get(PortAllocationModel.PROTOCOL));
-        }
-        stuckByServer.forEach((server, ports) -> items.add(item("warning", "ethernet",
-            copy("ports_releasing", "attention_title", "server", server),
-            copy("ports_releasing", "attention_detail",
-                "count", ports.size(),
-                "hours", RELEASING_STUCK_AFTER.toHours(),
-                "ports", String.join(", ", ports)),
-            null)));
-    }
-
-    // A releasing claim can outlive its servers row (host removal parks claims and
-    // deletes nothing), so a dangling id must still render, not throw.
-    private static String serverNameOf(@Nullable Integer serverId) {
-        try {
-            return ServerModel.nameOf(serverId);
-        } catch (IllegalArgumentException gone) {
-            return "removed host #" + serverId;
-        }
-    }
-
-    /**
      * No off-host destination for the control-plane recovery archive.
      *
      * Role-FREE, like the task itself: every node has a control-plane database. Surfaced here
@@ -425,10 +205,10 @@ public final class AttentionCollector {
      */
     public static void controlPlaneBackupDestination(List<AttentionItem> items) {
         if (ControlPlaneBackups.configuredDestinationName() == null) {
-            items.add(item("error", "box-archive",
+            items.add(item(AttentionSeverity.ERROR, "box-archive",
                 copy("control_plane_backup", "attention_title"),
                 copy("control_plane_backup", "attention_detail"),
-                CmsRoutes.list(ADMIN, "settings")));
+                CmsRoutes.list(ADMIN, SettingsPage.DEFAULT_SLUG)));
             return;
         }
         controlPlaneBackupFreshness(items);
@@ -463,421 +243,11 @@ public final class AttentionCollector {
             ? newestSuccess.get(SystemTaskHistoryModel.STARTED_AT) : null;
         if (successAt == null
                 || successAt.isBefore(Now.instant().minus(CONTROL_PLANE_BACKUP_STALE_AFTER))) {
-            items.add(item("error", "box-archive",
+            items.add(item(AttentionSeverity.ERROR, "box-archive",
                 copy("control_plane_backup_stale", "attention_title"),
                 copy("control_plane_backup_stale", "attention_detail",
                     "hours", CONTROL_PLANE_BACKUP_STALE_AFTER.toHours()),
-                CmsRoutes.list(ADMIN, "settings")));
-        }
-    }
-
-    /**
-     * A docker-requiring node whose probe found no daemon: a red item, not silence.
-     *
-     * @param health the probe to read, injectable so the decision is testable without a daemon
-     * @return the item, or null when the daemon answered or no role needed it
-     */
-    public static @Nullable AttentionItem dockerUnreachable(@NonNull DockerHealth health) {
-        if (health.status() != DockerHealth.Status.UNREACHABLE) {
-            return null;
-        }
-        return item("error", "cubes",
-            copy("docker_unreachable", "attention_title"),
-            literal(health.problem()),
-            CmsRoutes.list(ADMIN, "settings"));
-    }
-
-    /** Surfaces an enabled managed Spamservice that is not currently ready. */
-    private static void spamserviceIssue(List<AttentionItem> items) {
-        AttentionItem issue = spamserviceIssue(SpamserviceManager.get().snapshot());
-        if (issue != null) {
-            items.add(issue);
-        }
-    }
-
-    /**
-     * The decision behind the spamservice item, on a snapshot so it is testable.
-     * An unconfigured or deliberately disabled service is a CHOICE, never a warning;
-     * only an enabled one that is not ready gets an item, and that item explains
-     * itself (the last error when there is one, else a localized state sentence)
-     * and links to the settings mount where the service is administered.
-     */
-    static @Nullable AttentionItem spamserviceIssue(SpamserviceManager.Snapshot snapshot) {
-        if (!snapshot.configured() || !snapshot.enabled() || "ready".equals(snapshot.state())) {
-            return null;
-        }
-        Microcopy detail = snapshot.lastError() != null
-            ? literal(snapshot.lastError())
-            : copy("spamservice_not_ready", "attention_detail", "state", snapshot.state());
-        return item("warning", "shield",
-            copy("not_ready", "spamservice"), detail,
-            CmsRoutes.list(ADMIN, "settings"));
-    }
-
-    /**
-     * The SSH watcher's own health, on a snapshot so it is testable.
-     *
-     * AIDEV-NOTE: a watcher that cannot read the journal bans NOBODY while every surface
-     * still says SSH watching is on -- the silent-success shape. It reports itself here
-     * (and once in the log) instead. An install that never asked for it is a CHOICE and
-     * gets no row, exactly like the spamservice item beside it.
-     */
-    public static @Nullable AttentionItem sshWatchIssue(SshAuthWatcher.Snapshot snapshot) {
-        if (!snapshot.configured()) {
-            return null;
-        }
-        if (snapshot.running() && snapshot.lastError() == null) {
-            return null;
-        }
-        Microcopy detail = snapshot.lastError() != null
-            ? literal(snapshot.lastError())
-            : copy("ssh_watch", "attention_detail");
-        return item("warning", "shield",
-            copy("ssh_watch", "attention_title"), detail,
-            CmsRoutes.list(ADMIN, "settings"));
-    }
-
-    /** DNS listeners that failed to bind, and enabled zones a resolver cannot delegate to. */
-    private static void dnsIssues(List<AttentionItem> items) {
-        Boolean enabled = HohenheimSettings.VALUES.getValue(HohenheimSettings.Dns.ENABLED);
-        var dnsServer = ServerMain.getDnsServer();
-        if (Boolean.TRUE.equals(enabled) && (dnsServer == null || !dnsServer.isRunning())) {
-            String reason = dnsServer != null ? dnsServer.getStartupError() : null;
-            items.add(item("error", "sitemap",
-                copy("dns_listener", "attention_title"),
-                literal(reason),
-                CmsRoutes.list(ADMIN, "settings")));
-        }
-        for (DnsZoneSnapshot zone : DnsZoneStore.INSTANCE.zones()) {
-            if (zone.getRrset(zone.getOrigin(), Type.NS) == null) {
-                items.add(item("warning", "sitemap",
-                    copy("dns_zone_no_ns", "attention_title", "origin", zone.getOriginString()),
-                    copy("dns_zone_no_ns", "attention_detail"),
-                    CmsRoutes.subpage(ADMIN, "dns-zones", zone.getZoneId(), "records")));
-            }
-        }
-        staleDnsSecondaries(items);
-        brokenDnsDelegations(items);
-    }
-
-    /**
-     * A linked secondary that has served an old serial, or nothing, for longer than the
-     * stale window -- read off the link rows the probe task writes, never probed here.
-     * Public so a test can prove the projection directly.
-     */
-    public static void staleDnsSecondaries(List<AttentionItem> items) {
-        DnsZoneModel zones = Models.get(DnsZoneModel.class);
-        DnsPeerModel peers = Models.get(DnsPeerModel.class);
-        for (Row link : Models.get(DnsZonePeerModel.class).find().all()) {
-            if (!DnsSecondaryFreshness.isStale(link)) {
-                continue;
-            }
-            Integer zoneId = link.get(DnsZonePeerModel.ZONE_ID);
-            Integer peerId = link.get(DnsZonePeerModel.PEER_ID);
-            Row zone = zoneId != null ? zones.findById(zoneId) : null;
-            Row peer = peerId != null ? peers.findById(peerId) : null;
-            if (zone == null || !Boolean.TRUE.equals(zone.get(DnsZoneModel.ENABLED))) {
-                continue;
-            }
-            String error = link.get(DnsZonePeerModel.PROBE_ERROR);
-            Integer served = link.get(DnsZonePeerModel.SERVED_SERIAL);
-            Microcopy detail = error != null
-                ? literal(error)
-                : copy("dns_secondary_stale", "attention_detail",
-                    "served", served != null ? served : 0,
-                    "serial", zone.get(DnsZoneModel.SERIAL) != null ? zone.get(DnsZoneModel.SERIAL) : 0);
-            items.add(item("warning", "handshake",
-                copy("dns_secondary_stale", "attention_title",
-                    "peer", peer != null ? String.valueOf(peer.get(DnsPeerModel.NAME)) : "#" + peerId,
-                    "origin", String.valueOf(zone.get(DnsZoneModel.ORIGIN))),
-                detail,
-                CmsRoutes.subpage(ADMIN, "dns-zones", zoneId, "secondaries")));
-        }
-    }
-
-    /**
-     * A primary zone whose last delegation check ended in a verdict that carries a
-     * severity; the verdict's own label is the detail. Public so a test can prove it.
-     */
-    public static void brokenDnsDelegations(List<AttentionItem> items) {
-        for (Row zone : Models.get(DnsZoneModel.class).findEnabled()) {
-            DelegationVerdict verdict = DelegationVerdict.forToken(zone.get(DnsZoneModel.DELEGATION_STATUS));
-            if (verdict == null || verdict.severity() == null) {
-                continue;
-            }
-            items.add(item(verdict.severity(), verdict.icon(),
-                copy("dns_delegation_broken", "attention_title",
-                    "origin", String.valueOf(zone.get(DnsZoneModel.ORIGIN))),
-                verdict.label(),
-                CmsRoutes.detail(ADMIN, "dns-zones", zone.get(DnsZoneModel.ID))));
-        }
-    }
-
-    /**
-     * A dead or degraded proxy listener, REGARDLESS of force_ssl population. The Aug 04
-     * 2026 port-443 outage stayed invisible for six days partly because the only listener
-     * attention item required force_ssl sites; this one fires on listener state alone.
-     * The force-SSL twin below stays because it names the affected sites.
-     * Public so a test can prove the projection directly, like the instance collectors.
-     */
-    public static void failedProxyListeners(List<AttentionItem> items) {
-        var proxy = ServerMain.getProxyServer();
-        if (proxy == null) return;
-        if (proxy.getHttpState() == ProxyServer.State.FAILED) {
-            items.add(item("error", "sitemap",
-                copy("proxy_http_listener", "attention_title"),
-                literal(proxy.getHttpFailureReason()),
-                CmsRoutes.list(ADMIN, "settings")));
-        }
-        if (proxy.getHttpsState() == ProxyServer.State.FAILED) {
-            items.add(item("error", "certificate",
-                copy("proxy_https_listener", "attention_title"),
-                literal(proxy.getHttpsFailureReason()),
-                CmsRoutes.list(ADMIN, "certificates")));
-        } else if (proxy.getHttpsState() == ProxyServer.State.RUNNING
-                && proxy.getHttpsFailureReason() != null) {
-            // Partial mode: passthrough listens but termination failed, so the listener
-            // reads healthy while every force_ssl vhost answers 503.
-            items.add(item("error", "certificate",
-                copy("proxy_https_degraded", "attention_title"),
-                literal(proxy.getHttpsFailureReason()),
-                CmsRoutes.list(ADMIN, "certificates")));
-        }
-    }
-
-    /**
-     * HTTPS termination is down while force-SSL routes exist: those sites answer plain
-     * HTTP with a 503 (the fail-closed force_ssl gate in SiteDispatcher), so the operator
-     * must SEE the inert control instead of a checkbox that silently stopped mattering.
-     * Public so a test can prove the projection directly, like the instance collectors.
-     */
-    public static void httpsUnavailableWithForceSsl(List<AttentionItem> items) {
-        var proxy = ServerMain.getProxyServer();
-        if (proxy == null || proxy.isHttpsTerminationAvailable()
-                || proxy.getHttpState() != ProxyServer.State.RUNNING) {
-            return;
-        }
-        List<String> sites = proxy.getDispatcher().forceSslSiteNames();
-        boolean globalForce = Boolean.TRUE.equals(
-            HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
-        boolean anyRoutes = proxy.getDispatcher().getExactRouteCount()
-            + proxy.getDispatcher().getWildcardRouteCount()
-            + proxy.getDispatcher().getRegexRouteCount() > 0;
-        if (sites.isEmpty() && !(globalForce && anyRoutes)) {
-            return;
-        }
-        items.add(item("error", "certificate",
-            copy("https_unavailable", "attention_title"),
-            copy("https_unavailable", "attention_detail",
-                "sites", sites.isEmpty() ? "-" : String.join(", ", sites)),
-            CmsRoutes.list(ADMIN, "certificates")));
-    }
-
-    /**
-     * Certificates whose last renewal failed, linked to their detail page.
-     *
-     * PUBLIC for the reason the note above gives: a test proves this projection directly,
-     * positive and negative, instead of loading the whole dashboard twice to watch an item
-     * appear and then disappear.
-     */
-    public static void errorCertificates(List<AttentionItem> items) {
-        List<Row> rows = Models.get(CertificateModel.class).find()
-            .where(CertificateModel.STATUS.eq(CertificateModel.STATUS_ERROR))
-            .all();
-        for (Row row : rows) {
-            items.add(item("error", "certificate",
-                copy("certificate", "attention_title", "name", row.get(CertificateModel.NICE_NAME)),
-                literal(row.get(CertificateModel.RENEWAL_ERROR)),
-                CmsRoutes.detail(ADMIN, "certificates", row.get(CertificateModel.ID))));
-        }
-    }
-
-    private static void unhealthySites(List<AttentionItem> items) {
-        var proxy = ServerMain.getProxyServer();
-        if (proxy == null) {
-            return;
-        }
-        List<Row> sites = Models.get(SiteModel.class).find()
-            .where(SiteModel.ENABLED.eq(true))
-            .where(SiteModel.DELETED_AT.isNull())
-            .all();
-        for (Row site : sites) {
-            Integer siteId = site.get(SiteModel.ID);
-            if (siteId == null) {
-                continue;
-            }
-            SiteRequestHandler handler = proxy.getDispatcher().findHandlerBySiteId(siteId);
-            SiteHealth health = handler != null ? handler.getHealth() : null;
-            if (health == SiteHealth.DOWN || health == SiteHealth.DEGRADED) {
-                items.add(item(health == SiteHealth.DOWN ? "error" : "warning", "globe",
-                    copy("site", "attention_title", "name", site.get(SiteModel.NAME)),
-                    copy(health == SiteHealth.DOWN ? "down" : "degraded", "attention_detail"),
-                    CmsRoutes.detail(ADMIN, "sites", siteId)));
-            }
-        }
-    }
-
-    private static void failedDatabases(List<AttentionItem> items) {
-        List<Row> rows = Models.get(DatabaseModel.class).find()
-            .where(DatabaseModel.STATUS.eq(DatabaseModel.STATUS_FAILED))
-            .all();
-        for (Row row : rows) {
-            String reason = row.get(DatabaseModel.FAILURE_REASON);
-            items.add(item("error", "database",
-                copy("database", "attention_title", "name", row.get(DatabaseModel.NAME)),
-                reason == null || reason.isBlank()
-                    ? copy("provisioning_failed", "attention_detail")
-                    : copy("provisioning_failed_reason", "attention_detail", "reason", reason),
-                CmsRoutes.detail(ADMIN, "databases", row.get(DatabaseModel.ID))));
-        }
-        // An ACTIVE record carrying a reason is the one shape a status alone cannot show:
-        // a failed move rolled the record back onto its untouched dedicated engine and
-        // stamped WHY there, so without this the operator learns nothing happened only by
-        // opening the record.
-        for (Row row : Models.get(DatabaseModel.class).find()
-                .where(DatabaseModel.STATUS.eq(DatabaseModel.STATUS_ACTIVE))
-                .where(DatabaseModel.FAILURE_REASON.isNotNull())
-                .all()) {
-            String reason = row.get(DatabaseModel.FAILURE_REASON);
-            if (reason == null || reason.isBlank()) {
-                continue;
-            }
-            items.add(item("warning", "database",
-                copy("database", "attention_title", "name", row.get(DatabaseModel.NAME)),
-                copy("database_operation_failed", "attention_detail", "reason", reason),
-                CmsRoutes.detail(ADMIN, "databases", row.get(DatabaseModel.ID))));
-        }
-        failedDatabaseEngines(items);
-    }
-
-    /** A shared engine that could not be brought up serves every database on it nothing. */
-    private static void failedDatabaseEngines(List<AttentionItem> items) {
-        for (Row row : Models.get(DatabaseEngineModel.class).find()
-                .where(DatabaseEngineModel.STATUS.eq(DatabaseModel.STATUS_FAILED))
-                .all()) {
-            String reason = row.get(DatabaseEngineModel.FAILURE_REASON);
-            items.add(item("error", "server",
-                copy("database_engine", "attention_title",
-                    "name", row.get(DatabaseEngineModel.NAME)),
-                reason == null || reason.isBlank()
-                    ? copy("provisioning_failed", "attention_detail")
-                    : copy("engine_provisioning_failed_reason", "attention_detail",
-                        "reason", reason),
-                CmsRoutes.detail(ADMIN, DatabaseEngineResource.SLUG,
-                    row.get(DatabaseEngineModel.ID))));
-        }
-    }
-
-    /**
-     * Sites whose ATTACHED database can't serve its injected credentials right now
-     * (record not active, or container not running). Attached databases are local by
-     * the link-time rule, so the probe is a cheap local docker inspect -- and only
-     * linked databases of live enabled sites are probed. Failed-record databases
-     * already surface above; this frames the SITE impact of a stopped container.
-     */
-    private static void unavailableAttachedDatabases(List<AttentionItem> items) {
-        var linkModel = Models.get(InstanceDatabaseModel.class);
-        if (linkModel == null) {
-            return;
-        }
-        List<Row> links = linkModel.find().all();
-        if (links.isEmpty()) {
-            return;
-        }
-        var instanceModel = Models.get(InstanceModel.class);
-        var databaseModel = Models.get(DatabaseModel.class);
-        DatabaseService databases = new DatabaseService();
-        for (Row link : links) {
-            Row instance = instanceModel.find()
-                .where(InstanceModel.ID.eq(link.get(InstanceDatabaseModel.INSTANCE_ID)))
-                .where(InstanceModel.DELETED_AT.isNull())
-                .first();
-            if (instance == null) {
-                continue;
-            }
-            Row database = databaseModel.find()
-                .where(DatabaseModel.ID.eq(link.get(InstanceDatabaseModel.DATABASE_ID)))
-                .first();
-            if (database == null) {
-                continue;   // dangling link; the tab shows it as (deleted)
-            }
-            String status = database.get(DatabaseModel.STATUS);
-            boolean unavailable;
-            Microcopy detail;
-            if (!DatabaseModel.STATUS_ACTIVE.equals(status)) {
-                unavailable = true;
-                detail = copy("database_status", "attention_detail",
-                    "name", database.get(DatabaseModel.NAME), "status", status);
-            } else {
-                var live = safeDetail(databases, database);
-                boolean workloadDead = live != null && live.workloadDead();
-                unavailable = live == null || !live.running() || workloadDead;
-                boolean unreachable = live == null
-                    || live.containerState() == ContainerState.UNREACHABLE;
-                // "Gone/stopped", "the daemon could not be asked" and "the container runs
-                // but the engine inside it was OOM-killed" are three different operator
-                // problems; conflating the first two was the C6 status defect, and
-                // reporting the third as healthy was its instance-tier twin.
-                String key = workloadDead ? "database_workload_dead"
-                    : unreachable ? "database_unreachable" : "database_not_running";
-                detail = copy(key, "attention_detail",
-                    "name", database.get(DatabaseModel.NAME));
-            }
-            if (unavailable) {
-                items.add(item("warning", "database",
-                    copy("instance", "attention_title",
-                        "name", instance.get(InstanceModel.NAME)),
-                    detail,
-                    CmsRoutes.subpage(ADMIN, "instances", instance.get(InstanceModel.ID),
-                        "databases")));
-            }
-        }
-    }
-
-    private static DatabaseService.@Nullable Detail safeDetail(DatabaseService databases, Row database) {
-        try {
-            return databases.detailOf(database);
-        } catch (Exception e) {
-            return null;   // unresolvable engine/host: treat as unavailable
-        }
-    }
-
-    /**
-     * The newest release operation of every application, when it FAILED.
-     *
-     * AIDEV-NOTE: this used to read the {@code deployments} table of the deleted host-slot
-     * lane. The release engine's own {@code release_operations} row IS the deploy history
-     * now -- one record of what was attempted, with its step log -- so there is no second
-     * table to keep in step with it.
-     */
-    private static void failedDeployments(List<AttentionItem> items) {
-        var instanceModel = Models.get(InstanceModel.class);
-        var operations = Models.get(ReleaseOperationModel.class);
-        if (instanceModel == null || operations == null) {
-            return;
-        }
-        for (Row application : instanceModel.find()
-                .where(InstanceModel.KIND.eq(ApplicationKind.ID.toString()))
-                .where(InstanceModel.DELETED_AT.isNull())
-                .all()) {
-            Integer applicationId = application.get(InstanceModel.ID);
-            if (applicationId == null) {
-                continue;
-            }
-            List<Row> latest = operations.findForOwner(InstanceModel.MODEL_ID.toString(),
-                applicationId, 1);
-            if (latest.isEmpty()) {
-                continue;
-            }
-            Row operation = latest.get(0);
-            if (ReleaseOperationModel.STATUS_FAILED.equals(
-                    operation.get(ReleaseOperationModel.STATUS))) {
-                items.add(item("error", "rocket",
-                    copy("deploy", "attention_title",
-                        "name", application.get(InstanceModel.NAME)),
-                    literal(operation.get(ReleaseOperationModel.FAILURE_REASON)),
-                    CmsRoutes.subpage(ADMIN, "instances", applicationId, "deployments")));
-            }
+                CmsRoutes.list(ADMIN, SettingsPage.DEFAULT_SLUG)));
         }
     }
 
@@ -902,32 +272,11 @@ public final class AttentionCollector {
             }
             if (TaskStatus.FAILED.name().equals(
                     latest.get(0).get(SystemTaskHistoryModel.STATUS))) {
-                items.add(item("warning", "clock",
+                items.add(item(AttentionSeverity.WARNING, "clock",
                     copy("task", "attention_title", "name", descriptor.typePath()),
                     copy("last_run_failed", "attention_detail"),
                     null));
             }
         }
-    }
-
-    private static @NonNull AttentionItem item(String severity, String icon, Microcopy title,
-                                               @Nullable Microcopy detail,
-                                               @Nullable RouteTarget target) {
-        return new AttentionItem(severity, icon, title, detail, target);
-    }
-
-    private static @Nullable Microcopy literal(@Nullable Object value) {
-        if (value == null || String.valueOf(value).isBlank()) {
-            return null;
-        }
-        return Microcopy.literal(String.valueOf(value));
-    }
-
-    private static @NonNull Microcopy copy(String key, String scope, Object... args) {
-        Microcopy copy = Microcopy.of(key).withFilter("scope", scope);
-        for (int i = 0; i + 1 < args.length; i += 2) {
-            copy = copy.withArg(String.valueOf(args[i]), args[i + 1]);
-        }
-        return copy;
     }
 }

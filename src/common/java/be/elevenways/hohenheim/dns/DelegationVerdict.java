@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.dns;
 
+import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -29,42 +30,42 @@ public enum DelegationVerdict {
      * The apex NS set we serve disagrees with the controller's declared nameserver set
      * ({@code dns.nameservers}): a local configuration fact, judged before the parent is.
      */
-    APEX_UNDECLARED("apex_undeclared", "warning", "code-branch", "orange"),
+    APEX_UNDECLARED("apex_undeclared", AttentionSeverity.WARNING, "code-branch", "orange"),
 
     /**
      * The SOA MNAME we serve is not one of the apex NS names: the zone names a primary
      * nobody delegates to, and often one with no address at all. A local configuration
      * fact like {@link #APEX_UNDECLARED}, judged before the parent is.
      */
-    SOA_MNAME_UNLISTED("soa_mname_unlisted", "warning", "code-branch", "orange"),
+    SOA_MNAME_UNLISTED("soa_mname_unlisted", AttentionSeverity.WARNING, "code-branch", "orange"),
 
     /** The parent's nameservers could not be reached, so nothing could be judged. */
-    PARENT_UNREACHABLE("parent_unreachable", "warning", "question", "gray"),
+    PARENT_UNREACHABLE("parent_unreachable", AttentionSeverity.WARNING, "question", "gray"),
 
     /** The parent holds no delegation for the zone at all (the registrar step is pending). */
-    NOT_DELEGATED("not_delegated", "warning", "link-slash", "orange"),
+    NOT_DELEGATED("not_delegated", AttentionSeverity.WARNING, "link-slash", "orange"),
 
     /** We list an apex NS the parent does not delegate to. */
-    LISTED_NOT_DELEGATED("listed_not_delegated", "warning", "code-branch", "orange"),
+    LISTED_NOT_DELEGATED("listed_not_delegated", AttentionSeverity.WARNING, "code-branch", "orange"),
 
     /** The parent delegates to a nameserver our apex NS RRset does not list. */
-    DELEGATED_NOT_LISTED("delegated_not_listed", "warning", "code-branch", "orange"),
+    DELEGATED_NOT_LISTED("delegated_not_listed", AttentionSeverity.WARNING, "code-branch", "orange"),
 
     /** A delegated server answers, but with a serial behind the one this primary serves. */
-    NS_STALE_SERIAL("ns_stale_serial", "warning", "hourglass-half", "orange"),
+    NS_STALE_SERIAL("ns_stale_serial", AttentionSeverity.WARNING, "hourglass-half", "orange"),
 
     /** An in-bailiwick nameserver is delegated without a glue address at the parent. */
-    MISSING_GLUE("missing_glue", "error", "unlink", "red"),
+    MISSING_GLUE("missing_glue", AttentionSeverity.ERROR, "unlink", "red"),
 
     /** A delegated nameserver does not answer authoritatively for the zone: a lame delegation. */
-    NS_UNREACHABLE("ns_unreachable", "error", "triangle-exclamation", "red");
+    NS_UNREACHABLE("ns_unreachable", AttentionSeverity.ERROR, "triangle-exclamation", "red");
 
     private final String token;
-    private final @Nullable String severity;
+    private final @Nullable AttentionSeverity severity;
     private final String icon;
     private final String color;
 
-    DelegationVerdict(String token, @Nullable String severity, String icon, String color) {
+    DelegationVerdict(String token, @Nullable AttentionSeverity severity, String icon, String color) {
         this.token = token;
         this.severity = severity;
         this.icon = icon;
@@ -77,7 +78,7 @@ public enum DelegationVerdict {
     }
 
     /** @return the attention severity this verdict raises, or null when it raises none */
-    public @Nullable String severity() {
+    public @Nullable AttentionSeverity severity() {
         return this.severity;
     }
 

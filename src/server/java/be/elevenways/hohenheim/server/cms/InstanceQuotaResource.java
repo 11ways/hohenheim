@@ -29,6 +29,9 @@ import java.util.List;
  */
 public final class InstanceQuotaResource extends RowResource {
 
+    /** This resource's slug, which the instance list names as a related page. */
+    public static final String SLUG = "instance-quotas";
+
     // AIDEV-NOTE: every override column the reserve hooks read must be ON this form.
     // M073 added max_disk_gb/max_nics and InstanceDeviceQuota.diskLimitFor/nicLimitFor
     // consult them, but they were absent here for a wave -- so the columns existed,
@@ -57,7 +60,7 @@ public final class InstanceQuotaResource extends RowResource {
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_quota"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_quota"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "instance_quota"); }
-    @Override public @NonNull String slug() { return "instance-quotas"; }
+    @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Model model() { return Models.get(InstanceQuotaModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }

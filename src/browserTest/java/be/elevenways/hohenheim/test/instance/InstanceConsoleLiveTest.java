@@ -160,8 +160,9 @@ class InstanceConsoleLiveTest {
                     .as("step 1: while the container itself is already up").isTrue();
 
                 // 2. The line has not appeared, so the record STAYS starting.
-                assertThat(within(Duration.ofMillis(2_000), () -> !InstanceModel.STATUS_STARTING.equals(status(id))))
-                    .as("step 2: no readiness line, no Running").isFalse();
+                Poll.never("step 2: the record left starting without its readiness line",
+                    Duration.ofMillis(2_000), POLL_INTERVAL,
+                    () -> !InstanceModel.STATUS_STARTING.equals(status(id)));
 
                 // 3. Make the workload print its readiness line: the matcher flips the
                 //    record to RUNNING while the container is still alive -- output
@@ -182,8 +183,9 @@ class InstanceConsoleLiveTest {
                 assertThat(containerExitCode(docker, handle))
                     .as("step 4: the workload exited by ITS OWN stop command (exit 0),"
                         + " not the daemon's kill").isZero();
-                assertThat(within(Duration.ofMillis(4_000), () -> containerRunning(docker, handle)))
-                    .as("step 4: the observed stop suppressed the restart policy").isFalse();
+                Poll.never("step 4: the container runs again, so the observed stop did NOT"
+                        + " suppress the restart policy",
+                    Duration.ofMillis(4_000), POLL_INTERVAL, () -> containerRunning(docker, handle));
                 assertThat(status(id))
                     .as("step 4: and the record still says stopped")
                     .isEqualTo(InstanceModel.STATUS_STOPPED);
@@ -220,8 +222,9 @@ class InstanceConsoleLiveTest {
                 InstanceConsoles.sendCommand(id, "exit 7");
                 Poll.until("step 6: crash three trips flap protection and stamps error",
                     Duration.ofMillis(20_000), POLL_INTERVAL, () -> InstanceModel.STATUS_ERROR.equals(status(id)));
-                assertThat(within(Duration.ofMillis(4_000), () -> containerRunning(docker, handle)))
-                    .as("step 6: and nothing restarts it any more").isFalse();
+                Poll.never("step 6: something restarted the instance after flap protection"
+                        + " gave up on it",
+                    Duration.ofMillis(4_000), POLL_INTERVAL, () -> containerRunning(docker, handle));
                 assertThat(containerId(docker, handle))
                     .as("step 6: the crashed container was not replaced")
                     .isEqualTo(beforeThird);
@@ -384,8 +387,10 @@ class InstanceConsoleLiveTest {
      * Whether {@code condition} comes to hold inside {@code window}, polled through {@link Poll}.
      *
      * AIDEV-NOTE: kept for the assertions that need the boolean -- a message built from
-     * output read AFTER the wait, or a timed NEGATIVE observation (a live daemon offers no
-     * deterministic "this will never restart" probe, so those stay bounded windows).
+     * output read AFTER the wait. The timed NEGATIVE observations (a live daemon offers no
+     * deterministic "this will never restart" probe, so those stay bounded windows) moved
+     * to {@link Poll#never}, which fails on the first sample that sees the violation
+     * instead of reading a boolean at the end of the window.
      */
     private static boolean within(Duration window, BooleanSupplier condition) {
         try {
