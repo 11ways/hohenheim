@@ -5822,6 +5822,14 @@
     "text": "Orphan {$name} removed at the daemon",
     "scope": "reconcile_finding"
   },
+  "orphaned_filtered": {
+    "text": "Orphaned under these filters",
+    "scope": "reconcile_finding"
+  },
+  "colliding_filtered": {
+    "text": "Colliding under these filters",
+    "scope": "reconcile_finding"
+  },
   "orphan_not_orphaned": {
     "text": "{$name} is not an orphaned resource",
     "scope": "violations"
