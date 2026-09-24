@@ -45,10 +45,9 @@ final class ServerMediaHandlers {
 
         // The tab's live region watches this feed: every committed write of a fetch row (a state, a
         // stored fraction, an ending) pings it, and the region re-reads SERVERS_MEDIA_VIEW. Gated by
-        // the tab's own permission, so a viewer the tab refuses never hears a fetch move. Replaced,
-        // never stacked, because a test JVM runs this init once per server boot.
-        LiveFeeds.INSTANCE.unregister(InstallMediaLive.FEED);
-        LiveFeeds.INSTANCE.register(InstallMediaLive.FEED, LiveFeed.of(
+        // the tab's own permission, so a viewer the tab refuses never hears a fetch move. Registered
+        // as its owner, because a test JVM runs this init once per server boot.
+        LiveFeeds.INSTANCE.registerOwned(InstallMediaLive.FEED, LiveFeed.of(
             access -> access.hasPermission(HohenheimSources.MEDIA_MANAGE),
             InstallMediaFetchModel.MODEL_ID));
 
