@@ -42,7 +42,7 @@ expect "instances stays off" "$PLAN" "instances=false"
 expect "writes hohenheim.dry" "$PLAN" "write /opt/hohenheim/settings/hohenheim.dry"
 expect "hohenheim.dry is group readable only" "$PLAN" "settings/hohenheim.dry (mode 0640"
 expect "local.dry is a secret" "$PLAN" "settings/local.dry (mode 0600"
-expect "auth.dry is a secret" "$PLAN" "settings/auth.dry (mode 0600"
+expect "no retired auth.dry is seeded" "$PLAN" "settings/auth.dry" no
 expect "creates the service user" "$PLAN" "useradd --system"
 expect "installs the nft sudoers grant" "$PLAN" "/etc/sudoers.d/hohenheim-nft"
 expect "a sudoers grant is validated before it is installed" "$PLAN" "validate with visudo -cf, then install /etc/sudoers.d/hohenheim-nft"

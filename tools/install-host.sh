@@ -824,6 +824,18 @@ seed_settings "$SETTINGS_DIR/hohenheim.dry" 0640 "{
 }
 "
 
+# zenit-auth reads auth.* from the framework's own settings chain; a separate
+# settings/auth.dry is a retired name the server refuses at boot.
+LOCAL_AUTH_BLOCK=""
+if [ -n "$MAIN_URL" ]; then
+    LOCAL_AUTH_BLOCK=",
+    \"auth\": {
+        \"external_base_url\": \"$MAIN_URL\"
+    }"
+else
+    skip "auth.external_base_url needs --main-url"
+fi
+
 seed_settings "$SETTINGS_DIR/local.dry" 0600 "{
     \"environment\": \"live\",$LOCAL_DATABASE_BLOCK
     \"network\": {
@@ -840,18 +852,9 @@ seed_settings "$SETTINGS_DIR/local.dry" 0600 "{
     },
     \"activity\": {
         \"enabled\": true
-    }
+    }$LOCAL_AUTH_BLOCK
 }
 "
-
-if [ -n "$MAIN_URL" ]; then
-    seed_settings "$SETTINGS_DIR/auth.dry" 0600 "{
-    \"external_base_url\": \"$MAIN_URL\"
-}
-"
-else
-    skip "auth.dry needs --main-url"
-fi
 
 # --- 10. port 53 ------------------------------------------------------------
 
