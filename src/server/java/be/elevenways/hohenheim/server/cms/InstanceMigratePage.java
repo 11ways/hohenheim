@@ -9,7 +9,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.page.CmsFormBody;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.SubmittableRecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -35,7 +35,7 @@ import java.util.Map;
  * {@code InstancePlacement} records for creates -- so the delegated surface never carries
  * this page ({@link ManageInstanceResource} does not list it).
  */
-public final class InstanceMigratePage implements RecordScopedPage<Row> {
+public final class InstanceMigratePage implements SubmittableRecordScopedPage<Row> {
 
     public static final String SLUG = "migrate";
 
@@ -59,11 +59,6 @@ public final class InstanceMigratePage implements RecordScopedPage<Row> {
     @Override
     public boolean visibleFor(@NonNull Row record, @NonNull AccessContext accessContext) {
         return HohenheimAccess.isAdmin(accessContext);
-    }
-
-    @Override
-    public boolean submittable() {
-        return true;
     }
 
     @Override
