@@ -12,12 +12,12 @@ import be.elevenways.hohenheim.server.instance.WorkspaceKind;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.typed.rule.Condition;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.rules.RuleCompiler;
-import be.elevenways.zenit.common.orm.query.rules.RuleGroup;
-import be.elevenways.zenit.common.orm.query.rules.Vocabulary;
+import be.elevenways.zenit.common.orm.query.rules.RuleVocabulary;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
 import org.junit.jupiter.api.Test;
@@ -195,9 +195,9 @@ class DependentFieldApplicabilityTest extends HohenheimTestBase {
     }
 
     /** The resolved tree validates against the vocabulary the target source actually offers. */
-    private static void assertValidates(String step, Identifier modelId, RuleGroup tree) {
+    private static void assertValidates(String step, Identifier modelId, Condition tree) {
         assertThat(tree).as(step + ": resolves to a tree").isNotNull();
-        Vocabulary vocabulary = RecordSourceRegistry.INSTANCE
+        RuleVocabulary vocabulary = RecordSourceRegistry.INSTANCE
             .requireDefaultFor(modelId).vocabulary();
         Violations violations = RuleCompiler.validate(tree, vocabulary);
         assertThat(violations.isEmpty())

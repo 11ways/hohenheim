@@ -411,7 +411,7 @@ live scope `zf-form-scope.hwk`, and `RecordSourceProvider.rules` riding
 
 Spec:
 - zenit core `common/edit/SiblingRulesResolver` (interface, DRY-serializable
-  record implementations): `@Nullable RuleGroup resolve(Map<String,Object>
+  record implementations): `@Nullable Condition resolve(Map<String,Object>
   siblingValues)`; null = "no narrowing yet" (picker disabled, like
   ProviderPick's unresolved provider).
 - `RelationPick.Builder.rulesFromSiblings(SiblingRulesResolver resolver,
