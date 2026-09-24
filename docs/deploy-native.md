@@ -84,8 +84,11 @@ What each step does, in order:
    `0755`, re-asserted on every run: every directory below it is created and
    handed out by the helper, and a root the service user owned would let it swap
    an entry between the helper's check and its act.
-9. **Settings** -- seeds `settings/hohenheim.dry` (0640), `settings/local.dry`
-   and `settings/auth.dry` (0600, secrets). An existing file is NEVER rewritten:
+9. **Settings** -- seeds `settings/hohenheim.dry` (0640) and `settings/local.dry`
+   (0600, secrets; `auth.external_base_url` rides it when `--main-url` is given).
+   Every zenit module reads its group from `local.dry` (or `ZENIT__<GROUP>__*`);
+   a `settings/auth.dry` or `settings/comms.dry` is a retired file the server
+   refuses at boot. An existing file is NEVER rewritten:
    the panel's settings editor persists into these same files. That idempotence
    cuts both ways -- a host installed BEFORE a seeded default changed keeps the
    old value, and the only fix is editing its settings file by hand (which is
