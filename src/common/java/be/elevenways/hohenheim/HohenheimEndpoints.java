@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim;
 
+import be.elevenways.hohenheim.instance.InstallMediaView;
 import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.data.DataPage;
@@ -129,6 +130,15 @@ public class HohenheimEndpoints {
         RateLimitPolicy.of(5, Duration.ofMinutes(1))
             .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
             .named("hh_db_io");
+
+    /**
+     * The Install media tab's live re-read: at most two per coalescing window per open tab, and
+     * every one of them lists the host's pool, so a runaway page is capped here.
+     */
+    private static final RateLimitPolicy MEDIA_VIEW_LIMIT =
+        RateLimitPolicy.of(120, Duration.ofMinutes(1))
+            .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
+            .named("hh_media_view");
 
     private static final RateLimitPolicy DEPLOY_LIMIT =
         RateLimitPolicy.of(10, Duration.ofMinutes(1))
@@ -473,6 +483,19 @@ public class HohenheimEndpoints {
             .addDelimiter().addStatic("media").addDelimiter().addStatic("delete").build())
         .requiresPermission(HohenheimSources.MEDIA_MANAGE)
         .rateLimit(DATABASE_IO_LIMIT)
+        .build();
+
+    /**
+     * The Install media tab's live region read afresh (the pool's media and the stored fetches), as the
+     * tab's live watch asks for it whenever a fetch row changes. Read-only and gated like the tab itself.
+     */
+    public static final Endpoint<InstallMediaView> SERVERS_MEDIA_VIEW = Endpoint.<InstallMediaView>builder()
+        .identifier(Identifier.of("hohenheim", "servers_media_view"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("servers").addDelimiter().addParameter(SERVER_ID)
+            .addDelimiter().addStatic("media").build())
+        .requiresPermission(HohenheimSources.MEDIA_MANAGE)
+        .rateLimit(MEDIA_VIEW_LIMIT)
         .build();
 
     // --- Deploy control (forms on the instance Deploys tab) ---

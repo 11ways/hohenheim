@@ -9,7 +9,7 @@ import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
-import be.elevenways.hohenheim.server.cms.AttentionCollector;
+import be.elevenways.hohenheim.server.cms.DnsAttention;
 import be.elevenways.hohenheim.server.dns.AxfrResponder;
 import be.elevenways.hohenheim.server.dns.DelegationCheck;
 import be.elevenways.hohenheim.server.dns.DelegationLookup;
@@ -603,13 +603,13 @@ class DnsFederationHealthTest {
 
     private static List<AttentionItem> staleItems() {
         List<AttentionItem> items = new ArrayList<>();
-        AttentionCollector.staleDnsSecondaries(items);
+        DnsAttention.staleDnsSecondaries(items);
         return items;
     }
 
     private static List<AttentionItem> delegationItems() {
         List<AttentionItem> items = new ArrayList<>();
-        AttentionCollector.brokenDnsDelegations(items);
+        DnsAttention.brokenDnsDelegations(items);
         return items;
     }
 

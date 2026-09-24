@@ -63,12 +63,13 @@ public final class PrivateNetns implements AutoCloseable {
     }
 
     public PrivateNetns() throws IOException {
-        this.hostPid = hold(List.of("unshare", "-rn", "sleep", String.valueOf(HOLD_SECONDS)));
+        this.hostPid = hold(List.of("unshare", "-rn", "sleep", String.valueOf(HOLD_SECONDS)), "sleep").pid();
     }
 
     /** @return the pid holding a nested namespace inside this one (a "container") */
     public long nested() throws IOException {
-        return hold(enter(hostPid, List.of("unshare", "-n", "sleep", String.valueOf(HOLD_SECONDS))));
+        return hold(enter(hostPid, List.of("unshare", "-n", "sleep", String.valueOf(HOLD_SECONDS))), "sleep")
+            .pid();
     }
 
     /** @return an ENABLED production policy applier bound to this namespace's kernel */
@@ -136,26 +137,28 @@ public final class PrivateNetns implements AutoCloseable {
 
     /** Start a background TCP listener inside a nested namespace and leave it running. */
     public void listen(long pid, int port) throws IOException {
-        hold(enter(pid, List.of("python3", "-c",
+        Process listener = hold(enter(pid, List.of("python3", "-c",
             "import socket,time\n"
             + "s = socket.socket(socket.AF_INET6)\n"
             + "s.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)\n"
             + "s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\n"
             + "s.bind(('::', " + port + "))\n"
             + "s.listen(8)\n"
-            + "time.sleep(" + HOLD_SECONDS + ")\n")));
+            + "time.sleep(" + HOLD_SECONDS + ")\n")), "python3");
+        NamespaceHolders.awaitTcpListen(listener, port);
     }
 
     /** Start a background TCP listener in the fixture's own (the "host") namespace. */
     public void listenInHost(int port) throws IOException {
-        hold(enter(hostPid, List.of("python3", "-c",
+        Process listener = hold(enter(hostPid, List.of("python3", "-c",
             "import socket,time\n"
             + "s = socket.socket(socket.AF_INET6)\n"
             + "s.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)\n"
             + "s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\n"
             + "s.bind(('::', " + port + "))\n"
             + "s.listen(8)\n"
-            + "time.sleep(" + HOLD_SECONDS + ")\n")));
+            + "time.sleep(" + HOLD_SECONDS + ")\n")), "python3");
+        NamespaceHolders.awaitTcpListen(listener, port);
     }
 
     @Override
@@ -165,23 +168,16 @@ public final class PrivateNetns implements AutoCloseable {
         }
     }
 
-    private long hold(List<String> argv) throws IOException {
-        Process process = new ProcessBuilder(argv)
-            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-            .redirectError(ProcessBuilder.Redirect.DISCARD)
-            .start();
+    /**
+     * Start a holder and wait until it runs {@code program}; see {@link NamespaceHolders}.
+     *
+     * AIDEV-NOTE: unshare and nsenter exec their command in the SAME process, so the pid we get is
+     * the pid whose {@code /proc/<pid>/ns/*} the next nsenter must target.
+     */
+    private Process hold(List<String> argv, String program) throws IOException {
+        Process process = NamespaceHolders.start(argv, program);
         this.holders.add(process);
-        // unshare and nsenter exec their command in the SAME process, so the pid we get is
-        // the pid whose /proc/<pid>/ns/* the next nsenter must target.
-        try {
-            Thread.sleep(300);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        if (!process.isAlive()) {
-            throw new IOException("namespace holder died immediately: " + String.join(" ", argv));
-        }
-        return process.pid();
+        return process;
     }
 
     private static List<String> enter(long pid, List<String> argv) {

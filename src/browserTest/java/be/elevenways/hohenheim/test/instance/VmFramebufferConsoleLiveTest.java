@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.auth.AuthKeys;
@@ -26,6 +27,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CompletionStage;
@@ -94,9 +96,10 @@ class VmFramebufferConsoleLiveTest extends HohenheimTestBase {
             // (the scancode round-trips to the daemon without error).
             ws.sendText("{\"t\":\"k\",\"c\":\"KeyR\",\"d\":true}", true).join();
             ws.sendText("{\"t\":\"k\",\"c\":\"KeyR\",\"d\":false}", true).join();
-            Thread.sleep(500);
-            assertThat(client.closeCode.get())
-                .as("input did not tear the console down").isEqualTo(-1);
+            // Frames are pushed only when the screen CHANGES, so no deterministic "still
+            // alive" signal is owed after a keystroke: the socket is watched for the window.
+            Poll.never("input tore the console down", Duration.ofMillis(500),
+                () -> client.closed.getCount() == 0);
 
             // Clause 2: revoke the grant; the tenant's OPEN console is closed 1008.
             RecordGrants.revoke(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,

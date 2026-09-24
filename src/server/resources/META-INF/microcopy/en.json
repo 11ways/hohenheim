@@ -1070,9 +1070,37 @@
     "text": "Attached database {$name} is not running",
     "scope": "attention_detail"
   },
-  "database_workload_dead": {
-    "text": "Attached database {$name} runs, but its engine was killed for running out of memory",
+  "database_failed": {
+    "text": "Attached database {$name} failed: its engine stopped unexpectedly or its last operation did not complete",
     "scope": "attention_detail"
+  },
+  "site_unrouted": {
+    "text": "Site {$name} is missing from routing",
+    "scope": "attention_title"
+  },
+  "site_refusing": {
+    "text": "Site {$name} is routed but refuses requests",
+    "scope": "attention_title"
+  },
+  "unknown_kind": {
+    "text": "Its upstream kind {$detail} is not known to this build, so none of its hostnames route",
+    "scope": "routing_problem"
+  },
+  "handler_failed": {
+    "text": "Its request handler could not be built, so none of its hostnames route: {$detail}",
+    "scope": "routing_problem"
+  },
+  "handler_faulted": {
+    "text": "Its request handler refuses every request: {$detail}",
+    "scope": "routing_problem"
+  },
+  "duplicate_route": {
+    "text": "One of its routes is already claimed by another site and is ignored: {$detail}",
+    "scope": "routing_problem"
+  },
+  "auth_unavailable": {
+    "text": "Its authentication provider cannot be built, so every request is refused: {$detail}",
+    "scope": "routing_problem"
   },
   "database_status": {
     "text": "Attached database {$name} is {$status}",

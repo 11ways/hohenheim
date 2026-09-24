@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.docker;
 
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.PinnedImages;
 import be.elevenways.protoblast.common.time.Now;
 
 import java.io.IOException;
@@ -37,10 +38,11 @@ public final class TestImages {
      * classes, which let the image under every live test change between two runs with no
      * commit. The compose-style {@code repo:tag@digest} spelling is what
      * {@code DockerClient.ensureImage} pulls by digest and what LiveLane.requireImage checks
-     * for; bump both halves together, never the tag alone.
+     * for; bump both halves together, never the tag alone. Since wave 3 the pin itself
+     * lives in production ({@link PinnedImages#ALPINE}, the Docker preflight's probe image),
+     * so the tests and the preflight can never run two different alpines.
      */
-    public static final String ALPINE =
-        "alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b";
+    public static final String ALPINE = PinnedImages.ALPINE;
 
     private TestImages() {}
 

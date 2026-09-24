@@ -45,10 +45,15 @@ class InstancePowerAuditTest {
     private static SqlDatasource datasource;
     private static int hostId;
 
-    /** The panel's own action builders are protected; the panel is the subject here. */
-    private static final class ExposedInstanceResource extends InstanceResource {
-        @Override public RowAction<Row> deployAction() { return super.deployAction(); }
-        @Override public RowAction<Row> stopAction() { return super.stopAction(); }
+    /** One of the panel's own row actions, found by id the way the record page finds it. */
+    @SuppressWarnings("unchecked")
+    private static RowAction.Invoke<Row> panelAction(InstanceResource panel, String path) {
+        for (RowAction<Row> action : panel.rowActions()) {
+            if (path.equals(action.id().getPath())) {
+                return (RowAction.Invoke<Row>) action;
+            }
+        }
+        throw new AssertionError("the instance panel offers no " + path);
     }
 
     @BeforeAll
@@ -206,11 +211,11 @@ class InstancePowerAuditTest {
             //    so the same operation was audited over /api/v1 and silent from the UI
             //    -- including from /manage, where the delegated tenant lives.
             int panelId = instanceRecord("audit-panel");
-            ExposedInstanceResource panel = new ExposedInstanceResource();
+            InstanceResource panel = new InstanceResource();
             Row panelRow = Models.get(InstanceModel.class).findById(panelId);
             ActionContext ctx = ActionContext.of(AccessContext.anonymous());
-            RowAction.Invoke<Row> deployAction = (RowAction.Invoke<Row>) panel.deployAction();
-            RowAction.Invoke<Row> stopAction = (RowAction.Invoke<Row>) panel.stopAction();
+            RowAction.Invoke<Row> deployAction = panelAction(panel, "deploy_instance");
+            RowAction.Invoke<Row> stopAction = panelAction(panel, "stop_instance");
 
             Accountability.runAs(operator("42"),
                 () -> deployAction.handler().apply(panelRow, ctx));

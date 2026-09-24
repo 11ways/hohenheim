@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
+import be.elevenways.hohenheim.server.cms.HostAttention;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerReconciler;
@@ -506,7 +507,7 @@ class DockerReconcilerTest {
             //    warning per server once past the age threshold (threshold in the future
             //    makes every parked row "old" without forging timestamps).
             List<AttentionItem> items = new ArrayList<>();
-            AttentionCollector.stuckReleasingPorts(items, Now.instant().plusSeconds(60));
+            HostAttention.stuckReleasingPorts(items, Now.instant().plusSeconds(60));
             assertThat(items)
                 .as("step 4: local and edge each raise one stuck-releasing warning")
                 .hasSize(2);

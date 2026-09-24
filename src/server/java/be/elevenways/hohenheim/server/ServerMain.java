@@ -146,7 +146,27 @@ public class ServerMain {
             // destination pointer set; the settle decides rollback vs completion from
             // daemon attribution so ownership can never stay split. Virtual thread:
             // it does live daemon work on up to two hosts per record.
-            JobRunner.startVirtualThread(InstanceMigrations::recoverInterrupted);
+            //
+            // The reservation ledger drifts whenever an instance write is refused AFTER
+            // the owner buckets were spent (the host-budget refusal is the reachable
+            // shape): a before-write hook cannot compensate a sibling hook's throw, and
+            // an instance save carries no transaction to roll one back. Recomputed from
+            // the live rows here, so a drifted control plane heals on the next boot
+            // instead of locking an owner out one refusal at a time.
+            //
+            // AIDEV-NOTE: the reconcile runs AFTER the migration settle, on the same
+            // thread, never beside it. The settle moves host bookings (a completed handoff
+            // books the destination, a rollback closes the window), and the reconcile
+            // reads migrate_reserved_mb as truth: run concurrently, its double scan either
+            // abstained for the whole boot or corrected a bucket mid-move. Still off the
+            // boot thread, like every other daemon-touching settle here.
+            JobRunner.startVirtualThread(() -> {
+                try {
+                    InstanceMigrations.recoverInterrupted();
+                } finally {
+                    QuotaReconciler.reconcile();
+                }
+            });
             // A controller killed mid-upload leaves a backup row UPLOADING forever
             // (invisible to the dashboard, never swept) and possibly a committed
             // artifact; killed mid-capture it leaves a FAILED snapshot row whose
@@ -163,13 +183,6 @@ public class ServerMain {
             // settles to error because the payload may be half-written. Virtual thread:
             // it asks the daemon per record.
             JobRunner.startVirtualThread(InstanceService::recoverInterrupted);
-            // The reservation ledger drifts whenever an instance write is refused AFTER
-            // the owner buckets were spent (the host-budget refusal is the reachable
-            // shape): a before-write hook cannot compensate a sibling hook's throw, and
-            // an instance save carries no transaction to roll one back. Recomputed from
-            // the live rows here, so a drifted control plane heals on the next boot
-            // instead of locking an owner out one refusal at a time.
-            JobRunner.startVirtualThread(QuotaReconciler::reconcile);
         } else {
             roleSkip(HohenheimRoles.Role.INSTANCES,
                 "interrupted-migration settle skipped, no instances run here");

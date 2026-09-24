@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerTransport;
+import be.elevenways.hohenheim.server.docker.PinnedImages;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.security.NftRunner;
@@ -83,6 +84,14 @@ class HostPreflightBatteryTest {
             assertThat(passing.check(HostPreflight.CONTAINER_KERNEL_CHECK).status())
                 .as("step 2: as a pass").isEqualTo(HostPreflight.STATUS_PASS);
             assertThat(passing.passed()).as("step 2: every required check passed").isTrue();
+            assertThat(docker.ensuredImages)
+                .as("step 2: the probe image is ensured by its tag+digest pin, never a floating tag")
+                .isNotEmpty()
+                .allMatch(PinnedImages.ALPINE::equals);
+            assertThat(docker.createdImages)
+                .as("step 2: and the probe container runs exactly that pinned reference")
+                .isNotEmpty()
+                .allMatch(PinnedImages.ALPINE::equals);
             for (HostPreflight.Check check : passing.checks()) {
                 assertThat(HostPreflight.DOCKER_BATTERY)
                     .as("step 2: check '%s' is declared in DOCKER_BATTERY, or a partial run"
@@ -189,6 +198,8 @@ class HostPreflightBatteryTest {
 
         int execExit = 0;
         String apiVersion = "1.47";
+        final List<String> ensuredImages = new ArrayList<>();
+        final List<Object> createdImages = new ArrayList<>();
 
         ScriptedDocker() {
             super(new RefusingTransport());
@@ -215,11 +226,13 @@ class HostPreflightBatteryTest {
 
         @Override
         public void ensureImage(String image, String tag) {
+            this.ensuredImages.add(image);
         }
 
         @Override
         public String createContainer(String name, Map<String, Object> spec,
                                       ContainerHardening.Profile profile) {
+            this.createdImages.add(spec.get("Image"));
             return name;
         }
 

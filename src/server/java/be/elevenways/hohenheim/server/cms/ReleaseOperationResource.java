@@ -22,6 +22,9 @@ import java.util.List;
  */
 public final class ReleaseOperationResource extends OperationHistoryResource {
 
+    /** This resource's slug, which the instance list names as a related page. */
+    public static final String SLUG = "releases";
+
     public ReleaseOperationResource() {
         super("release_operation");
     }
@@ -58,7 +61,7 @@ public final class ReleaseOperationResource extends OperationHistoryResource {
         .column(ColumnSpec.fromField(ReleaseOperationModel.STARTED_AT).sortable().build())
         .build();
 
-    @Override public @NonNull String slug() { return "releases"; }
+    @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Model model() { return Models.get(ReleaseOperationModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }

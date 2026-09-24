@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.test;
 
-import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.CertCoverage;
 import be.elevenways.hohenheim.DisplayWidget;
@@ -11,7 +10,6 @@ import be.elevenways.hohenheim.WorkloadTier;
 import be.elevenways.hohenheim.dns.DelegationVerdict;
 import be.elevenways.hohenheim.host.HostState;
 import be.elevenways.hohenheim.model.CertificateModel;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.widget.common.WidgetRegistry;
 import org.junit.jupiter.api.Test;
@@ -51,9 +49,9 @@ class DashboardVocabularyDriftTest {
         assertThat(styled).as("step 1: app.scss tints exactly the AttentionSeverity keys")
             .containsExactlyInAnyOrderElementsOf(keys(AttentionSeverity.values(), AttentionSeverity::key));
 
-        // 2. The legacy string spellings the collectors still pass resolve to their member.
-        assertThat(new AttentionItem("error", "x", Microcopy.literal("t"), null, null).severity())
-            .as("step 2: the legacy constructor maps the old spelling").isEqualTo(AttentionSeverity.ERROR);
+        // 2. A stored or legacy spelling resolves to its member.
+        assertThat(AttentionSeverity.of("error"))
+            .as("step 2: the rendered key maps back to its member").isEqualTo(AttentionSeverity.ERROR);
 
         // 3. An unknown spelling fails closed instead of rendering an untinted item.
         assertThatThrownBy(() -> AttentionSeverity.of("critical"))
@@ -62,8 +60,8 @@ class DashboardVocabularyDriftTest {
         // 4. Every DNS delegation verdict that raises an item names a severity the enum knows.
         for (DelegationVerdict verdict : DelegationVerdict.values()) {
             if (verdict.severity() != null) {
-                assertThat(AttentionSeverity.of(verdict.severity()).key())
-                    .as("step 4: %s raises a known severity", verdict).isEqualTo(verdict.severity());
+                assertThat(verdict.severity().key())
+                    .as("step 4: %s raises a tinted severity", verdict).isIn(styled);
             }
         }
     }
@@ -133,14 +131,12 @@ class DashboardVocabularyDriftTest {
                 Identifier.of("hohenheim", "host_workloads").toString(),
                 Identifier.of("hohenheim", "instance_endpoints").toString());
 
-        // 2. Each one is registered as itself, and the legacy alias names the same id.
+        // 2. Each one is registered as itself.
         for (DisplayWidget widget : widgets) {
             assertThat(WidgetRegistry.INSTANCE.get(widget.id())).as("step 2: %s is registered", widget.id())
                 .isSameAs(widget);
             assertThat(widget.configSpec().entries()).as("step 2: %s is configless", widget.id()).isEmpty();
         }
-        assertThat(HohenheimWidgets.ATTENTION.id()).as("step 2: the alias names the declared id")
-            .isEqualTo(HohenheimWidgets.ATTENTION.id());
     }
 
     private static Set<String> captures(String text, String regex) {

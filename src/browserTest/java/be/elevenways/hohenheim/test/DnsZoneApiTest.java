@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.dns.DelegationVerdict;
 import be.elevenways.hohenheim.model.DnsRecordModel;
@@ -156,7 +157,7 @@ class DnsZoneApiTest extends HohenheimTestBase {
         assertThat(DelegationVerdict.MATCHES.worseOf(DelegationVerdict.APEX_UNDECLARED))
             .as("step 3: the finding outranks a clean verdict and carries a severity")
             .isEqualTo(DelegationVerdict.APEX_UNDECLARED);
-        assertThat(DelegationVerdict.APEX_UNDECLARED.severity()).isEqualTo("warning");
+        assertThat(DelegationVerdict.APEX_UNDECLARED.severity()).isEqualTo(AttentionSeverity.WARNING);
         assertThat(DelegationVerdict.forToken("apex_undeclared")).isEqualTo(DelegationVerdict.APEX_UNDECLARED);
 
         // 4. A stranger key is refused by name and writes nothing; a key narrowed away

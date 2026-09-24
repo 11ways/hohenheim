@@ -6,6 +6,7 @@ import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.PinnedImages;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
@@ -55,7 +56,7 @@ class HostPreflightTest {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
         DockerClient docker = new DockerClient();
-        LiveLane.requireImage(docker, "alpine:latest");
+        LiveLane.requireImage(docker, PinnedImages.ALPINE);
         LiveLane.require(LiveLane.Need.NETNS, PrivateNetns.available(),
             "no private netns for the nft half");
 
@@ -156,7 +157,7 @@ class HostPreflightTest {
     void theStoredReportIsHonestAboutAnUnverifiableHost() throws Exception {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
-        LiveLane.requireImage(new DockerClient(), "alpine:latest");
+        LiveLane.requireImage(new DockerClient(), PinnedImages.ALPINE);
 
         Db.run(datasource, () -> {
             ServerModel.localServerId();

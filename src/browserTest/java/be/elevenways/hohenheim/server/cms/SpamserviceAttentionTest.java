@@ -24,23 +24,23 @@ class SpamserviceAttentionTest {
     @Test
     void onlyAnEnabledUnreadyServiceWarnsAndTheItemExplainsItself() {
         // Step 1: a fresh install (nothing configured) raises nothing.
-        assertThat(AttentionCollector.spamserviceIssue(snapshot(false, false, "stopped", null)))
+        assertThat(FirewallAttention.spamserviceIssue(snapshot(false, false, "stopped", null)))
             .as("an unconfigured spamservice must not warn")
             .isNull();
 
         // Step 2: a configured but deliberately disabled service raises nothing.
-        assertThat(AttentionCollector.spamserviceIssue(snapshot(true, false, "stopped", null)))
+        assertThat(FirewallAttention.spamserviceIssue(snapshot(true, false, "stopped", null)))
             .as("a disabled spamservice is an operator choice, not a defect")
             .isNull();
 
         // Step 3: an enabled, ready service raises nothing.
-        assertThat(AttentionCollector.spamserviceIssue(snapshot(true, true, "ready", null)))
+        assertThat(FirewallAttention.spamserviceIssue(snapshot(true, true, "ready", null)))
             .as("a ready spamservice must not warn")
             .isNull();
 
         // Step 4: enabled but unready, no recorded error: a warning with a
         // localized state sentence and a destination (the positive anchor).
-        AttentionItem starting = AttentionCollector.spamserviceIssue(
+        AttentionItem starting = FirewallAttention.spamserviceIssue(
             snapshot(true, true, "starting", null));
         assertThat(starting).as("an enabled unready spamservice must warn").isNotNull();
         assertThat(starting.severity()).as("severity is a warning").isEqualTo(AttentionSeverity.WARNING);
@@ -57,7 +57,7 @@ class SpamserviceAttentionTest {
 
         // Step 5: a recorded error beats the state sentence -- it is the actual
         // explanation, rendered verbatim.
-        AttentionItem crashed = AttentionCollector.spamserviceIssue(
+        AttentionItem crashed = FirewallAttention.spamserviceIssue(
             snapshot(true, true, "crashed", "Spamservice exited with code 137"));
         assertThat(crashed).as("an erroring spamservice must warn").isNotNull();
         assertThat(crashed.detail()).isNotNull();

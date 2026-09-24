@@ -49,7 +49,7 @@ public final class UidMappedNetns implements AutoCloseable {
             "--map-groups=0:" + selfGid() + ":1",
             "--map-users=" + FIRST_MAPPED_INNER_UID + ":" + range.start + ":" + range.count,
             "--map-groups=" + FIRST_MAPPED_INNER_UID + ":" + range.start + ":" + range.count,
-            "sleep", String.valueOf(HOLD_SECONDS)));
+            "sleep", String.valueOf(HOLD_SECONDS)), "sleep").pid();
     }
 
     /** @return whether this machine can build the fixture at all */
@@ -162,24 +162,26 @@ public final class UidMappedNetns implements AutoCloseable {
 
     /** Start a background TCP listener on one address inside the fixture. */
     public void listen(String address, int port) throws IOException {
-        hold(enter(List.of("python3", "-c",
+        Process listener = hold(enter(List.of("python3", "-c",
             "import socket,time\n"
             + "s = socket.socket()\n"
             + "s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\n"
             + "s.bind(('" + address + "', " + port + "))\n"
             + "s.listen(8)\n"
-            + "time.sleep(" + HOLD_SECONDS + ")\n")));
+            + "time.sleep(" + HOLD_SECONDS + ")\n")), "python3");
+        NamespaceHolders.awaitTcpListen(listener, port);
     }
 
     /** Start a background UDP responder that answers DNS queries with their own header id. */
     public void listenDns(String address) throws IOException {
-        hold(enter(List.of("python3", "-c",
+        Process responder = hold(enter(List.of("python3", "-c",
             "import socket\n"
             + "s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\n"
             + "s.bind(('" + address + "', 53))\n"
             + "while True:\n"
             + "    data, peer = s.recvfrom(512)\n"
-            + "    s.sendto(data[:2] + bytes([0x81,0x80]) + data[4:], peer)\n")));
+            + "    s.sendto(data[:2] + bytes([0x81,0x80]) + data[4:], peer)\n")), "python3");
+        NamespaceHolders.awaitUdpBound(responder, 53);
     }
 
     @Override
@@ -189,21 +191,11 @@ public final class UidMappedNetns implements AutoCloseable {
         }
     }
 
-    private long hold(List<String> argv) throws IOException {
-        Process process = new ProcessBuilder(argv)
-            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-            .redirectError(ProcessBuilder.Redirect.DISCARD)
-            .start();
+    /** Start a holder and wait until it runs {@code program}; see {@link NamespaceHolders}. */
+    private Process hold(List<String> argv, String program) throws IOException {
+        Process process = NamespaceHolders.start(argv, program);
         this.holders.add(process);
-        try {
-            Thread.sleep(400);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        if (!process.isAlive()) {
-            throw new IOException("namespace holder died immediately: " + String.join(" ", argv));
-        }
-        return process.pid();
+        return process;
     }
 
     private List<String> enter(List<String> argv) {

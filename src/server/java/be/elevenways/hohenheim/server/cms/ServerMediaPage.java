@@ -3,6 +3,9 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.instance.InstallMediaFetchState;
+import be.elevenways.hohenheim.instance.InstallMediaFetchView;
+import be.elevenways.hohenheim.instance.InstallMediaView;
+import be.elevenways.hohenheim.instance.InstallMediumView;
 import be.elevenways.hohenheim.model.InstallMediaFetchModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.instance.InstallMedia;
@@ -10,7 +13,6 @@ import be.elevenways.hohenheim.server.instance.InstallMediaFetches;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -63,56 +65,13 @@ public final class ServerMediaPage implements RecordScopedPage<Row> {
                                            @NonNull AccessContext accessContext,
                                            @NonNull Row server) {
         Integer serverId = server.get(ServerModel.ID);
-        List<Map<String, Object>> media = new ArrayList<>();
-        String loadError = null;
-        try {
-            for (InstallMedia.Medium medium : new InstallMedia().listFor(server)) {
-                Map<String, Object> entry = new HashMap<>();
-                entry.put("name", medium.name());
-                entry.put("description", medium.description());
-                media.add(entry);
-            }
-        } catch (IOException unreachable) {
-            // An unreachable daemon renders the tab with a named error instead of a 500:
-            // the operator came here to manage media, and "the host did not answer" is
-            // an answer about the host, not a page failure.
-            Blast.log("MEDIA: listing install media of", server.get(ServerModel.NAME),
-                "failed -", unreachable.getMessage());
-            loadError = unreachable.getMessage();
-        }
-
-        // The fetch lane runs in the background: its stored rows are the only place a running
-        // download, its progress or its failure reason can be read, so they render here and the
-        // tab reloads itself while any of them is still in flight.
-        List<Map<String, Object>> fetches = new ArrayList<>();
-        boolean fetching = false;
-        for (Row fetch : InstallMediaFetches.shownFor(serverId)) {
-            InstallMediaFetchState state = InstallMediaFetches.stateOf(fetch);
-            Double progress = fetch.get(InstallMediaFetchModel.PROGRESS);
-            Map<String, Object> entry = new HashMap<>();
-            entry.put("name", fetch.get(InstallMediaFetchModel.NAME));
-            entry.put("state", state.label());
-            entry.put("variant", state.variant());
-            entry.put("active", state.active());
-            entry.put("percent", state.active() && progress != null
-                ? Integer.valueOf((int) Math.floor(progress * 100)) : null);
-            entry.put("reason", fetch.get(InstallMediaFetchModel.ERROR));
-            fetches.add(entry);
-            fetching |= state.active();
-        }
-
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", CmsSupport.pageTitle(conduit, "server_media",
             server.get(ServerModel.NAME)));
-        vars.put("fetches", fetches);
-        // Declared only while something runs: the reload element is then the one thing that
-        // keeps the tab current, and a settled tab never polls.
-        vars.put("refreshUrl", fetching
-            ? CmsRoutes.subpage(CmsSupport.panelSlug(conduit), "servers", serverId, SLUG).toUrl()
-            : null);
+        vars.put("serverId", serverId);
         vars.put("serverName", server.get(ServerModel.NAME));
-        vars.put("media", media);
-        vars.put("loadError", loadError);
+        // The live region's first paint; the same view is what its live re-read answers.
+        vars.put("view", view(server));
         vars.put("fetchTarget", HohenheimEndpoints.SERVERS_MEDIA_FETCH
             .with(HohenheimEndpoints.SERVER_ID, serverId));
         vars.put("deleteTarget", HohenheimEndpoints.SERVERS_MEDIA_DELETE
@@ -124,5 +83,47 @@ public final class ServerMediaPage implements RecordScopedPage<Row> {
         vars.put("maxIsoGb", InstallMedia.MAX_ISO_BYTES >> 30);
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/server-media"), vars);
+    }
+
+    /**
+     * THE install-media view of one Incus host, rendered by the tab and answered by its live re-read
+     * ({@code HohenheimEndpoints.SERVERS_MEDIA_VIEW}).
+     *
+     * AIDEV-NOTE: the fetch lane runs in the background, so its stored rows are the only place a running
+     * download, its progress or its failure reason can be read. They render here, and the tab's region
+     * re-reads this view whenever a fetch row changes (the InstallMediaLive feed) instead of reloading
+     * the whole tab on a timer.
+     */
+    public static @NonNull InstallMediaView view(@NonNull Row server) {
+        List<InstallMediumView> media = new ArrayList<>();
+        String loadError = null;
+        try {
+            for (InstallMedia.Medium medium : new InstallMedia().listFor(server)) {
+                media.add(new InstallMediumView(medium.name(),
+                    medium.description() == null ? "" : medium.description()));
+            }
+        } catch (IOException unreachable) {
+            // An unreachable daemon renders the tab with a named error instead of a 500:
+            // the operator came here to manage media, and "the host did not answer" is
+            // an answer about the host, not a page failure.
+            Blast.log("MEDIA: listing install media of", server.get(ServerModel.NAME),
+                "failed -", unreachable.getMessage());
+            loadError = unreachable.getMessage();
+        }
+
+        List<InstallMediaFetchView> fetches = new ArrayList<>();
+        Integer serverId = server.get(ServerModel.ID);
+        for (Row fetch : InstallMediaFetches.shownFor(serverId)) {
+            InstallMediaFetchState state = InstallMediaFetches.stateOf(fetch);
+            Double progress = fetch.get(InstallMediaFetchModel.PROGRESS);
+            fetches.add(new InstallMediaFetchView(
+                fetch.get(InstallMediaFetchModel.NAME),
+                state.label(),
+                state.variant(),
+                state.active(),
+                state.active() && progress != null ? Integer.valueOf((int) Math.floor(progress * 100)) : null,
+                fetch.get(InstallMediaFetchModel.ERROR)));
+        }
+        return new InstallMediaView(media, fetches, loadError);
     }
 }

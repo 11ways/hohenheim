@@ -13,7 +13,8 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.hohenheim.AttentionItem;
-import be.elevenways.hohenheim.server.cms.AttentionCollector;
+import be.elevenways.hohenheim.server.cms.HostAttention;
+import be.elevenways.hohenheim.server.cms.ProxyAttention;
 import be.elevenways.hohenheim.server.cms.AdminActivityResource;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -510,11 +511,11 @@ class AdminPagesTest extends HohenheimTestBase {
 
         // With the failure gone, its attention item disappears even if another subsystem still
         // needs attention. Asserted on the PROJECTION rather than through a second dashboard
-        // load: the render half is already proven above, and AttentionCollector documents this
-        // as the way to test a collector's negative case (see its note on the instance
-        // collectors, and InstanceAttentionTest, which does exactly this).
+        // load: the render half is already proven above, and the collectors document this
+        // as the way to test a collector's negative case (see InstanceAttention's note on
+        // the instance collectors, and InstanceAttentionTest, which does exactly this).
         List<AttentionItem> afterDelete = new ArrayList<>();
-        AttentionCollector.errorCertificates(afterDelete);
+        ProxyAttention.errorCertificates(afterDelete);
         String goneUrl = "/admin/certificates/" + cert.get(CertificateModel.ID);
         assertThat(afterDelete.stream()
             .map(raised -> raised.target() == null ? "" : raised.target().toUrl()).toList())
@@ -762,7 +763,7 @@ class AdminPagesTest extends HohenheimTestBase {
             serverModel.save(local);
 
             List<AttentionItem> blocked = new ArrayList<>();
-            AttentionCollector.hostsNotAdmitted(blocked);
+            HostAttention.hostsNotAdmitted(blocked);
             assertThat(blocked)
                 .as("step 1: a blocked host raises exactly one attention item")
                 .hasSize(1);
@@ -807,14 +808,14 @@ class AdminPagesTest extends HohenheimTestBase {
             local.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
             serverModel.save(local);
             List<AttentionItem> admitted = new ArrayList<>();
-            AttentionCollector.hostsNotAdmitted(admitted);
+            HostAttention.hostsNotAdmitted(admitted);
             assertThat(admitted).as("step 4: an admitted host raises nothing").isEmpty();
 
             // 5. A CORDONED host is a deliberate operator state, never a warning.
             local.set(ServerModel.ADMISSION, ServerModel.ADMISSION_CORDONED);
             serverModel.save(local);
             List<AttentionItem> cordoned = new ArrayList<>();
-            AttentionCollector.hostsNotAdmitted(cordoned);
+            HostAttention.hostsNotAdmitted(cordoned);
             assertThat(cordoned).as("step 5: a cordoned host raises nothing either").isEmpty();
         } finally {
             local.set(ServerModel.ADMISSION, admission);

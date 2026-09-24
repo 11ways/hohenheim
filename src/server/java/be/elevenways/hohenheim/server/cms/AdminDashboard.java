@@ -1,9 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.AttentionWidget;
-import be.elevenways.hohenheim.OnboardingChecklistWidget;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.OnboardingStep;
-import be.elevenways.hohenheim.OnboardingWidget;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.HohenheimRoles;
@@ -42,7 +41,7 @@ import java.util.Map;
 public final class AdminDashboard extends DashboardPanelPeer {
 
     /** The dashboard is the OPERATOR surface; every tile links into the admin panel. */
-    private static final String ADMIN = "admin";
+    private static final String ADMIN = HohenheimSlugs.ADMIN;
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dashboard"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("dashboard").withFilter("scope", "admin"); }
@@ -92,13 +91,13 @@ public final class AdminDashboard extends DashboardPanelPeer {
         // silence) had no visible way forward.
         List<OnboardingStep> onboarding = OnboardingCollector.collect();
         if (OnboardingCollector.hasWork(onboarding)) {
-            widgets.add(section(new WidgetInstance(OnboardingChecklistWidget.ID, Map.of())
+            widgets.add(section(new WidgetInstance(HohenheimWidgets.ONBOARDING_CHECKLIST.id(), Map.of())
                 .withData(onboarding)));
         }
         if (proxy && Models.get(SiteModel.class).findActive().isEmpty()) {
-            widgets.add(section(new WidgetInstance(OnboardingWidget.ID, Map.of())));
+            widgets.add(section(new WidgetInstance(HohenheimWidgets.ONBOARDING.id(), Map.of())));
         }
-        widgets.add(section(new WidgetInstance(AttentionWidget.ID, Map.of())
+        widgets.add(section(new WidgetInstance(HohenheimWidgets.ATTENTION.id(), Map.of())
             .withData(AttentionCollector.collect())));
         if (!tiles.isEmpty()) {
             widgets.add(section(new WidgetInstance(ColumnsWidget.ID,

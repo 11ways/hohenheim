@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
-import be.elevenways.hohenheim.server.cms.AttentionCollector;
+import be.elevenways.hohenheim.server.cms.ProxyAttention;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -116,7 +116,7 @@ class ForceSslAvailabilityTest {
         // Step 3: the operator can SEE the inert control on the dashboard.
         ServerMain.adoptProxyServer(proxy);
         List<AttentionItem> items = new ArrayList<>();
-        AttentionCollector.httpsUnavailableWithForceSsl(items);
+        ProxyAttention.httpsUnavailableWithForceSsl(items);
         assertThat(items)
             .as("step 3: HTTPS-down with force-SSL sites raises an attention item")
             .hasSize(1);
@@ -149,7 +149,7 @@ class ForceSslAvailabilityTest {
 
         // Step 6: the attention item clears once HTTPS termination is available again.
         List<AttentionItem> after = new ArrayList<>();
-        AttentionCollector.httpsUnavailableWithForceSsl(after);
+        ProxyAttention.httpsUnavailableWithForceSsl(after);
         assertThat(after)
             .as("step 6: no attention item while HTTPS termination is up")
             .isEmpty();

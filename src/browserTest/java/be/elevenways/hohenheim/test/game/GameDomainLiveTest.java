@@ -276,11 +276,15 @@ class GameDomainLiveTest {
                     () -> InstanceModel.STATUS_STOPPED.equals(
                         Models.get(InstanceModel.class).findById(proxyId)
                             .get(InstanceModel.STATUS)));
-                sleep(3_000);
-                assertThat((String) Models.get(InstanceModel.class).findById(proxyId)
-                    .get(InstanceModel.STATUS))
-                    .as("step 8: the OBSERVED stop suppressed the crash-restart policy")
-                    .isEqualTo(InstanceModel.STATUS_STOPPED);
+                // The console lane's own exit handler stamps STOPPED and returns, so a
+                // restart could only come from ANOTHER lane (the status reconciler); nothing
+                // signals "it chose not to", so the record is watched for the window.
+                Poll.never("step 8: the proxy left STOPPED after an OBSERVED stop (the"
+                        + " crash-restart policy was not suppressed)",
+                    Duration.ofSeconds(3), Duration.ofMillis(150),
+                    () -> !InstanceModel.STATUS_STOPPED.equals(
+                        Models.get(InstanceModel.class).findById(proxyId)
+                            .get(InstanceModel.STATUS)));
 
                 // 9. NOTHING DANGLES: destroying the backend takes the mapping, the
                 //    generated SRV row, the generated config row and the link network

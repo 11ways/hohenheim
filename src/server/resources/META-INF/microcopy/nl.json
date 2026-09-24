@@ -1070,9 +1070,37 @@
     "text": "Gekoppelde database {$name} draait niet",
     "scope": "attention_detail"
   },
-  "database_workload_dead": {
-    "text": "Gekoppelde database {$name} draait, maar de engine is gestopt wegens geheugentekort",
+  "database_failed": {
+    "text": "Gekoppelde database {$name} is mislukt: de engine is onverwacht gestopt of de laatste bewerking is niet voltooid",
     "scope": "attention_detail"
+  },
+  "site_unrouted": {
+    "text": "Site {$name} ontbreekt in de routering",
+    "scope": "attention_title"
+  },
+  "site_refusing": {
+    "text": "Site {$name} is gerouteerd maar weigert verzoeken",
+    "scope": "attention_title"
+  },
+  "unknown_kind": {
+    "text": "Het upstreamtype {$detail} is onbekend in deze versie, dus geen van de hostnamen wordt gerouteerd",
+    "scope": "routing_problem"
+  },
+  "handler_failed": {
+    "text": "De verzoekafhandeling kon niet worden opgebouwd, dus geen van de hostnamen wordt gerouteerd: {$detail}",
+    "scope": "routing_problem"
+  },
+  "handler_faulted": {
+    "text": "De verzoekafhandeling weigert elk verzoek: {$detail}",
+    "scope": "routing_problem"
+  },
+  "duplicate_route": {
+    "text": "Een van de routes wordt al door een andere site geclaimd en wordt genegeerd: {$detail}",
+    "scope": "routing_problem"
+  },
+  "auth_unavailable": {
+    "text": "De authenticatieprovider kan niet worden opgebouwd, dus elk verzoek wordt geweigerd: {$detail}",
+    "scope": "routing_problem"
   },
   "database_status": {
     "text": "Gekoppelde database {$name} is {$status}",

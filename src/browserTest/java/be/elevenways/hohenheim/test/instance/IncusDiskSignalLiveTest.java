@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
-import be.elevenways.hohenheim.server.cms.AttentionCollector;
+import be.elevenways.hohenheim.server.cms.InstanceAttention;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.RootDisk;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
@@ -190,7 +190,7 @@ class IncusDiskSignalLiveTest {
     /** The disk attention items as "severity url"; scoped by the caller's own ids. */
     private static List<String> diskItems() {
         List<AttentionItem> items = new ArrayList<>();
-        AttentionCollector.instancesLowOnDisk(items);
+        InstanceAttention.instancesLowOnDisk(items);
         List<String> rendered = new ArrayList<>();
         for (AttentionItem item : items) {
             rendered.add(item.severity().key() + " " + targetUrl(item));

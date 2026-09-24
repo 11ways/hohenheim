@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
+import be.elevenways.hohenheim.server.cms.InstanceAttention;
 import be.elevenways.hohenheim.server.task.BackupControlPlane;
 import be.elevenways.hohenheim.server.task.CleanOldInstanceLogs;
 import be.elevenways.hohenheim.test.TestDatabases;
@@ -95,7 +96,7 @@ class InstanceAttentionTest {
 
             // 1. CRASHED: only the errored instance is named. A running one and a
             //    deliberately stopped one are not incidents.
-            assertThat(raised(AttentionCollector::crashedInstances))
+            assertThat(raised(InstanceAttention::crashedInstances))
                 .as("step 1: exactly the crashed instance surfaces, as an error linked to"
                     + " its console -- not the running one, not the stopped one")
                 .containsExactly("error /admin/instances/" + crashed + "/page/console");
@@ -105,7 +106,7 @@ class InstanceAttentionTest {
             Row trashed = Models.get(InstanceModel.class).findById(crashed);
             trashed.set(InstanceModel.DELETED_AT, Now.instant());
             Models.get(InstanceModel.class).save(trashed);
-            assertThat(raised(AttentionCollector::crashedInstances))
+            assertThat(raised(InstanceAttention::crashedInstances))
                 .as("step 2: a trashed instance raises nothing").isEmpty();
 
             // 3. BACKUP FAILED: only the LATEST attempt speaks. An instance whose old
@@ -114,32 +115,32 @@ class InstanceAttentionTest {
             backup(healthy, InstanceBackupModel.STATUS_FAILED);
             backup(healthy, InstanceBackupModel.STATUS_COMPLETE);
             backup(stopped, InstanceBackupModel.STATUS_FAILED);
-            assertThat(raised(AttentionCollector::failedInstanceBackups))
+            assertThat(raised(InstanceAttention::failedInstanceBackups))
                 .as("step 3: only the instance whose NEWEST backup failed surfaces; the one"
                     + " that recovered does not, because an old failure is not news")
                 .containsExactly("error /admin/instances/" + stopped + "/page/backups");
 
             // 4. DISK: never measured means silence, not zero. This is the Docker tier's
             //    permanent state, so it must not produce a single item.
-            assertThat(raised(AttentionCollector::instancesLowOnDisk))
+            assertThat(raised(InstanceAttention::instancesLowOnDisk))
                 .as("step 4: an unmeasured disk raises nothing at all").isEmpty();
 
             // 5. Measured but comfortable: still silence.
             observeDisk(healthy, 1_000_000_000L, 10_000_000_000L);
-            assertThat(raised(AttentionCollector::instancesLowOnDisk))
+            assertThat(raised(InstanceAttention::instancesLowOnDisk))
                 .as("step 5: 10% of an enforced ceiling is not an alarm").isEmpty();
 
             // 6. Measured WITHOUT an enforced ceiling (limit 0, the incus shape for a
             //    workload that declares no root size): still silence, because there is no
             //    ceiling to be near. A collector dividing by the pool size would fire here.
             observeDisk(stopped, 9_000_000_000L, 0L);
-            assertThat(raised(AttentionCollector::instancesLowOnDisk))
+            assertThat(raised(InstanceAttention::instancesLowOnDisk))
                 .as("step 6: a workload with no enforced ceiling has no percentage, so a"
                     + " 9 GB occupancy raises nothing").isEmpty();
 
             // 7. Measured and nearly full: the item finally fires, and only for that one.
             observeDisk(healthy, 9_600_000_000L, 10_000_000_000L);
-            assertThat(raised(AttentionCollector::instancesLowOnDisk))
+            assertThat(raised(InstanceAttention::instancesLowOnDisk))
                 .as("step 7: 96% of a real, enforced ceiling raises exactly one ERROR item,"
                     + " and the unbounded workload still stays quiet")
                 .containsExactly("error /admin/instances/" + healthy);
@@ -147,7 +148,7 @@ class InstanceAttentionTest {
             // 8. Between the two thresholds it is a WARNING, not an error: "worth watching"
             //    and "about to break" are different operator problems.
             observeDisk(healthy, 8_800_000_000L, 10_000_000_000L);
-            assertThat(raised(AttentionCollector::instancesLowOnDisk))
+            assertThat(raised(InstanceAttention::instancesLowOnDisk))
                 .as("step 8: 88% is a warning, not an error")
                 .containsExactly("warning /admin/instances/" + healthy);
         });
@@ -180,7 +181,7 @@ class InstanceAttentionTest {
             // 1. A declared target and ZERO completed backups: the never-backed-up item
             //    fires. The instance WITHOUT a target stays silent -- no target means no
             //    declared intent, and alarming it would drown the signal.
-            assertThat(raisedKeys(AttentionCollector::staleInstanceBackups))
+            assertThat(raisedKeys(InstanceAttention::staleInstanceBackups))
                 .as("step 1: exactly the target-declared instance raises the"
                     + " never-backed-up item")
                 .containsExactly("instance_backup_never warning /admin/instances/"
@@ -189,14 +190,14 @@ class InstanceAttentionTest {
             // 2. A FAILED attempt is not a success: still the never item (the failure
             //    itself is the OTHER collector's error).
             backup(covered, InstanceBackupModel.STATUS_FAILED);
-            assertThat(raisedKeys(AttentionCollector::staleInstanceBackups))
+            assertThat(raisedKeys(InstanceAttention::staleInstanceBackups))
                 .as("step 2: failed attempts do not count as coverage")
                 .containsExactly("instance_backup_never warning /admin/instances/"
                     + covered + "/page/backups");
 
             // 3. A recent COMPLETE backup: silence.
             backup(covered, InstanceBackupModel.STATUS_COMPLETE);
-            assertThat(raisedKeys(AttentionCollector::staleInstanceBackups))
+            assertThat(raisedKeys(InstanceAttention::staleInstanceBackups))
                 .as("step 3: a fresh completed backup silences the projection").isEmpty();
 
             // 4. Age that success beyond the window: the STALE item fires -- last
@@ -207,14 +208,14 @@ class InstanceAttentionTest {
                 .assign(InstanceBackupModel.CREATED_AT,
                     Now.instant().minus(30, java.time.temporal.ChronoUnit.DAYS))
                 .updateAll();
-            assertThat(raisedKeys(AttentionCollector::staleInstanceBackups))
+            assertThat(raisedKeys(InstanceAttention::staleInstanceBackups))
                 .as("step 4: a success older than the window raises the stale item")
                 .containsExactly("instance_backup_stale warning /admin/instances/"
                     + covered + "/page/backups");
 
             // 5. The check is an operator dial: 0 disables it entirely.
             HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.STALE_AFTER_DAYS, 0);
-            assertThat(raisedKeys(AttentionCollector::staleInstanceBackups))
+            assertThat(raisedKeys(InstanceAttention::staleInstanceBackups))
                 .as("step 5: stale_after_days 0 disables the freshness check").isEmpty();
             HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.STALE_AFTER_DAYS, 7);
 

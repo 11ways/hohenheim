@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.server.security;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.security.BanScope;
-import be.elevenways.hohenheim.server.cms.AttentionCollector;
+import be.elevenways.hohenheim.server.cms.FirewallAttention;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
@@ -206,13 +206,13 @@ class SshAuthWatchTest {
 
         // 2. An install that never asked for SSH watching raises nothing on the dashboard.
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.SSH_WATCH_ENABLED, false);
-        assertThat(AttentionCollector.sshWatchIssue(watcher.snapshot()))
+        assertThat(FirewallAttention.sshWatchIssue(watcher.snapshot()))
             .as("step 2: not configured is a choice, never a warning")
             .isNull();
 
         // 3. Asked for but not running IS a warning: the silent-success shape this guards.
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.SSH_WATCH_ENABLED, true);
-        assertThat(AttentionCollector.sshWatchIssue(watcher.snapshot()))
+        assertThat(FirewallAttention.sshWatchIssue(watcher.snapshot()))
             .as("step 3: enabled but dead must be visible")
             .isNotNull();
     }
@@ -256,7 +256,7 @@ class SshAuthWatchTest {
         assertThat(watcher.snapshot().lastError())
             .as("step 2: the reason is retained for the dashboard")
             .contains("Permission denied");
-        assertThat(AttentionCollector.sshWatchIssue(watcher.snapshot()))
+        assertThat(FirewallAttention.sshWatchIssue(watcher.snapshot()))
             .as("step 3: and it is visible where the firewall role reports health")
             .isNotNull();
     }

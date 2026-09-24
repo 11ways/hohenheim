@@ -1,51 +1,27 @@
 package be.elevenways.hohenheim.server.auth;
 
-import be.elevenways.hohenheim.model.AccessListModel;
-import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.DnsRecordModel;
-import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.auth.model.PermissionGroupModel;
-import be.elevenways.zenit.auth.model.RecordGrantModel;
-import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthModels;
-import be.elevenways.zenit.auth.server.GrantAdministration;
-import be.elevenways.zenit.auth.server.GrantableModel;
-import be.elevenways.zenit.auth.server.RecordGrantCapabilityChecker;
-import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
-import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
-import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.security.KnownCapabilities;
 import be.elevenways.zenit.common.security.KnownCapability;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.security.Principal;
-import be.elevenways.zenit.common.security.RecordCapabilityRules;
 import be.elevenways.zenit.common.security.RecordCapabilityScope;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.data.RecordSourceGate;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.Map;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.function.Function;
 
 /**
@@ -68,6 +44,12 @@ import java.util.function.Function;
  * "any records at all" must take the set-wise face -- an id set cannot express
  * every-record authority, and {@link #grantedRecordIds} now REFUSES to pretend
  * otherwise.
+ *
+ * AIDEV-NOTE: this class is THE public funnel and the home of the capability vocabulary;
+ * the mechanics live in package-private collaborators it delegates to (HohenheimGrantPolicy
+ * for the boot-time declarations, RecordOwners for ownership, OperationGates for the
+ * service-side gates, CapabilityScopes for the set-wise walk and its request memo). Callers
+ * keep asking HohenheimAccess; a collaborator made public would be a second entry point.
  *
  * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.2.0
@@ -216,497 +198,15 @@ public final class HohenheimAccess {
      */
     public static final Permission SITES_MANAGE_ALL = Permission.of("hohenheim.sites.manage_all");
 
+    /** How a packed subject set separates its entries; no subject token can contain it. */
+    public static final String SUBJECT_SEPARATOR = "\n";
+
     private HohenheimAccess() {
     }
 
     /** Whether the context may create instances at all (admins always may). */
     public static boolean canCreateInstances(@NonNull AccessContext ctx) {
         return isAdmin(ctx) || ctx.hasPermission(INSTANCES_CREATE);
-    }
-
-    /**
-     * The boot-time half of this policy: every model here that holds record grants (sites,
-     * DNS records, instances, managed databases, git providers, access lists and
-     * certificates) is declared grantable, because zenit-auth refuses a grant on an
-     * undeclared model and the declaration is also what keeps the grant-cleanup hooks off
-     * every other model's deletes. Each model's capability VOCABULARY (e.g. site manage is
-     * delegable, so a holder may mint the {@code cap:hohenheim:site#manage} API-key scope)
-     * and the walk's composition RULES land here too, so the enforcement path and the
-     * delegation path can never see different policies.
-     */
-    public static void declareGrantableModels() {
-        // AIDEV-NOTE: liveWhen is NOT optional here. Sites soft-delete by hand -- the
-        // resource stamps deleted_at through save() without SoftDeleteBehaviour attached --
-        // so a trashed site's row is still physically present. Without this predicate the
-        // framework's presence-only default counted it as alive: its grants survived the
-        // orphan sweep and came straight back the moment the site was restored, handing an
-        // operator authority the delete had already withdrawn. The SAME predicate also
-        // stops a new grant being planted on a trashed site.
-        RecordGrants.declareGrantable(GrantableModel.of(SiteModel.MODEL_ID)
-            .liveWhen(row -> row.get(SiteModel.DELETED_AT) == null));
-        KnownCapabilities.register(SiteModel.MODEL_ID,
-            KnownCapability.of(MANAGE)
-                .label(Microcopy.of("manage").withFilter("scope", "capability"))
-                .elevated()
-                .asDelegable());
-        RecordGrantCapabilityChecker.declareRules(SiteModel.MODEL_ID,
-            RecordCapabilityRules.create()
-                .gate(ManagePanel.ACCESS)
-                .admin(HohenheimPanel.ACCESS)
-                // Every-site authority without the admin permission; see SITES_MANAGE_ALL for
-                // why this line belongs on THIS model and on no other one here.
-                .typeLevel(SITES_MANAGE_ALL));
-
-        // AIDEV-NOTE: DnsZoneModel, DnsPeerModel and DnsZonePeerModel declare NO vocabulary
-        // and are NOT grantable, PERMANENTLY and by decision (docs/instance-tier-plan.md,
-        // "Phase 2 parallel gate", DECIDED 2026-08-02). A zone row is the DNSSEC/TSIG trust
-        // root (dnssec_private_key, tsig_secret, api_key) and every remaining field is SOA
-        // policy whose blast radius is the whole zone going dark, so there is no per-field
-        // split leaving a tenant a safe subset; creating a zone also ASSERTS a delegation
-        // from the parent that hohenheim cannot verify. A tenant never sees a zone row, only
-        // names inside one. Do not "helpfully" add one here: the tenant-facing DNS surface is
-        // ManageDnsRecordResource, scoped by hostname authority and per-record grants.
-        // AIDEV-NOTE: asOwnerImplied() on these two is DECLARED but INERT today -- the walk's
-        // owner row only runs when the model's rules name an ownerField, and dns_records has
-        // no owning-principal column. It is written down anyway because the decision is that
-        // ownership WOULD imply them; the day a column lands, ownedBy() is the only edit.
-        // CertificateModel's owner row is live (requested_by_user_id).
-        RecordGrants.declareGrantable(GrantableModel.of(DnsRecordModel.MODEL_ID));
-        KnownCapabilities.register(DnsRecordModel.MODEL_ID,
-            KnownCapability.of(VIEW)
-                .label(Microcopy.of("view").withFilter("scope", "capability"))
-                .asDelegable()
-                .asOwnerImplied(),
-            KnownCapability.of(EDIT)
-                .label(Microcopy.of("edit").withFilter("scope", "capability"))
-                .elevated()
-                .asDelegable()
-                .asOwnerImplied(),
-            // NOT delegable: the minted token is a bearer credential that SURVIVES grant
-            // revocation, so re-delegation would launder a permanent capability out of a
-            // revocable one. NS/CAA/MX/DS/DNSKEY authoring, managed_by mutation and zone_id
-            // reassignment are deliberately not capabilities AT ALL -- each is a
-            // zone-compromise primitive, refused in the write pipeline (TenantWrites) for
-            // every writer rather than offered as something an operator could grant.
-            KnownCapability.of(DYNDNS)
-                .label(Microcopy.of("dyndns").withFilter("scope", "capability"))
-                .elevated());
-        RecordGrantCapabilityChecker.declareRules(DnsRecordModel.MODEL_ID,
-            RecordCapabilityRules.create()
-                .gate(ManagePanel.ACCESS)
-                .admin(HohenheimPanel.ACCESS));
-
-        // Instances: registering the vocabulary in the SAME commit as the model is
-        // load-bearing -- without one, sameOwner on instances compares two EMPTY subject
-        // sets and answers "same owner" for every pair: a tenancy check that cannot fail.
-        //
-        // AIDEV-NOTE: the UMBRELLA DECISION (2026-08-08, Phase 3/5/6 gate work). "manage"
-        // is KEPT and stays THE ownership marker (manageSubjectsOf/sameOwner, the quota
-        // bucket, the released-claim ledger, project adoption all read it), and the narrow
-        // verbs are declared as capabilities manage IMPLIES -- the framework's new
-        // KnownCapability.impliedBy row in the precedence walk. The alternative, replacing
-        // manage with a set of narrow rows, was rejected: ownership identity would have had
-        // to move to a second spelling, and the local dev database already holds applied
-        // grant rows that a rewrite would have to migrate.
-        //
-        // Because implication is exactly the set of verbs that rode manage BEFORE this
-        // change, no grant row's effective authority moves and there is therefore NO
-        // migration: an existing manage holder keeps precisely view/console/power/config/
-        // destroy and, as before, does NOT get files.*/snapshots/backups/image_any/exec.
-        // Widening manage to imply those would be a silent privilege grant to every
-        // already-stored row, which is why the umbrella deliberately stops where it does.
-        //
-        // exec cannot be listed as an implier at all: it is ADMIN, and KnownCapability
-        // refuses ADMIN + impliedBy structurally. "manage does not imply exec" is thus an
-        // invariant of the mechanism, not a line someone could edit here by accident.
-        RecordGrants.declareGrantable(GrantableModel.of(InstanceModel.MODEL_ID)
-            .liveWhen(row -> row.get(InstanceModel.DELETED_AT) == null));
-        KnownCapabilities.register(InstanceModel.MODEL_ID,
-            KnownCapability.of(MANAGE)
-                .label(Microcopy.of("manage").withFilter("scope", "capability"))
-                .elevated()
-                .asDelegable(),
-            // Seeing the record is implied by every verb that operates on it: an operator
-            // handing out "console" must not have to remember to hand out "view" too, or
-            // the delegate gets a 404 on the page carrying the console.
-            //
-            // AIDEV-NOTE: files.read, snapshots and backups were MISSING from this list
-            // until 2026-08-11, and the docblock above states exactly why that was wrong:
-            // each of the three is surfaced by ONE tab on the instance record page, so a
-            // delegate granted only that capability was 403'd off the record and could
-            // never reach the tab the grant exists for. The grant did strictly less than
-            // it claimed and nothing reported it -- InstanceFilesTabGateTest caught it
-            // while proving the files tab's own gate.
-            KnownCapability.of(VIEW)
-                .label(Microcopy.of("view").withFilter("scope", "capability"))
-                .asDelegable()
-                .impliedBy(MANAGE, CONSOLE, POWER, CONFIG, DESTROY,
-                    FILES_READ, SNAPSHOTS, BACKUPS, SHELL),
-            KnownCapability.of(CONSOLE)
-                .label(Microcopy.of("console").withFilter("scope", "capability"))
-                .asDelegable()
-                .impliedBy(MANAGE),
-            KnownCapability.of(POWER)
-                .label(Microcopy.of("power").withFilter("scope", "capability"))
-                .asDelegable()
-                .impliedBy(MANAGE),
-            KnownCapability.of(CONFIG)
-                .label(Microcopy.of("config").withFilter("scope", "capability"))
-                .elevated()
-                .asDelegable()
-                .impliedBy(MANAGE),
-            KnownCapability.of(DESTROY)
-                .label(Microcopy.of("destroy").withFilter("scope", "capability"))
-                .elevated()
-                .asDelegable()
-                .impliedBy(MANAGE),
-            // ADMIN, so the record enforces non-delegable AND not-owner-implied AND
-            // not-implied-by-anything. An operator may still plant it (admins bypass
-            // GrantAdministration's containment); the holder can never pass it on, mint it
-            // into an API-key scope, or reach it by holding manage.
-            KnownCapability.of(EXEC)
-                .label(Microcopy.of("exec").withFilter("scope", "capability"))
-                .admin(),
-            // Phase 4: the snapshot/backup actions now exist (InstanceSnapshots /
-            // InstanceBackups behind the admin resources), so their capabilities
-            // register per the plan's no-unwired rule. Elevated -- a snapshot
-            // restore destroys data and a backup export carries secret variables.
-            KnownCapability.of(SNAPSHOTS)
-                .label(Microcopy.of("snapshots").withFilter("scope", "capability"))
-                .elevated()
-                .asDelegable(),
-            KnownCapability.of(BACKUPS)
-                .label(Microcopy.of("backups").withFilter("scope", "capability"))
-                .elevated()
-                .asDelegable(),
-            // Phase 5: the image gate exists (InstanceImagePolicy on the write funnel),
-            // so the capability registers WITH its enforcement per the no-unwired rule.
-            // The grant matrix this declaration attaches is the instances access page
-            // that manage/snapshots/backups already surface.
-            KnownCapability.of(IMAGE_ANY)
-                .label(Microcopy.of("image_any").withFilter("scope", "capability"))
-                .elevated(),
-            // Phase 6: the file manager exists (InstanceFiles behind the Files tab and the
-            // /api/v1 file lane), so its two capabilities register WITH their enforcement
-            // per the no-unwired rule. They ride the SAME grant matrix manage/snapshots/
-            // backups already surface, so declaring them adds two columns to a page that is
-            // already reachable and designed -- not a new unreachable surface.
-            //
-            // AIDEV-NOTE: files.read is ORDINARY, alongside view/console/power (four of
-            // them; KnownCapability defaults to ORDINARY, so an absent .elevated()/.admin()
-            // IS the declaration -- corrected 2026-08-08, this note used to claim read was
-            // the only one). What is specific to read: it is NOT owner-implied and NOT
-            // implied by write. InstanceFiles asks for exactly one of the two on every
-            // call, so an operator can hand out a read-only file browser.
-            KnownCapability.of(FILES_READ)
-                .label(Microcopy.of("files_read").withFilter("scope", "capability"))
-                .asDelegable(),
-            KnownCapability.of(FILES_WRITE)
-                .label(Microcopy.of("files_write").withFilter("scope", "capability"))
-                .elevated()
-                .asDelegable(),
-            // The interactive shell lands WITH its enforcing surface (InstanceShell behind
-            // the Shell tab and the instance-shell WebSocket), per the no-unwired rule. It
-            // rides the same subjects x capabilities matrix the verbs above already
-            // surface, and it implies VIEW so a shell delegate is not 404'd off the record
-            // carrying the tab -- the defect files.read/snapshots/backups shipped with.
-            KnownCapability.of(SHELL)
-                .label(Microcopy.of("shell").withFilter("scope", "capability"))
-                .elevated()
-                .asDelegable());
-        RecordGrantCapabilityChecker.declareRules(InstanceModel.MODEL_ID,
-            RecordCapabilityRules.create()
-                .gate(ManagePanel.ACCESS)
-                .admin(HohenheimPanel.ACCESS));
-
-        // Managed databases: the tenant-allocation tier (Phase 5). MANAGE stays THE
-        // ownership identity for exactly the reason it does on instances -- there is no
-        // owner column on managed_databases, and manageSubjectsOf/sameOwner, the instance
-        // quota bucket the engine is charged to (InstanceQuota.creationOwnerPackOf reads the
-        // OWNING DATABASE's manage grants) and creationOwnerSubjects all read it. The
-        // narrow verbs are what manage IMPLIES, exactly the instance-tier template.
-        //
-        // AIDEV-NOTE: this vocabulary is deliberately SHORTER than the operations the
-        // tier has, because a verb lands WITH its enforcing surface and never ahead of
-        // it -- declaring one attaches a subjects x capabilities grant matrix, so a
-        // declared-but-unenforced verb ships an operator-editable delegation surface over
-        // something nothing checks. The refusals, each with its reason:
-        //
-        // - restore: DatabaseService.restoreFromFile runs an UPLOADED dump as the engine
-        //   superuser, and the only page that offers it (DatabaseRestorePage) also renders
-        //   the plaintext credentials. Neither the arbitrary-SQL lane nor a credential-free
-        //   variant of that page is built here, so there is nothing to enforce a `restore`
-        //   grant ON. It stays operator-only and is the first candidate when a delegated
-        //   restore surface is actually designed.
-        // - config: DatabaseResource is updatable() == false -- the record is immutable
-        //   after create by design (it describes a provisioned container), so no edit
-        //   operation exists for the verb to gate.
-        // - power: the engine is a generatedOnly() DatabaseContainerKind instance, and
-        //   ManageInstanceResource excludes generated rows, so no tenant path reaches a
-        //   start/stop of it at all. A database is allocated and destroyed, not powered.
-        // - exec: NEVER. Backup and restore are IMPLEMENTED by exec'ing into the engine
-        //   container; offering the verb would be offering a superuser shell on the host.
-        RecordGrants.declareGrantable(GrantableModel.of(DatabaseModel.MODEL_ID));
-        KnownCapabilities.register(DatabaseModel.MODEL_ID,
-            KnownCapability.of(MANAGE)
-                .label(Microcopy.of("manage").withFilter("scope", "capability"))
-                .elevated()
-                .asDelegable(),
-            KnownCapability.of(VIEW)
-                .label(Microcopy.of("view").withFilter("scope", "capability"))
-                .asDelegable()
-                .impliedBy(MANAGE, CREDENTIALS, BACKUPS, DESTROY),
-            KnownCapability.of(CREDENTIALS)
-                .label(Microcopy.of("credentials").withFilter("scope", "capability"))
-                .elevated()
-                .asDelegable()
-                .impliedBy(MANAGE),
-            // AIDEV-NOTE: backups IS implied by manage here while it is NOT on instances,
-            // and the difference is deliberate rather than an oversight. On instances the
-            // umbrella had to stop where it did because widening it would have silently
-            // handed the capability to every ALREADY-STORED manage grant. This model has
-            // no stored grants to widen -- the vocabulary ships with the surface -- so the
-            // umbrella is chosen on the merits: a database's owner backing up their own
-            // database is the ordinary case, not a delegation.
-            KnownCapability.of(BACKUPS)
-                .label(Microcopy.of("backups").withFilter("scope", "capability"))
-                .elevated()
-                .asDelegable()
-                .impliedBy(MANAGE),
-            KnownCapability.of(DESTROY)
-                .label(Microcopy.of("destroy").withFilter("scope", "capability"))
-                .elevated()
-                .asDelegable()
-                .impliedBy(MANAGE));
-        RecordGrantCapabilityChecker.declareRules(DatabaseModel.MODEL_ID,
-            RecordCapabilityRules.create()
-                .gate(ManagePanel.ACCESS)
-                .admin(HohenheimPanel.ACCESS));
-
-        // Git providers: MANAGE is the WHOLE vocabulary, and that is a decision. The row
-        // is a credential store, so there is no read-only half worth granting -- either a
-        // subject owns the installation (edit it, test it, delete it) or it merely USES
-        // one, and using is not a grant question: a provider is offered to a picker when
-        // it is SHARED or when the principal manages it (see gitProviderScope). The
-        // narrow verbs instances have (console/power/...) have no analogue here.
-        RecordGrants.declareGrantable(GrantableModel.of(GitProviderModel.MODEL_ID));
-        KnownCapabilities.register(GitProviderModel.MODEL_ID,
-            KnownCapability.of(MANAGE)
-                .label(Microcopy.of("manage").withFilter("scope", "capability"))
-                .elevated()
-                .asDelegable());
-        RecordGrantCapabilityChecker.declareRules(GitProviderModel.MODEL_ID,
-            RecordCapabilityRules.create()
-                .gate(ManagePanel.ACCESS)
-                .admin(HohenheimPanel.ACCESS));
-
-        // Access lists: MANAGE is the whole vocabulary, the git-provider decision one row
-        // up applied verbatim -- either a subject owns the policy (edit its rules, delete
-        // it) or it merely ATTACHES it, and attaching is not a grant question: a list is
-        // offered when it is SHARED or when the principal manages it (accessListScope).
-        // The rule ROWS deliberately have no grant surface of their own; they answer to
-        // their parent list, exactly like site domains answer to their site.
-        RecordGrants.declareGrantable(GrantableModel.of(AccessListModel.MODEL_ID));
-        KnownCapabilities.register(AccessListModel.MODEL_ID,
-            KnownCapability.of(MANAGE)
-                .label(Microcopy.of("manage").withFilter("scope", "capability"))
-                .elevated()
-                .asDelegable());
-        RecordGrantCapabilityChecker.declareRules(AccessListModel.MODEL_ID,
-            RecordCapabilityRules.create()
-                .gate(ManagePanel.ACCESS)
-                .admin(HohenheimPanel.ACCESS));
-
-        RecordGrants.declareGrantable(GrantableModel.of(CertificateModel.MODEL_ID));
-        // AIDEV-NOTE: VIEW is the WHOLE certificate vocabulary, and that is a decision.
-        // Key EXPORT and certificate UPLOAD are not capabilities at all -- hohenheim
-        // terminates TLS itself so a tenant never needs the key, and an uploaded
-        // certificate is unverified authority over a name. ORDERING is not one either:
-        // see the note beside DYNDNS for why the struck `request` capability could never
-        // have been the authority CertificateAuthority already decides by name coverage.
-        KnownCapabilities.register(CertificateModel.MODEL_ID,
-            KnownCapability.of(VIEW)
-                .label(Microcopy.of("view").withFilter("scope", "capability"))
-                .asDelegable()
-                .asOwnerImplied());
-        RecordGrantCapabilityChecker.declareRules(CertificateModel.MODEL_ID,
-            RecordCapabilityRules.create()
-                .gate(ManagePanel.ACCESS)
-                .admin(HohenheimPanel.ACCESS)
-                // The requester IS the owner: the column already exists because renewal
-                // re-decides authority against it every sweep.
-                .ownedBy(CertificateModel.REQUESTED_BY_USER_ID.getName()));
-    }
-
-    /**
-     * Whether two records of one model answer to the SAME owner, which is what separates
-     * a deliberate configuration from a cross-tenant seizure.
-     *
-     * AIDEV-NOTE: ownership is the record's set of {@link #MANAGE} grant SUBJECTS, never
-     * an owner column -- InstanceModel deliberately has NO owner_principal_id, and this
-     * method is THE one derivation every tier (routes, released claims, instances) answers
-     * from; a second spelling is how two authorities drift. Two records an operator alone
-     * controls hold no manage grants at all, so they compare equal and an admin may
-     * deliberately point a wildcard at one site and carve one host out to another (a
-     * shipped, dispatch-tested capability -- exact beats wildcard, and two upstreams need
-     * two sites). The moment either side is TENANT-held, the subject sets differ and the
-     * same shape becomes a takeover. Equality, not overlap: {A} versus {A, B} would let B
-     * seize what A was serving. Mirrors WorkloadIdentity.isTenantManaged, which is the
-     * same tenancy predicate one seam over.
-     *
-     * @return true when both records carry the same manage-grant subjects (both empty
-     *         included), failing CLOSED to "different owners" when grants cannot be read
-     */
-    public static boolean sameOwner(@NonNull Identifier model, @NonNull Object firstId,
-                                    @NonNull Object secondId) {
-        // Grants key records by their stringified id, so identity folds the same way.
-        if (String.valueOf(firstId).equals(String.valueOf(secondId))) {
-            return true;
-        }
-        Set<String> first = manageSubjectsOf(model, firstId);
-        Set<String> second = manageSubjectsOf(model, secondId);
-        return first != null && second != null && first.equals(second);
-    }
-
-    /** Site convenience over {@link #sameOwner(Identifier, Object, Object)}. */
-    public static boolean sameOwner(int firstSiteId, int secondSiteId) {
-        return sameOwner(SiteModel.MODEL_ID, firstSiteId, secondSiteId);
-    }
-
-    /**
-     * THE owner identity of a record: the subjects holding {@link #MANAGE} on it, spelled
-     * {@code subjectType:subjectId}. An EMPTY set means operator-owned (nobody was granted
-     * anything), which is why it is a legitimate value and never an error.
-     *
-     * AIDEV-NOTE: public because the released-claim ledger (ReleasedClaims) must STORE this
-     * exact set at release time and compare a later claimant against it. It is the same
-     * authority {@link #sameOwner} answers from -- a second spelling of "who owns this
-     * record" is how the quarantine and the overlap refusal would end up disagreeing.
-     *
-     * AIDEV-NOTE: only LIVE grant rows count, read through zenit-auth's own
-     * {@link GrantAdministration#liveRecordGrantRows} -- an expired grant decides nothing
-     * in the check path, so it must not keep a tenant the OWNER here either. Until
-     * 2026-09-23 this counted every stored row with value=true, so an expired manage grant
-     * still made its holder "owner" for sameOwner, the quota bucket and the released-claim
-     * ledger while the walk had already stopped honouring it.
-     *
-     * AIDEV-NOTE: "zenit-auth is not installed" is asked through its presence fact
-     * ({@link AuthModels#datasourceOrNull}), never inferred from an exception. The previous
-     * {@code catch (IllegalStateException)} read ANY IllegalStateException from the grant
-     * read as "no auth, operator-owned" and answered the empty set -- so an unrelated
-     * failure made two tenants' records compare as the same owner (fail OPEN).
-     *
-     * @return the manage-grant subjects, or null when grants are unreadable (callers fail closed)
-     */
-    public static @Nullable Set<String> manageSubjectsOf(@NonNull Identifier model,
-                                                         @NonNull Object recordId) {
-        Set<String> subjects = new HashSet<>();
-        if (AuthModels.datasourceOrNull() == null) {
-            // ZenitAuth.init never ran (tools, minimal tests): no grant can exist, so every
-            // record is operator-owned and the sets are legitimately equal.
-            return subjects;
-        }
-        try {
-            for (Row grant : GrantAdministration.liveRecordGrantRows(model, recordId)) {
-                if (MANAGE.equals(grant.get(RecordGrantModel.CAPABILITY))
-                        && Boolean.TRUE.equals(grant.get(RecordGrantModel.VALUE))) {
-                    subjects.add(GrantSubjects.tokenOf(grant));
-                }
-            }
-        } catch (RuntimeException unreadable) {
-            return null;
-        }
-        return subjects;
-    }
-
-    /** Site convenience over {@link #manageSubjectsOf(Identifier, Object)}. */
-    public static @Nullable Set<String> manageSubjectsOf(int siteId) {
-        return manageSubjectsOf(SiteModel.MODEL_ID, siteId);
-    }
-
-    /** How a packed subject set separates its entries; no subject token can contain it. */
-    public static final String SUBJECT_SEPARATOR = "\n";
-
-    /**
-     * THE canonical packing of a subject set (released-claim ledger, quota bucket keys):
-     * sorted and newline-joined, so two spellings of one owner set can never compare
-     * unequal. EMPTY packs to "" -- the operator. A second packing beside this one is how
-     * the quarantine and the quota would end up disagreeing about who an owner is.
-     */
-    public static @NonNull String packSubjects(@NonNull Set<String> subjects) {
-        return String.join(SUBJECT_SEPARATOR, new TreeSet<>(subjects));
-    }
-
-    /** The inverse of {@link #packSubjects}; null/"" parses to the empty (operator) set. */
-    public static @NonNull Set<String> parseSubjects(@Nullable Object packed) {
-        if (packed == null) {
-            return Set.of();
-        }
-        String raw = String.valueOf(packed);
-        if (raw.isEmpty()) {
-            return Set.of();
-        }
-        Set<String> subjects = new LinkedHashSet<>();
-        for (String part : raw.split(SUBJECT_SEPARATOR)) {
-            if (!part.isEmpty()) {
-                subjects.add(part);
-            }
-        }
-        return subjects;
-    }
-
-    /**
-     * THE human label of ONE packed subject: the user's display name (else its email) or
-     * the group's title (else its slug).
-     *
-     * AIDEV-NOTE: it lives beside {@link #packSubjects}/{@link #parseSubjects} because it
-     * reads the SAME {@code subjectType:subjectId} vocabulary those write -- a labeller
-     * that cuts the token itself somewhere else is how a third subject type would end up
-     * rendered as a raw id by half the surfaces. An unresolvable subject renders as its
-     * RAW token on purpose: a deleted user is a fact worth showing, and a released claim's
-     * former owner is usually exactly that.
-     */
-    public static @NonNull String subjectLabel(@NonNull String subject) {
-        GrantSubjects.Subject parsed = GrantSubjects.parse(subject);
-        if (parsed == null) {
-            return subject;
-        }
-        String label = switch (parsed.type()) {
-            case USER -> {
-                Row user = AuthModels.users().findById(parsed.id());
-                yield user == null ? null : firstNonBlank(user.get(UserModel.DISPLAY_NAME),
-                    user.get(UserModel.EMAIL));
-            }
-            case GROUP -> {
-                Row group = AuthModels.permissionGroups().findById(parsed.id());
-                yield group == null ? null : firstNonBlank(group.get(PermissionGroupModel.TITLE),
-                    group.get(PermissionGroupModel.SLUG));
-            }
-        };
-        return label != null ? label : subject;
-    }
-
-    /**
-     * A whole packed subject set rendered for a reader, in the canonical order.
-     *
-     * @return the joined labels, empty for the operator-owned (empty) set
-     */
-    public static @NonNull String labelSubjects(@Nullable Object packed) {
-        StringBuilder labels = new StringBuilder();
-        for (String subject : parseSubjects(packed)) {
-            if (labels.length() > 0) {
-                labels.append(", ");
-            }
-            labels.append(subjectLabel(subject));
-        }
-        return labels.toString();
-    }
-
-    private static @Nullable String firstNonBlank(@Nullable String first, @Nullable String second) {
-        if (first != null && !first.isBlank()) {
-            return first;
-        }
-        return second != null && !second.isBlank() ? second : null;
     }
 
     /**
@@ -791,147 +291,6 @@ public final class HohenheimAccess {
     }
 
     /**
-     * THE operation-funnel gate for a capability-sensitive instance act (power, snapshot,
-     * backup): a TENANT-ORIGINATED call must hold the capability, while operator and
-     * system work (background tasks, schedule chains re-authorized per step, seeds) passes
-     * untouched. It sits on the SERVICE, not on a resource or a handler, for the reason
-     * {@link TenantWrites} spells out: the HTML row action, the automation API and any
-     * future caller all reach the service, and a second copy per surface is how the API
-     * ends up a wider door than the UI.
-     *
-     * AIDEV-NOTE: the refusal is the SAME text for every capability and never says which
-     * one is missing -- naming it would turn a refusal into a capability oracle. It is
-     * also the same refusal a caller gets for an instance they cannot see at all, which
-     * is what the API's uniform 404 is built on.
-     *
-     * AIDEV-NOTE (default-allow, deferred inversion -- 2026-08-10): the opening
-     * {@code !isTenantOriginated()} ALLOWS whenever no tenant identity is in flight, and
-     * "no conduit" conflates a boot task, a sweeper, a WebSocket handler and a LEAKED
-     * JobRunner continuation into one verdict -- only some of which are provably safe. A
-     * dedicated recon established, and this was confirmed, that this is STRUCTURAL, NOT LIVE:
-     * no off-thread path reaches this gate today (the file-manager caller set is fully
-     * synchronous; the two request-continuations that DO reach a gate -- the template-install
-     * runner and SiteReleases.scheduleDrain -> InstanceService.stop -- gain no authority
-     * because the entry point already authorized the same target). The durable fix is to
-     * demand a POSITIVE system/operator marker ({@code TenantWrites.asSystem(...)}) rather
-     * than infer one from an empty ThreadLocal, plus narrowing {@code GeneratedRows} from a
-     * whole-thread off-switch to "attribution plus the writes it wraps". That inversion is
-     * deferred DELIBERATELY: fail-closed-by-default requires enumerating and wrapping EVERY
-     * system entry point (boot stages, TaskService sweepers, seeds, the ACME publisher, CLI
-     * tools, the WebSocket authenticators, the migration/lease runners) -- miss one and
-     * legitimate system work refuses itself, which is worse than a gap with no live exploit.
-     * It warrants its own wave with a full enumeration; do not close it with a blind marker.
-     *
-     * AIDEV-NOTE (re-assessed 2026-09-23, still deferred, with the measured scope): as of
-     * this date the "no conduit = system" reading is relied on by 20 ScheduledTask
-     * implementations, 6 dedicated JobRunner pools and roughly 50 async spawn sites
-     * (fireAndForget / submit / raw threads) in src/server, plus the boot stages, seeds, CLI
-     * commands and the WebSocket handlers (InstanceConsoles, InstanceShell) that answer from
-     * a Principal with no conduit. Failing closed needs ONE of two things first, and neither
-     * exists: (a) a positive system marker wrapped around every one of those entry points
-     * (miss one and legitimate operator/system work refuses itself), or (b) request-identity
-     * PROPAGATION through protoblast's JobRunner, so a continuation spawned by a tenant
-     * request carries that tenant instead of reading as system -- a framework feature, not a
-     * hohenheim edit. Until (b) lands, a tenant-originated background step is only as safe as
-     * the synchronous gate its entry point ran on the SAME target, which is what the two
-     * known request-continuations above do.
-     *
-     * @throws Violations {@code instance_not_permitted}
-     */
-    public static void requireOperationCapability(int instanceId, @NonNull String capability) {
-        if (!TenantWrites.isTenantOriginated()) {
-            return;
-        }
-        AccessContext ctx = TenantWrites.acting();
-        // ctx.isAnonymous() aligns this with requireDatabaseCapability. The walk already
-        // returns false for an anonymous principal before any lookup, so this is an explicit
-        // fail-closed spelling for readability, not a behaviour change.
-        if (ctx == null || ctx.isAnonymous() || !hasInstanceCapability(ctx, instanceId, capability)) {
-            throw Violations.ofForm(instanceNotPermitted());
-        }
-    }
-
-    /**
-     * THE destroy decision, in the shape a RENDER asks it: why this instance's delete is
-     * offered yet certain to be refused, or null when it can run.
-     *
-     * AIDEV-NOTE: this and {@link #requireDestroyPermitted} are the two faces of ONE
-     * decision -- same capability, same text -- because the panel used to answer the
-     * delete affordance with {@code deletableBy} while the only real gate sat inside
-     * {@code InstanceService.destroy}: a view-only delegate was shown a live Delete that
-     * could only 422. The FACT is asked over the walk each lane demands (see the note on
-     * {@link #hasInstanceCapability}), which is the one thing the two spellings differ on.
-     */
-    public static @Nullable Microcopy destroyUnavailableReason(@NonNull AccessContext ctx,
-                                                               int instanceId) {
-        return destroyRefusal(ctx, instanceId, true);
-    }
-
-    /**
-     * THE destroy gate, in the shape a WRITE asks it: the same refusal
-     * {@link #destroyUnavailableReason} renders the dead Delete with, thrown.
-     *
-     * @throws Violations {@code instance_not_permitted}
-     */
-    public static void requireDestroyPermitted(int instanceId) {
-        if (!TenantWrites.isTenantOriginated()) {
-            return;
-        }
-        AccessContext ctx = TenantWrites.acting();
-        if (ctx == null) {
-            throw Violations.ofForm(instanceNotPermitted());
-        }
-        Microcopy refusal = destroyRefusal(ctx, instanceId, false);
-        if (refusal != null) {
-            throw Violations.ofForm(refusal);
-        }
-    }
-
-    /**
-     * @param memoized the render lane's request memo ({@link #reachesRecord}); false is
-     *                 the fresh walk every write gate keeps
-     */
-    private static @Nullable Microcopy destroyRefusal(@NonNull AccessContext ctx, int instanceId,
-                                                      boolean memoized) {
-        if (ctx.isAnonymous()) {
-            return instanceNotPermitted();
-        }
-        boolean holds = memoized
-            ? reachesRecord(ctx, InstanceModel.MODEL_ID, instanceId, DESTROY)
-            : hasInstanceCapability(ctx, instanceId, DESTROY);
-        return holds ? null : instanceNotPermitted();
-    }
-
-    /**
-     * The instance tier's uniform refusal, which deliberately never names the capability
-     * that is missing -- rendered as a dead affordance's reason exactly as it is answered
-     * to a POST, so neither surface is a capability oracle the other is not.
-     */
-    private static @NonNull Microcopy instanceNotPermitted() {
-        return Microcopy.of("instance_not_permitted").withFilter("scope", "violations");
-    }
-
-    /**
-     * THE operator gate of an instance-tier act no delegation reaches (install-media
-     * attach, template capture): a tenant-originated caller must hold the ADMIN
-     * permission, and the refusal is the tier's uniform one -- naming "operators only"
-     * would tell a delegate the act exists specifically above them. System work (the
-     * {@link #requireOperationCapability} contract) passes untouched, including its
-     * documented default-allow debt.
-     *
-     * @throws Violations {@code instance_not_permitted}
-     */
-    public static void requireOperatorOperation() {
-        if (!TenantWrites.isTenantOriginated()) {
-            return;
-        }
-        AccessContext ctx = TenantWrites.acting();
-        if (ctx == null || ctx.isAnonymous() || !isAdmin(ctx)) {
-            throw Violations.ofForm(instanceNotPermitted());
-        }
-    }
-
-    /**
      * Whether the context holds {@code capability} on the managed database -- the SAME
      * precedence walk every other tier rides, over the database vocabulary. Per-ROW
      * callers use {@link #reachesRecord}; the fresh walk stays for write gates
@@ -943,391 +302,272 @@ public final class HohenheimAccess {
     }
 
     /**
-     * THE operation-funnel gate for a capability-sensitive managed-database act (backup,
-     * destroy). It sits on the SERVICE for the reason {@link #requireOperationCapability}
-     * spells out one tier over: the row action, the download endpoint and any later caller
-     * all reach the service, and a second copy per surface is how one of them ends up a
-     * wider door than the others. Operator and system work (the nightly backup task, the
-     * reconciler, seeds) passes untouched.
+     * Declare every grantable model, its capability vocabulary and its walk rules.
      *
-     * AIDEV-NOTE: the refusal never names the missing capability and is the SAME text a
-     * caller gets for a database they cannot see at all -- the instance tier's uniform
-     * refusal, for the same reason: a refusal that distinguishes the two is an oracle.
+     * @see HohenheimGrantPolicy#declareGrantableModels
+     */
+    public static void declareGrantableModels() {
+        HohenheimGrantPolicy.declareGrantableModels();
+    }
+
+    // ---- Record ownership (RecordOwners) ----
+
+    /**
+     * Whether two records of one model answer to the SAME owner (equal {@link #MANAGE} subjects).
+     *
+     * @return true for the same owner, failing CLOSED to false when grants cannot be read
+     * @see RecordOwners#sameOwner(Identifier, Object, Object)
+     */
+    public static boolean sameOwner(@NonNull Identifier model, @NonNull Object firstId,
+                                    @NonNull Object secondId) {
+        return RecordOwners.sameOwner(model, firstId, secondId);
+    }
+
+    /** Site convenience over {@link #sameOwner(Identifier, Object, Object)}. */
+    public static boolean sameOwner(int firstSiteId, int secondSiteId) {
+        return RecordOwners.sameOwner(firstSiteId, secondSiteId);
+    }
+
+    /**
+     * THE owner identity of a record: the subjects holding {@link #MANAGE} on it.
+     *
+     * @return the manage-grant subjects, or null when grants are unreadable (callers fail closed)
+     * @see RecordOwners#manageSubjectsOf(Identifier, Object)
+     */
+    public static @Nullable Set<String> manageSubjectsOf(@NonNull Identifier model,
+                                                         @NonNull Object recordId) {
+        return RecordOwners.manageSubjectsOf(model, recordId);
+    }
+
+    /** Site convenience over {@link #manageSubjectsOf(Identifier, Object)}. */
+    public static @Nullable Set<String> manageSubjectsOf(int siteId) {
+        return RecordOwners.manageSubjectsOf(SiteModel.MODEL_ID, siteId);
+    }
+
+    /** THE canonical packing of a subject set; see {@link RecordOwners#packSubjects}. */
+    public static @NonNull String packSubjects(@NonNull Set<String> subjects) {
+        return RecordOwners.packSubjects(subjects);
+    }
+
+    /** The inverse of {@link #packSubjects}; null/"" parses to the empty (operator) set. */
+    public static @NonNull Set<String> parseSubjects(@Nullable Object packed) {
+        return RecordOwners.parseSubjects(packed);
+    }
+
+    /** THE human label of ONE packed subject; see {@link RecordOwners#subjectLabel}. */
+    public static @NonNull String subjectLabel(@NonNull String subject) {
+        return RecordOwners.subjectLabel(subject);
+    }
+
+    /**
+     * A whole packed subject set rendered for a reader, in the canonical order.
+     *
+     * @return the joined labels, empty for the operator-owned (empty) set
+     */
+    public static @NonNull String labelSubjects(@Nullable Object packed) {
+        return RecordOwners.labelSubjects(packed);
+    }
+
+    /**
+     * Run {@code body} with the creation-owner derivation pinned to {@code subjects}.
+     *
+     * @throws IllegalStateException when a creation owner is already pinned
+     * @see RecordOwners#withCreationOwner
+     */
+    public static void withCreationOwner(@NonNull Set<String> subjects, @NonNull Runnable body) {
+        RecordOwners.withCreationOwner(subjects, body);
+    }
+
+    /**
+     * THE owner identity a NEW record created by this context will answer to.
+     *
+     * @see RecordOwners#creationOwnerSubjects
+     */
+    public static @NonNull Set<String> creationOwnerSubjects(@Nullable AccessContext ctx) {
+        return RecordOwners.creationOwnerSubjects(ctx);
+    }
+
+    /**
+     * Hand the creation owner {@link #MANAGE} on a record it just created.
+     *
+     * @see RecordOwners#grantCreatorManage
+     */
+    public static void grantCreatorManage(@NonNull Identifier model, @NonNull Object recordId,
+                                          @Nullable AccessContext ctx) {
+        RecordOwners.grantCreatorManage(model, recordId, ctx);
+    }
+
+    /**
+     * Undo {@link #grantCreatorManage} for a create that is being compensated.
+     *
+     * @see RecordOwners#revokeCreatorManage
+     */
+    public static void revokeCreatorManage(@NonNull Identifier model, @NonNull Object recordId,
+                                           @Nullable AccessContext ctx) {
+        RecordOwners.revokeCreatorManage(model, recordId, ctx);
+    }
+
+    // ---- Service-side operation gates (OperationGates) ----
+
+    /**
+     * THE operation-funnel gate for a capability-sensitive instance act.
+     *
+     * @throws Violations {@code instance_not_permitted}
+     * @see OperationGates#requireOperationCapability
+     */
+    public static void requireOperationCapability(int instanceId, @NonNull String capability) {
+        OperationGates.requireOperationCapability(instanceId, capability);
+    }
+
+    /**
+     * THE destroy decision as a render asks it: the dead Delete's reason, or null when it can run.
+     *
+     * @see OperationGates#destroyUnavailableReason
+     */
+    public static @Nullable Microcopy destroyUnavailableReason(@NonNull AccessContext ctx,
+                                                               int instanceId) {
+        return OperationGates.destroyUnavailableReason(ctx, instanceId);
+    }
+
+    /**
+     * THE destroy gate as a write asks it.
+     *
+     * @throws Violations {@code instance_not_permitted}
+     * @see OperationGates#requireDestroyPermitted
+     */
+    public static void requireDestroyPermitted(int instanceId) {
+        OperationGates.requireDestroyPermitted(instanceId);
+    }
+
+    /**
+     * THE operator gate of an instance-tier act no delegation reaches.
+     *
+     * @throws Violations {@code instance_not_permitted}
+     * @see OperationGates#requireOperatorOperation
+     */
+    public static void requireOperatorOperation() {
+        OperationGates.requireOperatorOperation();
+    }
+
+    /**
+     * THE operation-funnel gate for a capability-sensitive managed-database act.
      *
      * @throws Violations {@code database_not_permitted}
+     * @see OperationGates#requireDatabaseCapability
      */
     public static void requireDatabaseCapability(int databaseId, @NonNull String capability) {
-        if (!TenantWrites.isTenantOriginated()) {
-            return;
-        }
-        AccessContext ctx = TenantWrites.acting();
-        if (ctx == null || ctx.isAnonymous()
-                || !hasDatabaseCapability(ctx, databaseId, capability)) {
-            throw databaseRefusal();
-        }
+        OperationGates.requireDatabaseCapability(databaseId, capability);
     }
 
     /** THE uniform managed-database refusal; visibility, absence and denial are one answer. */
     public static @NonNull Violations databaseRefusal() {
-        return Violations.ofForm(Microcopy.of("database_not_permitted")
-            .withFilter("scope", "violations"));
+        return OperationGates.databaseRefusal();
     }
 
+    // ---- Set-wise scopes and their request memo (CapabilityScopes) ----
+
     /**
-     * @return null for admins, else {@code ID IN (the database ids the context holds
-     *         {@code capability} on)}, matching NOTHING when there are none
+     * @return null for admins, else the database ids the context holds {@code capability} on
+     * @see CapabilityScopes#databaseScope
      */
     public static @Nullable Criteria databaseScope(@NonNull AccessContext ctx,
                                                    @NonNull String capability) {
-        return grantScope(ctx, Models.get(DatabaseModel.class), DatabaseModel.MODEL_ID,
-            capability, DatabaseModel.ID::in);
+        return CapabilityScopes.databaseScope(ctx, capability);
     }
 
     /** Every database id the context holds {@code capability} on (walk-confirmed). */
     @NonNull
     public static Set<Integer> databaseIdsWith(@NonNull AccessContext ctx,
                                                @NonNull String capability) {
-        return grantedRecordIds(ctx, DatabaseModel.MODEL_ID, capability);
+        return CapabilityScopes.databaseIdsWith(ctx, capability);
     }
 
-    /**
-     * THE git-provider visibility policy: which provider rows a principal may SEE and
-     * therefore pick. Shared providers are offered to every authenticated principal (the
-     * operator's declaration that this installation's credential is for general use);
-     * everything else is offered only to the subjects the walk confirms {@code manage}
-     * for. Anonymous reaches nothing -- a provider row names a host an operator runs.
-     *
-     * AIDEV-NOTE: the shared half is deliberately NOT a capability. Modelling "may use"
-     * as a grant would demand a grant row per (tenant, provider) pair for a credential
-     * the operator already decided is general, and the pickers and the /manage list would
-     * then answer to two different questions. One criteria, one answer, one home.
-     *
-     * @return null for an unconstrained scope, else a criteria that never widens past
-     *         shared rows plus the confirmed ids
-     */
+    /** THE git-provider visibility policy; see {@link CapabilityScopes#gitProviderScope}. */
     public static @Nullable Criteria gitProviderScope(@NonNull AccessContext ctx) {
-        Model model = Models.get(GitProviderModel.class);
-        if (ctx.isAnonymous()) {
-            return model.matchNone();
-        }
-        RecordCapabilityScope scope = capabilityScope(ctx, GitProviderModel.MODEL_ID, MANAGE);
-        if (scope.isAll()) {
-            return null;
-        }
-        Criteria shared = GitProviderModel.SHARED.eq(true);
-        if (scope.isNone()) {
-            return shared;
-        }
-        Set<Integer> managed = intIds(scope.recordIds());
-        if (managed.isEmpty()) {
-            return shared;
-        }
-        return new CompositeCriteria(CompositeOperator.OR, shared,
-            GitProviderModel.ID.in(managed));
+        return CapabilityScopes.gitProviderScope(ctx);
     }
 
-    /**
-     * THE access-list visibility policy, the {@link #gitProviderScope} shape verbatim:
-     * shared lists are offered to every authenticated principal, everything else only to
-     * the subjects the walk confirms {@code manage} for. Anonymous reaches nothing.
-     *
-     * @return null for an unconstrained scope, else a criteria that never widens past
-     *         shared rows plus the confirmed ids
-     */
+    /** THE access-list visibility policy; see {@link CapabilityScopes#accessListScope}. */
     public static @Nullable Criteria accessListScope(@NonNull AccessContext ctx) {
-        Model model = Models.get(AccessListModel.class);
-        if (ctx.isAnonymous()) {
-            return model.matchNone();
-        }
-        RecordCapabilityScope scope = capabilityScope(ctx, AccessListModel.MODEL_ID, MANAGE);
-        if (scope.isAll()) {
-            return null;
-        }
-        Criteria shared = AccessListModel.SHARED.eq(true);
-        if (scope.isNone()) {
-            return shared;
-        }
-        Set<Integer> managed = intIds(scope.recordIds());
-        if (managed.isEmpty()) {
-            return shared;
-        }
-        return new CompositeCriteria(CompositeOperator.OR, shared,
-            AccessListModel.ID.in(managed));
+        return CapabilityScopes.accessListScope(ctx);
     }
 
-    /**
-     * Whether the context may ATTACH this list (to a site or a protected path): the list
-     * is shared, or the walk confirms {@code manage} on it. The scope criteria above and
-     * this per-row answer are one policy asked two ways.
-     */
+    /** Whether the context may ATTACH this list; see {@link CapabilityScopes#canUseAccessList}. */
     public static boolean canUseAccessList(@NonNull AccessContext ctx, @Nullable Object listId) {
-        if (!(listId instanceof Integer id)) {
-            return false;
-        }
-        if (reachesRecord(ctx, AccessListModel.MODEL_ID, id, MANAGE)) {
-            return true;
-        }
-        Row list = Models.get(AccessListModel.class).findById(id);
-        return list != null && Boolean.TRUE.equals(list.get(AccessListModel.SHARED));
+        return CapabilityScopes.canUseAccessList(ctx, listId);
     }
 
     /**
-     * @return null for admins (no extra constraint), else {@code ID IN (the instance ids
-     *         the context holds {@code capability} on)}, matching NOTHING when there are none
+     * @return null for admins, else the instance ids the context holds {@code capability} on
+     * @see CapabilityScopes#instanceScope
      */
     public static @Nullable Criteria instanceScope(@NonNull AccessContext ctx,
                                                    @NonNull String capability) {
-        return grantScope(ctx, Models.get(InstanceModel.class), InstanceModel.MODEL_ID,
-            capability, InstanceModel.ID::in);
+        return CapabilityScopes.instanceScope(ctx, capability);
     }
 
     /** Every instance id the context holds {@code capability} on (walk-confirmed). */
     @NonNull
     public static Set<Integer> instanceIdsWith(@NonNull AccessContext ctx,
                                                @NonNull String capability) {
-        return grantedRecordIds(ctx, InstanceModel.MODEL_ID, capability);
+        return CapabilityScopes.instanceIdsWith(ctx, capability);
     }
 
     /**
-     * The explicit creation-owner override (a PROJECT create): set by the one funnel
-     * that validated the actor's membership, read by every consumer of
-     * {@link #creationOwnerSubjects} -- so the quota charge, the placement decision
-     * and the planted grant follow the override as ONE derivation, never three.
-     */
-    private static final ThreadLocal<@Nullable Set<String>> CREATION_OWNER =
-        new ThreadLocal<>();
-
-    /**
-     * Run {@code body} with the creation-owner derivation pinned to {@code subjects}
-     * (a validated project subject). Nesting is refused: two pending owners on one
-     * thread means two funnels interleaved, which is a bug, not a use case.
+     * THE managed-site scoping shape; see {@link CapabilityScopes#managedSiteScope}.
      *
-     * @throws IllegalStateException when a creation owner is already pinned
-     */
-    public static void withCreationOwner(@NonNull Set<String> subjects, @NonNull Runnable body) {
-        if (CREATION_OWNER.get() != null) {
-            throw new IllegalStateException("A creation owner is already pinned on this thread");
-        }
-        CREATION_OWNER.set(Set.copyOf(subjects));
-        try {
-            body.run();
-        } finally {
-            CREATION_OWNER.remove();
-        }
-    }
-
-    /**
-     * THE owner identity a NEW record created by this context will answer to: an
-     * explicitly pinned owner (a validated project create) when one is active, else the
-     * acting user's own subject, or the empty (operator) set for admins and system work.
-     * One derivation, because the quota bucket charged at create, the placement decision
-     * and the manage grant planted right after MUST name the same owner -- two spellings
-     * is how a tenant's instance ends up charged to the operator's bucket.
-     */
-    @NonNull
-    public static Set<String> creationOwnerSubjects(@Nullable AccessContext ctx) {
-        Set<String> pinned = CREATION_OWNER.get();
-        if (pinned != null) {
-            return pinned;
-        }
-        if (ctx == null || isAdmin(ctx) || ctx.isAnonymous()) {
-            return Set.of();
-        }
-        Long principalId = ctx.principalId();
-        return principalId == null ? Set.of() : Set.of(GrantSubjects.userToken(principalId));
-    }
-
-    /**
-     * Hand the creation owner ({@link #creationOwnerSubjects}) {@link #MANAGE} on a record
-     * it just created, then drop the request memo the grant just made stale. Operator and
-     * system creates plant nothing: an empty subject set IS operator ownership, and a grant
-     * there would make one admin's record look tenant-held to sameOwner.
-     *
-     * AIDEV-NOTE: THE one planting loop. Four hand-rolled copies (instances, databases, git
-     * providers, access lists) each cut the token with indexOf(':') and only two of them
-     * remembered to drop the memo -- without that, zenit-cms verifying the created row
-     * against the caller's own scope predicate makes a legitimate create refuse ITSELF
-     * with out_of_scope. It MUST name the same subjects the quota charged at create.
-     */
-    public static void grantCreatorManage(@NonNull Identifier model, @NonNull Object recordId,
-                                          @Nullable AccessContext ctx) {
-        for (String token : creationOwnerSubjects(ctx)) {
-            GrantSubjects.Subject subject = GrantSubjects.require(token);
-            RecordGrants.grant(subject.type(), subject.id(), model, recordId, MANAGE, true);
-        }
-        if (ctx != null) {
-            forgetCapabilityScopes(ctx);
-        }
-    }
-
-    /**
-     * Undo {@link #grantCreatorManage} for a create that is being compensated.
-     *
-     * AIDEV-NOTE: callers delete the record FIRST and revoke after: the delete rides the
-     * tenant-write hooks, which ask for a capability the creator's own manage implies, so
-     * revoking first makes the compensation refuse itself.
-     */
-    public static void revokeCreatorManage(@NonNull Identifier model, @NonNull Object recordId,
-                                           @Nullable AccessContext ctx) {
-        for (String token : creationOwnerSubjects(ctx)) {
-            GrantSubjects.Subject subject = GrantSubjects.require(token);
-            RecordGrants.revoke(subject.type(), subject.id(), model, recordId, MANAGE);
-        }
-        if (ctx != null) {
-            forgetCapabilityScopes(ctx);
-        }
-    }
-
-    /**
-     * THE managed-site scoping shape, shared by every source and resource whose rows hang
-     * off a site: an ALL scope is unconstrained, a NONE scope matches NOTHING, and a
-     * confirmed set gets the criteria {@code forManagedIds} spells over it.
-     *
-     * AIDEV-NOTE: one definition on purpose. Three hand-rolled copies (site, domain,
-     * certificate) is how one of them ends up missing the anonymous branch or answering
-     * {@code ID.in(empty)}, which some backends widen instead of refusing.
-     *
-     * @param model          the model being scoped, for its {@code matchNone()}
-     * @param forManagedIds  builds the criteria from the confirmed managed-site ids
      * @return null for an unconstrained scope, else a criteria
      */
     public static @Nullable Criteria managedSiteScope(@NonNull AccessContext ctx,
                                                       @NonNull Model model,
                                                       @NonNull Function<Set<Integer>, Criteria> forManagedIds) {
-        return grantScope(ctx, model, SiteModel.MODEL_ID, MANAGE, forManagedIds);
+        return CapabilityScopes.managedSiteScope(ctx, model, forManagedIds);
     }
 
     /**
-     * The generalized shape of {@link #managedSiteScope}: the framework's tri-state answer,
-     * translated into a criteria. ALL means no extra constraint, NONE matches nothing, and a
-     * confirmed SET gets the criteria {@code forGrantedIds} spells over it.
+     * The walk's tri-state answer translated into a criteria; see {@link CapabilityScopes#grantScope}.
      *
-     * AIDEV-NOTE: there are deliberately no {@code isAdmin} or {@code isAnonymous} branches
-     * here anymore, and re-adding either would be a SECOND spelling of the walk's own
-     * whole-model rows. The scope already answers ALL for the admin bypass and for
-     * {@link #SITES_MANAGE_ALL}, and NONE for anonymous, for a model with no declared policy
-     * and for an EXPLICIT gate denial -- and that last one is the reason the order matters:
-     * gate denial precedes the type-level row, so a denied subject holding manage_all must
-     * enumerate nothing. Spelling the prefix by hand here is how the two would drift.
-     *
-     * @param model the model being SCOPED (its {@code matchNone()}), which is not necessarily
-     *        the model the capability is held on -- domains scope by their parent site
+     * @param model the model being SCOPED, not necessarily the one the capability is held on
      */
     public static @Nullable Criteria grantScope(@NonNull AccessContext ctx,
                                                 @NonNull Model model,
                                                 @NonNull Identifier capabilityModel,
                                                 @NonNull String capability,
                                                 @NonNull Function<Set<Integer>, Criteria> forGrantedIds) {
-        RecordCapabilityScope scope = capabilityScope(ctx, capabilityModel, capability);
-        if (scope.isAll()) {
-            return null;
-        }
-        if (scope.isNone()) {
-            return model.matchNone();
-        }
-        return forGrantedIds.apply(intIds(scope.recordIds()));
+        return CapabilityScopes.grantScope(ctx, model, capabilityModel, capability, forGrantedIds);
     }
 
-    /** Request-scoped memo of the walk's set-wise answers, keyed by model + capability. */
-    private static final IdentifierKey<Map<String, RecordCapabilityScope>> CAPABILITY_SCOPES =
-        IdentifierKey.of("hohenheim", "capability_scopes");
-
     /**
-     * WHICH records of {@code model} the context holds {@code capability} on, as the
-     * framework's tri-state (ALL / NONE / a confirmed SET) -- THE set-wise question every
-     * scope criteria, panel probe and nav probe here asks.
+     * WHICH records of {@code model} the context holds {@code capability} on, memoized per request.
      *
-     * AIDEV-NOTE: never an id set, and never {@code isAdmin || hasPermission(typeLevel)}.
-     * Authority from a whole-model row (the admin bypass, {@link #SITES_MANAGE_ALL}) covers
-     * records that carry no grant at all, so a grant-store enumeration answers EMPTY for it
-     * -- which reads as "nothing" and silently empties every list while the by-id checks keep
-     * answering yes. The hand-rolled candidates-plus-confirm loop that used to live here
-     * could not express ALL at all.
-     *
-     * Memoized per REQUEST on the conduit (the PermissionResolver WALK_CACHE idiom): panel
-     * eligibility, scope criteria and the nav probes all ask per render, and grants written
-     * mid-request stay next-request-effective. Conduit-less contexts run the walk fresh.
-     *
-     * AIDEV-NOTE: the memo is a MAP keyed by model+capability, not one attribute per set. One
-     * attribute per set is how the second consumer (dns records) quietly ends up outside the
-     * budget the first consumer's test pinned.
+     * @see CapabilityScopes#capabilityScope(AccessContext, Identifier, String)
      */
     @NonNull
     public static RecordCapabilityScope capabilityScope(@NonNull AccessContext ctx,
                                                         @NonNull Identifier model,
                                                         @NonNull String capability) {
-        String key = model + "#" + capability;
-        Conduit conduit = ctx.conduit();
-        if (conduit == null) {
-            return ctx.capabilityScope(model, capability);
-        }
-
-        Map<String, RecordCapabilityScope> cache = conduit.getAttribute(CAPABILITY_SCOPES);
-        if (cache == null) {
-            cache = new HashMap<>();
-            try {
-                conduit.setAttribute(CAPABILITY_SCOPES, cache);
-            } catch (UnsupportedOperationException attributeless) {
-                // A conduit without attribute storage just pays the walk each call.
-            }
-        }
-
-        RecordCapabilityScope cached = cache.get(key);
-        if (cached != null) {
-            return cached;
-        }
-
-        RecordCapabilityScope scope = ctx.capabilityScope(model, capability);
-        cache.put(key, scope);
-        return scope;
+        return CapabilityScopes.capabilityScope(ctx, model, capability);
     }
 
-    /**
-     * THE "does this subject reach anything" question, for panel eligibility and NAV-ONLY
-     * probes.
-     *
-     * AIDEV-NOTE: never {@code grantedRecordIds(...).isEmpty()}. That spelling cannot see an
-     * ALL scope, so it answers "reaches nothing" for exactly the subjects who reach
-     * everything -- panel hidden, resource invisible, list empty -- while their by-id checks
-     * keep passing. It is also the spelling that now THROWS on such a scope.
-     */
+    /** THE "does this subject reach anything" question; see {@link CapabilityScopes#reachesAny}. */
     public static boolean reachesAny(@NonNull AccessContext ctx, @NonNull Identifier model,
                                      @NonNull String capability) {
-        return !capabilityScope(ctx, model, capability).isNone();
+        return CapabilityScopes.reachesAny(ctx, model, capability);
     }
 
     /**
-     * Whether the context holds {@code capability} on ONE record, answered off the REQUEST
-     * MEMO rather than by a fresh per-record walk.
+     * Whether the context holds {@code capability} on ONE record, answered off the request memo.
      *
-     * AIDEV-NOTE: this is the shape a LIST asks, once per rendered row, to decide whether
-     * that row gets a pencil or an Edit button. The obvious spelling --
-     * {@code ctx.hasCapability(model, id, capability)} -- is a grant-store round trip PER
-     * ROW, which is an N+1 the page's own scope criteria already paid for once: the
-     * set-wise face runs the SAME precedence rows and confirms every candidate through
-     * them, so membership in the scope and the per-record answer agree by construction.
-     * TenantDomainDnsScopeTest's query budget is what catches the regression when a new
-     * per-row predicate reaches for the un-memoized face.
-     *
-     * The memo's staleness rule applies: a grant written earlier in THIS request is not
-     * seen unless {@link #forgetCapabilityScopes} was called, which is correct for a
-     * render and is why creation funnels ({@link #grantCreatorManage}) drop it.
+     * @see CapabilityScopes#reachesRecord
      */
     public static boolean reachesRecord(@NonNull AccessContext ctx, @NonNull Identifier model,
                                         @Nullable Integer recordId, @NonNull String capability) {
-        if (recordId == null) {
-            return false;
-        }
-        RecordCapabilityScope scope = capabilityScope(ctx, model, capability);
-        if (scope.isAll()) {
-            return true;
-        }
-        return !scope.isNone() && intIds(scope.recordIds()).contains(recordId);
+        return CapabilityScopes.reachesRecord(ctx, model, recordId, capability);
     }
 
     /** Whether the context manages at least one site, an every-site scope included. */
     public static boolean managesAnySite(@NonNull AccessContext ctx) {
-        return reachesAny(ctx, SiteModel.MODEL_ID, MANAGE);
+        return CapabilityScopes.managesAnySite(ctx);
     }
 
     /**
@@ -1337,82 +577,45 @@ public final class HohenheimAccess {
      */
     @NonNull
     public static Set<Integer> managedSiteIds(@NonNull AccessContext ctx) {
-        return grantedRecordIds(ctx, SiteModel.MODEL_ID, MANAGE);
+        return CapabilityScopes.managedSiteIds(ctx);
     }
 
     /**
-     * Every record id of {@code model} the context holds {@code capability} on, for feeding a
-     * criteria that must name them.
+     * Every record id of {@code model} the context holds {@code capability} on.
      *
-     * @throws IllegalStateException when the scope is ALL, which enumerates nothing -- the
-     *         framework refuses to answer that as a set rather than quietly denying every
-     *         record. A caller reaching this on a model where a whole-model row can decide
-     *         wants {@link #reachesAny} or {@link #capabilityScope} instead.
+     * @throws IllegalStateException when the scope is ALL; see {@link CapabilityScopes#grantedRecordIds}
      */
     @NonNull
     public static Set<Integer> grantedRecordIds(@NonNull AccessContext ctx,
                                                 @NonNull Identifier model,
                                                 @NonNull String capability) {
-        return intIds(capabilityScope(ctx, model, capability).recordIds());
+        return CapabilityScopes.grantedRecordIds(ctx, model, capability);
     }
 
     /**
-     * Drop the WHOLE request memo of capability scopes (every model and capability),
-     * because THIS request just changed the grants it caches.
+     * Drop the WHOLE request memo of capability scopes, because this request changed the grants.
      *
-     * AIDEV-NOTE: the memo is deliberately "grants written mid-request stay
-     * next-request-effective" -- correct for an operator editing somebody else's grants,
-     * and WRONG for a creation funnel that plants the creator's own manage grant, because
-     * the very next thing that happens is zenit-cms verifying the new row against the
-     * caller's scope predicate. Without this the scoped create refuses itself with
-     * {@code out_of_scope} and rolls back a perfectly legitimate allocation. Call it from
-     * the funnel that planted the grant, never speculatively; {@link #grantCreatorManage}
-     * already does.
+     * @see CapabilityScopes#forgetCapabilityScopes
      */
     public static void forgetCapabilityScopes(@NonNull AccessContext ctx) {
-        Conduit conduit = ctx.conduit();
-        Map<String, RecordCapabilityScope> cache = conduit == null ? null
-            : conduit.getAttribute(CAPABILITY_SCOPES);
-        if (cache != null) {
-            cache.clear();
-        }
+        CapabilityScopes.forgetCapabilityScopes(ctx);
     }
 
-    /**
-     * The principal-only face of {@link #capabilityScope(AccessContext, Identifier, String)},
-     * for the conduit-less callers. The installed WebSocket authenticator is the sanctioned
-     * principal-only path and rides the SAME walk, whole-model rows included -- which is why
-     * this replaced a hand-rolled candidates-plus-confirm loop that could only ever answer
-     * with a set.
-     */
+    /** The principal-only face of {@link #capabilityScope(AccessContext, Identifier, String)}. */
     @NonNull
     public static RecordCapabilityScope capabilityScope(@NonNull Principal principal,
                                                         @NonNull Identifier model,
                                                         @NonNull String capability) {
-        return Zenit.getWebSocketAuthenticator().capabilityScope(principal, model, capability);
+        return CapabilityScopes.capabilityScope(principal, model, capability);
     }
 
     /**
      * Every site id the principal holds {@link #MANAGE} on, for conduit-less contexts.
      *
-     * @throws IllegalStateException on an every-site scope; ask
-     *         {@link #capabilityScope(Principal, Identifier, String)} where one is possible
+     * @throws IllegalStateException on an every-site scope
      */
     @NonNull
     public static Set<Integer> managedSiteIds(@NonNull Principal principal) {
-        return intIds(capabilityScope(principal, SiteModel.MODEL_ID, MANAGE).recordIds());
-    }
-
-    /** The walk keys records by their stringified id; every model scoped here keys on an int. */
-    private static @NonNull Set<Integer> intIds(@NonNull Set<String> recordIds) {
-        Set<Integer> ids = new LinkedHashSet<>();
-        for (String raw : recordIds) {
-            try {
-                ids.add(Integer.parseInt(raw));
-            } catch (NumberFormatException ignored) {
-                // A grant may key on any string; a non-numeric one matches no row here.
-            }
-        }
-        return ids;
+        return CapabilityScopes.managedSiteIds(principal);
     }
 }

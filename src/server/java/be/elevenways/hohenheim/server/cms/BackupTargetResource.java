@@ -33,6 +33,9 @@ import java.util.List;
  */
 public final class BackupTargetResource extends RowResource {
 
+    /** This resource's slug, which the instance list names as a related page. */
+    public static final String SLUG = "backup-targets";
+
     private final FormSpec formSpec = FormSpec.builder()
         .add(BackupTargetModel.NAME)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(BackupTargetModel.KIND))
@@ -48,7 +51,7 @@ public final class BackupTargetResource extends RowResource {
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "backup_target"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "backup_target"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "backup_target"); }
-    @Override public @NonNull String slug() { return "backup-targets"; }
+    @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Model model() { return Models.get(BackupTargetModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
