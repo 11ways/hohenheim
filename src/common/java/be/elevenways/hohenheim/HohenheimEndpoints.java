@@ -1330,13 +1330,14 @@ public class HohenheimEndpoints {
         .build();
 
     // --- Dynamic DNS (dyndns2 update protocol; public, token in HTTP Basic auth) ---
-    // No requiresPermission: the token IS the credential, verified by the handler.
-    // csrfExempt because ddclient/routers cannot carry a CSRF token (GET, no cookie).
+    // No requiresPermission: the token IS the credential, verified by the handler, so the
+    // route authenticates itself and no login gate stands in front of it. That declaration
+    // carries the CSRF exemption ddclient/routers need (GET, no cookie, no CSRF token).
     public static final Endpoint<Object> DYNDNS_UPDATE = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "dyndns_update"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("nic").addDelimiter().addStatic("update").build())
-        .csrfExempt()
+        .authenticatesItself()
         .rateLimit(DYNDNS_LIMIT)
         .build();
 
@@ -1344,8 +1345,9 @@ public class HohenheimEndpoints {
     /**
      * Unauthenticated liveness: the process booted and routing resolves. Served at the
      * conventional {@code /health} (what an uptime monitor and the deploy probes ask) AND at
-     * {@code /api/health}; both are public prefixes in ServerMain.installAuthBaselines, so
-     * neither can ever answer with the login redirect a probe cannot tell from a hang.
+     * {@code /api/health}. A liveness probe defines no credential, so the route authenticates
+     * itself: neither path can ever answer with the login redirect a probe cannot tell from a
+     * hang, nor with the setup redirect of an unseeded install.
      */
     public static final Endpoint<Object> HEALTH = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "health"))
@@ -1353,6 +1355,7 @@ public class HohenheimEndpoints {
             .addStatic("health").build())
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("health").build())
+        .authenticatesItself()
         .build();
 
     // --- Interactive terminals ---

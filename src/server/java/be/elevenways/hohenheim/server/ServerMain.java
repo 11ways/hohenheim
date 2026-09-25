@@ -371,14 +371,10 @@ public class ServerMain {
     }
 
     // baseline("/") is a catch-all (zenit-auth 620125d): every admin path requires login except
-    // the public prefixes below and zenit-auth's own login/setup/asset paths. Git webhooks are
-    // served by the PROXY listener (SiteDispatcher), not this server, so they stay reachable.
+    // the routes that declare authenticatesItself() where they are defined (HohenheimEndpoints
+    // HEALTH and DYNDNS_UPDATE) and zenit-auth's own sign-in pages. Git webhooks are served by
+    // the PROXY listener (SiteDispatcher), not this server, so they stay reachable.
     public static void installAuthBaselines() {
-        AuthRegistry.registerPublicPrefix("/api/health");
-        AuthRegistry.registerPublicPrefix("/health");
-        // The dyndns endpoint authenticates by update token in the request itself,
-        // not a session; the handler refuses anything the token does not unlock.
-        AuthRegistry.registerPublicPrefix("/nic/update");
         AuthRegistry.baseline("/", AuthRequirement.requiresLogin());
         // declareGrantableModels() already ran, before the migrations -- see main().
         KnownPermissions.register("hohenheim",
