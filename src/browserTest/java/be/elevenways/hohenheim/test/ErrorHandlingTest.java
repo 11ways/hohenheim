@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.auth.server.AuthRegistry;
 import be.elevenways.zenit.common.flash.FlashLevel;
 import be.elevenways.zenit.common.routing.Endpoint;
 import be.elevenways.zenit.common.routing.EndpointRoute;
@@ -27,11 +26,17 @@ class ErrorHandlingTest extends HohenheimTestBase {
     /** The path prefix of the test-owned route. */
     private static final String TEST_ERROR_PREFIX = "/_test";
 
-    /** Test-owned deliberately-throwing endpoint; self-registers at class load. */
+    /**
+     * Test-owned deliberately-throwing endpoint; self-registers at class load. It defines no
+     * credential, so it authenticates itself: an anonymous caller reaches it past hohenheim's
+     * login gate on "/", which step 3 of the error-detail journey needs, while a signed-in
+     * request still carries its principal.
+     */
     static final PageEndpoint TEST_ERROR = Endpoint.pageBuilder()
         .identifier(Identifier.of("hohenheimtest", "test_error"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("_test").addDelimiter().addStatic("error").build())
+        .authenticatesItself()
         .build();
 
     /**
@@ -92,7 +97,6 @@ class ErrorHandlingTest extends HohenheimTestBase {
         //    none of it. zenit's ErrorDetails never exposes internals to an identified
         //    principal, whatever the deployment says -- a product's users never receive them.
         ServerSettings.VALUES.setValue(ServerSettings.Debugging.EXPOSE_ERROR_DETAILS, true);
-        AuthRegistry.Snapshot registry = AuthRegistry.snapshot();
         try {
             assertThat(errorResponse(true).body())
                 .as("step 2: an identified request never reads the exception, exposure on or not")
@@ -100,14 +104,13 @@ class ErrorHandlingTest extends HohenheimTestBase {
                 .contains("INTERNAL_ERROR");
 
             // 3. The same failure answering an ANONYMOUS caller carries the real message, so
-            //    step 1 is a WITHHOLDING and not a lost error. The test-owned route is opened
-            //    to anonymous callers for this step only (hohenheim gates "/" behind login).
-            AuthRegistry.registerPublicPrefix(TEST_ERROR_PREFIX);
+            //    step 1 is a WITHHOLDING and not a lost error. The test-owned route
+            //    authenticates itself, so hohenheim's login gate on "/" lets the anonymous
+            //    caller through.
             assertThat(errorResponse(false).body())
                 .as("step 3: expose_error_details brings the exception's words back")
                 .contains("Deliberate test error");
         } finally {
-            AuthRegistry.restore(registry);
             ServerSettings.VALUES.setValue(ServerSettings.Debugging.EXPOSE_ERROR_DETAILS, null);
         }
     }
