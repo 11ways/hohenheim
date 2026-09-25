@@ -1,6 +1,5 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import org.teavm.gradle.api.OptimizationLevel
-import org.teavm.gradle.api.SourceFilePolicy
 import org.teavm.gradle.tasks.GenerateJavaScriptTask
 
 plugins {
@@ -330,27 +329,10 @@ blastTeavmJar(
 
 teavm {
     js {
-        // AIDEV-NOTE: hohenheim shipped obfuscated=false + optimization=NONE until 2026-08-12
-        // and its bundle was 23,986,504 bytes -- SIX TIMES its sibling apps (orcono 4.0MB, QQ
-        // 3.9MB, thoth 3.5MB), all of which already carried these two settings and the reasoning
-        // below. Every admin page load paid that parse, in production and in every browser test:
-        // measured client-side cost per navigation was 311-1166ms against 35-229ms of server
-        // render, so the CLIENT was 6-10x the server on every page.
-        // Debuggability survives: sourceMap = true still maps stack traces back to Java source.
-        // Flip obfuscated to false TEMPORARILY when running protoblast/tools/analyze-teavm-bundle,
-        // which needs unmangled names -- and flip it back.
-        obfuscated = true
         addedToWebApp = true
-        sourceMap = true
         strict = false
-        // DO_NOTHING, not LINK_LOCAL_FILES: the map ships in the server jar and is
-        // served publicly, and LINK_LOCAL_FILES embeds absolute file:///tmp/... build
-        // paths as source links -- browsers refuse them with a security error on every
-        // page load and the map leaks local build paths. Mapping stack traces back to
-        // Java file+line needs only the mappings, which DO_NOTHING keeps.
-        sourceFilePolicy = SourceFilePolicy.DO_NOTHING
-        // BALANCED, deliberately, matching orcono/QQ/thoth: NONE ships the unoptimized bundle
-        // measured above, and AGGRESSIVE is catastrophic (orcono measured 87.8MB vs 14.9MB at
+        // BALANCED, deliberately, matching orcono/QQ/thoth: NONE ships a far larger unoptimized
+        // bundle, and AGGRESSIVE is catastrophic (orcono measured 87.8MB vs 14.9MB at
         // BALANCED -- inlining multiplies the honest suspendable bodies). Do not flip to
         // AGGRESSIVE without re-measuring.
         optimization = OptimizationLevel.BALANCED
