@@ -30,12 +30,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * A field that does not apply to what the operator chose says so, or is not there at all.
  *
- * AIDEV-NOTE: both halves of the same defect. A dependent picker whose narrowing cannot
+ * AIDEV-NOTE: one defect, two pickers. A dependent picker whose narrowing cannot
  * resolve renders DISABLED under the framework's "choose the sibling first" placeholder,
  * which is a true sentence only while the sibling is unchosen -- picking "Docker
  * container" left the runtime-image picker saying "Choose kind first" with a kind
- * chosen. And a stored site whose upstream serves files still rendered the instance pick,
- * greyed out, with help text describing an instance it will never have.
+ * chosen, and a site whose upstream serves files showed the same false sentence on its
+ * instance pick. Both narrowings now resolve for a chosen sibling and declare the true
+ * reason (HohenheimPickRules.RuntimeImageRules.resolve explains the stance). The site's
+ * instance pick is deliberately NOT hidden to avoid that sentence: hiding it was a
+ * one-way door, which SiteResource.fieldBindings explains.
  */
 class DependentFieldApplicabilityTest extends HohenheimTestBase {
 
@@ -46,7 +49,8 @@ class DependentFieldApplicabilityTest extends HohenheimTestBase {
     @Test
     void theRuntimeImagePickerSaysWhyItOffersNothing() {
         DefaultCatalogLoader catalogs = new DefaultCatalogLoader();
-        // Built exactly as InstanceResource declares it, off the kind handlers' own facts.
+        // Built as InstanceResource declares it, off the kind handlers' own facts, minus the
+        // Incus-only kinds: this test never picks one.
         HohenheimPickRules.RuntimeImageRules rules = new HohenheimPickRules.RuntimeImageRules(
             "kind",
             InstanceKinds.kindsWhere(InstanceKindHandler::usesRuntimeImage),
