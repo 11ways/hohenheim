@@ -4,7 +4,6 @@ import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.typed.CoreTypes;
-import be.elevenways.protoblast.common.typed.rule.Combinator;
 import be.elevenways.protoblast.common.typed.rule.Condition;
 import be.elevenways.protoblast.common.typed.rule.Operand;
 import be.elevenways.zenit.common.annotation.ZenitAutoLoad;
@@ -110,7 +109,7 @@ public final class HohenheimPickRules {
                 rules.add(Condition.test("volume_backend", CoreTypes.IN,
                     Operand.of(VolumeBackend.quotaCapableTokens())));
             }
-            return new Condition.Group(Combinator.ALL, false, rules);
+            return Condition.all(rules);
         }
 
         /**
@@ -199,7 +198,7 @@ public final class HohenheimPickRules {
             if (this.incusOnlyKinds.contains(kind)) {
                 rules.add(Condition.test("incus_image", CoreTypes.IS_NOT_EMPTY));
             }
-            return new Condition.Group(Combinator.ALL, false, rules);
+            return Condition.all(rules);
         }
 
         /**
