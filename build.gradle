@@ -250,7 +250,9 @@ serverJar.configure {
         attributes 'Enable-Native-Access': 'ALL-UNNAMED'
     }
 
-    from({ project.configurations.spamserviceDistribution.singleFile }) {
+    // Captured at configuration time: Task.project read while the task runs is refused from Gradle 10.
+    def spamserviceDistribution = project.configurations.spamserviceDistribution
+    from({ spamserviceDistribution.singleFile }) {
         into 'managed-services'
         rename { 'spamservice-server.jar' }
     }
@@ -300,7 +302,7 @@ serverJar.configure {
                 }
                 digest.digest()
             }
-            def expected = project.configurations.spamserviceDistribution.singleFile.withInputStream {
+            def expected = spamserviceDistribution.singleFile.withInputStream {
                 hashStream(it)
             }
             def actual = jar.getInputStream(nested).withCloseable { hashStream(it) }
