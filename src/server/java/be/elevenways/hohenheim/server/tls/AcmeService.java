@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.tls;
 
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
@@ -849,7 +850,7 @@ public class AcmeService {
                         () -> publisher.publish(authorization.record()));
                     published.add(authorization);
                 }
-                int propagation = HohenheimSettings.VALUES.getValue(
+                int propagation = Zenit.SETTINGS_VALUES.getValue(
                     HohenheimSettings.Ssl.DNS_PROPAGATION_SECONDS);
                 if (propagation > 0 && !publisher.servesImmediately()) {
                     Thread.sleep(TimeUnit.SECONDS.toMillis(propagation));
@@ -1041,7 +1042,7 @@ public class AcmeService {
         String normalized = email.trim().toLowerCase(Locale.ROOT);
         if (normalized.isEmpty()) return "";
 
-        String global = HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL);
+        String global = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL);
         if (global != null && normalized.equals(global.trim().toLowerCase(Locale.ROOT))) return "";
 
         return normalized;
@@ -1054,7 +1055,7 @@ public class AcmeService {
      *                when an explicit directory URL is configured
      */
     static String directoryUri(boolean staging) {
-        String configured = HohenheimSettings.VALUES.getValue(
+        String configured = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Ssl.ACME_DIRECTORY_URL);
         if (configured != null && !configured.isBlank()) {
             return configured.trim();
@@ -1067,12 +1068,12 @@ public class AcmeService {
         if (existing != null) return existing;
 
         boolean staging = Boolean.TRUE.equals(
-            HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_STAGING));
+            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_STAGING));
 
         String serverUri = directoryUri(staging);
 
         String email = normalizedEmail.isEmpty()
-            ? HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL)
+            ? Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL)
             : normalizedEmail;
 
         KeyPair keyPair = loadOrCreateAccountKeyPair(normalizedEmail);

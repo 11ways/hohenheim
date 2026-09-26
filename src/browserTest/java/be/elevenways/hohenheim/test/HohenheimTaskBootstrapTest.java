@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
-import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
+import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.hohenheim.server.task.BackupControlPlane;
 import be.elevenways.hohenheim.server.task.BackupDatabases;
 import be.elevenways.hohenheim.server.task.ReconcileEngineIsolation;
@@ -36,7 +36,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.time.Duration;
 import java.util.List;
 
@@ -94,13 +93,9 @@ class HohenheimTaskBootstrapTest {
 
     @BeforeAll
     static void boot() throws Exception {
-        // Role-gated declarations read the boot snapshot; this suite declares the
-        // full-node set (all roles on) through a private settings file.
-        File settingsDry = File.createTempFile("hohenheim-task-bootstrap", ".dry");
-        settingsDry.delete();
-        settingsDry.deleteOnExit();
-        System.setProperty("hohenheim.settings", settingsDry.getAbsolutePath());
-        HohenheimSettingsFiles.load();
+        // Role-gated declarations read the boot snapshot: every role defaults to on, the
+        // full-node set, and the lane's settings root carries no operator overrides.
+        HohenheimSettingsBoot.load();
 
         HohenheimEndpoints.init();
         // auto-discovery creates system_task + the M0xx tables
@@ -109,18 +104,9 @@ class HohenheimTaskBootstrapTest {
         service = TaskBootstrap.start(HohenheimDatabase.datasource());
     }
 
-    /**
-     * AIDEV-NOTE: the settings property is JVM-WIDE and the browser lane shares one fork,
-     * so leaving it set pointed every later class in this fork at this suite's temp file --
-     * SettingsGroupCoverageTest then read that path where it asserts the production one,
-     * and failed on an order it never chose. Clearing it is half the restore; the reload is
-     * what puts the loaded snapshot back.
-     */
     @AfterAll
     static void shutdown() {
         if (service != null) service.shutdown();
-        System.clearProperty("hohenheim.settings");
-        HohenheimSettingsFiles.load();
     }
 
     @Test

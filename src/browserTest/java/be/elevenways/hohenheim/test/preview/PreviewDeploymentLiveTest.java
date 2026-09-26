@@ -28,6 +28,7 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -81,9 +82,9 @@ class PreviewDeploymentLiveTest {
             booted = true;
             ProxyTestSupport.bootRuntime();
         }
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Previews.BASE_DOMAIN, "preview.test");
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Previews.LIFETIME_MINUTES, 60);
         HostFixtures.admitLocal();
         // A hosted zone covering the preview base domain, and a declared public

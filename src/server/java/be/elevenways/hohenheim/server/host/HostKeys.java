@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.process.BoundedProcess;
 import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -385,7 +386,7 @@ public final class HostKeys {
      * token, as the per-controller daemon resource names.
      */
     static @NonNull Path storeDirectory() {
-        Path directory = Path.of(HohenheimSettings.VALUES
+        Path directory = Path.of(Zenit.SETTINGS_VALUES
             .getValue(HohenheimSettings.Storage.DATA_PATH))
             .resolve("host-ssh").resolve(ControllerIdentity.token());
         try {

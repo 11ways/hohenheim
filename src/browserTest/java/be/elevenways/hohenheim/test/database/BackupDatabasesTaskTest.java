@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.hohenheim.server.task.BackupDatabases;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -65,8 +66,8 @@ class BackupDatabasesTaskTest {
         DatabaseService service = new DatabaseService(datasource);
 
         Path backupRoot = Files.createTempDirectory("hohenheim-backups");
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.BACKUP_PATH, backupRoot.toString());
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.BACKUP_RETENTION, 1);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.BACKUP_PATH, backupRoot.toString());
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.BACKUP_RETENTION, 1);
 
         String name = "bk" + System.nanoTime();
         String ephemeralName = "bke" + System.nanoTime();

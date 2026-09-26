@@ -1,14 +1,12 @@
 package be.elevenways.hohenheim.server.cli;
 
 import be.elevenways.hohenheim.server.HohenheimDatabase;
-import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
+import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.cli.HostConsole;
 import be.elevenways.zenit.server.cli.OfflineCommandException;
 import be.elevenways.zenit.server.cli.OfflineCommands;
 import be.elevenways.zenit.server.cli.ServerCli;
-import be.elevenways.zenit.server.setting.ServerSettings;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.function.Consumer;
@@ -86,8 +84,7 @@ public final class OfflineBoot {
             return true;
         }
 
-        HohenheimSettingsFiles.load();
-        ServerSettings.VALUES.loadFrom(ServerZenitRuntime.defaultSettingsSources());
+        HohenheimSettingsBoot.load();
         // Registry writes only, and the same ones the migration lane does: a command that
         // touches a grant-aware model must see the same liveness declarations a boot would.
         HohenheimAccess.declareGrantableModels();

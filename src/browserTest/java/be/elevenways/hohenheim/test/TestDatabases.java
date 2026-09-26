@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.test.live.LiveNamespaces;
 import be.elevenways.zenit.auth.server.ZenitAuth;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -80,7 +81,7 @@ public final class TestDatabases {
         SqlDatasource outgoing = HohenheimDatabase.datasource();
         releaseHostLeases();
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
         closeOutgoing(outgoing);
         remintControllerIdentity();
@@ -89,7 +90,7 @@ public final class TestDatabases {
         // proxy.force_https defaults ON and now fails CLOSED (503) whenever no certificate
         // is loaded -- which is every cleartext test proxy. The test baseline turns it off;
         // the force-SSL availability tests re-enable it explicitly.
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, false);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, false);
 
         if (template == null) {
             captureTemplate(db);

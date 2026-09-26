@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.AfterEach;
@@ -42,9 +43,9 @@ class Ipv6BanGranularityTest {
 
     @AfterEach
     void resetSettings() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.BANS_ENABLED, true);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.NEVER_BAN, List.of());
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 50);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.BANS_ENABLED, true);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.NEVER_BAN, List.of());
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 50);
     }
 
     private BanService newService(boolean nftEnabled) {
@@ -142,7 +143,7 @@ class Ipv6BanGranularityTest {
     @Test
     void protectedAddressInsideTheRangeVetoesTheWholeSlash64() {
         // One never_ban address inside the /64 protects the entire range.
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
             List.of("2001:db8:5:5::1337"));
         BanService service = newService(false);
 
@@ -153,12 +154,12 @@ class Ipv6BanGranularityTest {
         assertThat(BanService.protectionProblem("2001:db8:5:5::/64")).contains("never_ban");
 
         // A wider never_ban range protects every /64 inside it too.
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
             List.of("2001:db8:6::/48"));
         assertThat(BanService.protectionProblem("2001:db8:6:77::1")).contains("never_ban");
 
         // The neighboring /64 stays bannable.
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
             List.of("2001:db8:5:5::1337"));
         Row allowed = service.createBan("2001:db8:5:6::42", null, BanModel.SOURCE_MANUAL,
             null, null);

@@ -225,7 +225,7 @@ class ProteusAuthGateTest {
         guardWithProviderLeaf(gatedSite, "/admin", gatedProvider, ADMIN);
         gatedSite("denied.test", provider("Proteus denied", "rc", "hohenheim.site.elsewhere"));
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();
         httpPort = ((InetSocketAddress) proxy.getHttpListenerInfo().getAddress()).getPort();

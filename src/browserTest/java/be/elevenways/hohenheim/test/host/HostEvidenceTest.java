@@ -23,6 +23,7 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -162,10 +163,10 @@ class HostEvidenceTest {
             // 4. The freshness bound therefore judges the MEASUREMENT. A bound the reading
             //    is older than removes the budget even though probed_at is seconds old --
             //    proving the bound never silently rode the failed run's timestamp.
-            Integer originalHours = HohenheimSettings.VALUES.getValue(
+            Integer originalHours = Zenit.SETTINGS_VALUES.getValue(
                 HohenheimSettings.Capacity.FACTS_MAX_AGE_HOURS);
             try {
-                HohenheimSettings.VALUES.setValue(
+                Zenit.SETTINGS_VALUES.setValue(
                     HohenheimSettings.Capacity.FACTS_MAX_AGE_HOURS, 1);
                 Map<String, Object> memory = new LinkedHashMap<>();
                 memory.put(HostPreflight.MEM_TOTAL_FACT, SIXTEEN_GB);
@@ -196,7 +197,7 @@ class HostEvidenceTest {
                 assertThat(InstanceCapacity.budgetMbOf(model.findByName("evidence-a")))
                     .as("step 6: a freshly measured reading is a budget again").isNotNull();
             } finally {
-                HohenheimSettings.VALUES.setValue(
+                Zenit.SETTINGS_VALUES.setValue(
                     HohenheimSettings.Capacity.FACTS_MAX_AGE_HOURS,
                     originalHours != null ? originalHours : 168);
             }
@@ -224,10 +225,10 @@ class HostEvidenceTest {
             HostFixtures.acknowledgePosture(host);
             int serverId = model.findByName("evidence-b").get(ServerModel.ID);
 
-            Integer originalMinutes = HohenheimSettings.VALUES.getValue(
+            Integer originalMinutes = Zenit.SETTINGS_VALUES.getValue(
                 HohenheimSettings.Hosts.CONTACT_MAX_AGE_MINUTES);
             try {
-                HohenheimSettings.VALUES.setValue(
+                Zenit.SETTINGS_VALUES.setValue(
                     HohenheimSettings.Hosts.CONTACT_MAX_AGE_MINUTES, 180);
 
                 // 1. POSITIVE ANCHOR: a host that answered a moment ago places fine.
@@ -278,7 +279,7 @@ class HostEvidenceTest {
 
                 // 6. Zero disables the bound outright -- the declared way out for an
                 //    operator who would rather place onto an unheard-from host.
-                HohenheimSettings.VALUES.setValue(
+                Zenit.SETTINGS_VALUES.setValue(
                     HohenheimSettings.Hosts.CONTACT_MAX_AGE_MINUTES, 0);
                 Row silentAgain = model.findByName("evidence-b");
                 silentAgain.set(ServerModel.LAST_SEEN_AT,
@@ -287,7 +288,7 @@ class HostEvidenceTest {
                 HostAdmission.requireInstancePlacement(serverId,
                     WorkloadIsolation.SHARED_KERNEL, BUCKET);
             } finally {
-                HohenheimSettings.VALUES.setValue(
+                Zenit.SETTINGS_VALUES.setValue(
                     HohenheimSettings.Hosts.CONTACT_MAX_AGE_MINUTES,
                     originalMinutes != null ? originalMinutes : 180);
             }

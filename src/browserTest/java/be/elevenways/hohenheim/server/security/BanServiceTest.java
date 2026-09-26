@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.security.BanScope;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.security.SecurityEventTypes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -49,9 +50,9 @@ class BanServiceTest {
 
     @AfterEach
     void resetSettings() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.BANS_ENABLED, true);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.NEVER_BAN, List.of());
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 50);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.BANS_ENABLED, true);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.NEVER_BAN, List.of());
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 50);
     }
 
     private final List<String> notifications = new ArrayList<>();
@@ -197,7 +198,7 @@ class BanServiceTest {
         service.createBan("198.51.100.70", null, BanModel.SOURCE_MANUAL, null, null);
         assertThat(service.isBanned("198.51.100.70")).isTrue();
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.BANS_ENABLED, false);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.BANS_ENABLED, false);
         assertThat(service.isBanned("198.51.100.70")).isFalse();
         service.autoBan("198.51.100.71", "auth.lockout", "score 30 over threshold");
         assertThat(Models.get(BanModel.class).find()
@@ -206,7 +207,7 @@ class BanServiceTest {
 
     @Test
     void neverBanAllowlistRefusesExactAndCidrMatches() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
             List.of("203.0.113.7", "198.51.100.192/26", "2001:db8::/32"));
         BanService service = newService(false);
 
@@ -260,7 +261,7 @@ class BanServiceTest {
 
     @Test
     void exhaustedAutoBanBudgetSuppressesFurtherAutoBans() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 2);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 2);
         BanService service = newService(false);
 
         service.autoBan("192.0.2.10", "auth.lockout", "budget test 1");
@@ -277,7 +278,7 @@ class BanServiceTest {
 
     @Test
     void protectedTargetsDoNotConsumeTheAutoBanBudget() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 1);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 1);
         BanService service = newService(false);
 
         service.autoBan("127.0.0.1", "auth.lockout", "protected");
@@ -291,7 +292,7 @@ class BanServiceTest {
 
     @Test
     void duplicateTargetsDoNotConsumeAnotherAutoBanSlot() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 2);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 2);
         BanService service = newService(false);
 
         service.autoBan("192.0.2.62", "auth.lockout", "first");
@@ -307,7 +308,7 @@ class BanServiceTest {
 
     @Test
     void ipv6RotationsInOneSlash64ConsumeOneAutoBanSlot() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 2);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 2);
         BanService service = newService(false);
 
         service.autoBan("2001:db8:55:66::1", "reputation", "first address");
@@ -323,7 +324,7 @@ class BanServiceTest {
 
     @Test
     void concurrentIpv6RotationsSerializeIntoOneCompletedSlot() throws Exception {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 2);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 2);
         BanService service = newService(false);
         int workers = 12;
         CountDownLatch ready = new CountDownLatch(workers);
@@ -358,7 +359,7 @@ class BanServiceTest {
 
     @Test
     void nftFailureRollsBackTheRowAndDoesNotConsumeABudgetSlot() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 1);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 1);
         java.util.concurrent.atomic.AtomicBoolean fail = new java.util.concurrent.atomic.AtomicBoolean(true);
         NftService nft = new NftService((args, stdin) -> fail.get()
             ? new NftRunner.Result(1, "", "injected failure")
@@ -381,7 +382,7 @@ class BanServiceTest {
 
     @Test
     void manualBansAreNeverBudgetLimited() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 1);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 1);
         BanService service = newService(false);
 
         service.autoBan("192.0.2.20", "auth.lockout", "budget consumed");
@@ -398,7 +399,7 @@ class BanServiceTest {
 
     @Test
     void autoBanBudgetIsATrueSlidingHourAtTheBoundary() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 2);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 2);
         java.util.concurrent.atomic.AtomicLong now =
             new java.util.concurrent.atomic.AtomicLong(1_000_000_000L);
         BanService service = newService(false, now::get);
@@ -421,7 +422,7 @@ class BanServiceTest {
 
     @Test
     void budgetExhaustionNotifiesExactlyOncePerWindow() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 1);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR, 1);
         java.util.concurrent.atomic.AtomicLong now =
             new java.util.concurrent.atomic.AtomicLong(1_000_000_000L);
         BanService service = newService(false, now::get);

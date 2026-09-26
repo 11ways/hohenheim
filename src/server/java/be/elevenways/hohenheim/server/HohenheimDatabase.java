@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.server.ServerZenitRuntime;
@@ -98,14 +99,14 @@ public class HohenheimDatabase {
      * hohenheim {@code database.path}.
      */
     static @NonNull String fallbackUrl() {
-        String legacyUrl = HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.URL);
+        String legacyUrl = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.URL);
         if (legacyUrl != null && !legacyUrl.isBlank()) {
             Blast.log("Datasource: hohenheim database.url is deprecated; move it to zenit's"
                 + " database.url (settings/local.dry or ZENIT__DATABASE__URL)");
             return legacyUrl.trim();
         }
-        String path = HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.PATH);
-        if (HohenheimSettings.VALUES.hasValue(HohenheimSettings.Database.PATH)) {
+        String path = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.PATH);
+        if (Zenit.SETTINGS_VALUES.hasValue(HohenheimSettings.Database.PATH)) {
             Blast.log("Datasource: hohenheim database.path is deprecated; set zenit's"
                 + " database.url to jdbc:sqlite:" + path + " instead");
         }

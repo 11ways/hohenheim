@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -211,7 +212,7 @@ public final class SandboxedBuilds {
 
     /** The configured history depth, shared with every other writer of this record. */
     public static int historyPerOwner() {
-        Integer keep = HohenheimSettings.VALUES.getValue(
+        Integer keep = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Builds.HISTORY_PER_OWNER);
         return keep != null ? keep : 0;
     }

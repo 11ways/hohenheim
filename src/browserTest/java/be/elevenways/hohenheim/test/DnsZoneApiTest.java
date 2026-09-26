@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -48,7 +49,7 @@ class DnsZoneApiTest extends HohenheimTestBase {
     @BeforeAll
     static void seed() {
         previousDeclared = DnsNameservers.declared();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Dns.NAMESERVERS, DECLARED);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Dns.NAMESERVERS, DECLARED);
         int adminId = AuthModels.users().find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first().get(UserModel.ID);
         keyAdmin = ApiKeyService.create(adminId, "zone-api-admin", List.of("hohenheim.*"), null)
@@ -64,7 +65,7 @@ class DnsZoneApiTest extends HohenheimTestBase {
             // DnsZoneCascades take the records with the zone on every delete lane.
             zones.delete(zone.get(DnsZoneModel.ID));
         }
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Dns.NAMESERVERS, previousDeclared);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Dns.NAMESERVERS, previousDeclared);
         DnsZoneStore.INSTANCE.reload();
     }
 
@@ -214,7 +215,7 @@ class DnsZoneApiTest extends HohenheimTestBase {
         // 3. With nothing declared, the default policy refuses a file that carries a
         //    foreign NS set (there is nothing to put in its place) and leaves the rows
         //    untouched, while a file without apex NS rows imports with nothing to replace.
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Dns.NAMESERVERS, List.of());
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Dns.NAMESERVERS, List.of());
         try {
             int serialBeforeRefusal = serialOf(zoneId);
             HttpResponse<String> refused = keyPost(keyAdmin, "/api/v1/dns/zones/" + zoneId + "/import",
@@ -231,7 +232,7 @@ class DnsZoneApiTest extends HohenheimTestBase {
             assertThat(apexNs(zoneId)).as("step 3: which leaves the zone with no apex NS at all").isEmpty();
             assertThat(bare.body()).contains("\"nameservers\":[]");
         } finally {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Dns.NAMESERVERS, DECLARED);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Dns.NAMESERVERS, DECLARED);
         }
 
         // 4. The doors and the refusals every caller shares: blank text, a narrowed key,
@@ -290,7 +291,7 @@ class DnsZoneApiTest extends HohenheimTestBase {
 
         // 3. With nothing declared there is nothing to default to: the column stays blank
         //    and the served SOA keeps synthesizing ns1.<origin>, exactly as before.
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Dns.NAMESERVERS, List.of());
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Dns.NAMESERVERS, List.of());
         try {
             String origin = "mname-undeclared-zone-api-a.test";
             HttpResponse<String> undeclared = keyPost(keyAdmin, "/api/v1/dns/zones",
@@ -305,7 +306,7 @@ class DnsZoneApiTest extends HohenheimTestBase {
                 .as("step 3: the snapshot still synthesizes ns1.<origin>")
                 .isEqualTo("ns1." + origin);
         } finally {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Dns.NAMESERVERS, DECLARED);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Dns.NAMESERVERS, DECLARED);
             DnsZoneStore.INSTANCE.reload();
         }
     }

@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.proxy.ProxyProtocolV2;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.proxy.TlsClientHelloReader;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import com.sun.net.httpserver.HttpServer;
@@ -65,13 +66,13 @@ class TlsPassthroughTest {
         if (proxy != null) proxy.stop();
         if (rawBackend != null) rawBackend.close();
         if (httpBackend != null) httpBackend.stop(0);
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES, List.of());
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.CONNECTION_PROLOGUE_TIMEOUT_SECONDS, 5);
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.MAX_PUBLIC_CONNECTIONS, 10_000);
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.MAX_PENDING_CONNECTIONS, 1024);
     }
 
@@ -109,7 +110,7 @@ class TlsPassthroughTest {
     @Test
     void trustedIngressProxyHeaderIsPreservedAndUntrustedIngressIsRejected() throws Exception {
         resetDatabase();
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES, List.of("127.0.0.1/32"));
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
         CompletableFuture<Captured> captured = captureOneConnection(true);
@@ -137,7 +138,7 @@ class TlsPassthroughTest {
         rawBackend.close();
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
         rawBackend.setSoTimeout(1_000);
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES, List.of());
         resetDatabase();
         setupPassthrough("rejected.example.test", "exact", rawBackend.getLocalPort(), true);
@@ -210,7 +211,7 @@ class TlsPassthroughTest {
     @Test
     void clientHelloTimeoutIsAnAbsoluteDeadlineNotAnIdleTimeout() throws Exception {
         resetDatabase();
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.CONNECTION_PROLOGUE_TIMEOUT_SECONDS, 1);
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
         rawBackend.setSoTimeout(1_500);
@@ -237,7 +238,7 @@ class TlsPassthroughTest {
     @Test
     void completedClientHelloRemovesTheHandshakeDeadlineFromTheRelay() throws Exception {
         resetDatabase();
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.CONNECTION_PROLOGUE_TIMEOUT_SECONDS, 1);
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
         CompletableFuture<Void> backend = CompletableFuture.runAsync(() -> {
@@ -277,7 +278,7 @@ class TlsPassthroughTest {
     @Test
     void activeConnectionLimitRejectsExcessTlsClients() throws Exception {
         resetDatabase();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.MAX_PUBLIC_CONNECTIONS, 1);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.MAX_PUBLIC_CONNECTIONS, 1);
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
         CompletableFuture<Void> accepted = new CompletableFuture<>();
         CompletableFuture<Void> release = new CompletableFuture<>();
@@ -311,7 +312,7 @@ class TlsPassthroughTest {
     @Test
     void pendingHandshakeLimitRejectsExcessSlowClients() throws Exception {
         resetDatabase();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.MAX_PENDING_CONNECTIONS, 1);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.MAX_PENDING_CONNECTIONS, 1);
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
         setupPassthrough("pending.example.test", "exact", rawBackend.getLocalPort(), false);
         startProxy();
@@ -379,9 +380,9 @@ class TlsPassthroughTest {
         try (ServerSocket reservation = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
             publicPort = reservation.getLocalPort();
         }
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, publicPort);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, publicPort);
         setupPassthrough("loop.example.test", "exact", publicPort, false);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();
 
@@ -420,7 +421,7 @@ class TlsPassthroughTest {
     void trustedProxyIdentityIsRestoredBeforeTerminatedHttpSecurityAndForwarding() throws Exception {
         resetDatabase();
         installCertificate("identity.example.test");
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES, List.of("127.0.0.1"));
         AtomicReference<String> realIp = new AtomicReference<>();
         httpBackend = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -459,8 +460,8 @@ class TlsPassthroughTest {
     }
 
     private void startProxy() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();
     }

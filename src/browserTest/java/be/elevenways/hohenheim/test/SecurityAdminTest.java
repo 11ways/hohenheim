@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
@@ -39,7 +40,7 @@ class SecurityAdminTest extends HohenheimTestBase {
             .where(BanModel.IP.eq("192.168.1.1")).count()).isZero();
         assertThat(privateIp.statusCode()).isEqualTo(200);
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
             List.of("203.0.113.66", "198.51.100.0/24"));
         try {
             for (String ip : new String[] {"203.0.113.66", "198.51.100.9"}) {
@@ -50,7 +51,7 @@ class SecurityAdminTest extends HohenheimTestBase {
                     .where(BanModel.IP.eq(ip)).count()).as("ip %s", ip).isZero();
             }
         } finally {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.NEVER_BAN, List.of());
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.NEVER_BAN, List.of());
         }
 
         navigateToApp("/admin/bans");

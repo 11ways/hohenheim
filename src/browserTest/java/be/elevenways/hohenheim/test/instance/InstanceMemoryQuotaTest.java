@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -91,12 +92,12 @@ class InstanceMemoryQuotaTest extends HohenheimTestBase {
             HardDeletes.byId(instances, row.get(InstanceModel.ID));
         }
         if (this.previousMemoryCap != null) {
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Quota.MAX_MEMORY_MB_PER_OWNER, this.previousMemoryCap);
             this.previousMemoryCap = null;
         }
         if (this.previousCountCap != null) {
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER, this.previousCountCap);
             this.previousCountCap = null;
         }
@@ -104,9 +105,9 @@ class InstanceMemoryQuotaTest extends HohenheimTestBase {
 
     @Test
     void anOwnerMemoryBudgetBindsUnboundedWorkloadsAndComesBackOnEveryExit() throws Exception {
-        this.previousMemoryCap = HohenheimSettings.VALUES.getValue(
+        this.previousMemoryCap = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Quota.MAX_MEMORY_MB_PER_OWNER);
-        this.previousCountCap = HohenheimSettings.VALUES.getValue(
+        this.previousCountCap = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER);
         long baseline = Quotas.usedOf(MEMORY_BUCKET);
 
@@ -134,9 +135,9 @@ class InstanceMemoryQuotaTest extends HohenheimTestBase {
         //    creates through the REAL create submit. The instance COUNT is left uncapped, so
         //    the only thing that can refuse either create is the memory budget.
         long limit = Quotas.usedOf(MEMORY_BUCKET) + FOOTPRINT_MB;
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Quota.MAX_MEMORY_MB_PER_OWNER, (int) limit);
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER, 0);
 
         CyclicBarrier barrier = new CyclicBarrier(2);

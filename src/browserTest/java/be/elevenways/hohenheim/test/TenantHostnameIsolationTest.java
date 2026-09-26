@@ -18,6 +18,7 @@ import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.panel.PanelPeer;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -381,7 +382,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
     /** Declare the node's role set and snapshot it, the way a boot's settings load does. */
     private static void roles(Set<Role> enabled) {
         for (Role role : Role.values()) {
-            HohenheimSettings.VALUES.setValue(role.setting(), enabled.contains(role));
+            Zenit.SETTINGS_VALUES.setValue(role.setting(), enabled.contains(role));
         }
         HohenheimRoles.capture();
     }

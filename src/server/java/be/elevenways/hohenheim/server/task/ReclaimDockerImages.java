@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.docker.DockerReclaim;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
@@ -46,7 +47,7 @@ public class ReclaimDockerImages extends ScheduledTask {
 
     @Override
     public void executor(TaskContext ctx) {
-        if (!Boolean.TRUE.equals(HohenheimSettings.VALUES.getValue(HohenheimSettings.Stacks.RECLAIM_IMAGES))) {
+        if (!Boolean.TRUE.equals(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Stacks.RECLAIM_IMAGES))) {
             return;
         }
 
@@ -64,12 +65,12 @@ public class ReclaimDockerImages extends ScheduledTask {
     /** Whether unattributable (reference-less) images are swept too; off by default. */
     public static boolean includeUnattributed() {
         return Boolean.TRUE.equals(
-            HohenheimSettings.VALUES.getValue(HohenheimSettings.Stacks.RECLAIM_UNTRACKED));
+            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Stacks.RECLAIM_UNTRACKED));
     }
 
     /** The configured age guard, never below the floor: zero would race a live deploy. */
     public static @NonNull Duration minimumAge() {
-        Integer hours = HohenheimSettings.VALUES.getValue(HohenheimSettings.Stacks.RECLAIM_MIN_AGE_HOURS);
+        Integer hours = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Stacks.RECLAIM_MIN_AGE_HOURS);
         int resolved = hours == null ? MIN_AGE_FLOOR_HOURS : Math.max(MIN_AGE_FLOOR_HOURS, hours);
         return Duration.ofHours(resolved);
     }

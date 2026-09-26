@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.AfterEach;
@@ -44,8 +45,8 @@ class NeverBanHostnamesTest {
     void reset() {
         NeverBanHostnames.INSTANCE.setResolver(null);
         NeverBanHostnames.INSTANCE.resetForTests();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.NEVER_BAN, List.of());
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.BANS_ENABLED, true);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.NEVER_BAN, List.of());
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.BANS_ENABLED, true);
     }
 
     private BanService newService() {
@@ -65,7 +66,7 @@ class NeverBanHostnamesTest {
 
     @Test
     void resolvedHostnameAddressesAreUnbannable() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
             List.of("home.example.net"));
         NeverBanHostnames.INSTANCE.setResolver(hostname ->
             List.of("203.0.113.77", "2001:db8:9:9::abcd"));
@@ -95,7 +96,7 @@ class NeverBanHostnamesTest {
 
     @Test
     void resolutionFailureKeepsThePreviousAddressesProtected() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
             List.of("home.example.net"));
         NeverBanHostnames.INSTANCE.setResolver(hostname -> List.of("203.0.113.80"));
         NeverBanHostnames.INSTANCE.refresh();
@@ -117,20 +118,20 @@ class NeverBanHostnamesTest {
 
     @Test
     void removedHostnamesLoseTheirProtection() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
             List.of("home.example.net"));
         NeverBanHostnames.INSTANCE.setResolver(hostname -> List.of("203.0.113.85"));
         NeverBanHostnames.INSTANCE.refresh();
         assertThat(BanService.protectionProblem("203.0.113.85")).contains("never_ban");
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.NEVER_BAN, List.of());
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.NEVER_BAN, List.of());
         NeverBanHostnames.INSTANCE.refresh();
         assertThat(BanService.protectionProblem("203.0.113.85")).isNull();
     }
 
     @Test
     void literalOnlyListsBehaveExactlyAsBefore() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
             List.of("203.0.113.7", "198.51.100.192/26"));
         NeverBanHostnames.INSTANCE.setResolver(hostname -> {
             throw new AssertionError("no hostname entries, the resolver must never run");
@@ -147,7 +148,7 @@ class NeverBanHostnamesTest {
         // A hostname in the list but NOT yet refreshed: the ban path must not
         // resolve it (the resolver seam would throw), and a hostname VALUE as
         // ban target still refuses via the literal pre-check.
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
             List.of("home.example.net"));
         NeverBanHostnames.INSTANCE.setResolver(hostname -> {
             throw new AssertionError("resolved on a ban path");
@@ -167,7 +168,7 @@ class NeverBanHostnamesTest {
         });
         HohenheimSecurity.boot();
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.NEVER_BAN,
             List.of("updated.example.net"));
 
         assertThat(resolved.await(5, TimeUnit.SECONDS)).isTrue();

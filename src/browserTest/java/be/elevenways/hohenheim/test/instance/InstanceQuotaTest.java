@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -72,7 +73,7 @@ class InstanceQuotaTest extends HohenheimTestBase {
             HardDeletes.byId(instances, row.get(InstanceModel.ID));
         }
         this.createdIds.clear();
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER,
             this.previousLimit == null ? 0 : this.previousLimit);
     }
@@ -91,11 +92,11 @@ class InstanceQuotaTest extends HohenheimTestBase {
 
     @Test
     void twoRacingCreatesCannotOverspendTheLastSlotAndDestroyFreesIt() throws Exception {
-        this.previousLimit = HohenheimSettings.VALUES.getValue(
+        this.previousLimit = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER);
         long usedBefore = Quotas.usedOf(OPERATOR_BUCKET);
         long limit = usedBefore + 1;   // EXACTLY one remaining operator slot
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER, (int) limit);
 
         // 1. Two threads behind a barrier both submit the REAL create (the zenit-cms

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.security.SecurityEventTypes;
 
 import java.util.Map;
@@ -163,10 +164,10 @@ public final class ThreatScorer {
 
     public ThreatScorer() {
         this(Now::millis,
-            () -> HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISS_WINDOW_SECONDS),
-            () -> HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISS_BAN_THRESHOLD),
-            () -> HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISS_DECAY_PER_HIT),
-            () -> HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.DEFAULT_EVENT_WEIGHT));
+            () -> Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISS_WINDOW_SECONDS),
+            () -> Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISS_BAN_THRESHOLD),
+            () -> Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISS_DECAY_PER_HIT),
+            () -> Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.DEFAULT_EVENT_WEIGHT));
     }
 
     /** Test constructor: inject the clock and the windowing knobs. */

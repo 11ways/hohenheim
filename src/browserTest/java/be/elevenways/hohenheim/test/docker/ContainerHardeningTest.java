@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.docker;
 
 import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.zenit.common.Zenit;
 import java.time.Duration;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.runtime.NetworkPosture;
@@ -425,9 +426,9 @@ class ContainerHardeningTest {
         int instanceId = 999_107;
         int neighbourId = 999_108;
         Path volumeRoot = Files.createTempDirectory("hohenheim-volume-root");
-        String savedRoot = HohenheimSettings.VALUES.getValue(
+        String savedRoot = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Storage.VOLUME_ROOT);
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Storage.VOLUME_ROOT, volumeRoot.toString());
         PrivateNetns netns = new PrivateNetns();
         String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
@@ -538,7 +539,7 @@ class ContainerHardeningTest {
                 runtime.destroy(created);
             }
             netns.close();
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.VOLUME_ROOT, savedRoot);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.VOLUME_ROOT, savedRoot);
             deleteTree(volumeRoot);
         }
     }
@@ -814,12 +815,12 @@ class ContainerHardeningTest {
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, TEST_IMAGE);
 
-        Integer original = HohenheimSettings.VALUES.getValue(
+        Integer original = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Security.CONTAINER_PIDS_LIMIT);
         String name = "hh-forkstorm-" + System.nanoTime();
         try {
             // 1. A deliberately tiny cap, so the storm is bounded and fast.
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.CONTAINER_PIDS_LIMIT, 24);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.CONTAINER_PIDS_LIMIT, 24);
             assertThat(ContainerHardening.pidsLimit())
                 .as("step 1: the setting reaches the policy").isEqualTo(24);
 
@@ -841,7 +842,7 @@ class ContainerHardeningTest {
                 .as("step 4: the daemon holds the configured cap")
                 .isEqualTo(24L);
         } finally {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.CONTAINER_PIDS_LIMIT,
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.CONTAINER_PIDS_LIMIT,
                 original != null ? original : ContainerHardening.DEFAULT_PIDS_LIMIT);
             try {
                 docker.removeContainer(name, true);

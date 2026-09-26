@@ -110,7 +110,7 @@ public final class ErrorPages {
     /** The operator's own copy when they set one, else the localized default. */
     private static String override(SettingDefinition<String> setting, LocaleChain locales,
                                   String key) {
-        String configured = HohenheimSettings.VALUES.getValue(setting);
+        String configured = Zenit.SETTINGS_VALUES.getValue(setting);
         return configured != null && !configured.isBlank() ? configured : text(locales, key);
     }
 

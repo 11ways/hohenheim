@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -62,7 +63,7 @@ class RootDiskSizeTest extends HohenheimTestBase {
             HardDeletes.byId(instances, row.get(InstanceModel.ID));
         }
         if (this.previousDiskCap != null) {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER,
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER,
                 this.previousDiskCap);
             this.previousDiskCap = null;
         }
@@ -152,7 +153,7 @@ class RootDiskSizeTest extends HohenheimTestBase {
 
     @Test
     void theRootDiskIsChargedToTheOwnerDiskCapLikeAnAttachedOne() {
-        this.previousDiskCap = HohenheimSettings.VALUES.getValue(
+        this.previousDiskCap = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER);
         long usedBefore = Quotas.usedOf(DISK_BUCKET);
 
@@ -205,7 +206,7 @@ class RootDiskSizeTest extends HohenheimTestBase {
             .isEqualTo(usedBefore + 14);
 
         // 5. Over the cap is the NAMED refusal, and the refused write spends nothing.
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER,
             (int) Quotas.usedOf(DISK_BUCKET) + 2);
         Row over = Models.get(InstanceModel.class).findById(id);
         over.set(InstanceModel.SETTINGS, settings("alpine/3.22", 40));
@@ -215,7 +216,7 @@ class RootDiskSizeTest extends HohenheimTestBase {
             .isEqualTo("disk_quota_reached");
         assertThat(Quotas.usedOf(DISK_BUCKET))
             .as("step 5: the refused write spent nothing").isEqualTo(usedBefore + 14);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER,
             this.previousDiskCap == null ? 0 : this.previousDiskCap);
 
         // 6. The soft-delete transition hands the charge back -- InstanceService.destroy

@@ -30,6 +30,7 @@ import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -72,12 +73,12 @@ class ApplicationBackupRecoveryTest {
         SnapshotRuntime runtime = new SnapshotRuntime(daemon.runtime());
         InstanceKinds.register(new SnapshotKind(runtime));
         ImageTransport transport = new ImageTransport(daemon);
-        String priorData = HohenheimSettings.VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
+        String priorData = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
         DockerClient.overrideLocalTransportForTest(() -> transport);
-        String priorStaging = HohenheimSettings.VALUES.getValue(HohenheimSettings.Backup.STAGING_PATH);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, tmp.resolve("data").toString());
+        String priorStaging = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Backup.STAGING_PATH);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, tmp.resolve("data").toString());
         FieldEncryption.installKeyring(EncryptionKeyring.loadOrCreate(tmp.resolve("ring.keys")));
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.STAGING_PATH, tmp.resolve("staging").toString());
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.STAGING_PATH, tmp.resolve("staging").toString());
         try {
             Db.run(datasource, () -> {
                 HostFixtures.admitLocal();
@@ -196,8 +197,8 @@ class ApplicationBackupRecoveryTest {
             daemon.close();
             FakeDockerDaemon.restore();
             FieldEncryption.installKeyring(null);
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.STAGING_PATH, priorStaging);
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, priorData);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.STAGING_PATH, priorStaging);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, priorData);
         }
     }
 

@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -75,9 +76,9 @@ class QuotaDriftReconcileTest {
     static void setUp() throws Exception {
         datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB, 0);
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Capacity.MEMORY_OVERCOMMIT_RATIO, 1.0);
     }
 
@@ -94,7 +95,7 @@ class QuotaDriftReconcileTest {
         this.instances.clear();
         this.hosts.clear();
         if (this.previousMemoryCap != null) {
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Quota.MAX_MEMORY_MB_PER_OWNER, this.previousMemoryCap);
             this.previousMemoryCap = null;
         }
@@ -102,7 +103,7 @@ class QuotaDriftReconcileTest {
 
     @Test
     void aRefusedCreateNeverLeavesAnOwnerChargedForAWorkloadThatDoesNotExist() {
-        this.previousMemoryCap = HohenheimSettings.VALUES.getValue(
+        this.previousMemoryCap = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Quota.MAX_MEMORY_MB_PER_OWNER);
         Db.run(datasource, () -> {
             int roomy = host("roomy", 65536L);
@@ -119,7 +120,7 @@ class QuotaDriftReconcileTest {
             // 2. A create the OWNER MEMORY cap refuses spends NOTHING. The slot is reserved
             //    before the memory is, so an uncompensated refusal cost the owner one
             //    instance of their cap per refusal, forever -- a lockout that only grows.
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Quota.MAX_MEMORY_MB_PER_OWNER, FOOTPRINT_MB);
             Throwable overOwnerBudget =
                 catchThrowable(() -> Models.get(InstanceModel.class)
@@ -132,7 +133,7 @@ class QuotaDriftReconcileTest {
                 .isEqualTo(1);
             assertThat(Quotas.usedOf(MEMORY_BUCKET))
                 .as("step 2: the memory never moved").isEqualTo(FOOTPRINT_MB);
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Quota.MAX_MEMORY_MB_PER_OWNER, 0);
 
             // 3. The shape robbedoes carried: the HOST budget refuses AFTER the owner's slot

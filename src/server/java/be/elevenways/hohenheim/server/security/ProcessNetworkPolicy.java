@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -101,7 +102,7 @@ public final class ProcessNetworkPolicy {
     private static volatile @Nullable ProcessNetworkPolicy override;
 
     private static final BooleanSupplier ENABLED_SETTING = () -> Boolean.TRUE.equals(
-        HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.NFTABLES_ENABLED));
+        Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.NFTABLES_ENABLED));
 
     private static final ProcessNetworkPolicy PRODUCTION = new ProcessNetworkPolicy(
         new NftRunner.Sudo(), ENABLED_SETTING, SYSTEM_RESOLV_CONF);

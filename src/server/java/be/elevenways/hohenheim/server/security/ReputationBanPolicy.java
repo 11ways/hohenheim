@@ -6,6 +6,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.spamservice.client.Reputation;
 import be.elevenways.spamservice.client.SpamserviceClient;
+import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -94,9 +95,9 @@ public final class ReputationBanPolicy {
         this.clock = Now::millis;
         this.availabilitySource = () -> SpamserviceManager.get().client() != null;
         this.clientSource = () -> SpamserviceManager.get().client();
-        this.categoriesSource = () -> HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.REPUTATION_BAN_CATEGORIES);
-        this.thresholdSource = () -> HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.REPUTATION_BAN_THRESHOLD);
-        this.positiveWeightSource = () -> HohenheimSettings.VALUES.getValue(
+        this.categoriesSource = () -> Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.REPUTATION_BAN_CATEGORIES);
+        this.thresholdSource = () -> Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.REPUTATION_BAN_THRESHOLD);
+        this.positiveWeightSource = () -> Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Security.REPUTATION_POSITIVE_EVENT_WEIGHT);
         this.lookupOverride = null;
         this.banSink = (ip, reason) -> BanService.INSTANCE.autoBan(ip, "reputation", reason);

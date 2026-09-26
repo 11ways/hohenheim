@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.tls;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.process.BoundedProcess;
+import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.concurrent.TimeUnit;
@@ -28,12 +29,12 @@ public final class CommandDnsTxtPublisher implements DnsTxtPublisher {
     }
 
     public static boolean isConfigured() {
-        String command = HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND);
+        String command = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND);
         return command != null && !command.isBlank();
     }
 
     private static void run(String action, DnsTxtRecord record) throws Exception {
-        String command = HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND);
+        String command = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND);
         if (command == null || command.isBlank()) {
             throw new IllegalStateException("DNS hook command is not configured");
         }

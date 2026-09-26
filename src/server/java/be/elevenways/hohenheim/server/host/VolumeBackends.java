@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -47,13 +48,13 @@ public final class VolumeBackends {
      * otherwise {@code <data_path>/volumes}.
      */
     public static @NonNull String volumeRoot() {
-        String declared = HohenheimSettings.VALUES.getValue(
+        String declared = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Storage.VOLUME_ROOT);
         if (declared != null && !declared.isBlank()) {
             String root = declared.trim();
             return root.endsWith("/") ? root.substring(0, root.length() - 1) : root;
         }
-        String dataPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
+        String dataPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
         String base = dataPath == null || dataPath.isBlank() ? "/opt/hohenheim/data" : dataPath.trim();
         return base.endsWith("/") ? base + "volumes" : base + "/volumes";
     }

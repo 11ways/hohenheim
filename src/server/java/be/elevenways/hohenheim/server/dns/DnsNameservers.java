@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.dns;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.dns.DelegationVerdict;
 import be.elevenways.hohenheim.model.DnsRecordModel;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -30,7 +31,7 @@ public final class DnsNameservers {
 
     /** @return the declared names, canonical and deduplicated by the setting's coercer; empty when none */
     public static @NonNull List<String> declared() {
-        List<String> names = HohenheimSettings.VALUES.getValue(HohenheimSettings.Dns.NAMESERVERS);
+        List<String> names = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Dns.NAMESERVERS);
         return names == null ? List.of() : names;
     }
 

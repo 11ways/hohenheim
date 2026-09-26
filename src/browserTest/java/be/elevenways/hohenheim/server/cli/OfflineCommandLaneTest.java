@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.server.cli;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
-import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.test.ApiSupport;
@@ -11,14 +10,17 @@ import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.migration.InstallsAt;
 import be.elevenways.zenit.auth.server.PasswordService;
 import be.elevenways.zenit.auth.server.SetPasswordOfflineCommand;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.migration.Migration;
+import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.cli.HistorySecretSurveyCommand;
 import be.elevenways.zenit.server.cli.HostConsole;
 import be.elevenways.zenit.server.cli.OfflineCommandException;
 import be.elevenways.zenit.server.cli.OfflineCommands;
 import be.elevenways.zenit.server.cli.PurgeHistorySecretsCommand;
+import be.elevenways.zenit.server.setting.ServerSettings;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -55,8 +57,6 @@ class OfflineCommandLaneTest {
     private static final String FORGOTTEN = "the forgotten password";
     private static final String CHOSEN = "chosen offline password";
 
-    private static String previousSettingsProperty;
-    private static Path settingsFile;
     private static Datasource fixtureDatasource;
 
     @BeforeAll
@@ -66,27 +66,10 @@ class OfflineCommandLaneTest {
         // The pool zenit-auth's models captured; the lane opens and closes its OWN, so this
         // one survives the whole class and must be released by hand at the end.
         fixtureDatasource = HohenheimDatabase.datasource();
-
-        // OfflineBoot loads the real settings chain, which is the point -- but it must not
-        // read the developer's own settings/hohenheim.dry. An empty file keeps the load
-        // REAL while leaving the programmatic database.path this fixture installed intact
-        // (loadFrom applies a source's keys; it never resets the ones the source omits).
-        settingsFile = Files.createTempFile("hohenheim-offline-settings", ".dry");
-        Files.writeString(settingsFile, "{}");
-        previousSettingsProperty = System.getProperty("hohenheim.settings");
-        System.setProperty("hohenheim.settings", settingsFile.toString());
     }
 
     @AfterAll
     static void tearDown() throws Exception {
-        if (previousSettingsProperty == null) {
-            System.clearProperty("hohenheim.settings");
-        } else {
-            System.setProperty("hohenheim.settings", previousSettingsProperty);
-        }
-        if (settingsFile != null) {
-            Files.deleteIfExists(settingsFile);
-        }
         // The lane CLOSES the datasource it opened, which is correct for a process about to
         // exit and fatal for the next class in a shared JVM. Hand the fork a live one back.
         TestDatabases.freshDatabase();
@@ -162,7 +145,7 @@ class OfflineCommandLaneTest {
         //    command sees the same ORM a booted server would. Proven by a command whose
         //    refusal can only be COMPOSED by querying backup_targets -- "(none configured)"
         //    is the result of a live ORM read, not a constant.
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, "");
         Datasource beforeLane = Datasources.getDefault();
         assertThatThrownBy(() -> OfflineBoot.runIfRequested(
@@ -249,12 +232,13 @@ class OfflineCommandLaneTest {
         assertThat(String.join("\n", errors))
             .as("step 6b: and the refusal on stderr").contains("--restore-control-plan");
 
-        // 7. The settings file the lane loaded is the one the property named: this is what
-        //    makes a database.encryption.key_file override in settings/local.dry apply to a
-        //    break-glass command exactly as it does to a boot.
-        assertThat(HohenheimSettingsFiles.settingsFile())
-            .as("step 7: the lane must honour the settings-file override")
-            .isEqualTo(settingsFile);
+        // 7. The lane reads the chain a boot reads, settings/local.dry under the settings root
+        //    included: this is what makes a database.encryption.key_file override there apply
+        //    to a break-glass command exactly as it does to a boot.
+        assertThat(ServerSettings.VALUES.getLoadedSources())
+            .as("step 7: the lane's chain carries the operator's settings/local.dry")
+            .anySatisfy(source -> assertThat(source.describe())
+                .isEqualTo(ServerZenitRuntime.localSettingsFile().toString()));
 
         // 8. THE wiring itself. Everything above proves OfflineBoot works; this proves the
         //    application ENTRY POINT reaches it, which is the half that was missing. The

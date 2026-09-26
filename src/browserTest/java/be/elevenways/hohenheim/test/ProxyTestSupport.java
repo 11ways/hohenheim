@@ -108,7 +108,7 @@ public final class ProxyTestSupport {
 
     /** Start a ProxyServer on an ephemeral HTTP port and return it. */
     public static ProxyServer startProxy() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         ProxyServer proxy = new ProxyServer();
         proxy.start();
         return proxy;

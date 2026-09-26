@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceFileSupport;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -447,13 +448,13 @@ public final class InstanceFiles {
     }
 
     private static int maxEntries() {
-        Integer configured = HohenheimSettings.VALUES.getValue(HohenheimSettings.Files.MAX_ENTRIES);
+        Integer configured = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Files.MAX_ENTRIES);
         return configured == null || configured <= 0 ? 2000 : configured;
     }
 
     /** The cap on ONE file, in both directions. */
     public static long maxFileBytes() {
-        Integer kilobytes = HohenheimSettings.VALUES.getValue(HohenheimSettings.Files.MAX_FILE_KB);
+        Integer kilobytes = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Files.MAX_FILE_KB);
         return (kilobytes == null || kilobytes <= 0 ? 8192L : kilobytes.longValue()) * 1024;
     }
 

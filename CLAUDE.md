@@ -87,17 +87,15 @@ silently aborts used to make a run of nothing look green.
   typed `RowResource` peers for sites/domains/certificates/access lists/auth
   providers/databases/servers/notification channels, zenit-cms's readonly
   `ActivityResource` over the framework activity log, the framework
-  `SettingsPage` at `/admin/settings` (two mounts: the hohenheim context
-  editing `settings/hohenheim.dry`, plus zenit's `ServerSettings` editing
-  `settings/local.dry`; DIFF-based save, secrets masked, restartRequired
+  `SettingsPage` at `/admin/settings` (the `hohenheim` group and the framework
+  mount, both editing `settings/local.dry`; DIFF-based save, secrets masked, restartRequired
   metadata drives the restart toast; a group deep-links by its path, e.g.
   `/admin/settings?section=capacity` or `?section=database.backup`), and `RecordScopedPage` tabs on sites
   (Domains, Protected paths on every non-passthrough site, Deployments on a site whose
   instance carries a git source, Dev sessions)
-  and databases (Restore). `HohenheimSettings` roots at its OWN `hohenheim`
-  group (the standard consumer shape); its file keys stay flat
-  (`proxy.http_port`) because the context root maps the file root. Tests
-  redirect the editable file via `-Dhohenheim.settings`. Mutations are
+  and databases (Restore). `HohenheimSettings` is the `hohenheim` group of
+  `Zenit.SETTINGS_VALUES` (`hohenheim.proxy.http_port`, `ZENIT__HOHENHEIM__*`);
+  the test lanes point `zenit.settings.root` into the build directory. Mutations are
   recorded by zenit's `ActivityLog` (enabled in `settings/default.dry`;
   behaviour verbs via `ActivityLog.withAction`) and routing-relevant writes
   rebuild the proxy via `ProxyReloadHooks` on the global model-hook tier --
@@ -149,8 +147,8 @@ host the capability -- `TaskService` knows nothing about roles and almost no
 executor self-guards. The genuinely node-agnostic tasks (`BackupControlPlane`,
 `CheckForeignKeys`) use a bare list on purpose. Activity pruning is no Hohenheim task
 any more: zenit's own `ActivityPruneTask` reads `activity.retention_days`, which
-`HohenheimSettingsFiles.applyFrameworkDefaults` seeds to 90 days. Reading
-roles before `HohenheimSettingsFiles.load()` throws; tests get their snapshot
+`HohenheimSettingsBoot.applyFrameworkDefaults` seeds to 90 days. Reading
+roles before `HohenheimSettingsBoot.load()` throws; tests get their snapshot
 from `HohenheimTestRuntime.ensureBooted()` unless they need a restricted set,
 which they capture themselves before booting.
 

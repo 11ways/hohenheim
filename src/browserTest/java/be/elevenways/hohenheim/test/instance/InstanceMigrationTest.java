@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -568,17 +569,17 @@ class InstanceMigrationTest {
             // 7. A destination with no room REFUSES BY NAME, before a single daemon call:
             //    migrateTo names its own host, so this reservation is the only thing
             //    between an operator's typo and an overbooked machine.
-            Integer previousReserve = HohenheimSettings.VALUES.getValue(
+            Integer previousReserve = Zenit.SETTINGS_VALUES.getValue(
                 HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB);
-            Double previousRatio = HohenheimSettings.VALUES.getValue(
+            Double previousRatio = Zenit.SETTINGS_VALUES.getValue(
                 HohenheimSettings.Capacity.MEMORY_OVERCOMMIT_RATIO);
             int last = instanceRecord("cap-last", src,
                 FakeNativeDaemons.FakeNativeKind.ID.toString());
             service.deploy(last);
             try {
-                HohenheimSettings.VALUES.setValue(
+                Zenit.SETTINGS_VALUES.setValue(
                     HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB, 0);
-                HohenheimSettings.VALUES.setValue(
+                Zenit.SETTINGS_VALUES.setValue(
                     HohenheimSettings.Capacity.MEMORY_OVERCOMMIT_RATIO, 1.0);
                 // 200 MB of budget, 128 of it already spent by the neighbour.
                 HostPreflight.store(ServerModel.nameOf(dst), new HostPreflight.Report(
@@ -608,9 +609,9 @@ class InstanceMigrationTest {
                     .as("step 7: and the refused reservation spent nothing")
                     .isEqualTo(128);
             } finally {
-                HohenheimSettings.VALUES.setValue(
+                Zenit.SETTINGS_VALUES.setValue(
                     HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB, previousReserve);
-                HohenheimSettings.VALUES.setValue(
+                Zenit.SETTINGS_VALUES.setValue(
                     HohenheimSettings.Capacity.MEMORY_OVERCOMMIT_RATIO, previousRatio);
             }
 

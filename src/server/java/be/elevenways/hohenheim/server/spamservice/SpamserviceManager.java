@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.process.BoundedProcess;
 import be.elevenways.hohenheim.server.security.SecurityReportEnv;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.spamservice.client.SpamserviceClient;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.security.SecureTokens;
@@ -804,7 +805,7 @@ public final class SpamserviceManager {
     }
 
     private static long reputationTtlMs() {
-        Integer seconds = HohenheimSettings.VALUES.getValue(
+        Integer seconds = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Security.REPUTATION_TTL_SECONDS);
         return Math.max(1, seconds != null ? seconds : 300) * 1000L;
     }
@@ -814,7 +815,7 @@ public final class SpamserviceManager {
     }
 
     private static Path configuredRuntimeRoot() {
-        String configured = HohenheimSettings.VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
+        String configured = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
         return Path.of(configured == null || configured.isBlank() ? "data" : configured);
     }
 

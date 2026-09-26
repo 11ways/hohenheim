@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.test.host.LiveRemoteHost;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -190,7 +191,7 @@ class LiveControlPlaneOffHostBackupTest {
                     + " ADMITTED for placement, and it does not need to be")
                 .isEqualTo(ServerModel.ADMISSION_BLOCKED);
 
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, "control-plane-offhost");
             BackupTarget target = ControlPlaneBackups.requireDestination();
 
@@ -242,14 +243,14 @@ class LiveControlPlaneOffHostBackupTest {
         //    target resolves its destination from a `servers` row, which lives in the database
         //    that is gone. That is the honest total-loss order (and the documented limitation
         //    on restoreFromTarget) -- and it makes the bytes provably free of any local state.
-        String originalPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.PATH);
-        String originalUrl = HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.URL);
+        String originalPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.PATH);
+        String originalUrl = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.URL);
         String originalKeyFile = ServerSettings.VALUES.getValue(
             ServerSettings.Database.Encryption.KEY_FILE);
         Path fetched = workspace.resolve("fetched.zrec");
         try {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, dbFile.toString());
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.URL, "");
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.PATH, dbFile.toString());
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.URL, "");
             ServerSettings.VALUES.setValue(
                 ServerSettings.Database.Encryption.KEY_FILE, keyringFile.toString());
             remoteFetch(remoteFile, fetched);
@@ -259,8 +260,8 @@ class LiveControlPlaneOffHostBackupTest {
             ControlPlaneBackups.restore(fetched);
         } finally {
             Files.deleteIfExists(fetched);
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, originalPath);
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.URL,
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.PATH, originalPath);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.URL,
                 originalUrl == null ? "" : originalUrl);
             ServerSettings.VALUES.setValue(
                 ServerSettings.Database.Encryption.KEY_FILE, originalKeyFile);

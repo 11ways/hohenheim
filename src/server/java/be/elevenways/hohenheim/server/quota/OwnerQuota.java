@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -79,7 +80,7 @@ public final class OwnerQuota {
         if (override != null) {
             return override;
         }
-        Integer value = HohenheimSettings.VALUES.getValue(fallback);
+        Integer value = Zenit.SETTINGS_VALUES.getValue(fallback);
         return value != null && value > 0 ? value : null;
     }
 

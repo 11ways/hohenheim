@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.dns;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.util.Watchdog;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -72,7 +73,7 @@ public final class DnsServer {
     private final ConcurrentHashMap<InetAddress, Integer> tcpPerClient = new ConcurrentHashMap<>();
     private volatile long tcpConnectionDeadlineMs = TCP_CONNECTION_DEADLINE_MS;
     private final DnsRateLimiter rateLimiter = new DnsRateLimiter(() -> {
-        Integer limit = HohenheimSettings.VALUES.getValue(HohenheimSettings.Dns.RATE_LIMIT_PER_SECOND);
+        Integer limit = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Dns.RATE_LIMIT_PER_SECOND);
         return limit != null ? limit : 0;
     });
     private volatile @Nullable SecondaryZoneService secondaryService;
@@ -95,13 +96,13 @@ public final class DnsServer {
 
     /** @return true when the server is enabled in settings and both listeners bound */
     public boolean startIfEnabled() {
-        Boolean enabled = HohenheimSettings.VALUES.getValue(HohenheimSettings.Dns.ENABLED);
+        Boolean enabled = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Dns.ENABLED);
         if (!Boolean.TRUE.equals(enabled)) {
             return false;
         }
 
-        String bindAddress = HohenheimSettings.VALUES.getValue(HohenheimSettings.Dns.BIND_ADDRESS);
-        Integer port = HohenheimSettings.VALUES.getValue(HohenheimSettings.Dns.PORT);
+        String bindAddress = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Dns.BIND_ADDRESS);
+        Integer port = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Dns.PORT);
 
         try {
             this.start(bindAddress != null ? bindAddress : "0.0.0.0", port != null ? port : 53);

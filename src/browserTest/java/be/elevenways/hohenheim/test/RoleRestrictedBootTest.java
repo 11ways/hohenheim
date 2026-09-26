@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimRoles;
-import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
+import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
@@ -19,6 +19,7 @@ import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelPeer;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.task.orm.SystemTaskModel;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.http.ZenitHttpServer;
@@ -27,7 +28,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -61,13 +61,9 @@ class RoleRestrictedBootTest {
         //    hand-list silently leaves any later-added role on -- the INSTANCES
         //    role did exactly that and put a DockerClient construction into this
         //    "docker-less" boot.
-        File settingsDry = File.createTempFile("hohenheim-role-boot", ".dry");
-        settingsDry.delete();
-        settingsDry.deleteOnExit();
-        System.setProperty("hohenheim.settings", settingsDry.getAbsolutePath());
-        HohenheimSettingsFiles.forceDefinitions();
+        HohenheimSettingsBoot.forceDefinitions();
         for (HohenheimRoles.Role role : HohenheimRoles.Role.values()) {
-            HohenheimSettings.VALUES.setValue(role.setting(),
+            Zenit.SETTINGS_VALUES.setValue(role.setting(),
                 role == HohenheimRoles.Role.DNS);
         }
 

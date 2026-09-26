@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.proxy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterAll;
@@ -47,7 +48,7 @@ class AccessLogTest {
 
     @AfterAll
     static void stop() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Logging.ACCESS_TO_FILE, false);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Logging.ACCESS_TO_FILE, false);
         if (proxy != null) {
             proxy.stop();
             proxy = null;
@@ -74,8 +75,8 @@ class AccessLogTest {
     void theLogFollowsARotatedFileAndRecordsTheClientPath() throws Exception {
         Path directory = Files.createTempDirectory("hh-access-log");
         Path logFile = directory.resolve("access.log");
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Logging.ACCESS_PATH, logFile.toString());
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Logging.ACCESS_TO_FILE, true);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Logging.ACCESS_PATH, logFile.toString());
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Logging.ACCESS_TO_FILE, true);
 
         Row site = ProxyTestSupport.setupSite("hohenheim:address", "Access Log Site", "access-log-site",
             Map.of("forward_host", "127.0.0.1", "forward_port", upstream.getAddress().getPort()));

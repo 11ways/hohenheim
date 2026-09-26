@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.tls.CertificateStore;
 import be.elevenways.hohenheim.server.tls.SniKeyManager;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.common.session.InMemorySessionStore;
 import be.elevenways.zenit.common.session.SessionStore;
@@ -94,7 +95,7 @@ public class ProxyServer {
         this.certificateStore = new CertificateStore();
         this.acmeService = new AcmeService(certificateStore);
         this.connectionIdentities = new ConnectionIdentities();
-        long sessionTtl = HohenheimSettings.VALUES.getValue(HohenheimSettings.ProxyAuth.SESSION_TTL_SECONDS);
+        long sessionTtl = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.ProxyAuth.SESSION_TTL_SECONDS);
         this.proxySessionStore = new InMemorySessionStore(sessionTtl);
         this.dispatcher = new SiteDispatcher(acmeService, proxySessionStore);
 
@@ -163,7 +164,7 @@ public class ProxyServer {
         warnIfForceSslRefusing();
 
         boolean acmeEnabled = Boolean.TRUE.equals(
-            HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED));
+            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED));
         if (acmeEnabled) {
             acmeService.start();
         }
@@ -183,7 +184,7 @@ public class ProxyServer {
     private void warnIfForceSslRefusing() {
         if (httpsTerminationAddress != null || httpState != State.RUNNING) return;
         boolean globalForce = Boolean.TRUE.equals(
-            HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
+            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
         List<String> siteNames = dispatcher.forceSslSiteNames();
         boolean anyRoutes = dispatcher.getExactRouteCount() + dispatcher.getWildcardRouteCount()
             + dispatcher.getRegexRouteCount() > 0;
@@ -194,8 +195,8 @@ public class ProxyServer {
     }
 
     private void startHttpListener() {
-        int httpPort = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT);
-        String socketPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTP_SOCKET_PATH);
+        int httpPort = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT);
+        String socketPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.HTTP_SOCKET_PATH);
         boolean socketMode = socketPath != null && !socketPath.isBlank();
         // A configured PROXY v2 peer set means the public HTTP port must resolve connection
         // identity before Undertow decodes a request. In socket mode the bridge already is
@@ -244,7 +245,7 @@ public class ProxyServer {
             httpServer.start();
             InetSocketAddress undertowAddress = (InetSocketAddress) getHttpListenerInfo().getAddress();
             if (socketMode) {
-                String permissions = HohenheimSettings.VALUES.getValue(
+                String permissions = Zenit.SETTINGS_VALUES.getValue(
                     HohenheimSettings.Proxy.HTTP_SOCKET_PERMISSIONS);
                 httpSocketBridge = new UnixSocketListenerBridge(
                     Path.of(socketPath.trim()), undertowAddress.getPort(), permissions);
@@ -308,7 +309,7 @@ public class ProxyServer {
         ipv4.start();
         target.add(ipv4);
 
-        String ipv6Address = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.IPV6_ADDRESS);
+        String ipv6Address = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.IPV6_ADDRESS);
         if (ipv6Address == null || ipv6Address.isBlank()) return;
         int ipv6Port = port == 0 ? ipv4.getLocalAddress().getPort() : port;
         PublicTcpListener ipv6 = new PublicTcpListener(ipv6Address.trim(), ipv6Port, prologueTimeout,
@@ -320,7 +321,7 @@ public class ProxyServer {
 
     /** Whether at least one non-blank X-Hohenheim-Key is configured. */
     private static boolean hasTrustedProxyKeys() {
-        List<String> keys = HohenheimSettings.VALUES.getValue(
+        List<String> keys = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS);
         if (keys == null) return false;
         for (String key : keys) {
@@ -330,14 +331,14 @@ public class ProxyServer {
     }
 
     private static List<String> trustedProxyProtocolSources() {
-        List<String> configured = HohenheimSettings.VALUES.getValue(
+        List<String> configured = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES);
         return configured != null ? configured : List.of();
     }
 
     private static int boundedSetting(SettingDefinition<Integer> definition, String path,
                                       int minimum, int maximum) {
-        int value = HohenheimSettings.VALUES.getValue(definition);
+        int value = Zenit.SETTINGS_VALUES.getValue(definition);
         if (value < minimum || value > maximum) {
             throw new IllegalArgumentException(path + " must be between " + minimum + " and " + maximum);
         }
@@ -353,7 +354,7 @@ public class ProxyServer {
             return;
         }
 
-        int httpsPort = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTPS_PORT);
+        int httpsPort = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.HTTPS_PORT);
 
         try {
             Exception terminationFailure = null;
@@ -427,7 +428,7 @@ public class ProxyServer {
     }
 
     private static void addIpv6Listener(Undertow.Builder builder, int port, SSLContext sslContext) {
-        String ipv6Address = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.IPV6_ADDRESS);
+        String ipv6Address = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.IPV6_ADDRESS);
         if (ipv6Address == null || ipv6Address.isBlank()) return;
 
         if (sslContext != null) {

@@ -123,9 +123,9 @@ sudo iptables -t nat -A PREROUTING -p tcp --dport 80  -j REDIRECT --to-ports 808
 sudo iptables -t nat -A PREROUTING -p tcp --dport 443 -j REDIRECT --to-ports 8443
 ```
 
-Set `proxy.http_port = 8080` and `proxy.https_port = 8443` in
-`settings/hohenheim.dry` (the `proxy.*` group is Hohenheim's own, not Zenit's;
-putting it in `local.dry` is ignored). Clients see port 80/443 unchanged.
+Set `hohenheim.proxy.http_port = 8080` and `hohenheim.proxy.https_port = 8443` in
+`settings/local.dry` (the `proxy.*` group is Hohenheim's own, so it lives under
+the `hohenheim` key). Clients see port 80/443 unchanged.
 
 ### Option 4: `authbind`
 
@@ -247,10 +247,8 @@ version of the same procedure.
 ├── hohenheim-server.jar          # fat jar (rename the built artifact)
 ├── public/                       # static assets (shipped with the repo)
 ├── settings/
-│   ├── local.dry                 # Zenit + module overrides: auth.*, comms.*, ... (not tracked)
-│   ├── local.dry.example         # Zenit reference
-│   ├── hohenheim.dry             # Hohenheim proxy/app settings (not tracked)
-│   └── hohenheim.dry.example     # Hohenheim reference
+│   ├── local.dry                 # every setting: hohenheim.*, auth.*, comms.*, ... (not tracked)
+│   └── local.dry.example         # reference
 ├── data/                         # instance volumes, backups, build contexts
 ├── hohenheim.db                  # SQLite database (auto-created)
 └── logs/                         # access + domain-miss logs
@@ -258,12 +256,16 @@ version of the same procedure.
 
 ## Configuration
 
-Zenit server settings, including the admin listener, live in `settings/local.dry`.
-Hohenheim's own settings live in `settings/hohenheim.dry`. Copy the matching
-[`local.dry.example`](settings/local.dry.example) and
-[`hohenheim.dry.example`](settings/hohenheim.dry.example) files and uncomment
-what you need. `ZENIT__*` and `HOHENHEIM__*` environment variables override the
-corresponding files.
+Every setting lives in `settings/local.dry`: Zenit's own (the admin listener
+included) and Hohenheim's under the `hohenheim` key. Copy
+[`local.dry.example`](settings/local.dry.example) and uncomment what you need.
+`ZENIT__GROUP__KEY` environment variables override the file, e.g.
+`ZENIT__HOHENHEIM__PROXY__HTTP_PORT`.
+
+An install from before this layout had `settings/hohenheim.dry`: the first boot
+moves its keys under `hohenheim` in `settings/local.dry` and keeps the old file
+as `settings/hohenheim.dry.bak-<timestamp>`. A `HOHENHEIM__*` variable refuses
+the boot, naming its `ZENIT__HOHENHEIM__*` replacement.
 
 Most-useful keys:
 
@@ -282,7 +284,8 @@ placing the admin listener behind a proxy on another host, set `trusted_proxies`
 that proxy's literal IP or CIDR. Hostnames are deliberately refused so request-time
 trust decisions can never trigger DNS.
 
-`settings/hohenheim.dry`:
+Hohenheim's own keys, under `hohenheim` in `settings/local.dry` (shown without
+that wrapper):
 
 ```
 {
@@ -555,8 +558,8 @@ control panel. It is **off by default**. Full design notes:
 [`docs/authoritative-dns.md`](docs/authoritative-dns.md) and
 [`docs/dns-federation.md`](docs/dns-federation.md).
 
-Enable it in `settings/hohenheim.dry` (the `dns.*` group is Hohenheim's own; a
-`dns` block in `local.dry` is ignored):
+Enable it under `hohenheim` in `settings/local.dry` (the `dns.*` group is
+Hohenheim's own; a top-level `dns` block is ignored):
 
 ```
 "dns": {
@@ -870,8 +873,8 @@ child's uid drop. Leave it `false`.
   first build is running in the sandbox; the site starts answering once the
   release container passes its health gate. Watch the build operation on the
   instance record.
-- **Admin UI works but proxy doesn't.** Check `proxy.http_port` in
-  `settings/hohenheim.dry` — if it's `80` and you didn't grant
+- **Admin UI works but proxy doesn't.** Check `hohenheim.proxy.http_port` in
+  `settings/local.dry` — if it's `80` and you didn't grant
   `CAP_NET_BIND_SERVICE`, the listener never came up. `journalctl -u hohenheim`
   will show the `bind` error.
 

@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -101,16 +102,16 @@ class WorkspaceDockerLiveTest {
 
         // Per-workload network policy must be ENFORCEABLE for the sandboxed build lane to
         // start anything at all, and this host's ssh lane is what applies the nft rules.
-        savedNftables = HohenheimSettings.VALUES.getValue(
+        savedNftables = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Security.NFTABLES_ENABLED);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.NFTABLES_ENABLED, true);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.NFTABLES_ENABLED, true);
 
         // The VOLUME ROOT, not the data path: the controller's own data path stays local
         // (it holds the per-host ssh identity store), and only the workload host's volume
         // directory moves onto the btrfs pool.
         dataPath = POOL + "/hohenheim-workspace-docker-live-" + UUID.randomUUID();
-        savedDataPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Storage.VOLUME_ROOT);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.VOLUME_ROOT, dataPath);
+        savedDataPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.VOLUME_ROOT);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.VOLUME_ROOT, dataPath);
 
         Db.run(datasource, () -> {
             Row server = Models.get(ServerModel.class).findByName(HOST);
@@ -144,9 +145,9 @@ class WorkspaceDockerLiveTest {
             shell.run("docker rmi " + HostShell.quote(dockerReference())
                 + " >/dev/null 2>&1; true", 120);
         }
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.VOLUME_ROOT,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.VOLUME_ROOT,
             savedDataPath);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.NFTABLES_ENABLED,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.NFTABLES_ENABLED,
             savedNftables);
         if (remote != null) {
             System.out.println("=== cleanup: authorized_keys -> "

@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -137,14 +138,14 @@ public final class HostApi {
 
     /** The declared overcommit factor; 1.0 when unset or nonsensical, as the budget reads it. */
     private static double overcommitRatio() {
-        Double ratio = HohenheimSettings.VALUES.getValue(
+        Double ratio = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Capacity.MEMORY_OVERCOMMIT_RATIO);
         return ratio == null || ratio <= 0 ? 1.0 : ratio;
     }
 
     /** The memory held back for everything that is not a booked workload. */
     private static int reserveMb() {
-        Integer reserve = HohenheimSettings.VALUES.getValue(
+        Integer reserve = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB);
         return reserve == null ? 0 : Math.max(0, reserve);
     }

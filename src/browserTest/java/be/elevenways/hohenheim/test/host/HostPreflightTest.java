@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.host;
 
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -60,11 +61,11 @@ class HostPreflightTest {
         LiveLane.require(LiveLane.Need.NETNS, PrivateNetns.available(),
             "no private netns for the nft half");
 
-        Integer originalPids = HohenheimSettings.VALUES.getValue(
+        Integer originalPids = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Security.CONTAINER_PIDS_LIMIT);
         try (PrivateNetns netns = new PrivateNetns()) {
             // 1. A deliberately unusual pids cap, so the kernel read is provably real.
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Security.CONTAINER_PIDS_LIMIT, 137);
 
             HostPreflight.Report report = HostPreflight.run(docker,
@@ -142,7 +143,7 @@ class HostPreflightTest {
                 .as("step 7: every required check passed, so the verdict is a pass")
                 .isTrue();
         } finally {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.CONTAINER_PIDS_LIMIT,
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.CONTAINER_PIDS_LIMIT,
                 originalPids != null ? originalPids : 512);
         }
     }

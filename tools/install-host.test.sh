@@ -39,8 +39,7 @@ plan_of() {
 PLAN="$(plan_of --roles proxy,dns,firewall --main-url https://panel.example --admin-email ops@elevenways.be)"
 expect "roles line names the three enabled roles" "$PLAN" "proxy=true dns=true firewall=true"
 expect "instances stays off" "$PLAN" "instances=false"
-expect "writes hohenheim.dry" "$PLAN" "write /opt/hohenheim/settings/hohenheim.dry"
-expect "hohenheim.dry is group readable only" "$PLAN" "settings/hohenheim.dry (mode 0640"
+expect "no retired hohenheim.dry is seeded" "$PLAN" "settings/hohenheim.dry" no
 expect "local.dry is a secret" "$PLAN" "settings/local.dry (mode 0600"
 expect "no retired auth.dry is seeded" "$PLAN" "settings/auth.dry" no
 expect "creates the service user" "$PLAN" "useradd --system"
@@ -105,8 +104,8 @@ else
 fi
 
 # 2b. The control-plane database location: a fresh install names zenit's database.url,
-#     an existing host is never re-pointed (its hohenheim.dry database.path stays the
-#     honoured fallback).
+#     an existing host is never re-pointed (its retired hohenheim.dry database.path stays
+#     the honoured fallback once the server moves it into local.dry).
 PLAN="$(plan_of --roles proxy --prefix "$WORK/fresh")"
 expect "a fresh install seeds zenit's database.url" "$PLAN" "fresh install: the control-plane database is database.url = jdbc:sqlite:$WORK/fresh/hohenheim.db in local.dry"
 expect "a fresh install writes local.dry" "$PLAN" "write $WORK/fresh/settings/local.dry"
@@ -115,7 +114,7 @@ printf '{ "database": { "path": "/srv/elsewhere/hohenheim.db" } }\n' > "$WORK/ex
 PLAN="$(plan_of --roles proxy --prefix "$WORK/existing")"
 expect "an existing host keeps its database location" "$PLAN" "existing install: the database keeps the location its settings already name"
 expect "an existing host is not given a database.url" "$PLAN" "fresh install:" no
-expect "an existing hohenheim.dry is left untouched" "$PLAN" "hohenheim.dry exists (left untouched)"
+expect "an existing hohenheim.dry is left for the server to move" "$PLAN" "hohenheim.dry exists: the server moves its keys into local.dry on first boot"
 if /usr/bin/grep -qF "/srv/elsewhere/hohenheim.db" "$WORK/existing/settings/hohenheim.dry"; then
     ok "the dry run did not rewrite the existing hohenheim.dry"
 else

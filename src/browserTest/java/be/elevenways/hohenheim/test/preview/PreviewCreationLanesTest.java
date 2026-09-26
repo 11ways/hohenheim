@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -52,7 +53,7 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
 
     @BeforeAll
     static void setUpSite() {
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Previews.BASE_DOMAIN, "preview.test");
         var siteModel = Models.get(SiteModel.class);
         Row site = siteModel.createEmptyRow();
@@ -107,9 +108,9 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
     @Test
     void theManualQueueClaimsSynchronouslyChargesTheOwnerAndRefusesAtTheCapByName()
             throws Exception {
-        Integer savedCap = HohenheimSettings.VALUES.getValue(
+        Integer savedCap = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Previews.MAX_PER_OWNER);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Previews.MAX_PER_OWNER, 1);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Previews.MAX_PER_OWNER, 1);
         try {
             // 1. queue() returns SYNCHRONOUSLY with a claimed, quota-charged row: the
             //    manual lane's refusals and charges happen before the caller's form
@@ -158,7 +159,7 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
                 .as("step 4: the released slot is claimable again").isNotNull();
             PreviewDeployments.destroy(second.get(PreviewDeploymentModel.ID), "operator");
         } finally {
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Previews.MAX_PER_OWNER, savedCap);
         }
     }

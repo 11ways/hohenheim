@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.cms.common.action.ActionContext;
 import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -75,14 +76,14 @@ class ApplicationPushPolicyTest {
         daemon = new FakeDockerDaemon();
         daemon.install();
         daemon.installContainerKind();
-        savedProbeTimeout = HohenheimSettings.VALUES.getValue(
+        savedProbeTimeout = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS);
-        savedProbeInterval = HohenheimSettings.VALUES.getValue(
+        savedProbeInterval = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Releases.PROBE_INTERVAL_MS);
-        savedDrain = HohenheimSettings.VALUES.getValue(HohenheimSettings.Releases.DRAIN_SECONDS);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS, 2);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.PROBE_INTERVAL_MS, 50);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 0);
+        savedDrain = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Releases.DRAIN_SECONDS);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS, 2);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.PROBE_INTERVAL_MS, 50);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 0);
         Db.run(datasource, HostFixtures::admitLocal);
     }
 
@@ -93,11 +94,11 @@ class ApplicationPushPolicyTest {
             daemon.close();
             daemon = null;
         }
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS, savedProbeTimeout);
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Releases.PROBE_INTERVAL_MS, savedProbeInterval);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, savedDrain);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, savedDrain);
     }
 
     /**

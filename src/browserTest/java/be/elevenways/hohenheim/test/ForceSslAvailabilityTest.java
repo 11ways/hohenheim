@@ -87,7 +87,7 @@ class ForceSslAvailabilityTest {
             Map.of("forward_host", "127.0.0.1", "forward_port", upstreamPort));
         addForceSslDomain(forced, "forced.fssl.test");
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         proxy = ProxyTestSupport.startProxy();
         int port = ProxyTestSupport.httpPort(proxy);
         assertThat(proxy.isHttpsTerminationAvailable())
@@ -123,7 +123,7 @@ class ForceSslAvailabilityTest {
         assertThat(items.get(0).severity()).isEqualTo(AttentionSeverity.ERROR);
 
         // Step 4: global force_https gets the same fail-closed treatment for MATCHED routes.
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, true);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, true);
         String globalRefused = ProxyTestSupport.rawRequest(port, "plain.fssl.test", "/");
         assertThat(globalRefused)
             .as("step 4: global force_https refuses cleartext on a matched route while HTTPS is down")
@@ -132,11 +132,11 @@ class ForceSslAvailabilityTest {
         assertThat(unmatched)
             .as("step 4: an unmatched hostname has nothing to protect and stays a 404")
             .contains("404");
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, false);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, false);
 
         // Step 5: a certificate arrives; after reload the same request becomes the redirect.
         installCertificate("forced.fssl.test");
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
         proxy.reload();
         assertThat(proxy.isHttpsTerminationAvailable())
             .as("step 5: HTTPS termination is up after the certificate reload")

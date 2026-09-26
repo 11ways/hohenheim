@@ -108,7 +108,7 @@ class ProxyAuthGateTest {
         domain.set(SiteDomainModel.FORCE_SSL, false);
         domainModel.save(domain);
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();
         httpPort = ((InetSocketAddress) proxy.getHttpListenerInfo().getAddress()).getPort();
@@ -143,10 +143,10 @@ class ProxyAuthGateTest {
         // proto is one holding a configured X-Hohenheim-Key.
         boolean hadAssume = ServerSettings.VALUES.hasValue(ServerSettings.Network.ASSUME_HTTPS);
         Boolean previousAssume = ServerSettings.VALUES.getValue(ServerSettings.Network.ASSUME_HTTPS);
-        List<String> previousKeys = HohenheimSettings.VALUES.getValue(
+        List<String> previousKeys = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS);
         ServerSettings.VALUES.setValue(ServerSettings.Network.ASSUME_HTTPS, false);
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of("front-key"));
 
         try {
@@ -181,7 +181,7 @@ class ProxyAuthGateTest {
         } finally {
             ServerSettings.VALUES.setValue(ServerSettings.Network.ASSUME_HTTPS,
                 hadAssume ? previousAssume : null);
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, previousKeys);
         }
 

@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
-import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
+import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.server.ZenitAuth;
@@ -14,7 +14,6 @@ import be.elevenways.zenit.server.setting.ServerSettings;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -45,11 +44,7 @@ class BootWiringWindowTest {
     void everyRequestFacingWiringExistsWhenTheListenerAccepts() throws Exception {
         // 1. Exactly ServerMain's pre-boot sequence, up to (not including) the
         //    ServerZenitRuntime call that launches the boot stages.
-        File settingsDry = File.createTempFile("hohenheim-boot-window", ".dry");
-        settingsDry.delete();
-        settingsDry.deleteOnExit();
-        System.setProperty("hohenheim.settings", settingsDry.getAbsolutePath());
-        HohenheimSettingsFiles.load();
+        HohenheimSettingsBoot.load();
 
         HohenheimEndpoints.init();
         HohenheimTestRuntime.declareAccessModelsOnce();

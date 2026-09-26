@@ -4,43 +4,29 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.setting.SettingGroup;
-import be.elevenways.zenit.server.setting.DryFileSource;
-import be.elevenways.zenit.server.setting.EnvSettingsSource;
+import be.elevenways.zenit.server.ServerZenitRuntime;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import java.nio.file.Path;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
- * Loads Hohenheim's own settings context from its editable file plus
- * {@code HOHENHEIM__*} environment overrides (env wins per key).
+ * Loads the framework's default settings chain, which carries Hohenheim's {@code hohenheim.*} group, and captures the
+ * role snapshot.
  */
-public final class HohenheimSettingsFiles {
+public final class HohenheimSettingsBoot {
 
-    private HohenheimSettingsFiles() {
+    private HohenheimSettingsBoot() {
     }
 
     /**
-     * The admin-editable settings file (the settings page persists here).
-     * Overridable via {@code -Dhohenheim.settings} so tests never clobber
-     * the developer's real file.
-     */
-    public static Path settingsFile() {
-        return Path.of(System.getProperty("hohenheim.settings", "settings/hohenheim.dry"));
-    }
-
-    /**
-     * Keys are RELATIVE to the {@code hohenheim} group root: the file keeps
-     * the flat {@code proxy.http_port} shape, and
-     * {@code HOHENHEIM__PROXY__HTTP_PORT} maps to the same setting.
+     * Loads {@code settings/default.dry}, {@code settings/local.dry} and {@code ZENIT__*} early, adopting a retired
+     * {@code settings/hohenheim.dry} into local.dry first (HohenheimRetiredNames), then captures the role snapshot.
      */
     public static void load() {
         forceDefinitions();
-        HohenheimSettings.VALUES.loadFrom(
-            new DryFileSource(settingsFile()),
-            new EnvSettingsSource("HOHENHEIM"));
         applyFrameworkDefaults();
+        ServerZenitRuntime.loadDefaultSettings();
         // The settings just became real: this is THE role-snapshot moment.
         // Every roles.* gate reads the snapshot, never the live setting.
         HohenheimRoles.capture();
@@ -57,7 +43,7 @@ public final class HohenheimSettingsFiles {
      * activity.retention_days, whose framework default is 0 (keep forever). Hohenheim kept
      * 90 days through a task of its own (CleanOldActivity, deleted 2026-09-23), so the
      * behaviour must not change on upgrade: this seeds 90. It runs BEFORE the framework
-     * chain loads at boot (ServerMain loads this file first), so settings/local.dry or
+     * chain loads at boot ({@link #load}), so settings/local.dry or
      * ZENIT__ACTIVITY__RETENTION_DAYS still override it; a value already loaded is kept.
      */
     static void applyFrameworkDefaults() {

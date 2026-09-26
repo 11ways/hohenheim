@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.proxy.ProxyProtocolV2;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import com.sun.net.httpserver.HttpServer;
@@ -48,14 +49,14 @@ class ProxyProtocolHttpTest {
     void cleanup() {
         if (proxy != null) proxy.stop();
         if (backend != null) backend.stop(0);
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES, List.of());
     }
 
     @Test
     void trustedHeaderBecomesTheForwardedClientIdentity() throws Exception {
         resetDatabase();
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES, List.of("127.0.0.1/32"));
         startBackendAndProxy("ingress.example.test", null);
 
@@ -71,7 +72,7 @@ class ProxyProtocolHttpTest {
     @Test
     void directClientsStayValidWhileTheIngressFrontIsActive() throws Exception {
         resetDatabase();
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES, List.of("127.0.0.1/32"));
         startBackendAndProxy("direct.example.test", null);
 
@@ -85,7 +86,7 @@ class ProxyProtocolHttpTest {
     @Test
     void untrustedPeerSendingAHeaderIsDisconnected() throws Exception {
         resetDatabase();
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES, List.of("203.0.113.0/24"));
         startBackendAndProxy("refused.example.test", null);
 
@@ -100,7 +101,7 @@ class ProxyProtocolHttpTest {
     @Test
     void proxiedDestinationDrivesListenOnMatching() throws Exception {
         resetDatabase();
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES, List.of("127.0.0.1/32"));
         startBackendAndProxy("bound.example.test", "203.0.113.7");
 
@@ -120,7 +121,7 @@ class ProxyProtocolHttpTest {
     @Test
     void withoutTrustedPeersThePublicPortStaysTheUndertowListener() throws Exception {
         resetDatabase();
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES, List.of());
         startBackendAndProxy("plain.example.test", null);
 
@@ -159,8 +160,8 @@ class ProxyProtocolHttpTest {
             Models.get(SiteDomainModel.class).save(domain);
         }
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();
     }

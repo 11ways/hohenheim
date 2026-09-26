@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -66,9 +67,9 @@ class InstanceCapacityTest {
     static void setUp() throws Exception {
         datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB, 0);
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Capacity.MEMORY_OVERCOMMIT_RATIO, 1.0);
     }
 
@@ -344,7 +345,7 @@ class InstanceCapacityTest {
             //    removing it (0 = the operator's explicit choice to trust a reading of any
             //    age) makes the SAME stored reading the budget again, and the gate that
             //    comes with it can fail.
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Capacity.FACTS_MAX_AGE_HOURS, 0);
             try {
                 assertThat(InstanceCapacity.budgetMbOf(
@@ -361,7 +362,7 @@ class InstanceCapacityTest {
                     .as("step 5: by name")
                     .isEqualTo("host_capacity_reached");
             } finally {
-                HohenheimSettings.VALUES.setValue(
+                Zenit.SETTINGS_VALUES.setValue(
                     HohenheimSettings.Capacity.FACTS_MAX_AGE_HOURS, 168);
             }
         });

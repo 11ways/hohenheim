@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.quota.DatabaseQuota;
 import be.elevenways.hohenheim.server.quota.SiteQuota;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -60,12 +61,12 @@ class SiteAndDatabaseQuotaTest extends HohenheimTestBase {
             databases.find().where(DatabaseModel.ID.eq(row.get(DatabaseModel.ID))).delete();
         }
         if (this.previousSiteCap != null) {
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Quota.MAX_SITES_PER_OWNER, this.previousSiteCap);
             this.previousSiteCap = null;
         }
         if (this.previousDatabaseCap != null) {
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Quota.MAX_DATABASES_PER_OWNER, this.previousDatabaseCap);
             this.previousDatabaseCap = null;
         }
@@ -73,7 +74,7 @@ class SiteAndDatabaseQuotaTest extends HohenheimTestBase {
 
     @Test
     void aSiteCountCapBindsRacingCreatesAndComesBackOnEveryExit() throws Exception {
-        this.previousSiteCap = HohenheimSettings.VALUES.getValue(
+        this.previousSiteCap = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Quota.MAX_SITES_PER_OWNER);
         long baseline = Quotas.usedOf(SITE_BUCKET);
 
@@ -91,7 +92,7 @@ class SiteAndDatabaseQuotaTest extends HohenheimTestBase {
         // 2. Cap the owner with EXACTLY one slot left, then race two creates through the
         //    real create submit.
         long limit = Quotas.usedOf(SITE_BUCKET) + 1;
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Quota.MAX_SITES_PER_OWNER, (int) limit);
 
         CyclicBarrier barrier = new CyclicBarrier(2);
@@ -171,7 +172,7 @@ class SiteAndDatabaseQuotaTest extends HohenheimTestBase {
 
     @Test
     void aDatabaseCountCapBindsIndependentlyOfTheInstanceSlotTheEngineSpends() {
-        this.previousDatabaseCap = HohenheimSettings.VALUES.getValue(
+        this.previousDatabaseCap = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Quota.MAX_DATABASES_PER_OWNER);
         long baseline = Quotas.usedOf(DATABASE_BUCKET);
 
@@ -192,7 +193,7 @@ class SiteAndDatabaseQuotaTest extends HohenheimTestBase {
         //    open. "N databases per tenant" is refused by the database dimension alone --
         //    the instance slot the engine container spends cannot express this.
         long limit = Quotas.usedOf(DATABASE_BUCKET);
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Quota.MAX_DATABASES_PER_OWNER, (int) limit);
         assertThat(violationKeyOf(catchThrowable(() -> saveDatabase(DB_PREFIX + "over"))))
             .as("step 3: the database count refuses by name")

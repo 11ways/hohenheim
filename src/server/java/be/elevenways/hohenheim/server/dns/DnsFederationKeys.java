@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.dns;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DnsPeerModel;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.security.SecureTokens;
@@ -50,7 +51,7 @@ public final class DnsFederationKeys {
      *         name, else the system hostname, else a constant
      */
     public static @NonNull String localName() {
-        String configured = HohenheimSettings.VALUES.getValue(HohenheimSettings.Dns.FEDERATION_NAME);
+        String configured = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Dns.FEDERATION_NAME);
         if (configured != null && !configured.isBlank()) {
             return configured.trim();
         }
@@ -72,7 +73,7 @@ public final class DnsFederationKeys {
      *         only the receiver can say where our packets came from
      */
     public static @Nullable String localTransferHost() {
-        String bind = HohenheimSettings.VALUES.getValue(HohenheimSettings.Dns.BIND_ADDRESS);
+        String bind = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Dns.BIND_ADDRESS);
         if (bind == null || bind.isBlank()) {
             return null;
         }
@@ -92,7 +93,7 @@ public final class DnsFederationKeys {
 
     /** @return the port this instance's DNS listener serves, which is where a peer transfers from */
     public static int localTransferPort() {
-        Integer port = HohenheimSettings.VALUES.getValue(HohenheimSettings.Dns.PORT);
+        Integer port = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Dns.PORT);
         return port != null && port > 0 && port < 65536 ? port : 53;
     }
 

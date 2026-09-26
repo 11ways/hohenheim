@@ -113,7 +113,7 @@ class TlsCertificateTest {
 
     @Test
     void httpsNotStartedWithoutCertificates() throws Exception {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         ProxyServer proxy = new ProxyServer();
         proxy.start();
 
@@ -140,8 +140,8 @@ class TlsCertificateTest {
         row.set(CertificateModel.PRIVATE_KEY_PEM, keyToPem(keyPair));
         certModel.save(row);
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
 
         ProxyServer proxy = new ProxyServer();
         proxy.start();
@@ -410,8 +410,8 @@ class TlsCertificateTest {
             httpsPort = reservation.getLocalPort();
         }
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, httpsPort);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, httpsPort);
 
         ProxyServer proxy = new ProxyServer();
         proxy.start();
@@ -464,8 +464,8 @@ class TlsCertificateTest {
         row.set(CertificateModel.PRIVATE_KEY_PEM, keyToPem(kp));
         certModel.save(row);
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
 
         ProxyServer proxy = new ProxyServer();
         proxy.start();

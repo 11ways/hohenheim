@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.SiteResource;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -117,7 +118,7 @@ class ReleasedClaimRegexShadowTest {
     @Test
     void aRegexRowServesTheHostnameAnExactRowGaveUp() throws Exception {
         resetDatabase();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS, 0);
 
         // 1. The victim serves the hostname on an exact row, and the proxy proves it.
         Row victim = proxySite("Regex Shadow Victim", "regex-shadow-victim", "victim-upstream");

@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.security.BanScope;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -74,7 +75,7 @@ public class NftService {
     public NftService() {
         this(new NftRunner.Sudo(),
             () -> Boolean.TRUE.equals(
-                HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.NFTABLES_ENABLED)));
+                Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.NFTABLES_ENABLED)));
     }
 
     /** Test constructor: inject the executor and the enable gate. */
@@ -200,14 +201,14 @@ public class NftService {
     /** Parse the security.nftables_ports setting; blank or garbage falls back to 80,443. */
     public static @NonNull List<Integer> configuredPorts() {
         return parsePorts(
-            HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.NFTABLES_PORTS),
+            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.NFTABLES_PORTS),
             List.of(80, 443));
     }
 
     /** Parse the security.nftables_ssh_ports setting; blank or garbage falls back to 22. */
     public static @NonNull List<Integer> configuredSshPorts() {
         return parsePorts(
-            HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.NFTABLES_SSH_PORTS),
+            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.NFTABLES_SSH_PORTS),
             List.of(SSH_PORT));
     }
 

@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.security.SecureTokens;
@@ -95,7 +96,7 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
         appCId = applicationOf(siteCId);
         enablePreviews(siteCId);
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();
         ServerMain.adoptProxyServer(proxy);

@@ -262,8 +262,8 @@ class TlsResilienceTest {
             "#!/bin/sh\nhead -c 262144 /dev/zero | tr '\\0' 'x'\n"
                 + "echo \"$1 $2 $3\" > '" + finished.getAbsolutePath() + "'\nexit 0\n");
         hook.setExecutable(true);
-        String previous = HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND, hook.getAbsolutePath());
+        String previous = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND, hook.getAbsolutePath());
         try {
             // 2. The publish succeeds: no timeout, no failure verdict.
             assertThatCode(() -> new CommandDnsTxtPublisher().publish(
@@ -271,7 +271,7 @@ class TlsResilienceTest {
                 .as("step 2: a verbose hook that exits 0 is a successful publish, not a timeout")
                 .doesNotThrowAnyException();
         } finally {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND, previous);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND, previous);
         }
 
         // 3. And the hook really ran to its end with the publish's arguments, which it can
@@ -289,8 +289,8 @@ class TlsResilienceTest {
         java.nio.file.Files.writeString(hook.toPath(),
             "#!/bin/sh\necho 'zone not found'\nexit 3\n");
         hook.setExecutable(true);
-        String previous = HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND, hook.getAbsolutePath());
+        String previous = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND, hook.getAbsolutePath());
         try {
             new CommandDnsTxtPublisher().publish(
                 new DnsTxtRecord("_acme-challenge.example.com", "failing-hook-value"));
@@ -298,7 +298,7 @@ class TlsResilienceTest {
         } catch (IllegalStateException e) {
             assertThat(e.getMessage()).contains("exit 3").contains("zone not found");
         } finally {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND, previous);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.DNS_HOOK_COMMAND, previous);
         }
     }
 }

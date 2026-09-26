@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.Sshd;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -97,16 +98,16 @@ class BackupTargetsTest {
     @BeforeEach
     void isolateTheSshStore() throws Exception {
         HohenheimTestRuntime.ensureBooted();
-        this.previousDataPath = HohenheimSettings.VALUES.getValue(
+        this.previousDataPath = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Storage.DATA_PATH);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.DATA_PATH,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH,
             this.tmp.resolve("controller-data").toString());
     }
 
     @AfterEach
     void restoreTheSshStore() {
         if (this.previousDataPath != null) {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.DATA_PATH,
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH,
                 this.previousDataPath);
         }
     }

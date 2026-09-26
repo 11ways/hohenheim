@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -78,14 +79,14 @@ class InstanceFilesLiveTest {
         // CMS contributions drained is itself a hard failure. Same order ServerMain uses.
         HohenheimTestRuntime.declareAccessModelsOnce();
         HohenheimTestRuntime.ensureBooted();
-        previousMaxFileKb = HohenheimSettings.VALUES.getValue(HohenheimSettings.Files.MAX_FILE_KB);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Files.MAX_FILE_KB, MAX_FILE_KB);
+        previousMaxFileKb = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Files.MAX_FILE_KB);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Files.MAX_FILE_KB, MAX_FILE_KB);
         netns = PrivateNetns.installEnforcing();
     }
 
     @AfterAll
     static void tearDown() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Files.MAX_FILE_KB, previousMaxFileKb);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Files.MAX_FILE_KB, previousMaxFileKb);
         PrivateNetns.uninstall(netns);
         netns = null;
     }

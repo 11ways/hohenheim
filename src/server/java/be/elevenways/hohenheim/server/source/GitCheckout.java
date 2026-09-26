@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -40,7 +41,7 @@ public final class GitCheckout {
 
     /** The directory a given owner record's checkouts live in. */
     public static @NonNull File directoryFor(@NonNull Identifier ownerModel, int ownerId) {
-        String dataPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
+        String dataPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
         String base = dataPath == null || dataPath.isBlank() ? "/opt/hohenheim/data" : dataPath;
         return new File(new File(new File(base, "checkouts"), ownerModel.getPath()),
             String.valueOf(ownerId));
