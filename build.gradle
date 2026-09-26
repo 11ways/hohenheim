@@ -14,14 +14,6 @@ plugins {
 // migration (it dropped checker-qual from custom source sets and ran no checkers anyway); the
 // checker-qual annotation artifact is declared directly on every source set below instead.
 
-group = 'be.elevenways'
-version = '0.1.0-SNAPSHOT'
-
-repositories {
-    mavenCentral()
-    mavenLocal()
-}
-
 // --- Source Sets ---
 sourceSets {
     common {

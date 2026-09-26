@@ -1,6 +1,10 @@
 pluginManagement {
     repositories {
-        mavenLocal()
+        mavenLocal {
+            content {
+                includeGroupByRegex 'be\\.elevenways(?:\\..*)?'
+            }
+        }
         gradlePluginPortal()
         mavenCentral()
     }
