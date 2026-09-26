@@ -4,10 +4,10 @@ import org.teavm.gradle.tasks.GenerateJavaScriptTask
 
 plugins {
     id 'java-library'
-    id 'org.teavm' version '0.15.0'
-    id 'com.gradleup.shadow' version '9.4.2'
-    id 'be.elevenways.protoblast' version '0.1.0-SNAPSHOT'
-    id 'be.elevenways.zenit' version '0.1.0-SNAPSHOT'
+    alias(libs.plugins.teavm)
+    alias(libs.plugins.shadow)
+    id 'be.elevenways.protoblast'
+    alias(libs.plugins.zenit)
 }
 
 // AIDEV-NOTE: the org.checkerframework Gradle plugin was removed during the Java 25 / Gradle 9
@@ -105,103 +105,103 @@ tasks.named('compileClientJava') {
 dependencies {
     // Common (compile-only since client/server each pull their own variant)
     commonCompileOnly teavm.libs.jsoApis
-    commonCompileOnly ('be.elevenways:protoblast-client:0.1.0-SNAPSHOT') { changing = true }
-    commonCompileOnly ('be.elevenways:hawkeye-common:0.1.0-SNAPSHOT') { changing = true }
-    commonCompileOnly ('be.elevenways:hawkeye-client:0.1.0-SNAPSHOT') { changing = true }
-    commonCompileOnly ('be.elevenways:zenit-common:0.1.0-SNAPSHOT') { changing = true }
-    commonCompileOnly ('be.elevenways:plumage-common:0.1.0-SNAPSHOT') { changing = true }
-    commonCompileOnly ('be.elevenways:zenit-forms-common:0.1.0-SNAPSHOT') { changing = true }
-    commonCompileOnly ('be.elevenways:zenit-microcopy-common:0.1.0-SNAPSHOT') { changing = true }
-    commonCompileOnly ('be.elevenways:zenit-auth-common:0.1.0-SNAPSHOT') { changing = true }
-    commonCompileOnly ('be.elevenways:zenit-cms-common:0.1.0-SNAPSHOT') { changing = true }
-    commonCompileOnly ('be.elevenways:zenit-widget-common:0.1.0-SNAPSHOT') { changing = true }
+    commonCompileOnly (libs.protoblast.client) { changing = true }
+    commonCompileOnly (libs.hawkeye.common) { changing = true }
+    commonCompileOnly (libs.hawkeye.client) { changing = true }
+    commonCompileOnly (libs.zenit.common) { changing = true }
+    commonCompileOnly (libs.plumage.common) { changing = true }
+    commonCompileOnly (libs.zenit.forms.common) { changing = true }
+    commonCompileOnly (libs.zenit.microcopy.common) { changing = true }
+    commonCompileOnly (libs.zenit.auth.common) { changing = true }
+    commonCompileOnly (libs.zenit.cms.common) { changing = true }
+    commonCompileOnly (libs.zenit.widget.common) { changing = true }
     // The admin inbox page mounts zenit-comms' own <zc-inbox> surface, so the template
     // compiler needs that module's compiled templates and item view type.
-    commonCompileOnly ('be.elevenways:zenit-comms-common:0.1.0-SNAPSHOT') { changing = true }
+    commonCompileOnly (libs.zenit.comms.common) { changing = true }
 
     // Client (TeaVM-compiled browser code)
     clientCompileOnly sourceSets.common.output
     clientImplementation teavm.libs.jsoApis
-    clientImplementation ('be.elevenways:protoblast-client:0.1.0-SNAPSHOT') { changing = true }
-    clientImplementation ('be.elevenways:hawkeye-client:0.1.0-SNAPSHOT') { changing = true }
-    clientImplementation ('be.elevenways:zenit-client:0.1.0-SNAPSHOT') { changing = true }
-    clientImplementation ('be.elevenways:plumage-client:0.1.0-SNAPSHOT') { changing = true }
-    clientImplementation ('be.elevenways:zenit-forms-client:0.1.0-SNAPSHOT') { changing = true }
-    clientImplementation ('be.elevenways:zenit-microcopy-client:0.1.0-SNAPSHOT') { changing = true }
-    clientImplementation ('be.elevenways:zenit-cms-client:0.1.0-SNAPSHOT') { changing = true }
+    clientImplementation (libs.protoblast.client) { changing = true }
+    clientImplementation (libs.hawkeye.client) { changing = true }
+    clientImplementation (libs.zenit.client) { changing = true }
+    clientImplementation (libs.plumage.client) { changing = true }
+    clientImplementation (libs.zenit.forms.client) { changing = true }
+    clientImplementation (libs.zenit.microcopy.client) { changing = true }
+    clientImplementation (libs.zenit.cms.client) { changing = true }
     // The shell user menu (zn-auth-user-menu, contributed by AuthCmsBridge)
     // must hydrate: the client bundle needs zenit-auth's compiled templates
     // (carried by the self-sufficient client platform jar).
-    clientImplementation ('be.elevenways:zenit-auth-client:0.1.0-SNAPSHOT') { changing = true }
+    clientImplementation (libs.zenit.auth.client) { changing = true }
     // Same reason for <zc-inbox>: the admin inbox page's list must hydrate.
-    clientImplementation ('be.elevenways:zenit-comms-client:0.1.0-SNAPSHOT') { changing = true }
+    clientImplementation (libs.zenit.comms.client) { changing = true }
 
     // Server
     serverCompileOnly sourceSets.common.output
-    serverImplementation ('be.elevenways:protoblast-server:0.1.0-SNAPSHOT') { changing = true }
-    serverImplementation ('be.elevenways:hawkeye-server:0.1.0-SNAPSHOT') { changing = true }
-    serverImplementation ('be.elevenways:zenit-server:0.1.0-SNAPSHOT') { changing = true }
-    serverImplementation ('be.elevenways:zenit-auth-server:0.1.0-SNAPSHOT') { changing = true }
-    serverImplementation ('be.elevenways:plumage-server:0.1.0-SNAPSHOT') { changing = true }
-    serverImplementation ('be.elevenways:zenit-forms-server:0.1.0-SNAPSHOT') { changing = true }
-    serverImplementation ('be.elevenways:zenit-microcopy-server:0.1.0-SNAPSHOT') { changing = true }
-    serverImplementation ('be.elevenways:zenit-cms-server:0.1.0-SNAPSHOT') { changing = true }
-    serverImplementation ('be.elevenways:zenit-comms-server:0.1.0-SNAPSHOT') { changing = true }
+    serverImplementation (libs.protoblast.server) { changing = true }
+    serverImplementation (libs.hawkeye.server) { changing = true }
+    serverImplementation (libs.zenit.server) { changing = true }
+    serverImplementation (libs.zenit.auth.server) { changing = true }
+    serverImplementation (libs.plumage.server) { changing = true }
+    serverImplementation (libs.zenit.forms.server) { changing = true }
+    serverImplementation (libs.zenit.microcopy.server) { changing = true }
+    serverImplementation (libs.zenit.cms.server) { changing = true }
+    serverImplementation (libs.zenit.comms.server) { changing = true }
     // Spamservice: the canonical IP-reputation / security-event authority
     // (reputation pulls + client provisioning for managed sites).
-    serverImplementation ('be.elevenways:spamservice-client:0.1.0-SNAPSHOT') { changing = true }
-    spamserviceDistribution ('be.elevenways:spamservice-server:0.1.0-SNAPSHOT') { changing = true }
+    serverImplementation (libs.spamservice.client) { changing = true }
+    spamserviceDistribution (libs.spamservice.server) { changing = true }
 
-    commonImplementation 'org.checkerframework:checker-qual:4.2.0'
-    clientImplementation 'org.checkerframework:checker-qual:4.2.0'
-    serverImplementation 'org.checkerframework:checker-qual:4.2.0'
+    commonImplementation libs.checker.qual
+    clientImplementation libs.checker.qual
+    serverImplementation libs.checker.qual
 
     // Database
-    serverImplementation 'org.xerial:sqlite-jdbc:3.45.1.0'
+    serverImplementation libs.jdbc.sqlite
 
     // ACME / Let's Encrypt
-    serverImplementation 'org.shredzone.acme4j:acme4j-client:3.4.0'
+    serverImplementation libs.acme4j.client
 
     // DNS wire format (authoritative DNS server)
-    serverImplementation 'dnsjava:dnsjava:3.6.5'
+    serverImplementation libs.dnsjava
 
     // PEM parsing (BouncyCastle)
-    serverImplementation 'org.bouncycastle:bcpkix-jdk18on:1.78.1'
+    serverImplementation libs.bouncycastle.pkix
 
     // Browser tests
-    testImplementation platform('org.junit:junit-bom:5.10.0')
-    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation platform(libs.junit.bom)
+    testImplementation libs.junit.jupiter
     // Gradle 9 no longer auto-provides the JUnit Platform launcher (propagates to browserTest
     // via extendsFrom). Java 25 needs checker-qual on the test classpaths too (the removed
     // checkerframework plugin used to supply it).
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    testImplementation 'org.checkerframework:checker-qual:4.2.0'
-    browserTestImplementation platform('org.junit:junit-bom:5.10.0')
-    browserTestImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly libs.junit.launcher
+    testImplementation libs.checker.qual
+    browserTestImplementation platform(libs.junit.bom)
+    browserTestImplementation libs.junit.jupiter
     // The live-lane report is a TestExecutionListener, so the launcher API has to be on
     // the COMPILE path here, not merely on the runtime one Gradle supplies.
-    browserTestImplementation 'org.junit.platform:junit-platform-launcher'
-    browserTestImplementation 'com.microsoft.playwright:playwright:1.48.0'
-    browserTestImplementation 'org.assertj:assertj-core:3.25.3'
+    browserTestImplementation libs.junit.launcher
+    browserTestImplementation libs.playwright
+    browserTestImplementation libs.assertj
     browserTestImplementation sourceSets.server.output
-    browserTestImplementation ('be.elevenways:protoblast-server:0.1.0-SNAPSHOT') { changing = true }
-    browserTestImplementation ('be.elevenways:zenit-server:0.1.0-SNAPSHOT') { changing = true }
-    browserTestImplementation ('be.elevenways:zenit-auth-server:0.1.0-SNAPSHOT') { changing = true }
-    browserTestImplementation ('be.elevenways:hawkeye-server:0.1.0-SNAPSHOT') { changing = true }
-    browserTestImplementation ('be.elevenways:hawkeye-test-support:0.1.0-SNAPSHOT') { changing = true }
-    browserTestImplementation ('be.elevenways:plumage-server:0.1.0-SNAPSHOT') { changing = true }
-    browserTestImplementation ('be.elevenways:zenit-forms-server:0.1.0-SNAPSHOT') { changing = true }
-    browserTestImplementation ('be.elevenways:zenit-microcopy-server:0.1.0-SNAPSHOT') { changing = true }
-    browserTestImplementation ('be.elevenways:spamservice-client:0.1.0-SNAPSHOT') { changing = true }
-    browserTestImplementation ('be.elevenways:zenit-cms-server:0.1.0-SNAPSHOT') { changing = true }
-    browserTestImplementation ('be.elevenways:zenit-comms-server:0.1.0-SNAPSHOT') { changing = true }
+    browserTestImplementation (libs.protoblast.server) { changing = true }
+    browserTestImplementation (libs.zenit.server) { changing = true }
+    browserTestImplementation (libs.zenit.auth.server) { changing = true }
+    browserTestImplementation (libs.hawkeye.server) { changing = true }
+    browserTestImplementation (libs.hawkeye.test.support) { changing = true }
+    browserTestImplementation (libs.plumage.server) { changing = true }
+    browserTestImplementation (libs.zenit.forms.server) { changing = true }
+    browserTestImplementation (libs.zenit.microcopy.server) { changing = true }
+    browserTestImplementation (libs.spamservice.client) { changing = true }
+    browserTestImplementation (libs.zenit.cms.server) { changing = true }
+    browserTestImplementation (libs.zenit.comms.server) { changing = true }
     // The shared source-guard scanner: PageTitleLocalizationTest declares its own rule
     // (a repo-specific mechanism, so not a BuiltInRules entry) and drives the same walk.
-    browserTestImplementation ('be.elevenways:protoblast-source-guard:0.1.0-SNAPSHOT') { changing = true }
-    browserTestImplementation 'org.xerial:sqlite-jdbc:3.45.1.0'
-    browserTestImplementation 'org.bouncycastle:bcpkix-jdk18on:1.78.1'
-    browserTestImplementation 'org.shredzone.acme4j:acme4j-client:3.4.0'
-    browserTestImplementation 'dnsjava:dnsjava:3.6.5'
+    browserTestImplementation (libs.protoblast.source.guard) { changing = true }
+    browserTestImplementation libs.jdbc.sqlite
+    browserTestImplementation libs.bouncycastle.pkix
+    browserTestImplementation libs.acme4j.client
+    browserTestImplementation libs.dnsjava
 }
 
 // The runtime-image build contexts ride the SERVER resources, so a host that has to

@@ -6,4 +6,8 @@ pluginManagement {
     }
 }
 
+plugins {
+    id 'be.elevenways.protoblast.settings' version '0.1.0-SNAPSHOT'
+}
+
 rootProject.name = 'hohenheim'
