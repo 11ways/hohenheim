@@ -1,5 +1,5 @@
 Presence of this file opts the project into the protoblast plugin's checkPrivateSettingsContexts
 compile gate (production Java constructing a SettingsContext of its own: the default settings
 chain loads into Zenit.SETTINGS_VALUES and nothing else, so a module's private context accepts
-every configured value and never reads one; see CheckPrivateSettingsContextsTask). A settings
-tree with files of its own carries a "private-settings-context: <why>" comment.
+every configured value and never reads one; see CheckPrivateSettingsContextsTask). zenit core's
+own context is exempt by the rule itself.

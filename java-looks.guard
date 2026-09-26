@@ -2,5 +2,5 @@ Presence of this file opts the project into the protoblast plugin's checkJavaLoo
 gate (production Java writing a look property into an element's inline style, or a literal
 color into any CSS it builds, paints outside the stylesheet where the design tokens, the
 theme and the color scheme never reach it; Java writes geometry only, and StyleProperty
-declares which property plays which role; see CheckJavaLooksTask). A deliberate look
-carries a "java-look: <why>" comment.
+declares which property plays which role; see CheckJavaLooksTask). No comment
+excuses a look.
