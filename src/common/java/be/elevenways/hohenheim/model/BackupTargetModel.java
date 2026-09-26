@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.backup.BackupTargetRegistry;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.field.*;
@@ -109,7 +110,7 @@ public class BackupTargetModel extends Model {
      *                    {@code backup_target_control_plane}
      */
     static void refuseRemovalWhileReferenced(@NonNull RemoveFromDatasource context) {
-        String controlPlane = HohenheimSettings.VALUES.getValue(
+        String controlPlane = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET);
         for (Row doomed : context.doomedRows()) {
             Integer targetId = doomed.get(ID);

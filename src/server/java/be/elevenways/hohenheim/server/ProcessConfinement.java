@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.process.BoundedProcess;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -213,7 +214,7 @@ public final class ProcessConfinement {
 
     /** @return the configured per-child process cap, never below 1 */
     public static int pidsLimit() {
-        Integer configured = HohenheimSettings.VALUES.getValue(
+        Integer configured = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Process.PIDS_LIMIT);
         return configured != null && configured > 0 ? configured : DEFAULT_PIDS_LIMIT;
     }

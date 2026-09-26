@@ -124,7 +124,7 @@ class ProxyDispatchTest {
             ),
             Map.of("custom_headers", headers, "force_ssl", false));
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();
 
@@ -182,8 +182,8 @@ class ProxyDispatchTest {
             Map.of("forward_host", "127.0.0.1", "forward_port", upstream.getAddress().getPort()),
             Map.of("hsts_enabled", true, "hsts_subdomains", true, "force_ssl", false));
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();
 
@@ -233,7 +233,7 @@ class ProxyDispatchTest {
             Map.of("forward_host", "127.0.0.1", "forward_port", 9999, "websocket_upgrade", false),
             Map.of("force_ssl", false));
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();
 
@@ -268,7 +268,7 @@ class ProxyDispatchTest {
             Map.of("forward_host", "127.0.0.1", "forward_port", 9999, "websocket_upgrade", true),
             Map.of("force_ssl", false));
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();
 
@@ -345,7 +345,7 @@ class ProxyDispatchTest {
             ),
             Map.of("match_type", "regex", "force_ssl", false));
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();
 
@@ -409,7 +409,7 @@ class ProxyDispatchTest {
             Map.of("forward_host", "127.0.0.1", "forward_port", upstreamPort),
             Map.of("force_ssl", false));
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();
         int httpPort = ((InetSocketAddress) proxy.getHttpListenerInfo().getAddress()).getPort();
@@ -444,7 +444,7 @@ class ProxyDispatchTest {
                 "rewrite_location", false),
             Map.of("force_ssl", false));
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();
         int httpPort = ((InetSocketAddress) proxy.getHttpListenerInfo().getAddress()).getPort();
@@ -479,7 +479,7 @@ class ProxyDispatchTest {
             Map.of("forward_host", "127.0.0.1", "forward_port", upstream.getAddress().getPort()),
             Map.of("response_headers", responseHeaders, "force_ssl", false));
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();
         int httpPort = ((InetSocketAddress) proxy.getHttpListenerInfo().getAddress()).getPort();
@@ -513,8 +513,8 @@ class ProxyDispatchTest {
             Map.of("forward_host", "127.0.0.1", "forward_port", 9999),
             Map.of("force_ssl", false));
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();
 
@@ -550,7 +550,7 @@ class ProxyDispatchTest {
         setupSiteWithDomain("listen.test", Map.of("forward_host", "127.0.0.1", "forward_port", 9999),
             Map.of("listen_on", "192.0.2.25", "force_ssl", false));
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();
 

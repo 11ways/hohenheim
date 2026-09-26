@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.quota.ChargedModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.quota.QuotaExceeded;
@@ -142,7 +143,7 @@ public final class InstanceCapacity {
         if (measuredAt == null && hasReading) {
             measuredAt = server.get(ServerModel.PROBED_AT);
         }
-        Integer maxAge = HohenheimSettings.VALUES.getValue(
+        Integer maxAge = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Capacity.FACTS_MAX_AGE_HOURS);
         return new HostCapacityView(
             budget != null,
@@ -169,9 +170,9 @@ public final class InstanceCapacity {
         if (totalMb == null || !readingIsFresh(server)) {
             return null;
         }
-        Integer reserve = HohenheimSettings.VALUES.getValue(
+        Integer reserve = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB);
-        Double ratio = HohenheimSettings.VALUES.getValue(
+        Double ratio = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Capacity.MEMORY_OVERCOMMIT_RATIO);
         long bookable = totalMb - (reserve == null ? 0 : Math.max(0, reserve));
         if (bookable <= 0) {
@@ -203,7 +204,7 @@ public final class InstanceCapacity {
      * provenance, whose reading really is as old as their last probe.
      */
     private static boolean readingIsFresh(@NonNull Row server) {
-        Integer hours = HohenheimSettings.VALUES.getValue(
+        Integer hours = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Capacity.FACTS_MAX_AGE_HOURS);
         if (hours == null || hours <= 0) {
             return true;

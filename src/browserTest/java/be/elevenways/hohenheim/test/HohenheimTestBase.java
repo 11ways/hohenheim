@@ -4,7 +4,7 @@ import be.elevenways.hawkeye.testSupport.HawkeyeBrowserTestBase;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
-import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
+import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.protoblast.common.time.Now;
@@ -26,8 +26,6 @@ import be.elevenways.zenit.server.http.RateLimitMiddleware;
 import be.elevenways.zenit.server.http.ZenitHttpServer;
 import com.microsoft.playwright.options.Cookie;
 
-import java.io.File;
-import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -67,36 +65,26 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
             return port;
         }
 
-        // Use temp files for the test database and the settings write-back so
-        // tests never pollute the working directory or the developer's local.dry.
-        try {
-            File settingsDry = File.createTempFile("hohenheim-test-settings", ".dry");
-            settingsDry.delete();
-            settingsDry.deleteOnExit();
-            System.setProperty("hohenheim.settings", settingsDry.getAbsolutePath());
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to create temp database file", e);
-        }
-
         // The shared harness DECLARES its role set instead of inheriting it by
         // omission: every role on, the full-node shape this suite has always
         // exercised. load() below snapshots these into HohenheimRoles.
-        HohenheimSettingsFiles.forceDefinitions();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.PROXY, true);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.DNS, true);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.FIREWALL, true);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.STACKS, true);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.DATABASES, true);
+        HohenheimSettingsBoot.forceDefinitions();
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.PROXY, true);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.DNS, true);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.FIREWALL, true);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.STACKS, true);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.DATABASES, true);
 
-        // Load the (empty) test settings file into the context so the panel's
-        // framework SettingsPage can locate its editable DryFileSource.
-        HohenheimSettingsFiles.load();
+        // Load the settings chain the way ServerMain does. The lane's zenit.settings.root
+        // points settings/local.dry into the build directory, so the settings page writes
+        // there and never into the developer's own file.
+        HohenheimSettingsBoot.load();
 
         HohenheimEndpoints.init();
         // Before the migrations, exactly as ServerMain does it: the declarations carry the
         // per-model liveness definition zenit-auth's orphan-purge migration consults.
         HohenheimTestRuntime.declareAccessModelsOnce();
-        // Claims the database path too, AFTER HohenheimSettingsFiles.load() so a loaded
+        // Claims the database path too, AFTER HohenheimSettingsBoot.load() so a loaded
         // settings file can never point the suite at a developer's real database.
         try {
             TestDatabases.freshDatabase();

@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.backup.FilesystemBackupTarget;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -66,7 +67,7 @@ final class BackupLaneFixture {
 
         Path staging = Files.createTempDirectory("hohenheim-backup-staging");
         staging.toFile().deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.STAGING_PATH,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.STAGING_PATH,
             staging.toAbsolutePath().toString());
         Path targetRoot = Files.createTempDirectory("hohenheim-backup-target");
         targetRoot.toFile().deleteOnExit();

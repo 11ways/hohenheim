@@ -1,10 +1,12 @@
 // Zenit server developer-local overrides for Hohenheim.
 //
 // Copy this file to `settings/local.dry` and uncomment the keys you need to
-// change. Values in `settings/local.dry` are loaded after `settings/default.dry`
-// (which Hohenheim does not currently ship), so entries here take precedence.
+// change. Values in `settings/local.dry` are loaded after `settings/default.dry`,
+// so entries here take precedence; `ZENIT__GROUP__KEY` environment variables
+// (e.g. `ZENIT__HOHENHEIM__PROXY__HTTP_PORT`) override both.
 //
-// `local.dry` is gitignored by design: it typically pins developer-local ports.
+// `local.dry` is gitignored by design: it pins developer-local ports and
+// commonly carries proxy trust keys and machine-local paths.
 {
     // Zenit framework settings
     "network": {
@@ -15,5 +17,34 @@
         // is "loopback"; explicitly list a LAN/reverse-proxy address before placing the
         // admin listener behind a proxy on another host.
         //"trusted_proxies": "loopback, 10.0.0.0/8"
+    },
+
+    // Hohenheim's own settings
+    "hohenheim": {
+        "proxy": {
+            // Public listeners. Ports below 1024 normally require a capability.
+            //"http_port": 8080,
+            //"https_port": 443,
+
+            // Secret values accepted in X-Hohenheim-Key from upstream HTTP proxies.
+            //"trusted_proxy_keys": ["replace-with-a-random-key"],
+
+            // Literal IP/CIDR peers allowed to prepend PROXY protocol v2, on BOTH public
+            // ports. A non-empty list also moves the plain HTTP listener behind the
+            // Layer-4 ingress front; an empty list keeps it a direct listener.
+            //"proxy_protocol_trusted_sources": ["127.0.0.1/32", "::1/128"],
+            //"connection_prologue_timeout_seconds": 5,
+            //"max_pending_connections": 1024,
+            //"max_public_connections": 10000
+        },
+        "ssl": {
+            //"letsencrypt_enabled": false
+        },
+        "storage": {
+            //"data_path": "data"
+        },
+        "database": {
+            //"path": "hohenheim.db"
+        }
     }
 }

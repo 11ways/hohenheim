@@ -24,6 +24,7 @@ import be.elevenways.hohenheim.server.util.DatasourceScoped;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
@@ -1028,7 +1029,7 @@ public class DatabaseService extends DatasourceScoped {
             }
 
             // 2. Dump the dedicated engine; the file is the rollback.
-            Path backupRoot = Path.of(HohenheimSettings.VALUES.getValue(
+            Path backupRoot = Path.of(Zenit.SETTINGS_VALUES.getValue(
                 HohenheimSettings.Database.BACKUP_PATH));
             Path dump = backupRowToFile(row, backupRoot.resolve("moves").resolve(name),
                 STAMP.format(Now.instant()));

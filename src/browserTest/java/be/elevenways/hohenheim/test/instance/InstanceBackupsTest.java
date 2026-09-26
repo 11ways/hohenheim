@@ -16,6 +16,7 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -98,7 +99,7 @@ class InstanceBackupsTest {
             // 1. TWO captures inside one second (retention off so nothing prunes yet).
             //    The stamp resolves to the second, so aligning both inside one is what
             //    reproduces the collision; a pair that straddles a boundary is retried.
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.RETENTION, 0);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 0);
             int older = 0;
             int newer = 0;
             boolean aligned = false;
@@ -129,7 +130,7 @@ class InstanceBackupsTest {
             //    restorable artifact. Before the fix the shared key meant this delete
             //    removed the survivor's only payload while its row still read COMPLETE
             //    with a sha256.
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.RETENTION, 1);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 1);
             backups.pruneForRetention(instanceId);
             assertThat(Models.get(InstanceBackupModel.class).findById(older))
                 .as("step 2: the older backup fell outside the window and its row is gone")
@@ -154,7 +155,7 @@ class InstanceBackupsTest {
                     + unreadable.getMessage());
             }
 
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
             service.destroy(instanceId);
         });
     }
@@ -233,7 +234,7 @@ class InstanceBackupsTest {
             InstanceBackups backups = new InstanceBackups();
             int instanceId = instanceRecord("backup-operator-only", hostId);
             service.deploy(instanceId);
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.RETENTION, 0);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 0);
             int backupId = backups.backupNow(instanceId, targetId, target);
             Row backup = Models.get(InstanceBackupModel.class).findById(backupId);
 
@@ -253,7 +254,7 @@ class InstanceBackupsTest {
                 .as("step 2: and no instance record was created by the refused attempt")
                 .isEqualTo(instancesBefore);
 
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
             service.destroy(instanceId);
         });
     }
@@ -275,7 +276,7 @@ class InstanceBackupsTest {
 
             // 1. Two explicit-target backups with NO target record id; the second one's
             //    completion sweep (retention 1) must remove the first, row AND artifact.
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.RETENTION, 1);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 1);
             int older = backups.backupNow(instanceId, null, target);
             String olderKey = remoteKeyOf(older);
             int newer = backups.backupNow(instanceId, null, target);
@@ -290,7 +291,7 @@ class InstanceBackupsTest {
             assertThat(Models.get(InstanceBackupModel.class).findById(newer))
                 .as("step 1: the completing backup itself survives").isNotNull();
 
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
             service.destroy(instanceId);
         });
     }
@@ -417,7 +418,7 @@ class InstanceBackupsTest {
                 .where(InstanceModel.ID.eq(instanceId))
                 .assign(InstanceModel.BACKUP_TARGET_ID, (Object) null)
                 .updateAll();
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET,
                 "delete-guard-target");
             try {
@@ -426,7 +427,7 @@ class InstanceBackupsTest {
                     .as("step 4: the control-plane destination refuses with its own name")
                     .isEqualTo("backup_target_control_plane ");
             } finally {
-                HohenheimSettings.VALUES.setValue(
+                Zenit.SETTINGS_VALUES.setValue(
                     HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, null);
             }
 

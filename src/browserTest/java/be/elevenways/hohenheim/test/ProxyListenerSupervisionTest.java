@@ -72,7 +72,7 @@ class ProxyListenerSupervisionTest {
             receiver.stop(0);
             receiver = null;
         }
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
     }
 
     @Test
@@ -105,8 +105,8 @@ class ProxyListenerSupervisionTest {
         installCertificate("supervised.test");
         try (ServerSocket blocker = new ServerSocket(0)) {
             int blockedPort = blocker.getLocalPort();
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, blockedPort);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, blockedPort);
 
             AtomicLong clock = new AtomicLong(Now.millis());
             proxy = new ProxyServer();
@@ -230,8 +230,8 @@ class ProxyListenerSupervisionTest {
     @Timeout(60)
     void httpListenerRidesTheSameBoundedRestartPath() {
         // Step 1: HTTP on a privileged port fails at start and records attempt 1.
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 80);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 80);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
         AtomicLong clock = new AtomicLong(Now.millis());
         ProxyServer httpProxy = new ProxyServer();
         httpProxy.setClockForTesting(clock::get);
@@ -248,7 +248,7 @@ class ProxyListenerSupervisionTest {
                 .as("step 1: HTTP arms the same 30s initial backoff").isEqualTo(HALF_MINUTE);
 
             // Step 2: not due -> no attempt, even though the port setting is now fine.
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
             httpProxy.superviseListeners();
             assertThat(httpProxy.getHttpState())
                 .as("step 2: before the due time the supervisor must not touch HTTP")
@@ -276,8 +276,8 @@ class ProxyListenerSupervisionTest {
     @Timeout(60)
     void theMinutelyTaskReachesTheAdoptedProxyAndHealsIt() {
         // Step 1: an HTTP listener that failed to start (privileged port), attempt 1 armed.
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 80);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 80);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
         AtomicLong clock = new AtomicLong(Now.millis());
         ProxyServer taskProxy = new ProxyServer();
         taskProxy.setClockForTesting(clock::get);
@@ -292,7 +292,7 @@ class ProxyListenerSupervisionTest {
             // proxy adopted the task supervises NOTHING. This is the executor's null
             // branch, and a run that reports success while doing nothing is exactly what
             // made the wiring invisible to the bootstrap test.
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
             clock.set(due);
             ServerMain.adoptProxyServer(null);
             runSupervisionTask();
@@ -318,7 +318,7 @@ class ProxyListenerSupervisionTest {
         } finally {
             ServerMain.adoptProxyServer(null);
             taskProxy.stop();
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         }
     }
 

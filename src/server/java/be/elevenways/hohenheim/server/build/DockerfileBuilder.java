@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.build;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BuildOperationModel;
+import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
@@ -96,7 +97,7 @@ public final class DockerfileBuilder implements Builders {
 
     /** The configured daemonless builder image. */
     static @NonNull String builderImage() {
-        String configured = HohenheimSettings.VALUES.getValue(
+        String configured = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Builds.BUILDER_IMAGE);
         return configured == null || configured.isBlank()
             ? "gcr.io/kaniko-project/executor:v1.23.2" : configured.trim();

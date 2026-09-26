@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -110,7 +111,7 @@ public final class InstanceAttention {
      * one instance (failing nightly AND stale); that is escalation, not duplication.
      */
     public static void staleInstanceBackups(List<AttentionItem> items) {
-        Integer days = HohenheimSettings.VALUES.getValue(
+        Integer days = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Backup.STALE_AFTER_DAYS);
         if (days == null || days <= 0) {
             return;

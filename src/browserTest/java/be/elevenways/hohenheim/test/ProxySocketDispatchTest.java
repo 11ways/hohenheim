@@ -80,7 +80,7 @@ class ProxySocketDispatchTest {
 
         setupSocketSite("socket.test", sock.toString());
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();
         int httpPort = ((InetSocketAddress) proxy.getHttpListenerInfo().getAddress()).getPort();

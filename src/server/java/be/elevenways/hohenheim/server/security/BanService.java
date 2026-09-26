@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.net.AddressScope;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -175,7 +176,7 @@ public final class BanService {
 
     public boolean enforcementEnabled() {
         return Boolean.TRUE.equals(
-            HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.BANS_ENABLED));
+            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.BANS_ENABLED));
     }
 
     // -----------------------------------------------------------------------
@@ -260,7 +261,7 @@ public final class BanService {
                 }
             } else {
                 try {
-                    int ttlHours = HohenheimSettings.VALUES.getValue(
+                    int ttlHours = Zenit.SETTINGS_VALUES.getValue(
                         HohenheimSettings.Security.AUTO_BAN_TTL_HOURS);
                     createBanNormalized(bans, normalized, reason, BanModel.SOURCE_AUTO,
                         eventType, scope, Duration.ofHours(Math.max(1, ttlHours)), true);
@@ -308,7 +309,7 @@ public final class BanService {
      * Global sliding-hour auto-ban budget over successfully completed unique rows.
      */
     private int configuredAutoBanBudget() {
-        Integer configured = HohenheimSettings.VALUES.getValue(
+        Integer configured = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Security.AUTO_BAN_BUDGET_PER_HOUR);
         return Math.max(1, configured != null ? configured : 50);
     }
@@ -650,7 +651,7 @@ public final class BanService {
                 return "one of this server's own addresses";
             }
         }
-        List<String> neverBan = HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.NEVER_BAN);
+        List<String> neverBan = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.NEVER_BAN);
         if (IpLiterals.matchesList(literal, neverBan)) {
             return "on the security.never_ban allowlist";
         }
@@ -681,7 +682,7 @@ public final class BanService {
                 return "contains one of this server's own addresses";
             }
         }
-        List<String> neverBan = HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.NEVER_BAN);
+        List<String> neverBan = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.NEVER_BAN);
         if (IpLiterals.listOverlapsV6Subnet(network, neverBan)) {
             return "contains an address on the security.never_ban allowlist";
         }

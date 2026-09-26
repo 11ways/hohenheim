@@ -24,6 +24,7 @@ import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.http.RateLimitMiddleware;
 import com.microsoft.playwright.Locator;
 import org.junit.jupiter.api.*;
@@ -130,11 +131,11 @@ class AdminPagesTest extends HohenheimTestBase {
         page.click(".cms-settings-actions pl-button");
         page.waitForCondition(() -> page.locator("pl-toast").count() > 0);
 
-        // The DIFF-based write-back landed in the (test-redirected) settings file
-        // with keys RELATIVE to the hohenheim group.
-        Path settingsDry = Path.of(System.getProperty("hohenheim.settings"));
+        // The DIFF-based write-back landed in the framework's settings/local.dry (the lane's
+        // settings root, never the checkout's) under the hohenheim group.
+        Path settingsDry = ServerZenitRuntime.localSettingsFile();
         assertThat(Files.isRegularFile(settingsDry)).isTrue();
-        Map<?, ?> parsed = (Map<?, ?>) Zenit.DRY.parse(Files.readString(settingsDry));
+        Map<?, ?> parsed = (Map<?, ?>) ((Map<?, ?>) Zenit.DRY.parse(Files.readString(settingsDry))).get("hohenheim");
         Map<?, ?> proxy = (Map<?, ?>) parsed.get("proxy");
         assertThat(String.valueOf(proxy.get("fallback_address"))).isEqualTo("http://127.0.0.1:9999");
         Map<?, ?> security = (Map<?, ?>) parsed.get("security");
@@ -143,9 +144,9 @@ class AdminPagesTest extends HohenheimTestBase {
             .isEqualTo(List.of("198.51.100.0/24", "203.0.113.7"));
 
         // The live context applied the change without a restart.
-        assertThat(HohenheimSettings.VALUES.getValue(
+        assertThat(Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Security.DOMAIN_MISS_THRESHOLD)).isEqualTo(7);
-        assertThat(HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.NEVER_BAN))
+        assertThat(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.NEVER_BAN))
             .isEqualTo(List.of("198.51.100.0/24", "203.0.113.7"));
 
         // Settings edits are accountable: the touched keys land in the activity log.
@@ -168,9 +169,9 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(page.locator(neverBan + " .zf-array-row").count())
             .as("an armed reset leaves the editor untouched until save").isEqualTo(2);
         page.click(".cms-settings-actions pl-button");
-        page.waitForCondition(() -> HohenheimSettings.VALUES
+        page.waitForCondition(() -> Zenit.SETTINGS_VALUES
             .getValue(HohenheimSettings.Security.NEVER_BAN).isEmpty());
-        parsed = (Map<?, ?>) Zenit.DRY.parse(Files.readString(settingsDry));
+        parsed = (Map<?, ?>) ((Map<?, ?>) Zenit.DRY.parse(Files.readString(settingsDry))).get("hohenheim");
         security = (Map<?, ?>) parsed.get("security");
         assertThat(security.containsKey("never_ban")).isFalse();
 
@@ -224,7 +225,7 @@ class AdminPagesTest extends HohenheimTestBase {
         // A number input sanitizes garbage client-side, so exercise the server
         // rejection with a raw POST: an uncoercible port must rerender with a
         // violation instead of persisting anything.
-        Integer before = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT);
+        Integer before = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT);
         var response = adminPostForm("/admin/settings",
             "app.proxy.http_port=not-a-port&app.proxy.http_port__base=" + before);
 
@@ -233,7 +234,7 @@ class AdminPagesTest extends HohenheimTestBase {
 
         String raw = Files.exists(settingsDry) ? Files.readString(settingsDry) : "";
         assertThat(raw).doesNotContain("not-a-port");
-        assertThat(HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT))
+        assertThat(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT))
             .isEqualTo(before);
     }
 

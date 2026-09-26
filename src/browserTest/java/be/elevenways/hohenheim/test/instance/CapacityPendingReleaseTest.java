@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.validation.Violations;
@@ -34,7 +35,7 @@ class CapacityPendingReleaseTest {
     void theCreditAdmitsExactlyTheReleasingAmountOnTheDeclaredHostAndOnlyInsideTheScope() {
         Db.run(datasource, () -> {
             int local = ServerModel.localServerId();
-            int reserve = HohenheimSettings.VALUES.getValue(
+            int reserve = Zenit.SETTINGS_VALUES.getValue(
                 HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB);
             // 1. A host whose budget is exactly 1000 MB, booked to the last megabyte.
             HostFixtures.makeLocalPlaceable(1000 + reserve);

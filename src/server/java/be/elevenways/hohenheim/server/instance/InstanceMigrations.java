@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -849,7 +850,7 @@ public final class InstanceMigrations {
     }
 
     private static Path stagingRoot() {
-        return Path.of(HohenheimSettings.VALUES.getValue(HohenheimSettings.Backup.STAGING_PATH));
+        return Path.of(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Backup.STAGING_PATH));
     }
 
     private static Violations refusal(String key, Row row, Exception cause) {

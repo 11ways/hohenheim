@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.build;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.hohenheim.server.util.Tar;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -92,7 +93,7 @@ public final class NixpacksDistribution {
 
     private static @NonNull String setting(@NonNull SettingDefinition<String> definition,
                                            @NonNull String name) throws IOException {
-        String value = HohenheimSettings.VALUES.getValue(definition);
+        String value = Zenit.SETTINGS_VALUES.getValue(definition);
         if (value == null || value.isBlank()) {
             throw new IOException("REFUSED to run a nixpacks build: hohenheim.builds."
                 + name + " is empty; the detector must be pinned, never floating");
@@ -101,7 +102,7 @@ public final class NixpacksDistribution {
     }
 
     private static @NonNull Path cacheDir(@NonNull String version) {
-        String dataPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
+        String dataPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
         return Path.of(dataPath == null || dataPath.isBlank() ? "data" : dataPath)
             .resolve("nixpacks").resolve(version);
     }

@@ -20,6 +20,7 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -100,13 +101,13 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         approvedTemplateId = template(PREFIX + "approved", true);
         unapprovedTemplateId = template(PREFIX + "unapproved", false);
 
-        previousLimit = HohenheimSettings.VALUES.getValue(
+        previousLimit = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER);
     }
 
     @AfterAll
     static void cleanUp() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER,
             previousLimit == null ? 0 : previousLimit);
         Model instances = Models.get(InstanceModel.class);
         for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
@@ -505,7 +506,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
 
             // 7. And the cap binds: set the tenant's limit to what it already uses and the
             //    next create is refused by name.
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER,
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER,
                 (int) InstanceQuota.usedBy(HohenheimAccess.packSubjects(
                     java.util.Set.of("user:" + tenantAId))));
             HttpResponse<String> capped = tenantPost(createUrl,
@@ -516,7 +517,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             assertThat(Models.get(InstanceModel.class).find()
                     .where(InstanceModel.NAME.eq(PREFIX + "over-cap")).count())
                 .as("step 7: and nothing landed").isZero();
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER, 0);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER, 0);
 
             // 8. An UNAPPROVED template stays unusable even by direct id: the catalog's
             //    omission is UX, the funnel is the gate. The refusal is answered exactly
@@ -552,7 +553,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
      * host, a create permission or a binding quota it did not set up itself.
      */
     private static void handBackCreation(@Nullable Row createGrant) {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER,
             previousLimit == null ? 0 : previousLimit);
         if (createGrant != null) {
             GrantService.deleteDirectGrant(GrantSubjectType.USER, tenantAId,

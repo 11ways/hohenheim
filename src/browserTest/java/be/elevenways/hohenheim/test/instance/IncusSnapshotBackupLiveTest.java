@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.schedule.InstanceSnapshotAction;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -96,13 +97,13 @@ class IncusSnapshotBackupLiveTest {
         HohenheimTestRuntime.ensureBooted();
 
         workRoot = Files.createTempDirectory("hohenheim-incus-backup-test");
-        previousSnapshotPath = HohenheimSettings.VALUES.getValue(
+        previousSnapshotPath = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Backup.SNAPSHOT_PATH);
-        previousStagingPath = HohenheimSettings.VALUES.getValue(
+        previousStagingPath = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Backup.STAGING_PATH);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.SNAPSHOT_PATH,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.SNAPSHOT_PATH,
             workRoot.resolve("snapshots").toString());
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.STAGING_PATH,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.STAGING_PATH,
             workRoot.resolve("staging").toString());
         FieldEncryption.installKeyring(EncryptionKeyring.loadOrCreate(
             workRoot.resolve("test-keyring.keys")));
@@ -127,9 +128,9 @@ class IncusSnapshotBackupLiveTest {
             }
         }
         FieldEncryption.installKeyring(null);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.SNAPSHOT_PATH,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.SNAPSHOT_PATH,
             previousSnapshotPath);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.STAGING_PATH,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.STAGING_PATH,
             previousStagingPath);
         deleteRecursively(workRoot);
     }

@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.protoblast.common.util.BlastString;
+import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -468,7 +469,7 @@ public final class ContainerHardening {
 
     /** @return the configured per-container process cap, never below 1 */
     public static int pidsLimit() {
-        Integer configured = HohenheimSettings.VALUES.getValue(
+        Integer configured = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Security.CONTAINER_PIDS_LIMIT);
         return configured != null && configured > 0 ? configured : DEFAULT_PIDS_LIMIT;
     }
@@ -514,14 +515,14 @@ public final class ContainerHardening {
 
     /** @return the configured rotation size in MB for one container log file, never below 1 */
     public static int logMaxSizeMb() {
-        Integer configured = HohenheimSettings.VALUES.getValue(
+        Integer configured = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Security.CONTAINER_LOG_MAX_SIZE_MB);
         return configured != null && configured > 0 ? configured : DEFAULT_LOG_MAX_SIZE_MB;
     }
 
     /** @return how many rotated log files one container keeps, never below 1 */
     public static int logMaxFiles() {
-        Integer configured = HohenheimSettings.VALUES.getValue(
+        Integer configured = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Security.CONTAINER_LOG_MAX_FILES);
         return configured != null && configured > 0 ? configured : DEFAULT_LOG_MAX_FILES;
     }

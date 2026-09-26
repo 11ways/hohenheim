@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.BeforeAll;
@@ -39,7 +40,7 @@ class AcmeAccountEmailTest {
 
     @Test
     void normalizationMapsDefaultsToTheGlobalAccount() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL, "ops@example.com");
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL, "ops@example.com");
 
         assertThat(AcmeService.normalizeAccountEmail(null)).isEmpty();
         assertThat(AcmeService.normalizeAccountEmail("   ")).isEmpty();

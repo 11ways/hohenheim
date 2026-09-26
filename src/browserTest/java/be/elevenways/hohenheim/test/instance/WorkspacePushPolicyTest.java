@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.WorkspaceBuilds;
 import be.elevenways.hohenheim.server.instance.WorkspaceKind;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -48,16 +49,16 @@ class WorkspacePushPolicyTest {
         BackupLaneFixture fixture = BackupLaneFixture.install();
         datasource = fixture.datasource;
         hostId = fixture.hostId;
-        savedUidBase = HohenheimSettings.VALUES.getValue(
+        savedUidBase = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Storage.VOLUME_UID_BASE);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.VOLUME_UID_BASE, 200000);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.VOLUME_UID_BASE, 200000);
         daemon = FakeWorkspaceDaemon.install();
     }
 
     @AfterAll
     static void tearDown() {
         FakeWorkspaceDaemon.uninstall();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.VOLUME_UID_BASE,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.VOLUME_UID_BASE,
             savedUidBase);
         BackupLaneFixture.uninstall();
     }

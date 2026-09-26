@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
-import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.server.cms.AuthRolesResource;
@@ -19,7 +18,6 @@ import be.elevenways.zenit.comms.CommsSettings;
 import be.elevenways.zenit.comms.server.cms.CommsSettingsLabels;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.ui.Icon;
-import be.elevenways.zenit.server.setting.SettingsEditor;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.ArrayList;
@@ -240,11 +238,10 @@ public final class HohenheimPanel extends Panel {
     }
 
     /**
-     * The settings editor: Hohenheim's own settings file, zenit's framework mount, the comms
-     * transport chain (zenit-comms' group of the framework file, which the framework mount then
-     * leaves out) and the spamservice backend. The file-backed mounts only appear when this boot
-     * actually loaded their editable file, so the panel never breaks over a missing settings
-     * source (test boots load others).
+     * The settings editor: Hohenheim's own group and the comms transport chain (each a group of
+     * the framework file, which the framework mount then leaves out), zenit's framework mount and
+     * the spamservice backend. The file-backed mounts only appear when this boot actually loaded
+     * the framework file, so the panel never breaks over a missing settings source.
      *
      * AIDEV-NOTE: the framework mount is zenit-cms's own {@link SettingsPage#frameworkMount()},
      * never a hand-built {@code SettingsEditor} over settings/local.dry: its key and label are
@@ -254,13 +251,10 @@ public final class HohenheimPanel extends Panel {
      */
     private static @NonNull SettingsPage settingsPage() {
         List<SettingsPage.Mount> mounts = new ArrayList<>();
-        try {
-            SettingsEditor appEditor = SettingsEditor.forFile(
-                HohenheimSettings.VALUES, HohenheimSettingsFiles.settingsFile());
-            mounts.add(new SettingsPage.Mount("app",
-                Microcopy.literal("Hohenheim"), appEditor));
-        } catch (IllegalArgumentException notLoaded) {
-            // Boot without the hohenheim settings file: the other mounts only.
+        SettingsPage.Mount app = SettingsPage.frameworkGroup("app", Microcopy.literal("Hohenheim"),
+            HohenheimSettings.HOHENHEIM);
+        if (app != null) {
+            mounts.add(app);
         }
         SettingsPage.Mount framework = SettingsPage.frameworkMount();
         if (framework != null) {

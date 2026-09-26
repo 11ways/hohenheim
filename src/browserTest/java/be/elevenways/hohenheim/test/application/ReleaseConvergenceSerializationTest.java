@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -69,14 +70,14 @@ class ReleaseConvergenceSerializationTest {
         HohenheimTestRuntime.ensureBooted();
         daemon = new FakeDockerDaemon();
         daemon.install();
-        savedProbeTimeout = HohenheimSettings.VALUES.getValue(
+        savedProbeTimeout = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS);
-        savedProbeInterval = HohenheimSettings.VALUES.getValue(
+        savedProbeInterval = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Releases.PROBE_INTERVAL_MS);
-        savedDrain = HohenheimSettings.VALUES.getValue(HohenheimSettings.Releases.DRAIN_SECONDS);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS, 5);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.PROBE_INTERVAL_MS, 50);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 0);
+        savedDrain = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Releases.DRAIN_SECONDS);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS, 5);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.PROBE_INTERVAL_MS, 50);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 0);
         Db.run(datasource, HostFixtures::admitLocal);
     }
 
@@ -87,11 +88,11 @@ class ReleaseConvergenceSerializationTest {
             daemon.close();
             daemon = null;
         }
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS, savedProbeTimeout);
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Releases.PROBE_INTERVAL_MS, savedProbeInterval);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, savedDrain);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, savedDrain);
     }
 
     /**
@@ -300,7 +301,7 @@ class ReleaseConvergenceSerializationTest {
         Db.run(datasource, () -> {
             int applicationId = application("drain-race", "v1");
             // A drain window no test waits out: the timer must never be what settles it.
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 600);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 600);
             try {
                 // 1. v1 serves (A), then v2 is released (B): A is retired and its drain is
                 //    PENDING for the whole window.
@@ -348,7 +349,7 @@ class ReleaseConvergenceSerializationTest {
                     .as("step 4: while the rolled-back release still serves")
                     .isEqualTo(releaseC);
             } finally {
-                HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 0);
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 0);
                 ApplicationReleases.destroyFor(applicationId);
             }
         });

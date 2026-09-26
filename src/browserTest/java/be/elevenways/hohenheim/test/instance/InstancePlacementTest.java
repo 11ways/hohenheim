@@ -31,6 +31,7 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -99,9 +100,9 @@ class InstancePlacementTest {
         HohenheimTestRuntime.ensureBooted();
         // The budget arithmetic is the SUBJECT here, so the two knobs that shape it are
         // pinned rather than inherited: bookable memory == the host's measured total.
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB, 0);
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Capacity.MEMORY_OVERCOMMIT_RATIO, 1.0);
     }
 

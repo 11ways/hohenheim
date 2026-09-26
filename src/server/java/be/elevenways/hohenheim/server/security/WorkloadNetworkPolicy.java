@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.HostMode;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.runtime.Egress;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -73,7 +74,7 @@ public final class WorkloadNetworkPolicy {
 
     /** The fleet-wide enforcement switch; per-host CAPABILITY is the preflight's job. */
     private static final BooleanSupplier ENABLED_SETTING = () -> Boolean.TRUE.equals(
-        HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.NFTABLES_ENABLED));
+        Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.NFTABLES_ENABLED));
 
     private static final WorkloadNetworkPolicy PRODUCTION = new WorkloadNetworkPolicy(
         new NftRunner.Sudo(), ENABLED_SETTING);
@@ -346,8 +347,8 @@ public final class WorkloadNetworkPolicy {
                 rules.add("ip saddr " + network.ipv4Subnet() + " ip daddr " + range + " drop");
             }
             for (Integer port : new Integer[] {
-                    HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT),
-                    HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTPS_PORT)}) {
+                    Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT),
+                    Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.HTTPS_PORT)}) {
                 if (port == null || port < 1 || port > 65535) {
                     continue;
                 }

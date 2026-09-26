@@ -39,6 +39,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -188,7 +189,7 @@ public final class PreviewDeployments {
             throw Violations.ofField("application_id", applicationId,
                 violation("preview_unsupported_type"));
         }
-        String baseDomain = str(HohenheimSettings.VALUES.getValue(
+        String baseDomain = str(Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Previews.BASE_DOMAIN));
         if (baseDomain.isEmpty()) {
             throw Violations.ofForm(violation("preview_no_base_domain"));
@@ -830,7 +831,7 @@ public final class PreviewDeployments {
     }
 
     private static @NonNull Instant expiry() {
-        Integer minutes = HohenheimSettings.VALUES.getValue(
+        Integer minutes = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Previews.LIFETIME_MINUTES);
         long effective = minutes != null && minutes > 0 ? minutes : 1440;
         return Now.instant().plusSeconds(effective * 60);

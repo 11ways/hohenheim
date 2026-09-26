@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -55,7 +56,7 @@ class InstanceSnapshotRetentionTest {
         // this test owns rather than the developer's configured one.
         Path root = Files.createTempDirectory("hohenheim-snapshot-retention-root");
         root.toFile().deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.SNAPSHOT_PATH,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.SNAPSHOT_PATH,
             root.toAbsolutePath().toString());
         FakeNativeDaemons.register();
         Db.run(datasource, () -> hostId = HostFixtures.admittedIncusHost("snap-retention-host"));
@@ -74,7 +75,7 @@ class InstanceSnapshotRetentionTest {
 
             // 1. Retention of 3, and FIVE captures: the daemon holds every one of them
             //    while they are being taken, so the prune has something to remove.
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Backup.SNAPSHOT_RETENTION, 3);
             List<Integer> ids = new ArrayList<>();
             List<String> names = new ArrayList<>();
@@ -115,7 +116,7 @@ class InstanceSnapshotRetentionTest {
                 .as("step 3: exactly the retention count remains").isEqualTo(3);
 
             // 4. Retention OFF keeps everything: 0 must mean "keep", never "keep none".
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Backup.SNAPSHOT_RETENTION, 0);
             snapshots.create(instanceId, "capture 6");
             snapshots.create(instanceId, "capture 7");
@@ -123,7 +124,7 @@ class InstanceSnapshotRetentionTest {
                     .where(InstanceSnapshotModel.INSTANCE_ID.eq(instanceId)).count())
                 .as("step 4: a retention of 0 prunes nothing").isEqualTo(5);
 
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Backup.SNAPSHOT_RETENTION, 7);
             service.destroy(instanceId);
         });
@@ -146,7 +147,7 @@ class InstanceSnapshotRetentionTest {
             InstanceSnapshots snapshots = new InstanceSnapshots();
             int instanceId = instanceRecord("snap-stale-row", hostId);
             service.deploy(instanceId);
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Backup.SNAPSHOT_RETENTION, 0);
 
             // 1. The operator renames the capture WHILE the daemon is taking it -- the
@@ -183,7 +184,7 @@ class InstanceSnapshotRetentionTest {
                     "named", "true",
                     "note", "renamed while capturing"));
 
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Backup.SNAPSHOT_RETENTION, 7);
             service.destroy(instanceId);
         });
@@ -229,7 +230,7 @@ class InstanceSnapshotRetentionTest {
 
             // 1. Retention of 1 over the VOLUME lane: the capture writes real tars under
             //    the snapshot root, and the older capture's row AND payload both go.
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Backup.SNAPSHOT_RETENTION, 1);
             int first = snapshots.create(instanceId, "volume capture 1");
             Path firstDir = Path.of((String) Models.get(InstanceSnapshotModel.class)
@@ -281,7 +282,7 @@ class InstanceSnapshotRetentionTest {
                 .as("step 4: the retry sweep removed both")
                 .isEqualTo(Map.of("row", "false", "payload", "false"));
 
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Backup.SNAPSHOT_RETENTION, 7);
             service.destroy(instanceId);
         });

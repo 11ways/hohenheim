@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerTransport;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
+import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import org.junit.jupiter.api.Test;
@@ -33,9 +34,9 @@ class ContainerLogLimitTest {
     @Test
     void everyCreatedContainerCarriesABoundedRotatingLogAndNoCallerCanRemoveIt()
             throws IOException {
-        Integer previousSize = HohenheimSettings.VALUES.getValue(
+        Integer previousSize = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Security.CONTAINER_LOG_MAX_SIZE_MB);
-        Integer previousFiles = HohenheimSettings.VALUES.getValue(
+        Integer previousFiles = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Security.CONTAINER_LOG_MAX_FILES);
         RecordingTransport transport = new RecordingTransport();
         DockerClient docker = new DockerClient(transport);
@@ -58,9 +59,9 @@ class ContainerLogLimitTest {
 
             // 2. It is a POLICY, so it follows the operator's setting rather than a
             //    constant -- and the numbers on the wire are the numbers configured.
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Security.CONTAINER_LOG_MAX_SIZE_MB, 4);
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Security.CONTAINER_LOG_MAX_FILES, 2);
             docker.createContainer("log-cap-probe-tuned", spec(), DockerContainerKind.HARDENING);
             assertThat(transport.lastCreateBody)
@@ -71,9 +72,9 @@ class ContainerLogLimitTest {
             // 3. Nonsense is not obeyed: a zero or negative cap is not "unlimited", it
             //    falls back to the default. A setting that could switch the policy off
             //    would be the same hole wearing a form.
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Security.CONTAINER_LOG_MAX_SIZE_MB, 0);
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Security.CONTAINER_LOG_MAX_FILES, -1);
             docker.createContainer("log-cap-probe-zero", spec(), DockerContainerKind.HARDENING);
             assertThat(transport.lastCreateBody)
@@ -97,10 +98,10 @@ class ContainerLogLimitTest {
                 .as("step 4: STATE, not just the throw -- nothing reached the daemon")
                 .isNull();
         } finally {
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Security.CONTAINER_LOG_MAX_SIZE_MB,
                 previousSize == null ? ContainerHardening.DEFAULT_LOG_MAX_SIZE_MB : previousSize);
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Security.CONTAINER_LOG_MAX_FILES,
                 previousFiles == null ? ContainerHardening.DEFAULT_LOG_MAX_FILES : previousFiles);
         }

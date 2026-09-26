@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -69,7 +70,7 @@ class ApplicationRuntimeContractTest {
      */
     @Test
     void applicationReleasesSpendTheSameQuotaAsEveryInstance() {
-        Integer previous = HohenheimSettings.VALUES.getValue(
+        Integer previous = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER);
         // The APPLICATION is minted before the headroom is closed: it is an instance too,
         // so creating it under the cap would refuse the owner instead of the release.
@@ -83,7 +84,7 @@ class ApplicationRuntimeContractTest {
         filler.set(InstanceModel.KIND, "hohenheim:docker_container");
         Models.get(InstanceModel.class).save(filler);
         long used = Quotas.usedOf(OPERATOR_BUCKET);
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER, (int) used);
         try {
             // 2. The application's owned-release CREATE is refused by the same
@@ -103,7 +104,7 @@ class ApplicationRuntimeContractTest {
             assertThat(Quotas.usedOf(OPERATOR_BUCKET))
                 .as("step 3: the refused reservation was not spent").isEqualTo(used);
         } finally {
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER,
                 previous == null ? 0 : previous);
         }

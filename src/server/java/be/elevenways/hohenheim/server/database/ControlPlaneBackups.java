@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
 import be.elevenways.hohenheim.server.task.BackupDatabases;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -79,7 +80,7 @@ public final class ControlPlaneBackups {
      */
     public static @NonNull Archive backupNow() throws IOException {
         String name = destinationName();
-        int retention = HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.BACKUP_RETENTION);
+        int retention = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.BACKUP_RETENTION);
         return backupNow(HohenheimDatabase.datasource(), FieldEncryption.requireKeyring(),
             requireDestination(), stagingDirectory(), retention, name);
     }
@@ -199,7 +200,7 @@ public final class ControlPlaneBackups {
      *         breaking change: there is no local fallback to degrade to
      */
     private static @NonNull String destinationName() {
-        String name = HohenheimSettings.VALUES.getValue(
+        String name = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET);
         if (name == null || name.isBlank()) {
             throw new IllegalStateException(
@@ -223,7 +224,7 @@ public final class ControlPlaneBackups {
 
     /** Where archives are built before upload; never a resting place. */
     public static @NonNull Path stagingDirectory() {
-        return Path.of(HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.BACKUP_PATH))
+        return Path.of(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.BACKUP_PATH))
             .resolve(STAGING_SUBDIRECTORY);
     }
 
@@ -321,7 +322,7 @@ public final class ControlPlaneBackups {
 
     /** @return whether a destination is configured at all (the dashboard's question) */
     public static @Nullable String configuredDestinationName() {
-        return Texts.trimmedOrNull(HohenheimSettings.VALUES.getValue(
+        return Texts.trimmedOrNull(Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET));
     }
 }

@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -38,13 +39,13 @@ class ArtifactSourceTest {
     @BeforeAll static void setup() throws Exception {
         datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
-        previousDataPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, tmp.toString());
+        previousDataPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, tmp.toString());
         Db.run(datasource, HostFixtures::admitLocal);
     }
 
     @AfterAll static void cleanup() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, previousDataPath);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, previousDataPath);
     }
 
     @Test void restoredSourceSurvivesFailedDeployAndCannotOverwriteAnExistingApplication() throws Exception {

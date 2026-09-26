@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.incus.IncusClients;
 import be.elevenways.hohenheim.server.incus.IncusReaper;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -213,14 +214,14 @@ public class ReapIncusControllers extends ScheduledTask {
      *         is never assumed
      */
     public static @NonNull Duration graceDuration() {
-        Integer hours = HohenheimSettings.VALUES.getValue(
+        Integer hours = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Incus.CONTROLLER_PRESENCE_GRACE_HOURS);
         return hours == null || hours <= 0 ? Duration.ZERO : Duration.ofHours(hours);
     }
 
     /** Whether an automatic sweep may remove anything at all. */
     public static boolean reapingEnabled() {
-        return Boolean.TRUE.equals(HohenheimSettings.VALUES.getValue(
+        return Boolean.TRUE.equals(Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Incus.REAP_DEPARTED_CONTROLLERS))
             && !graceDuration().isZero();
     }

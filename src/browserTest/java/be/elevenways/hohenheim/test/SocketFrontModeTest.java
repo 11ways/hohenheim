@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.security.BanService;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -52,8 +53,8 @@ class SocketFrontModeTest {
             upstream.stop(0);
             upstream = null;
         }
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of());
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_SOCKET_PATH, "");
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of());
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_SOCKET_PATH, "");
     }
 
     @Test
@@ -66,8 +67,8 @@ class SocketFrontModeTest {
 
         // Step 1: socket mode WITHOUT trusted proxy keys must refuse to start, loudly.
         // (Pre-fix counterfactual: it started, and every client became 127.0.0.1.)
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_SOCKET_PATH, sock.toString());
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_SOCKET_PATH, sock.toString());
         proxy = new ProxyServer();
         proxy.start();
         assertThat(proxy.getHttpState())
@@ -95,7 +96,7 @@ class SocketFrontModeTest {
                 "forward_port", upstream.getAddress().getPort()));
         ProxyTestSupport.addDomain(site, "front.sock.test", "exact", null, false);
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of(KEY));
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of(KEY));
         proxy = new ProxyServer();
         proxy.start();
         assertThat(proxy.getHttpState())
@@ -140,7 +141,7 @@ class SocketFrontModeTest {
         // Step 5: the setting is LIVE, and clearing it fails CLOSED. proxy.trusted_proxy_keys
         // is editable while the front serves; before the per-request half existed, clearing
         // it left the listener running with every client degraded to loopback.
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of());
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of());
         assertThat(unixRequest(sock, "front.sock.test", "/", "X-Hohenheim-Key: " + KEY))
             .as("step 5: with the key set cleared, the previously valid key no longer opens"
                 + " the front -- the socket listener fails closed instead of degrading")
@@ -148,7 +149,7 @@ class SocketFrontModeTest {
 
         // Step 6: and restoring the keys restores service, so the gate tracks the setting
         // in both directions rather than latching.
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of(KEY));
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of(KEY));
         assertThat(unixRequest(sock, "front.sock.test", "/", "X-Hohenheim-Key: " + KEY))
             .as("step 6: restoring the key set restores the authenticated front")
             .contains("200").contains("socket-front-ok");

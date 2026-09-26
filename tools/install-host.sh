@@ -760,12 +760,12 @@ esac
 LE_ENABLED="false"
 [ -n "$ADMIN_EMAIL" ] && [ "$role_proxy" = "true" ] && LE_ENABLED="true"
 
-# Where the control-plane database is named. A FRESH install (neither settings file
-# exists yet) names it the framework's way: zenit's database.url in local.dry. An
-# existing host is never re-pointed: its hohenheim.dry carries the deprecated
+# Where the control-plane database is named. A FRESH install (no settings file exists
+# yet) names it the framework's way: zenit's database.url in local.dry. An existing
+# host is never re-pointed: its (retired) hohenheim.dry carries the deprecated
 # database.path the server still honours as its fallback, and seeding a database.url
 # beside it would silently win over a path the operator may have changed. So a host
-# that already has hohenheim.dry gets no database.url, even when local.dry is new.
+# that still has hohenheim.dry gets no database.url, even when local.dry is new.
 if [ ! -f "$SETTINGS_DIR/hohenheim.dry" ] && [ ! -f "$SETTINGS_DIR/local.dry" ]; then
     info "fresh install: the control-plane database is database.url = jdbc:sqlite:$PREFIX/hohenheim.db in local.dry"
     LOCAL_DATABASE_BLOCK="
@@ -777,52 +777,60 @@ else
     LOCAL_DATABASE_BLOCK=""
 fi
 
-seed_settings "$SETTINGS_DIR/hohenheim.dry" 0640 "{
-    \"roles\": {
-        \"proxy\": $role_proxy,
-        \"dns\": $role_dns,
-        \"firewall\": $role_firewall,
-        \"stacks\": $role_stacks,
-        \"databases\": $role_databases,
-        \"instances\": $role_instances
-    },
-    \"proxy\": {
-        \"http_port\": 80,
-        \"https_port\": 443,
-        \"force_https\": false
-    },
-    \"ssl\": {
-        \"letsencrypt_enabled\": $LE_ENABLED,
-        \"letsencrypt_email\": \"$ADMIN_EMAIL\",
-        \"letsencrypt_staging\": false
-    },
-    \"dns\": {
-        \"enabled\": $role_dns,
-        \"bind_address\": \"0.0.0.0\",
-        \"port\": 53,
-        \"rate_limit_per_second\": 20
-    },
-    \"storage\": {
-        \"data_path\": \"$PREFIX/data\"
-    },
-    \"database\": {
-        \"backup_path\": \"$PREFIX/data/backups\",
-        \"backup_retention\": 7
-    },
-    \"logging\": {
-        \"access_to_file\": true,
-        \"access_path\": \"/var/log/hohenheim/access.log\"
-    },
-    \"security\": {
-        \"bans_enabled\": $role_firewall,
-        \"nftables_enabled\": $role_firewall,
-        \"nftables_ports\": \"80,443\",
-        \"nftables_ssh_ports\": \"22\",
-        \"ssh_watch_enabled\": $role_firewall,
-        \"auto_ban_ttl_hours\": 24
-    }
-}
-"
+# Hohenheim's own group rides the framework's local.dry. A host that still has the
+# retired settings/hohenheim.dry gets no block: the server moves that file's keys under
+# hohenheim.* in local.dry on its first boot (keeping a backup), and they win there.
+if [ -f "$SETTINGS_DIR/hohenheim.dry" ]; then
+    skip "hohenheim.dry exists: the server moves its keys into local.dry on first boot"
+    LOCAL_HOHENHEIM_BLOCK=""
+else
+    LOCAL_HOHENHEIM_BLOCK=",
+    \"hohenheim\": {
+        \"roles\": {
+            \"proxy\": $role_proxy,
+            \"dns\": $role_dns,
+            \"firewall\": $role_firewall,
+            \"stacks\": $role_stacks,
+            \"databases\": $role_databases,
+            \"instances\": $role_instances
+        },
+        \"proxy\": {
+            \"http_port\": 80,
+            \"https_port\": 443,
+            \"force_https\": false
+        },
+        \"ssl\": {
+            \"letsencrypt_enabled\": $LE_ENABLED,
+            \"letsencrypt_email\": \"$ADMIN_EMAIL\",
+            \"letsencrypt_staging\": false
+        },
+        \"dns\": {
+            \"enabled\": $role_dns,
+            \"bind_address\": \"0.0.0.0\",
+            \"port\": 53,
+            \"rate_limit_per_second\": 20
+        },
+        \"storage\": {
+            \"data_path\": \"$PREFIX/data\"
+        },
+        \"database\": {
+            \"backup_path\": \"$PREFIX/data/backups\",
+            \"backup_retention\": 7
+        },
+        \"logging\": {
+            \"access_to_file\": true,
+            \"access_path\": \"/var/log/hohenheim/access.log\"
+        },
+        \"security\": {
+            \"bans_enabled\": $role_firewall,
+            \"nftables_enabled\": $role_firewall,
+            \"nftables_ports\": \"80,443\",
+            \"nftables_ssh_ports\": \"22\",
+            \"ssh_watch_enabled\": $role_firewall,
+            \"auto_ban_ttl_hours\": 24
+        }
+    }"
+fi
 
 # zenit-auth reads auth.* from the framework's own settings chain; a separate
 # settings/auth.dry is a retired name the server refuses at boot.
@@ -852,7 +860,7 @@ seed_settings "$SETTINGS_DIR/local.dry" 0600 "{
     },
     \"activity\": {
         \"enabled\": true
-    }$LOCAL_AUTH_BLOCK
+    }$LOCAL_AUTH_BLOCK$LOCAL_HOHENHEIM_BLOCK
 }
 "
 

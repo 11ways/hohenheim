@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.FakeContainerFiles;
 import be.elevenways.hohenheim.test.docker.TestTars;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -54,13 +55,13 @@ class InstanceFilesContainmentTest {
     static void setUp() throws Exception {
         datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
-        previousMaxFileKb = HohenheimSettings.VALUES.getValue(HohenheimSettings.Files.MAX_FILE_KB);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Files.MAX_FILE_KB, MAX_FILE_KB);
+        previousMaxFileKb = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Files.MAX_FILE_KB);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Files.MAX_FILE_KB, MAX_FILE_KB);
     }
 
     @AfterAll
     static void tearDown() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Files.MAX_FILE_KB, previousMaxFileKb);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Files.MAX_FILE_KB, previousMaxFileKb);
         DockerClient.overrideLocalTransportForTest(null);
     }
 

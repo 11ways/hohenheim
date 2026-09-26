@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -408,7 +409,7 @@ public final class InstanceSnapshots {
      * arbitrarily -- which snapshot survives must not be arbitrary.
      */
     public void pruneForRetention(int instanceId) {
-        Integer retention = HohenheimSettings.VALUES.getValue(
+        Integer retention = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Backup.SNAPSHOT_RETENTION);
         if (retention == null || retention <= 0) {
             return;
@@ -633,7 +634,7 @@ public final class InstanceSnapshots {
     }
 
     static long maxArchiveBytes() {
-        Integer capMb = HohenheimSettings.VALUES.getValue(
+        Integer capMb = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Backup.MAX_ARCHIVE_MB);
         return (capMb == null || capMb <= 0 ? 1024L : capMb.longValue()) * 1024 * 1024;
     }
@@ -643,7 +644,7 @@ public final class InstanceSnapshots {
     }
 
     private static Path snapshotRoot() {
-        return Path.of(HohenheimSettings.VALUES.getValue(HohenheimSettings.Backup.SNAPSHOT_PATH));
+        return Path.of(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Backup.SNAPSHOT_PATH));
     }
 
     @SuppressWarnings("unchecked")

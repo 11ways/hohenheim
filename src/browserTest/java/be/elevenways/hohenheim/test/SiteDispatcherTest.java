@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import com.sun.net.httpserver.HttpServer;
@@ -53,7 +54,7 @@ class SiteDispatcherTest {
             marker.stop(0);
         }
         markerUpstreams.clear();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of());
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of());
     }
 
     private record ProxyHeaders(String realIp, String forwardedFor, String forwardedProto,
@@ -197,7 +198,7 @@ class SiteDispatcherTest {
     @Test
     void trustedKeyPropagatesTheRealClientIp() throws Exception {
         resetDatabase();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS,
             List.of("front-key-1", "front-key-2"));
 
         AtomicReference<ProxyHeaders> captured = new AtomicReference<>();
@@ -222,7 +223,7 @@ class SiteDispatcherTest {
     @Test
     void untrustedForwardingHeadersAreRejectedAndRegenerated() throws Exception {
         resetDatabase();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS,
             List.of("front-key-1"));
 
         AtomicReference<ProxyHeaders> captured = new AtomicReference<>();
@@ -248,7 +249,7 @@ class SiteDispatcherTest {
     @Test
     void trustedProxyCannotInstallANonLiteralClientIdentity() throws Exception {
         resetDatabase();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS,
             List.of("front-key-1"));
         AtomicReference<ProxyHeaders> captured = new AtomicReference<>();
         int upstreamPort = startCapturingUpstream(captured);
@@ -267,7 +268,7 @@ class SiteDispatcherTest {
     @Test
     void trustedRequestAppendsToExistingForwardedFor() throws Exception {
         resetDatabase();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS,
             List.of("front-key-1"));
 
         AtomicReference<ProxyHeaders> captured = new AtomicReference<>();

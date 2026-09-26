@@ -24,6 +24,7 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -59,7 +60,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
 
     @BeforeAll
     static void setUpSite() {
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Previews.BASE_DOMAIN, "preview.test");
         var siteModel = Models.get(SiteModel.class);
         Row site = siteModel.createEmptyRow();
@@ -183,7 +184,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
 
     @Test
     void thePreviewQuotaBindsAtomicallyAndReleasesOnTeardown() {
-        Integer savedCap = HohenheimSettings.VALUES.getValue(
+        Integer savedCap = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Previews.MAX_PER_OWNER);
         // AIDEV-NOTE: the cap is ONE slot above what the owner already holds, never a bare 1.
         // The application here has no grant, so its owner is the operator, whose bucket every
@@ -192,7 +193,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
         String owner = Objects.requireNonNull(
             OwnerQuota.currentOwnerPack(InstanceModel.MODEL_ID, applicationId),
             "the application's owner is readable");
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Previews.MAX_PER_OWNER,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Previews.MAX_PER_OWNER,
             Math.toIntExact(PreviewQuota.usedBy(owner) + 1));
         try {
             // 1. The next preview of this owner fits.
@@ -215,7 +216,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
                 .as("step 3: the released slot is claimable again").isNotNull();
             PreviewDeployments.destroy(second.get(PreviewDeploymentModel.ID), "operator");
         } finally {
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Previews.MAX_PER_OWNER, savedCap);
         }
     }
@@ -297,9 +298,9 @@ class PreviewMechanicsTest extends HohenheimTestBase {
      */
     @Test
     void aReclaimedPreviewHostnameIsQuarantinedAgainstAnotherOwner() throws Exception {
-        Integer savedWindow = HohenheimSettings.VALUES.getValue(
+        Integer savedWindow = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS);
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS, 30);
         var domains = Models.get(SiteDomainModel.class);
         var sites = Models.get(SiteModel.class);
@@ -376,7 +377,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
                 .as("step 5: the same owner redeploys onto its own hostname").isNotNull();
             PreviewDeployments.destroy(againId, "operator");
         } finally {
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS, savedWindow);
         }
     }

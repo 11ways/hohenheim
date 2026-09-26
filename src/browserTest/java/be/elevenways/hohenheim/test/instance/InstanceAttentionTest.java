@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.task.BackupControlPlane;
 import be.elevenways.hohenheim.server.task.CleanOldInstanceLogs;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.task.TaskStatus;
 import be.elevenways.zenit.common.task.orm.SystemTaskHistoryModel;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -166,7 +167,7 @@ class InstanceAttentionTest {
         Db.run(datasource, () -> {
             int covered = instance("attn-fresh-covered", InstanceModel.STATUS_RUNNING);
             int uncovered = instance("attn-fresh-uncovered", InstanceModel.STATUS_RUNNING);
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.STALE_AFTER_DAYS, 7);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.STALE_AFTER_DAYS, 7);
             // A real target row: backup_target_id is an enforced foreign key, and the
             // collector reads only that a target is declared, never the target itself.
             Row target = Models.get(BackupTargetModel.class).createEmptyRow();
@@ -215,10 +216,10 @@ class InstanceAttentionTest {
                     + covered + "/page/backups");
 
             // 5. The check is an operator dial: 0 disables it entirely.
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.STALE_AFTER_DAYS, 0);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.STALE_AFTER_DAYS, 0);
             assertThat(raisedKeys(InstanceAttention::staleInstanceBackups))
                 .as("step 5: stale_after_days 0 disables the freshness check").isEmpty();
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.STALE_AFTER_DAYS, 7);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.STALE_AFTER_DAYS, 7);
 
             trash(covered);
             trash(uncovered);
@@ -259,7 +260,7 @@ class InstanceAttentionTest {
 
             // 2. Freshness: a destination is configured but the newest COMPLETED backup
             //    run is 3 days old -- the observation item fires.
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, "attn-target");
             taskRun(nightly, TaskStatus.COMPLETED,
                 Now.instant().minus(3, java.time.temporal.ChronoUnit.DAYS));
@@ -279,7 +280,7 @@ class InstanceAttentionTest {
                     + " failure item clears; no other declared type has news")
                 .isEmpty();
 
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, "");
         });
     }

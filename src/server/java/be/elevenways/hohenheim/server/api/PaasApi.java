@@ -25,6 +25,7 @@ import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.protoblast.common.util.BlastString;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -718,7 +719,7 @@ public final class PaasApi {
 
     /** The upload cap in bytes; a DISK guard, since the body never enters the heap. */
     private static long maxUploadBytes() {
-        Integer mb = HohenheimSettings.VALUES.getValue(HohenheimSettings.Builds.MAX_UPLOAD_MB);
+        Integer mb = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Builds.MAX_UPLOAD_MB);
         return (mb == null || mb < 1 ? 512L : mb.longValue()) * 1024L * 1024L;
     }
 

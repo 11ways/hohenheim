@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.server.instance.InstanceDeviceQuota;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -56,9 +57,9 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
             HardDeletes.byId(Models.get(InstanceModel.class), this.instanceId);
             this.instanceId = null;
         }
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER,
             this.previousDiskCap == null ? 0 : this.previousDiskCap);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Quota.MAX_EXTRA_NICS_PER_OWNER,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Quota.MAX_EXTRA_NICS_PER_OWNER,
             this.previousNicCap == null ? 0 : this.previousNicCap);
     }
 
@@ -87,12 +88,12 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
 
     @Test
     void racingDiskAttachesCannotOverspendAndResizeChargesTheDelta() throws Exception {
-        this.previousDiskCap = HohenheimSettings.VALUES.getValue(
+        this.previousDiskCap = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER);
         int instanceId = instanceRecord();
         long usedBefore = Quotas.usedOf(DISK_BUCKET);
         // EXACTLY 2 GB of headroom above whatever the shared server already counts.
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER,
             (int) usedBefore + 2);
 
         // 1. Two threads behind a barrier both write a 2 GB disk row: only one can win
@@ -162,11 +163,11 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
 
     @Test
     void nicSlotsAreReservedAndInvalidDevicesAreRefusedByName() throws Exception {
-        this.previousNicCap = HohenheimSettings.VALUES.getValue(
+        this.previousNicCap = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Quota.MAX_EXTRA_NICS_PER_OWNER);
         int instanceId = instanceRecord();
         long usedBefore = Quotas.usedOf(NIC_BUCKET);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Quota.MAX_EXTRA_NICS_PER_OWNER,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Quota.MAX_EXTRA_NICS_PER_OWNER,
             (int) usedBefore + 1);
 
         // 1. The last NIC slot is spendable once.

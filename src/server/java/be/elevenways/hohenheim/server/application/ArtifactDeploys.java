@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -51,7 +52,7 @@ public final class ArtifactDeploys {
     private ArtifactDeploys() {}
 
     public static File directoryFor(int applicationId) {
-        String dataPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
+        String dataPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
         String base = dataPath == null || dataPath.isBlank() ? "/opt/hohenheim/data" : dataPath;
         return Path.of(base, "artifacts", InstanceModel.MODEL_ID.getPath(), String.valueOf(applicationId)).toFile();
     }

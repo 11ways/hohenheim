@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.server.cms.HostAttention;
 import be.elevenways.hohenheim.server.cms.OnboardingCollector;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -159,7 +160,7 @@ class DashboardRoleGatingTest {
     /** Declare the node's role set and snapshot it, the way a boot's settings load does. */
     private static void roles(Set<Role> enabled) {
         for (Role role : Role.values()) {
-            HohenheimSettings.VALUES.setValue(role.setting(), enabled.contains(role));
+            Zenit.SETTINGS_VALUES.setValue(role.setting(), enabled.contains(role));
         }
         HohenheimRoles.capture();
     }

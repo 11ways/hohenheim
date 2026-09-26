@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -18,7 +19,7 @@ import java.util.Set;
  *
  * AIDEV-NOTE: restartRequired on a setting is advisory-only (nothing enforces it
  * at runtime), so consistency comes from reading the flags exactly once. The
- * snapshot is captured by {@link HohenheimSettingsFiles#load()} -- the moment the
+ * snapshot is captured by {@link HohenheimSettingsBoot#load()} -- the moment the
  * settings become real -- and a read before capture throws instead of silently
  * answering from defaults, because a gate that quietly defaults to "enabled"
  * (or "disabled") is how a role flag turns into security theater.
@@ -68,7 +69,7 @@ public final class HohenheimRoles {
     public static synchronized void capture() {
         EnumSet<Role> enabled = EnumSet.noneOf(Role.class);
         for (Role role : Role.values()) {
-            if (Boolean.TRUE.equals(HohenheimSettings.VALUES.getValue(role.setting))) {
+            if (Boolean.TRUE.equals(Zenit.SETTINGS_VALUES.getValue(role.setting))) {
                 enabled.add(role);
             }
         }
@@ -136,7 +137,7 @@ public final class HohenheimRoles {
         Set<Role> current = snapshot;
         if (current == null) {
             throw new IllegalStateException("HohenheimRoles read before capture:"
-                + " HohenheimSettingsFiles.load() must run first");
+                + " HohenheimSettingsBoot.load() must run first");
         }
         return current;
     }

@@ -44,7 +44,7 @@ class ProxyServerStateTest {
     @Test
     void startOnPrivilegedPortTransitionsToFailed() {
         // Port 80 requires root -- will fail in non-root test environment
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 80);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 80);
 
         ProxyServer proxy = new ProxyServer();
         proxy.start();
@@ -56,7 +56,7 @@ class ProxyServerStateTest {
 
     @Test
     void startOnAvailablePortTransitionsToRunning() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
 
         ProxyServer proxy = new ProxyServer();
         proxy.start();
@@ -69,7 +69,7 @@ class ProxyServerStateTest {
 
     @Test
     void stopTransitionsRunningToStopped() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
 
         ProxyServer proxy = new ProxyServer();
         proxy.start();
@@ -83,13 +83,13 @@ class ProxyServerStateTest {
     @Test
     void reloadOnFailedStateAttemptsRestart() {
         // Start on port 80 (fails)
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 80);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 80);
         ProxyServer proxy = new ProxyServer();
         proxy.start();
         assertThat(proxy.getState()).isEqualTo(ProxyServer.State.FAILED);
 
         // Change to available port and reload -- should attempt restart
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         proxy.reload();
         assertThat(proxy.getState()).isEqualTo(ProxyServer.State.RUNNING);
 
@@ -98,7 +98,7 @@ class ProxyServerStateTest {
 
     @Test
     void failureReasonIsDescriptive() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 80);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 80);
 
         ProxyServer proxy = new ProxyServer();
         proxy.start();

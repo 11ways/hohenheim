@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violation;
@@ -222,7 +223,7 @@ public final class HostAdmission {
      * @throws Violations {@code host_contact_lapsed}
      */
     public static void requireRecentContact(@NonNull Row server) {
-        Integer minutes = HohenheimSettings.VALUES.getValue(
+        Integer minutes = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Hosts.CONTACT_MAX_AGE_MINUTES);
         if (minutes == null || minutes <= 0) {
             return;

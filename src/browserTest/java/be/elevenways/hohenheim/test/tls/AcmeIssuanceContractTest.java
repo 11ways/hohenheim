@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.tls.DnsTxtRecord;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -74,14 +75,14 @@ class AcmeIssuanceContractTest {
         HohenheimTestRuntime.ensureBooted();
 
         ca = new FakeAcmeServer();
-        savedDirectory = HohenheimSettings.VALUES.getValue(
+        savedDirectory = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Ssl.ACME_DIRECTORY_URL);
-        savedPropagation = HohenheimSettings.VALUES.getValue(
+        savedPropagation = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Ssl.DNS_PROPAGATION_SECONDS);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Ssl.ACME_DIRECTORY_URL,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.ACME_DIRECTORY_URL,
             ca.directoryUrl());
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Ssl.DNS_PROPAGATION_SECONDS, 0);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.DNS_PROPAGATION_SECONDS, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL,
             "acme-test@example.com");
 
         acme = new AcmeService(new CertificateStore());
@@ -95,9 +96,9 @@ class AcmeIssuanceContractTest {
             ca.close();
             ca = null;
         }
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Ssl.ACME_DIRECTORY_URL,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.ACME_DIRECTORY_URL,
             savedDirectory);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Ssl.DNS_PROPAGATION_SECONDS,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.DNS_PROPAGATION_SECONDS,
             savedPropagation);
     }
 

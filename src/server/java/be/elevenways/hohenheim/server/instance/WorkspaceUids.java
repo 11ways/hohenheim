@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -123,7 +124,7 @@ public final class WorkspaceUids {
 
     /** The configured first uid, or the shipped default when nothing is set. */
     public static int configuredBase() {
-        Integer base = HohenheimSettings.VALUES.getValue(HohenheimSettings.Storage.VOLUME_UID_BASE);
+        Integer base = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.VOLUME_UID_BASE);
         return base == null ? 200000 : base;
     }
 }

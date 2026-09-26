@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.xbill.DNS.Type;
@@ -42,7 +43,7 @@ public final class DnsAttention {
 
     /** DNS listeners that failed to bind, and enabled zones a resolver cannot delegate to. */
     static void dnsIssues(List<AttentionItem> items) {
-        Boolean enabled = HohenheimSettings.VALUES.getValue(HohenheimSettings.Dns.ENABLED);
+        Boolean enabled = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Dns.ENABLED);
         var dnsServer = ServerMain.getDnsServer();
         if (Boolean.TRUE.equals(enabled) && (dnsServer == null || !dnsServer.isRunning())) {
             String reason = dnsServer != null ? dnsServer.getStartupError() : null;

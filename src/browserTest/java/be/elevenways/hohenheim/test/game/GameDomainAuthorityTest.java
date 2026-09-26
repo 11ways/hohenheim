@@ -24,6 +24,7 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -446,18 +447,18 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
      */
     @Test
     void aGameMappingCannotIntroduceAHostnameAndInheritsTheDomainRowsQuarantine() {
-        Integer savedWindow = HohenheimSettings.VALUES.getValue(
+        Integer savedWindow = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS);
         try {
             aGameMappingInheritsTheDomainRowsQuarantine();
         } finally {
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS, savedWindow);
         }
     }
 
     private void aGameMappingInheritsTheDomainRowsQuarantine() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS, 30);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS, 30);
         String released = "arena.gamedomain.test";
         var domains = Models.get(SiteDomainModel.class);
         var sites = Models.get(SiteModel.class);

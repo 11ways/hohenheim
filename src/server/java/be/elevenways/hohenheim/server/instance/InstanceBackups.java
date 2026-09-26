@@ -43,6 +43,7 @@ import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -732,7 +733,7 @@ public final class InstanceBackups {
      */
     private void pruneForRetention(int instanceId, @Nullable Integer currentTargetId,
                                    @Nullable BackupTarget currentTarget) {
-        Integer retention = HohenheimSettings.VALUES.getValue(
+        Integer retention = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Backup.RETENTION);
         if (retention == null || retention <= 0) {
             return;
@@ -1289,6 +1290,6 @@ public final class InstanceBackups {
     }
 
     private static Path stagingRoot() {
-        return Path.of(HohenheimSettings.VALUES.getValue(HohenheimSettings.Backup.STAGING_PATH));
+        return Path.of(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Backup.STAGING_PATH));
     }
 }

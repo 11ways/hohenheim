@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -68,7 +69,7 @@ public final class NeverBanHostnames {
      * the SecuritySweep task (boot + hourly), NEVER from a request/ban path.
      */
     public synchronized void refresh() {
-        List<String> list = HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.NEVER_BAN);
+        List<String> list = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.NEVER_BAN);
         Set<String> hostnames = extractHostnames(list);
 
         // Hostnames removed from the setting lose their protection.

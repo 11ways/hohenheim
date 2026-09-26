@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -154,7 +155,7 @@ class NixpacksBuildLiveTest {
                     .contains("\"providers\":[\"node\"]");
                 assertThat(detection).as("step 2: carries the pinned tool version")
                     .contains("\"tool\":\"nixpacks\"")
-                    .contains(String.valueOf(HohenheimSettings.VALUES.getValue(
+                    .contains(String.valueOf(Zenit.SETTINGS_VALUES.getValue(
                         HohenheimSettings.Builds.NIXPACKS_VERSION)));
                 assertThat(detection).as("step 2: and the emitted Dockerfile text")
                     .contains("FROM ghcr.io/railwayapp/nixpacks");

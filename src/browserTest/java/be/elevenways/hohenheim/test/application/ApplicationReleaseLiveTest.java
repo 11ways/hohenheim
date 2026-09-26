@@ -23,6 +23,7 @@ import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -85,24 +86,24 @@ class ApplicationReleaseLiveTest {
             ProxyTestSupport.bootRuntime();
         }
         netns = PrivateNetns.installEnforcing();
-        savedProbeTimeout = HohenheimSettings.VALUES.getValue(
+        savedProbeTimeout = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS);
-        savedProbeInterval = HohenheimSettings.VALUES.getValue(
+        savedProbeInterval = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Releases.PROBE_INTERVAL_MS);
-        savedDrain = HohenheimSettings.VALUES.getValue(HohenheimSettings.Releases.DRAIN_SECONDS);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS, 6);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.PROBE_INTERVAL_MS, 100);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 2);
+        savedDrain = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Releases.DRAIN_SECONDS);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS, 6);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.PROBE_INTERVAL_MS, 100);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 2);
     }
 
     @AfterAll
     static void restoreSettings() {
         PrivateNetns.uninstall(netns);
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS, savedProbeTimeout);
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Releases.PROBE_INTERVAL_MS, savedProbeInterval);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, savedDrain);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, savedDrain);
     }
 
     /**
@@ -467,7 +468,7 @@ class ApplicationReleaseLiveTest {
         String digest1 = TestImages.loadHttpServer(docker, repo1 + ":latest", "rec-one");
         String digest2 = TestImages.loadHttpServer(docker, repo2 + ":latest", "rec-two");
         int applicationId = application("rc-app", settingsFor(repo1));
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 600);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 600);
         try {
             // 1. A real release whose drain will NOT run for 600s -- the lost-drain shape.
             converge(applicationId, settingsFor(repo1));
@@ -527,7 +528,7 @@ class ApplicationReleaseLiveTest {
             assertThat(settingsOf(servingOf(applicationId)).get("image"))
                 .as("step 3: the serving release was never touched").isEqualTo(digest2);
         } finally {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 2);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 2);
             ApplicationReleases.destroyFor(applicationId);
             removeQuietly(docker, repo1 + ":latest");
             removeQuietly(docker, repo2 + ":latest");

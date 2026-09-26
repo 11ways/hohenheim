@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 
@@ -29,7 +30,7 @@ public final class AccessLog {
     /** Register a completion listener that appends one combined-log line once the response is sent. */
     public void logAccess(HttpServerExchange exchange, String hostname, String clientIp) {
         boolean logToFile = Boolean.TRUE.equals(
-            HohenheimSettings.VALUES.getValue(HohenheimSettings.Logging.ACCESS_TO_FILE));
+            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Logging.ACCESS_TO_FILE));
         if (!logToFile) {
             return;
         }
@@ -41,7 +42,7 @@ public final class AccessLog {
 
         exchange.addExchangeCompleteListener((ex, next) -> {
             try {
-                String logPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Logging.ACCESS_PATH);
+                String logPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Logging.ACCESS_PATH);
                 if (logPath == null || logPath.isEmpty()) { next.proceed(); return; }
 
                 int status = ex.getStatusCode();

@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.cms.FirewallAttention;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.SecurityEventTypes;
 import org.junit.jupiter.api.AfterEach;
@@ -43,15 +44,15 @@ class SshAuthWatchTest {
 
     @BeforeEach
     void enableBans() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.BANS_ENABLED, true);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.NEVER_BAN, List.of());
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.BANS_ENABLED, true);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.NEVER_BAN, List.of());
     }
 
     @AfterEach
     void resetSettings() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.BANS_ENABLED, true);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.NEVER_BAN, List.of());
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.SSH_WATCH_ENABLED, false);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.BANS_ENABLED, true);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.NEVER_BAN, List.of());
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.SSH_WATCH_ENABLED, false);
     }
 
     // -----------------------------------------------------------------------
@@ -205,13 +206,13 @@ class SshAuthWatchTest {
         assertThat(watcher.signalCount()).as("step 1: the counter agrees").isEqualTo(2);
 
         // 2. An install that never asked for SSH watching raises nothing on the dashboard.
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.SSH_WATCH_ENABLED, false);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.SSH_WATCH_ENABLED, false);
         assertThat(FirewallAttention.sshWatchIssue(watcher.snapshot()))
             .as("step 2: not configured is a choice, never a warning")
             .isNull();
 
         // 3. Asked for but not running IS a warning: the silent-success shape this guards.
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.SSH_WATCH_ENABLED, true);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.SSH_WATCH_ENABLED, true);
         assertThat(FirewallAttention.sshWatchIssue(watcher.snapshot()))
             .as("step 3: enabled but dead must be visible")
             .isNotNull();
@@ -240,7 +241,7 @@ class SshAuthWatchTest {
                 }
             });
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.SSH_WATCH_ENABLED, true);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.SSH_WATCH_ENABLED, true);
         watcher.start();
         assertThat(thirdPause.await(5, TimeUnit.SECONDS))
             .as("step 1: the supervisor reached its third backoff").isTrue();

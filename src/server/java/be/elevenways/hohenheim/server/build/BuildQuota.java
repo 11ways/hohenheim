@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.build;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
+import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
@@ -38,15 +39,15 @@ public record BuildQuota(double cpus, int memoryMb, long diskBytes, long timeout
 
     /** The host's configured build quota. */
     public static @NonNull BuildQuota fromSettings() {
-        Double cpus = HohenheimSettings.VALUES.getValue(HohenheimSettings.Builds.CPU_LIMIT);
-        Integer memoryMb = HohenheimSettings.VALUES.getValue(
+        Double cpus = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Builds.CPU_LIMIT);
+        Integer memoryMb = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Builds.MEMORY_LIMIT_MB);
-        Integer diskMb = HohenheimSettings.VALUES.getValue(HohenheimSettings.Builds.DISK_LIMIT_MB);
-        Integer timeoutSeconds = HohenheimSettings.VALUES.getValue(
+        Integer diskMb = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Builds.DISK_LIMIT_MB);
+        Integer timeoutSeconds = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Builds.TIMEOUT_SECONDS);
-        Integer pids = HohenheimSettings.VALUES.getValue(HohenheimSettings.Builds.PIDS_LIMIT);
-        Integer logKb = HohenheimSettings.VALUES.getValue(HohenheimSettings.Builds.LOG_LIMIT_KB);
-        Integer artifactMb = HohenheimSettings.VALUES.getValue(
+        Integer pids = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Builds.PIDS_LIMIT);
+        Integer logKb = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Builds.LOG_LIMIT_KB);
+        Integer artifactMb = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Builds.MAX_ARTIFACT_MB);
         return new BuildQuota(
             cpus != null && cpus > 0 ? cpus : 2.0,

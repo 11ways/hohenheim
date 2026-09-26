@@ -84,11 +84,14 @@ What each step does, in order:
    `0755`, re-asserted on every run: every directory below it is created and
    handed out by the helper, and a root the service user owned would let it swap
    an entry between the helper's check and its act.
-9. **Settings** -- seeds `settings/hohenheim.dry` (0640) and `settings/local.dry`
-   (0600, secrets; `auth.external_base_url` rides it when `--main-url` is given).
-   Every zenit module reads its group from `local.dry` (or `ZENIT__<GROUP>__*`);
-   a `settings/auth.dry` or `settings/comms.dry` is a retired file the server
-   refuses at boot. An existing file is NEVER rewritten:
+9. **Settings** -- seeds `settings/local.dry` (0600, secrets): Hohenheim's role
+   and security declaration under `hohenheim`, and `auth.external_base_url` when
+   `--main-url` is given. Every group is read from `local.dry` (or
+   `ZENIT__<GROUP>__*`); a `settings/auth.dry` or `settings/comms.dry` is a
+   retired file the server refuses at boot, and a `settings/hohenheim.dry` from
+   an older install is moved under `hohenheim` in `local.dry` on the first boot
+   (kept as `hohenheim.dry.bak-<timestamp>`), with `HOHENHEIM__*` refused. An
+   existing file is NEVER rewritten:
    the panel's settings editor persists into these same files. That idempotence
    cuts both ways -- a host installed BEFORE a seeded default changed keeps the
    old value, and the only fix is editing its settings file by hand (which is
@@ -103,7 +106,7 @@ What each step does, in order:
    The control-plane database is named the framework's way on a FRESH install
    (neither settings file exists yet): zenit's `database.url =
    jdbc:sqlite:<prefix>/hohenheim.db` in `settings/local.dry`. An existing host
-   is never re-pointed: its `hohenheim.dry` keeps the deprecated
+   is never re-pointed: its retired `hohenheim.dry` keeps the deprecated
    `database.path` (and the dropped `database.engine`) the installer used to
    seed, and the server still honours that path as the fallback when
    `database.url` is unset. Moving such a host onto `database.url` is a hand
@@ -294,14 +297,15 @@ always required.
       hohenheim-server.jar
       public/cms.js            (+ cms.js.map, optional)
       settings/default.dry     copy of the repo's settings/default.dry
-      settings/hohenheim.dry   the role + security declaration, see below
-                               (GITIGNORED in the repo -- it is per-deployment;
-                                start from settings/hohenheim.dry.example)
+      settings/local.dry       every setting; the role + security declaration under
+                               hohenheim, see below (GITIGNORED in the repo -- it is
+                               per-deployment; start from settings/local.dry.example)
       data/                    storage.data_path (created empty)
       hohenheim.db             created by the first boot (104+ migrations)
       settings/field-encryption.keys   auto-generated 0600 on first boot
 
-`settings/hohenheim.dry` for an instances-only compute node:
+The `hohenheim` block of `settings/local.dry` for an instances-only compute node
+(shown without that wrapper):
 
     {
         "roles": {

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.TestImages;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
@@ -84,16 +85,16 @@ class SharedDatabaseEngineLiveTest {
         HohenheimTestRuntime.ensureBooted();
         netns = PrivateNetns.installEnforcing();
         backupRoot = Files.createTempDirectory("hohenheim-shared-engine-backups");
-        originalBackupPath = HohenheimSettings.VALUES.getValue(
+        originalBackupPath = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Database.BACKUP_PATH);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.BACKUP_PATH,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.BACKUP_PATH,
             backupRoot.toString());
     }
 
     @AfterAll
     static void tearDown() {
         if (originalBackupPath != null) {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.BACKUP_PATH,
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.BACKUP_PATH,
                 originalBackupPath);
         }
         PrivateNetns.uninstall(netns);
@@ -350,12 +351,12 @@ class SharedDatabaseEngineLiveTest {
             //     which is exactly where the 2026-09-02 defect lived: the consumers were
             //     redeployed while the record still read provisioning, the deploy refused
             //     with database_not_ready, and the site stayed down after a failed move.
-            Integer capBefore = HohenheimSettings.VALUES.getValue(
+            Integer capBefore = Zenit.SETTINGS_VALUES.getValue(
                 HohenheimSettings.Database.MAX_DUMP_MB);
             try {
                 // 1 MiB: the archive of three tiny documents clears it, so one 1.5 MB
                 // document pushes the dump over the cap; it is dropped again below.
-                HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.MAX_DUMP_MB, 1);
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.MAX_DUMP_MB, 1);
                 mongo(docker, dedicatedHandle, user, password, "admin", "admin",
                     "db.getSiblingDB('" + database + "').filler.insertOne("
                         + "{pad: 'x'.repeat(1500000)});");
@@ -379,7 +380,7 @@ class SharedDatabaseEngineLiveTest {
                 mongo(docker, dedicatedHandle, user, password, "admin", "admin",
                     "db.getSiblingDB('" + database + "').filler.drop();");
             } finally {
-                HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.MAX_DUMP_MB,
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.MAX_DUMP_MB,
                     capBefore);
             }
 
@@ -390,7 +391,7 @@ class SharedDatabaseEngineLiveTest {
             //     that frees it (the robbedoes trap of 2026-09-02).
             long booked = InstanceCapacity.bookedMbOn(ServerModel.localServerId());
             long engineMb = ManagedDatabase.Engine.MONGO.sharedFootprintMb();
-            HostFixtures.makeLocalPlaceable(booked + engineMb - 1 + HohenheimSettings.VALUES
+            HostFixtures.makeLocalPlaceable(booked + engineMb - 1 + Zenit.SETTINGS_VALUES
                 .getValue(HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB));
             assertThat(InstanceCapacity.bookableMbOn(ServerModel.localServerId(),
                     InstanceCapacity.budgetMbOf(Models.get(ServerModel.class)

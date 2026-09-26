@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.hohenheim.server.util.Tar;
 import be.elevenways.protoblast.common.dry.Dry;
+import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -114,7 +115,7 @@ public final class NixpacksBuilder implements Builders {
         FileTrees.deleteQuietly(request.contextDir().resolve(EMIT_DIR));
 
         log.line("[hohenheim] nixpacks detection phase starting (nixpacks "
-            + HohenheimSettings.VALUES.getValue(HohenheimSettings.Builds.NIXPACKS_VERSION)
+            + Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Builds.NIXPACKS_VERSION)
             + " in " + detectorImage + ", no network)");
         BuildSandbox.PhaseOutcome outcome = sandbox.runPhase(buildId, "detect",
             new BuildSandbox.Phase(detectorImage,
@@ -234,7 +235,7 @@ public final class NixpacksBuilder implements Builders {
     }
 
     private static @NonNull String detectorImage() {
-        String configured = HohenheimSettings.VALUES.getValue(
+        String configured = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Builds.DETECTOR_IMAGE);
         return configured == null || configured.isBlank() ? "alpine:3.21" : configured.trim();
     }
@@ -287,7 +288,7 @@ public final class NixpacksBuilder implements Builders {
                                                  @Nullable String dockerfile) {
         Map<String, Object> detection = new LinkedHashMap<>();
         detection.put("tool", "nixpacks");
-        detection.put("version", HohenheimSettings.VALUES.getValue(
+        detection.put("version", Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Builds.NIXPACKS_VERSION));
         detection.put("providers", providers.lines().map(String::strip)
             .filter(line -> !line.isEmpty()).toList());

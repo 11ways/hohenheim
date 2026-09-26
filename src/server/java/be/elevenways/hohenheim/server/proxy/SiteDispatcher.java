@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.SniKeyManager;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.security.SecurityEventTypes;
 import be.elevenways.zenit.common.session.SessionStore;
 import be.elevenways.zenit.server.security.SecurityEvents;
@@ -309,7 +310,7 @@ public class SiteDispatcher implements HttpHandler {
             threatScorer.recordHit(clientIp);
         } else {
             int score = threatScorer.recordEvent(clientIp, SecurityEventTypes.DOMAIN_MISS, 1);
-            int threshold = HohenheimSettings.VALUES.getValue(
+            int threshold = Zenit.SETTINGS_VALUES.getValue(
                 HohenheimSettings.Security.DOMAIN_MISS_THRESHOLD);
             if (score >= threshold) {
                 // Threshold-gated like the old fail2ban log line; the in-process
@@ -334,7 +335,7 @@ public class SiteDispatcher implements HttpHandler {
                 ErrorPages.send404(exchange, hostname);
                 return;
             }
-            String fallback = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS);
+            String fallback = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS);
             if (fallback != null && !fallback.isEmpty()) {
                 exchange.setStatusCode(302);
                 exchange.getResponseHeaders().put(Headers.LOCATION, fallback);
@@ -355,7 +356,7 @@ public class SiteDispatcher implements HttpHandler {
         // setting rides the same gate for MATCHED routes only: an unmatched hostname has no
         // content to protect and keeps its 404/fallback.
         boolean forceSsl = entry.forceSsl || Boolean.TRUE.equals(
-            HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
+            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
         if (forceSsl && !ProxyScheme.isEffectivelyHttps(exchange)) {
             if (httpsAvailable) {
                 redirectToHttps(exchange, hostname);
@@ -565,7 +566,7 @@ public class SiteDispatcher implements HttpHandler {
     private boolean shouldForceHttpsGlobally(HttpServerExchange exchange) {
         return httpsAvailable
             && !ProxyScheme.isEffectivelyHttps(exchange)
-            && Boolean.TRUE.equals(HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
+            && Boolean.TRUE.equals(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
     }
 
     public void setHttpsAvailable(boolean httpsAvailable) {
@@ -596,7 +597,7 @@ public class SiteDispatcher implements HttpHandler {
     private void redirectToHttps(HttpServerExchange exchange, String hostname) {
         String hostHeader = exchange.getRequestHeaders().getFirst(HOST);
         String authority = hostname;
-        int httpsPort = HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTPS_PORT);
+        int httpsPort = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.HTTPS_PORT);
 
         if (hostHeader != null && !hostHeader.isBlank()) {
             authority = hostHeader.replaceFirst(":\\d+$", "");

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.server.http.RequestScheme;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.AttachmentKey;
@@ -141,7 +142,7 @@ public final class ProxyScheme {
      * wall-clock timing rather than configuration.
      */
     private static @NonNull Set<String> trustedProxyKeys() {
-        List<String> configured = HohenheimSettings.VALUES.getValue(
+        List<String> configured = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS);
 
         ParsedKeys current = parsedKeys;

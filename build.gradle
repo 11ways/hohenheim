@@ -400,9 +400,14 @@ task browserTest(type: Test) {
     // by all three lanes and deliberately NOT wiped in doFirst: its job is to survive the
     // invocation that wrote it, so a killed worker's leaked networks are reaped next run.
     systemProperty 'hohenheim.namespace.dir', "${buildDir}/live-lane-namespaces"
+    // The operator's settings root (zenit.settings.root): settings/local.dry and the retired
+    // files resolve here, so a test boot never reads, writes or adopts the checkout's own
+    // operator files. Per task and wiped per run, like the truncation markers.
+    systemProperty 'zenit.settings.root', "${buildDir}/test-settings-root/browserTest"
     doFirst {
         delete "${buildDir}/live-lane-truncations/browserTest"
         delete "${buildDir}/test-db-templates/browserTest"
+        delete "${buildDir}/test-settings-root/browserTest"
     }
 
     testLogging {
@@ -471,9 +476,12 @@ task browserTestStandalone(type: Test) {
     // by all three lanes and deliberately NOT wiped in doFirst: its job is to survive the
     // invocation that wrote it, so a killed worker's leaked networks are reaped next run.
     systemProperty 'hohenheim.namespace.dir', "${buildDir}/live-lane-namespaces"
+    // See browserTest: a settings root of this task's own, wiped per run.
+    systemProperty 'zenit.settings.root', "${buildDir}/test-settings-root/browserTestStandalone"
     doFirst {
         delete "${buildDir}/live-lane-truncations/browserTestStandalone"
         delete "${buildDir}/test-db-templates/browserTestStandalone"
+        delete "${buildDir}/test-settings-root/browserTestStandalone"
     }
 
     testLogging {
@@ -536,9 +544,12 @@ task browserTestSolo(type: Test) {
     // by all three lanes and deliberately NOT wiped in doFirst: its job is to survive the
     // invocation that wrote it, so a killed worker's leaked networks are reaped next run.
     systemProperty 'hohenheim.namespace.dir', "${buildDir}/live-lane-namespaces"
+    // See browserTest: a settings root of this task's own, wiped per run.
+    systemProperty 'zenit.settings.root', "${buildDir}/test-settings-root/browserTestSolo"
     doFirst {
         delete "${buildDir}/live-lane-truncations/browserTestSolo"
         delete "${buildDir}/test-db-templates/browserTestSolo"
+        delete "${buildDir}/test-settings-root/browserTestSolo"
     }
 
     testLogging {

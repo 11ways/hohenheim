@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.server.setting.ServerSettings;
 import org.junit.jupiter.api.Test;
 
@@ -25,14 +26,14 @@ class SqliteOnlyDatabaseGuardTest {
 
     @Test
     void bootRefusesNonSqliteEnginesAndResolvesOneUrlForEveryLane() throws Exception {
-        String previousUrl = HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.URL);
+        String previousUrl = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.URL);
         String previousZenitUrl = ServerSettings.VALUES.getValue(ServerSettings.Database.URL);
         var datasourceBefore = HohenheimDatabase.datasource();
 
         try {
             // 1. A PostgreSQL URL in the deprecated hohenheim key is refused with a message
             //    naming the concrete hazard.
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.URL,
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.URL,
                 "jdbc:postgresql://localhost/hohenheim");
             assertThatThrownBy(HohenheimDatabase::init)
                 .as("step 1: a postgres fallback url must be refused at boot")
@@ -44,7 +45,7 @@ class SqliteOnlyDatabaseGuardTest {
             // 2. zenit's own database.url is guarded just the same -- it WINS over the
             //    hohenheim fallback, so a guard reading only the hohenheim key would be
             //    bypassed by the key that actually decides.
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.URL, "");
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.URL, "");
             ServerSettings.VALUES.setValue(ServerSettings.Database.URL, "jdbc:mysql://localhost/hohenheim");
             assertThatThrownBy(HohenheimDatabase::init)
                 .as("step 2: a mysql database.url must be refused at boot")
@@ -72,7 +73,7 @@ class SqliteOnlyDatabaseGuardTest {
             // 5. Unset, the deprecated hohenheim path is still honoured as the fallback, so an
             //    upgraded production install opens the same file it always did.
             ServerSettings.VALUES.setValue(ServerSettings.Database.URL, null);
-            String path = HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.PATH);
+            String path = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.PATH);
             assertThat(HohenheimDatabase.resolution().url())
                 .as("step 5: without database.url the hohenheim path is the url")
                 .isEqualTo("jdbc:sqlite:" + path);
@@ -80,7 +81,7 @@ class SqliteOnlyDatabaseGuardTest {
                 .as("step 5: and the restore lane agrees")
                 .isEqualTo(Path.of(path));
         } finally {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.URL, previousUrl);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.URL, previousUrl);
             ServerSettings.VALUES.setValue(ServerSettings.Database.URL, previousZenitUrl);
         }
 

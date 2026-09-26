@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.behaviour.RevisionableBehaviour;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -320,7 +321,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
         RecordGrants.grant(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, siteId,
             HohenheimAccess.MANAGE, true);
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         ProxyServer proxy = new ProxyServer();
         proxy.start();
         int proxyPort = ((InetSocketAddress) proxy.getHttpListenerInfo().getAddress()).getPort();

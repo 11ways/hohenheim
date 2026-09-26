@@ -12,6 +12,7 @@ import be.elevenways.spamservice.client.SpamserviceClient;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.PanelPage;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
@@ -107,10 +108,10 @@ public final class SpamserviceReputationPage extends PanelPage {
     }
 
     private static ReputationScore.Settings scoreSettings() {
-        return ReputationScore.Settings.of(HohenheimSettings.VALUES.getValue(
+        return ReputationScore.Settings.of(Zenit.SETTINGS_VALUES.getValue(
                 HohenheimSettings.Security.REPUTATION_BAN_CATEGORIES),
-            HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.REPUTATION_BAN_THRESHOLD),
-            HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.REPUTATION_POSITIVE_EVENT_WEIGHT),
+            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.REPUTATION_BAN_THRESHOLD),
+            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.REPUTATION_POSITIVE_EVENT_WEIGHT),
             true);
     }
 

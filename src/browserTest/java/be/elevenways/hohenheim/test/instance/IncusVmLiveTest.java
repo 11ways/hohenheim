@@ -24,6 +24,7 @@ import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -138,9 +139,9 @@ class IncusVmLiveTest {
             String nicBucket = InstanceDeviceQuota.nicBucketOf("");
             long diskUsedBefore = Quotas.usedOf(diskBucket);
             long nicUsedBefore = Quotas.usedOf(nicBucket);
-            Integer previousDiskCap = HohenheimSettings.VALUES.getValue(
+            Integer previousDiskCap = Zenit.SETTINGS_VALUES.getValue(
                 HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER);
-            Integer previousNicCap = HohenheimSettings.VALUES.getValue(
+            Integer previousNicCap = Zenit.SETTINGS_VALUES.getValue(
                 HohenheimSettings.Quota.MAX_EXTRA_NICS_PER_OWNER);
 
             // 1. The TEMPLATE is the provisioning vocabulary: cloud-init user-data with
@@ -336,10 +337,10 @@ class IncusVmLiveTest {
                     .isEqualTo("IPV4-OK");
 
                 // 8. DISK under quota: exactly 2 GB of operator headroom.
-                HohenheimSettings.VALUES.setValue(
+                Zenit.SETTINGS_VALUES.setValue(
                     HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER,
                     (int) diskUsedBefore + 2);
-                HohenheimSettings.VALUES.setValue(
+                Zenit.SETTINGS_VALUES.setValue(
                     HohenheimSettings.Quota.MAX_EXTRA_NICS_PER_OWNER,
                     (int) nicUsedBefore + 1);
 
@@ -449,10 +450,10 @@ class IncusVmLiveTest {
                     .isInstanceOfSatisfying(IncusClient.ApiException.class,
                         e -> assertThat(e.isNotFound()).isTrue());
             } finally {
-                HohenheimSettings.VALUES.setValue(
+                Zenit.SETTINGS_VALUES.setValue(
                     HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER,
                     previousDiskCap == null ? 0 : previousDiskCap);
-                HohenheimSettings.VALUES.setValue(
+                Zenit.SETTINGS_VALUES.setValue(
                     HohenheimSettings.Quota.MAX_EXTRA_NICS_PER_OWNER,
                     previousNicCap == null ? 0 : previousNicCap);
                 remote.forceDelete(handle);

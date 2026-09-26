@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.hohenheim.server.security.HohenheimSecurity;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.security.SecurityEvent;
@@ -46,12 +47,12 @@ class BanEnforcementTest {
             proxy.stop();
             proxy = null;
         }
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of());
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of());
     }
 
     @Test
     void dbBanIsRefusedAtHttpAndClearedByLift() throws Exception {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of(KEY));
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of(KEY));
         proxy = startProxy();
 
         Row ban = BanService.INSTANCE.createBan("203.0.113.150", "test",
@@ -77,7 +78,7 @@ class BanEnforcementTest {
     @Test
     void thresholdedDomainMissesReportThroughTheSecurityEventsFunnel() throws Exception {
         HohenheimSecurity.boot();   // installs the in-process SecurityEvents sink (idempotent)
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of(KEY));
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of(KEY));
         proxy = startProxy();
 
         // Domain misses must still travel the core funnel (that is what the
@@ -108,7 +109,7 @@ class BanEnforcementTest {
 
     @Test
     void bannedIpStillGetsAcmeChallengesButNothingElse() throws Exception {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of(KEY));
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of(KEY));
         proxy = startProxy();
 
         proxy.getAcmeService().offerHttpChallenge("test-token-xyz",
@@ -134,7 +135,7 @@ class BanEnforcementTest {
 
     @Test
     void enforcementComesOnlyFromBanRows() throws Exception {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of(KEY));
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of(KEY));
         proxy = startProxy();
 
         // A PROTECTED (private) IP pushed over the threshold gets no ban row,
@@ -175,18 +176,18 @@ class BanEnforcementTest {
 
     @Test
     void disabledEnforcementLetsBannedIpsThrough() throws Exception {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of(KEY));
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of(KEY));
         proxy = startProxy();
         BanService.INSTANCE.createBan("203.0.113.160", "test", BanModel.SOURCE_MANUAL, null, null);
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.BANS_ENABLED, false);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.BANS_ENABLED, false);
         try {
             assertThat(proxy.getDispatcher().isBanned("203.0.113.160")).isFalse();
             String response = rawRequest(httpPort(proxy), "whatever.test", "/",
                 "X-Hohenheim-Key: " + KEY, "X-Real-IP: 203.0.113.160");
             assertThat(response).doesNotContain("403");
         } finally {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.BANS_ENABLED, true);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.BANS_ENABLED, true);
         }
     }
 }

@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -91,7 +92,7 @@ class InstanceBackupRetentionRefusalTest {
 
             // 1. Two completed backups, retention 1: the older one's artifact is made
             //    undeletable by denying writes on its directory.
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.RETENTION, 0);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 0);
             int older = backups.backupNow(instanceId, targetId, target);
             int newer = backups.backupNow(instanceId, targetId, target);
             Path olderArtifact = targetRoot.resolve(BackupLaneFixture.remoteKeyOf(older));
@@ -102,7 +103,7 @@ class InstanceBackupRetentionRefusalTest {
             try {
                 // 2. The prune cannot remove the artifact, so the ROW stays: what
                 //    remains is still named by a record a later sweep can act on.
-                HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.RETENTION, 1);
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 1);
                 backups.pruneForRetention(instanceId);
                 assertThat(Map.of(
                         "row", String.valueOf(
@@ -126,7 +127,7 @@ class InstanceBackupRetentionRefusalTest {
             assertThat(Models.get(InstanceBackupModel.class).findById(newer))
                 .as("step 3: the newest backup was never touched").isNotNull();
 
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
             service.destroy(instanceId);
         });
     }

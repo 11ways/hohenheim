@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ArtifactOperationModel;
 import be.elevenways.hohenheim.server.application.ArtifactDeploys;
+import be.elevenways.zenit.common.Zenit;
 import java.nio.file.Files;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
@@ -667,12 +668,12 @@ class PaasApiTest extends HohenheimTestBase {
                 applicationAId, HohenheimAccess.POWER, true);
             HttpResponse<String> accepted = keyPost(keyPaasA, path, "not-a-jar");
             assertThat(keyPost(keyPaasA, path, "").statusCode()).isEqualTo(422);
-            Integer previousCap = HohenheimSettings.VALUES.getValue(HohenheimSettings.Builds.MAX_UPLOAD_MB);
+            Integer previousCap = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Builds.MAX_UPLOAD_MB);
             try {
-                HohenheimSettings.VALUES.setValue(HohenheimSettings.Builds.MAX_UPLOAD_MB, 1);
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Builds.MAX_UPLOAD_MB, 1);
                 assertThat(keyPost(keyPaasA, path, "x".repeat(1024 * 1024 + 1)).statusCode()).isEqualTo(422);
             } finally {
-                HohenheimSettings.VALUES.setValue(HohenheimSettings.Builds.MAX_UPLOAD_MB, previousCap);
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Builds.MAX_UPLOAD_MB, previousCap);
             }
             assertThat(accepted.statusCode()).isEqualTo(202);
             Row operation = Models.get(ArtifactOperationModel.class).find()

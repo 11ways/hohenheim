@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.PortPublication;
 import be.elevenways.hohenheim.server.util.PortProbe;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -275,7 +276,7 @@ final class PortPublications {
      * @throws IllegalStateException when the stored value is outside what the rule admits
      */
     private static int windowFirst() {
-        Integer first = HohenheimSettings.VALUES.getValue(
+        Integer first = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Instances.PUBLIC_PORT_FIRST);
         if (first == null || first <= 1024 || first > HohenheimSettings.Instances.MAX_PORT) {
             throw new IllegalStateException("instances.public_port_first = " + first
@@ -292,7 +293,7 @@ final class PortPublications {
      * @throws IllegalStateException when the stored value is outside what the rule admits
      */
     private static int windowCount() {
-        Integer count = HohenheimSettings.VALUES.getValue(
+        Integer count = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Instances.PUBLIC_PORT_COUNT);
         if (count == null || count < 1) {
             throw new IllegalStateException("instances.public_port_count = " + count

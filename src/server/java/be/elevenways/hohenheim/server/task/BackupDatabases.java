@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
@@ -72,8 +73,8 @@ public class BackupDatabases extends ScheduledTask {
 
     /** Dump every running, text-dumpable managed database, then prune old dumps. */
     public static Outcome backupAll(DatabaseService databaseService) {
-        Path backupRoot = Path.of(HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.BACKUP_PATH));
-        int retention = HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.BACKUP_RETENTION);
+        Path backupRoot = Path.of(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.BACKUP_PATH));
+        int retention = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.BACKUP_RETENTION);
 
         int backedUp = 0;
         List<String> failures = new ArrayList<>();

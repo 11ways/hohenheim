@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.IncusWorkloadType;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -61,19 +62,19 @@ class WorkspaceVolumeMountTest {
         BackupLaneFixture fixture = BackupLaneFixture.install();
         datasource = fixture.datasource;
         hostId = fixture.hostId;
-        savedDataPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
-        savedUidBase = HohenheimSettings.VALUES.getValue(
+        savedDataPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
+        savedUidBase = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Storage.VOLUME_UID_BASE);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, DATA_PATH);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.VOLUME_UID_BASE, 200000);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, DATA_PATH);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.VOLUME_UID_BASE, 200000);
         daemon = FakeWorkspaceDaemon.install();
     }
 
     @AfterAll
     static void tearDown() {
         FakeWorkspaceDaemon.uninstall();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, savedDataPath);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.VOLUME_UID_BASE,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, savedDataPath);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.VOLUME_UID_BASE,
             savedUidBase);
         BackupLaneFixture.uninstall();
     }

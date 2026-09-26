@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.validation.Violations;
 import com.sun.net.httpserver.HttpServer;
@@ -48,7 +49,7 @@ class PathRoutingTest {
             upstream.stop(0);
         }
         upstreams.clear();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS, "");
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS, "");
     }
 
     /** Upstream that answers with the given tag and records the path it received. */
@@ -105,7 +106,7 @@ class PathRoutingTest {
     @Test
     void knownHostnameWithoutMatchingPathIs404NotFallback() throws Exception {
         resetDatabase();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS,
             "https://fallback.example/");
 
         int apiPort = startUpstream("api-upstream", null);

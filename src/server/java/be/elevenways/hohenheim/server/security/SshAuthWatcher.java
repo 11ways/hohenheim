@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.security;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -114,7 +115,7 @@ public final class SshAuthWatcher {
     /** Whether an operator asked for SSH watching at all. */
     public static boolean isConfigured() {
         return Boolean.TRUE.equals(
-            HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.SSH_WATCH_ENABLED));
+            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.SSH_WATCH_ENABLED));
     }
 
     /**

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.host;
 
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -63,8 +64,8 @@ class HostKeyPinningTest {
         HohenheimTestRuntime.ensureBooted();
 
         sandbox = Files.createTempDirectory("hohenheim-host-key");
-        previousDataPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.DATA_PATH,
+        previousDataPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH,
             sandbox.resolve("data").toString());
         sshd = Sshd.start(sandbox.resolve("sshd"));
     }
@@ -75,7 +76,7 @@ class HostKeyPinningTest {
             sshd.stop();
         }
         if (previousDataPath != null) {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, previousDataPath);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, previousDataPath);
         }
         deleteTree(sandbox);
     }

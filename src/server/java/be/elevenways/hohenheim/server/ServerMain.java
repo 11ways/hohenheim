@@ -69,11 +69,10 @@ public class ServerMain {
             return;
         }
 
-        // Load Hohenheim's own settings (settings/hohenheim.dry + HOHENHEIM__*
-        // env). The context roots at the hohenheim group, so file keys keep the
-        // flat proxy/ssl/... shape. Also captures the HohenheimRoles snapshot,
-        // which every role gate below reads.
-        HohenheimSettingsFiles.load();
+        // Load the framework's settings chain, hohenheim.* included (a retired
+        // settings/hohenheim.dry is adopted into settings/local.dry first). Also
+        // captures the HohenheimRoles snapshot, which every role gate below reads.
+        HohenheimSettingsBoot.load();
 
         // Upstream kinds and auth-provider types self-register through compile-time
         // discovery (BlastAutoLoadInit); nothing needs an explicit boot here since the
@@ -310,7 +309,7 @@ public class ServerMain {
      * invoked when a migration flag is actually present -- a normal boot opens nothing here.
      */
     private static @NonNull SqlDatasource openDatabaseForCommandLine() {
-        HohenheimSettingsFiles.load();
+        HohenheimSettingsBoot.load();
         HohenheimAccess.declareGrantableModels();
         return HohenheimDatabase.openDatasource();
     }
@@ -423,17 +422,17 @@ public class ServerMain {
 
     // Register the Proteus realm as an SSO option when configured; password login is always available.
     private static void registerProteusIfConfigured() {
-        if (!Boolean.TRUE.equals(HohenheimSettings.VALUES.getValue(HohenheimSettings.AuthProteus.ENABLED))) {
+        if (!Boolean.TRUE.equals(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.AuthProteus.ENABLED))) {
             return;
         }
-        String endpoint = HohenheimSettings.VALUES.getValue(HohenheimSettings.AuthProteus.ENDPOINT);
-        String realmClient = HohenheimSettings.VALUES.getValue(HohenheimSettings.AuthProteus.REALM_CLIENT);
-        String accessKey = HohenheimSettings.VALUES.getValue(HohenheimSettings.AuthProteus.ACCESS_KEY);
+        String endpoint = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.AuthProteus.ENDPOINT);
+        String realmClient = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.AuthProteus.REALM_CLIENT);
+        String accessKey = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.AuthProteus.ACCESS_KEY);
         if (endpoint == null || endpoint.isBlank() || realmClient == null || realmClient.isBlank()
             || accessKey == null || accessKey.isBlank()) {
             return;
         }
-        String authenticator = HohenheimSettings.VALUES.getValue(HohenheimSettings.AuthProteus.AUTHENTICATOR);
+        String authenticator = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.AuthProteus.AUTHENTICATOR);
         IdentityProviderRegistry.register(
             new ProteusIdentityProvider("proteus", "Proteus",
                 new ProteusClient(endpoint, realmClient, accessKey), authenticator, false),

@@ -27,6 +27,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -513,7 +514,7 @@ public final class ReleaseEngine {
     private static void scheduleDrain(int applicationId, int opId, int retiredId,
                                       @NonNull String servingImage,
                                       @Nullable Datasource datasource) {
-        Integer seconds = HohenheimSettings.VALUES.getValue(
+        Integer seconds = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Releases.DRAIN_SECONDS);
         long waitMs = Math.max(0, (seconds != null ? seconds : 15) * 1000L);
         JobRunner.startVirtualThread(() -> {
@@ -880,9 +881,9 @@ public final class ReleaseEngine {
      * published port binds THAT host's loopback, never the controller's.
      */
     public static void probe(int port, @NonNull String path, @NonNull PublishedPortProbe lane) {
-        Integer timeout = HohenheimSettings.VALUES.getValue(
+        Integer timeout = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS);
-        Integer interval = HohenheimSettings.VALUES.getValue(
+        Integer interval = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Releases.PROBE_INTERVAL_MS);
         long deadline = Now.millis()
             + Math.max(1, timeout != null ? timeout : 60) * 1000L;
@@ -1088,7 +1089,7 @@ public final class ReleaseEngine {
 
     /** Keep the newest N operations per owning record; older rows go. */
     private static void prune(@NonNull Row op) {
-        Integer keep = HohenheimSettings.VALUES.getValue(
+        Integer keep = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Releases.HISTORY_PER_RECORD);
         int limit = keep != null && keep > 0 ? keep : 50;
         ReleaseOperationModel model = Models.get(ReleaseOperationModel.class);

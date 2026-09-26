@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.PermissionResolver;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -54,7 +55,7 @@ public final class ReleasedClaims {
 
     /** @return the configured quarantine window in days; 0 or less means disabled */
     public static int windowDays() {
-        Integer days = HohenheimSettings.VALUES.getValue(
+        Integer days = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS);
         return days != null ? days : 0;
     }

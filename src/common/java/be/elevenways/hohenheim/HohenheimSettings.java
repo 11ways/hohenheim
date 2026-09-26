@@ -4,7 +4,6 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.annotation.ZenitAutoLoad;
 import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.common.setting.SettingGroup;
-import be.elevenways.zenit.common.setting.SettingsContext;
 import be.elevenways.zenit.common.setting.SettingsRule;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.validation.PathKind;
@@ -23,15 +22,12 @@ import java.util.regex.Pattern;
 @ZenitAutoLoad(loadInnerClasses = true)
 public class HohenheimSettings {
 
-    // AIDEV-NOTE: The context roots at hohenheim's OWN group (the standard
-    // consumer shape; only ServerSettings roots at Zenit.SETTINGS). File keys
-    // are RELATIVE to this root, so settings/hohenheim.dry keeps the flat
-    // proxy/ssl/... shape. The server loads it via HohenheimSettingsFiles.
+    // AIDEV-NOTE: every value is read through Zenit.SETTINGS_VALUES, the one context the default
+    // chain loads: hohenheim.* in settings/local.dry, or ZENIT__HOHENHEIM__* in the environment.
+    // The retired settings/hohenheim.dry is adopted into local.dry and HOHENHEIM__* refused
+    // (HohenheimRetiredNames).
     public static final SettingGroup HOHENHEIM = Zenit.SETTINGS.createGroup("hohenheim")
         .label("Hohenheim");
-
-    // private-settings-context: loaded from settings/hohenheim.dry and HOHENHEIM__* by HohenheimSettingsFiles
-    public static final SettingsContext VALUES = new SettingsContext(HOHENHEIM);
 
     // Nested groups below are force-loaded at compile time via @ZenitAutoLoad
     // (loadInnerClasses=true): Protoblast's Gradle plugin emits a reference to
@@ -192,7 +188,7 @@ public class HohenheimSettings {
     // AIDEV-NOTE: restartRequired is ADVISORY metadata (a UI banner, nothing
     // enforces it at runtime). What makes these flags behave consistently is
     // that the server reads them ONCE at boot into the HohenheimRoles snapshot
-    // (captured by HohenheimSettingsFiles.load) and every gate reads the
+    // (captured by HohenheimSettingsBoot.load) and every gate reads the
     // snapshot, never the live setting. A live edit therefore changes nothing
     // until the restart the banner asks for.
     public abstract class Roles {
@@ -508,7 +504,7 @@ public class HohenheimSettings {
                         : "stacks.reclaim_min_age_hours is " + hours + "; it must be at least 1";
                 })
                 .says(Microcopy.of("setting_reclaim_min_age").withFilter("scope", "violations"))
-                .addTo(VALUES);
+                .addTo(Zenit.SETTINGS_VALUES);
 
         /** A whole number from a number or a numeric string; anything else is not one. */
         private static SettingDefinition.CoercionResult<Integer> coerceWholeNumber(Object raw) {
@@ -1084,7 +1080,7 @@ public class HohenheimSettings {
                 })
                 .says(Microcopy.of("setting_public_port_window").withFilter("scope", "violations")
                     .withArg("max", MAX_PORT))
-                .addTo(VALUES);
+                .addTo(Zenit.SETTINGS_VALUES);
     }
 
     // --- Sandboxed builders ---

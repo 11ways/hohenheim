@@ -29,6 +29,7 @@ import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.orm.field.StringField;
@@ -148,7 +149,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         }
         this.instances.clear();
         if (this.previousDiskCap != null) {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER,
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER,
                 this.previousDiskCap);
             this.previousDiskCap = null;
         }
@@ -314,9 +315,9 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             .doesNotContain("/instances/" + dockerId + "/page/devices");
 
         // 2. Over quota: the named refusal, no row, nothing spent.
-        this.previousDiskCap = HohenheimSettings.VALUES.getValue(
+        this.previousDiskCap = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER,
             (int) usedBefore + 1);
         HttpResponse<String> overQuota = apiPost("/api/v1/instances/" + instanceId
             + "/devices", "type=disk&name=" + NAME_PREFIX + "big&size_gb=9");
@@ -331,7 +332,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             .as("step 2: and spends nothing").isEqualTo(usedBefore);
         assertThat(DAEMON.get(handle).disks)
             .as("step 2: the daemon was never contacted").isEmpty();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER,
             this.previousDiskCap);
 
         // 3. The DAEMON refuses after the row was written: the row must be reverted, or

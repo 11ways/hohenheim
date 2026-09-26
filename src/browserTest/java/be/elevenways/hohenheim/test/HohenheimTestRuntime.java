@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimRoles;
-import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
+import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.server.ZenitAuth;
@@ -39,13 +39,13 @@ public final class HohenheimTestRuntime {
         // matching what these suites always exercised; a role-restricted test
         // declares its own set (and captures) BEFORE calling ensureBooted.
         if (!HohenheimRoles.isCaptured()) {
-            HohenheimSettingsFiles.forceDefinitions();
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.PROXY, true);
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.DNS, true);
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.FIREWALL, true);
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.STACKS, true);
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.DATABASES, true);
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.INSTANCES, true);
+            HohenheimSettingsBoot.forceDefinitions();
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.PROXY, true);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.DNS, true);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.FIREWALL, true);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.STACKS, true);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.DATABASES, true);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.INSTANCES, true);
             HohenheimRoles.capture();
         }
         declareAccessModelsOnce();
@@ -63,7 +63,7 @@ public final class HohenheimTestRuntime {
         // The suite opts OUT explicitly: its sites have no system user of their own
         // and would otherwise all fault. Nothing flips it back on any more -- the
         // host-user process lane that needed it was deleted in phase 0.
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Process.REQUIRE_DEDICATED_USER, false);
         ServerZenitRuntime.init().join();
     }

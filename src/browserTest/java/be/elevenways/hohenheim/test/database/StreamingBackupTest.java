@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -78,7 +79,7 @@ class StreamingBackupTest {
         DatabaseService service = new DatabaseService(datasource);
         String name = "cap" + System.nanoTime();
         Path dir = Files.createTempDirectory("hohenheim-cap-bk");
-        Integer originalCap = HohenheimSettings.VALUES.getValue(
+        Integer originalCap = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Database.MAX_DUMP_MB);
         try {
             service.create(name, ManagedDatabase.Engine.POSTGRES, PG_IMAGE,
@@ -94,7 +95,7 @@ class StreamingBackupTest {
             assertThat(seed.exitCode())
                 .withFailMessage("step 1: seed failed: %s", seed.stderr()).isZero();
 
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.MAX_DUMP_MB, 1);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.MAX_DUMP_MB, 1);
 
             // 2. The over-cap dump is refused, naming the setting an operator would raise.
             Throwable refusal = catchThrowable(() -> service.backupToFile(name, dir, "snap"));
@@ -112,7 +113,7 @@ class StreamingBackupTest {
 
             // 4. With the cap restored, the SAME database dumps completely: the seeded
             //    first and last rows are both in the file, so nothing was truncated.
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.MAX_DUMP_MB, originalCap);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.MAX_DUMP_MB, originalCap);
             Path dump = service.backupToFile(name, dir, "full");
             assertThat(Files.size(dump))
                 .as("step 4: the full dump is larger than the cap that refused it")
@@ -123,7 +124,7 @@ class StreamingBackupTest {
                 .contains("CREATE TABLE")
                 .contains("\n1\t").contains("\n20000\t");
         } finally {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.MAX_DUMP_MB, originalCap);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.MAX_DUMP_MB, originalCap);
             try {
                 service.destroy(name, true);
             } catch (IOException ignored) {
@@ -140,9 +141,9 @@ class StreamingBackupTest {
     @Test
     void oneFailingDatabaseDoesNotAbortTheNightlyLoop() throws IOException {
         Path backupRoot = Files.createTempDirectory("hohenheim-loop-bk");
-        String originalPath = HohenheimSettings.VALUES.getValue(
+        String originalPath = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Database.BACKUP_PATH);
-        HohenheimSettings.VALUES.setValue(
+        Zenit.SETTINGS_VALUES.setValue(
             HohenheimSettings.Database.BACKUP_PATH, backupRoot.toString());
         try {
             DatabaseService twoDatabases = new DatabaseService() {
@@ -188,7 +189,7 @@ class StreamingBackupTest {
                 .as("step 3: the failure names the database and the reason")
                 .singleElement().asString().startsWith("broken: ").contains("boom");
         } finally {
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Database.BACKUP_PATH, originalPath);
             deleteRecursively(backupRoot);
         }

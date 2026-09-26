@@ -110,7 +110,7 @@ class DevTunnelTest {
         adminServer.start();
         adminPort = adminServer.getPort();
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         proxy = new ProxyServer();
         proxy.start();
         proxyPort = ((InetSocketAddress) proxy.getHttpListenerInfo().getAddress()).getPort();

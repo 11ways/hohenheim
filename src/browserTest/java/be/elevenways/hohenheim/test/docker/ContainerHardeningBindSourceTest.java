@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
+import be.elevenways.zenit.common.Zenit;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -49,13 +50,13 @@ class ContainerHardeningBindSourceTest {
 
     @BeforeAll
     static void setUp() {
-        savedDataPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, "/srv/hoh-test");
+        savedDataPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, "/srv/hoh-test");
     }
 
     @AfterAll
     static void tearDown() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, savedDataPath);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, savedDataPath);
     }
 
     /**
@@ -139,7 +140,7 @@ class ContainerHardeningBindSourceTest {
             .as("step 1: a path under the OLD root is refused while data_path says otherwise")
             .isInstanceOf(IllegalArgumentException.class);
 
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, "/srv/moved");
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, "/srv/moved");
         try {
             Map<String, Object> moved = specWithBind("/srv/moved/volumes/7/home", 7);
             ContainerHardening.applyTo(moved, ContainerHardening.SERVICE);
@@ -147,7 +148,7 @@ class ContainerHardeningBindSourceTest {
                 .as("step 2: and accepted once data_path names it")
                 .containsKey("PidsLimit");
         } finally {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.DATA_PATH,
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH,
                 "/srv/hoh-test");
         }
     }

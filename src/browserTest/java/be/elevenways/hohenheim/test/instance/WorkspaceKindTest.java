@@ -30,6 +30,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -73,18 +74,18 @@ class WorkspaceKindTest {
     static void setUp() throws Exception {
         datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
-        savedDataPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
-        savedUidBase = HohenheimSettings.VALUES.getValue(
+        savedDataPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
+        savedUidBase = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Storage.VOLUME_UID_BASE);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, "/srv/hoh-ws");
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.VOLUME_UID_BASE, 200000);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, "/srv/hoh-ws");
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.VOLUME_UID_BASE, 200000);
         Db.run(datasource, HostFixtures::admitLocal);
     }
 
     @AfterAll
     static void tearDown() {
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, savedDataPath);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.VOLUME_UID_BASE,
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, savedDataPath);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.VOLUME_UID_BASE,
             savedUidBase);
     }
 
@@ -287,13 +288,13 @@ class WorkspaceKindTest {
     @Test
     void theUidBaseIsRefusedWhenItWouldCollideWithTheHostOrWithIncus() {
         Db.run(datasource, () -> {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.VOLUME_UID_BASE, 1000);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.VOLUME_UID_BASE, 1000);
             assertThatThrownBy(() -> WorkspaceUids.forInstance(1))
                 .as("step 1: a base inside the host's own account range is refused")
                 .isInstanceOf(Violations.class)
                 .hasMessageContaining("workspace_uid_base_invalid");
 
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.VOLUME_UID_BASE,
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.VOLUME_UID_BASE,
                 WorkspaceUids.INCUS_SUBUID_START);
             assertThatThrownBy(() -> WorkspaceUids.forInstance(1))
                 .as("step 2: and so is one inside the range Incus maps containers into")
@@ -301,7 +302,7 @@ class WorkspaceKindTest {
                 .hasMessageContaining("workspace_uid_base_invalid");
 
             // 3. FALSIFIED: the shipped default passes, so the guard is about the value.
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.VOLUME_UID_BASE,
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.VOLUME_UID_BASE,
                 200000);
             assertThat(WorkspaceUids.forInstance(5))
                 .as("step 3: the shipped base derives a uid in the safe window")

@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.database;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BackupTargetModel;
@@ -134,14 +135,14 @@ class ControlPlaneBackupTest {
 
         // 5. Restore reads the archive back FROM the target and puts both halves where the
         //    settings say they belong.
-        String originalPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.PATH);
-        String originalUrl = HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.URL);
+        String originalPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.PATH);
+        String originalUrl = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.URL);
         String originalKeyFile = ServerSettings.VALUES.getValue(
             ServerSettings.Database.Encryption.KEY_FILE);
         Path fetched = workspace.resolve("fetched.zrec");
         try {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, dbFile.toString());
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.URL, "");
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.PATH, dbFile.toString());
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.URL, "");
             ServerSettings.VALUES.setValue(
                 ServerSettings.Database.Encryption.KEY_FILE, keyringFile.toString());
             target.retrieve(archive.key(), fetched);
@@ -151,8 +152,8 @@ class ControlPlaneBackupTest {
                 .isEqualTo(archive.manifest().activeKeyId());
         } finally {
             Files.deleteIfExists(fetched);
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, originalPath);
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.URL,
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.PATH, originalPath);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.URL,
                 originalUrl == null ? "" : originalUrl);
             ServerSettings.VALUES.setValue(
                 ServerSettings.Database.Encryption.KEY_FILE, originalKeyFile);
@@ -185,7 +186,7 @@ class ControlPlaneBackupTest {
         Path workspace = Files.createTempDirectory("hh-cp-destination");
         SqlDatasource datasource = TestDatabases.freshDatasource();
 
-        String original = HohenheimSettings.VALUES.getValue(
+        String original = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET);
         try {
             Db.run(datasource, () -> {
@@ -197,7 +198,7 @@ class ControlPlaneBackupTest {
                 Models.get(BackupTargetModel.class).save(row);
 
                 // 1. Unset: refused, naming the setting and saying there is no local fallback.
-                HohenheimSettings.VALUES.setValue(
+                Zenit.SETTINGS_VALUES.setValue(
                     HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, "");
                 assertThatThrownBy(ControlPlaneBackups::requireDestination)
                     .as("step 1: an unconfigured destination refuses instead of writing locally")
@@ -210,7 +211,7 @@ class ControlPlaneBackupTest {
 
                 // 2. A typo names no target: refused, listing the ones that DO exist, so it
                 //    never reads like a product with no backup targets at all.
-                HohenheimSettings.VALUES.setValue(
+                Zenit.SETTINGS_VALUES.setValue(
                     HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, "typo");
                 assertThatThrownBy(ControlPlaneBackups::requireDestination)
                     .as("step 2: an unknown target name refuses and lists the known ones")
@@ -219,13 +220,13 @@ class ControlPlaneBackupTest {
                     .hasMessageContaining("somewhere-else");
 
                 // 3. The configured one resolves to a live target.
-                HohenheimSettings.VALUES.setValue(
+                Zenit.SETTINGS_VALUES.setValue(
                     HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, "somewhere-else");
                 assertThat(ControlPlaneBackups.requireDestination())
                     .as("step 3: a correctly named target resolves").isNotNull();
             });
         } finally {
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET,
                 original == null ? "" : original);
         }
@@ -237,10 +238,10 @@ class ControlPlaneBackupTest {
      */
     @Test
     void theDashboardRaisesAnItemWhileNoDestinationIsConfigured() {
-        String original = HohenheimSettings.VALUES.getValue(
+        String original = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET);
         try {
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, "");
             List<AttentionItem> unconfigured = new ArrayList<>();
             AttentionCollector.controlPlaneBackupDestination(unconfigured);
@@ -252,14 +253,14 @@ class ControlPlaneBackupTest {
             assertThat(unconfigured.get(0).target().toUrl())
                 .as("step 1: pointing at where it is fixed").isEqualTo("/admin/settings");
 
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, "somewhere");
             List<AttentionItem> configured = new ArrayList<>();
             AttentionCollector.controlPlaneBackupDestination(configured);
             assertThat(configured)
                 .as("step 2: and it goes silent once a destination is named").isEmpty();
         } finally {
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET,
                 original == null ? "" : original);
         }
@@ -267,31 +268,31 @@ class ControlPlaneBackupTest {
 
     @Test
     void databaseFileResolutionRefusesWhatRestoreCannotReplace() {
-        String originalPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.PATH);
-        String originalUrl = HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.URL);
+        String originalPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.PATH);
+        String originalUrl = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.URL);
         try {
             // A plain sqlite URL resolves to its file, query parameters stripped.
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.URL,
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.URL,
                 "jdbc:sqlite:/tmp/cp-test.db?foreign_keys=on");
             assertThat(ControlPlaneBackups.databaseFile())
                 .isEqualTo(Path.of("/tmp/cp-test.db"));
 
             // A non-sqlite URL is refused: restore replaces a FILE, it cannot address this.
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.URL,
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.URL,
                 "jdbc:postgresql://localhost/hh");
             assertThatThrownBy(ControlPlaneBackups::databaseFile)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("jdbc:sqlite:");
 
             // A memory URL names no file at all.
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.URL,
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.URL,
                 "jdbc:sqlite::memory:");
             assertThatThrownBy(ControlPlaneBackups::databaseFile)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("FILE");
         } finally {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, originalPath);
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.URL,
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.PATH, originalPath);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.URL,
                 originalUrl == null ? "" : originalUrl);
         }
     }

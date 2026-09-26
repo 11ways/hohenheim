@@ -18,6 +18,7 @@ import be.elevenways.zenit.cms.common.action.ActionContext;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -997,7 +998,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         Row offTenant = site("Window Off Tenant", "window-off-tenant", true);
         tenantOf(offTenant, "window-off-tenant@test");
         domain(offTenant, offHost);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS, 0);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS, 0);
         try {
             new SiteResource().deleteRow(siteModel.findById(offTenant.get(SiteModel.ID)),
                 AccessContext.anonymous());
@@ -1012,7 +1013,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
                 .as("step 4: and a different owner claims the released hostname freely")
                 .isNotNull();
         } finally {
-            HohenheimSettings.VALUES.setValue(
+            Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS, days);
         }
 

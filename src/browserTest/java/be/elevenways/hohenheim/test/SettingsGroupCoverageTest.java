@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
+import be.elevenways.hohenheim.server.HohenheimRetiredNames;
+import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.zenit.server.setting.DryFileSource;
+import be.elevenways.zenit.server.setting.RetiredName;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -55,7 +57,7 @@ class SettingsGroupCoverageTest {
     @Test
     void everyDeclaredSettingsGroupIsGuaranteedBeforeValuesLoad() {
         // 1. What the loader guarantees, computed from the declared nested classes.
-        Set<String> forced = HohenheimSettingsFiles.forceDefinitions();
+        Set<String> forced = HohenheimSettingsBoot.forceDefinitions();
         assertThat(forced).as("step 1: the loader guarantees some groups").isNotEmpty();
 
         // 2. It must cover every declared group. A hand-written list had drifted here and
@@ -73,17 +75,16 @@ class SettingsGroupCoverageTest {
     }
 
     /**
-     * {@code settings/hohenheim.dry} is gitignored (2026-08-07), so a fresh clone boots
-     * without it. Absence must be the normal case, and what is left must be the
-     * PRODUCTION shape -- which is why nothing from the previously-tracked file needed
-     * moving into {@code settings/default.dry}.
+     * The operator's {@code settings/local.dry} is gitignored, so a fresh clone boots without
+     * it. Absence must be the normal case, and what is left must be the PRODUCTION shape.
      */
     @Test
     void anAbsentSettingsFileLeavesTheProductionDefaults() throws IOException {
-        // 1. The file the loader reads is the gitignored one, not a second spelling.
-        assertThat(HohenheimSettingsFiles.settingsFile().toString())
-            .as("step 1: the loader reads settings/hohenheim.dry")
-            .isEqualTo("settings/hohenheim.dry");
+        // 1. The retired settings/hohenheim.dry is adopted into local.dry under hohenheim.*,
+        //    never read as a file of its own.
+        assertThat(HohenheimRetiredNames.RETIRED)
+            .as("step 1: the old file is declared adopted under the hohenheim group")
+            .contains(RetiredName.adoptedFile("settings/hohenheim.dry", HohenheimSettings.HOHENHEIM));
 
         // 2. A missing file is not a failure: an empty snapshot, no throw. A boot that
         //    died on the absent file would have made gitignoring it a bad trade.
@@ -103,14 +104,14 @@ class SettingsGroupCoverageTest {
         assertThat(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED.getDefaultValue())
             .as("step 3: certificates are automatic by default").isTrue();
 
-        // 4. And the file stays UNTRACKED. It holds per-deployment values and, per its
-        //    own .example, the proxy trust keys -- tracking it means either a
-        //    permanently dirty worktree on every deployment or a secret in git.
+        // 4. And the operator files stay UNTRACKED, the old one's adoption backup too. They
+        //    hold per-deployment values and the proxy trust keys -- tracking them means either
+        //    a permanently dirty worktree on every deployment or a secret in git.
         Path gitignore = Path.of(".gitignore");
         assertThat(Files.exists(gitignore))
             .as("step 4: the repo root is the working directory").isTrue();
         assertThat(Files.readString(gitignore).lines().map(String::trim).toList())
-            .as("step 4: settings/hohenheim.dry is gitignored, like settings/local.dry")
-            .contains("settings/hohenheim.dry", "settings/local.dry");
+            .as("step 4: settings/local.dry and the retired file's backups are gitignored")
+            .contains("settings/hohenheim.dry*", "settings/local.dry");
     }
 }

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.host;
 
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -73,15 +74,15 @@ class LiveRemoteHostTest {
         HohenheimTestRuntime.ensureBooted();
 
         sandbox = Files.createTempDirectory("hohenheim-live-remote");
-        previousDataPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.DATA_PATH,
+        previousDataPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH,
             sandbox.resolve("data").toString());
     }
 
     @AfterAll
     static void tearDown() {
         if (previousDataPath != null) {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, previousDataPath);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, previousDataPath);
         }
         deleteTree(sandbox);
     }
@@ -247,13 +248,13 @@ class LiveRemoteHostTest {
         Db.run(datasource, () -> {
             ServerService servers = new ServerService();
             Row host = remote.enrol(HOST);
-            Integer originalPids = HohenheimSettings.VALUES.getValue(
+            Integer originalPids = Zenit.SETTINGS_VALUES.getValue(
                 HohenheimSettings.Security.CONTAINER_PIDS_LIMIT);
             try {
                 HostKeys.scanAndPin(host);
                 Row pinned = Models.get(ServerModel.class).findByName(HOST);
                 HostKeys.confirm(pinned);
-                HohenheimSettings.VALUES.setValue(
+                Zenit.SETTINGS_VALUES.setValue(
                     HohenheimSettings.Security.CONTAINER_PIDS_LIMIT, 149);
 
                 HostPreflight.Report report = HostPreflight.runAndStore(HOST);
@@ -329,7 +330,7 @@ class LiveRemoteHostTest {
                 // 6. Admission is now legitimately reachable for this real host.
                 HostAdmission.requireAdmittable(stored);
             } finally {
-                HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.CONTAINER_PIDS_LIMIT,
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.CONTAINER_PIDS_LIMIT,
                     originalPids != null ? originalPids : 512);
                 servers.remove(HOST);
             }
