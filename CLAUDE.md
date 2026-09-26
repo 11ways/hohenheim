@@ -95,7 +95,7 @@ silently aborts used to make a run of nothing look green.
   instance carries a git source, Dev sessions)
   and databases (Restore). `HohenheimSettings` is the `hohenheim` group of
   `Zenit.SETTINGS_VALUES` (`hohenheim.proxy.http_port`, `ZENIT__HOHENHEIM__*`);
-  the test lanes point `zenit.settings.root` into the build directory. Mutations are
+  the zenit plugin points each test lane's `zenit.settings.root` into build/. Mutations are
   recorded by zenit's `ActivityLog` (enabled in `settings/default.dry`;
   behaviour verbs via `ActivityLog.withAction`) and routing-relevant writes
   rebuild the proxy via `ProxyReloadHooks` on the global model-hook tier --
