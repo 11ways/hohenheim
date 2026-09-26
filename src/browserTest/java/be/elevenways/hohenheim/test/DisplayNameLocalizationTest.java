@@ -14,7 +14,6 @@ import be.elevenways.protoblast.guard.ScanResult;
 import be.elevenways.protoblast.guard.ScanRoot;
 import be.elevenways.protoblast.guard.SourceRule;
 import be.elevenways.protoblast.guard.SourceRuleScanner;
-import be.elevenways.protoblast.diagnostic.Suppression;
 import be.elevenways.protoblast.guard.Violation;
 import be.elevenways.zenit.common.setting.ContentLocales;
 import be.elevenways.zenit.common.validation.Violations;
@@ -42,8 +41,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * container" inside it. The guard is deliberately wider than that one shape -- it bans
  * the CALL, not just the withArg spelling -- because a display name is equally wrong in a
  * page title, a toast or a flash, and a rule that named only withArg would have to be
- * re-widened at every new call shape. Zero legitimate call sites exist; a genuinely
- * non-user-facing one declares itself with the same-line marker.
+ * re-widened at every new call shape. Zero legitimate call sites exist, and no comment
+ * excuses one.
  */
 class DisplayNameLocalizationTest {
 
@@ -80,7 +79,6 @@ class DisplayNameLocalizationTest {
             .root(ScanRoot.of(common, "common"))
             .extensions("java")
             .commentMode(CommentMode.STRIP_BLOCK_AWARE)
-            .suppression(Suppression.sameLine("display-name-ok"))
             .pattern(NamedPattern.of("display-name-call", CALL, "server"))
             .pattern(NamedPattern.of("display-name-call", CALL, "common"))
             .build();
