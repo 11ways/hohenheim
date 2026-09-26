@@ -1,0 +1,1 @@
+# Presence of this file refuses a runtime Blast.isServer() in common/browser/client code (fold on Blast.IS_TEAVM).
