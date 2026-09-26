@@ -22,11 +22,6 @@ repositories {
     mavenLocal()
 }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_25
-    targetCompatibility = JavaVersion.VERSION_25
-}
-
 // --- Source Sets ---
 sourceSets {
     common {
