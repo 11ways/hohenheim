@@ -20,10 +20,10 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.server.net.OutboundUrlGuard;
+import be.elevenways.zenit.server.net.PinnedUpstreamDial;
 import io.undertow.server.HttpServerExchange;
 
 import java.io.IOException;
-import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
@@ -226,13 +226,10 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
      * Forwards a TENANT-owned site to a named host only after the name's addresses are vetted
      * as public, per request (the verdict is cached briefly in {@link TenantUpstreams}).
      *
-     * AIDEV-NOTE: a cleartext upstream is dialed at the VETTED address itself (the Host
-     * header is forwarded unchanged, the proxy never rewrites it), so a DNS answer that
-     * changes between the check and the dial cannot redirect it. A TLS upstream is dialed by
-     * NAME: Undertow's client resolves the URI host itself and offers no way to connect to a
-     * pinned address while keeping the name for SNI and certificate verification, so a
-     * rebinding answer inside the verdict window remains a residual gap there (reported as a
-     * framework limit, not papered over).
+     * AIDEV-NOTE: every upstream, cleartext or TLS, is dialed at the VETTED address through
+     * zenit's {@link PinnedUpstreamDial}, so a DNS answer that changes between the check and
+     * the dial cannot redirect it; TLS still sends and verifies the configured host name, and
+     * the Host header is forwarded unchanged (the proxy never rewrites it).
      */
     private static final class TenantAddressHandler implements SiteRequestHandler {
 
@@ -273,12 +270,10 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
                     + "forward to a public address");
                 return;
             }
-            URI dial;
+            PinnedUpstreamDial dial;
             try {
-                dial = "https".equalsIgnoreCase(scheme)
-                    ? new URI(scheme, null, host, port, "/", null, null)
-                    : new URI(scheme, null, literalOf(allowed.addresses().get(0)), port, "/", null, null);
-            } catch (URISyntaxException e) {
+                dial = PinnedUpstreamDial.of(new URI(scheme, null, host, port, "/", null, null), allowed);
+            } catch (URISyntaxException | IllegalArgumentException e) {
                 exchange.setStatusCode(502);
                 exchange.getResponseSender().send("Invalid upstream");
                 return;
@@ -286,12 +281,7 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
             if (rewriteLocation) {
                 exchange.putAttachment(SiteDispatcher.REWRITE_LOCATION, Boolean.TRUE);
             }
-            forwarder.forwardTo(new UpstreamTarget(dial, protocol, ignoreCertificates));
-        }
-
-        /** The address as a URI host; the URI constructor brackets an IPv6 literal itself. */
-        private static String literalOf(InetAddress address) {
-            return address.getHostAddress();
+            forwarder.forwardTo(UpstreamTarget.pinned(dial, protocol, ignoreCertificates));
         }
     }
 
