@@ -8,13 +8,14 @@ import java.time.Duration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * A database swap hands back the production controller's host leases before it closes the
- * outgoing database, so the first host operation on the new database costs nothing.
+ * A database swap closes the outgoing database under the production controller's host leases,
+ * and the first host operation on the new database still costs nothing.
  *
- * AIDEV-NOTE: before TestDatabases released them, the first requireFence after a swap
- * found a hold on the CLOSED datasource and spent zenit Leases' 30s storage-heal poll
- * releasing it -- the exact 30s that 15 default-lane tests each paid. The bound below is
- * far above the fast path and far below that poll, so it cannot flake either way.
+ * AIDEV-NOTE: the first requireFence after a swap finds a hold on the CLOSED datasource and
+ * releases it. zenit Leases once read that closed datasource as lost storage and spent its 30s
+ * storage-heal poll there -- the exact 30s that 15 default-lane tests each paid, hidden by a
+ * release-before-close step in TestDatabases. Leases now drops a hold on a closed datasource
+ * at once. The bound below is far above the fast path and far below that poll.
  */
 class DatabaseSwapLeaseReleaseTest {
 
