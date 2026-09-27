@@ -44,6 +44,7 @@ import javax.net.ssl.SSLContext;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
@@ -244,6 +245,83 @@ class UpstreamProtocolTest {
             assertThat(upstreamServerNames).as("step 3: SNI named the upstream host, not the address")
                 .containsExactly(upstream.host());
         }
+    }
+
+    @Test
+    void aTenantUpstreamFallsThroughARefusingAddressAndEveryNetworkJudgesItsOwn() throws Exception {
+        resetDatabase();
+        String upstreamHost = "tenant-plain.test";
+        int first = startPlainUpstream("plain-one", "http://" + upstreamHost + "/landing");
+        com.sun.net.httpserver.HttpServer second = com.sun.net.httpserver.HttpServer.create(
+            new InetSocketAddress("127.0.0.1", 0), 0);
+        second.createContext("/", ex -> {
+            byte[] body = "plain-two".getBytes(StandardCharsets.UTF_8);
+            ex.sendResponseHeaders(200, body.length);
+            ex.getResponseBody().write(body);
+            ex.close();
+        });
+        second.start();
+        try {
+            Row site = setupSite("hohenheim:address", "Tenant Plain", "tenant-plain", Map.of(
+                "forward_host", upstreamHost,
+                "forward_port", 80));
+            addDomain(site, "tenant-plain.front.test", "exact", null, false);
+            int owner = ApiSupport.user("tenant-plain@hohenheim.local");
+            RecordGrants.grant(GrantSubjectType.USER, owner, SiteModel.MODEL_ID, site.get(SiteModel.ID),
+                HohenheimAccess.MANAGE, true);
+            assertThat(TenantUpstreams.publicOnly(site)).as("step 1: the site is tenant-owned").isTrue();
+            proxy = startProxy();
+
+            int refusing;
+            try (ServerSocket closed = new ServerSocket(0)) {
+                refusing = closed.getLocalPort();
+            }
+            try (OutboundFixture upstream = OutboundFixture.route(upstreamHost, refusing, first)) {
+                // 2. The name's first vetted address refuses the connection: the proxy dials the next
+                //    vetted one instead of answering 503.
+                assertThat(upstream.publicAddresses()).as("step 2: the name has two addresses").hasSize(2);
+                assertThat(rawRequest(httpPort(proxy), "tenant-plain.front.test", "/"))
+                    .as("step 2: the second vetted address answered")
+                    .contains("200")
+                    .contains("plain-one");
+
+                // 3. The upstream's redirect names its own host, which the proxy still recognises
+                //    beside the address it dialed: the visitor is sent to the public host.
+                assertThat(rawRequest(httpPort(proxy), "tenant-plain.front.test", "/go"))
+                    .as("step 3: the upstream redirect is rewritten to the public host")
+                    .contains("Location: http://tenant-plain.front.test/landing");
+            }
+
+            // 4. The next fixture routes the same name to another upstream at once: the verdict
+            //    remembered under the first network is not answered under this one.
+            try (OutboundFixture next = OutboundFixture.route(upstreamHost, second.getAddress().getPort())) {
+                assertThat(rawRequest(httpPort(proxy), "tenant-plain.front.test", "/"))
+                    .as("step 4: the new network's own address answered")
+                    .contains("200")
+                    .contains("plain-two");
+            }
+        } finally {
+            second.stop(0);
+        }
+    }
+
+    /** A cleartext upstream answering {@code body}, and a redirect to {@code location} on /go. */
+    private int startPlainUpstream(String body, String location) throws IOException {
+        plainUpstream = com.sun.net.httpserver.HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        plainUpstream.createContext("/", ex -> {
+            if (ex.getRequestURI().getPath().equals("/go")) {
+                ex.getResponseHeaders().add("Location", location);
+                ex.sendResponseHeaders(302, -1);
+                ex.close();
+                return;
+            }
+            byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+            ex.sendResponseHeaders(200, bytes.length);
+            ex.getResponseBody().write(bytes);
+            ex.close();
+        });
+        plainUpstream.start();
+        return plainUpstream.getAddress().getPort();
     }
 
     // -------------------------------------------------------------------

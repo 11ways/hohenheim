@@ -226,10 +226,11 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
      * Forwards a TENANT-owned site to a named host only after the name's addresses are vetted
      * as public, per request (the verdict is cached briefly in {@link TenantUpstreams}).
      *
-     * AIDEV-NOTE: every upstream, cleartext or TLS, is dialed at the VETTED address through
+     * AIDEV-NOTE: every upstream, cleartext or TLS, is dialed at a VETTED address through
      * zenit's {@link PinnedUpstreamDial}, so a DNS answer that changes between the check and
-     * the dial cannot redirect it; TLS still sends and verifies the configured host name, and
-     * the Host header is forwarded unchanged (the proxy never rewrites it).
+     * the dial cannot redirect it; an address that refuses falls through to the next vetted one.
+     * TLS still sends and verifies the configured host name, and the Host header is forwarded
+     * unchanged (the proxy never rewrites it).
      */
     private static final class TenantAddressHandler implements SiteRequestHandler {
 
@@ -263,16 +264,18 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
                 exchange.dispatch(() -> handleRequest(exchange, forwarder));
                 return;
             }
-            OutboundUrlGuard.Verdict verdict = TenantUpstreams.vet(scheme, host);
+            OutboundUrlGuard.Verdict verdict = TenantUpstreams.vet(scheme, host, true);
             if (!(verdict instanceof OutboundUrlGuard.Allowed allowed) || allowed.addresses().isEmpty()) {
                 exchange.setStatusCode(502);
                 exchange.getResponseSender().send("Upstream refused: a tenant-owned site may only "
                     + "forward to a public address");
                 return;
             }
-            PinnedUpstreamDial dial;
+            URI upstream;
+            List<PinnedUpstreamDial> dials;
             try {
-                dial = PinnedUpstreamDial.of(new URI(scheme, null, host, port, "/", null, null), allowed);
+                upstream = new URI(scheme, null, host, port, "/", null, null);
+                dials = PinnedUpstreamDial.allOf(upstream, allowed);
             } catch (URISyntaxException | IllegalArgumentException e) {
                 exchange.setStatusCode(502);
                 exchange.getResponseSender().send("Invalid upstream");
@@ -281,7 +284,7 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
             if (rewriteLocation) {
                 exchange.putAttachment(SiteDispatcher.REWRITE_LOCATION, Boolean.TRUE);
             }
-            forwarder.forwardTo(UpstreamTarget.pinned(dial, protocol, ignoreCertificates));
+            forwarder.forwardTo(UpstreamTarget.pinned(upstream, dials, protocol, ignoreCertificates));
         }
     }
 
