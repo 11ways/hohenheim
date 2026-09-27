@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.server.proxy.auth.ProxyAuthKeys;
+import be.elevenways.zenit.server.http.TrustedProxies;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.HeaderMap;
 import io.undertow.util.HeaderValues;
@@ -116,7 +117,7 @@ final class ForwardingHeaders {
 
         stripOwnCredentials(requestHeaders, entry);
 
-        String sourceIp = exchange.getSourceAddress().getAddress().getHostAddress();
+        String sourceIp = TrustedProxies.socketPeerIp(exchange);
         boolean trustedRemoteProxy = ProxyScheme.isTrustedRemoteProxy(exchange);
         String trustedForwardedFor = trustedRemoteProxy
             ? requestHeaders.getFirst(X_FORWARDED_FOR)

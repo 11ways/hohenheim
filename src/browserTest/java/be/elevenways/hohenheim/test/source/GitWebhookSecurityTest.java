@@ -17,6 +17,7 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.security.SecureTokens;
+import be.elevenways.zenit.server.http.RateLimitMiddleware;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -76,7 +77,7 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
 
     @BeforeAll
     static void initSitesAndProxy() throws Exception {
-        GitWebhookHandler.limiter().clear();
+        RateLimitMiddleware.limiter().clear();
         upstreamRepo = Files.createTempDirectory("hohenheim-hook-upstream");
         gitIn(upstreamRepo, "init", "-q", "-b", "main");
         gitIn(upstreamRepo, "config", "user.email", "test@example.com");
@@ -340,7 +341,7 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
      */
     @Test
     void anOversizedBodyIsDrainedSoItsSenderReadsThe413() throws Exception {
-        GitWebhookHandler.limiter().clear();
+        RateLimitMiddleware.limiter().clear();
         byte[] body = new byte[2 * 1024 * 1024 + 256 * 1024];
         Arrays.fill(body, (byte) 'b');
         for (int round = 1; round <= 5; round++) {

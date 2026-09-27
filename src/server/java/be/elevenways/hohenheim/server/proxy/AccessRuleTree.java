@@ -14,6 +14,7 @@ import be.elevenways.protoblast.common.cache.Cache;
 import be.elevenways.zenit.common.net.IpRanges;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.session.SessionStore;
+import be.elevenways.zenit.server.http.TrustedProxies;
 import be.elevenways.zenit.server.security.SecureTokens;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.AttachmentKey;
@@ -111,9 +112,16 @@ public final class AccessRuleTree {
         return this.ownsPersistentCookie;
     }
 
-    /** Evaluate the tree for one request; see the class docs for the semantics. */
-    public @NonNull Result evaluate(@NonNull HttpServerExchange exchange, @Nullable String clientIp) {
-        return this.root.evaluate(new Evaluation(exchange, clientIp, IpRanges.parseLiteral(clientIp)));
+    /**
+     * Evaluate the tree for one request; see the class docs for the semantics.
+     *
+     * AIDEV-NOTE: the client is the one the dispatcher vouched for on the exchange
+     * ({@link TrustedProxies#clientIpOf}), the same client every address leaf and the
+     * verification budget key on; never a second argument that could disagree with it.
+     */
+    public @NonNull Result evaluate(@NonNull HttpServerExchange exchange) {
+        return this.root.evaluate(new Evaluation(exchange,
+            IpRanges.parseLiteral(TrustedProxies.clientIpOf(exchange))));
     }
 
     /**
@@ -296,8 +304,7 @@ public final class AccessRuleTree {
     }
 
     /** Per-request state shared by every node of one evaluation. */
-    private record Evaluation(@NonNull HttpServerExchange exchange, @Nullable String clientIp,
-                              byte @Nullable [] clientAddress) {
+    private record Evaluation(@NonNull HttpServerExchange exchange, byte @Nullable [] clientAddress) {
     }
 
     private sealed interface Node
@@ -446,7 +453,7 @@ public final class AccessRuleTree {
             if (refused != null && refused.contains(key)) {
                 return new Result(Verdict.PENDING, this);
             }
-            Long retryAfter = ProxyAuthThrottle.spendFor(evaluation.clientIp(), this.siteId);
+            Long retryAfter = ProxyAuthThrottle.spendFor(exchange, this.siteId);
             if (retryAfter != null) {
                 exchange.putAttachment(THROTTLED, retryAfter);
                 return new Result(Verdict.PENDING, this);

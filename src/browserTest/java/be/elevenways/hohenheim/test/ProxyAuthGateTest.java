@@ -9,11 +9,11 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.hohenheim.server.proxy.auth.ProxyAuthThrottle;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.setting.ServerSettings;
+import be.elevenways.zenit.server.http.RateLimitMiddleware;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -56,7 +56,7 @@ class ProxyAuthGateTest {
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
         Zenit.getHawkeye().setClientScriptLocation("/cms.js");
-        ProxyAuthThrottle.clearForTests();
+        RateLimitMiddleware.limiter().clear();
     }
 
     @AfterAll
