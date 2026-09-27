@@ -73,10 +73,12 @@ final class UpstreamProxyClient implements ProxyClient {
         // AIDEV-NOTE: Undertow's https/h2 providers force JDK endpoint identification
         // (the SAN hostname check) unless the caller overrides the option -- so
         // ignore_certificates must disable it too, or a trust-all context still
-        // rejects certs whose SAN doesn't match the dial host.
+        // rejects certs whose SAN doesn't match the dial host. The target's own dial options
+        // (a pinned dial's TLS host name) always ride along.
         OptionMap connectOptions = upstreamTarget.ignoreCertificates()
-            ? OptionMap.create(UndertowOptions.ENDPOINT_IDENTIFICATION_ALGORITHM, "")
-            : OptionMap.EMPTY;
+            ? OptionMap.builder().addAll(upstreamTarget.dialOptions())
+                .set(UndertowOptions.ENDPOINT_IDENTIFICATION_ALGORITHM, "").getMap()
+            : upstreamTarget.dialOptions();
 
         client.connect(new ClientCallback<ClientConnection>() {
             @Override

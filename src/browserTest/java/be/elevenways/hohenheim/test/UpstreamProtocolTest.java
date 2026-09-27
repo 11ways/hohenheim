@@ -1,11 +1,18 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
 import be.elevenways.hohenheim.server.tls.UpstreamTrust;
+import be.elevenways.hohenheim.server.upstream.TenantUpstreams;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.test.support.OutboundFixture;
 import com.sun.net.httpserver.HttpsConfigurator;
+import com.sun.net.httpserver.HttpsExchange;
 import com.sun.net.httpserver.HttpsServer;
 import io.undertow.Undertow;
 import io.undertow.UndertowOptions;
@@ -29,7 +36,10 @@ import org.xnio.Options;
 import org.xnio.Xnio;
 import org.xnio.XnioWorker;
 
+import javax.net.ssl.ExtendedSSLSession;
 import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SNIHostName;
+import javax.net.ssl.SNIServerName;
 import javax.net.ssl.SSLContext;
 import java.io.IOException;
 import java.math.BigInteger;
@@ -42,8 +52,10 @@ import java.security.KeyStore;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -62,6 +74,8 @@ class UpstreamProtocolTest {
     private HttpsServer httpsUpstream;
     private Undertow undertowUpstream;
     private com.sun.net.httpserver.HttpServer plainUpstream;
+    /** The SNI names the HTTPS upstream stub was offered, one entry per name per exchange. */
+    private final List<String> upstreamServerNames = new CopyOnWriteArrayList<>();
 
     @BeforeAll
     static void initRuntime() throws Exception {
@@ -108,6 +122,11 @@ class UpstreamProtocolTest {
         httpsUpstream = HttpsServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         httpsUpstream.setHttpsConfigurator(new HttpsConfigurator(context));
         httpsUpstream.createContext("/", ex -> {
+            if (ex instanceof HttpsExchange tls && tls.getSSLSession() instanceof ExtendedSSLSession session) {
+                for (SNIServerName name : session.getRequestedServerNames()) {
+                    upstreamServerNames.add(((SNIHostName) name).getAsciiName());
+                }
+            }
             byte[] body = "tls-upstream".getBytes(StandardCharsets.UTF_8);
             ex.sendResponseHeaders(200, body.length);
             ex.getResponseBody().write(body);
@@ -189,6 +208,42 @@ class UpstreamProtocolTest {
         assertThat(rawRequest(httpPort(proxy), "ignored-tls.test", "/"))
             .contains("200")
             .contains("tls-upstream");
+    }
+
+    @Test
+    void aTenantHttpsUpstreamIsDialedAtItsVettedAddressUnderItsOwnName() throws Exception {
+        resetDatabase();
+        String upstreamHost = "tenant-upstream.test";
+        KeyPair keyPair = generateKeyPair();
+        X509Certificate cert = selfSignedCert(keyPair, upstreamHost, false);
+        int port = startHttpsUpstream(keyPair, cert);
+        SiteDispatcher.overrideTrustedUpstreamSslContextForTests(UpstreamTrust.contextTrusting(cert));
+
+        // 1. A tenant-owned site forwards over TLS to a NAME, so every request is vetted.
+        Row site = setupSite("hohenheim:address", "Tenant TLS", "tenant-tls", Map.of(
+            "forward_scheme", "https",
+            "forward_host", upstreamHost,
+            "forward_port", 443));
+        addDomain(site, "tenant-tls.test", "exact", null, false);
+        int owner = ApiSupport.user("tenant-tls@hohenheim.local");
+        RecordGrants.grant(GrantSubjectType.USER, owner, SiteModel.MODEL_ID, site.get(SiteModel.ID),
+            HohenheimAccess.MANAGE, true);
+        assertThat(TenantUpstreams.publicOnly(site)).as("step 1: the site is tenant-owned").isTrue();
+
+        proxy = startProxy();
+        try (OutboundFixture upstream = OutboundFixture.route(upstreamHost, port)) {
+            // 2. The name exists only in zenit's outbound network: the system resolver knows no such
+            //    host, so the answer can only come from dialing the address the guard vetted.
+            assertThat(rawRequest(httpPort(proxy), "tenant-tls.test", "/"))
+                .as("step 2: the proxy reached the upstream through the vetted address")
+                .contains("200")
+                .contains("tls-upstream");
+
+            // 3. TLS still named the configured host: SNI carried it and the certificate, which names
+            //    only that host, was accepted.
+            assertThat(upstreamServerNames).as("step 3: SNI named the upstream host, not the address")
+                .containsExactly(upstream.host());
+        }
     }
 
     // -------------------------------------------------------------------
