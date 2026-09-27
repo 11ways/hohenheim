@@ -13,7 +13,6 @@ import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.model.SoftDeleteWrites;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.dns.DnsNames;
@@ -261,9 +260,9 @@ public final class TenantWrites {
             }
             if (isTenantOriginated()) {
                 checkSiteWrite(row);
-            } else if (!SoftDeleteWrites.onlyTrashes(context)) {
-                // The baseline is a SHAPE rule: an upstream an older release accepted must
-                // not make the site undeletable.
+            } else {
+                // The baseline is a SHAPE rule over the written settings only, so an upstream an
+                // older release accepted never makes the site undeletable.
                 checkProxyUpstream(row);
             }
         });

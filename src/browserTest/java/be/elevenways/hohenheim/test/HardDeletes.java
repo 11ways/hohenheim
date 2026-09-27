@@ -41,14 +41,15 @@ public final class HardDeletes {
         return byId(model, model.getPrimaryKeyValue(row));
     }
 
-    /** @return how many rows matching {@code criteria}, trashed included, were removed */
+    /**
+     * @return how many rows matching {@code criteria}, trashed included, were removed; one hard delete whose
+     *         remove hooks and activity see every doomed row
+     */
     public static int where(@NonNull Model model, @NonNull Criteria criteria) {
-        int removed = 0;
-        for (Row row : model.find().withTrashed().where(criteria).all()) {
-            if (row(model, row)) {
-                removed++;
-            }
+        SoftDeleteBehaviour softDelete = model.getSchema().getBehaviour(SoftDeleteBehaviour.class);
+        if (softDelete == null) {
+            return model.find().where(criteria).delete();
         }
-        return removed;
+        return softDelete.forceDeleteWhere(model, criteria);
     }
 }

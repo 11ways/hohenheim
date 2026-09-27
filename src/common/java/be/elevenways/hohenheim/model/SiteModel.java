@@ -248,8 +248,9 @@ public class SiteModel extends Model {
      */
     private static void refuseInstanceLinkMismatch(@NonNull SaveToDatasource context) {
         Row row = context.getRow();
-        // A shape rule: a site an older release accepted in this shape must stay deletable.
-        if (row == null || SoftDeleteWrites.onlyTrashes(context)) return;
+        // A shape rule judges only a write that moves its columns: a site an older release
+        // accepted in this shape stays deletable (a soft delete writes deleted_at alone).
+        if (row == null || !(row.has(UPSTREAM_KIND.getName()) || row.has(INSTANCE_ID.getName()))) return;
         Object kind = effective(row, UPSTREAM_KIND);
         if (kind == null) return;
         UpstreamKindInfo info = UpstreamKinds.REGISTRY.get(Identifier.tryParse(kind.toString()));
@@ -272,7 +273,9 @@ public class SiteModel extends Model {
      */
     private static void refuseHttpGatesOnPassthrough(@NonNull SaveToDatasource context) {
         Row row = context.getRow();
-        if (row == null || SoftDeleteWrites.onlyTrashes(context)
+        // Judged only when the write moves a column the rule relates, like the rule above.
+        if (row == null || !(row.has(UPSTREAM_KIND.getName()) || row.has(AUTH_PROVIDER_ID.getName())
+                || row.has(ACCESS_LIST_ID.getName()))
                 || !UPSTREAM_TLS_PASSTHROUGH.equals(effective(row, UPSTREAM_KIND))) return;
         Object authProvider = effective(row, AUTH_PROVIDER_ID);
         if (authProvider != null) {

@@ -157,7 +157,7 @@ public final class ProjectGuards {
             // into another environment. Ownership moves through grants without touching the
             // row, so a write carrying its UNCHANGED environment cannot cause the drift this
             // refuses; judging it anyway made a drifted record impossible to delete (the soft
-            // delete saves the whole row), to restore, or to edit at all.
+            // delete used to save the whole row), to restore, or to edit at all.
             Row stored = StoredRows.of(Models.get(InstanceModel.class), row);
             if (stored != null && environmentId.equals(stored.get(InstanceModel.ENVIRONMENT_ID))) {
                 return;

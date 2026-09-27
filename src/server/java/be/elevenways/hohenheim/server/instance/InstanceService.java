@@ -26,7 +26,6 @@ import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.WorkloadAttribution;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -642,32 +641,22 @@ public final class InstanceService {
      * @return false when the record is missing or already trashed (nothing written)
      */
     private boolean trash(int instanceId) {
-        Row row = Models.get(InstanceModel.class).findById(instanceId);
-        if (row == null) {
-            return false;
-        }
-        // AIDEV-NOTE: this stamps the behaviour's own deleted_at field through save() instead
-        // of calling InstanceModel.delete(row), deliberately. SoftDeleteBehaviour records every
-        // soft delete as (delete, "soft-delete") and its inner ActivityLog.withAction REPLACES
-        // an enclosing one, so a destroy would lose its "destroy" detail -- the one fact that
-        // tells an operator this was an irreversible teardown and not a record edit. The save
-        // is what the behaviour's own delete does (same field, same hooks: the quota release,
-        // grant cleanup and claim releases ride the deleted_at transition either way), minus
-        // its wrapping transaction, which a single-row save does not need.
-        row.set(InstanceModel.SOFT_DELETE.deletedAtField(), Now.instant());
-        // The deleted_at write is the CONTINUATION of a destroy whose capability gate ran
-        // at the funnel; TenantWrites' instance rule would otherwise read it as a tenant
-        // authoring a frozen column (see inAuthorizedOperation's contract).
+        // The soft delete is the behaviour's own: it writes deleted_at alone (the quota release,
+        // grant cleanup and claim releases ride that transition), and the destroy verb wrapped
+        // around it is what the activity log records, since the behaviour's own verb yields to it.
+        // The write is the CONTINUATION of a destroy whose capability gate ran at the funnel;
+        // TenantWrites' instance rule would otherwise read it as a tenant authoring a frozen
+        // column (see inAuthorizedOperation's contract).
         //
-        // This save is the ONE hook-firing write in the whole teardown, so the withAction
-        // rename belongs around it rather than around the caller's call: the CMS row
-        // action used to own that wrapper, which left every OTHER destroy caller (the
-        // release engine, preview expiry, database teardown) recording a bare "update"
-        // for an irreversible teardown.
+        // This delete is the ONE hook-firing write in the whole teardown, so the verb belongs
+        // around it rather than around the caller's call: the CMS row action used to own that
+        // wrapper, which left every OTHER destroy caller (the release engine, preview expiry,
+        // database teardown) recording a bare "update" for an irreversible teardown.
+        boolean[] trashed = {false};
         ActivityLog.withAction(ActivityLog.ACTION_DELETE, ACTIVITY_DESTROY_DETAIL,
             () -> TenantWrites.inAuthorizedOperation(
-                () -> Models.get(InstanceModel.class).save(row)));
-        return true;
+                () -> trashed[0] = Models.get(InstanceModel.class).delete(instanceId)));
+        return trashed[0];
     }
 
     // -- the fence discipline -------------------------------------------------
