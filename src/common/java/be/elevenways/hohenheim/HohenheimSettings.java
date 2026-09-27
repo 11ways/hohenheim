@@ -8,6 +8,7 @@ import be.elevenways.zenit.common.setting.SettingsRule;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.validation.PathKind;
 import be.elevenways.hohenheim.net.IpLiterals;
+import be.elevenways.hohenheim.net.LegacyIpSpellings;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.hohenheim.net.Hostnames;
 
@@ -96,10 +97,13 @@ public class HohenheimSettings {
             }
             ArrayList<String> result = new ArrayList<>();
             for (Object item : list) {
-                if (!(item instanceof String value) || !IpLiterals.isNetwork(value)) {
+                // A spelling only the retired lax parser read (010.0.0.1) is stored in production
+                // files; it coerces to the address it always meant.
+                String value = item instanceof String text ? LegacyIpSpellings.canonicalZonelessNetwork(text) : null;
+                if (value == null || !IpLiterals.isNetwork(value)) {
                     return SettingDefinition.CoercionResult.rejected();
                 }
-                result.add(value.trim());
+                result.add(value);
             }
             return SettingDefinition.CoercionResult.accepted(List.copyOf(result));
         }
@@ -682,7 +686,27 @@ public class HohenheimSettings {
                 + "or manually; add your own operator addresses as separate entries. Hostnames are resolved "
                 + "in the background (never on a request), keep their last resolved addresses "
                 + "on failure, and resolved IPv6 addresses protect their whole /64")
+            .coercer(Security::coerceNeverBan)
             .build();
+
+        /**
+         * A string list whose address entries in a spelling only the retired lax parser read (010.0.0.1)
+         * coerce to the address they always meant; hostnames and everything else stay as written.
+         */
+        private static SettingDefinition.CoercionResult<List<String>> coerceNeverBan(Object raw) {
+            if (!(raw instanceof List<?> list)) {
+                return SettingDefinition.CoercionResult.rejected();
+            }
+            ArrayList<String> result = new ArrayList<>();
+            for (Object item : list) {
+                if (!(item instanceof String entry)) {
+                    return SettingDefinition.CoercionResult.rejected();
+                }
+                String canonical = entry.indexOf('%') < 0 ? LegacyIpSpellings.canonicalNetwork(entry) : null;
+                result.add(canonical != null ? canonical : entry);
+            }
+            return SettingDefinition.CoercionResult.accepted(List.copyOf(result));
+        }
 
         public static final SettingDefinition<Boolean> NFTABLES_ENABLED = GROUP.buildSetting("nftables_enabled", Boolean.class)
             .defaultValue(false)

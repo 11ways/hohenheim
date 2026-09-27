@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.server.security;
 
+import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.zenit.common.net.IpRanges;
+import be.elevenways.zenit.common.setting.SettingDefinition;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -58,6 +61,7 @@ class IpVocabularyTest {
         assertThat(IpLiterals.parse("fe80::1%eth0")).as("step 1: no zone ids").isNull();
         assertThat(IpLiterals.parse("::ffff:203.0.113.9")).as("step 1: mapped folds").hasSize(4);
         assertThat(IpLiterals.parse("1.2.3")).as("step 1: no shorthand").isNull();
+        assertThat(IpLiterals.parse("010.0.0.1")).as("step 1: no leading-zero octet").isNull();
 
         // 2. Allowlist matching over zenit's CIDR math.
         List<String> allow = List.of("198.51.100.192/26", "2001:db8::/32", "home.example");
@@ -69,11 +73,11 @@ class IpVocabularyTest {
             .as("step 2: inside the v6 CIDR").isTrue();
 
         // 3. RFC 5952 text, the longest zero run compressed, the first on a tie.
-        assertThat(IpLiterals.format(IpLiterals.parse("2001:0db8:0:0:1:0:0:1")))
+        assertThat(IpRanges.format(IpLiterals.parse("2001:0db8:0:0:1:0:0:1")))
             .as("step 3: first of two equal runs").isEqualTo("2001:db8::1:0:0:1");
-        assertThat(IpLiterals.format(IpLiterals.parse("2001:db8:0:1:1:1:1:1")))
+        assertThat(IpRanges.format(IpLiterals.parse("2001:db8:0:1:1:1:1:1")))
             .as("step 3: a single zero group is not compressed").isEqualTo("2001:db8:0:1:1:1:1:1");
-        assertThat(IpLiterals.format(IpLiterals.parse("::1"))).as("step 3: loopback").isEqualTo("::1");
+        assertThat(IpRanges.format(IpLiterals.parse("::1"))).as("step 3: loopback").isEqualTo("::1");
 
         // 4. The zone-file column checks refuse every non-canonical spelling.
         assertThat(isIpv4("10.0.0.1"))
@@ -94,11 +98,22 @@ class IpVocabularyTest {
     void theTrustedSourceSyntaxKeepsAcceptingWhatProductionStored() {
         // 1. Every shape the retired IpAddressSyntax accepted still coerces: a stored
         //    trusted-source list must survive the upgrade.
+        SettingDefinition<List<String>> trusted = HohenheimSettings.Proxy.PROXY_PROTOCOL_TRUSTED_SOURCES;
         for (String accepted : List.of("203.0.113.9", " 203.0.113.0/24 ", "10.0.0.0/8",
                 "0.0.0.0/0", "2001:db8::/32", "::1", "::/0", "::ffff:10.0.0.0/104",
                 "2001:db8::1.2.3.4", "1.2.3.4 /32", "10.0.0.0/+8", "010.0.0.1")) {
-            assertThat(isNetwork(accepted)).as("step 1: '" + accepted + "' is accepted").isTrue();
+            assertThat(trusted.coerce(List.of(accepted)).accepted())
+                .as("step 1: '" + accepted + "' is accepted").isTrue();
         }
+        // A spelling zenit's parser now refuses coerces to the address it always meant.
+        assertThat(isNetwork("010.0.0.1")).as("step 1: the strict syntax refuses a leading zero").isFalse();
+        assertThat(trusted.coerce(List.of("010.0.0.1", "010.0.0.0/8")).value())
+            .as("step 1: the stored spelling becomes the decimal address it was read as")
+            .containsExactly("10.0.0.1", "10.0.0.0/8");
+        assertThat(HohenheimSettings.Security.NEVER_BAN.coerce(List.of("010.0.0.1", "home.example", "fe80::1%eth0"))
+                .value())
+            .as("step 1: never_ban keeps protecting a stored leading-zero entry; the rest stays as written")
+            .containsExactly("10.0.0.1", "home.example", "fe80::1%eth0");
 
         // 2. Hostnames, zone ids, shorthand and out-of-family prefixes are still refused.
         for (String refused : new String[] {"example.com", "fe80::1%eth0", "1.2.3", "1.2.3.4/33",
