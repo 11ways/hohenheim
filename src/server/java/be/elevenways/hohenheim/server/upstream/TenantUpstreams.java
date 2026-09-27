@@ -2,16 +2,14 @@ package be.elevenways.hohenheim.server.upstream;
 
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.net.AddressScope;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.net.InetAddress;
+import java.time.Duration;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * THE dial-time reach of a tenant-owned site: only the public internet, never a unix socket,
@@ -34,15 +32,24 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class TenantUpstreams {
 
     /** How long one host's verdict is reused before the name is resolved and judged again. */
-    private static final long VERDICT_TTL_MILLIS = 30_000;
+    private static final Duration VERDICT_TTL = Duration.ofSeconds(30);
 
-    /** Bound on remembered verdicts; past it a lookup is simply not cached. */
-    private static final int VERDICT_CACHE_MAX = 4096;
+    /** Bound on remembered verdicts per guard. */
+    private static final int VERDICT_MEMORY = 4096;
 
-    private static final ConcurrentHashMap<String, CachedVerdict> VERDICTS = new ConcurrentHashMap<>();
+    /**
+     * The reach of a tenant-owned site: public addresses only.
+     *
+     * AIDEV-NOTE: the guards remember verdicts per installed OutboundNetwork (zenit's
+     * {@link OutboundUrlGuard#remembering}), never in a map of their own: a test's OutboundFixture
+     * routing a name another fixture routed a moment ago must get its own address.
+     */
+    private static final OutboundUrlGuard PUBLIC_REACH =
+        OutboundUrlGuard.PUBLIC_INTERNET.remembering(VERDICT_TTL, VERDICT_MEMORY);
 
-    private record CachedVerdict(OutboundUrlGuard.@NonNull Verdict verdict, long judgedAt) {
-    }
+    /** The reach of an operator's (or operator-trusted) site: every address, still resolved once and pinned. */
+    private static final OutboundUrlGuard ANY_REACH =
+        OutboundUrlGuard.ANY_ADDRESS.remembering(VERDICT_TTL, VERDICT_MEMORY);
 
     private TenantUpstreams() {}
 
@@ -75,24 +82,17 @@ public final class TenantUpstreams {
     }
 
     /**
-     * Judge one upstream a tenant-owned site would dial, resolving a name at most once per
-     * {@link #VERDICT_TTL_MILLIS}. May block on DNS: call it off the I/O thread.
+     * Judge one upstream a site would dial, resolving a name at most once per {@link #VERDICT_TTL}.
+     * May block on DNS: call it off the I/O thread.
      *
+     * @param publicOnly {@link #publicOnly} of the site: public addresses only, else any address
      * @return the vetted addresses, or the refusal
      */
-    public static OutboundUrlGuard.@NonNull Verdict vet(@NonNull String scheme, @NonNull String host) {
+    public static OutboundUrlGuard.@NonNull Verdict vet(@NonNull String scheme, @NonNull String host,
+                                                        boolean publicOnly) {
         String url = scheme + "://" + (host.indexOf(':') >= 0 && !host.startsWith("[")
             ? "[" + host + "]" : host);
-        long now = Now.millis();
-        CachedVerdict cached = VERDICTS.get(url);
-        if (cached != null && now - cached.judgedAt() < VERDICT_TTL_MILLIS) {
-            return cached.verdict();
-        }
-        OutboundUrlGuard.Verdict verdict = OutboundUrlGuard.PUBLIC_INTERNET.check(url);
-        if (VERDICTS.size() < VERDICT_CACHE_MAX || cached != null) {
-            VERDICTS.put(url, new CachedVerdict(verdict, now));
-        }
-        return verdict;
+        return (publicOnly ? PUBLIC_REACH : ANY_REACH).check(url);
     }
 
     /**
@@ -103,10 +103,5 @@ public final class TenantUpstreams {
     public static @Nullable Boolean literalIsPublic(@Nullable String host) {
         AddressScope scope = AddressScope.ofLiteral(host);
         return scope == null ? null : scope.isPublic();
-    }
-
-    /** Whether one resolved address may be dialed for a tenant-owned site. */
-    public static boolean isPublic(@NonNull InetAddress address) {
-        return AddressScope.of(address.getAddress()).isPublic();
     }
 }
