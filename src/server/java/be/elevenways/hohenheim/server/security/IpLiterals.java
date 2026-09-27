@@ -13,10 +13,9 @@ import java.util.List;
  * resolution anywhere.
  *
  * AIDEV-NOTE: the parsing and the CIDR math are zenit's ({@link IpRanges#parseLiteral},
- * {@link IpRanges.Range}); this class only adds what bans need on top. Two strictness rules are
- * kept from the parser this replaced, because untrusted "ip" strings reach the ban paths: the
- * value is trimmed, and a zone id ({@code fe80::1%eth0}) is REFUSED rather than stripped. One
- * rule changed on purpose: an IPv4-mapped literal ({@code ::ffff:203.0.113.5}) now folds to its
+ * {@link IpRanges.Range}); this class only adds what bans need on top: the value is trimmed,
+ * because untrusted "ip" strings reach the ban paths. zenit's parser refuses a zone id
+ * ({@code fe80::1%eth0}) and a leading-zero octet itself. One rule changed on purpose: an IPv4-mapped literal ({@code ::ffff:203.0.113.5}) now folds to its
  * IPv4 address, where it used to key as the IPv6 network {@code ::/64} and be refused as
  * loopback, so a mapped client is banned as the IPv4 actor it is.
  */
@@ -42,10 +41,7 @@ public final class IpLiterals {
             return null;
         }
         String trimmed = value.trim();
-        if (trimmed.isEmpty() || trimmed.indexOf('%') >= 0) {
-            return null;
-        }
-        return IpRanges.parseLiteral(trimmed);
+        return trimmed.isEmpty() ? null : IpRanges.parseLiteral(trimmed);
     }
 
     /** The IPv6 actor identity: the whole /64 network a single actor controls. */
@@ -64,15 +60,9 @@ public final class IpLiterals {
             return null;
         }
         if (bytes.length == 4) {
-            return formatV4(bytes);
+            return IpRanges.format(bytes);
         }
         return formatV6Subnet(bytes);
-    }
-
-    /** Canonical dotted-quad text of 4 address bytes. */
-    public static @NonNull String formatV4(byte @NonNull [] bytes) {
-        return (bytes[0] & 0xFF) + "." + (bytes[1] & 0xFF) + "."
-            + (bytes[2] & 0xFF) + "." + (bytes[3] & 0xFF);
     }
 
     /**
@@ -81,7 +71,7 @@ public final class IpLiterals {
      * so the trailing {@code ::} is always valid).
      *
      * AIDEV-NOTE: this spelling is the STORED key of every v6 ban row, so it must never
-     * change -- it is deliberately not the RFC 5952 form {@link #format} produces (which would
+     * change -- it is deliberately not the RFC 5952 form {@link IpRanges#format} produces (which would
      * compress an inner zero run differently, e.g. {@code 2001:0:0:1::/64}).
      */
     public static @NonNull String formatV6Subnet(byte @NonNull [] bytes) {
@@ -103,53 +93,9 @@ public final class IpLiterals {
         return out.append("::/").append(V6_SUBNET_PREFIX).toString();
     }
 
-    /**
-     * The canonical text of an address: dotted quad for IPv4, RFC 5952 for IPv6 (lowercase,
-     * unpadded groups, the longest run of two or more zero groups compressed, the first on a
-     * tie) -- the spelling nft and Incus render back, which a read-back comparison needs.
-     */
-    public static @NonNull String format(byte @NonNull [] bytes) {
-        if (bytes.length == 4) {
-            return formatV4(bytes);
-        }
-        int[] groups = new int[8];
-        for (int i = 0; i < 8; i++) {
-            groups[i] = ((bytes[i * 2] & 0xFF) << 8) | (bytes[i * 2 + 1] & 0xFF);
-        }
-        int bestStart = -1;
-        int bestLength = 1;
-        for (int i = 0; i < 8; ) {
-            if (groups[i] != 0) {
-                i++;
-                continue;
-            }
-            int start = i;
-            while (i < 8 && groups[i] == 0) {
-                i++;
-            }
-            if (i - start > bestLength) {
-                bestStart = start;
-                bestLength = i - start;
-            }
-        }
-        StringBuilder out = new StringBuilder();
-        for (int i = 0; i < 8; i++) {
-            if (i == bestStart) {
-                out.append("::");
-                i += bestLength - 1;
-                continue;
-            }
-            if (out.length() > 0 && out.charAt(out.length() - 1) != ':') {
-                out.append(':');
-            }
-            out.append(Integer.toHexString(groups[i]));
-        }
-        return out.toString();
-    }
-
-    /** The {@code <address>/<prefix>} text of a range, in the {@link #format} spelling. */
+    /** The {@code <address>/<prefix>} text of a range, in the {@link IpRanges#format} spelling. */
     public static @NonNull String cidr(IpRanges.@NonNull Range range) {
-        return format(range.network()) + "/" + range.prefixLength();
+        return IpRanges.format(range.network()) + "/" + range.prefixLength();
     }
 
     /**

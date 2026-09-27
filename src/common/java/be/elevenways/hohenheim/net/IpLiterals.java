@@ -8,9 +8,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * DNS can serve verbatim, never a hostname; TeaVM-safe because the parsing is zenit's common
  * {@link IpRanges}.
  *
- * AIDEV-NOTE: stricter than {@link IpRanges#parseLiteral} on purpose, and only in SPELLING: a
- * zone file carries the canonical literal, so an IPv4 octet with a leading zero, an IPv6 zone
- * index and an embedded dotted quad are refused here even though the parser reads them.
+ * AIDEV-NOTE: stricter than {@link IpRanges#parseLiteral} in one SPELLING only: a zone file
+ * carries the canonical literal, so an embedded dotted quad is refused here even though the
+ * parser reads it. A leading-zero octet and a zone index the parser refuses itself.
  */
 public final class IpLiterals {
 
@@ -23,9 +23,7 @@ public final class IpLiterals {
             return false;
         }
         byte[] bytes = IpRanges.parseLiteral(value);
-        // The canonical round trip is what refuses a leading-zero octet ("010.0.0.1").
-        return bytes != null && bytes.length == 4 && value.equals((bytes[0] & 0xFF) + "."
-            + (bytes[1] & 0xFF) + "." + (bytes[2] & 0xFF) + "." + (bytes[3] & 0xFF));
+        return bytes != null && bytes.length == 4;
     }
 
     /**
@@ -34,8 +32,7 @@ public final class IpLiterals {
      * columns hold canonical literals a zone file can carry.
      */
     public static boolean isIpv6(@Nullable String value) {
-        if (value == null || value.indexOf(':') < 0 || value.indexOf('%') >= 0
-                || value.indexOf('.') >= 0) {
+        if (value == null || value.indexOf(':') < 0 || value.indexOf('.') >= 0) {
             return false;
         }
         // Not a length check: an all-hex IPv4-mapped spelling folds to 4 bytes and is still a
@@ -50,9 +47,10 @@ public final class IpLiterals {
      * AIDEV-NOTE: the parsing is zenit's {@link IpRanges#parseLiteral}; the prefix bound is
      * read off the SPELLING's family (128 for anything with a colon), exactly as the parser
      * this replaced did, because a stored value it accepted must keep coercing after an
-     * upgrade. An IPv4-mapped entry with a prefix over 32 is therefore still ACCEPTED here
-     * although the listener's matcher, which bounds the prefix by the folded 4 bytes,
-     * ignores it as malformed.
+     * upgrade (a leading-zero spelling the strict parser refuses is rewritten first, by
+     * {@link LegacyIpSpellings}). An IPv4-mapped entry with a prefix over 32 is therefore
+     * still ACCEPTED here although the listener's matcher, which bounds the prefix by the
+     * folded 4 bytes, ignores it as malformed.
      */
     public static boolean isNetwork(@Nullable String value) {
         if (value == null || value.isBlank()) {
@@ -61,7 +59,7 @@ public final class IpLiterals {
         String trimmed = value.trim();
         int slash = trimmed.indexOf('/');
         String address = (slash < 0 ? trimmed : trimmed.substring(0, slash)).trim();
-        if (address.indexOf('%') >= 0 || IpRanges.parseLiteral(address) == null) {
+        if (IpRanges.parseLiteral(address) == null) {
             return false;
         }
         if (slash < 0) {

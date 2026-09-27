@@ -104,9 +104,9 @@ public final class TenantNetworkRanges {
         if (literal == null || literal.isBlank()) {
             return null;
         }
-        // IpRanges drops the zone itself: it is a local interface selector, never part of the
-        // address a rule matches on. The parse is DNS-free, so getByAddress never resolves.
-        byte[] bytes = IpRanges.parseLiteral(literal.trim());
+        // The zone is a local interface selector, never part of the address a rule matches on:
+        // the scoped parse drops it. The parse is DNS-free, so getByAddress never resolves.
+        byte[] bytes = IpRanges.parseScopedLiteral(literal.trim());
         if (bytes == null) {
             return null;
         }
