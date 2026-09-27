@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SoftDeleteWrites;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -66,10 +65,9 @@ public final class OwnedInstances {
             // same generatedOnly() declaration -- this hook is the authoritative gate but
             // deliberately not a second copy of the rule.
             InstanceKinds.requireAuthorable(row.get(InstanceModel.KIND));
-            // A delete of a record whose host has since changed runtime must stay possible.
-            if (!SoftDeleteWrites.onlyTrashes(context)) {
-                requireHostRuntime(row);
-            }
+            // A soft delete writes neither kind nor host, so a record whose host has since
+            // changed runtime stays deletable.
+            requireHostRuntime(row);
         });
     }
 
