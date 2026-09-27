@@ -172,10 +172,11 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
      */
     @Test
     void generatedRowsAreReadOnlyEverywhere() throws Exception {
-        // The detail form renders read-only (no optimistic-concurrency token = no form).
+        // The detail form renders read-only (no optimistic-concurrency token = no form). The
+        // field NAME rides every record page's hydration vars, so the INPUT is what is absent.
         String detail = adminGet("/admin/instances/" + generatedDbInstanceId).body();
         assertThat(detail).as("no editable form is offered on a generated row")
-            .doesNotContain("cms__snapshot");
+            .doesNotContain("name=\"cms__snapshot\"");
 
         // A forged direct update is refused, not silently accepted.
         HttpResponse<String> update = httpPostForm(
