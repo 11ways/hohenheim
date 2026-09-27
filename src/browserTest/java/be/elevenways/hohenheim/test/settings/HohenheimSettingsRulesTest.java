@@ -25,7 +25,8 @@ class HohenheimSettingsRulesTest {
         Integer previousCount = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Instances.PUBLIC_PORT_COUNT);
         try {
             // 1. The coercer only converts: a numeric string is a number, garbage is not one.
-            Zenit.SETTINGS_VALUES.loadFromMap(Map.of("stacks", Map.of("reclaim_min_age_hours", "12")));
+            Zenit.SETTINGS_VALUES.loadFromMap(
+                Map.of("hohenheim", Map.of("stacks", Map.of("reclaim_min_age_hours", "12"))));
             assertThat(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Stacks.RECLAIM_MIN_AGE_HOURS))
                 .as("step 1: a numeric string converts").isEqualTo(12);
 
@@ -54,15 +55,16 @@ class HohenheimSettingsRulesTest {
                 .isInstanceOf(IllegalArgumentException.class);
 
             // 5. A real unprivileged window is accepted.
-            assertThatCode(() -> Zenit.SETTINGS_VALUES.loadFromMap(Map.of("instances",
-                    Map.of("public_port_first", 40000, "public_port_count", 500))))
+            assertThatCode(() -> Zenit.SETTINGS_VALUES.loadFromMap(Map.of("hohenheim", Map.of("instances",
+                    Map.of("public_port_first", 40000, "public_port_count", 500)))))
                 .as("step 5: 40000-40499 is a valid window").doesNotThrowAnyException();
             assertThat(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Instances.PUBLIC_PORT_FIRST))
                 .isEqualTo(40000);
         } finally {
-            Zenit.SETTINGS_VALUES.loadFromMap(Map.of(
+            // The group's keys live under "hohenheim" in the framework tree since 2026-09-26.
+            Zenit.SETTINGS_VALUES.loadFromMap(Map.of("hohenheim", Map.of(
                 "stacks", Map.of("reclaim_min_age_hours", previousAge),
-                "instances", Map.of("public_port_first", previousFirst, "public_port_count", previousCount)));
+                "instances", Map.of("public_port_first", previousFirst, "public_port_count", previousCount))));
         }
     }
 }
