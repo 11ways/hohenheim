@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -145,14 +146,16 @@ public final class SecondaryZoneService {
                 continue;
             }
             if (pendingNotifyPulls.add(zoneId)) {
-                jobs.fireAndForget(() -> {
+                // SYSTEM work: the TSIG check above was the gate, and the DNS listener thread
+                // that received the NOTIFY holds no identity of its own.
+                ExecutionIdentity.runAsSystem("dns-notify", () -> jobs.fireAndForget(() -> {
                     try {
                         transfer(zoneId, false);
                     }
                     finally {
                         pendingNotifyPulls.remove(zoneId);
                     }
-                });
+                }));
             }
             scheduled = true;
         }

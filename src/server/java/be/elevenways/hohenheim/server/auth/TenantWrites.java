@@ -23,13 +23,12 @@ import be.elevenways.hohenheim.server.upstream.kinds.AddressUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.StaticUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.TlsPassthroughUpstreamKind;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.routing.RouteScope;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.net.AddressScope;
 import be.elevenways.zenit.common.validation.UrlPolicy;
 import be.elevenways.zenit.common.validation.Violations;
@@ -144,26 +143,36 @@ public final class TenantWrites {
     }
 
     /**
-     * @return the access context of the request in flight, or null outside a request
+     * @return the acting caller's context (a request, or work a request scheduled), or null for
+     *         declared system work and for work with no identity at all
      */
     public static @Nullable AccessContext acting() {
-        Conduit conduit = RouteScope.currentConduit();
-        return conduit != null ? AccessContext.of(conduit) : null;
+        return ExecutionIdentity.currentCaller();
     }
 
     /**
-     * Whether the write in flight belongs to a delegated tenant rather than to an operator
-     * or to the system.
+     * Whether the write in flight must be judged as a delegated tenant's rather than passed as
+     * an operator's or the system's.
      *
      * AIDEV-NOTE: an ANONYMOUS request reads as tenant-originated on purpose (fail closed) --
      * that is what puts /nic/update under the DNS type allow-list instead of outside it.
+     * Work with NO identity reads as tenant-originated too, with a null {@link #acting()}, so
+     * every gate and write invariant refuses it: only a DECLARED system identity
+     * ({@link ExecutionIdentity#runAsSystem}, which boot, tasks and schedules carry) passes
+     * unjudged. This replaced the 2026-08-10 reading of "no conduit" as system work.
      */
     public static boolean isTenantOriginated() {
         if (GeneratedDnsRecords.inSystemScope() || AUTHORIZED_OPERATION.isActive()) {
             return false;
         }
-        AccessContext ctx = acting();
-        return ctx != null && !HohenheimAccess.isAdmin(ctx);
+        ExecutionIdentity identity = ExecutionIdentity.current();
+        if (identity == null) {
+            return true;
+        }
+        return switch (identity.kind()) {
+            case SYSTEM -> false;
+            case CALLER -> !HohenheimAccess.isAdmin(identity.callerContext());
+        };
     }
 
     /**
@@ -1262,7 +1271,8 @@ public final class TenantWrites {
     private static void requireRecordAuthority(@NonNull Row row, @Nullable Row stored) {
         AccessContext ctx = acting();
         if (ctx == null) {
-            return;
+            // Tenant-originated with no caller: work that declared no identity holds no authority.
+            throw refusal(DnsRecordModel.NAME.getName(), row.get(DnsRecordModel.NAME));
         }
 
         // AIDEV-NOTE: the ANONYMOUS lane is /nic/update and nothing else. It is already

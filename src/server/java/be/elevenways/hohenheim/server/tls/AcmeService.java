@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.tls;
 
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -134,8 +135,10 @@ public class AcmeService {
         this.certificateStore = certificateStore;
         DnsTxtPublishers.INSTANCE.register(new CommandDnsTxtPublisher());
         DnsTxtPublishers.INSTANCE.register(new InternalDnsTxtPublisher());
+        // Declared SYSTEM work: renewals and challenge expiry are the installation's own, and the
+        // DNS-01 records they publish would be judged and refused as work with no identity.
         this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "acme-renewal");
+            Thread t = new Thread(() -> ExecutionIdentity.runAsSystem("acme", r), "acme-renewal");
             t.setDaemon(true);
             return t;
         });

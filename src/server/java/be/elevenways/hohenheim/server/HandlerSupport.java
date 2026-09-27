@@ -174,10 +174,10 @@ public final class HandlerSupport {
      * Run request-authorized work on a virtual thread, carrying the request's datasource and
      * its accountability, so the activity rows the work writes still name who asked.
      *
-     * AIDEV-NOTE: the tenant gates inside the services read the REQUEST scope, which does not
-     * follow the work onto the new thread -- there every gate passes as system work. So a
-     * caller authorizes EVERYTHING synchronously before handing off; this method decides
-     * nothing and must never be the first thing a handler does.
+     * AIDEV-NOTE: the caller's identity follows the work (zenit's ExecutionIdentity rides
+     * the JobRunner hop), so the service gates inside judge the SAME caller they would have
+     * judged synchronously. A caller still authorizes everything before handing off, so a
+     * refusal is answered to the request instead of lost in a log line.
      */
     public static void inBackground(@NonNull Runnable work) {
         Datasource datasource = Db.currentOrDefault();

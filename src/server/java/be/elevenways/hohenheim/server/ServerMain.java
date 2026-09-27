@@ -28,6 +28,7 @@ import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import be.elevenways.hohenheim.server.security.SshAuthWatcher;
@@ -65,6 +66,13 @@ public class ServerMain {
     private static SecondaryZoneService secondaryZoneService;
 
     public static void main(String[] args) {
+        // THE process entry point declares the system identity: the command lines, the boot
+        // and every virtual thread, pool and timer started from here carry it, which is what
+        // lets HohenheimAccess's gates refuse work that declared no identity at all.
+        ExecutionIdentity.runAsSystem("boot", () -> start(args));
+    }
+
+    private static void start(String[] args) {
         if (runCommandLineOnly(args)) {
             return;
         }
@@ -323,7 +331,8 @@ public class ServerMain {
 
     /** Registers cleanup before the first managed child can start. */
     private static void installShutdownHook() {
-        Runtime.getRuntime().addShutdownHook(new Thread(ServerMain::shutdown, "hohenheim-shutdown"));
+        Runtime.getRuntime().addShutdownHook(new Thread(
+            () -> ExecutionIdentity.runAsSystem("shutdown", ServerMain::shutdown), "hohenheim-shutdown"));
     }
 
     /**

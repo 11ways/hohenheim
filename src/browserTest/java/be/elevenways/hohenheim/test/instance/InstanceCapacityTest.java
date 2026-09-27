@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -254,7 +255,8 @@ class InstanceCapacityTest {
         List<Thread> threads = new ArrayList<>();
         for (int i = 0; i < racers; i++) {
             int slot = i;
-            Thread worker = new Thread(() -> {
+            // Wrapped so the racer acts as the test's operator, as a JobRunner job would.
+            Thread worker = new Thread(ExecutionContext.wrap(() -> {
                 try {
                     barrier.await();
                     Db.run(datasource, () -> {
@@ -264,7 +266,7 @@ class InstanceCapacityTest {
                 } catch (Throwable refused) {
                     failures[slot].set(refused);
                 }
-            });
+            }));
             worker.start();
             threads.add(worker);
         }

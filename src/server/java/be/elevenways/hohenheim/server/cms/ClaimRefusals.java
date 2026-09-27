@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -55,12 +56,16 @@ final class ClaimRefusals {
     }
 
     /**
-     * Whether the writer in flight may learn WHICH site holds a route: system work and
-     * administrators always, a tenant only for a site it manages itself.
+     * Whether the writer in flight may learn WHICH site holds a route: declared system work
+     * and administrators always, a tenant only for a site it manages itself, and work with
+     * no identity never.
      */
     private static boolean mayReadHolder(@Nullable Integer holderSiteId) {
         AccessContext ctx = TenantWrites.acting();
-        if (ctx == null || HohenheimAccess.isAdmin(ctx)) {
+        if (ctx == null) {
+            return ExecutionIdentity.isSystem();
+        }
+        if (HohenheimAccess.isAdmin(ctx)) {
             return true;
         }
         return holderSiteId != null && HohenheimAccess.canManageSite(ctx, holderSiteId);

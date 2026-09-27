@@ -24,6 +24,7 @@ import be.elevenways.hohenheim.server.util.DatasourceScoped;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -66,8 +67,11 @@ public class DatabaseService extends DatasourceScoped {
 
     // Background pool for provisioning (image pull + container start can take tens of seconds);
     // shared because handlers construct DatabaseService per request. Bounded to limit load.
+    // Its threads are declared SYSTEM work: whoever asked was gated before the hand-off (an
+    // allocation, a move claim), and the engine containers it converges are operator-owned.
     private static final ExecutorService PROVISION_EXECUTOR = Executors.newFixedThreadPool(2, runnable -> {
-        Thread thread = new Thread(runnable, "db-provision");
+        Thread thread = new Thread(() -> ExecutionIdentity.runAsSystem("database-provision", runnable),
+            "db-provision");
         thread.setDaemon(true);
         return thread;
     });

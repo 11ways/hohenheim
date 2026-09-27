@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -117,7 +118,8 @@ public final class InstanceResize {
     }
 
     private static void deployNow(int instanceId) {
-        JobRunner.startVirtualThread(() -> {
+        // A SYSTEM deploy (the trigger says so): the resize write that asked for it was the gate.
+        JobRunner.startVirtualThread(() -> ExecutionIdentity.runAsSystem("instance-resize", () -> {
             try {
                 new InstanceService().deploy(instanceId, DeployTrigger.SYSTEM);
             } catch (RuntimeException refused) {
@@ -126,7 +128,7 @@ public final class InstanceResize {
                 Blast.log("INSTANCE: recreate after a resource-limit change of instance",
                     instanceId, "failed -", refused.getMessage());
             }
-        });
+        }));
     }
 
     /** Replace the recreate lane; tests only, and they must restore it. */

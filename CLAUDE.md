@@ -159,6 +159,13 @@ hand-maintained -- which tasks must reconcile into `system_task`, which must fir
 at boot and which must stay quiet are all derived from the tasks' own
 `ScheduleKind` declarations, so a pin and a declaration cannot disagree.
 
+`HohenheimAccess`'s gates and the `TenantWrites` invariants FAIL CLOSED on work with no
+`ExecutionIdentity`. A request's continuation runs as its caller; a lane that is the
+system's own work (a pool, a signed webhook, a deploy the request only asked for)
+declares `ExecutionIdentity.runAsSystem` where it starts, never by leaving the thread
+bare. Test bodies run as the operator (`OperatorIdentity`); a test's raw thread carries it
+through `ExecutionContext.wrap`.
+
 A failure state an operator must find without looking lands on an
 `AttentionCollector` item or `Alerts.send`. A getter, a log line or an internal
 state field is not visibility: the Aug 2026 six-day HTTPS outage had accurate
