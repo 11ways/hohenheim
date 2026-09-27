@@ -124,11 +124,20 @@ public final class ProxyTestSupport {
      */
     public static String rawRequest(int port, String host, String path, String... extraHeaderLines)
             throws Exception {
+        return rawRequestAs(port, "GET", host, path, extraHeaderLines);
+    }
+
+    /**
+     * Raw HTTP/1.1 exchange with any method and no body; returns the full response (headers + body).
+     * @param extraHeaderLines additional request header lines, without CRLF
+     */
+    public static String rawRequestAs(int port, String method, String host, String path,
+                                      String... extraHeaderLines) throws Exception {
         try (Socket socket = new Socket("127.0.0.1", port)) {
             socket.setSoTimeout(5000);
 
             StringBuilder request = new StringBuilder()
-                .append("GET ").append(path).append(" HTTP/1.1\r\n")
+                .append(method).append(' ').append(path).append(" HTTP/1.1\r\n")
                 .append("Host: ").append(host).append("\r\n");
             for (String line : extraHeaderLines) {
                 request.append(line).append("\r\n");

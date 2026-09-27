@@ -11,6 +11,8 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.session.InMemorySessionStore;
 import be.elevenways.zenit.common.session.SessionStore;
+import be.elevenways.zenit.server.http.RateLimitMiddleware;
+import be.elevenways.zenit.server.http.TrustedProxies;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import io.undertow.server.HttpServerExchange;
@@ -58,7 +60,7 @@ class AccessRuleTreeTest {
     /** Every journey starts from a full verification budget: the throttle is process-wide. */
     @BeforeEach
     void fullBudget() {
-        ProxyAuthThrottle.clearForTests();
+        RateLimitMiddleware.limiter().clear();
     }
 
     /**
@@ -79,15 +81,15 @@ class AccessRuleTreeTest {
         // 2. Spend the rest of this client's budget. The remembered pair still passes, which
         //    it could not if it were verified again: a verification now would be refused.
         for (int i = 1; i < ProxyAuthThrottle.POLICY.requests(); i++) {
-            assertThat(ProxyAuthThrottle.spendFor(client, 1)).as("step 2: token %d is available", i).isNull();
+            assertThat(ProxyAuthThrottle.spendFor(exchange(client, null), 1)).as("step 2: token %d is available", i).isNull();
         }
         assertThat(verdict(tree, client, basic("operator", "s3cret")))
             .as("step 2: a remembered pair passes without spending a token").isEqualTo(AccessRuleTree.Verdict.PASS);
 
         // 3. A pair that is not remembered needs a verification, the budget is spent, and the
         //    answer is 429 with Retry-After rather than another password prompt.
-        HttpServerExchange throttled = exchange(basic("operator", "guess"));
-        AccessRuleTree.Result throttledResult = tree.evaluate(throttled, client);
+        HttpServerExchange throttled = exchange(client, basic("operator", "guess"));
+        AccessRuleTree.Result throttledResult = tree.evaluate(throttled);
         assertThat(throttledResult.verdict()).as("step 3: the leaf stays pending").isEqualTo(AccessRuleTree.Verdict.PENDING);
         SiteAuthDecision tooMany = throttledResult.refusal(throttled);
         assertThat(((SiteAuthDecision.Deny) tooMany).statusCode()).as("step 3: answered 429").isEqualTo(429);
@@ -97,29 +99,29 @@ class AccessRuleTreeTest {
             .as("step 3: and no password prompt").isNull();
 
         // 4. The budget is per client: another client still gets an ordinary 401 for a wrong pair.
-        HttpServerExchange other = exchange(basic("operator", "guess"));
-        AccessRuleTree.Result otherResult = tree.evaluate(other, "198.51.100.8");
+        HttpServerExchange other = exchange("198.51.100.8", basic("operator", "guess"));
+        AccessRuleTree.Result otherResult = tree.evaluate(other);
         assertThat(((SiteAuthDecision.Deny) otherResult.refusal(other)).statusCode())
             .as("step 4: another client's budget is untouched").isEqualTo(401);
 
         // 5. A failed verification spends a token, and re-evaluating the SAME request (the
         //    gate's pass loop) never verifies that pair again.
-        ProxyAuthThrottle.clearForTests();
+        RateLimitMiddleware.limiter().clear();
         for (int i = 1; i < ProxyAuthThrottle.POLICY.requests(); i++) {
-            ProxyAuthThrottle.spendFor(client, 1);
+            ProxyAuthThrottle.spendFor(exchange(client, null), 1);
         }
-        HttpServerExchange failing = exchange(basic("operator", "wrong"));
-        assertThat(tree.evaluate(failing, client).verdict())
+        HttpServerExchange failing = exchange(client, basic("operator", "wrong"));
+        assertThat(tree.evaluate(failing).verdict())
             .as("step 5: a wrong pair is pending").isEqualTo(AccessRuleTree.Verdict.PENDING);
-        AccessRuleTree.Result again = tree.evaluate(failing, client);
+        AccessRuleTree.Result again = tree.evaluate(failing);
         assertThat(((SiteAuthDecision.Deny) again.refusal(failing)).statusCode())
             .as("step 5: the same request re-evaluated is still a 401, not a second spend").isEqualTo(401);
-        assertThat(ProxyAuthThrottle.spendFor(client, 1))
+        assertThat(ProxyAuthThrottle.spendFor(exchange(client, null), 1))
             .as("step 5: the one failed verification spent the last token").isNotNull();
 
         // 6. A changed password recompiles the tree, and the new leaf remembers nothing: the old
         //    pair is refused, the new one verifies.
-        ProxyAuthThrottle.clearForTests();
+        RateLimitMiddleware.limiter().clear();
         AccessRuleTree changed = tree(AccessListModel.SATISFY_ANY,
             List.of(credentialLeaf("operator", BasicCredentials.hashIfNeeded("n3w-secret"))));
         assertThat(verdict(changed, client, basic("operator", "s3cret")))
@@ -233,8 +235,8 @@ class AccessRuleTreeTest {
 
         // 9. CHALLENGE EMISSION. A pending root challenges; a root that no credential could
         //    rescue answers 403 without ever asking.
-        HttpServerExchange exchange = exchange(null);
-        AccessRuleTree.Result pending = credentialOnly.evaluate(exchange, "10.0.0.5");
+        HttpServerExchange exchange = exchange("10.0.0.5", null);
+        AccessRuleTree.Result pending = credentialOnly.evaluate(exchange);
         SiteAuthDecision challenge = pending.refusal(exchange);
         assertThat(challenge).as("step 9: a pending root answers with a challenge")
             .isInstanceOf(SiteAuthDecision.Deny.class);
@@ -245,8 +247,8 @@ class AccessRuleTreeTest {
 
         AccessRuleTree decidedByAddress = tree(AccessListModel.SATISFY_ALL,
             List.of(leaf(AccessRuleModel.TYPE_IP_DENY, "10.0.0.0/8"), credential));
-        HttpServerExchange plain = exchange(null);
-        AccessRuleTree.Result refused = decidedByAddress.evaluate(plain, "10.0.0.5");
+        HttpServerExchange plain = exchange("10.0.0.5", null);
+        AccessRuleTree.Result refused = decidedByAddress.evaluate(plain);
         assertThat(refused.verdict()).as("step 9: the address already decides it")
             .isEqualTo(AccessRuleTree.Verdict.FAIL);
         assertThat(((SiteAuthDecision.Deny) refused.refusal(plain)).statusCode())
@@ -260,8 +262,8 @@ class AccessRuleTreeTest {
             List.of(leaf(AccessRuleModel.TYPE_IP_ALLOW, "10.0.0.0/8"),
                 group(AccessListModel.SATISFY_ANY,
                     leaf(AccessRuleModel.TYPE_IP_ALLOW, "203.0.113.0/24"), credential)));
-        HttpServerExchange nestedExchange = exchange(null);
-        AccessRuleTree.Result nestedResult = nestedCredential.evaluate(nestedExchange, "10.0.0.5");
+        HttpServerExchange nestedExchange = exchange("10.0.0.5", null);
+        AccessRuleTree.Result nestedResult = nestedCredential.evaluate(nestedExchange);
         assertThat(nestedResult.verdict()).as("step 10: the nested credential is what is missing")
             .isEqualTo(AccessRuleTree.Verdict.PENDING);
         assertThat(((SiteAuthDecision.Deny) nestedResult.refusal(nestedExchange)).statusCode())
@@ -280,8 +282,8 @@ class AccessRuleTreeTest {
         SiteAuthDecision redirect = SiteAuthDecision.redirect("https://sso.example.com/login");
         AccessRuleTree gated = compile(AccessListModel.SATISFY_ANY, rows(List.of(provider)),
             new StubContext(gateAnswering(redirect)));
-        HttpServerExchange gatedExchange = exchange(null);
-        AccessRuleTree.Result gatedResult = gated.evaluate(gatedExchange, "10.0.0.5");
+        HttpServerExchange gatedExchange = exchange("10.0.0.5", null);
+        AccessRuleTree.Result gatedResult = gated.evaluate(gatedExchange);
         assertThat(gatedResult.verdict()).as("step 12: no session yet, so the leaf is PENDING")
             .isEqualTo(AccessRuleTree.Verdict.PENDING);
         assertThat(gatedResult.refusal(gatedExchange))
@@ -562,12 +564,12 @@ class AccessRuleTreeTest {
     // --- evaluation helpers ---------------------------------------------------------
 
     private static AccessRuleTree.Verdict verdict(AccessRuleTree tree, String clientIp, String header) {
-        return tree.evaluate(exchange(header), clientIp).verdict();
+        return tree.evaluate(exchange(clientIp, header)).verdict();
     }
 
     private static Outcome outcomeOf(AccessRuleTree tree, String clientIp, String header) {
-        HttpServerExchange exchange = exchange(header);
-        AccessRuleTree.Result result = tree.evaluate(exchange, clientIp);
+        HttpServerExchange exchange = exchange(clientIp, header);
+        AccessRuleTree.Result result = tree.evaluate(exchange);
         if (result.allowed()) {
             return Outcome.ALLOWED;
         }
@@ -576,8 +578,10 @@ class AccessRuleTreeTest {
             ? Outcome.CHALLENGED : Outcome.FORBIDDEN;
     }
 
-    private static HttpServerExchange exchange(String authorization) {
+    /** A request from {@code clientIp} as the dispatcher vouches for it, optionally presenting a credential. */
+    private static HttpServerExchange exchange(String clientIp, String authorization) {
         HttpServerExchange exchange = new HttpServerExchange(null);
+        TrustedProxies.vouch(exchange, clientIp);
         if (authorization != null) {
             exchange.getRequestHeaders().put(Headers.AUTHORIZATION, authorization);
         }

@@ -17,6 +17,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.security.SecurityEventTypes;
 import be.elevenways.zenit.common.session.SessionStore;
+import be.elevenways.zenit.server.http.TrustedProxies;
 import be.elevenways.zenit.server.security.SecurityEvents;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
@@ -239,9 +240,13 @@ public class SiteDispatcher implements HttpHandler {
 
         // --- Ban enforcement: reject banned IPs early (plain HTTP; HTTPS is
         //     rejected earlier still, at the TLS handshake, via SniKeyManager). Uses the
-        //     effective client IP so bans follow real clients through a trusted remote proxy. ---
-        String earlyIp = getClientIp(exchange);
-        if (isBanned(earlyIp)) {
+        //     effective client IP so bans follow real clients through a trusted remote proxy.
+        //     Vouched for at once: every later reader (a gate's rate limit, an identity provider's
+        //     audit field, zenit's exchange lane) gets THIS client, never the socket peer or a
+        //     forwarded header zenit's own trusted-proxy walk would believe from loopback. ---
+        String clientIp = resolveClientIp(exchange);
+        TrustedProxies.vouch(exchange, clientIp);
+        if (isBanned(clientIp)) {
             exchange.setStatusCode(403);
             exchange.endExchange();
             return;
@@ -250,11 +255,11 @@ public class SiteDispatcher implements HttpHandler {
         // Not banned: let the reputation policy consider a (throttled, async)
         // spamservice lookup -- an IP abusing hosted apps elsewhere gets a ban
         // row here before it does more damage. Never blocks this request.
-        ReputationBanPolicy.INSTANCE.noteRequest(earlyIp);
+        ReputationBanPolicy.INSTANCE.noteRequest(clientIp);
 
         // --- Git webhook intercept (before hostname routing) ---
         if (GitWebhookHandler.matches(exchange)) {
-            GitWebhookHandler.handle(exchange, earlyIp);
+            GitWebhookHandler.handle(exchange);
             return;
         }
 
@@ -301,11 +306,6 @@ public class SiteDispatcher implements HttpHandler {
 
         // --- Threat scoring: a known hostname with a wrong path is a plain 404,
         //     not a domain-scanning signal. ---
-        String clientIp = getClientIp(exchange);
-        // Attached BEFORE any gate runs: an auth gate or access tree reading the client (a
-        // rate limit, an identity provider's audit field) must see the trusted-proxy-resolved
-        // address, never the socket peer.
-        ResolvedClientIp.attach(exchange, clientIp);
         if (entry != null || resolution.hostnameKnown()) {
             threatScorer.recordHit(clientIp);
         } else {
@@ -414,7 +414,7 @@ public class SiteDispatcher implements HttpHandler {
         }
 
         // --- Access list enforcement ---
-        if (entry.hasAccessList() && !AccessListGate.allows(exchange, entry, clientIp)) {
+        if (entry.hasAccessList() && !AccessListGate.allows(exchange, entry)) {
             return;
         }
 
@@ -427,7 +427,7 @@ public class SiteDispatcher implements HttpHandler {
         String canonicalPath = path != null ? path.canonical() : exchange.getRelativePath();
         for (RouteEntry.PathGuard guard : entry.pathGuards) {
             if (guard.covers(canonicalPath)
-                    && !AccessListGate.allows(exchange, guard.tree(), clientIp)) {
+                    && !AccessListGate.allows(exchange, guard.tree())) {
                 return;
             }
         }
@@ -660,9 +660,14 @@ public class SiteDispatcher implements HttpHandler {
     /**
      * The effective client IP: the socket peer, unless a trusted remote proxy (valid
      * X-Hohenheim-Key) forwarded the original client in X-Real-IP.
+     *
+     * @throws IllegalStateException for an exchange without a socket peer
      */
-    private String getClientIp(HttpServerExchange exchange) {
-        String sourceIp = exchange.getSourceAddress().getAddress().getHostAddress();
+    private String resolveClientIp(HttpServerExchange exchange) {
+        String sourceIp = TrustedProxies.socketPeerIp(exchange);
+        if (sourceIp == null) {
+            throw new IllegalStateException("A proxy exchange always has a socket peer");
+        }
         if (isTrustedRemoteProxy(exchange)) {
             String realIp = exchange.getRequestHeaders().getFirst(ForwardingHeaders.X_REAL_IP);
             byte[] address = IpLiterals.parse(realIp != null ? realIp.trim() : null);

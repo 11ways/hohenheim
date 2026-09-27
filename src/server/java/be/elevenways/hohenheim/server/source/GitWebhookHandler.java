@@ -16,6 +16,8 @@ import be.elevenways.protoblast.common.dry.Dry;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.http.RateLimiter;
+import be.elevenways.zenit.common.routing.RateLimitPolicy;
+import be.elevenways.zenit.server.http.ExchangeRateLimits;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -43,8 +45,8 @@ import java.util.concurrent.TimeUnit;
 /**
  * Handles git webhook requests on the proxy port; intercepted by SiteDispatcher before
  * hostname-based routing, which never runs the zenit conduit chain -- so the signature
- * IS the authentication and core's RateLimiter is driven directly (the hashed-bearer
- * precedent).
+ * IS the authentication and the per-client budget is zenit's exchange lane
+ * ({@link ExchangeRateLimits}), keyed on the client the dispatcher vouched for.
  *
  * Security shape: every refusal on the way to signature verification -- unknown segment,
  * unknown application, missing secret, wrong signature -- is the SAME 404, so a
@@ -85,8 +87,10 @@ public class GitWebhookHandler {
     /** The refusal of an oversized body. */
     private static final String TOO_LARGE_BODY = "{\"error\":\"payload too large\"}";
 
-    private static final RateLimiter LIMITER = new RateLimiter();
-    private static final int ATTEMPTS_PER_MINUTE = 60;
+    /** Deliveries one client may attempt per window, spent before the body is read. */
+    public static final RateLimitPolicy POLICY = RateLimitPolicy.of(60, Duration.ofMinutes(1))
+        .keyBy(RateLimitPolicy.KeyBy.IP)
+        .named("hohenheim.git_webhook");
 
     /**
      * Check if the request is a POST to the webhook prefix.
@@ -100,9 +104,10 @@ public class GitWebhookHandler {
      * Handle a webhook request: rate limit, read the raw body, verify the signature,
      * claim the delivery id, then route the event (deploy or preview).
      */
-    public static void handle(HttpServerExchange exchange, @Nullable String clientIp) {
-        if (!LIMITER.tryAcquire("hohenheim:git-webhook:" + (clientIp == null ? "" : clientIp),
-                ATTEMPTS_PER_MINUTE, Duration.ofMinutes(1)).allowed()) {
+    public static void handle(HttpServerExchange exchange) {
+        RateLimiter.Decision budget = ExchangeRateLimits.tryAcquire(exchange, POLICY, null);
+        if (!budget.allowed()) {
+            ExchangeRateLimits.stampRetryAfter(exchange, budget.retryAfterSeconds());
             sendJson(exchange, 429, "{\"error\":\"rate limited\"}");
             return;
         }
@@ -754,10 +759,5 @@ public class GitWebhookHandler {
 
     private static @NonNull String str(@Nullable Object value) {
         return value == null ? "" : value.toString().trim();
-    }
-
-    /** Test hook: reset the per-IP webhook rate limiter. */
-    public static @NonNull RateLimiter limiter() {
-        return LIMITER;
     }
 }

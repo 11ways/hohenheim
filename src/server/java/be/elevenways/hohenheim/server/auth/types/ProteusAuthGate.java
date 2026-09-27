@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.auth.SiteAuthDecision;
 import be.elevenways.hohenheim.server.auth.SiteAuthContext;
 import be.elevenways.hohenheim.server.auth.SiteAuthGate;
 import be.elevenways.hohenheim.server.proxy.ProxyScheme;
-import be.elevenways.hohenheim.server.proxy.ResolvedClientIp;
 import be.elevenways.hohenheim.server.proxy.auth.CredentialOwner;
 import be.elevenways.hohenheim.server.proxy.auth.ProxyAuthKeys;
 import be.elevenways.hohenheim.server.proxy.auth.ProxyAuthThrottle;
@@ -15,6 +14,7 @@ import be.elevenways.zenit.auth.server.identity.proteus.ProteusClient;
 import be.elevenways.zenit.auth.server.identity.proteus.ProteusPermissions;
 import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.session.SessionStore;
+import be.elevenways.zenit.server.http.TrustedProxies;
 import be.elevenways.zenit.server.security.SecureTokens;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
@@ -113,7 +113,7 @@ public class ProteusAuthGate implements SiteAuthGate, CredentialOwner, SessionAu
                     return throttled;
                 }
                 ProteusClient.LoginResult result = client.persistentCookieLoginResult(
-                    cookie[0], cookie[1], cookie[2], cookie[0], ResolvedClientIp.get(exchange));
+                    cookie[0], cookie[1], cookie[2], cookie[0], TrustedProxies.clientIpOf(exchange));
                 if (result.success() && result.handle() != null) {
                     if (!permitted(result.permissions())) {
                         return SiteAuthDecision.deny(403, "Forbidden");

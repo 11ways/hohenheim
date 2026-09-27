@@ -20,8 +20,8 @@ final class AccessListGate {
      * Check the access list. Returns true if the request is allowed, false if blocked.
      * When blocked, the response (401, 403 or a provider redirect) is already sent.
      */
-    static boolean allows(HttpServerExchange exchange, RouteEntry entry, String clientIp) {
-        return allows(exchange, entry.accessTree, clientIp);
+    static boolean allows(HttpServerExchange exchange, RouteEntry entry) {
+        return allows(exchange, entry.accessTree);
     }
 
     /**
@@ -29,7 +29,7 @@ final class AccessListGate {
      * guard answer through this single evaluation, so a guarded folder can never behave
      * differently from a guarded site.
      */
-    static boolean allows(HttpServerExchange exchange, @Nullable AccessRuleTree tree, String clientIp) {
+    static boolean allows(HttpServerExchange exchange, @Nullable AccessRuleTree tree) {
         if (tree == null) {
             return true;
         }
@@ -40,7 +40,7 @@ final class AccessListGate {
         // Each pass either allows, refuses, or satisfies one more leaf, so the bound is the
         // number of credential leaves; the constant keeps a broken gate from spinning.
         for (int pass = 0; pass < MAX_PASSES; pass++) {
-            AccessRuleTree.Result result = tree.evaluate(exchange, clientIp);
+            AccessRuleTree.Result result = tree.evaluate(exchange);
             if (result.allowed()) {
                 return true;
             }
