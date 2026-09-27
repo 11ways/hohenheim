@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.source.GitRefNames;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.dry.Dry;
 import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.http.RateLimiter;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
@@ -252,6 +253,15 @@ public class GitWebhookHandler {
             return;
         }
 
+        // A verified delivery is SYSTEM work: the signature was the gate, and the deploys and
+        // previews it starts (on threads of their own) carry the declaration with them. Before
+        // this point the proxy thread holds no identity, which every gate refuses.
+        ExecutionIdentity.runAsSystem("git-webhook",
+            () -> processVerified(exchange, application, sourceSettings, body));
+    }
+
+    private static void processVerified(HttpServerExchange exchange, Row application,
+                                        Map<String, Object> sourceSettings, String body) {
         int applicationId = application.get(InstanceModel.ID);
 
         // Replay claim FIRST: a provider retry (same delivery id) must never act twice.

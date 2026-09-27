@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
@@ -287,7 +288,9 @@ public final class InstanceStatusReconciler {
         // The datasource context does not cross threads on its own (the console watch
         // captures it the same way).
         var datasource = Db.currentOrDefault();
-        Thread.startVirtualThread(() -> Db.run(datasource, () -> {
+        // Through JobRunner, which carries the reconciler's declared system identity onto the
+        // new thread; a raw virtual thread started the redeploy with no identity at all.
+        JobRunner.startVirtualThread(() -> Db.run(datasource, () -> {
             try {
                 this.instances.deploy(instanceId);
             } catch (RuntimeException refused) {

@@ -24,8 +24,8 @@ final class OperationGates {
     /**
      * THE operation-funnel gate for a capability-sensitive instance act (power, snapshot,
      * backup): a TENANT-ORIGINATED call must hold the capability, while operator and
-     * system work (background tasks, schedule chains re-authorized per step, seeds) passes
-     * untouched. It sits on the SERVICE, not on a resource or a handler, for the reason
+     * DECLARED system work (background tasks, schedule chains re-authorized per step, seeds)
+     * passes untouched. It sits on the SERVICE, not on a resource or a handler, for the reason
      * {@link TenantWrites} spells out: the HTML row action, the automation API and any
      * future caller all reach the service, and a second copy per surface is how the API
      * ends up a wider door than the UI.
@@ -35,37 +35,13 @@ final class OperationGates {
      * also the same refusal a caller gets for an instance they cannot see at all, which
      * is what the API's uniform 404 is built on.
      *
-     * AIDEV-NOTE (default-allow, deferred inversion -- 2026-08-10): the opening
-     * {@code !isTenantOriginated()} ALLOWS whenever no tenant identity is in flight, and
-     * "no conduit" conflates a boot task, a sweeper, a WebSocket handler and a LEAKED
-     * JobRunner continuation into one verdict -- only some of which are provably safe. A
-     * dedicated recon established, and this was confirmed, that this is STRUCTURAL, NOT LIVE:
-     * no off-thread path reaches this gate today (the file-manager caller set is fully
-     * synchronous; the two request-continuations that DO reach a gate -- the template-install
-     * runner and SiteReleases.scheduleDrain -> InstanceService.stop -- gain no authority
-     * because the entry point already authorized the same target). The durable fix is to
-     * demand a POSITIVE system/operator marker ({@code TenantWrites.asSystem(...)}) rather
-     * than infer one from an empty ThreadLocal, plus narrowing {@code GeneratedRows} from a
-     * whole-thread off-switch to "attribution plus the writes it wraps". That inversion is
-     * deferred DELIBERATELY: fail-closed-by-default requires enumerating and wrapping EVERY
-     * system entry point (boot stages, TaskService sweepers, seeds, the ACME publisher, CLI
-     * tools, the WebSocket authenticators, the migration/lease runners) -- miss one and
-     * legitimate system work refuses itself, which is worse than a gap with no live exploit.
-     * It warrants its own wave with a full enumeration; do not close it with a blind marker.
-     *
-     * AIDEV-NOTE (re-assessed 2026-09-23, still deferred, with the measured scope): as of
-     * this date the "no conduit = system" reading is relied on by 20 ScheduledTask
-     * implementations, 6 dedicated JobRunner pools and roughly 50 async spawn sites
-     * (fireAndForget / submit / raw threads) in src/server, plus the boot stages, seeds, CLI
-     * commands and the WebSocket handlers (InstanceConsoles, InstanceShell) that answer from
-     * a Principal with no conduit. Failing closed needs ONE of two things first, and neither
-     * exists: (a) a positive system marker wrapped around every one of those entry points
-     * (miss one and legitimate operator/system work refuses itself), or (b) request-identity
-     * PROPAGATION through protoblast's JobRunner, so a continuation spawned by a tenant
-     * request carries that tenant instead of reading as system -- a framework feature, not a
-     * hohenheim edit. Until (b) lands, a tenant-originated background step is only as safe as
-     * the synchronous gate its entry point ran on the SAME target, which is what the two
-     * known request-continuations above do.
+     * AIDEV-NOTE: the gate FAILS CLOSED. Only a DECLARED system identity passes untouched
+     * (boot, tasks, record schedules, offline commands and whatever they schedule carry
+     * zenit's {@code ExecutionIdentity} through every JobRunner hop); work with NO identity
+     * reads as tenant-originated with a null {@link TenantWrites#acting()} and is refused. A
+     * request's continuation runs as that request's caller, so it is judged exactly as the
+     * request would be. This replaced the 2026-08-10 default-allow that read "no conduit"
+     * as system work.
      *
      * @throws Violations {@code instance_not_permitted}
      */
@@ -148,8 +124,8 @@ final class OperationGates {
      * attach, template capture): a tenant-originated caller must hold the ADMIN
      * permission, and the refusal is the tier's uniform one -- naming "operators only"
      * would tell a delegate the act exists specifically above them. System work (the
-     * {@link #requireOperationCapability} contract) passes untouched, including its
-     * documented default-allow debt.
+     * {@link #requireOperationCapability} contract) passes untouched; work with no
+     * identity is refused.
      *
      * @throws Violations {@code instance_not_permitted}
      */

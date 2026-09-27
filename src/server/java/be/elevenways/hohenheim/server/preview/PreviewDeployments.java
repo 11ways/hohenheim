@@ -39,6 +39,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
@@ -141,7 +142,10 @@ public final class PreviewDeployments {
         }
         Datasource datasource = Db.currentOrDefault();
         String pinnedSha = sha;
-        JobRunner.startVirtualThread(() -> {
+        // The build is SYSTEM work whoever queued it: a preview is the application owner's
+        // environment, charged to that owner regardless of who clicks (see above), and the
+        // instance it writes is operator-shaped -- no tenant could author it field by field.
+        JobRunner.startVirtualThread(() -> ExecutionIdentity.runAsSystem("preview-deploy", () -> {
             Runnable build = () -> {
                 try {
                     deploy(applicationId, ref, pinnedSha, prNumber, trigger);
@@ -156,7 +160,7 @@ public final class PreviewDeployments {
             } else {
                 build.run();
             }
-        });
+        }));
         return preview;
     }
 

@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
@@ -38,6 +39,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -974,8 +976,12 @@ public class StackRuntime {
     private ExecutorService workerFor(int stackId) {
         // Virtual threads: lanes are never retired (see destroy), so a parked lane per
         // ever-touched stack id must cost next to nothing.
-        return workers.computeIfAbsent(stackId, id -> Executors.newSingleThreadExecutor(
-            Thread.ofVirtual().name("stack-" + id).factory()));
+        // A lane is declared SYSTEM work: stack operations were gated where they were asked for.
+        return workers.computeIfAbsent(stackId, id -> {
+            ThreadFactory lane = Thread.ofVirtual().name("stack-" + id).factory();
+            return Executors.newSingleThreadExecutor(
+                work -> lane.newThread(() -> ExecutionIdentity.runAsSystem("stack", work)));
+        });
     }
 
     /** A scoped body that may fail the way the daemon work it wraps fails. */

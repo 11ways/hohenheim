@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.HandlerSupport;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -119,14 +120,17 @@ public final class InstanceTemplateHandlers {
                 // (pending -> installing -> installed/failed) IS the progress record,
                 // and deploy refuses until it completes.
                 if (InstanceTemplates.hasInstallStep(template)) {
-                    INSTALL_RUNNER.startVirtualThread(() -> {
-                        try {
-                            new InstanceInstalls().install(instanceId);
-                        } catch (RuntimeException error) {
-                            Blast.log("INSTANCE: background install for", instanceId,
-                                "failed:", error.getMessage());
-                        }
-                    });
+                    // SYSTEM work: the create above was the gate, and the install stamps
+                    // pipeline-owned columns no tenant write may author.
+                    INSTALL_RUNNER.startVirtualThread(() -> ExecutionIdentity.runAsSystem(
+                        "template-install", () -> {
+                            try {
+                                new InstanceInstalls().install(instanceId);
+                            } catch (RuntimeException error) {
+                                Blast.log("INSTANCE: background install for", instanceId,
+                                    "failed:", error.getMessage());
+                            }
+                        }));
                 }
                 return HandlerSupport.redirect(CmsRoutes.detail(panel, HohenheimSlugs.INSTANCES, instanceId));
             } catch (Violations violations) {
