@@ -34,6 +34,7 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -508,8 +509,14 @@ public final class ReleaseEngine {
      * After the drain window: stop the superseded release (it stays retained as the
      * rollback target), reclaim every OLDER retired release, prune superseded build
      * artifacts, and stamp the operation succeeded. Runs on a virtual thread under the
-     * datasource and attribution scopes captured at switch time; a controller crash
-     * before it runs is finished by {@link #recoverInterrupted()}.
+     * datasource captured at switch time; a controller crash before it runs is finished by
+     * {@link #recoverInterrupted()}.
+     *
+     * AIDEV-NOTE: the drain is DETACHED system work, never the continuation of whoever
+     * started the release. Stopping the superseded release is the engine's own convergence:
+     * the caller's authority was judged when the release was admitted, a tenant structurally
+     * holds no capability on a generated release instance, and a grant revoked during the
+     * window must not strand a superseded release running.
      */
     private static void scheduleDrain(int applicationId, int opId, int retiredId,
                                       @NonNull String servingImage,
@@ -517,7 +524,7 @@ public final class ReleaseEngine {
         Integer seconds = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Releases.DRAIN_SECONDS);
         long waitMs = Math.max(0, (seconds != null ? seconds : 15) * 1000L);
-        JobRunner.startVirtualThread(() -> {
+        JobRunner.startVirtualThread(() -> ExecutionIdentity.runDetachedAsSystem("release-drain", () -> {
             try {
                 Thread.sleep(waitMs);
             } catch (InterruptedException interrupted) {
@@ -544,7 +551,7 @@ public final class ReleaseEngine {
                 Blast.log("RELEASE: drain of application", applicationId, "could not run -",
                     reasonOf(undrained));
             }
-        });
+        }));
     }
 
     /**

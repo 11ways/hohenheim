@@ -13,17 +13,24 @@ import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
+import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.project.Projects;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.UserPrincipal;
+import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -450,6 +457,57 @@ class ApplicationReleaseContractTest {
                     () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
                         reload(forwardOp).get(ReleaseOperationModel.STATUS)));
             } finally {
+                ApplicationReleases.destroyFor(applicationId);
+            }
+        });
+    }
+
+    /**
+     * A release a TENANT started drains as the system: the superseded release is stopped even
+     * though the tenant holds no capability on a generated release instance and lost the one
+     * on the application before the drain window ended.
+     */
+    @Test
+    void aTenantStartedReleaseStillStopsItsSupersededRelease() {
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 1);
+        Db.run(datasource, () -> {
+            int applicationId = application("tenant-drain-app");
+            try {
+                // 1. v1 serves; a tenant holds POWER on the application and nothing else.
+                converge(applicationId, settingsFor("v1"));
+                int firstId = servingOf(applicationId).get(InstanceModel.ID);
+                int tenantId = ApiSupport.user("drain-tenant@hohenheim.local", "Drain Tenant");
+                UserPrincipal tenant = new UserPrincipal(tenantId, "Drain Tenant");
+                RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, applicationId,
+                    HohenheimAccess.POWER, true);
+                assertThat(HohenheimAccess.hasInstanceCapability(tenant, firstId, HohenheimAccess.POWER))
+                    .as("step 1: the tenant holds no POWER on the generated release itself").isFalse();
+
+                // 2. The tenant deploys v2 through the power verb: a new release takes traffic.
+                Row application = Models.get(InstanceModel.class).findById(applicationId);
+                application.set(InstanceModel.SETTINGS, settingsFor("v2"));
+                Models.get(InstanceModel.class).save(application);
+                TenantConduits.as(tenant,
+                    () -> new InstanceService().deploy(applicationId, DeployTrigger.MANUAL));
+                Row op = latestOp(applicationId);
+                assertThat(servingOf(applicationId).get(InstanceModel.ID))
+                    .as("step 2: the tenant's release took traffic").isNotEqualTo(firstId);
+
+                // 3. The tenant loses the application inside the drain window.
+                RecordGrants.revokeAllForSubject(GrantSubjectType.USER, tenantId);
+
+                // 4. The drain is the system's convergence: the superseded release stops anyway.
+                await("step 4: the tenant's release operation completes after its drain window",
+                    () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
+                        reload(op).get(ReleaseOperationModel.STATUS)));
+                assertThat(daemon.isRunning(FakeDockerDaemon.handleOf(firstId)))
+                    .as("step 4: the superseded release was stopped").isFalse();
+                assertThat((String) reload(op).get(ReleaseOperationModel.STEP_LOG))
+                    .as("step 4: by the drain, not a failed stop")
+                    .contains("superseded release stopped")
+                    .doesNotContain("WARNING");
+            } finally {
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 0);
                 ApplicationReleases.destroyFor(applicationId);
             }
         });
