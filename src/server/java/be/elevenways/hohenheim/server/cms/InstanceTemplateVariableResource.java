@@ -94,8 +94,7 @@ public final class InstanceTemplateVariableResource extends RowResource {
 
     @Override
     public @Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of(HohenheimSlugs.INSTANCE_TEMPLATES,
-            row -> row.get(InstanceTemplateVariableModel.TEMPLATE_ID)).tab("contents");
+        return ResourceParent.of(HohenheimSlugs.INSTANCE_TEMPLATES, InstanceTemplateVariableModel.TEMPLATE_ID).tab("contents");
     }
 
     /**

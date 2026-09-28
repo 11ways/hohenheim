@@ -121,7 +121,7 @@ public class StackServiceResource extends ValidatedRowResource {
 
     @Override
     public @Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of(StackResource.SLUG, row -> row.get(StackServiceModel.STACK_ID)).tab(StackServicesPage.SLUG);
+        return ResourceParent.of(StackResource.SLUG, StackServiceModel.STACK_ID).tab(StackServicesPage.SLUG);
     }
 
     /** The stack's Services tab links here with ?stack_id= so the pick is preselected. */

@@ -108,8 +108,7 @@ public class InstanceDeviceResource extends RowResource {
 
     @Override
     public @Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of(HohenheimSlugs.INSTANCES,
-            InstanceDeviceResource::instanceIdOf).tab("devices");
+        return ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceDeviceModel.INSTANCE_ID).tab("devices");
     }
 
     /**

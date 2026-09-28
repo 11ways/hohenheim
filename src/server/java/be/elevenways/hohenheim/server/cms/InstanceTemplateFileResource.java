@@ -76,8 +76,7 @@ public final class InstanceTemplateFileResource extends RowResource {
 
     @Override
     public @Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of(HohenheimSlugs.INSTANCE_TEMPLATES,
-            row -> row.get(InstanceTemplateFileModel.TEMPLATE_ID)).tab("contents");
+        return ResourceParent.of(HohenheimSlugs.INSTANCE_TEMPLATES, InstanceTemplateFileModel.TEMPLATE_ID).tab("contents");
     }
 
     /** The Contents tab links here with ?template_id= so the pick arrives preselected. */

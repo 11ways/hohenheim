@@ -196,7 +196,9 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
             row -> InlineEditStates.editableCellsFor(panel, resource, applied, row, accessContext),
             accessContext);
 
-        RouteTarget addRecordTarget = CmsEndpoints.CREATE_FORM
+        // A read-only zone (trashed, or under a trashed record) offers no add: its records' writes are refused by
+        // zenit-cms through the record resource's parent, and this is the same answer on screen.
+        RouteTarget addRecordTarget = this.hostReadOnly(conduit) ? null : CmsEndpoints.CREATE_FORM
             .with(CmsEndpoints.PANEL_PARAM, PANEL)
             .with(CmsEndpoints.RESOURCE_PARAM, resource.slug())
             .with(HohenheimParams.ZONE_ID_PREFILL, zoneId);
@@ -219,7 +221,8 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
         vars.put("recordTabs", recordTabs(conduit));
         // Promoted seam: the framework's own quick-add builder. The zone preset it needs
         // is answered by DnsRecordResource.quickCreatePresetValues, which reads THIS route.
-        QuickAddState.putVars(vars, resource, accessContext, refreshUrl, addRecordTarget.toUrl());
+        QuickAddState.putVars(vars, resource, accessContext, refreshUrl,
+            addRecordTarget == null ? null : addRecordTarget.toUrl());
         return new RenderTemplateResult(TEMPLATE, vars);
     }
 

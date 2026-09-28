@@ -64,8 +64,7 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
         assertThat((Object) stored(oak).get(SiteModel.DELETED_AT)).as("step 1: the delete trashed the site")
             .isNotNull();
         assertThat(Quotas.usedOf(SITE_BUCKET)).as("step 1: and handed its slot back").isEqualTo(beforeTrash - 1);
-        // Asserted on the ROW, never the name: the delete's toast names the site too, and a page requested the
-        // instant the previous response arrived can still carry it (the flash is acknowledged after the write).
+        // Asserted on the ROW, never the name: the delete's toast names the site too.
         assertThat(adminGet("/admin/sites?filter.archived=true").body())
             .as("step 1: the Trash lists the trashed site").contains(rowOf(oak));
         assertThat(adminGet("/admin/sites").body())
@@ -136,8 +135,10 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
             .as("step 6: a path's update is refused").isEqualTo(403);
         assertThat(adminPostForm(pathDelete, confirmed("")).statusCode())
             .as("step 6: a path's delete is refused").isEqualTo(403);
-        adminPostForm("/admin/protected-paths/new",
-            "site_id=" + cedar + "&access_list_id=" + list + "&path=%2Fnew");
+        assertThat(adminPostForm("/admin/protected-paths/new",
+            "site_id=" + cedar + "&access_list_id=" + list + "&path=%2Fnew").statusCode())
+            .as("step 6: a new path under it is refused as a write under a trashed record, ahead of the site pick's"
+                + " own validation").isEqualTo(403);
         assertThat(pathsOf(cedar)).as("step 6: no path was written under the trashed site")
             .containsExactly("/private");
 

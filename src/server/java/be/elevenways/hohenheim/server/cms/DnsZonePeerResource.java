@@ -88,7 +88,7 @@ public final class DnsZonePeerResource extends RowResource {
 
     @Override
     public @org.checkerframework.checker.nullness.qual.Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of(HohenheimSlugs.DNS_ZONES, row -> row.get(DnsZonePeerModel.ZONE_ID)).tab("secondaries");
+        return ResourceParent.of(HohenheimSlugs.DNS_ZONES, DnsZonePeerModel.ZONE_ID).tab("secondaries");
     }
 
     /** The zone's Secondaries tab links here with ?zone_id= so the link is scoped. */
