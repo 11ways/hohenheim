@@ -1545,15 +1545,15 @@ the pushed workspace is retained for incremental builds.
 
 zenit-auth and zenit-comms read their groups from the framework's settings chain
 now (`settings/local.dry` < `ZENIT__AUTH__*` / `ZENIT__COMMS__*`). The files this
-install carries since 2026-08-29 are RETIRED and the server REFUSES to boot while
-either exists, naming each one and where its keys go:
+install carries since 2026-08-29 are RETIRED and ADOPTED on the first boot of a
+jar built on this change (2026-09-29; before that they refused the boot):
 
-- `settings/auth.dry` `{"external_base_url": ...}` becomes
-  `"auth": {"external_base_url": "https://admin.starfleet.life"}` in `settings/local.dry`;
-- `settings/comms.dry` `{"channels": {"mail_transports": ...}}` becomes
-  `"comms": {"channels": {"mail_transports": "hub://..."}}` in `settings/local.dry`.
+- `settings/auth.dry` `{"external_base_url": ...}` moves under `auth.*` in
+  `settings/local.dry`;
+- `settings/comms.dry` `{"channels": {"mail_transports": ...}}` moves under
+  `comms.*` in `settings/local.dry`;
+- each old file stays beside it as `<name>.bak-<timestamp>`.
 
-Move both into `local.dry` (0600, owner hohenheim), delete the two files, and
-unset any `AUTH__*` or `COMMS__*` variable in the unit, BEFORE swapping in a jar
-built on this change. The rehearsal on a byte copy surfaces the refusal first.
+No hand edit is needed. An `AUTH__*` or `COMMS__*` variable in the unit still
+refuses the boot, naming its `ZENIT__` spelling.
 

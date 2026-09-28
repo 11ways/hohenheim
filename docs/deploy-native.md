@@ -87,10 +87,11 @@ What each step does, in order:
 9. **Settings** -- seeds `settings/local.dry` (0600, secrets): Hohenheim's role
    and security declaration under `hohenheim`, and `auth.external_base_url` when
    `--main-url` is given. Every group is read from `local.dry` (or
-   `ZENIT__<GROUP>__*`); a `settings/auth.dry` or `settings/comms.dry` is a
-   retired file the server refuses at boot, and a `settings/hohenheim.dry` from
-   an older install is moved under `hohenheim` in `local.dry` on the first boot
-   (kept as `hohenheim.dry.bak-<timestamp>`), with `HOHENHEIM__*` refused. An
+   `ZENIT__<GROUP>__*`); a `settings/auth.dry`, `settings/comms.dry` or
+   `settings/hohenheim.dry` from an older install is moved under its group
+   (`auth`, `comms`, `hohenheim`) in `local.dry` on the first boot (kept as
+   `<name>.bak-<timestamp>`), with `AUTH__*`, `COMMS__*` and `HOHENHEIM__*`
+   refused. An
    existing file is NEVER rewritten:
    the panel's settings editor persists into these same files. That idempotence
    cuts both ways -- a host installed BEFORE a seeded default changed keeps the

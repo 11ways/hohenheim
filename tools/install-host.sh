@@ -833,7 +833,7 @@ else
 fi
 
 # zenit-auth reads auth.* from the framework's own settings chain; a separate
-# settings/auth.dry is a retired name the server refuses at boot.
+# settings/auth.dry is a retired name the server adopts into local.dry at boot.
 LOCAL_AUTH_BLOCK=""
 if [ -n "$MAIN_URL" ]; then
     LOCAL_AUTH_BLOCK=",
