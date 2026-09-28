@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.hohenheim.server.cms.ManageAccessRuleResource;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
+import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -101,7 +102,7 @@ public final class AccessListApi {
                 return null;
             }
             try {
-                int listId = (Integer) ResourceWrites.create(listResource(ctx),
+                int listId = (Integer) ResourceWrites.create(panelFor(ctx), listResource(ctx),
                     FormSubmissionRawValues.fromConduit(conduit), ctx);
                 Row created = Objects.requireNonNull(
                     Models.get(AccessListModel.class).findById(listId));
@@ -129,7 +130,7 @@ public final class AccessListApi {
                 // The resource's own delete: the rule rows cascade off the model hook and
                 // whatever the list gated stops being gated -- exactly what the form's
                 // confirmation warns about.
-                ResourceWrites.delete(listResource(ctx), list, ctx);
+                ResourceWrites.delete(panelFor(ctx), listResource(ctx), list, ctx);
                 return ApiConduits.json(Map.of("id", list.get(AccessListModel.ID),
                     "status", "deleted"));
             } catch (Violations refused) {
@@ -187,7 +188,7 @@ public final class AccessListApi {
                 form.get(AccessRuleModel.ENABLED.getName()));
         }
         try {
-            ResourceWrites.update(ruleResource(ctx), rule.get(AccessRuleModel.ID), rule,
+            ResourceWrites.update(panelFor(ctx), ruleResource(ctx), rule.get(AccessRuleModel.ID), rule,
                 values, ctx);
         } catch (Violations refused) {
             return ApiConduits.refusal(conduit, refused);
@@ -204,6 +205,11 @@ public final class AccessListApi {
      * key, the delegated one otherwise. Choosing it is the whole authority decision this
      * class makes -- everything else is the resource's and TenantWrites'.
      */
+    /** The panel whose peers the chosen resources' declared parents resolve against, paired like the resources. */
+    private static @NonNull Panel panelFor(@NonNull AccessContext ctx) {
+        return HohenheimAccess.isAdmin(ctx) ? ApiConduits.adminPanel() : ApiConduits.managePanel();
+    }
+
     private static @NonNull RowResource listResource(@NonNull AccessContext ctx) {
         return HohenheimAccess.isAdmin(ctx) ? ADMIN_LISTS : TENANT_LISTS;
     }

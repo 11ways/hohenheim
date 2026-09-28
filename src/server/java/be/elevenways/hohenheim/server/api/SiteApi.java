@@ -56,7 +56,7 @@ public final class SiteApi {
                 return null;
             }
             try {
-                int siteId = (Integer) ResourceWrites.create(SITES,
+                int siteId = (Integer) ResourceWrites.create(ApiConduits.adminPanel(), SITES,
                     FormSubmissionRawValues.fromConduit(conduit), ctx);
                 Row created = Objects.requireNonNull(
                     Models.get(SiteModel.class).findById(siteId));
@@ -85,7 +85,7 @@ public final class SiteApi {
                 // reclaimed and deleted_at stamped by the site's SoftDeleteBehaviour; the
                 // offered-but-dead lockout (the site serving this very panel) refuses
                 // through ResourceWrites like the form does.
-                ResourceWrites.delete(SITES, site, ctx);
+                ResourceWrites.delete(ApiConduits.adminPanel(), SITES, site, ctx);
                 return ApiConduits.json(Map.of("id", site.get(SiteModel.ID), "status", "deleted"));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
@@ -129,7 +129,7 @@ public final class SiteApi {
             }
             raw.put(siteKey, String.valueOf(siteId));
             try {
-                int domainId = (Integer) ResourceWrites.create(DOMAINS, raw, ctx);
+                int domainId = (Integer) ResourceWrites.create(ApiConduits.adminPanel(), DOMAINS, raw, ctx);
                 Row added = Objects.requireNonNull(
                     Models.get(SiteDomainModel.class).findById(domainId));
                 ActivityLog.record(Models.get(SiteModel.class), siteId, "domain_added",
@@ -164,7 +164,7 @@ public final class SiteApi {
                 return null;
             }
             try {
-                ResourceWrites.delete(DOMAINS, domain, ctx);
+                ResourceWrites.delete(ApiConduits.adminPanel(), DOMAINS, domain, ctx);
                 ActivityLog.record(Models.get(SiteModel.class), siteId, "domain_removed",
                     domain.get(SiteDomainModel.HOSTNAME));
                 return ApiConduits.json(Map.of("id", domainId, "site_id", siteId,

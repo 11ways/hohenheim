@@ -260,7 +260,7 @@ public final class InstanceApi {
                 // funnel demands the `destroy` capability -- so seeing an instance
                 // (rule 1's `view`) is not enough to destroy it, and the refusal is the
                 // service's typed one rather than anything decided here.
-                ResourceWrites.delete(INSTANCES, row, ctx);
+                ResourceWrites.delete(ApiConduits.adminPanel(), INSTANCES, row, ctx);
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             } catch (AccessRefusedException refused) {
@@ -506,7 +506,7 @@ public final class InstanceApi {
             return null;
         }
         try {
-            int instanceId = (Integer) ResourceWrites.create(INSTANCES, form, ctx);
+            int instanceId = (Integer) ResourceWrites.create(ApiConduits.adminPanel(), INSTANCES, form, ctx);
             Row created = reload(instanceId);
             ActivityLog.record(Models.get(InstanceModel.class), instanceId, "created",
                 created.get(InstanceModel.NAME));

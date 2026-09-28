@@ -52,17 +52,21 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
         boolean tlsPassthrough = SiteModel.UPSTREAM_TLS_PASSTHROUGH
             .equals(site.get(SiteModel.UPSTREAM_KIND));
         String panel = CmsSupport.panelSlug(conduit);
+        // A trashed site (or one under a trashed record) is read-only: every add below goes, and
+        // each row's edit and remove follow from the domain resource's own answer.
+        boolean readOnly = this.hostReadOnly(conduit);
         boolean administerDomains = HohenheimAccess.isAdmin(accessContext);
         // Requesting a certificate stays installation administration, because an issued
         // certificate is authority over a name.
-        boolean canRequestCert = administerDomains && !tlsPassthrough;
+        boolean canRequestCert = administerDomains && !tlsPassthrough && !readOnly;
         // AIDEV-NOTE: per-row write authority is the DOMAIN RESOURCE's answer, never a
         // second hand-rolled one. This page used to ask canManageSite while the resource's
         // writableBy asks reachesRecord -- two mechanisms deciding one question, so a
         // narrowed override on ManageDomainResource would have moved the endpoint without
         // moving the affordance. DnsZoneRecordsPage converges on this same seam.
-        SiteDomainResource resource = domainResource(panel);
-        boolean canAddDomain = resource != null && resource.creatable()
+        Panel host = PanelRegistry.getBySlug(panel);
+        SiteDomainResource resource = domainResource(host);
+        boolean canAddDomain = !readOnly && resource != null && resource.creatable()
             && HohenheimAccess.reachesRecord(accessContext, SiteModel.MODEL_ID, siteId,
                 HohenheimAccess.MANAGE);
         boolean anyRowActions = false;
@@ -73,8 +77,7 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
             entry.put("hostname", domain.get(SiteDomainModel.HOSTNAME));
             entry.put("matchType", domain.get(SiteDomainModel.MATCH_TYPE));
             entry.put("forceSsl", Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL)));
-            boolean canEditRow = resource != null && resource.updatable()
-                && resource.updatableBy(domain, accessContext);
+            boolean canEditRow = resource != null && resource.editableBy(host, domain, accessContext);
             entry.put("canEdit", canEditRow);
             if (canEditRow) {
                 // Bound back to THIS tab, like the remove below: the record page's Cancel and
@@ -85,10 +88,9 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
             // AIDEV-NOTE: the row's own remove, bound back to THIS tab. Detaching a hostname
             // used to be reachable only from the nav-hidden domains list or a hand-typed
             // /delete URL, so the tab that owns the hostnames could add one and never take
-            // one away. The endpoint re-decides through the resource's deletableBy; asking
+            // one away. The endpoint re-decides through the resource's removableBy; asking
             // the resource here is what keeps the affordance and the endpoint one answer.
-            boolean canRemoveRow = resource != null && resource.deletable()
-                && resource.deletableBy(domain, accessContext);
+            boolean canRemoveRow = resource != null && resource.removableBy(host, domain, accessContext);
             entry.put("canRemove", canRemoveRow);
             if (canRemoveRow) {
                 entry.put("deleteTarget", ReturnTarget.bind(
@@ -137,8 +139,7 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
      *
      * @return null when the panel carries no domain peer, which offers no write affordance
      */
-    private static @Nullable SiteDomainResource domainResource(@NonNull String panelSlug) {
-        Panel panel = PanelRegistry.getBySlug(panelSlug);
+    private static @Nullable SiteDomainResource domainResource(@Nullable Panel panel) {
         return panel != null && panel.peerBySlug("domains") instanceof SiteDomainResource peer
             ? peer : null;
     }
