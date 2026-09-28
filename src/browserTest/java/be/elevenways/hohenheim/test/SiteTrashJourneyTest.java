@@ -4,10 +4,12 @@ import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.quota.SiteQuota;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.flash.FlashEncoding;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -151,6 +153,33 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
             .contains("add-domain-link").contains(domainDelete);
         assertThat(adminGet(pathsTab(cedar)).body()).as("step 7: the Protected paths tab too")
             .contains("add-protected-path-link").contains(pathDelete);
+
+        // 8. Trashed again, its hostname is taken by another live site meanwhile. The restore is refused, and the
+        //    operator is told which hostname and which site hold it: the refusal names the enable toggle, which is
+        //    no field on a Trash row, so it must reach the operator as the action's own toast.
+        delete(cedar);
+        int birch = site("birch");
+        domain(birch);
+        HttpResponse<String> refused = adminPostForm("/admin/sites/" + cedar + "/action/trash_restore", "");
+        assertThat(refused.statusCode()).as("step 8: the refused restore answers back to the page").isIn(302, 303);
+        assertThat((Object) stored(cedar).get(SiteModel.DELETED_AT)).as("step 8: the site stays in the Trash")
+            .isNotNull();
+        FlashEncoding.Decoded toast = popFlash();
+        assertThat(toast).as("step 8: the refusal rides the session flash").isNotNull();
+        assertThat(toast.message().key()).as("step 8: as the route-conflict refusal, never a generic failure")
+            .isEqualTo("enable_route_conflict");
+        assertThat(CmsSupport.resolvedTextOrDefault(toast.message()))
+            .as("step 8: naming the hostname").contains(PREFIX + "cedar.test")
+            .as("step 8: and the site holding it").contains(PREFIX + "birch");
+
+        // 9. The bulk restore refuses the same way, by name.
+        adminPostForm("/admin/sites/bulk/trash_restore", "ids=" + cedar);
+        assertThat((Object) stored(cedar).get(SiteModel.DELETED_AT)).as("step 9: the bulk restore left it trashed")
+            .isNotNull();
+        FlashEncoding.Decoded bulkToast = popFlash();
+        assertThat(bulkToast).as("step 9: the bulk refusal rides the flash too").isNotNull();
+        assertThat(bulkToast.message().key()).as("step 9: with the same named refusal")
+            .isEqualTo("enable_route_conflict");
     }
 
     // -- fixtures ---------------------------------------------------------------
@@ -183,7 +212,7 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
         return row.get(AccessListModel.ID);
     }
 
-    /** One exact hostname, {@code <prefix>cedar.test}, on the site. */
+    /** One exact hostname, {@code <prefix>cedar.test}, on the site; step 8 gives it to a second site. */
     private static int domain(int siteId) {
         Row row = Models.get(SiteDomainModel.class).createEmptyRow();
         row.set(SiteDomainModel.SITE_ID, siteId);
