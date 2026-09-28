@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.routing.RouteScope;
@@ -39,13 +40,19 @@ public final class WithheldFailure {
      * peer addresses -- operator inventory. On the delegated panel this answers null and the
      * caller words a tenant-safe refusal instead (the InstanceOverviewPage install_error rule);
      * the operator still reads the reason on /admin or in the record's stored failure reason.
-     * No request in scope (a task, a direct test call) is the operator lane.
+     * Off the delegated panel the WORK decides (TenantWrites.actsAsOperator): declared system work
+     * or an operator caller reads it; a tenant's API request, a tenant's scheduled job and work
+     * with no identity at all never do -- "no request" is never the operator lane.
      *
-     * @return the failure's message (its class name when it carries none), or null on /manage
+     * @return the failure's message (its class name when it carries none), or null on /manage and
+     *         for work that does not act as the operator
      */
     public static @Nullable String operatorDetail(@NonNull Throwable failure) {
         Conduit conduit = RouteScope.currentConduit();
         if (conduit != null && CmsSupport.isDelegatedPanel(conduit)) {
+            return null;
+        }
+        if (!TenantWrites.actsAsOperator()) {
             return null;
         }
         String message = failure.getMessage();

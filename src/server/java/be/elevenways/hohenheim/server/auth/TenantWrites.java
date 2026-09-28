@@ -165,13 +165,21 @@ public final class TenantWrites {
         if (GeneratedDnsRecords.inSystemScope() || AUTHORIZED_OPERATION.isActive()) {
             return false;
         }
+        return !actsAsOperator();
+    }
+
+    /**
+     * Whether the work in flight acts as the operator: declared system work, or a caller holding the operator
+     * panel. Work with no identity never does, and an anonymous caller never does.
+     */
+    public static boolean actsAsOperator() {
         ExecutionIdentity identity = ExecutionIdentity.current();
         if (identity == null) {
-            return true;
+            return false;
         }
         return switch (identity.kind()) {
-            case SYSTEM -> false;
-            case CALLER -> !HohenheimAccess.isAdmin(identity.callerContext());
+            case SYSTEM -> true;
+            case CALLER -> HohenheimAccess.isAdmin(Objects.requireNonNull(identity.callerContext()));
         };
     }
 

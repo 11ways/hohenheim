@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.security.ExecutionIdentity;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -61,13 +60,10 @@ final class ClaimRefusals {
      * no identity never.
      */
     private static boolean mayReadHolder(@Nullable Integer holderSiteId) {
-        AccessContext ctx = TenantWrites.acting();
-        if (ctx == null) {
-            return ExecutionIdentity.isSystem();
-        }
-        if (HohenheimAccess.isAdmin(ctx)) {
+        if (TenantWrites.actsAsOperator()) {
             return true;
         }
-        return holderSiteId != null && HohenheimAccess.canManageSite(ctx, holderSiteId);
+        AccessContext ctx = TenantWrites.acting();
+        return ctx != null && holderSiteId != null && HohenheimAccess.canManageSite(ctx, holderSiteId);
     }
 }
