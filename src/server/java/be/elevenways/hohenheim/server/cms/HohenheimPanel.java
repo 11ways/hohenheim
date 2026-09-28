@@ -19,6 +19,7 @@ import be.elevenways.zenit.comms.server.cms.CommsSettingsLabels;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -221,7 +222,10 @@ public final class HohenheimPanel extends Panel {
         peers.add(new AdminInboxPage());
         // What is this server running: every bundled module's git commit (System group).
         peers.add(new BuildInfoPage());
-        peers.add(settingsPage());
+        SettingsPage settings = settingsPage();
+        if (settings != null) {
+            peers.add(settings);
+        }
         addIf(peers, new CertificateRequestPage(), Role.PROXY);
         return peers;
     }
@@ -238,35 +242,20 @@ public final class HohenheimPanel extends Panel {
     }
 
     /**
-     * The settings editor: Hohenheim's own group and the comms transport chain (each a group of
-     * the framework file, which the framework mount then leaves out), zenit's framework mount and
-     * the spamservice backend. The file-backed mounts only appear when this boot actually loaded
-     * the framework file, so the panel never breaks over a missing settings source.
-     *
-     * AIDEV-NOTE: the framework mount is zenit-cms's own {@link SettingsPage#frameworkMount()},
-     * never a hand-built {@code SettingsEditor} over settings/local.dry: its key and label are
-     * the framework's declared vocabulary (SettingsPage.FRAMEWORK_MOUNT_KEY, SettingsLabels), so
-     * a ?section=framework.* deep link and its translation cannot drift from other hosts. The
-     * mount order is unchanged from before (hohenheim, framework, comms, spamservice).
+     * The settings editor in the System group: Hohenheim's own group, the comms transport chain (each a group of the
+     * framework file, which the framework mount then leaves out), the spamservice backend and, appended by the
+     * standard page, zenit's framework mount. The file-backed mounts only appear when this boot loaded that file.
      */
-    private static @NonNull SettingsPage settingsPage() {
-        List<SettingsPage.Mount> mounts = new ArrayList<>();
-        SettingsPage.Mount app = SettingsPage.frameworkGroup("app", Microcopy.literal("Hohenheim"),
-            HohenheimSettings.HOHENHEIM);
-        if (app != null) {
-            mounts.add(app);
-        }
-        SettingsPage.Mount framework = SettingsPage.frameworkMount();
-        if (framework != null) {
-            mounts.add(framework);
-        }
-        SettingsPage.Mount comms = SettingsPage.frameworkGroup(CommsSettingsLabels.MOUNT_KEY,
-            CommsSettingsLabels.mount(), CommsSettings.ROOT);
-        if (comms != null) {
-            mounts.add(comms);
-        }
-        mounts.add(new SettingsPage.Mount("spamservice",
-            Microcopy.literal("Spamservice"), new SpamserviceSettingsBackend()));
-        return new AdminSettingsPage(mounts);
+    private static @Nullable SettingsPage settingsPage() {
+        return SettingsPage.standard(Identifier.of("hohenheim", "settings"))
+            .mount(SettingsPage.frameworkGroup("app", Microcopy.literal("Hohenheim"), HohenheimSettings.HOHENHEIM))
+            .mount(SettingsPage.frameworkGroup(CommsSettingsLabels.MOUNT_KEY, CommsSettingsLabels.mount(),
+                CommsSettings.ROOT))
+            .mount(new SettingsPage.Mount("spamservice", Microcopy.literal("Spamservice"),
+                new SpamserviceSettingsBackend()))
+            .navGroup(NavGroup.SYSTEM)
+            .navOrder(95)
+            .description(Microcopy.of("nav_hint").withFilter("scope", "settings"))
+            .build();
     }
 }
