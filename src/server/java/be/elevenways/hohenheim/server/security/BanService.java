@@ -12,6 +12,7 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.net.AddressScope;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -121,12 +122,17 @@ public final class BanService {
         this.writer = writer;
     }
 
-    /** The one daemon thread every automatic ban and background cache load runs on. */
-    private static @NonNull Executor backgroundWriter() {
+    /**
+     * The one daemon thread every automatic ban and background cache load runs on.
+     *
+     * AIDEV-NOTE: an automatic ban is the system's reaction to traffic, never the action of
+     * whichever request tripped it, so every task runs detached as system.
+     */
+    static @NonNull Executor backgroundWriter() {
         ThreadPoolExecutor executor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
             new LinkedBlockingQueue<>(WRITER_QUEUE_CAPACITY),
             runnable -> Thread.ofPlatform().daemon().name("ban-writer").unstarted(runnable));
-        return executor;
+        return task -> executor.execute(() -> ExecutionIdentity.runDetachedAsSystem("ban-writer", task));
     }
 
     NftService nft() {
@@ -141,12 +147,13 @@ public final class BanService {
     public void boot() {
         refreshCache();
         if (nft.isEnabled() && this.nftBootStarted.compareAndSet(false, true)) {
-            this.nftBootThread = Thread.ofPlatform().daemon().name("nft-resync").start(() -> {
-                Blast.log("NFT: background boot reconciliation started");
-                nft.setup(NftService.configuredPorts(), NftService.configuredSshPorts());
-                resyncNftables();
-                Blast.log("NFT: background boot reconciliation finished");
-            });
+            this.nftBootThread = Thread.ofPlatform().daemon().name("nft-resync").start(() ->
+                ExecutionIdentity.runDetachedAsSystem("nft-resync", () -> {
+                    Blast.log("NFT: background boot reconciliation started");
+                    nft.setup(NftService.configuredPorts(), NftService.configuredSshPorts());
+                    resyncNftables();
+                    Blast.log("NFT: background boot reconciliation finished");
+                }));
         }
     }
 
