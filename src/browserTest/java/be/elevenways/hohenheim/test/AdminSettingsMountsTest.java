@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The admin settings page is zenit-cms's standard page, placed in the System group, offering its four mounts with
- * the framework one appended by the standard page under the key every host shares.
+ * the framework one placed second, under the key every host shares.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -29,7 +29,7 @@ class AdminSettingsMountsTest extends HohenheimTestBase {
             .isEqualTo("framework");
 
         // 2. The peer is the standard page itself, placed and described by its options, the framework
-        //    mount appended last.
+        //    mount placed right after Hohenheim's own group.
         Panel admin = PanelRegistry.getBySlug(HohenheimSlugs.ADMIN);
         assertThat(admin).as("step 2: the admin panel is registered").isNotNull();
         PanelPeer peer = admin.peerBySlug(SettingsPage.DEFAULT_SLUG);
@@ -38,8 +38,8 @@ class AdminSettingsMountsTest extends HohenheimTestBase {
             .isSameAs(NavGroup.SYSTEM);
         assertThat(peer.description()).as("step 2: the settings entry carries its nav hint").isNotNull();
         List<String> keys = ((SettingsPage) peer).mounts().stream().map(SettingsPage.Mount::key).toList();
-        assertThat(keys).as("step 2: the host mounts in order, the framework mount appended last")
-            .containsExactly("app", "comms", "spamservice", SettingsPage.FRAMEWORK_MOUNT_KEY);
+        assertThat(keys).as("step 2: hohenheim, framework, comms, spamservice, in that order")
+            .containsExactly("app", SettingsPage.FRAMEWORK_MOUNT_KEY, "comms", "spamservice");
 
         // 3. One page load expanding a group of each file-backed mount renders all three.
         navigateToApp("/admin/settings?section="

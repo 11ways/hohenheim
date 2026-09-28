@@ -242,13 +242,14 @@ public final class HohenheimPanel extends Panel {
     }
 
     /**
-     * The settings editor in the System group: Hohenheim's own group, the comms transport chain (each a group of the
-     * framework file, which the framework mount then leaves out), the spamservice backend and, appended by the
-     * standard page, zenit's framework mount. The file-backed mounts only appear when this boot loaded that file.
+     * The settings editor in the System group: Hohenheim's own group, zenit's framework mount, the comms transport
+     * chain (it and Hohenheim's group are groups of the framework file, which the framework mount then leaves out) and
+     * the spamservice backend. The file-backed mounts only appear when this boot loaded that file.
      */
     private static @Nullable SettingsPage settingsPage() {
         return SettingsPage.standard(Identifier.of("hohenheim", "settings"))
             .mount(SettingsPage.frameworkGroup("app", Microcopy.literal("Hohenheim"), HohenheimSettings.HOHENHEIM))
+            .frameworkMount()
             .mount(SettingsPage.frameworkGroup(CommsSettingsLabels.MOUNT_KEY, CommsSettingsLabels.mount(),
                 CommsSettings.ROOT))
             .mount(new SettingsPage.Mount("spamservice", Microcopy.literal("Spamservice"),
