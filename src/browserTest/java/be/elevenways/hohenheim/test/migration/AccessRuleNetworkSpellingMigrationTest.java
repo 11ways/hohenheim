@@ -43,16 +43,24 @@ class AccessRuleNetworkSpellingMigrationTest {
         int list = accessList(datasource);
 
         // 1. Rules as the previous build stored them: a leading-zero octet (read as DECIMAL), a
-        //    zone id, a fullwidth IPv6 digit, a mapped CIDR with a leading zero, a canonical rule,
-        //    a value that never parsed, and a non-network rule carrying the same data key.
+        //    zone id, a fullwidth IPv6 digit, a mapped CIDR with a leading zero, dotted quads
+        //    embedded before the end of an IPv6 literal (production 91191333's parser read them
+        //    as groups), a canonical rule, a value that never parsed, and a non-network rule
+        //    carrying the same data key.
         int leadingZero = rule(datasource, list, "ip_deny", "010.000.0.1");
         int zoned = rule(datasource, list, "ip_allow", "fe80::1%eth0");
         int fullwidth = rule(datasource, list, "ip_deny", "2001:db8::１");
         int mappedCidr = rule(datasource, list, "ip_deny", "::ffff:010.0.0.0/104");
+        int quadFirst = rule(datasource, list, "ip_deny", "1.2.3.4::1");
+        int quadInTail = rule(datasource, list, "ip_allow", "::1.2.3.4:5");
+        int quadCidr = rule(datasource, list, "ip_deny", "1.2.3.4::/32");
+        int quadUncompressed = rule(datasource, list, "ip_deny", "1:2:3.4.5.6:7:8:9:a");
         int canonical = rule(datasource, list, "ip_allow", "192.0.2.0/24");
         int garbage = rule(datasource, list, "ip_deny", "not an address");
         int group = rule(datasource, list, "group", "010.0.0.1");
-        for (int id : List.of(leadingZero, zoned, fullwidth, mappedCidr)) {
+        List<Integer> lax = List.of(leadingZero, zoned, fullwidth, mappedCidr, quadFirst, quadInTail,
+            quadCidr, quadUncompressed);
+        for (int id : lax) {
             assertThat(AccessRuleModel.parseNetwork(network(datasource, id)))
                 .as("step 1: rule %s no longer parses under the strict parser", id).isNull();
         }
@@ -63,7 +71,15 @@ class AccessRuleNetworkSpellingMigrationTest {
         assertThat(network(datasource, zoned)).as("step 2: the zone dropped, as before").isEqualTo("fe80::1");
         assertThat(network(datasource, fullwidth)).as("step 2: the digit it read").isEqualTo("2001:db8::1");
         assertThat(network(datasource, mappedCidr)).as("step 2: the folded range").isEqualTo("10.0.0.0/8");
-        for (int id : List.of(leadingZero, zoned, fullwidth, mappedCidr)) {
+        assertThat(network(datasource, quadFirst)).as("step 2: a leading quad read as two groups")
+            .isEqualTo("102:304::1");
+        assertThat(network(datasource, quadInTail)).as("step 2: a quad inside the tail read as two groups")
+            .isEqualTo("::102:304:5");
+        assertThat(network(datasource, quadCidr)).as("step 2: the prefix kept over 128 bits")
+            .isEqualTo("102:304::/32");
+        assertThat(network(datasource, quadUncompressed)).as("step 2: a quad mid-address, uncompressed")
+            .isEqualTo("1:2:304:506:7:8:9:a");
+        for (int id : lax) {
             assertThat(AccessRuleModel.parseNetwork(network(datasource, id)))
                 .as("step 2: rule %s parses again", id).isNotNull();
         }
