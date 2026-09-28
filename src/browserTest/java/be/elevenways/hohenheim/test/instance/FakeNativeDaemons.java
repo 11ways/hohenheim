@@ -234,6 +234,7 @@ final class FakeNativeDaemons {
         private final BlockingQueue<byte[]> frames = new LinkedBlockingQueue<>();
         private final List<String> stdinWrites = new ArrayList<>();
         private volatile boolean closed;
+        private volatile ConsoleStream.Termination termination = ConsoleStream.Termination.CONSUMER_CLOSED;
 
         /** Deliver one output frame verbatim, chunk boundaries included. */
         void push(@NonNull String text) {
@@ -279,13 +280,18 @@ final class FakeNativeDaemons {
         }
 
         /**
-         * Always CONSUMER_CLOSED: nothing here asserts the crash-detection policy that
-         * ENDED and DAEMON_LOST drive, and a termination no test exercises would be a
-         * fake answering a question nobody asked.
+         * The daemon ends the stream in order: the workload exited, which is what drives
+         * the hub's crash policy (a close by the consumer never does).
          */
+        void endFromDaemon() {
+            this.termination = ConsoleStream.Termination.ENDED;
+            this.close();
+        }
+
+        /** CONSUMER_CLOSED unless {@link #endFromDaemon} ended it. */
         @Override
         public ConsoleStream.@NonNull Termination termination() {
-            return ConsoleStream.Termination.CONSUMER_CLOSED;
+            return this.termination;
         }
 
         @Override

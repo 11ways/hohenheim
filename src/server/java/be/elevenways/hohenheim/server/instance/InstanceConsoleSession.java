@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.runtime.ConsoleStreamSupport;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -97,7 +98,15 @@ final class InstanceConsoleSession {
         this.logSink = logSink;
         this.lastFlushAt = Now.millis();
         this.exitListener = exitListener;
-        JobRunner.startVirtualThread(this::pump);
+        // AIDEV-NOTE: the pump is the SYSTEM's watch of the workload, never the continuation of
+        // whoever opened the session. It outlives that request, and everything it does is a
+        // system reaction: the readiness stamp, the episode log and the exit policy (status,
+        // port release, crash-loop alert, crash restart). Carrying the opener made a
+        // CONSOLE-only viewer's session restart a crashed workload as that viewer, which the
+        // POWER gate refused, leaving it down. Viewer reads stay gated where they happen: the
+        // attach and the socket's revalidate, both on the viewer's own thread.
+        JobRunner.startVirtualThread(() -> ExecutionIdentity.runDetachedAsSystem("instance-console",
+            this::pump));
     }
 
     /** Teach the live redactor a value declared secret after this session opened. */
