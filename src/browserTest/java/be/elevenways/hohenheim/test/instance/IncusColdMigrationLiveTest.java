@@ -317,17 +317,19 @@ class IncusColdMigrationLiveTest {
 
                 // 11. KILLED CONTROLLER, live: the crash lands after the destination
                 //     import, leaving copies on BOTH real daemons and the record
-                //     mid-migration -- exactly the split this wave must kill.
+                //     mid-migration -- exactly the split this wave must kill. The kill
+                //     is KilledController's Error: an unchecked exception is a failure
+                //     the migration's own net settles in-process, never a dead process.
                 int rid = restoredId;
                 Throwable killed = catchThrowable(() -> new InstanceMigrations(
                     new InstanceService(), step -> {
                         if ("imported".equals(step)) {
-                            throw new IllegalStateException("controller killed live");
+                            throw new KilledController.Killed(step);
                         }
                     }).migrateTo(rid, hostBId));
                 assertThat(killed)
                     .as("step 11: the simulated kill escaped the failure net")
-                    .isInstanceOf(IllegalStateException.class);
+                    .isInstanceOf(KilledController.Killed.class);
                 assertThat((String) Models.get(InstanceModel.class).findById(restoredId)
                         .get(InstanceModel.STATUS))
                     .as("step 11: the record is left MIGRATING, as a dead controller"
