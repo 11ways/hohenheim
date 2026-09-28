@@ -10,11 +10,11 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.comms.server.CommsInboxModel;
 import be.elevenways.zenit.comms.server.CommsInboxOwners;
 import be.elevenways.zenit.server.live.LiveInvalidations;
-import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.TimeoutError;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -68,10 +68,16 @@ class AdminInboxBadgeTest extends HohenheimTestBase {
             .as("step 3: still the same page").isEqualTo(true);
     }
 
-    /** The count on the inbox entry; an entry printing none counts nothing. */
+    /**
+     * The count on the inbox entry; an entry printing none counts nothing.
+     *
+     * AIDEV-NOTE: one snapshot read, never count() then textContent(): the badge the count saw
+     * can leave before the text is read (exactly what step 3 waits for), and textContent then
+     * waits the whole default timeout for an element that is gone for good.
+     */
     private long badge() {
-        Locator badge = page.locator(BADGE);
-        return badge.count() == 0 ? 0 : Long.parseLong(badge.first().textContent().trim());
+        List<String> texts = page.locator(BADGE).allTextContents();
+        return texts.isEmpty() ? 0 : Long.parseLong(texts.get(0).trim());
     }
 
     /** Waits for a condition, naming the step instead of reporting a bare Playwright timeout. */
