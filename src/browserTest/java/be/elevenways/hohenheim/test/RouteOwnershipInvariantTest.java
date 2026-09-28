@@ -476,8 +476,8 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         assertThatThrownBy(() -> siteModel.save(trashed))
             .as("step 4: restoring into a taken route is refused")
             .isInstanceOfSatisfying(Violations.class, violations ->
-                assertThat(hasViolation(violations, "enabled", "enable_route_conflict"))
-                    .as("step 4: the refusal is the enable route conflict").isTrue());
+                assertThat(hasViolation(violations, "enabled", "restore_route_conflict"))
+                    .as("step 4: the refusal is the route conflict, worded as a restore").isTrue());
         assertThat((Instant) StoredRows.byId(siteModel, incumbent.get(SiteModel.ID)).get(SiteModel.DELETED_AT))
             .as("step 4: the refused restore left the site trashed").isNotNull();
         assertThat(storedClaimsOn(hostname))

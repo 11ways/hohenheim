@@ -5402,8 +5402,16 @@
     "text": "Cannot enable this site: {$hostname} overlaps {$pattern}, routed by site {$site}",
     "scope": "violations"
   },
+  "restore_route_overlap": {
+    "text": "Cannot restore this site: {$hostname} overlaps {$pattern}, routed by site {$site}",
+    "scope": "violations"
+  },
   "enable_route_conflict": {
     "text": "Cannot enable this site: {$hostname} is already routed by site {$site}",
+    "scope": "violations"
+  },
+  "restore_route_conflict": {
+    "text": "Cannot restore this site: {$hostname} is already routed by site {$site}",
     "scope": "violations"
   },
   "docker_unreachable": {
@@ -5534,6 +5542,10 @@
   },
   "enable_route_quarantined": {
     "text": "Cannot enable this site: {$hostname} was recently released by another owner and stays reserved for {$days} more day(s); an administrator can lift the quarantine",
+    "scope": "violations"
+  },
+  "restore_route_quarantined": {
+    "text": "Cannot restore this site: {$hostname} was recently released by another owner and stays reserved for {$days} more day(s); an administrator can lift the quarantine",
     "scope": "violations"
   },
   "kind": {
@@ -11912,6 +11924,10 @@
   },
   "enable_hostname_unavailable": {
     "text": "Cannot enable this site: {$hostname} is not available on this installation",
+    "scope": "violations"
+  },
+  "restore_hostname_unavailable": {
+    "text": "Cannot restore this site: {$hostname} is not available on this installation",
     "scope": "violations"
   },
   "covered": {

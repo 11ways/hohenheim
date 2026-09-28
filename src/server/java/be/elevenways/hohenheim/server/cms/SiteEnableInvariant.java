@@ -82,7 +82,7 @@ public final class SiteEnableInvariant {
             try {
                 RouteClaims.restamp(stored.get(SiteModel.ID), willBeLive(row, stored));
             } catch (ClaimConflict conflict) {
-                throw refusalFor(conflict);
+                throw refusalFor(conflict, SiteGoLive.of(stored));
             }
         });
     }
@@ -116,16 +116,16 @@ public final class SiteEnableInvariant {
      * produces, so a tenant who lost the race is told what happened instead of seeing a
      * driver error -- the whole point of the constraint is that the loser is TOLD.
      */
-    private static @NonNull Violations refusalFor(@NonNull ClaimConflict conflict) {
+    private static @NonNull Violations refusalFor(@NonNull ClaimConflict conflict, @NonNull SiteGoLive goLive) {
         Row holder = RouteClaims.holderSiteOf(conflict.getKey());
         Integer holderId = holder != null ? holder.get(SiteModel.ID) : null;
         String hostname = RouteClaims.hostnameOf(conflict.getKey());
         return Violations.ofField("enabled", true,
             ClaimRefusals.heldBy(holderId, holder,
-                site -> CmsSupport.violationText("enable_route_conflict")
+                site -> CmsSupport.violationText(goLive.routeConflictKey())
                     .withArg("hostname", hostname)
                     .withArg("site", holder != null ? site : "?"),
-                CmsSupport.violationText(ClaimRefusals.ENABLE_HOSTNAME_UNAVAILABLE)
+                CmsSupport.violationText(goLive.hostnameUnavailableKey())
                     .withArg("hostname", hostname)));
     }
 
@@ -143,6 +143,6 @@ public final class SiteEnableInvariant {
      * @throws Violations when going live would collide with a live site's route
      */
     private static void refuseConflictingEnable(@NonNull Row existing) {
-        SiteDomainResource.refuseEnableRouteConflicts(existing.get(SiteModel.ID));
+        SiteDomainResource.refuseEnableRouteConflicts(existing.get(SiteModel.ID), SiteGoLive.of(existing));
     }
 }

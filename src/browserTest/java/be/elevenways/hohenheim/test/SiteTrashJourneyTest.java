@@ -167,8 +167,9 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
         FlashEncoding.Decoded toast = popFlash();
         assertThat(toast).as("step 8: the refusal rides the session flash").isNotNull();
         assertThat(toast.message().key()).as("step 8: as the route-conflict refusal, never a generic failure")
-            .isEqualTo("enable_route_conflict");
+            .isEqualTo("restore_route_conflict");
         assertThat(CmsSupport.resolvedTextOrDefault(toast.message()))
+            .as("step 8: worded as a restore, never as an enable").startsWith("Cannot restore this site")
             .as("step 8: naming the hostname").contains(PREFIX + "cedar.test")
             .as("step 8: and the site holding it").contains(PREFIX + "birch");
 
@@ -179,7 +180,7 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
         FlashEncoding.Decoded bulkToast = popFlash();
         assertThat(bulkToast).as("step 9: the bulk refusal rides the flash too").isNotNull();
         assertThat(bulkToast.message().key()).as("step 9: with the same named refusal")
-            .isEqualTo("enable_route_conflict");
+            .isEqualTo("restore_route_conflict");
     }
 
     // -- fixtures ---------------------------------------------------------------
