@@ -84,8 +84,9 @@ class SoftDeleteJourneyTest {
                 .as("step 2: a default find no longer sees the trashed site").isNull();
             assertThat(sites.find().where(SiteModel.ID.eq(siteId)).count())
                 .as("step 2: nor does a default count").isZero();
-            assertThat(resource.loadRow(siteId, anyone))
-                .as("step 2: the record page loads nothing (a 404)").isNull();
+            Row inTrash = resource.loadRow(siteId, anyone);
+            assertThat(inTrash).as("step 2: the admin record page opens it from the Trash").isNotNull();
+            assertThat(resource.isArchived(inTrash)).as("step 2: as an archived, read-only record").isTrue();
             Row trashed = StoredRows.byId(sites, siteId);
             assertThat(trashed).as("step 2: the row is still stored").isNotNull();
             assertThat((Object) trashed.get(SiteModel.DELETED_AT))

@@ -68,6 +68,9 @@ public final class ManageSiteResource extends SiteResource {
     @Override public boolean creatable() { return false; }
     @Override public boolean deletable() { return false; }
 
+    /** The delegated surface deletes nothing, so it has no Trash either. */
+    @Override public boolean offersTrash() { return false; }
+
     /**
      * The delegated surface owns NOTHING outside its three form fields, so it
      * inherits none of SiteResource's declaration. Deliberately explicit: a
