@@ -130,7 +130,7 @@ public final class DatabaseApi {
                 // The resource's pipeline: deletableBy demands `destroy` on the record,
                 // deleteUnavailableReason refuses while a workload holds it, and deleteRow
                 // is DatabaseService.destroy -- which asks the destroy gate again itself.
-                ResourceWrites.delete(DATABASES, row, ctx);
+                ResourceWrites.delete(ApiConduits.adminPanel(), DATABASES, row, ctx);
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             } catch (AccessRefusedException refused) {

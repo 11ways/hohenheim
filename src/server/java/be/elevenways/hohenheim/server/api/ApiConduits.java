@@ -2,8 +2,12 @@ package be.elevenways.hohenheim.server.api;
 
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.cms.HohenheimPanel;
+import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -124,6 +128,29 @@ public final class ApiConduits {
             row.put("field", violation.path());
         }
         return row;
+    }
+
+    /**
+     * The panel whose peers an API write's resource resolves its declared parent against ({@code ResourceWrites}), so a
+     * record under an archived parent is refused on the API exactly as on the admin routes.
+     *
+     * @throws IllegalStateException when the admin panel was never registered
+     */
+    public static @NonNull Panel adminPanel() {
+        return registeredPanel(HohenheimPanel.SLUG);
+    }
+
+    /** The {@link #adminPanel()} twin for the tenant resources, which resolve their parents in the operator panel. */
+    public static @NonNull Panel managePanel() {
+        return registeredPanel(ManagePanel.SLUG);
+    }
+
+    private static @NonNull Panel registeredPanel(@NonNull String slug) {
+        Panel panel = PanelRegistry.getBySlug(slug);
+        if (panel == null) {
+            throw new IllegalStateException("panel '" + slug + "' is not registered");
+        }
+        return panel;
     }
 
     public static @NonNull ActionResult<Object> json(@NonNull Map<String, Object> body) {

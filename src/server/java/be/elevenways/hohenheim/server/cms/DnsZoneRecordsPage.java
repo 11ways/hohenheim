@@ -52,6 +52,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Records tab on a DNS zone: the zone's own records rendered through the record
@@ -135,6 +136,9 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
                                          @NonNull DnsRecordResource resource) {
         Integer zoneId = zone.get(DnsZoneModel.ID);
         String origin = zone.get(DnsZoneModel.ORIGIN);
+        // The panel this tab renders under: the one whose peers every write predicate below
+        // resolves the record's parent against (a record under a trashed zone is read-only).
+        Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(PANEL), "the admin panel is registered");
 
         String search = Texts.trimmedOrNull(conduit.getQueryParam(CmsEndpoints.LIST_SEARCH_PARAM.getName()));
         Integer requestedPage = CmsSupport.parsedInt(conduit.getQueryParam(CmsEndpoints.LIST_PAGE_PARAM.getName()));
@@ -171,14 +175,14 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
             records,
             resource::rowKey,
             row -> resource.rowCells(applied, row),
-            resource.offeredRowActions(),
+            resource.offeredRowActions(panel),
             (actionId, row) -> ReturnTarget.bind(
                 CmsRoutes.invokeRow(PANEL, resource.slug(), resource.rowKey(row), actionId), returnTo),
             column -> null,
             row -> recordUrl(resource, row, returnTo),
-            row -> resource.updatable() && resource.updatableBy(row, accessContext)
+            row -> resource.editableBy(panel, row, accessContext)
                 ? recordUrl(resource, row, returnTo) : null,
-            row -> resource.deletable() && resource.deletableBy(row, accessContext)
+            row -> resource.removableBy(panel, row, accessContext)
                 ? ReturnTarget.bind(CmsRoutes.delete(PANEL, resource.slug(), resource.rowKey(row)),
                     returnTo).toUrl()
                 : null,
@@ -189,7 +193,7 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
             row -> resource.deleteUnavailableReason(row, accessContext),
             // Promoted seam: the framework's own affordance answer, which the generated
             // list page uses too -- this page used to carry a copy of it.
-            row -> InlineEditStates.editableCellsFor(resource, applied, row, accessContext),
+            row -> InlineEditStates.editableCellsFor(panel, resource, applied, row, accessContext),
             accessContext);
 
         RouteTarget addRecordTarget = CmsEndpoints.CREATE_FORM

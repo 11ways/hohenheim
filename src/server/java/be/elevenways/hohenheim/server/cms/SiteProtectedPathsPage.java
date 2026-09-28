@@ -52,9 +52,10 @@ public final class SiteProtectedPathsPage implements RecordScopedPage<Row> {
         Integer siteId = site.get(SiteModel.ID);
         String panel = CmsSupport.panelSlug(conduit);
         // Per-row write authority is the RESOURCE's answer, never a second hand-rolled
-        // one -- the SiteDomainsPage seam.
-        ProtectedPathResource resource = pathResource(panel);
-        boolean canAdd = resource != null && resource.creatable()
+        // one -- the SiteDomainsPage seam; a read-only (trashed) site offers no add.
+        Panel host = PanelRegistry.getBySlug(panel);
+        ProtectedPathResource resource = pathResource(host);
+        boolean canAdd = !this.hostReadOnly(conduit) && resource != null && resource.creatable()
             && HohenheimAccess.reachesRecord(accessContext, SiteModel.MODEL_ID, siteId,
                 HohenheimAccess.MANAGE);
         boolean anyRowActions = false;
@@ -64,15 +65,13 @@ public final class SiteProtectedPathsPage implements RecordScopedPage<Row> {
             entry.put("id", guarded.get(ProtectedPathModel.ID));
             entry.put("path", guarded.get(ProtectedPathModel.PATH));
             entry.put("listName", listNameOf(guarded));
-            boolean canEditRow = resource != null && resource.updatable()
-                && resource.updatableBy(guarded, accessContext);
+            boolean canEditRow = resource != null && resource.editableBy(host, guarded, accessContext);
             entry.put("canEdit", canEditRow);
             if (canEditRow) {
                 entry.put("editTarget", CmsRoutes.detail(panel, "protected-paths",
                     guarded.get(ProtectedPathModel.ID)));
             }
-            boolean canRemoveRow = resource != null && resource.deletable()
-                && resource.deletableBy(guarded, accessContext);
+            boolean canRemoveRow = resource != null && resource.removableBy(host, guarded, accessContext);
             entry.put("canRemove", canRemoveRow);
             if (canRemoveRow) {
                 entry.put("deleteTarget", ReturnTarget.bind(
@@ -111,8 +110,7 @@ public final class SiteProtectedPathsPage implements RecordScopedPage<Row> {
      * The protected-path resource of the panel this tab renders under, whose write
      * predicates decide every affordance here.
      */
-    private static @Nullable ProtectedPathResource pathResource(@NonNull String panelSlug) {
-        Panel panel = PanelRegistry.getBySlug(panelSlug);
+    private static @Nullable ProtectedPathResource pathResource(@Nullable Panel panel) {
         return panel != null
             && panel.peerBySlug("protected-paths") instanceof ProtectedPathResource peer
             ? peer : null;
