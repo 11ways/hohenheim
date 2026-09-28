@@ -234,6 +234,12 @@ request that times out. No production deploy was performed for this review.
    resolves `database.path` independently of cwd. `--rehearse-migrations`
    opens the copy through its own unregistered datasource and refuses a target
    that is the configured live file, symlinks included.)
+   The rehearsal also reads a COPY of `settings/` (`-Dzenit.settings.root`
+   pointing into the rehearsal dir): a newer jar adopts retired settings files
+   into `local.dry` on boot, and doing that to the live files would strand a
+   rollback of the still-running old jar. `--rollback` restores `settings/`
+   from the preflight copy for the same reason, keeping the newer tree aside
+   as `settings.rolled-back-<stamp>`.
 6. Swap: `install -o hohenheim -g hohenheim -m 644` beside the live jar,
    `systemctl stop`, an at-swap `.backup` of the database, `mv` into place,
    then `systemctl start`. Everything up to the `mv` aborts on error; from the
