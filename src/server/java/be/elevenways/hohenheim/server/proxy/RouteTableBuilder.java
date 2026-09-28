@@ -229,6 +229,7 @@ final class RouteTableBuilder {
             accessTree = AccessRuleTree.compile(accessList.get(AccessListModel.SATISFY),
                 inputs.rulesByList().getOrDefault(accessListId, List.of()), leafContext);
             own(treeGates, accessTree.gates());
+            unusableRules(siteId, siteName, accessList, accessTree);
         }
         List<RouteEntry.PathGuard> pathGuards = pathGuards(siteId, siteName, inputs, leafContext,
             treeGates);
@@ -325,12 +326,14 @@ final class RouteTableBuilder {
                 if (guardList == null) {
                     Blast.log("SiteDispatcher: protected path", guardPath, "on site",
                         siteName, "names a missing access list - failing closed");
-                    guardTree = AccessRuleTree.denyAll();
+                    guardTree = AccessRuleTree.denyAll("protected path " + guardPath
+                        + " names missing access list " + guardListId);
                 } else {
                     guardTree = AccessRuleTree.compile(guardList.get(AccessListModel.SATISFY),
                         inputs.rulesByList().getOrDefault(guardListId, List.of()), leafContext);
                     own(treeGates, guardTree.gates());
                 }
+                unusableRules(siteId, siteName, guardList, guardTree);
                 if (guardListId != null) {
                     guardTreesByList.put(guardListId, guardTree);
                 }
@@ -438,6 +441,16 @@ final class RouteTableBuilder {
             }
         }
         destroy(handlers, gates);
+    }
+
+    /** Record one problem per rule a compiled tree refuses in place of evaluating it. */
+    private void unusableRules(Integer siteId, String siteName, @Nullable Row accessList,
+                               AccessRuleTree tree) {
+        String listName = accessList != null ? accessList.get(AccessListModel.NAME) : null;
+        for (String rule : tree.unusableRules()) {
+            problem(siteId, siteName, RoutingProblem.Reason.ACCESS_RULE_UNUSABLE,
+                listName != null ? listName + ": " + rule : rule);
+        }
     }
 
     private void problem(@Nullable Integer siteId, @Nullable String siteName,

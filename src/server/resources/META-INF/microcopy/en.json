@@ -1106,6 +1106,10 @@
     "text": "Its authentication provider cannot be built, so every request is refused: {$detail}",
     "scope": "routing_problem"
   },
+  "access_rule_unusable": {
+    "text": "An access rule cannot be evaluated and refuses every request it decides: {$detail}",
+    "scope": "routing_problem"
+  },
   "database_status": {
     "text": "Attached database {$name} is {$status}",
     "scope": "attention_detail"

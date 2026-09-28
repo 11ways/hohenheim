@@ -1106,6 +1106,10 @@
     "text": "De authenticatieprovider kan niet worden opgebouwd, dus elk verzoek wordt geweigerd: {$detail}",
     "scope": "routing_problem"
   },
+  "access_rule_unusable": {
+    "text": "Een toegangsregel kan niet worden geevalueerd en weigert elk verzoek waarover hij beslist: {$detail}",
+    "scope": "routing_problem"
+  },
   "database_status": {
     "text": "Gekoppelde database {$name} is {$status}",
     "scope": "attention_detail"
