@@ -7,6 +7,7 @@
 {% declare dsRecord: String = "" %}
 {% declare importTarget: RouteTarget %}
 {% declare importable: Boolean = true %}
+{% declare writable: Boolean = true %}
 {% declare primaryPeer: String = "" %}
 {% declare recordTabs: List<RecordTabState> %}
 {% extend "zenitcms:shell" var:title=title %}
@@ -61,6 +62,8 @@
             : t("import_replica", scope: "dns_zone") }}
     </pl-alert>
     {% else %}
+    {#- A read-only zone (trashed, or under a trashed record) offers no import: the endpoint refuses one. -#}
+    {% if writable %}
     {% let zoneTextValue = "" %}
     <form use:Zenit.form={% importTarget %}
           use:CmsConfirm.destructive={% t("import_confirm", scope: "dns_zone") %}>
@@ -96,6 +99,7 @@
             <pl-button variant="destructive" type="submit">{{ t("import_action", scope: "dns_zone") }}</pl-button>
         </div>
     </form>
+    {% /if %}
     {% /if %}
 </section>
 {% /block %}

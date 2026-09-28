@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.api;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.server.cms.DnsRecordResource;
 import be.elevenways.hohenheim.server.cms.DnsZoneResource;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
@@ -41,6 +42,9 @@ import java.util.Objects;
 public final class DnsZoneApi {
 
     private static final DnsZoneResource ZONES = new DnsZoneResource();
+
+    /** The record resource whose declared parent judges whether an import may write into a zone. */
+    private static final DnsRecordResource RECORDS = new DnsRecordResource();
 
     private DnsZoneApi() {
     }
@@ -91,6 +95,12 @@ public final class DnsZoneApi {
                 return null;
             }
             int zoneId = zone.get(DnsZoneModel.ID);
+            try {
+                RECORDS.requireImportable(ApiConduits.adminPanel(), zoneId, ctx);
+            } catch (AccessRefusedException readOnly) {
+                ResourceWrites.answer(conduit, readOnly);
+                return null;
+            }
             String text = ApiConduits.formValue(conduit, "zone_text");
             if (text.isBlank()) {
                 return ApiConduits.refusal(conduit, Violations.ofField("zone_text", "",
