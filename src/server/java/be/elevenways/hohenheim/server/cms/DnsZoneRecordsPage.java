@@ -171,7 +171,7 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
             records,
             resource::rowKey,
             row -> resource.rowCells(applied, row),
-            resource.rowActions(),
+            resource.offeredRowActions(),
             (actionId, row) -> ReturnTarget.bind(
                 CmsRoutes.invokeRow(PANEL, resource.slug(), resource.rowKey(row), actionId), returnTo),
             column -> null,

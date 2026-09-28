@@ -21,9 +21,9 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * A trashed site leaves every surface that reads sites by default -- the admin record page, the
- * site picker's record source and the automation API -- and a restore brings it back to all of
- * them, with no surface spelling a filter of its own.
+ * A trashed site leaves every surface that reads live sites -- the site picker's record source and
+ * the automation API -- while the admin record page opens it from the Trash, and a restore brings it
+ * back to all of them, with no surface spelling a filter of its own.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -58,8 +58,10 @@ class SoftDeleteSurfacesTest extends HohenheimTestBase {
 
             // 2. Trashed through the admin delete, it is on none of them.
             new SiteResource().deleteRow(sites.findById(siteId), AccessContext.anonymous());
-            assertThat(adminGet("/admin/sites/" + siteId).statusCode())
-                .as("step 2: the record page reads as missing").isEqualTo(404);
+            HttpResponse<String> inTrash = adminGet("/admin/sites/" + siteId);
+            assertThat(inTrash.statusCode()).as("step 2: the record page opens from the Trash").isEqualTo(200);
+            assertThat(inTrash.body()).as("step 2: offering its restore")
+                .contains("/admin/sites/" + siteId + "/action/trash_restore");
             assertThat(pickerBody()).as("step 2: the picker no longer offers it").doesNotContain(NAME);
             assertThat(keyGet(keyAdmin, "/api/v1/sites").body())
                 .as("step 2: the API list drops it").doesNotContain(NAME);

@@ -275,6 +275,7 @@ public class SiteResource extends RowResource {
             .label(FieldLabels.labelFor(SiteModel.ENABLED)).build())
         .filter(FilterSpec.forField(SiteModel.CREATED_AT, FilterSpec.Kind.DATETIME_RANGE)
             .label(FieldLabels.labelFor(SiteModel.CREATED_AT)).build())
+        .filter(this.archivedFilter())
         .defaultSort(SortSpec.desc(SiteModel.CREATED_AT.getName()))
         .rowClasses(row -> Boolean.TRUE.equals(row.get(SiteModel.ENABLED))
             ? "" : "hh-site-disabled")
@@ -511,6 +512,19 @@ public class SiteResource extends RowResource {
                 "zdev_" + SecureTokens.randomToken(24));
         }
         coerced.put("settings", settings);
+    }
+
+    /**
+     * A deleted site lands in the Trash, from where it is restored or deleted for good.
+     *
+     * AIDEV-NOTE: sound because a site owns no runtime (see {@link #deleteRow}): its restore is the model's save,
+     * so every site write hook runs and the quota re-books the slot (refused by name over the cap). What the delete
+     * released stays released, as a behaviour restore always had it: the previews it destroyed, its record grants
+     * and its disabled DNS records (see DnsClaimReleases).
+     */
+    @Override
+    public boolean offersTrash() {
+        return true;
     }
 
     /**

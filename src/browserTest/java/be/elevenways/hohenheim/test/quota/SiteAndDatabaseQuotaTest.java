@@ -164,6 +164,16 @@ class SiteAndDatabaseQuotaTest extends HohenheimTestBase {
             .as("step 6: reviving a trashed site over the cap is refused by name")
             .isEqualTo("site_quota_reached");
 
+        // 6b. The admin Trash's Restore is that same untrash: refused by the same name, the site
+        //     stays trashed and the ledger stays full.
+        adminPostForm("/admin/sites/" + winner.get(SiteModel.ID) + "/action/trash_restore", "");
+        assertThat(popFlash()).as("step 6b: the refusal is toasted").isNotNull()
+            .extracting(flash -> flash.message().key()).isEqualTo("site_quota_reached");
+        assertThat((Object) Models.get(SiteModel.class).find().withTrashed()
+                .where(SiteModel.ID.eq(winner.get(SiteModel.ID))).first().get(SiteModel.DELETED_AT))
+            .as("step 6b: the site stays trashed").isNotNull();
+        assertThat(Quotas.usedOf(SITE_BUCKET)).as("step 6b: and the ledger stays full").isEqualTo(limit);
+
         // 7. The hard-delete pairing releases too (tests and future bulk cleanup).
         HardDeletes.where(Models.get(SiteModel.class), SiteModel.NAME.eq(SITE_PREFIX + "replacement"));
         assertThat(Quotas.usedOf(SITE_BUCKET))
