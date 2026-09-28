@@ -13,6 +13,14 @@ import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.model.UserPrincipal;
+import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.conduit.ConduitAttributes;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.hohenheim.test.InstanceRowCleanup;
 import be.elevenways.hohenheim.test.QueryConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -128,24 +136,44 @@ class DatabaseLimitPartialWriteTest extends HohenheimTestBase {
     }
 
     @Test
-    void aDaemonsOwnFailureTextReachesTheOperatorButNeverATenant() {
+    void aDaemonsOwnFailureTextReachesTheOperatorButNeverATenantJourney() {
         IOException failure = new IOException("dial unix /var/run/docker.sock: connection refused");
+        UserPrincipal admin = adminPrincipal();
+        UserPrincipal tenant = new UserPrincipal(ApiSupport.user(PREFIX + "tenant@hohenheim.local", "Limit Tenant"),
+            "Limit Tenant");
 
-        // 1. No request in scope (a task, a direct call) is the operator lane.
-        assertThat(WithheldFailure.operatorDetail(failure))
-            .as("step 1: the operator lane keeps the daemon's text")
-            .isEqualTo(failure.getMessage());
+        // 1. Declared system work (a task, the operator harness) is the operator lane.
+        assertThat(ExecutionIdentity.supplyAsSystem("withheld-failure-test",
+                () -> WithheldFailure.operatorDetail(failure)))
+            .as("step 1: declared system work keeps the daemon's text").isEqualTo(failure.getMessage());
 
-        // 2. Under /admin the operator reads the reason.
-        String admin = RouteScope.supply(QueryConduits.request(HohenheimSlugs.ADMIN, Map.of()),
-            () -> WithheldFailure.operatorDetail(failure));
-        assertThat(admin).as("step 2: /admin shows the daemon's text").isEqualTo(failure.getMessage());
+        // 2. Work with no identity at all is never the operator lane: "no request" discloses nothing.
+        ExecutionIdentity.run(null, () -> assertThat(WithheldFailure.operatorDetail(failure))
+            .as("step 2: no identity gets no daemon text").isNull());
 
-        // 3. Under /manage the socket path never reaches the tenant: the caller words a
-        //    tenant-safe refusal instead.
-        String tenant = RouteScope.supply(QueryConduits.request(HohenheimSlugs.MANAGE, Map.of()),
-            () -> WithheldFailure.operatorDetail(failure));
-        assertThat(tenant).as("step 3: /manage gets no daemon text at all").isNull();
+        // 3. Under /admin the authenticated operator reads the reason.
+        Conduit adminPanel = QueryConduits.request(HohenheimSlugs.ADMIN, Map.of());
+        adminPanel.setAttribute(ConduitAttributes.PRINCIPAL, admin);
+        assertThat(RouteScope.supply(adminPanel, () -> WithheldFailure.operatorDetail(failure)))
+            .as("step 3: /admin shows the operator the daemon's text").isEqualTo(failure.getMessage());
+
+        // 4. Under /manage the socket path never reaches the reader, the operator included: the surface decides.
+        Conduit managePanel = QueryConduits.request(HohenheimSlugs.MANAGE, Map.of());
+        managePanel.setAttribute(ConduitAttributes.PRINCIPAL, admin);
+        assertThat(RouteScope.supply(managePanel, () -> WithheldFailure.operatorDetail(failure)))
+            .as("step 4: /manage gets no daemon text at all").isNull();
+
+        // 5. Off the panels (the API), a tenant's request is not the operator lane; an operator's is.
+        String[] offPanel = new String[2];
+        TenantConduits.as(tenant, () -> offPanel[0] = WithheldFailure.operatorDetail(failure));
+        TenantConduits.as(admin, () -> offPanel[1] = WithheldFailure.operatorDetail(failure));
+        assertThat(offPanel[0]).as("step 5: a tenant's API request gets no daemon text").isNull();
+        assertThat(offPanel[1]).as("step 5: an operator's API request does").isEqualTo(failure.getMessage());
+    }
+
+    private static UserPrincipal adminPrincipal() {
+        Row admin = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        return new UserPrincipal(admin.get(UserModel.ID), "Test Admin");
     }
 
     private static Object engineSettings(int databaseId) {
