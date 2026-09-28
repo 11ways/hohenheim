@@ -117,8 +117,7 @@ public class InstanceVolumeResource extends RowResource {
 
     @Override
     public @Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of(HohenheimSlugs.INSTANCES,
-            InstanceVolumeResource::instanceIdOf).tab(InstanceVolumesPage.SLUG);
+        return ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceVolumeModel.INSTANCE_ID).tab(InstanceVolumesPage.SLUG);
     }
 
     /** Editing a volume demands CONFIG on its instance, like every device write. */

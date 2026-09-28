@@ -137,8 +137,7 @@ public class AccessRuleResource extends RowResource {
 
     @Override
     public @Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of(HohenheimSlugs.ACCESS_LISTS,
-            row -> row.get(AccessRuleModel.ACCESS_LIST_ID)).tab("rules");
+        return ResourceParent.of(HohenheimSlugs.ACCESS_LISTS, AccessRuleModel.ACCESS_LIST_ID).tab("rules");
     }
 
     /**

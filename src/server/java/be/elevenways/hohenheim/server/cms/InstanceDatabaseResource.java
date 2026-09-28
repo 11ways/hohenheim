@@ -141,8 +141,7 @@ public class InstanceDatabaseResource extends RowResource {
 
     @Override
     public @Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of(HohenheimSlugs.INSTANCES,
-            row -> row.get(InstanceDatabaseModel.INSTANCE_ID)).tab("databases");
+        return ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceDatabaseModel.INSTANCE_ID).tab("databases");
     }
 
     /**

@@ -76,8 +76,7 @@ public final class InstanceFileResource extends RowResource {
 
     @Override
     public @Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of(HohenheimSlugs.INSTANCES,
-            row -> row.get(InstanceFileModel.INSTANCE_ID)).tab("provisioning");
+        return ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceFileModel.INSTANCE_ID).tab("provisioning");
     }
 
     /** The Provisioning tab links here with ?instance_id= so the pick arrives preselected. */

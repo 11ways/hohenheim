@@ -176,7 +176,7 @@ public class SiteDomainResource extends RowResource {
 
     @Override
     public @org.checkerframework.checker.nullness.qual.Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of(HohenheimSlugs.SITES, row -> row.get(SiteDomainModel.SITE_ID)).tab("domains");
+        return ResourceParent.of(HohenheimSlugs.SITES, SiteDomainModel.SITE_ID).tab("domains");
     }
 
 

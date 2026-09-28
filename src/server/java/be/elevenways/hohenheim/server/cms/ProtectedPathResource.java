@@ -81,8 +81,7 @@ public class ProtectedPathResource extends RowResource {
 
     @Override
     public @Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of(HohenheimSlugs.SITES,
-            row -> row.get(ProtectedPathModel.SITE_ID)).tab("protected-paths");
+        return ResourceParent.of(HohenheimSlugs.SITES, ProtectedPathModel.SITE_ID).tab("protected-paths");
     }
 
     /** Guarding a folder is authority over the site it belongs to, like a domain row. */

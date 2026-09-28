@@ -17,6 +17,7 @@ import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
+import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
@@ -107,6 +108,15 @@ public class DnsRecordResource extends RowResource {
     @Override public int navOrder() { return 31; }
     @Override public @NonNull Icon icon() { return Icon.of("list-ul"); }
     @Override public boolean showInNav() { return false; }
+
+    /**
+     * A record belongs to its zone: the zone's Records tab is its home, and a zone that becomes read-only (trashed,
+     * or under a trashed record) makes every write of its records refused by zenit-cms.
+     */
+    @Override
+    public @Nullable ResourceParent<Row> parent() {
+        return ResourceParent.of(DnsZoneResource.SLUG, DnsRecordModel.ZONE_ID).tab(DnsZoneRecordsPage.SLUG);
+    }
 
     /**
      * Edit and delete ride {@code TenantWrites}' record lanes (per-record {@code edit}

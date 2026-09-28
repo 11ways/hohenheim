@@ -88,8 +88,7 @@ public class InstanceScheduleStepResource extends RowResource {
 
     @Override
     public @Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of(InstanceScheduleResource.SLUG,
-            row -> row.get(RecordScheduleStepModel.SCHEDULE_ID)).tab(InstanceScheduleStepsPage.SLUG);
+        return ResourceParent.of(InstanceScheduleResource.SLUG, RecordScheduleStepModel.SCHEDULE_ID).tab(InstanceScheduleStepsPage.SLUG);
     }
 
     /**

@@ -20,6 +20,7 @@ import be.elevenways.zenit.cms.common.schema.TableView;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.Nested;
+import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -45,6 +46,12 @@ import java.util.Map;
  * revision restore all pass and this method does not.
  */
 public final class ManageDnsRecordResource extends DnsRecordResource {
+
+    /** The tenant surface carries no zone peer (zones are admin-only), so its records stand on their own. */
+    @Override
+    public @Nullable ResourceParent<Row> parent() {
+        return null;
+    }
 
     /**
      * The delegated form's name entry: the SAME column ({@code name}) with the help this
