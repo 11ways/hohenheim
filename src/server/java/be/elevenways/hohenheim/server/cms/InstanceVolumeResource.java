@@ -14,9 +14,7 @@ import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.instance.WorkspaceKind;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
-import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
@@ -27,6 +25,7 @@ import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.common.data.RowScope;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -103,8 +102,7 @@ public class InstanceVolumeResource extends RowResource {
 
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return ctx -> AccessDecision.allow(QueryPredicate.of(
-            InstanceVolumeModel.INSTANCE_ID.isNotNull()));
+        return AccessFunction.scopedBy(RowScope.within(() -> InstanceVolumeModel.INSTANCE_ID.isNotNull()));
     }
 
     /**

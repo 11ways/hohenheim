@@ -53,7 +53,7 @@ public final class ManageAccessListResource extends AccessListResource {
      */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return TenantScopes.MANAGED_ACCESS_LISTS.accessFunction();
+        return AccessFunction.scopedBy(TenantScopes.MANAGED_ACCESS_LISTS);
     }
 
     /**

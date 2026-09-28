@@ -27,7 +27,7 @@ public final class ManageAccessRuleResource extends AccessRuleResource {
     /** Admins see every rule; everyone else only the rows of lists they manage. */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return TenantScopes.ACCESS_RULES.accessFunction();
+        return AccessFunction.scopedBy(TenantScopes.ACCESS_RULES);
     }
 
     /** Writing a rule demands {@code manage} on the list it belongs to. */

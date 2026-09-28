@@ -71,7 +71,7 @@ public final class ManageGitProviderResource extends GitProviderResource {
      */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return TenantScopes.MANAGED_GIT_PROVIDERS.accessFunction();
+        return AccessFunction.scopedBy(TenantScopes.MANAGED_GIT_PROVIDERS);
     }
 
     /**

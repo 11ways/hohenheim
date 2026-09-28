@@ -62,7 +62,7 @@ public final class ManageSiteResource extends SiteResource {
     /** Admins see every non-deleted site; everyone else only their granted ones. */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return TenantScopes.SITES.accessFunction();
+        return AccessFunction.scopedBy(TenantScopes.SITES);
     }
 
     @Override public boolean creatable() { return false; }

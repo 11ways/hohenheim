@@ -6,9 +6,7 @@ import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
-import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
@@ -17,6 +15,7 @@ import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.common.data.RowScope;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
@@ -135,8 +134,7 @@ public final class EnvironmentVariableResource extends RowResource {
     /** Only environment-owned rows exist on this surface, list AND load AND create. */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return ctx -> AccessDecision.allow(QueryPredicate.of(
-            InstanceVariableModel.ENVIRONMENT_ID.isNotNull()));
+        return AccessFunction.scopedBy(RowScope.within(() -> InstanceVariableModel.ENVIRONMENT_ID.isNotNull()));
     }
 
     /** Related-record prefill: /new?environment_id=N arrives preselected. */

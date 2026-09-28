@@ -28,7 +28,7 @@ public final class ManageInstanceDatabaseResource extends InstanceDatabaseResour
 
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return TenantScopes.INSTANCE_DATABASES.accessFunction();
+        return AccessFunction.scopedBy(TenantScopes.INSTANCE_DATABASES);
     }
 
     /**

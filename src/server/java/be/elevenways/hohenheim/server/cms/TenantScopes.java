@@ -22,12 +22,8 @@ import be.elevenways.hohenheim.server.auth.HostnameAuthority;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.util.BlastString;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
-import be.elevenways.zenit.cms.common.access.AccessFunction;
-import be.elevenways.zenit.cms.common.access.QueryPredicate;
-import be.elevenways.zenit.common.data.RecordSource;
+import be.elevenways.zenit.common.data.RowScope;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
@@ -35,6 +31,7 @@ import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.RecordCapabilityScope;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
+import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -42,8 +39,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.function.Supplier;
 
 /**
  * THE delegated read scope of every model the /manage panel projects, declared once and
@@ -53,9 +48,12 @@ import java.util.function.Supplier;
  * accessFunction and ManagePanel.declareSources spelled it again for the record source, and
  * the two had drifted: the instance source offered GENERATED (product-tier-owned) rows the
  * list hid, and the domain source listed the domains of soft-deleted sites the list hid. A
- * {@link Scope} is the pair a source and a list both need -- a BASE every principal is
- * narrowed by and the per-principal ACCESS half -- so a surface can only differ from its
- * picker by naming a DIFFERENT scope, which is then visible here.
+ * {@link RowScope} is the pair a source and a list both need -- a BASE every principal is
+ * narrowed by and the per-principal ACCESS half -- read through zenit-cms's
+ * {@code AccessFunction.scopedBy} and the source's {@code scopedBy}, so a surface can only
+ * differ from its picker by naming a DIFFERENT scope, which is then visible here. A base the
+ * admin resource shares is ITS declaration ({@code SiteDomainResource.ROWS} and siblings),
+ * narrowed here per principal.
  *
  * AIDEV-NOTE: two models deliberately carry TWO scopes, both declared here so the difference
  * is written down: access lists and git providers list only the rows a tenant MANAGES
@@ -69,70 +67,32 @@ import java.util.function.Supplier;
 public final class TenantScopes {
 
     /**
-     * One model's delegated scope.
-     *
-     * @param base   the criteria every principal is narrowed by (admins included), or null
-     * @param access the per-principal half; it answers null for an unconstrained principal
-     */
-    public record Scope(@Nullable Supplier<Criteria> base,
-                        @NonNull Function<AccessContext, @Nullable Criteria> access) {
-
-        /** @return base AND access, or null when neither constrains this principal */
-        public @Nullable Criteria criteria(@NonNull AccessContext ctx) {
-            Criteria baseCriteria = this.base != null ? this.base.get() : null;
-            Criteria accessCriteria = this.access.apply(ctx);
-            if (baseCriteria == null) {
-                return accessCriteria;
-            }
-            return accessCriteria == null ? baseCriteria : Criteria.and(baseCriteria, accessCriteria);
-        }
-
-        /** @return the cms decision a Manage* resource's accessFunction answers */
-        public @NonNull AccessDecision decide(@NonNull AccessContext ctx) {
-            return TenantScopes.decision(this.criteria(ctx));
-        }
-
-        /** @return this scope as a resource access function */
-        public @NonNull AccessFunction<Row> accessFunction() {
-            return this::decide;
-        }
-
-        /** @return the builder with this scope's base and access halves declared on it */
-        public <M extends Model> RecordSource.@NonNull Builder<M> applyTo(
-                RecordSource.@NonNull Builder<M> builder) {
-            if (this.base != null) {
-                builder.baseCriteria(this.base);
-            }
-            return builder.accessCriteria(this.access);
-        }
-    }
-
-    /**
      * Live sites (the site's SoftDeleteBehaviour hides trashed rows from every find, so the
      * base needs no filter); tenants only the ones they manage.
      */
-    public static final Scope SITES = new Scope(null, TenantScopes::siteAccess);
+    public static final RowScope SITES = RowScope.perPrincipal(TenantScopes::siteAccess);
 
     /** Domains of live sites; tenants only those of the sites they manage. */
-    public static final Scope DOMAINS = new Scope(SiteDomainResource::liveSiteScope,
+    public static final RowScope DOMAINS = SiteDomainResource.ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.managedSiteScope(ctx, Models.get(SiteDomainModel.class),
             SiteDomainModel.SITE_ID::in));
 
     /** Protected paths; tenants only those of the sites they manage. */
-    public static final Scope PROTECTED_PATHS = new Scope(null,
+    public static final RowScope PROTECTED_PATHS = RowScope.perPrincipal(
         ctx -> HohenheimAccess.managedSiteScope(ctx, Models.get(ProtectedPathModel.class),
             ProtectedPathModel.SITE_ID::in));
 
     /** DNS records; tenants only the names they answer for plus explicit view grants. */
-    public static final Scope DNS_RECORDS = new Scope(null, TenantScopes::dnsRecordAccess);
+    public static final RowScope DNS_RECORDS = RowScope.perPrincipal(TenantScopes::dnsRecordAccess);
 
     /**
      * Certificates minus the ACME account row; tenants only the walk-reachable ones.
      *
-     * AIDEV-NOTE: the base is THE {@link HohenheimSources#notTheAcmeAccountRow}, never a
-     * second spelling of the exclusion (ManageCertificateResource used to carry one).
+     * AIDEV-NOTE: the base is THE admin {@link CertificateResource#ROWS} (itself
+     * {@link HohenheimSources#notTheAcmeAccountRow}), never a second spelling of the exclusion
+     * (ManageCertificateResource used to carry one).
      */
-    public static final Scope CERTIFICATES = new Scope(HohenheimSources::notTheAcmeAccountRow,
+    public static final RowScope CERTIFICATES = CertificateResource.ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(CertificateModel.class),
             CertificateModel.MODEL_ID, HohenheimAccess.VIEW, CertificateModel.ID::in));
 
@@ -143,45 +103,52 @@ public final class TenantScopes {
      * through their owning record's surface and never through a picker or the /manage
      * list -- THE {@link InstanceModel#liveAuthored} clause the instance and file APIs read too.
      */
-    public static final Scope INSTANCES = new Scope(InstanceModel::liveAuthored,
+    public static final RowScope INSTANCES = RowScope.within(InstanceModel::liveAuthored).andPerPrincipal(
         ctx -> HohenheimAccess.instanceScope(ctx, HohenheimAccess.VIEW));
 
     /** The template catalog: operators browse everything, everyone else only APPROVED rows. */
-    public static final Scope INSTANCE_TEMPLATES = new Scope(null,
+    public static final RowScope INSTANCE_TEMPLATES = RowScope.perPrincipal(
         ctx -> HohenheimAccess.isAdmin(ctx) ? null : InstanceTemplateModel.APPROVED_AT.isNotNull());
 
     /** Instance schedules; tenants only those of viewable instances. */
-    public static final Scope INSTANCE_SCHEDULES = new Scope(
-        () -> RecordScheduleModel.MODEL.eq(InstanceModel.MODEL_ID.toString()),
+    public static final RowScope INSTANCE_SCHEDULES = InstanceScheduleResource.ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(RecordScheduleModel.class),
             InstanceModel.MODEL_ID, HohenheimAccess.VIEW, TenantScopes::recordIdIn));
 
+    /**
+     * Schedule steps, visible exactly when their PARENT schedule is: an unconstrained parent scope
+     * answers unconstrained here too, anything else enumerates the visible schedule ids.
+     *
+     * AIDEV-NOTE: enumerated rather than a correlated subquery -- the ORM offers no EXISTS
+     * composition here, the set is one tenant's schedules, and an empty set becomes matchNone
+     * rather than IN () (which some backends widen).
+     */
+    public static final RowScope INSTANCE_SCHEDULE_STEPS = RowScope.perPrincipal(TenantScopes::scheduleStepAccess);
+
     /** Projects: THE visibility policy (membership, narrowed by an API key's scopes). */
-    public static final Scope PROJECTS = new Scope(null, Projects::visibleScope);
+    public static final RowScope PROJECTS = RowScope.perPrincipal(Projects::visibleScope);
 
     /** Managed databases; tenants only the ones they hold {@code view} on. */
-    public static final Scope DATABASES = new Scope(null,
+    public static final RowScope DATABASES = RowScope.perPrincipal(
         ctx -> HohenheimAccess.databaseScope(ctx, HohenheimAccess.VIEW));
 
     /** Devices attached to an instance; tenants only those of viewable instances. */
-    public static final Scope INSTANCE_DEVICES = new Scope(
-        () -> InstanceDeviceModel.INSTANCE_ID.isNotNull(),
+    public static final RowScope INSTANCE_DEVICES = InstanceDeviceResource.ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(InstanceDeviceModel.class),
             InstanceModel.MODEL_ID, HohenheimAccess.VIEW, InstanceDeviceModel.INSTANCE_ID::in));
 
     /** Instance-database attachments; tenants only those of viewable instances. */
-    public static final Scope INSTANCE_DATABASES = new Scope(
-        () -> InstanceDatabaseModel.INSTANCE_ID.isNotNull(),
+    public static final RowScope INSTANCE_DATABASES = InstanceDatabaseResource.ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(InstanceDatabaseModel.class),
             InstanceModel.MODEL_ID, HohenheimAccess.VIEW, InstanceDatabaseModel.INSTANCE_ID::in));
 
     /** Snapshots of the instances the principal holds {@code snapshots} on. */
-    public static final Scope INSTANCE_SNAPSHOTS = new Scope(null,
+    public static final RowScope INSTANCE_SNAPSHOTS = RowScope.perPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(InstanceSnapshotModel.class),
             InstanceModel.MODEL_ID, HohenheimAccess.SNAPSHOTS, InstanceSnapshotModel.INSTANCE_ID::in));
 
     /** Backups of the instances the principal holds {@code backups} on. */
-    public static final Scope INSTANCE_BACKUPS = new Scope(null,
+    public static final RowScope INSTANCE_BACKUPS = RowScope.perPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(InstanceBackupModel.class),
             InstanceModel.MODEL_ID, HohenheimAccess.BACKUPS, InstanceBackupModel.INSTANCE_ID::in));
 
@@ -189,40 +156,32 @@ public final class TenantScopes {
      * Live previews (trashed ones are hidden by the model's SoftDeleteBehaviour); tenants only
      * those of the APPLICATIONS they manage.
      */
-    public static final Scope PREVIEWS = new Scope(null,
+    public static final RowScope PREVIEWS = RowScope.perPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(PreviewDeploymentModel.class),
             InstanceModel.MODEL_ID, HohenheimAccess.MANAGE, PreviewDeploymentModel.APPLICATION_ID::in));
 
     /** The access lists a tenant OWNS: the /manage list. */
-    public static final Scope MANAGED_ACCESS_LISTS = new Scope(null,
+    public static final RowScope MANAGED_ACCESS_LISTS = RowScope.perPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(AccessListModel.class),
             AccessListModel.MODEL_ID, HohenheimAccess.MANAGE, AccessListModel.ID::in));
 
     /** The access lists a tenant may ATTACH: shared rows plus the managed ones (the pickers). */
-    public static final Scope USABLE_ACCESS_LISTS = new Scope(null, HohenheimAccess::accessListScope);
+    public static final RowScope USABLE_ACCESS_LISTS = RowScope.perPrincipal(HohenheimAccess::accessListScope);
 
     /** The rules of the access lists a tenant manages. */
-    public static final Scope ACCESS_RULES = new Scope(null,
+    public static final RowScope ACCESS_RULES = RowScope.perPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(AccessRuleModel.class),
             AccessListModel.MODEL_ID, HohenheimAccess.MANAGE, AccessRuleModel.ACCESS_LIST_ID::in));
 
     /** The git providers a tenant OWNS: the /manage list. */
-    public static final Scope MANAGED_GIT_PROVIDERS = new Scope(null,
+    public static final RowScope MANAGED_GIT_PROVIDERS = RowScope.perPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(GitProviderModel.class),
             GitProviderModel.MODEL_ID, HohenheimAccess.MANAGE, GitProviderModel.ID::in));
 
     /** The git providers a tenant may USE: shared rows plus the managed ones (the pickers). */
-    public static final Scope USABLE_GIT_PROVIDERS = new Scope(null, HohenheimAccess::gitProviderScope);
+    public static final RowScope USABLE_GIT_PROVIDERS = RowScope.perPrincipal(HohenheimAccess::gitProviderScope);
 
     private TenantScopes() {
-    }
-
-    /**
-     * THE translation of a scope criteria into a cms decision: null (unconstrained) allows
-     * everything, anything else allows exactly the rows it matches.
-     */
-    public static @NonNull AccessDecision decision(@Nullable Criteria scope) {
-        return scope == null ? AccessDecision.allowAll() : AccessDecision.allow(QueryPredicate.of(scope));
     }
 
     /**
@@ -231,6 +190,20 @@ public final class TenantScopes {
      */
     private static @Nullable Criteria siteAccess(@NonNull AccessContext ctx) {
         return HohenheimAccess.managedSiteScope(ctx, Models.get(SiteModel.class), SiteModel.ID::in);
+    }
+
+    /** @return null when the parent schedule scope leaves this principal unconstrained, else its steps */
+    private static @Nullable Criteria scheduleStepAccess(@NonNull AccessContext ctx) {
+        if (INSTANCE_SCHEDULES.accessCriteria(ctx) == null) {
+            return null;
+        }
+        Criteria schedules = INSTANCE_SCHEDULES.criteria(ctx);
+        Set<Integer> scheduleIds = new LinkedHashSet<>();
+        for (Row schedule : Models.get(RecordScheduleModel.class).find().where(schedules).all()) {
+            scheduleIds.add(schedule.get(RecordScheduleModel.ID));
+        }
+        return scheduleIds.isEmpty() ? Models.get(RecordScheduleStepModel.class).matchNone()
+            : RecordScheduleStepModel.SCHEDULE_ID.in(scheduleIds);
     }
 
     /** Record schedules key their target polymorphically, so the id set folds to strings. */

@@ -39,7 +39,7 @@ public final class ManagePreviewDeploymentResource extends PreviewDeploymentReso
     /** Admins see every live preview; everyone else only previews of their granted applications. */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return TenantScopes.PREVIEWS.accessFunction();
+        return AccessFunction.scopedBy(TenantScopes.PREVIEWS);
     }
 
     /**

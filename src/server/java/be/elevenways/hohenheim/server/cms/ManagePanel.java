@@ -260,8 +260,9 @@ public final class ManagePanel extends Panel {
         // both the admin SiteResource and the delegated ManageSiteResource; this server-side
         // declaration replaces it deliberately, because its scope reads zenit-auth grants
         // unavailable to the common/browser registration lane.
-        RecordSourceRegistry.INSTANCE.override(TenantScopes.SITES.applyTo(
-                RecordSource.of(SiteModel.class).search(SiteModel.NAME, SiteModel.SLUG))
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(SiteModel.class)
+            .search(SiteModel.NAME, SiteModel.SLUG)
+            .scopedBy(TenantScopes.SITES)
             .build());
 
         // The domain source, for the SAME reason and by the same verb -- plus one that is
@@ -277,21 +278,24 @@ public final class ManagePanel extends Panel {
         // child row is a second authority that can disagree with the first.
         // AIDEV-NOTE: the base now carries the live-site filter the /manage list always
         // applied: a domain of a soft-deleted site is no longer offered by a picker either.
-        RecordSourceRegistry.INSTANCE.override(TenantScopes.DOMAINS.applyTo(
-                RecordSource.of(SiteDomainModel.class).search(SiteDomainModel.HOSTNAME))
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(SiteDomainModel.class)
+            .search(SiteDomainModel.HOSTNAME)
+            .scopedBy(TenantScopes.DOMAINS)
             .build());
 
         // Access lists: the pickers (a site's list, a protected path's list) offer shared
         // rows plus the principal's managed ones -- the git-provider policy verbatim, and
         // an explicit override for the same two-panel shadowing reason as site_domain
         // (AccessListResource and ManageAccessListResource both expose the model).
-        RecordSourceRegistry.INSTANCE.override(TenantScopes.USABLE_ACCESS_LISTS.applyTo(
-                RecordSource.of(AccessListModel.class).search(AccessListModel.NAME))
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(AccessListModel.class)
+            .search(AccessListModel.NAME)
+            .scopedBy(TenantScopes.USABLE_ACCESS_LISTS)
             .build());
 
         // Protected paths: child rows scoped by their parent SITE, like domains.
-        RecordSourceRegistry.INSTANCE.override(TenantScopes.PROTECTED_PATHS.applyTo(
-                RecordSource.of(ProtectedPathModel.class).search(ProtectedPathModel.PATH))
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(ProtectedPathModel.class)
+            .search(ProtectedPathModel.PATH)
+            .scopedBy(TenantScopes.PROTECTED_PATHS)
             .build());
 
         // DNS records: this one scopes child rows by their parent zone, so a tenant reaches
@@ -311,8 +315,9 @@ public final class ManagePanel extends Panel {
         // has to be declared here or the bar simply never appears. It used to be a
         // hand-written copy of that provider; nothing about the reduction or the
         // persistence path was ever hohenheim-specific.
-        var dnsRecords = TenantScopes.DNS_RECORDS.applyTo(RecordSource.of(DnsRecordModel.class)
-            .search(DnsRecordModel.NAME, DnsRecordModel.VALUE));
+        var dnsRecords = RecordSource.of(DnsRecordModel.class)
+            .search(DnsRecordModel.NAME, DnsRecordModel.VALUE)
+            .scopedBy(TenantScopes.DNS_RECORDS);
         RecordCreateProvider dnsCreate = CmsRecordSources.createProviderFor(new DnsRecordResource());
         if (dnsCreate != null) {
             dnsRecords.creatable(dnsCreate, HohenheimSources.ADMIN_ACCESS);
@@ -323,8 +328,9 @@ public final class ManagePanel extends Panel {
         // browser registry keeps, legitimately -- the scope below reads zenit-auth record
         // grants that common code cannot see). The base criteria is the SAME method the
         // common registration uses, never a second copy of the ACME-account exclusion.
-        RecordSourceRegistry.INSTANCE.override(TenantScopes.CERTIFICATES.applyTo(
-                RecordSource.of(CertificateModel.class).search(CertificateModel.NICE_NAME))
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(CertificateModel.class)
+            .search(CertificateModel.NICE_NAME)
+            .scopedBy(TenantScopes.CERTIFICATES)
             .build());
 
         // Instances: the SAME two-panel shadowing hazard as sites and domains, now that
@@ -337,10 +343,10 @@ public final class ManagePanel extends Panel {
         // AIDEV-NOTE: the base excludes GENERATED instances like the /manage list always
         // did (TenantScopes.INSTANCES): a product-tier-owned row is managed through its
         // owning record, and a picker offering it was a tenant read the list refused.
-        RecordSourceRegistry.INSTANCE.override(TenantScopes.INSTANCES.applyTo(
-                RecordSource.of(InstanceModel.class)
-                    .project(InstanceModel.NAME, InstanceModel.KIND)
-                    .search(InstanceModel.NAME))
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceModel.class)
+            .project(InstanceModel.NAME, InstanceModel.KIND)
+            .search(InstanceModel.NAME)
+            .scopedBy(TenantScopes.INSTANCES)
             .build());
 
         // Templates: exposed by TWO RowResources (admin InstanceTemplateResource and
@@ -348,25 +354,27 @@ public final class ManagePanel extends Panel {
         // the same shadowing hazard as instances above. The scope is THE catalog policy:
         // operators browse everything, everyone else only APPROVED templates. The
         // instance form's dependent template pick narrows on the projected kind.
-        RecordSourceRegistry.INSTANCE.override(TenantScopes.INSTANCE_TEMPLATES.applyTo(
-                RecordSource.of(InstanceTemplateModel.class)
-                    .project(InstanceTemplateModel.NAME, InstanceTemplateModel.KIND)
-                    .search(InstanceTemplateModel.NAME))
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceTemplateModel.class)
+            .project(InstanceTemplateModel.NAME, InstanceTemplateModel.KIND)
+            .search(InstanceTemplateModel.NAME)
+            .scopedBy(TenantScopes.INSTANCE_TEMPLATES)
             .build());
 
         // Record schedules: this declaration carries the SAME scope the delegated resource
         // enforces, so a picker and the resource can never disagree -- a deliberate
         // narrowing of the default derived from RecordScheduleModel.NAME.
-        RecordSourceRegistry.INSTANCE.override(TenantScopes.INSTANCE_SCHEDULES.applyTo(
-                RecordSource.of(RecordScheduleModel.class).search(RecordScheduleModel.NAME))
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(RecordScheduleModel.class)
+            .search(RecordScheduleModel.NAME)
+            .scopedBy(TenantScopes.INSTANCE_SCHEDULES)
             .build());
 
         // Projects: the SAME two-derived-defaults hazard, now that ManageProjectResource
         // exposes the model beside the admin ProjectResource -- and the widest of the two
         // would name every tenant's projects to whoever a picker rendered for. The scope
         // is THE visibility policy, so a picker and the resource can never disagree.
-        RecordSourceRegistry.INSTANCE.override(TenantScopes.PROJECTS.applyTo(
-                RecordSource.of(ProjectModel.class).search(ProjectModel.NAME))
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(ProjectModel.class)
+            .search(ProjectModel.NAME)
+            .scopedBy(TenantScopes.PROJECTS)
             .build());
 
         // Managed databases: the common registration (HohenheimSources) is ADMIN_ACCESS
@@ -377,23 +385,25 @@ public final class ManagePanel extends Panel {
         // rendered for, starting with the site-database attachment picker. override, not
         // register: the manage panel deliberately serves a WIDER audience than the
         // databases panel's own permission, scoped to what each principal was granted.
-        RecordSourceRegistry.INSTANCE.override(TenantScopes.DATABASES.applyTo(
-                RecordSource.of(DatabaseModel.class).search(DatabaseModel.NAME))
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(DatabaseModel.class)
+            .search(DatabaseModel.NAME)
+            .scopedBy(TenantScopes.DATABASES)
             .build());
 
         // Instance devices: same two-derived-defaults hazard again, and the widest one
         // would list every tenant's disk names and sizes to whoever a picker rendered for.
-        RecordSourceRegistry.INSTANCE.override(TenantScopes.INSTANCE_DEVICES.applyTo(
-                RecordSource.of(InstanceDeviceModel.class).search(InstanceDeviceModel.NAME))
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceDeviceModel.class)
+            .search(InstanceDeviceModel.NAME)
+            .scopedBy(TenantScopes.INSTANCE_DEVICES)
             .build());
 
         // Preview deployments: the same two-derived-defaults hazard (the admin
         // PreviewDeploymentResource and the delegated ManagePreviewDeploymentResource
         // both derive), and the widest one would name every tenant's branch names and
         // preview hostnames to whoever a picker rendered for.
-        RecordSourceRegistry.INSTANCE.override(TenantScopes.PREVIEWS.applyTo(
-                RecordSource.of(PreviewDeploymentModel.class)
-                    .search(PreviewDeploymentModel.HOSTNAME, PreviewDeploymentModel.REF))
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(PreviewDeploymentModel.class)
+            .search(PreviewDeploymentModel.HOSTNAME, PreviewDeploymentModel.REF)
+            .scopedBy(TenantScopes.PREVIEWS)
             .build());
 
         // Git providers: the SAME two-derived-defaults hazard (the admin
@@ -403,15 +413,17 @@ public final class ManagePanel extends Panel {
         // for. The scope IS the visibility policy (shared rows plus the ones the
         // principal manages), so the site form's provider picker and this source can
         // never disagree.
-        RecordSourceRegistry.INSTANCE.override(TenantScopes.USABLE_GIT_PROVIDERS.applyTo(
-                RecordSource.of(GitProviderModel.class).search(GitProviderModel.NAME))
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(GitProviderModel.class)
+            .search(GitProviderModel.NAME)
+            .scopedBy(TenantScopes.USABLE_GIT_PROVIDERS)
             .build());
 
         // Instance-database attachments: the row names both a workload and a credential
         // store, so this source must carry the parent instance's visibility scope instead
         // of the admin gate zenit-cms derives.
-        RecordSourceRegistry.INSTANCE.override(TenantScopes.INSTANCE_DATABASES.applyTo(
-                RecordSource.of(InstanceDatabaseModel.class).title())
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceDatabaseModel.class)
+            .title()
+            .scopedBy(TenantScopes.INSTANCE_DATABASES)
             .build());
     }
 

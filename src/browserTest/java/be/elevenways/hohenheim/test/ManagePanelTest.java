@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.cms.ManageDomainResource;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
@@ -16,10 +17,13 @@ import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.data.BucketSize;
+import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceBucketQuery;
 import be.elevenways.zenit.common.data.RecordSourceQuery;
+import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.AccessContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -339,6 +343,64 @@ class ManagePanelTest extends HohenheimTestBase {
             .statusCode()).isIn(302, 303);
         assertThat(Models.get(SiteDomainModel.class).find()
             .where(SiteDomainModel.HOSTNAME.eq("delegated.example.com")).first()).isNull();
+    }
+
+    /**
+     * The tenant scope rides the framework's AccessFunction.scopedBy: a tenant managing site A
+     * lists, counts, opens, edits and picks site A's domains, and every direct id of site
+     * B's domain answers 404 exactly like a missing one -- never a 403 that would confirm it exists.
+     */
+    @Test
+    void aTenantReachesOnlyItsOwnSitesDomainsOnEveryManageSurface() throws Exception {
+        RecordGrants.grant(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, siteAId,
+            HohenheimAccess.MANAGE, true);
+        String foreignHost = "foreign-" + managedHost;
+        Row foreign = Models.get(SiteDomainModel.class).createEmptyRow();
+        foreign.set(SiteDomainModel.SITE_ID, siteBId);
+        foreign.set(SiteDomainModel.HOSTNAME, foreignHost);
+        foreign.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        Models.get(SiteDomainModel.class).save(foreign);
+        Integer foreignId = foreign.get(SiteDomainModel.ID);
+        AccessContext tenant = AccessContext.of(
+            TenantConduits.stubFor(new UserPrincipal(operatorId, "Site Operator")));
+        ManageDomainResource domains = new ManageDomainResource();
+
+        // 1. The list shows site A's domain and never site B's.
+        HttpResponse<String> list = operatorGet("/manage/domains");
+        assertThat(list.statusCode()).as("1. the tenant reaches the domain list").isEqualTo(200);
+        assertThat(list.body()).as("1. the list holds A's domain only")
+            .contains(managedHost).doesNotContain(foreignHost);
+
+        // 2. The count behind the pager counts the scope, not the table.
+        assertThat(domains.countRows(domains.tableView(tenant).apply(domains.tableSpec()), tenant))
+            .as("2. the tenant's domain count is its one domain").isEqualTo(1L);
+
+        // 3. Site B's domain by direct id is not found on read, update and delete, and survives untouched.
+        assertThat(operatorGet("/manage/domains/" + foreignId).statusCode())
+            .as("3. reading B's domain is not found").isEqualTo(404);
+        assertThat(operatorPost("/manage/domains/" + foreignId,
+            "site_id=" + siteAId + "&hostname=hijacked.example.com").statusCode())
+            .as("3. updating B's domain is not found").isEqualTo(404);
+        assertThat(operatorPost("/manage/domains/" + foreignId + "/delete", confirmed("")).statusCode())
+            .as("3. deleting B's domain is not found").isEqualTo(404);
+        Row survivor = Models.get(SiteDomainModel.class).findById(foreignId);
+        assertThat(survivor).as("3. B's domain still exists").isNotNull();
+        assertThat(survivor.get(SiteDomainModel.HOSTNAME)).as("3. and is unchanged").isEqualTo(foreignHost);
+
+        // 4. The domain picker source reads the same scope: A's domain resolves, B's resolves to nothing.
+        RecordSource<?> picker = RecordSourceRegistry.INSTANCE.requireDefaultFor(SiteDomainModel.MODEL_ID);
+        assertThat(picker.resolveRow(String.valueOf(domainAId), null, tenant))
+            .as("4. the picker resolves A's domain").isNotNull();
+        assertThat(picker.resolveRow(String.valueOf(foreignId), null, tenant))
+            .as("4. the picker resolves B's domain to nothing").isNull();
+
+        // 5. A's own domain opens and saves through the same routes (its delete is
+        //    delegatedSurfaceStaysSafeAndReturnsToManage's).
+        assertThat(operatorGet("/manage/domains/" + domainAId).statusCode())
+            .as("5. A's domain opens").isEqualTo(200);
+        assertThat(operatorPost("/manage/domains/" + domainAId,
+            "site_id=" + siteAId + "&hostname=" + managedHost).statusCode())
+            .as("5. A's domain saves").isIn(302, 303);
     }
 
     /** Revocation, group/negative record grants and an explicit global deny all drive eligibility. */

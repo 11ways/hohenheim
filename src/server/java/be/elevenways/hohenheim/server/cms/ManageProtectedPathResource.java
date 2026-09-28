@@ -24,7 +24,7 @@ public final class ManageProtectedPathResource extends ProtectedPathResource {
     /** Admins see every row; everyone else only the guarded paths of managed sites. */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return TenantScopes.PROTECTED_PATHS.accessFunction();
+        return AccessFunction.scopedBy(TenantScopes.PROTECTED_PATHS);
     }
 
     /** NAV-ONLY (zero managed sites hide the empty list); the route stays scoped. */

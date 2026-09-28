@@ -93,7 +93,7 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
     /** Admins see every record; everyone else only the names they answer for. */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return TenantScopes.DNS_RECORDS.accessFunction();
+        return AccessFunction.scopedBy(TenantScopes.DNS_RECORDS);
     }
 
     /**

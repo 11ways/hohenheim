@@ -13,9 +13,7 @@ import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
-import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
@@ -23,6 +21,7 @@ import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.common.data.RowScope;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
@@ -56,6 +55,10 @@ import java.util.Map;
  * existence/name/host oracle (see the note inside {@link #validate}).
  */
 public class InstanceDatabaseResource extends RowResource {
+
+    /** Attachments to an instance; the /manage scope narrows this same base per principal. */
+    public static final RowScope ROWS = RowScope.within(() -> InstanceDatabaseModel.INSTANCE_ID.isNotNull());
+
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(RelationPick.of(InstanceDatabaseModel.INSTANCE_ID, InstanceModel.MODEL_ID).build())
@@ -133,8 +136,7 @@ public class InstanceDatabaseResource extends RowResource {
 
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return ctx -> AccessDecision.allow(QueryPredicate.of(
-            InstanceDatabaseModel.INSTANCE_ID.isNotNull()));
+        return AccessFunction.scopedBy(ROWS);
     }
 
     @Override

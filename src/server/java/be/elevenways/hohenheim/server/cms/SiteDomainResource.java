@@ -18,15 +18,14 @@ import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.server.upstream.kinds.TlsPassthroughUpstreamKind;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
-import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
+import be.elevenways.zenit.common.data.RowScope;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
@@ -62,6 +61,10 @@ import java.util.Objects;
  * through a site's Domains tab.
  */
 public class SiteDomainResource extends RowResource {
+
+    /** Domains of live sites; the /manage scope narrows this same base per principal. */
+    public static final RowScope ROWS = RowScope.within(SiteDomainResource::liveSiteScope);
+
 
     /** The Domains tab's quick-add entries; the site rides along as a host-supplied preset. */
     private static final QuickCreateSpec QUICK_CREATE = QuickCreateSpec
@@ -160,14 +163,14 @@ public class SiteDomainResource extends RowResource {
      */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return ctx -> AccessDecision.allow(QueryPredicate.of(liveSiteScope()));
+        return AccessFunction.scopedBy(ROWS);
     }
 
     /**
      * @return the criteria matching only rows whose owning site is not soft-deleted; spelled
      *         through the site's SoftDeleteBehaviour because a relation hop runs no find hook
      */
-    protected static @NonNull Criteria liveSiteScope() {
+    private static @NonNull Criteria liveSiteScope() {
         return Criteria.related(SiteDomainModel.SITE, SiteModel.SOFT_DELETE.isNotTrashed());
     }
 

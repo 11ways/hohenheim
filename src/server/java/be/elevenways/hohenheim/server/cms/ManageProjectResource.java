@@ -67,7 +67,7 @@ public final class ManageProjectResource extends ProjectResource {
      */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return TenantScopes.PROJECTS.accessFunction();
+        return AccessFunction.scopedBy(TenantScopes.PROJECTS);
     }
 
     /** NAV-ONLY (a principal in no project hides the empty list); the route stays scoped. */

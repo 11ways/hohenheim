@@ -37,7 +37,7 @@ public final class ManageInstanceBackupResource extends InstanceBackupResource {
      */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return TenantScopes.INSTANCE_BACKUPS.accessFunction();
+        return AccessFunction.scopedBy(TenantScopes.INSTANCE_BACKUPS);
     }
 
     /** Only the synthesized view/delete affordances; no restore-to-new. */

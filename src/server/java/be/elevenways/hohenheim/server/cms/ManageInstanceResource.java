@@ -89,7 +89,7 @@ public final class ManageInstanceResource extends InstanceResource {
         // Generated (product-tier-owned) instances stay off the delegated surface too:
         // their one UI is the owning record's own page. The scope says so once, for this
         // list and the instance picker alike.
-        return TenantScopes.INSTANCES.accessFunction();
+        return AccessFunction.scopedBy(TenantScopes.INSTANCES);
     }
 
     @Override public boolean creatable() { return false; }

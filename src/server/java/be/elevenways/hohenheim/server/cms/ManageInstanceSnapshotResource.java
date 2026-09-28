@@ -36,7 +36,7 @@ public final class ManageInstanceSnapshotResource extends InstanceSnapshotResour
      */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return TenantScopes.INSTANCE_SNAPSHOTS.accessFunction();
+        return AccessFunction.scopedBy(TenantScopes.INSTANCE_SNAPSHOTS);
     }
 
     /** NAV-ONLY; reachesAny, because an id set cannot express every-record authority. */
