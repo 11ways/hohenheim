@@ -315,19 +315,27 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
             .as("pinning a certificate row is authority over a name the tenant may not hold")
             .isNull();
 
-        // 2. A binding onto a site the tenant does NOT manage writes nothing.
-        assertThat(tenantPost("/manage/domains/new",
-            "site_id=" + foreignSiteId + "&hostname=stolen.tenantscope.test").statusCode())
-            .isIn(200, 302, 303, 404, 422);
+        // 2. A binding onto a site the tenant does NOT manage writes nothing. A parent the
+        //    caller cannot load is out of scope (a plain 403), never "in the trash": that
+        //    copy would tell the tenant the foreign site exists and where it is.
+        HttpResponse<String> stolen = tenantPost("/manage/domains/new",
+            "site_id=" + foreignSiteId + "&hostname=stolen.tenantscope.test");
+        assertThat(stolen.statusCode()).as("step 2: the foreign-site create is refused")
+            .isIn(200, 302, 303, 403, 404, 422);
+        assertThat(stolen.body()).as("step 2: the refusal is not the archived-parent copy")
+            .doesNotContain("in the trash");
         assertThat(domainByHostname("stolen.tenantscope.test"))
             .as("the AccessFunction scopes READS; the site_id a CREATE submits is a "
                 + "separate question and the write pipeline is what answers it")
             .isNull();
 
         // 3. Neither can it MOVE one of its own rows onto another tenant's site.
-        assertThat(tenantPost("/manage/domains/" + forged.get(SiteDomainModel.ID),
-            "site_id=" + foreignSiteId + "&hostname=forged.t.tenantscope.test").statusCode())
-            .isIn(200, 302, 303, 404, 422);
+        HttpResponse<String> moved = tenantPost("/manage/domains/" + forged.get(SiteDomainModel.ID),
+            "site_id=" + foreignSiteId + "&hostname=forged.t.tenantscope.test");
+        assertThat(moved.statusCode()).as("step 3: the move onto a foreign site is refused")
+            .isIn(200, 302, 303, 403, 404, 422);
+        assertThat(moved.body()).as("step 3: the refusal is not the archived-parent copy")
+            .doesNotContain("in the trash");
         assertThat((Integer) Models.get(SiteDomainModel.class)
             .findById(forged.get(SiteDomainModel.ID)).get(SiteDomainModel.SITE_ID))
             .as("a move to a foreign site is the same takeover as a create there")
