@@ -25,24 +25,16 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.routing.BodyDefinition;
-import be.elevenways.zenit.common.routing.ParameterDefinition;
-import be.elevenways.zenit.common.api.ResponseCarrier;
-import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.protoblast.common.key.IdentifierKey;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.util.HashMap;
 import java.util.Map;
 
+import static be.elevenways.hohenheim.test.TestAccessContexts.contextFor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
@@ -585,88 +577,5 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
         assertThat(records.findById(foreignId))
             .as("step 4: the hand-authored SRV row STILL survives every cascade")
             .isNotNull();
-    }
-
-    /** Production-shaped context for a bare principal (the CapabilityWalkTest idiom). */
-    private static AccessContext contextFor(Principal principal) {
-        StubConduit conduit = new StubConduit();
-        conduit.setAttribute(ConduitAttributes.PRINCIPAL, principal);
-        return AccessContext.of(conduit);
-    }
-
-    /** Attribute-only Conduit; every request-flavored method throws. */
-    private static final class StubConduit implements Conduit {
-
-        private final Map<IdentifierKey<?>, Object> attributes = new HashMap<>();
-
-        @Override
-        @SuppressWarnings("unchecked")
-        public <T> T getAttribute(IdentifierKey<T> key) {
-            return (T) this.attributes.get(key);
-        }
-
-        @Override
-        public <T> void setAttribute(IdentifierKey<T> key, T value) {
-            if (value == null) {
-                this.attributes.remove(key);
-            } else {
-                this.attributes.put(key, value);
-            }
-        }
-
-        @Override
-        public ResponseCarrier getResponseCarrier() {
-            throw new UnsupportedOperationException("stub carries no response");
-        }
-
-        @Override
-        public <T> T getParameter(ParameterDefinition<T> parameter) {
-            throw new UnsupportedOperationException("stub carries no request");
-        }
-
-        @Override
-        public <T> T getBody(BodyDefinition<T> definition) {
-            throw new UnsupportedOperationException("stub carries no request");
-        }
-
-        @Override
-        public boolean isHawkeyeRequest() {
-            return false;
-        }
-
-        @Override
-        public void enableStreamingResponse() {
-            throw new UnsupportedOperationException("stub carries no response");
-        }
-
-        @Override
-        public void notFound() {
-            throw new UnsupportedOperationException("stub carries no response");
-        }
-
-        @Override
-        public void forbidden() {
-            throw new UnsupportedOperationException("stub carries no response");
-        }
-
-        @Override
-        public void badRequest() {
-            throw new UnsupportedOperationException("stub carries no response");
-        }
-
-        @Override
-        public void badRequest(String message) {
-            throw new UnsupportedOperationException("stub carries no response");
-        }
-
-        @Override
-        public <T> ActionResult<T> softRedirect(String url) {
-            throw new UnsupportedOperationException("stub carries no response");
-        }
-
-        @Override
-        public <T> ActionResult<T> hardRedirect(String url) {
-            throw new UnsupportedOperationException("stub carries no response");
-        }
     }
 }
