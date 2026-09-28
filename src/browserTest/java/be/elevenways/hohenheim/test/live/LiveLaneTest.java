@@ -45,6 +45,10 @@ class LiveLaneTest {
      */
     @Test
     void theGateNamesWhatIsMissingAndADeclaredHostTurnsThatSkipIntoAFailure() {
+        // The run's OWN declaration (a declaring run is exactly where this class must stay
+        // green), restored at the end; every step states the policy it exercises.
+        Set<Need> ambient = LiveLane.required();
+
         // 1. A satisfied need is a no-op -- the positive anchor. A gate that aborted
         //    unconditionally would satisfy every assertion below.
         LiveLane.require(Need.NETNS, true, "there is a netns");
@@ -52,8 +56,10 @@ class LiveLaneTest {
         // 2. An unsatisfied need aborts, carrying BOTH the machine-readable need and the
         //    caller's own reason verbatim. JUnit reports an abort as SKIPPED, which is
         //    exactly the outcome that used to read as green.
-        Throwable aborted = catchThrowable(
-            () -> LiveLane.require(Need.DOCKER_SOCKET, false, "Docker socket not present"));
+        Throwable[] skipped = new Throwable[1];
+        LiveLane.withRequired(Set.of(), () -> skipped[0] = catchThrowable(
+            () -> LiveLane.require(Need.DOCKER_SOCKET, false, "Docker socket not present")));
+        Throwable aborted = skipped[0];
         assertThat(aborted)
             .as("step 2: an unmet need aborts the test rather than failing it")
             .isInstanceOf(TestAbortedException.class);
@@ -86,12 +92,13 @@ class LiveLaneTest {
         //    declaration into the classes that share this JVM.
         assertThat(LiveLane.required())
             .as("step 5: withRequired restores the JVM's own policy")
-            .isEmpty();
+            .isEqualTo(ambient);
     }
 
     /**
      * The reachability gate: a CONFIGURED host that is down is a named skip, not a setUp
-     * failure, and a host that declares the need still fails on it.
+     * failure, and a host that declares the need still fails on it. Each step states its
+     * policy, so a run that itself declares incus-host stays green.
      */
     @Test
     void anUnreachableConfiguredHostIsANamedSkipUnlessTheRunDeclaresTheNeed() throws Exception {
@@ -106,8 +113,10 @@ class LiveLaneTest {
 
         // 2. The same port with nothing listening: the test aborts naming the need, the
         //    endpoint and the connect error, which is what the live lane report prints.
-        Throwable aborted = catchThrowable(() -> LiveLane.requireReachable(Need.INCUS_HOST,
-            "incus daemon", "127.0.0.1", closedPort));
+        Throwable[] skipped = new Throwable[1];
+        LiveLane.withRequired(Set.of(), () -> skipped[0] = catchThrowable(
+            () -> LiveLane.requireReachable(Need.INCUS_HOST, "incus daemon", "127.0.0.1", closedPort)));
+        Throwable aborted = skipped[0];
         assertThat(aborted)
             .as("step 2: an unreachable endpoint aborts rather than failing in setUp")
             .isInstanceOf(TestAbortedException.class);
