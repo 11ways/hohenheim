@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
+import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.ProxyAttention;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
@@ -86,6 +88,32 @@ class RoutingProblemsTest {
             .bypassBehaviours()
             .updateAll();
 
+        // A site whose access list holds an ip_deny rule stored in a spelling this build's
+        // parser refuses (an older parser accepted it); written past validation like the rest.
+        Row guarded = setupSite("hohenheim:redirect", "Problems Broken Rule", "problems-broken-rule",
+            Map.of("target_url", "https://example.com/"));
+        addDomain(guarded, "broken-rule.problems.test", "exact", null, false);
+        Row list = Models.get(AccessListModel.class).createEmptyRow();
+        list.set(AccessListModel.NAME, "Broken Deny");
+        list.set(AccessListModel.SATISFY, AccessListModel.SATISFY_ANY);
+        Models.get(AccessListModel.class).save(list);
+        Row denyRule = Models.get(AccessRuleModel.class).createEmptyRow();
+        denyRule.set(AccessRuleModel.ACCESS_LIST_ID, list.get(AccessListModel.ID));
+        denyRule.set(AccessRuleModel.TYPE, AccessRuleModel.TYPE_IP_DENY);
+        denyRule.set(AccessRuleModel.DATA, new LinkedHashMap<>(Map.of("network", "203.0.113.0/24")));
+        denyRule.set(AccessRuleModel.ENABLED, true);
+        denyRule.set(AccessRuleModel.SORT, 0);
+        Models.get(AccessRuleModel.class).save(denyRule);
+        Models.get(AccessRuleModel.class).find()
+            .where(AccessRuleModel.ID.eq(denyRule.get(AccessRuleModel.ID)))
+            .assign(AccessRuleModel.DATA, new LinkedHashMap<>(Map.of("network", "1.2.3.4::1")))
+            .bypassBehaviours()
+            .updateAll();
+        siteModel.find().where(SiteModel.ID.eq(guarded.get(SiteModel.ID)))
+            .assign(SiteModel.ACCESS_LIST_ID, list.get(AccessListModel.ID))
+            .bypassBehaviours()
+            .updateAll();
+
         proxy = startProxy();
         int port = httpPort(proxy);
         List<RoutingProblem> problems = proxy.getDispatcher().routingProblems();
@@ -141,6 +169,26 @@ class RoutingProblemsTest {
             .endsWith("/admin/sites/" + unknown.get(SiteModel.ID));
         assertThat(items).as("step 4: the healthy site raises nothing")
             .noneMatch(item -> "Problems Healthy".equals(item.title().args().get("name")));
+
+        // Step 5: the unparseable deny rule refuses rather than passing everyone, and the
+        //         route load names it against its site instead of only logging it.
+        assertThat(problems)
+            .as("step 5: the unusable rule is a recorded problem naming its list and spelling")
+            .anySatisfy(problem -> {
+                assertThat(problem.siteId()).isEqualTo(guarded.get(SiteModel.ID));
+                assertThat(problem.reason()).isEqualTo(RoutingProblem.Reason.ACCESS_RULE_UNUSABLE);
+                assertThat(problem.reason().unrouted()).isFalse();
+                assertThat(problem.detail()).isEqualTo("Broken Deny: ip_deny 1.2.3.4::1");
+            });
+        assertThat(rawRequest(port, "broken-rule.problems.test", "/"))
+            .as("step 5: the site refuses instead of serving past its broken deny rule")
+            .contains("403").doesNotContain("Location: https://example.com/");
+        assertThat(items).as("step 5: the dashboard warns about the site")
+            .anySatisfy(item -> {
+                assertThat(item.title().args().get("name")).isEqualTo("Problems Broken Rule");
+                assertThat(item.severity()).isEqualTo(AttentionSeverity.WARNING);
+                assertThat(item.detail().key()).isEqualTo("access_rule_unusable");
+            });
     }
 
     /**

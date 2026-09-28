@@ -38,7 +38,10 @@ public record RoutingProblem(int siteId, @NonNull String siteName, @NonNull Reas
         DUPLICATE_ROUTE(false),
 
         /** The site's auth provider cannot be built, so every request is refused (fail closed). */
-        AUTH_UNAVAILABLE(false);
+        AUTH_UNAVAILABLE(false),
+
+        /** An access rule cannot be evaluated (unknown type, unparseable network, unusable provider) and refuses. */
+        ACCESS_RULE_UNUSABLE(false);
 
         private final boolean unrouted;
 

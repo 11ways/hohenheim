@@ -47,8 +47,9 @@ import java.util.Set;
  * every child passes, and is PENDING in between. An EMPTY group PASSES (which is what
  * keeps a rule-less list inert).
  *
- * Disabled rules are skipped as though absent. An UNKNOWN rule type FAILS CLOSED with
- * one log line -- never a denylist, never a skip.
+ * Disabled rules are skipped as though absent. A rule this build cannot evaluate (an UNKNOWN
+ * type, an unbuildable provider, a network spelling that no longer parses) FAILS CLOSED with
+ * one log line and is listed in {@link #unusableRules()} -- never a denylist, never a skip.
  *
  * The request is allowed iff the root passes. A PENDING root is exactly the case where a
  * credential could still flip the verdict, and that is when -- and only when -- the
@@ -69,6 +70,7 @@ public final class AccessRuleTree {
     private final boolean needsBlockingEvaluation;
     private final boolean ownsAuthorizationHeader;
     private final boolean ownsPersistentCookie;
+    private final List<String> unusableRules;
 
     private AccessRuleTree(Node root, List<SiteAuthGate> gates, CompileFacts facts) {
         this.root = root;
@@ -84,6 +86,15 @@ public final class AccessRuleTree {
         }
         this.ownsAuthorizationHeader = authorization;
         this.ownsPersistentCookie = persistentCookie;
+        this.unusableRules = List.copyOf(facts.unusable);
+    }
+
+    /**
+     * One description per enabled rule this tree compiled into a refusing leaf, for the route
+     * load to surface as a routing problem.
+     */
+    public @NonNull List<String> unusableRules() {
+        return this.unusableRules;
     }
 
     /** Gates this tree built and therefore owns; the route table destroys them on reload. */
@@ -153,7 +164,7 @@ public final class AccessRuleTree {
                     Blast.log("AccessRuleTree: rule", rule.get(AccessRuleModel.ID),
                         "has no usable parent chain (missing parent or cycle);",
                         "DENYING the whole list.");
-                    return denyAll();
+                    return denyAll("rule " + rule.get(AccessRuleModel.ID) + " (no usable parent chain)");
                 }
                 parent = ancestor.get(AccessRuleModel.PARENT_ID);
             }
@@ -177,9 +188,14 @@ public final class AccessRuleTree {
         return new AccessRuleTree(new GroupNode(all, children), gates, facts);
     }
 
-    /** A tree that refuses every request; the fail-closed answer to an unusable list. */
-    static @NonNull AccessRuleTree denyAll() {
-        return new AccessRuleTree(new UnknownNode("(unusable rule set)"), List.of(), new CompileFacts());
+    /**
+     * A tree that refuses every request; the fail-closed answer to an unusable list.
+     *
+     * @param why what made the list unusable, listed in {@link #unusableRules()}
+     */
+    static @NonNull AccessRuleTree denyAll(@NonNull String why) {
+        CompileFacts facts = new CompileFacts();
+        return new AccessRuleTree(facts.unusable(why), List.of(), facts);
     }
 
     /** Build the enabled rows of one level; a disabled row is skipped with its subtree. */
@@ -217,13 +233,16 @@ public final class AccessRuleTree {
                 return new GroupNode(all,
                     build(children, childrenByParent, context, gates, facts));
             }
-            case AccessRuleModel.TYPE_IP_ALLOW -> {
-                return new NetworkNode(AccessRuleModel.parseNetwork(
-                    AccessRuleModel.text(data.get(AccessRuleModel.NETWORK.getName()))), true);
-            }
-            case AccessRuleModel.TYPE_IP_DENY -> {
-                return new NetworkNode(AccessRuleModel.parseNetwork(
-                    AccessRuleModel.text(data.get(AccessRuleModel.NETWORK.getName()))), false);
+            case AccessRuleModel.TYPE_IP_ALLOW, AccessRuleModel.TYPE_IP_DENY -> {
+                // AIDEV-NOTE: an unparseable network is a refusing leaf in BOTH directions. It
+                // used to match nothing, which made an ip_deny leaf PASS everyone: a deny rule
+                // whose stored spelling a newer parser rejects silently stopped blocking.
+                String network = AccessRuleModel.text(data.get(AccessRuleModel.NETWORK.getName()));
+                IpRanges.Range range = AccessRuleModel.parseNetwork(network);
+                if (range == null) {
+                    return facts.unusable(type + " " + network);
+                }
+                return new NetworkNode(range, AccessRuleModel.TYPE_IP_ALLOW.equals(type));
             }
             case AccessRuleModel.TYPE_BASIC_AUTH -> {
                 facts.blocking = true;
@@ -243,13 +262,13 @@ public final class AccessRuleTree {
                 if (gate == null) {
                     // A provider rule whose provider is gone or misconfigured denies; it
                     // must never degrade into "no identity required".
-                    return new UnknownNode("auth_provider " + providerId);
+                    return facts.unusable("auth_provider " + providerId);
                 }
                 gates.add(gate);
                 return new AuthProviderNode(gate, context.sessionStore(), context.siteId());
             }
             default -> {
-                return new UnknownNode(type);
+                return facts.unusable("of unknown type " + type);
             }
         }
     }
@@ -258,6 +277,13 @@ public final class AccessRuleTree {
     private static final class CompileFacts {
         boolean blocking;
         boolean basicLeaf;
+        final List<String> unusable = new ArrayList<>();
+
+        /** Record one rule the tree cannot evaluate and return the leaf that refuses in its place. */
+        @NonNull UnusableNode unusable(@NonNull String rule) {
+            this.unusable.add(rule);
+            return new UnusableNode(rule);
+        }
     }
 
     /** What a leaf needs from the site it guards. */
@@ -308,7 +334,7 @@ public final class AccessRuleTree {
     }
 
     private sealed interface Node
-        permits GroupNode, NetworkNode, UnknownNode, BasicAuthNode, AuthProviderNode {
+        permits GroupNode, NetworkNode, UnusableNode, BasicAuthNode, AuthProviderNode {
 
         @NonNull Result evaluate(@NonNull Evaluation evaluation);
     }
@@ -354,35 +380,32 @@ public final class AccessRuleTree {
         }
     }
 
-    /**
-     * An address leaf. A null range is an unparseable rule, which matches nothing: an
-     * allow leaf then fails and a deny leaf passes, in both cases the SAFE direction.
-     */
-    private record NetworkNode(IpRanges.@Nullable Range range, boolean passWhenInside) implements Node {
+    /** An address leaf; an unparseable network never gets here, it compiles to an {@link UnusableNode}. */
+    private record NetworkNode(IpRanges.@NonNull Range range, boolean passWhenInside) implements Node {
 
         @Override
         public @NonNull Result evaluate(@NonNull Evaluation evaluation) {
-            boolean inside = this.range != null && this.range.matches(evaluation.clientAddress());
+            boolean inside = this.range.matches(evaluation.clientAddress());
             return new Result(inside == this.passWhenInside ? Verdict.PASS : Verdict.FAIL, null);
         }
     }
 
     /** A rule this build cannot evaluate: it denies, loudly, once per compiled tree. */
-    private static final class UnknownNode implements Node {
+    private static final class UnusableNode implements Node {
 
-        private final @Nullable String type;
+        private final @NonNull String rule;
         private boolean logged;
 
-        private UnknownNode(@Nullable String type) {
-            this.type = type;
+        private UnusableNode(@NonNull String rule) {
+            this.rule = rule;
         }
 
         @Override
         public @NonNull Result evaluate(@NonNull Evaluation evaluation) {
             if (!this.logged) {
                 this.logged = true;
-                Blast.log("AccessRuleTree: access rule of unknown type", this.type,
-                    "-- denying. A rule the proxy cannot evaluate never widens access.");
+                Blast.log("AccessRuleTree: access rule", this.rule,
+                    "cannot be evaluated -- denying. A rule the proxy cannot evaluate never widens access.");
             }
             return new Result(Verdict.FAIL, null);
         }

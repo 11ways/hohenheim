@@ -216,6 +216,27 @@ class AccessRuleTreeTest {
             .as("step 7: a sibling that passes still passes -- the refusal is the LEAF's, "
                 + "not the tree's")
             .isEqualTo(AccessRuleTree.Verdict.PASS);
+        assertThat(tree(AccessListModel.SATISFY_ANY, List.of(unknown)).unusableRules())
+            .as("step 7: and the tree names the rule it refuses in place of evaluating")
+            .containsExactly("of unknown type shenanigans");
+
+        // 7b. A network spelling this build cannot parse (stored by an older parser) FAILS
+        //     CLOSED for a deny leaf too: matching nothing would have let EVERYONE past it.
+        Fixture brokenDeny = leaf(AccessRuleModel.TYPE_IP_DENY, "1.2.3.4::1");
+        Fixture brokenAllow = leaf(AccessRuleModel.TYPE_IP_ALLOW, "1.2.3.4::1");
+        assertThat(verdict(tree(AccessListModel.SATISFY_ANY, List.of(brokenDeny)), "192.0.2.9", null))
+            .as("step 7b: an unparseable ip_deny refuses instead of passing everyone")
+            .isEqualTo(AccessRuleTree.Verdict.FAIL);
+        assertThat(verdict(tree(AccessListModel.SATISFY_ALL,
+                List.of(leaf(AccessRuleModel.TYPE_IP_ALLOW, "10.0.0.0/8"), brokenDeny)), "10.0.0.5", null))
+            .as("step 7b: and under 'all' it refuses a client every other rule admits")
+            .isEqualTo(AccessRuleTree.Verdict.FAIL);
+        assertThat(verdict(tree(AccessListModel.SATISFY_ANY, List.of(brokenAllow)), "1.2.3.4", null))
+            .as("step 7b: an unparseable ip_allow refuses too")
+            .isEqualTo(AccessRuleTree.Verdict.FAIL);
+        assertThat(tree(AccessListModel.SATISFY_ALL, List.of(brokenDeny, brokenAllow)).unusableRules())
+            .as("step 7b: both are named, spelling included")
+            .containsExactly("ip_deny 1.2.3.4::1", "ip_allow 1.2.3.4::1");
 
         // 8. A credential leaf is PENDING, not FAIL, until the client has been asked.
         Fixture credential = credentialLeaf("operator", hash);
@@ -280,6 +301,9 @@ class AccessRuleTreeTest {
         // 12. With a gate, the leaf is PENDING without a session and delegates its challenge
         //     to that gate rather than reimplementing a login flow.
         SiteAuthDecision redirect = SiteAuthDecision.redirect("https://sso.example.com/login");
+        assertThat(tree(AccessListModel.SATISFY_ANY, List.of(provider)).unusableRules())
+            .as("step 11: and is named as unusable").containsExactly("auth_provider 4242");
+
         AccessRuleTree gated = compile(AccessListModel.SATISFY_ANY, rows(List.of(provider)),
             new StubContext(gateAnswering(redirect)));
         HttpServerExchange gatedExchange = exchange("10.0.0.5", null);
@@ -551,14 +575,20 @@ class AccessRuleTreeTest {
             row.set(AccessRuleModel.DATA, new LinkedHashMap<>(fixture.data()));
             row.set(AccessRuleModel.ENABLED, fixture.enabled());
             row.set(AccessRuleModel.SORT, sort++);
-            if (AccessRuleModel.TYPE.isValidValue(fixture.type())) {
+            if (AccessRuleModel.TYPE.isValidValue(fixture.type()) && !unparseableNetwork(fixture)) {
                 model.save(row);
             }
-            // An unknown type is deliberately NOT saved: the model's vocabulary hook refuses
-            // it, and the gate must still survive a row that reached the column another way.
+            // An unknown type or unparseable network is deliberately NOT saved: validation
+            // refuses it, and the gate must still survive a row that reached the column another
+            // way (an older build's parser, a direct write).
             collected.add(row);
             persist(fixture.children(), row.get(AccessRuleModel.ID), collected);
         }
+    }
+
+    private static boolean unparseableNetwork(Fixture fixture) {
+        Object network = fixture.data().get(AccessRuleModel.NETWORK.getName());
+        return network != null && AccessRuleModel.parseNetwork(network.toString()) == null;
     }
 
     // --- evaluation helpers ---------------------------------------------------------
