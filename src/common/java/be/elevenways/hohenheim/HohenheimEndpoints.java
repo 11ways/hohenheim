@@ -1319,16 +1319,6 @@ public class HohenheimEndpoints {
         .csrfExempt()
         .build();
 
-    // --- Remote-record edit forwarding (admin form POST on a SECONDARY zone's
-    //     Records tab; forwards to the owning peer's API above) ---
-    public static final Endpoint<Object> DNS_REMOTE_RECORD = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "dns_remote_record"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic(HohenheimSlugs.ADMIN).addDelimiter().addStatic(HohenheimSlugs.DNS_ZONES).addDelimiter()
-            .addParameter(ZONE_ID).addDelimiter().addStatic("remote-records").build())
-        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
-        .build();
-
     // --- Dynamic DNS (dyndns2 update protocol; public, token in HTTP Basic auth) ---
     // No requiresPermission: the token IS the credential, verified by the handler, so the
     // route authenticates itself and no login gate stands in front of it. That declaration

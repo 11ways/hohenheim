@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.dns.DnsRecordDto;
@@ -9,6 +8,7 @@ import be.elevenways.hohenheim.dns.DnsRecordView;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
@@ -18,12 +18,14 @@ import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.protoblast.common.typed.rule.Condition;
 import be.elevenways.protoblast.common.typed.rule.Operand;
 import be.elevenways.plumage.component.Pager;
+import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsFormBody;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.render.table.TableState;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.SubmittableRecordScopedPage;
 import be.elevenways.zenit.cms.common.schema.FilterState;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableView;
@@ -50,6 +52,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -57,9 +60,14 @@ import java.util.Objects;
 /**
  * Records tab on a DNS zone: the zone's own records rendered through the record
  * resource's declarations (search, quick-add, inline-editable cells, row actions),
- * or -- on a SECONDARY zone -- the owning peer's records read through its API.
+ * or -- on a SECONDARY zone -- the owning peer's records read through its API, whose
+ * edits this tab's own submit forwards to the owner.
+ *
+ * AIDEV-NOTE: the remote edits ride the framework's subpage submit lane, never an endpoint
+ * of their own: zenit-cms refuses a submit over a read-only zone (trashed, or under a
+ * trashed record) before {@link #submit} runs, and the render offers no edit there.
  */
-public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
+public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row> {
 
     /** This page's template, shared by the available and unavailable branches. */
     private static final Identifier TEMPLATE = Identifier.of("hohenheim", "cms/dns-zone-records");
@@ -155,6 +163,8 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
         // page window and its total -- this tab only adds the zone scope.
         RecordPage<Row> page = resource.listPage(applied, accessContext);
         List<Row> records = page.rows();
+        // The per-row write verdicts below walk each record's parent (this zone) once for the whole page.
+        resource.prefetchLineage(panel, records, accessContext);
 
         BoundEndpoint<?> listTarget = CmsRoutes.subpage(PANEL, DnsZoneResource.SLUG, zoneId, this.slug());
         String listUrl = listTarget.toUrl();
@@ -287,7 +297,7 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
         DnsPeerApi api = DnsPeerApi.forPeer(peer);
 
         List<DnsRecordView> records = new ArrayList<>();
-        boolean editable = false;
+        boolean reachable = false;
         String notice = "";
         DnsRecordFormView editRecord = null;
         String requestedRecord = conduit.getQueryParam(HohenheimParams.REMOTE_RECORD.getName());
@@ -309,7 +319,7 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
                         editRecord = formView(remote);
                     }
                 }
-                editable = true;
+                reachable = true;
             }
             catch (RuntimeException e) {
                 notice = Microcopy.of("peer_unreachable").withFilter("scope", "dns_remote")
@@ -322,10 +332,15 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
                 .resolve(conduit.getLocales(), conduit.getMessageResolver());
         }
 
-        if (!editable) {
+        if (!reachable) {
             replicaRecords(origin, records);
         }
-        if ("new".equals(requestedRecord) && editable) {
+        // A read-only zone still reads its owner's records, but offers none of their edits: the submit is refused.
+        boolean editable = reachable && !this.hostReadOnly(conduit);
+        if (!editable) {
+            editRecord = null;
+        }
+        else if ("new".equals(requestedRecord)) {
             editRecord = DnsRecordFormView.empty();
         }
 
@@ -348,10 +363,64 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
         vars.put("recordTypes", DnsRecordModel.ALL_TYPES);
         vars.put("addRecordTarget", remoteRecordTarget(zoneId, "new"));
         vars.put("recordsTabTarget", CmsRoutes.subpage(PANEL, DnsZoneResource.SLUG, zoneId, this.slug()));
-        vars.put("remoteFormTarget", HohenheimEndpoints.DNS_REMOTE_RECORD
-            .with(HohenheimEndpoints.ZONE_ID, zoneId));
+        vars.put("remoteFormTarget", CmsRoutes.subpageSubmit(PANEL, DnsZoneResource.SLUG, zoneId, this.slug()));
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/dns-zone-remote-records"), vars);
+    }
+
+    /**
+     * Forward a secondary zone's remote-record save or delete to its owning peer.
+     *
+     * @return a toast of the owner's answer, back on this tab; a primary zone's tab has nothing to forward
+     */
+    @Override
+    public @NonNull CmsActionResult submit(@NonNull Conduit conduit, @NonNull AccessContext accessContext,
+                                           @NonNull Row zone) {
+        if (!DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
+            return CmsActionResult.refresh();
+        }
+        Integer peerId = zone.get(DnsZoneModel.PRIMARY_PEER_ID);
+        DnsPeerApi api = DnsPeerApi.forPeer(peerId != null ? Models.get(DnsPeerModel.class).findById(peerId) : null);
+        if (api == null) {
+            return CmsActionResult.errorToast(Microcopy.of("peer_not_configured").withFilter("scope", "dns_remote"));
+        }
+
+        Map<String, Object> body = conduit.getBody(CmsFormBody.BODY);
+        Map<String, Object> form = body == null ? Map.of() : body;
+        String origin = zone.get(DnsZoneModel.ORIGIN);
+        String action = HandlerSupport.submittedString(form, "action");
+        String recordText = HandlerSupport.submittedString(form, "record_id");
+        Integer recordId = HandlerSupport.submittedInteger(form, "record_id");
+        if (!recordText.isEmpty() && recordId == null) {
+            return CmsActionResult.refresh();
+        }
+        Map<String, String> fields = new LinkedHashMap<>();
+        for (String field : DnsPeerApi.RECORD_FIELDS) {
+            if (form.containsKey(field)) {
+                fields.put(field, HandlerSupport.submittedString(form, field));
+            }
+        }
+
+        try {
+            if ("delete".equals(action) && recordId != null) {
+                api.deleteRecord(origin, recordId);
+            }
+            else if (recordId != null) {
+                api.updateRecord(origin, recordId, fields);
+            }
+            else {
+                api.createRecord(origin, fields);
+            }
+        }
+        catch (DnsPeerApi.PeerApiException e) {
+            // A validation refusal round-trips by microcopy key (same catalogs on both instances); a transport
+            // failure shows the raw message.
+            return CmsActionResult.errorToast(e.getViolationKey() != null
+                ? Microcopy.of(e.getViolationKey()).withFilter("scope", "violations")
+                : Microcopy.of("peer_call_failed").withFilter("scope", "dns_remote")
+                    .withArg("reason", String.valueOf(e.getMessage())));
+        }
+        return CmsActionResult.refreshWithToast(Microcopy.of("edit_saved").withFilter("scope", "dns_remote"));
     }
 
     /**

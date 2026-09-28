@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
+import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.hohenheim.server.dns.DnsRecordCodec;
 import org.junit.jupiter.api.Test;
 import org.xbill.DNS.Name;
@@ -67,7 +68,7 @@ class DnsRecordTypeVocabularyTest {
         assertThat(DnsRecordModel.DATA_FIELD_NAMES)
             .as("step 3: the per-type extras are read off the sub-schemas themselves")
             .containsExactlyInAnyOrder("priority", "weight", "port");
-        assertThat(DnsRecordApiHandlers.RECORD_FIELDS)
+        assertThat(DnsPeerApi.RECORD_FIELDS)
             .as("step 3: and every one of them reaches the wire, alongside the columns")
             .containsAll(DnsRecordModel.DATA_FIELD_NAMES)
             .contains(DnsRecordModel.NAME.getName(), DnsRecordModel.TYPE.getName(),

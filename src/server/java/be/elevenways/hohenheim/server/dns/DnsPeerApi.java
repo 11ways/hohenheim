@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.dns.DnsPeerKeyResponse;
 import be.elevenways.hohenheim.dns.DnsRecordListResponse;
 import be.elevenways.hohenheim.dns.DnsValidationErrorResponse;
 import be.elevenways.hohenheim.model.DnsPeerModel;
+import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.routing.RouteTarget;
@@ -19,6 +20,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +45,35 @@ public final class DnsPeerApi {
 
         public @Nullable String getViolationKey() { return violationKey; }
         public @Nullable String getViolationField() { return violationField; }
+    }
+
+    /**
+     * The row columns the peer wire carries FLAT: a deliberate SUBSET of the model (no
+     * zone_id, no generated_* -- those are the server's, not a caller's). {@code managed_by}
+     * is handled apart: it is settable on CREATE only, and only to a value
+     * {@link DnsRecordModel#MANAGED_BY_VALUES} declares.
+     */
+    private static final List<String> COLUMN_FIELDS = List.of(
+        DnsRecordModel.NAME.getName(), DnsRecordModel.TYPE.getName(),
+        DnsRecordModel.VALUE.getName(), DnsRecordModel.TTL.getName(),
+        DnsRecordModel.ENABLED.getName());
+
+    /**
+     * The record fields the wire carries: what the owner's record API reads and what the remote-record form forwards.
+     *
+     * AIDEV-NOTE: the type-specific half is DERIVED from the model's per-type sub-schemas
+     * ({@link DnsRecordModel#DATA_FIELD_NAMES}), never re-listed. Until 2026-08-17 this
+     * spelled "priority", "weight", "port" here AND partitioned on the same three names
+     * again in the owner's record API -- so adding a field to the SRV schema needed two
+     * edits that nothing tied together, and forgetting either silently
+     * dropped the field off the API instead of failing.
+     */
+    public static final List<String> RECORD_FIELDS = recordFields();
+
+    private static List<String> recordFields() {
+        List<String> fields = new ArrayList<>(COLUMN_FIELDS);
+        fields.addAll(DnsRecordModel.DATA_FIELD_NAMES);
+        return List.copyOf(fields);
     }
 
     private static final HttpClient HTTP = HttpClient.newBuilder()

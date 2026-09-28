@@ -47,7 +47,6 @@ public final class HohenheimHandlers {
         GitProviderHandlers.init();
         DnsRecordApiHandlers.init();
         DnsPeerApiHandlers.init();
-        DnsZoneHandlers.initRemoteRecords();
         DynamicDnsHandlers.init();
         DatabaseHandlers.init();
         ServerMediaHandlers.init();

@@ -2,10 +2,8 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
-import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
@@ -17,12 +15,11 @@ import be.elevenways.zenit.common.routing.BoundEndpoint;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * DNS zone administration: the zone-file paste import and the remote-record edit
- * forwarding. Git provider browsing lives in {@link GitProviderHandlers}.
+ * DNS zone administration: the zone-file paste import. A secondary zone's remote-record edits are its Records
+ * tab's own submit ({@code DnsZoneRecordsPage}); git provider browsing lives in {@link GitProviderHandlers}.
  */
 final class DnsZoneHandlers {
 
@@ -77,71 +74,6 @@ final class DnsZoneHandlers {
                     .withArg("reason", String.valueOf(e.getMessage())));
                 return HandlerSupport.redirect(back);
             }
-        });
-    }
-
-    /**
-     * Remote-record edit forwarding: the admin form POST on a SECONDARY zone's Records
-     * tab, forwarded to the owning peer's API.
-     */
-    static void initRemoteRecords() {
-        HohenheimEndpoints.DNS_REMOTE_RECORD.setHandler(conduit -> {
-            Integer zoneId = conduit.getParameter(HohenheimEndpoints.ZONE_ID);
-            Row zone = Models.get(DnsZoneModel.class).find()
-                .where(DnsZoneModel.ID.eq(zoneId)).first();
-            if (zone == null || !DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
-                return HandlerSupport.redirect(zoneList());
-            }
-            BoundEndpoint<Map<String, Object>> back = zoneSubpage(zoneId, "records");
-
-            Integer peerId = zone.get(DnsZoneModel.PRIMARY_PEER_ID);
-            Row peer = peerId != null ? Models.get(DnsPeerModel.class).findById(peerId) : null;
-            DnsPeerApi api = DnsPeerApi.forPeer(peer);
-            if (api == null) {
-                HohenheimFlash.error(conduit,
-                    Microcopy.of("peer_not_configured").withFilter("scope", "dns_remote"));
-                return HandlerSupport.redirect(back);
-            }
-
-            Map<String, String> form = HandlerSupport.formMap(conduit);
-            String origin = zone.get(DnsZoneModel.ORIGIN);
-            String action = form.getOrDefault("action", "save");
-            String recordId = form.getOrDefault("record_id", "").trim();
-            Map<String, String> fields = new LinkedHashMap<>();
-            for (String field : DnsRecordApiHandlers.RECORD_FIELDS) {
-                if (form.containsKey(field)) {
-                    fields.put(field, form.get(field));
-                }
-            }
-
-            try {
-                if ("delete".equals(action) && !recordId.isEmpty()) {
-                    api.deleteRecord(origin, Integer.parseInt(recordId));
-                }
-                else if (!recordId.isEmpty()) {
-                    api.updateRecord(origin, Integer.parseInt(recordId), fields);
-                }
-                else {
-                    api.createRecord(origin, fields);
-                }
-            }
-            catch (NumberFormatException e) {
-                return HandlerSupport.redirect(back);
-            }
-            catch (DnsPeerApi.PeerApiException e) {
-                // A validation refusal round-trips by microcopy key (same catalogs
-                // on both instances); transport failures show the raw message.
-                Microcopy message = e.getViolationKey() != null
-                    ? Microcopy.of(e.getViolationKey()).withFilter("scope", "violations")
-                    : Microcopy.of("peer_call_failed").withFilter("scope", "dns_remote")
-                        .withArg("reason", String.valueOf(e.getMessage()));
-                HohenheimFlash.error(conduit, message);
-                return HandlerSupport.redirect(back);
-            }
-
-            HohenheimFlash.success(conduit,
-                Microcopy.of("edit_saved").withFilter("scope", "dns_remote"));
-            return HandlerSupport.redirect(back);
         });
     }
 

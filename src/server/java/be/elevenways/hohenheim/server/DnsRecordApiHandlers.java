@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.cms.DnsRecordEdits;
 import be.elevenways.hohenheim.server.dns.DnsNames;
+import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -35,35 +36,6 @@ import java.util.Map;
  * API-key principals only; primary zones only.
  */
 final class DnsRecordApiHandlers {
-
-    /**
-     * The row columns the peer wire carries FLAT: a deliberate SUBSET of the model (no
-     * zone_id, no generated_* -- those are the server's, not a caller's). {@code managed_by}
-     * is handled apart: it is settable on CREATE only, and only to a value
-     * {@link DnsRecordModel#MANAGED_BY_VALUES} declares.
-     */
-    private static final List<String> COLUMN_FIELDS = List.of(
-        DnsRecordModel.NAME.getName(), DnsRecordModel.TYPE.getName(),
-        DnsRecordModel.VALUE.getName(), DnsRecordModel.TTL.getName(),
-        DnsRecordModel.ENABLED.getName());
-
-    /**
-     * The record fields the wire carries, shared with the remote-record forwarding form.
-     *
-     * AIDEV-NOTE: the type-specific half is DERIVED from the model's per-type sub-schemas
-     * ({@link DnsRecordModel#DATA_FIELD_NAMES}), never re-listed. Until 2026-08-17 this
-     * spelled "priority", "weight", "port" here AND partitioned on the same three names
-     * again in {@link #recordValues} -- so adding a field to the SRV schema needed two
-     * edits in this file that nothing tied together, and forgetting either silently
-     * dropped the field off the API instead of failing.
-     */
-    static final List<String> RECORD_FIELDS = recordFields();
-
-    private static List<String> recordFields() {
-        List<String> fields = new ArrayList<>(COLUMN_FIELDS);
-        fields.addAll(DnsRecordModel.DATA_FIELD_NAMES);
-        return List.copyOf(fields);
-    }
 
     private DnsRecordApiHandlers() {
     }
@@ -259,7 +231,7 @@ final class DnsRecordApiHandlers {
     private static Map<String, Object> recordValues(Map<String, String> form) {
         Map<String, Object> values = new LinkedHashMap<>();
         Map<String, Object> data = new LinkedHashMap<>();
-        for (String field : RECORD_FIELDS) {
+        for (String field : DnsPeerApi.RECORD_FIELDS) {
             if (!form.containsKey(field)) {
                 continue;
             }
