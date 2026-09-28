@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -181,7 +182,7 @@ class PortLedgerOverlapTest {
         for (int i = 0; i < 2; i++) {
             int ownerId = owners[i];
             String bind = binds[i];
-            racers[i] = new Thread(() -> Db.run(datasource, () -> {
+            racers[i] = new Thread(ExecutionContext.wrap(() -> Db.run(datasource, () -> {
                 try {
                     barrier.await();
                     PortLedger.claim(localId[0], bind, 8420, "tcp",
@@ -189,7 +190,7 @@ class PortLedgerOverlapTest {
                 } catch (Exception refused) {
                     refusals.add(refused);
                 }
-            }));
+            })));
             racers[i].start();
         }
         for (Thread racer : racers) {

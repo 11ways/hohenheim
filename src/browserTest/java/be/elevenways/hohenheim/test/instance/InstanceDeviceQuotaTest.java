@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.server.instance.InstanceDeviceQuota;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -104,7 +105,7 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
         List<Thread> threads = new ArrayList<>();
         for (int i = 0; i < 2; i++) {
             int slot = i;
-            Thread worker = new Thread(() -> {
+            Thread worker = new Thread(ExecutionContext.wrap(() -> {
                 try {
                     barrier.await();
                     Models.get(InstanceDeviceModel.class)
@@ -112,7 +113,7 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
                 } catch (Throwable refused) {
                     failures[slot].set(refused);
                 }
-            });
+            }));
             worker.start();
             threads.add(worker);
         }
