@@ -13,8 +13,10 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
+import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
@@ -22,6 +24,7 @@ import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldLabels;
@@ -116,6 +119,18 @@ public class DnsRecordResource extends RowResource {
     @Override
     public @Nullable ResourceParent<Row> parent() {
         return ResourceParent.of(DnsZoneResource.SLUG, DnsRecordModel.ZONE_ID).tab(DnsZoneRecordsPage.SLUG);
+    }
+
+    /**
+     * Refuse a zone-file import into {@code zoneId} while the zone is read-only, with the refusal zenit-cms gives every
+     * record create there: the import writes its records itself, so it asks before it writes.
+     *
+     * @param panel the panel the zone's lineage resolves in (the operator panel)
+     * @throws AccessRefusedException coded {@code CmsRefusalCopy.ARCHIVED_PARENT}
+     */
+    public void requireImportable(@NonNull Panel panel, int zoneId, @NonNull AccessContext accessContext) {
+        ResourceWrites.requireOutsideArchive(panel, this, Map.of(DnsRecordModel.ZONE_ID.getName(), zoneId),
+            accessContext, "import");
     }
 
     /**

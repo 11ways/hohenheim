@@ -50,6 +50,9 @@ public final class DnsZoneFilePage implements RecordScopedPage<Row> {
         // destructive-looking button that fails. The tab says so instead of showing it.
         boolean replica = DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone));
         vars.put("importable", !replica);
+        // A read-only zone (trashed, or under a trashed record) takes no import: the endpoint refuses it with
+        // zenit-cms's archived-parent refusal (DnsRecordResource.requireImportable), and this is the same answer.
+        vars.put("writable", !this.hostReadOnly(conduit));
         Integer peerId = zone.get(DnsZoneModel.PRIMARY_PEER_ID);
         Row peer = replica && peerId != null
             ? Models.get(DnsPeerModel.class).findById(peerId) : null;
