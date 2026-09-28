@@ -10,7 +10,6 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.JsonResult;
 import be.elevenways.zenit.common.routing.RouteTarget;
-import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.http.HttpConduit;
 import be.elevenways.zenit.server.http.RedirectResult;
@@ -171,17 +170,16 @@ public final class HandlerSupport {
     }
 
     /**
-     * Run request-authorized work on a virtual thread, carrying the request's datasource and
-     * its accountability, so the activity rows the work writes still name who asked.
+     * Run request-authorized work on a virtual thread, carrying the request's datasource.
      *
-     * AIDEV-NOTE: the caller's identity follows the work (zenit's ExecutionIdentity rides
-     * the JobRunner hop), so the service gates inside judge the SAME caller they would have
-     * judged synchronously. A caller still authorizes everything before handing off, so a
-     * refusal is answered to the request instead of lost in a log line.
+     * AIDEV-NOTE: the caller's identity and accountability follow the work (zenit's
+     * ExecutionIdentity and Accountability ride the JobRunner hop), so the service gates inside
+     * judge the SAME caller they would have judged synchronously and the activity rows name who
+     * asked. A caller still authorizes everything before handing off, so a refusal is answered
+     * to the request instead of lost in a log line.
      */
     public static void inBackground(@NonNull Runnable work) {
         Datasource datasource = Db.currentOrDefault();
-        Accountability caller = Accountability.current();
-        JobRunner.startVirtualThread(() -> Db.run(datasource, () -> Accountability.runAs(caller, work)));
+        JobRunner.startVirtualThread(() -> Db.run(datasource, work));
     }
 }

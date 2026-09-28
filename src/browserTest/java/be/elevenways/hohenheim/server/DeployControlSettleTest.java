@@ -5,9 +5,15 @@ import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.model.UserPrincipal;
+import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.flash.FlashEncoding;
 import be.elevenways.zenit.common.flash.FlashLevel;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -33,6 +39,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DeployControlSettleTest extends HohenheimTestBase {
 
     private static final String NAME = "deploy-control-settle-app";
+
+    /** A record id no instance holds, carrying only this test's attribution row. */
+    private static final int SETTLE_RECORD = 987_654_321;
 
     @Test
     void aDeploysTabVerbAnswersInsideItsWindowOrSaysItIsRunning() throws Exception {
@@ -69,6 +78,19 @@ class DeployControlSettleTest extends HohenheimTestBase {
         } finally {
             release.countDown();
         }
+
+        // 3b. The background verb writes its activity as whoever asked: the attribution rides the hop.
+        Row admin = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        int adminId = admin.get(UserModel.ID);
+        TenantConduits.as(new UserPrincipal(adminId, "Test Admin"), () -> SiteControlHandlers.settleWithin(
+            Duration.ofSeconds(5), "test verb",
+            () -> ActivityLog.record(Models.get(InstanceModel.class), SETTLE_RECORD, "settle_attribution", null)));
+        Row attributed = new ActivityModel(Models.get(InstanceModel.class).getResolvedDatasource()).find()
+            .where(ActivityModel.RECORD_ID.eq(String.valueOf(SETTLE_RECORD)))
+            .where(ActivityModel.ACTION.eq("settle_attribution")).first();
+        assertThat(attributed).as("step 3b: the background verb recorded its activity").isNotNull();
+        assertThat((String) attributed.get(ActivityModel.ACTOR))
+            .as("step 3b: naming the caller who asked, not the system").isEqualTo(String.valueOf(adminId));
 
         // 4. Over HTTP: rolling back an application with no retained release used to escape
         //    the handler as a bare 422 page. It now redirects back to the tab and the
