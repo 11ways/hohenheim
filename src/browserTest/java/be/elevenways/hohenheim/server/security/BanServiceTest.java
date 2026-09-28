@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.security.BanScope;
+import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.security.SecurityEventTypes;
@@ -332,7 +333,7 @@ class BanServiceTest {
         List<Thread> threads = new ArrayList<>();
         for (int i = 0; i < workers; i++) {
             String ip = "2001:db8:77:88::" + Integer.toHexString(i + 1);
-            threads.add(Thread.ofPlatform().start(() -> {
+            threads.add(Thread.ofPlatform().start(ExecutionContext.wrap(() -> {
                 ready.countDown();
                 try {
                     start.await();
@@ -340,7 +341,7 @@ class BanServiceTest {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
-            }));
+            })));
         }
         assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
         start.countDown();
@@ -523,7 +524,7 @@ class BanServiceTest {
         }, () -> true);
         BanService service = new BanService(slowNft);
 
-        Thread bootCaller = Thread.ofPlatform().start(service::boot);
+        Thread bootCaller = Thread.ofPlatform().start(ExecutionContext.wrap(service::boot));
         try {
             assertThat(runnerEntered.await(1, TimeUnit.SECONDS)).isTrue();
             bootCaller.join(500);
@@ -608,8 +609,8 @@ class BanServiceTest {
 
             // 1. autoBan hands the work to the writer and returns; the writer then sits in
             //    nft, holding the service monitor.
-            Thread caller = Thread.ofPlatform().start(() ->
-                service.autoBan(slowTarget, "auth.lockout", "score 30 over threshold"));
+            Thread caller = Thread.ofPlatform().start(ExecutionContext.wrap(() ->
+                service.autoBan(slowTarget, "auth.lockout", "score 30 over threshold")));
             caller.join(2_000);
             assertThat(caller.isAlive())
                 .as("step 1: autoBan returned without waiting for the write").isFalse();
@@ -618,11 +619,11 @@ class BanServiceTest {
 
             // 2. The ban check still answers at once: it is a snapshot read, never the monitor.
             CountDownLatch answered = new CountDownLatch(1);
-            Thread checker = Thread.ofPlatform().start(() -> {
+            Thread checker = Thread.ofPlatform().start(ExecutionContext.wrap(() -> {
                 if (service.isBanned("198.51.100.130")) {
                     answered.countDown();
                 }
-            });
+            }));
             assertThat(answered.await(2, TimeUnit.SECONDS))
                 .as("step 2: isBanned answered true while the writer holds the monitor").isTrue();
             checker.join(1_000);

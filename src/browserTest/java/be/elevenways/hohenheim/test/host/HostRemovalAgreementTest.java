@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -122,10 +123,11 @@ class HostRemovalAgreementTest {
         ExecutorService pool = Executors.newFixedThreadPool(racers);
         List<Future<Integer>> calls = new ArrayList<>();
         try {
+            ExecutionContext.Snapshot operator = ExecutionContext.capture();
             for (int i = 0; i < racers; i++) {
                 calls.add(pool.submit(() -> {
                     start.await(10, TimeUnit.SECONDS);
-                    return Db.supply(datasource, ServerModel::localServerId);
+                    return operator.supply(() -> Db.supply(datasource, ServerModel::localServerId));
                 }));
             }
             Set<Integer> ids = new HashSet<>();

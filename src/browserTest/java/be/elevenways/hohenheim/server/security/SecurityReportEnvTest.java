@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.AfterEach;
@@ -133,8 +134,9 @@ class SecurityReportEnvTest {
         var executor = Executors.newFixedThreadPool(8);
         try {
             List<java.util.concurrent.Future<Map<String, String>>> calls = new ArrayList<>();
+            ExecutionContext.Snapshot operator = ExecutionContext.capture();
             for (int i = 0; i < 8; i++) {
-                calls.add(executor.submit(() -> SecurityReportEnv.forSite(siteId)));
+                calls.add(executor.submit(() -> operator.supply(() -> SecurityReportEnv.forSite(siteId))));
             }
             String canonical = null;
             for (var call : calls) {

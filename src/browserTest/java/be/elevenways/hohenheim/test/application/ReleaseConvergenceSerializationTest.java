@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -360,14 +361,14 @@ class ReleaseConvergenceSerializationTest {
     private static Thread converger(int applicationId,
                                     AtomicReference<ApplicationReleases.Release> result,
                                     AtomicReference<Throwable> failure, String name) {
-        return new Thread(() -> {
+        return new Thread(ExecutionContext.wrap(() -> {
             try {
                 Db.run(datasource, () ->
                     result.set(ApplicationReleases.converge(applicationId, Map.of())));
             } catch (Throwable refused) {
                 failure.set(refused);
             }
-        }, name);
+        }), name);
     }
 
     /**

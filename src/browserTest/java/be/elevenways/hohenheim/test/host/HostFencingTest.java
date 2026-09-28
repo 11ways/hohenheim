@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.host;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -134,15 +135,27 @@ class HostFencingTest {
                 new HostLeases(d -> rivalCoordinator, Duration.ofSeconds(30)), () -> {});
 
             AtomicReference<Throwable> aOutcome = new AtomicReference<>();
-            Thread aThread = new Thread(() -> {
+            // The raw thread carries the test's operator identity, as a request's continuation
+            // carries its caller: bare, the fail-closed gates refuse the deploy outright.
+            Thread aThread = new Thread(ExecutionContext.wrap(() -> {
                 Db.run(datasource, () ->
                     aOutcome.set(catchThrowable(() -> controllerA.deploy(id))));
-            }, "controller-a");
+            }), "controller-a");
 
             try {
                 // 1. A deploys and STALLS after create+start, before its outcome write.
                 aThread.start();
-                assertThat(aStalled.await(120, TimeUnit.SECONDS))
+                boolean stalled = false;
+                for (int wait = 0; wait < 600 && !stalled && aThread.isAlive(); wait++) {
+                    stalled = aStalled.await(200, TimeUnit.MILLISECONDS);
+                }
+                if (!stalled) {
+                    aThread.join(TimeUnit.SECONDS.toMillis(5));
+                    assertThat(aOutcome.get())
+                        .as("step 1: controller A ended before its stall point with this outcome")
+                        .isNull();
+                }
+                assertThat(stalled)
                     .as("step 1: controller A reached its stall point").isTrue();
                 // A's fence, read off its JVM-held lease (no DB statement involved).
                 long aFence = leasesA.requireFence(localId);

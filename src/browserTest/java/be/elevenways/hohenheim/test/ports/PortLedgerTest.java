@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.ports;
 
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -380,7 +381,7 @@ class PortLedgerTest {
         Thread[] racers = new Thread[2];
         for (int i = 0; i < 2; i++) {
             int ownerId = ids[i];
-            racers[i] = new Thread(() -> Db.run(datasource, () -> {
+            racers[i] = new Thread(ExecutionContext.wrap(() -> Db.run(datasource, () -> {
                 try {
                     barrier.await();
                     PortLedger.claimPreallocated(ServerModel.localServerId(), "", 8351,
@@ -390,7 +391,7 @@ class PortLedgerTest {
                 } catch (Exception unexpected) {
                     refusals.add(unexpected);
                 }
-            }));
+            })));
             racers[i].start();
         }
         for (Thread racer : racers) {

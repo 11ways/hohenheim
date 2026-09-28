@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -65,10 +66,10 @@ class InstanceOperationSerializationTest {
                     return;
                 }
                 fired[0] = true;
-                Thread rival = new Thread(() -> Db.run(datasource, () -> {
+                Thread rival = new Thread(ExecutionContext.wrap(() -> Db.run(datasource, () -> {
                     rivalDeploy.set(catchThrowable(() -> new InstanceService().deploy(id)));
                     rivalStop.set(catchThrowable(() -> new InstanceService().stop(id)));
-                }), "rival-operation");
+                })), "rival-operation");
                 rival.start();
                 try {
                     rival.join(TimeUnit.SECONDS.toMillis(60));

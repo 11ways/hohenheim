@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.server.dns.DnsServer;
 import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
+import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.comms.CommsChannel;
 import be.elevenways.zenit.comms.server.Comms;
@@ -244,7 +245,8 @@ class DnsFederationHealthTest {
             //    none of the writer's transaction (JobRunner.fireAndForget in ServerMain).
             DnsZoneStore.INSTANCE.setOnZoneChanged((id, serial) -> {
                 announced.set(serial);
-                Thread sender = new Thread(() -> new DnsNotifier().notifyZonePeersBlocking(id, serial));
+                Thread sender = new Thread(ExecutionContext.wrap(
+                    () -> new DnsNotifier().notifyZonePeersBlocking(id, serial)));
                 sender.start();
                 try {
                     sender.join();

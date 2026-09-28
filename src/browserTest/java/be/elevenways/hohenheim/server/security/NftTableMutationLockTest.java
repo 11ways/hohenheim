@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.protoblast.common.thread.ExecutionContext;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -51,25 +52,25 @@ class NftTableMutationLockTest {
         // 2. The remover's emptiness listing is held open -- the race window.
         kernel.holdNextTableListing();
         AtomicReference<Throwable> removerFailure = new AtomicReference<>();
-        Thread removing = Thread.ofPlatform().start(() -> {
+        Thread removing = Thread.ofPlatform().start(ExecutionContext.wrap(() -> {
             try {
                 remover.remove(1001, "gone");
             } catch (Throwable failure) {
                 removerFailure.set(failure);
             }
-        });
+        }));
         assertThat(kernel.listingHeld.await(5, TimeUnit.SECONDS))
             .as("step 2: the remover has seen an empty table and not yet deleted it").isTrue();
 
         // 3. A deploy starts inside that window. It must wait, not write.
         AtomicReference<Throwable> deployFailure = new AtomicReference<>();
-        Thread deploying = Thread.ofPlatform().start(() -> {
+        Thread deploying = Thread.ofPlatform().start(ExecutionContext.wrap(() -> {
             try {
                 deployer.apply(1002, "fresh");
             } catch (Throwable failure) {
                 deployFailure.set(failure);
             }
-        });
+        }));
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (deploying.getState() != Thread.State.WAITING
                 && deploying.isAlive() && System.nanoTime() < deadline) {
