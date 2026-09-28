@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.Zenit;
@@ -21,7 +22,6 @@ import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.Accountability;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -39,7 +39,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -57,9 +56,9 @@ import java.util.function.Supplier;
  * ActivityLog.withAction} has nothing to rename and would record literally nothing.
  * What made the stack tier the LAST silent tier is the thread hop: every operation runs
  * on the stack's own worker and {@code Accountability} is a ThreadLocal, so a row
- * written there is unattributed system work unless the dispatching thread's attribution
- * is snapshotted and re-entered -- which {@link #onWorker} and {@link #submitAsync} now
- * do for every hop, sync and async. WHICH surface acted stays answerable through the
+ * written there is unattributed system work unless the dispatching thread's execution
+ * context is captured and re-entered -- which {@link #onLane} does for every hop of
+ * {@link #onWorker} and {@link #submitAsync}, sync and async. WHICH surface acted stays answerable through the
  * activity row's own {@code origin} column: {@code web} for a panel action, {@code
  * system} for the adoption and boot-recovery callers.
  */
@@ -277,16 +276,19 @@ public class StackRuntime {
                 throw new IOException(String.valueOf(other), other);
             }
         }
-        Accountability caller = Accountability.current();
+        Object[] result = new Object[1];
+        Exception[] failure = new Exception[1];
         try {
-            return workerFor(stackId).submit(() -> {
+            workerFor(stackId).submit(onLane(() -> {
                 CURRENT_STACK.set(stackId);
                 try {
-                    return asCaller(caller, body);
+                    result[0] = body.call();
+                } catch (Exception thrown) {
+                    failure[0] = thrown;
                 } finally {
                     CURRENT_STACK.remove();
                 }
-            }).get();
+            })).get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("Interrupted while operating on stack " + stackId, e);
@@ -303,6 +305,18 @@ public class StackRuntime {
             }
             throw new IOException(String.valueOf(cause), cause);
         }
+        if (failure[0] instanceof IOException io) {
+            throw io;
+        }
+        if (failure[0] instanceof RuntimeException runtime) {
+            throw runtime;
+        }
+        if (failure[0] != null) {
+            throw new IOException(String.valueOf(failure[0]), failure[0]);
+        }
+        @SuppressWarnings("unchecked")
+        T typed = (T) result[0];
+        return typed;
     }
 
     /**
@@ -914,11 +928,10 @@ public class StackRuntime {
      * @param recordId the deployment row this work must settle, null when it has none
      */
     private void submitAsync(int stackId, @NonNull Runnable body, @Nullable Integer recordId) {
-        Accountability caller = Accountability.current();
-        workerFor(stackId).submit(() -> {
+        workerFor(stackId).submit(onLane(() -> {
             CURRENT_STACK.set(stackId);
             try {
-                Accountability.runAs(caller, body);
+                body.run();
             } catch (Throwable e) {
                 String failure = e.getMessage() != null ? e.getMessage() : e.toString();
                 Blast.log("STACK: queued work failed for stack", stackId, "-", failure);
@@ -933,36 +946,21 @@ public class StackRuntime {
             } finally {
                 CURRENT_STACK.remove();
             }
-        });
+        }));
     }
 
     /**
-     * Run worker work under the DISPATCHING thread's attribution.
+     * Bind lane work to the DISPATCHING thread's execution context and raise it to system
+     * authority there, so a tenant's stack operation stays attributed to the tenant.
      *
-     * AIDEV-NOTE: the snapshot is taken on the caller's thread and re-entered here
-     * because {@code Accountability} resolves through a ThreadLocal and a request-scoped
-     * resolver, neither of which exists on a stack worker. Without it every stack
-     * activity row -- and every deployment-history row the worker saves through the
-     * model hooks -- is unattributed {@code system} work, which is exactly what an
-     * accountability-shaped no-op looks like.
+     * AIDEV-NOTE: the context is captured HERE, on the caller's thread: a lane is a plain
+     * executor whose threads carry nothing of their own, and a stack operation was gated
+     * where it was asked for, so it runs as system work on that caller's behalf
+     * ({@code ExecutionIdentity.onBehalfOf}). Adoption and boot recovery dispatch from
+     * system threads and stay the system's.
      */
-    private static <T> T asCaller(@NonNull Accountability caller,
-                                  @NonNull Callable<T> body) throws Exception {
-        Object[] result = new Object[1];
-        Exception[] failure = new Exception[1];
-        Accountability.runAs(caller, () -> {
-            try {
-                result[0] = body.call();
-            } catch (Exception thrown) {
-                failure[0] = thrown;
-            }
-        });
-        if (failure[0] != null) {
-            throw failure[0];
-        }
-        @SuppressWarnings("unchecked")
-        T typed = (T) result[0];
-        return typed;
+    private static @NonNull Runnable onLane(@NonNull Runnable work) {
+        return ExecutionContext.wrap(() -> ExecutionIdentity.runAsSystem("stack", work));
     }
 
     /** Record a SETTLED stack operation on the stack record, on the worker's datasource. */
@@ -976,12 +974,9 @@ public class StackRuntime {
     private ExecutorService workerFor(int stackId) {
         // Virtual threads: lanes are never retired (see destroy), so a parked lane per
         // ever-touched stack id must cost next to nothing.
-        // A lane is declared SYSTEM work: stack operations were gated where they were asked for.
-        return workers.computeIfAbsent(stackId, id -> {
-            ThreadFactory lane = Thread.ofVirtual().name("stack-" + id).factory();
-            return Executors.newSingleThreadExecutor(
-                work -> lane.newThread(() -> ExecutionIdentity.runAsSystem("stack", work)));
-        });
+        // Its threads carry nothing: every task declares its own context (onLane).
+        return workers.computeIfAbsent(stackId, id -> Executors.newSingleThreadExecutor(
+            Thread.ofVirtual().name("stack-" + id).factory()));
     }
 
     /** A scoped body that may fail the way the daemon work it wraps fails. */

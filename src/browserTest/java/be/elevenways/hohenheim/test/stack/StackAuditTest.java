@@ -7,7 +7,9 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.cms.common.action.ActionContext;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -150,6 +152,16 @@ class StackAuditTest {
             .as("step 5: unattended work is recorded as system work, named by its reason")
             .isEqualTo(Map.of("actor", "null",
                 "origin", Accountability.ORIGIN_SYSTEM, "detail", "adoption"));
+
+        // 6. A TENANT's request, whose attribution is its caller identity rather than an
+        //    entered scope: the worker runs it as system work on that tenant's behalf.
+        int tenantStackId = stackRecord("audit-tenant-stack");
+        TenantConduits.as(new UserPrincipal(4343, "Stack Tenant"),
+            () -> deployQuietly(tenantStackId, "manual"));
+        assertThat((String) onlyActivity(tenantStackId, StackRuntime.ACTIVITY_DEPLOY_ACTION)
+                .get(ActivityModel.ACTOR))
+            .as("step 6: a tenant-started stack deploy is the tenant's action, never SYSTEM")
+            .isEqualTo("4343");
     }
 
     // -- fixture --------------------------------------------------------------

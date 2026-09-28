@@ -23,6 +23,7 @@ import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
 import be.elevenways.hohenheim.server.util.DatasourceScoped;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.Zenit;
@@ -67,18 +68,25 @@ public class DatabaseService extends DatasourceScoped {
 
     // Background pool for provisioning (image pull + container start can take tens of seconds);
     // shared because handlers construct DatabaseService per request. Bounded to limit load.
-    // Its threads are declared SYSTEM work: whoever asked was gated before the hand-off (an
-    // allocation, a move claim), and the engine containers it converges are operator-owned.
+    // Its threads carry nothing: every task declares its own context through submit().
     private static final ExecutorService PROVISION_EXECUTOR = Executors.newFixedThreadPool(2, runnable -> {
-        Thread thread = new Thread(() -> ExecutionIdentity.runAsSystem("database-provision", runnable),
-            "db-provision");
+        Thread thread = new Thread(runnable, "db-provision");
         thread.setDaemon(true);
         return thread;
     });
 
-    /** The provisioning pool, for the engine tier's own background work. */
+    /**
+     * Run {@code work} on the provisioning pool as system work on the submitting caller's behalf.
+     *
+     * AIDEV-NOTE: the context is captured HERE, on the submitting thread, and raised to system
+     * authority on the pool: whoever asked was gated before the hand-off (an allocation, a move
+     * claim) and the engine containers it converges are operator-owned, but a tenant's
+     * allocation stays the tenant's action in the activity log. A pool thread declaring the
+     * identity itself recorded every such write as SYSTEM.
+     */
     static void submit(@NonNull Runnable work) {
-        PROVISION_EXECUTOR.submit(work);
+        PROVISION_EXECUTOR.submit(ExecutionContext.wrap(
+            () -> ExecutionIdentity.runAsSystem("database-provision", work)));
     }
 
     public DatabaseService() {
@@ -505,7 +513,7 @@ public class DatabaseService extends DatasourceScoped {
      *                 credentials, limits) is read off the row on the pool thread
      */
     public void provisionInBackground(int recordId) {
-        PROVISION_EXECUTOR.submit(() -> {
+        submit(() -> {
             Row row = query(() -> model().findById(recordId));
             if (row == null) {
                 // The one shape left that can miss: the record was committed and then
@@ -1264,7 +1272,7 @@ public class DatabaseService extends DatasourceScoped {
                 : CmsSupport.violationText("database_not_active").withArg("name", name)
                     .withArg("status", DatabaseModel.STATUS_PROVISIONING));
         }
-        PROVISION_EXECUTOR.submit(() -> {
+        submit(() -> {
             try {
                 runMove(claimed);
             } catch (IOException e) {
