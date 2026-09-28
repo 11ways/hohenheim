@@ -18,6 +18,8 @@ import be.elevenways.zenit.cms.common.render.CmsRefusalCopy;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.zenit.cms.common.schema.ColumnSpec;
+import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -120,6 +122,18 @@ class DnsZoneImportReadOnlyTest extends HohenheimTestBase {
         @Override public @NonNull String slug() { return "owner-sites"; }
         @Override public @NonNull Model model() { return Models.get(SiteModel.class); }
         @Override public @NonNull FormSpec formSpec() { return FormSpec.builder().add(SiteModel.NAME).build(); }
+
+        // Like SiteResource: a trashed site still loads, as ARCHIVED; without it the parent is merely
+        // unreachable, which zenit-cms refuses as out of scope, never as the trash.
+        @Override public boolean offersTrash() { return true; }
+
+        @Override
+        public @NonNull TableSpec<Row> tableSpec() {
+            return TableSpec.<Row>builder()
+                .column(ColumnSpec.fromField(SiteModel.NAME).build())
+                .filter(this.archivedFilter())
+                .build();
+        }
     }
 
     private static final class SiteOwnedZones extends RowResource {
