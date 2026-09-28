@@ -21,10 +21,11 @@ import java.util.Set;
  * the canonical spelling of the address the previous build read it as.
  *
  * AIDEV-NOTE: zenit's IpRanges.parseLiteral used to accept a zone id (dropped), IPv4 octets with
- * leading zeros (read as DECIMAL) and non-ASCII digits in IPv6 groups. A rule stored in such a
- * spelling now parses to nothing, and an unparseable ip_deny leaf PASSES (AccessRuleTree), so
- * leaving it would silently widen access. {@link LegacyIpSpellings} is the previous reading; a value
- * it also refused matched nothing before and is left untouched.
+ * leading zeros (read as DECIMAL), non-ASCII digits in IPv6 groups and a dotted quad in any IPv6
+ * group. A rule stored in such a spelling now parses to nothing, which AccessRuleTree refuses as an
+ * unusable rule, so leaving it would lock out whoever it used to admit. {@link LegacyIpSpellings} is
+ * the reading of production build 91191333; a value it also refused matched nothing before and is
+ * left untouched.
  *
  * @author Jelle De Loecker
  * @since  0.1.0

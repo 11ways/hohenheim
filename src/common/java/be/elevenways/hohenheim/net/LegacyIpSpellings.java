@@ -10,9 +10,10 @@ import java.util.List;
 /**
  * The address a value spelled for the retired lax zenit parser meant, so Hohenheim can rewrite what it stored.
  *
- * AIDEV-NOTE: FROZEN. zenit's IpRanges.parseLiteral once accepted a zone id (dropped), IPv4 octets with
- * leading zeros (read as DECIMAL) and any Unicode hex digit in an IPv6 group; it refuses them now. This
- * is that old reading, kept only to canonicalize values stored under it (M017's access rules, the
+ * AIDEV-NOTE: FROZEN at zenit f0306e25, the parser production build 91191333 shipped. It accepted a zone
+ * id (dropped), IPv4 octets with leading zeros (read as DECIMAL), any Unicode hex digit in an IPv6 group
+ * and an embedded dotted quad in ANY group (1.2.3.4::1 read as 102:304::1); zenit refuses all of them
+ * now. This is that old reading, kept only to canonicalize values stored under it (M017's access rules, the
  * trusted-source and never-ban settings) and never to match an address. Changing it changes what a
  * stored rule means.
  *
@@ -60,7 +61,7 @@ public final class LegacyIpSpellings {
 
     /**
      * The previous build's reading of a literal: a zone id dropped, decimal octets with leading
-     * zeros, any Unicode hex digit in an IPv6 group, the IPv4-mapped form folded.
+     * zeros, any Unicode hex digit in an IPv6 group, a dotted quad in any group, the IPv4-mapped form folded.
      */
     public static byte @Nullable [] legacyAddress(@NonNull String value) {
         if (value.isEmpty()) {
@@ -122,8 +123,8 @@ public final class LegacyIpSpellings {
         }
         String head = compression < 0 ? value : value.substring(0, compression);
         String tail = compression < 0 ? "" : value.substring(compression + 2);
-        List<byte[]> leading = legacyGroups(head, compression < 0);
-        List<byte[]> trailing = legacyGroups(tail, compression >= 0);
+        List<byte[]> leading = legacyGroups(head);
+        List<byte[]> trailing = legacyGroups(tail);
         if (leading == null || trailing == null) {
             return null;
         }
@@ -145,7 +146,7 @@ public final class LegacyIpSpellings {
         return bytes;
     }
 
-    private static @Nullable List<byte[]> legacyGroups(@NonNull String half, boolean closesAddress) {
+    private static @Nullable List<byte[]> legacyGroups(@NonNull String half) {
         List<byte[]> groups = new ArrayList<>();
         if (half.isEmpty()) {
             return groups;
@@ -153,16 +154,11 @@ public final class LegacyIpSpellings {
         if (half.charAt(0) == ':' || half.charAt(half.length() - 1) == ':') {
             return null;
         }
-        String[] parts = half.split(":", -1);
-        for (int index = 0; index < parts.length; index++) {
-            String group = parts[index];
+        for (String group : half.split(":", -1)) {
             if (group.isEmpty()) {
                 return null;
             }
             if (group.indexOf('.') >= 0) {
-                if (!closesAddress || index != parts.length - 1) {
-                    return null;
-                }
                 byte[] embedded = legacyIpv4(group);
                 if (embedded == null) {
                     return null;
