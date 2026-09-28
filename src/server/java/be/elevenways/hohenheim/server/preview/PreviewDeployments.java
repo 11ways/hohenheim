@@ -142,9 +142,11 @@ public final class PreviewDeployments {
         }
         Datasource datasource = Db.currentOrDefault();
         String pinnedSha = sha;
-        // The build is SYSTEM work whoever queued it: a preview is the application owner's
-        // environment, charged to that owner regardless of who clicks (see above), and the
-        // instance it writes is operator-shaped -- no tenant could author it field by field.
+        // The build runs with SYSTEM authority whoever queued it: a preview is the application
+        // owner's environment, charged to that owner regardless of who clicks (see above), and
+        // the instance it writes is operator-shaped -- no tenant could author it field by field.
+        // It stays the queuer's ACTION (runAsSystem keeps the carried caller's attribution): a
+        // click is a person's, a verified webhook's queue is already the system's.
         JobRunner.startVirtualThread(() -> ExecutionIdentity.runAsSystem("preview-deploy", () -> {
             Runnable build = () -> {
                 try {

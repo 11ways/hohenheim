@@ -120,8 +120,9 @@ public final class InstanceTemplateHandlers {
                 // (pending -> installing -> installed/failed) IS the progress record,
                 // and deploy refuses until it completes.
                 if (InstanceTemplates.hasInstallStep(template)) {
-                    // SYSTEM work: the create above was the gate, and the install stamps
-                    // pipeline-owned columns no tenant write may author.
+                    // SYSTEM authority: the create above was the gate, and the install stamps
+                    // pipeline-owned columns no tenant write may author. It stays the
+                    // creator's action (runAsSystem keeps the caller's attribution).
                     INSTALL_RUNNER.startVirtualThread(() -> ExecutionIdentity.runAsSystem(
                         "template-install", () -> {
                             try {

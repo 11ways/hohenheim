@@ -146,9 +146,9 @@ public final class SecondaryZoneService {
                 continue;
             }
             if (pendingNotifyPulls.add(zoneId)) {
-                // SYSTEM work: the TSIG check above was the gate, and the DNS listener thread
-                // that received the NOTIFY holds no identity of its own.
-                ExecutionIdentity.runAsSystem("dns-notify", () -> jobs.fireAndForget(() -> {
+                // DETACHED system work: the TSIG check above was the gate, and a NOTIFY from a
+                // primary is nobody's action, whatever the listener thread happens to carry.
+                ExecutionIdentity.runDetachedAsSystem("dns-notify", () -> jobs.fireAndForget(() -> {
                     try {
                         transfer(zoneId, false);
                     }

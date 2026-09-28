@@ -118,7 +118,8 @@ public final class InstanceResize {
     }
 
     private static void deployNow(int instanceId) {
-        // A SYSTEM deploy (the trigger says so): the resize write that asked for it was the gate.
+        // A SYSTEM deploy (the trigger says so): the resize write that asked for it was the gate,
+        // and the recreate stays that writer's action (runAsSystem keeps its attribution).
         JobRunner.startVirtualThread(() -> ExecutionIdentity.runAsSystem("instance-resize", () -> {
             try {
                 new InstanceService().deploy(instanceId, DeployTrigger.SYSTEM);
