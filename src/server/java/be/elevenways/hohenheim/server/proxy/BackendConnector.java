@@ -12,6 +12,7 @@ import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -27,12 +28,15 @@ import java.util.concurrent.TimeoutException;
 /**
  * Vets and connects TLS passthrough backends within one bounded deadline.
  *
- * AIDEV-NOTE: the host is judged by zenit's outbound guard through {@link TenantUpstreams#vet}
- * (public addresses only for a tenant-owned route, every address for an operator's) and only the
- * addresses it vetted are dialed, each through {@link OutboundNetwork#connect}: no resolver, DNS
- * cache or address classification of its own. What stays here is the passthrough's own need: a
- * lookup the accept path waits for at most until the connect deadline (a bounded pool, one lookup
- * per host in flight), the address-family interleave and the refusal to dial Hohenheim's own
+ * AIDEV-NOTE: a tenant-owned route's host is judged by zenit's outbound guard through
+ * {@link TenantUpstreams#vet} (public addresses only) and only the addresses it vetted are dialed.
+ * An operator route resolves through the installed {@link OutboundNetwork} resolver and nothing
+ * else, as InetAddress.getAllByName did before: the guard's URL parse refuses a Docker-style name
+ * such as backend_1, which the resolver accepts. Every address is dialed through
+ * {@link OutboundNetwork#connect}. An operator lookup that fails is never remembered, so a backend
+ * that starts resolving is dialed on the next connection. What stays here is the passthrough's own
+ * need: a lookup the accept path waits for at most until the connect deadline (a bounded pool, one
+ * lookup per host in flight), the address-family interleave and the refusal to dial Hohenheim's own
  * public listener.
  */
 final class BackendConnector {
@@ -43,7 +47,7 @@ final class BackendConnector {
             thread.setDaemon(true);
             return thread;
         }, new ThreadPoolExecutor.AbortPolicy());
-    private static final ConcurrentHashMap<String, CompletableFuture<OutboundUrlGuard.Verdict>> IN_FLIGHT =
+    private static final ConcurrentHashMap<String, CompletableFuture<List<InetAddress>>> IN_FLIGHT =
         new ConcurrentHashMap<>();
 
     private BackendConnector() {}
@@ -56,7 +60,9 @@ final class BackendConnector {
     static Socket connect(String host, int port, int timeoutMillis, int publicTlsPort,
                           boolean publicOnly) throws IOException {
         long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
-        List<InetAddress> addresses = happyEyeballsOrder(vet(host, publicOnly, deadline).addresses());
+        List<InetAddress> addresses = happyEyeballsOrder(IpLiterals.parse(host) != null
+            ? addresses(host, publicOnly)
+            : awaitAddresses(host, publicOnly, deadline));
         IOException lastFailure = null;
         int remainingCandidates = addresses.size();
         for (InetAddress address : addresses) {
@@ -80,21 +86,28 @@ final class BackendConnector {
         throw new SocketTimeoutException("TLS passthrough connection deadline exceeded");
     }
 
-    /** The guard's verdict for the host, a literal inline and a name within the deadline. */
-    private static OutboundUrlGuard.Allowed vet(String host, boolean publicOnly, long deadline) throws IOException {
-        OutboundUrlGuard.Verdict verdict = IpLiterals.parse(host) != null
-            ? TenantUpstreams.vet("https", host, publicOnly)
-            : awaitVerdict(host, publicOnly, deadline);
-        return switch (verdict) {
-            case OutboundUrlGuard.Allowed allowed -> allowed;
-            case OutboundUrlGuard.Refused refused ->
-                throw new IOException("TLS passthrough target refused: " + refused.reason());
-        };
+    /**
+     * The addresses a route may dial: the guard's vetted ones for a tenant route, whatever the
+     * resolver answers for an operator route. May block on DNS.
+     */
+    private static List<InetAddress> addresses(String host, boolean publicOnly) throws IOException {
+        if (publicOnly) {
+            return switch (TenantUpstreams.vet("https", host, true)) {
+                case OutboundUrlGuard.Allowed allowed -> allowed.addresses();
+                case OutboundUrlGuard.Refused refused ->
+                    throw new IOException("TLS passthrough target refused: " + refused.reason());
+            };
+        }
+        InetAddress[] resolved = OutboundNetwork.SEAM.require().resolver().resolve(host);
+        if (resolved == null || resolved.length == 0) {
+            throw new UnknownHostException("TLS passthrough target " + host + " resolves to no address");
+        }
+        return List.of(resolved);
     }
 
-    private static OutboundUrlGuard.Verdict awaitVerdict(String host, boolean publicOnly, long deadline)
+    private static List<InetAddress> awaitAddresses(String host, boolean publicOnly, long deadline)
             throws IOException {
-        CompletableFuture<OutboundUrlGuard.Verdict> lookup = sharedLookup(host, publicOnly);
+        CompletableFuture<List<InetAddress>> lookup = sharedLookup(host, publicOnly);
         try {
             long remainingMillis = remainingMillis(deadline);
             if (remainingMillis <= 0) throw new SocketTimeoutException("backend DNS deadline exceeded");
@@ -105,20 +118,21 @@ final class BackendConnector {
             Thread.currentThread().interrupt();
             throw new IOException("backend DNS lookup interrupted", e);
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof IOException failure) throw failure;
             throw new IOException("backend vetting failed", e.getCause());
         }
     }
 
-    private static CompletableFuture<OutboundUrlGuard.Verdict> sharedLookup(String host, boolean publicOnly)
+    private static CompletableFuture<List<InetAddress>> sharedLookup(String host, boolean publicOnly)
             throws IOException {
         String key = (publicOnly ? "public|" : "any|") + host;
-        CompletableFuture<OutboundUrlGuard.Verdict> created = new CompletableFuture<>();
-        CompletableFuture<OutboundUrlGuard.Verdict> existing = IN_FLIGHT.putIfAbsent(key, created);
+        CompletableFuture<List<InetAddress>> created = new CompletableFuture<>();
+        CompletableFuture<List<InetAddress>> existing = IN_FLIGHT.putIfAbsent(key, created);
         if (existing != null) return existing;
         try {
             VETTING.execute(() -> {
                 try {
-                    created.complete(TenantUpstreams.vet("https", host, publicOnly));
+                    created.complete(addresses(host, publicOnly));
                 } catch (Throwable failure) {
                     created.completeExceptionally(failure);
                 } finally {
