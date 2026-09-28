@@ -5402,8 +5402,16 @@
     "text": "Kan deze site niet inschakelen: {$hostname} overlapt met {$pattern}, gerouteerd door site {$site}",
     "scope": "violations"
   },
+  "restore_route_overlap": {
+    "text": "Kan deze site niet herstellen: {$hostname} overlapt met {$pattern}, gerouteerd door site {$site}",
+    "scope": "violations"
+  },
   "enable_route_conflict": {
     "text": "Kan deze site niet inschakelen: {$hostname} wordt al gerouteerd door site {$site}",
+    "scope": "violations"
+  },
+  "restore_route_conflict": {
+    "text": "Kan deze site niet herstellen: {$hostname} wordt al gerouteerd door site {$site}",
     "scope": "violations"
   },
   "docker_unreachable": {
@@ -5534,6 +5542,10 @@
   },
   "enable_route_quarantined": {
     "text": "Kan deze site niet inschakelen: {$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog {$days} dag(en) gereserveerd; een beheerder kan de quarantaine opheffen",
+    "scope": "violations"
+  },
+  "restore_route_quarantined": {
+    "text": "Kan deze site niet herstellen: {$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog {$days} dag(en) gereserveerd; een beheerder kan de quarantaine opheffen",
     "scope": "violations"
   },
   "kind": {
@@ -11912,6 +11924,10 @@
   },
   "enable_hostname_unavailable": {
     "text": "Kan deze site niet inschakelen: {$hostname} is niet beschikbaar op deze installatie",
+    "scope": "violations"
+  },
+  "restore_hostname_unavailable": {
+    "text": "Kan deze site niet herstellen: {$hostname} is niet beschikbaar op deze installatie",
     "scope": "violations"
   },
   "covered": {

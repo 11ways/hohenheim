@@ -561,9 +561,10 @@ public class SiteDomainResource extends RowResource {
      * exempt while it stays disabled, so enabling it must re-run the comparison
      * against every other enabled site's rows.
      *
+     * @param goLive how the site enters the route table, which words the refusal
      * @throws Violations anchored on {@code enabled} naming the conflicting site
      */
-    static void refuseEnableRouteConflicts(int siteId) {
+    static void refuseEnableRouteConflicts(int siteId, @NonNull SiteGoLive goLive) {
         Map<Integer, Row> sitesById = new HashMap<>();
         for (Row site : Models.get(SiteModel.class).find().all()) {
             sitesById.put(site.get(SiteModel.ID), site);
@@ -619,11 +620,11 @@ public class SiteDomainResource extends RowResource {
                 throw Violations.ofField("enabled", true,
                     ClaimRefusals.heldBy(candidateSiteId, candidateSite,
                         site -> CmsSupport.violationText(
-                                identical ? "enable_route_conflict" : "enable_route_overlap")
+                                identical ? goLive.routeConflictKey() : goLive.routeOverlapKey())
                             .withArg("hostname", ownName)
                             .withArg("pattern", String.valueOf(candidateHostname))
                             .withArg("site", site),
-                        CmsSupport.violationText(ClaimRefusals.ENABLE_HOSTNAME_UNAVAILABLE)
+                        CmsSupport.violationText(goLive.hostnameUnavailableKey())
                             .withArg("hostname", ownName)));
             }
 
@@ -634,7 +635,7 @@ public class SiteDomainResource extends RowResource {
             Row quarantine = ReleasedClaims.refusalFor(RouteClaims.keyOf(own), ownMatchType, siteId);
             if (quarantine != null) {
                 throw Violations.ofField("enabled", true,
-                    quarantineViolation(quarantine, "enable_route_quarantined"));
+                    quarantineViolation(quarantine, goLive.routeQuarantinedKey()));
             }
         }
     }

@@ -29,9 +29,6 @@ import java.util.function.Function;
  */
 final class ClaimRefusals {
 
-    /** The neutral site-enable refusal, naming only the tenant's OWN hostname. */
-    static final String ENABLE_HOSTNAME_UNAVAILABLE = "enable_hostname_unavailable";
-
     private ClaimRefusals() {
     }
 
