@@ -200,6 +200,44 @@ class DnsListEditingTest extends HohenheimTestBase {
     }
 
     /**
+     * Every as-you-type search on the Records tab takes over the tab's history entry, so Back leaves the tab
+     * instead of walking back through each term typed.
+     */
+    @Test
+    void searchingTheRecordsTabTakesOverItsHistoryEntry() {
+        int zoneId = createZone("history-tab.example");
+        int wwwId = createRecord(zoneId, "www", DnsRecordModel.TYPE_A, "192.0.2.30");
+        int mailId = createRecord(zoneId, "mail", DnsRecordModel.TYPE_A, "192.0.2.31");
+        String zones = "/admin/dns-zones";
+        String search = "cms-list-search input[type='search']";
+
+        // 1. The zone list, then the zone's Records tab.
+        navigateToApp(zones);
+        navigateToApp(zones + "/" + zoneId + "/page/records");
+        int entries = historyLength();
+
+        // 2. A search narrows the list without adding an entry.
+        page.locator(search).fill("mail");
+        page.waitForURL("**/page/records?search=mail");
+        waitForCount("pl-table-row[data-row-key='" + wwwId + "']", 0);
+        assertThat(historyLength()).as("step 2: the search took over the tab's entry").isEqualTo(entries);
+
+        // 3. A second term takes over the same entry again.
+        page.locator(search).fill("www");
+        page.waitForURL("**/page/records?search=www");
+        waitForCount("pl-table-row[data-row-key='" + mailId + "']", 0);
+        assertThat(historyLength()).as("step 3: still no entry per term").isEqualTo(entries);
+
+        // 4. Back leaves the tab: the zone list, never an earlier search term.
+        page.goBack();
+        page.waitForURL("**" + zones);
+    }
+
+    private int historyLength() {
+        return ((Number) page.evaluate("() => history.length")).intValue();
+    }
+
+    /**
      * A delegated tenant on the /manage surface: authority over the RECORD decides every
      * lane, and it is decided per record rather than per zone.
      */
