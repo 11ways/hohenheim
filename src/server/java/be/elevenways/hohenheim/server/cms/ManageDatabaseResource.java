@@ -101,7 +101,7 @@ public final class ManageDatabaseResource extends DatabaseResource {
      */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return TenantScopes.DATABASES.accessFunction();
+        return AccessFunction.scopedBy(TenantScopes.DATABASES);
     }
 
     /**

@@ -12,9 +12,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.RelativeTime;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
-import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -29,6 +27,7 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.common.data.RowScope;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.edit.FieldAccess;
@@ -69,6 +68,10 @@ import java.util.Map;
  * scoped out of every list/load.
  */
 public class CertificateResource extends RowResource {
+
+    /** Every certificate but the internal ACME account row; the /manage scope narrows this same base. */
+    public static final RowScope ROWS = RowScope.within(HohenheimSources::notTheAcmeAccountRow);
+
 
     /**
      * Display-only form entries: VIRTUAL string fields, never schema columns.
@@ -335,7 +338,7 @@ public class CertificateResource extends RowResource {
     /** Scope out the internal ACME account row everywhere. */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return ctx -> AccessDecision.allow(QueryPredicate.of(HohenheimSources.notTheAcmeAccountRow()));
+        return AccessFunction.scopedBy(ROWS);
     }
 
     @Override

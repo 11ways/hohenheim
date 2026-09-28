@@ -113,7 +113,7 @@ public final class ManageInstanceDeviceResource extends InstanceDeviceResource {
 
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return TenantScopes.INSTANCE_DEVICES.accessFunction();
+        return AccessFunction.scopedBy(TenantScopes.INSTANCE_DEVICES);
     }
 
     /**

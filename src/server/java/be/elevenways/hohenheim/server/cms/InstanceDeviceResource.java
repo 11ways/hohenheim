@@ -9,9 +9,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceDevices;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
-import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -20,6 +18,7 @@ import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.common.data.RowScope;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -51,6 +50,10 @@ import java.util.Map;
  * /admin cannot drift on what attaching a disk requires.
  */
 public class InstanceDeviceResource extends RowResource {
+
+    /** Devices attached to an instance; the /manage scope narrows this same base per principal. */
+    public static final RowScope ROWS = RowScope.within(() -> InstanceDeviceModel.INSTANCE_ID.isNotNull());
+
 
     protected final InstanceDevices devices = new InstanceDevices();
 
@@ -86,8 +89,7 @@ public class InstanceDeviceResource extends RowResource {
 
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return ctx -> AccessDecision.allow(QueryPredicate.of(
-            InstanceDeviceModel.INSTANCE_ID.isNotNull()));
+        return AccessFunction.scopedBy(ROWS);
     }
 
     /**

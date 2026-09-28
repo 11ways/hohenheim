@@ -77,7 +77,7 @@ public final class ManageCertificateResource extends CertificateResource {
     /** Admins see every certificate; everyone else only the walk-reachable ones. */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return TenantScopes.CERTIFICATES.accessFunction();
+        return AccessFunction.scopedBy(TenantScopes.CERTIFICATES);
     }
 
     @Override

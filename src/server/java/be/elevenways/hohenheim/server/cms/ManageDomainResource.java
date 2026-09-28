@@ -43,7 +43,7 @@ public final class ManageDomainResource extends SiteDomainResource {
      */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return TenantScopes.DOMAINS.accessFunction();
+        return AccessFunction.scopedBy(TenantScopes.DOMAINS);
     }
 
     /**

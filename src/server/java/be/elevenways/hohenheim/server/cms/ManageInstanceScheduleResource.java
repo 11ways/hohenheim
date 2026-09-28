@@ -30,7 +30,7 @@ public final class ManageInstanceScheduleResource extends InstanceScheduleResour
 
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return TenantScopes.INSTANCE_SCHEDULES.accessFunction();
+        return AccessFunction.scopedBy(TenantScopes.INSTANCE_SCHEDULES);
     }
 
     /**

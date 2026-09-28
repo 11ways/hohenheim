@@ -75,7 +75,7 @@ public final class ManageInstanceTemplateResource extends InstanceTemplateResour
     /** Admins see the whole catalog; everyone else only what an operator approved. */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return TenantScopes.INSTANCE_TEMPLATES.accessFunction();
+        return AccessFunction.scopedBy(TenantScopes.INSTANCE_TEMPLATES);
     }
 
     @Override public @NonNull List<RelatedPage> relatedPages() { return List.of(); }

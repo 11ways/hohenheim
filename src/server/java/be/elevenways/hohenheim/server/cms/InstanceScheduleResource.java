@@ -9,9 +9,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
-import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
@@ -20,6 +18,7 @@ import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.common.data.RowScope;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FormSpec;
@@ -52,6 +51,11 @@ import java.util.Map;
  * at all requires manage on its instance NOW.
  */
 public class InstanceScheduleResource extends RowResource {
+
+    /** INSTANCE schedules only; the /manage scope narrows this same base per principal. */
+    public static final RowScope ROWS = RowScope.within(
+        () -> RecordScheduleModel.MODEL.eq(InstanceModel.MODEL_ID.toString()));
+
 
     /** The Schedules tab's quick-add entries; the instance rides along as a preset. */
     private static final QuickCreateSpec QUICK_CREATE = QuickCreateSpec
@@ -172,8 +176,7 @@ public class InstanceScheduleResource extends RowResource {
     /** This surface manages INSTANCE schedules only. */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return ctx -> AccessDecision.allow(QueryPredicate.of(
-            RecordScheduleModel.MODEL.eq(InstanceModel.MODEL_ID.toString())));
+        return AccessFunction.scopedBy(ROWS);
     }
 
     @Override
