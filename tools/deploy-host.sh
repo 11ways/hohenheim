@@ -300,10 +300,14 @@ if [ "$MODE" = "rollback" ]; then
     step "Rollback: $ROLLBACK_JAR -> $REMOTE_JAR"
     OUT="$(remote "set -e
 $SUDO test -f '$ROLLBACK_JAR' || { echo '@@missing'; exit 3; }
+$SUDO test -d '$PREFLIGHT_DIR/settings' || { echo '@@missing-settings'; exit 3; }
 $SUDO install -o '$SERVICE_USER' -g '$SERVICE_USER' -m 0644 '$ROLLBACK_JAR' '$PREFIX/hohenheim-server.jar.rollingback'
 trap '$SUDO systemctl start \"$SERVICE\"' 0
 $SUDO systemctl stop '$SERVICE'
 $SUDO mv '$PREFIX/hohenheim-server.jar.rollingback' '$REMOTE_JAR'
+$SUDO mv '$SETTINGS_DIR' '$SETTINGS_DIR.rolled-back-$STAMP'
+$SUDO cp -a '$PREFLIGHT_DIR/settings' '$SETTINGS_DIR'
+echo '@@settings restored from $PREFLIGHT_DIR/settings; the newer layout is kept at $SETTINGS_DIR.rolled-back-$STAMP'
 set +e
 echo '@@jar'
 stat -c '%n %s %U:%G %a' '$REMOTE_JAR'
@@ -432,16 +436,24 @@ step "5. Rehearse the migrations against a byte copy (never the live file)"
 # The rehearsal dir lives under /opt, NOT under the preflight dir: the service
 # user cannot traverse /root, and `Unable to access jarfile` there reads like a
 # jar problem while it is a permission one.
+# The rehearsal boots the settings chain, and a newer jar ADOPTS retired settings
+# files (hohenheim.dry, auth.dry, comms.dry) into local.dry on that boot. It must
+# do so on a COPY: adopting the live files here would rewrite them under the old,
+# still-running jar, and a later rollback would boot that jar without them. So the
+# settings root is a copy under the rehearsal dir; the working directory stays the
+# prefix so the shipped defaults resolve as they do for the service.
 REHEARSAL="$(remote "set -e
 $SUDO install -d -o '$SERVICE_USER' -g '$SERVICE_USER' -m 0755 '$REHEARSE_DIR'
 $SUDO install -o '$SERVICE_USER' -g '$SERVICE_USER' -m 0644 '$STAGED_JAR' '$REHEARSE_DIR/new.jar'
 $SUDO sqlite3 '$DB_PATH' \".backup '$REHEARSE_DIR/rehearse.db'\"
 $SUDO chown '$SERVICE_USER:$SERVICE_USER' '$REHEARSE_DIR/rehearse.db'
+$SUDO cp -a '$SETTINGS_DIR' '$REHEARSE_DIR/settings'
+$SUDO chown -R '$SERVICE_USER:$SERVICE_USER' '$REHEARSE_DIR/settings'
 JAVA=\$($SUDO systemctl show '$SERVICE' -p ExecStart --value 2>/dev/null | sed -n 's/.*path=\\([^ ;]*\\).*/\\1/p')
 [ -x \"\$JAVA\" ] || JAVA=\$(command -v java)
 echo \"@@java \$JAVA\"
 set +e
-cd '$PREFIX' && $RUN_AS \"\$JAVA\" -jar '$REHEARSE_DIR/new.jar' --rehearse-migrations '$REHEARSE_DIR/rehearse.db' 2>&1
+cd '$PREFIX' && $RUN_AS \"\$JAVA\" -Dzenit.settings.root='$REHEARSE_DIR' -jar '$REHEARSE_DIR/new.jar' --rehearse-migrations '$REHEARSE_DIR/rehearse.db' 2>&1
 echo \"@@rehearse \$?\"")" || fail "the rehearsal could not run on the host"
 
 if [ "$DRY_RUN" = "no" ]; then

@@ -222,6 +222,12 @@ expect "prints a runbook skeleton" "$OUT" "## Deploy"
 expect "the skeleton carries the jar sha" "$OUT" "$JAR_SHA"
 expect "the skeleton names the rollback command" "$OUT" "--rollback testbox --preflight"
 
+SCRIPTS="$(cat "$REMOTE_SCRIPTS")"
+expect "the rehearsal copies the settings directory" "$SCRIPTS" \
+    "cp -a '/opt/hohenheim/settings' '/opt/hohenheim-rehearse-"
+expect "the rehearsal boots on that copy, never the live settings" "$SCRIPTS" \
+    "-Dzenit.settings.root='/opt/hohenheim-rehearse-"
+
 LOG="$(cat "$SSH_LOG")"
 ORDER="$(/usr/bin/grep -v '^scp ' "$SSH_LOG" | tr '\n' ' ')"
 expect "the jar is uploaded before anything is verified on the host" "$LOG" "scp "
@@ -348,6 +354,10 @@ expect "rollback swaps the preflight jar back" "$OUT" "Rollback: /root/hohenheim
 expect "rollback probes health too" "$OUT" "Health probe after the rollback"
 expect "rollback says the database is not restored for you" "$OUT" "the database is NOT restored by this mode"
 expect "rollback did the swap" "$(cat "$SSH_LOG")" "rollback-swap"
+expect "rollback restores the settings the older jar read" "$(cat "$REMOTE_SCRIPTS")" \
+    "cp -a '/root/hohenheim-preflight-20260902-wave4/settings' '/opt/hohenheim/settings'"
+expect "rollback keeps the newer settings aside" "$(cat "$REMOTE_SCRIPTS")" \
+    "mv '/opt/hohenheim/settings' '/opt/hohenheim/settings.rolled-back-"
 
 if OUT="$(run_lane --rollback testbox 2>&1)"; then
     no "rollback without --preflight is refused"
