@@ -158,7 +158,7 @@ public final class HohenheimSecurity {
         if (!SecurityEventTypes.DOMAIN_MISS.equals(event.type())
                 && !SecurityEventClassification.isPositive(event.type())
                 && IpLiterals.isLiteral(event.remoteIp())) {
-            scorer.recordEvent(event.remoteIp(), event.type(), 1);
+            scorer.recordEvent(event.remoteIp(), event.type(), event.detail());
         }
     }
 }

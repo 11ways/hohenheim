@@ -1,15 +1,19 @@
 package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.proxy.auth.ProxyAuthThrottle;
+import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.security.SecurityEventTypes;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.IntSupplier;
 import java.util.function.LongSupplier;
 
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
@@ -74,6 +78,18 @@ public final class ThreatScorer {
         Map.entry(SecurityEventTypes.SSH_MAX_ATTEMPTS, 6),
         Map.entry(SecurityEventTypes.SSH_PROTOCOL_ABUSE, 4));
     private static final int WS_EVENT_WEIGHT = 2;
+
+    // AIDEV-NOTE: a RATE_LIMITED refusal is worth what the REFUSING POLICY says it is, read
+    // off the event's policy detail and keyed by the policies' own bucket names, never a
+    // re-spelled literal. A forge redelivering webhooks is a legitimate peer shouting, not an
+    // attack (scoring it banned GitHub's hook range), while a proxy-auth refusal IS credential
+    // guessing. A policy missing here keeps the type's weight: fail closed toward banning.
+    // A refusal spent from the shared overflow bucket scores nothing whatever the policy,
+    // because an address sharing that bucket is one of many strangers, not the abuser.
+    private static final Map<String, Integer> RATE_LIMITED_POLICY_WEIGHTS = Map.of(
+        Objects.requireNonNull(GitWebhookHandler.POLICY.bucketName(), "webhook policy name"), 0,
+        Objects.requireNonNull(ProxyAuthThrottle.POLICY.bucketName(), "proxy-auth policy name"),
+        EVENT_WEIGHTS.get(SecurityEventTypes.RATE_LIMITED));
 
     /** Every {@code ws.*} handshake refusal shares {@link #WS_EVENT_WEIGHT}. */
     private static final String WS_PREFIX = "ws.";
@@ -259,6 +275,36 @@ public final class ThreatScorer {
     public int recordEvent(String ip, String type, int count) {
         int points = Math.max(1, weightOf(type)) * Math.max(1, count);
         return record(ip, type, points);
+    }
+
+    /**
+     * The ban-score weight of one reported event: its type's, except a {@link
+     * SecurityEventTypes#RATE_LIMITED} refusal, which weighs what its refusing policy is worth.
+     *
+     * @return 0 for an event that must never count toward a ban
+     */
+    public int weightOf(@NonNull String type, @Nullable Map<String, String> detail) {
+        if (!SecurityEventTypes.RATE_LIMITED.equals(type) || detail == null) {
+            return weightOf(type);
+        }
+        if ("true".equals(detail.get(SecurityEventTypes.RATE_LIMITED_SHARED_BUDGET))) {
+            return 0;
+        }
+        String policy = detail.get(SecurityEventTypes.RATE_LIMITED_POLICY);
+        Integer weight = policy == null ? null : RATE_LIMITED_POLICY_WEIGHTS.get(policy);
+        return weight != null ? weight : weightOf(type);
+    }
+
+    /**
+     * Record one reported event for this IP at {@link #weightOf(String, Map)}; an event
+     * weighing 0 records nothing and fires no ban.
+     */
+    public void recordEvent(@NonNull String ip, @NonNull String type,
+                            @Nullable Map<String, String> detail) {
+        int weight = weightOf(type, detail);
+        if (weight > 0) {
+            record(ip, type, weight);
+        }
     }
 
     private int record(String ip, String type, int points) {
