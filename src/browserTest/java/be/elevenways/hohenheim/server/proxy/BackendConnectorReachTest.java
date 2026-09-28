@@ -1,13 +1,18 @@
 package be.elevenways.hohenheim.server.proxy;
 
+import be.elevenways.zenit.server.net.OutboundNetwork;
 import be.elevenways.zenit.test.support.OutboundFixture;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.UnknownHostException;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -16,7 +21,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * A TLS passthrough route is vetted by zenit's outbound guard and dials only the addresses it
  * vetted: a tenant-owned route reaches public addresses only, an operator route keeps reaching
  * loopback, an address that refuses falls through to the next vetted one, and a verdict is never
- * answered under another outbound network.
+ * answered under another outbound network. An operator route dials any name its resolver
+ * accepts (a Docker-style backend_1 included) and never remembers a failed lookup.
  */
 class BackendConnectorReachTest {
 
@@ -64,6 +70,44 @@ class BackendConnectorReachTest {
                  Socket accepted = other.accept()) {
                 assertThat(accepted.getPort()).as("step 5: the new fixture's backend accepted")
                     .isEqualTo(tenant.getLocalPort());
+            }
+
+            // 6. A Docker-style name with an underscore, which no URL host admits: an operator
+            //    route dials whatever the resolver answers, a tenant route still refuses it.
+            try (OutboundFixture docker = OutboundFixture.route("backend_1", port);
+                 Socket operator = BackendConnector.connect("backend_1", 443, 2000, 1, false);
+                 Socket accepted = backend.accept()) {
+                assertThat(accepted.getPort()).as("step 6: the operator route reached backend_1")
+                    .isEqualTo(operator.getLocalPort());
+                assertThatThrownBy(() -> BackendConnector.connect(docker.host(), 443, 2000, 1, true))
+                    .as("step 6: a tenant route keeps the guard's refusal")
+                    .isInstanceOf(IOException.class)
+                    .hasMessageContaining("refused");
+            }
+
+            // 7. Under ONE outbound network, a name that does not resolve yet fails, and the next
+            //    connection after it starts resolving reaches the backend: the failure was not kept.
+            Map<String, InetAddress> names = new ConcurrentHashMap<>();
+            OutboundNetwork previous = OutboundNetwork.SEAM.require();
+            OutboundNetwork.SEAM.install(new OutboundNetwork(name -> {
+                InetAddress known = names.get(name);
+                if (known == null) {
+                    throw new UnknownHostException(name);
+                }
+                return new InetAddress[] {known};
+            }, OutboundNetwork.DIRECT_ROUTE));
+            try {
+                assertThatThrownBy(() -> BackendConnector.connect("late_backend", port, 2000, 1, false))
+                    .as("step 7: an unresolvable name fails the connection")
+                    .isInstanceOf(UnknownHostException.class);
+                names.put("late_backend", InetAddress.getByAddress("late_backend", new byte[] {127, 0, 0, 1}));
+                try (Socket operator = BackendConnector.connect("late_backend", port, 2000, 1, false);
+                     Socket accepted = backend.accept()) {
+                    assertThat(accepted.getPort()).as("step 7: the name resolves now and is dialed")
+                        .isEqualTo(operator.getLocalPort());
+                }
+            } finally {
+                OutboundNetwork.SEAM.install(previous);
             }
         }
     }
