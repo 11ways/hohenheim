@@ -6,13 +6,18 @@ import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DnsFederationKeys;
+import be.elevenways.hohenheim.server.cms.DnsZoneRecordsPage;
 import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.AccessContext;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -234,7 +239,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         stub.calls.clear();
         stub.status = 200;
         stub.body = "{\"id\":6}";
-        var created = adminPostForm("/admin/dns-zones/" + zoneId + "/remote-records",
+        var created = adminPostForm("/admin/dns-zones/" + zoneId + "/page/records",
             "name=api&type=CNAME&value=owned.example.&ttl=&priority=&weight=&port=&enabled=true");
         assertThat(created.statusCode()).isEqualTo(302);
         assertThat(created.headers().firstValue("Location").orElse(""))
@@ -254,7 +259,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         // Update and delete address the owner's record id.
         stub.calls.clear();
         stub.body = "";
-        var updated = adminPostForm("/admin/dns-zones/" + zoneId + "/remote-records",
+        var updated = adminPostForm("/admin/dns-zones/" + zoneId + "/page/records",
             "record_id=6&name=api&type=CNAME&value=other.example.&enabled=true");
         assertThat(updated.headers().firstValue("Location").orElse("")).doesNotContain("saved");
         assertThat(popFlash()).isNotNull()
@@ -262,7 +267,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         assertThat(stub.calls.get(0).path()).isEqualTo("/api/dns/zones/central.example/records/6");
 
         stub.calls.clear();
-        var deleted = adminPostForm("/admin/dns-zones/" + zoneId + "/remote-records",
+        var deleted = adminPostForm("/admin/dns-zones/" + zoneId + "/page/records",
             "action=delete&record_id=6");
         assertThat(deleted.headers().firstValue("Location").orElse("")).doesNotContain("saved");
         assertThat(popFlash()).isNotNull()
@@ -310,7 +315,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         stub.calls.clear();
         stub.status = 422;
         stub.body = "{\"error\":\"validation\",\"field\":\"value\",\"key\":\"dns_record_duplicate\"}";
-        var refused = adminPostForm("/admin/dns-zones/" + zoneId + "/remote-records",
+        var refused = adminPostForm("/admin/dns-zones/" + zoneId + "/page/records",
             "name=www&type=A&value=198.51.100.9&enabled=true");
         String location = refused.headers().firstValue("Location").orElse("");
         assertThat(location)
@@ -321,11 +326,34 @@ class DnsCentralEditTest extends HohenheimTestBase {
         assertThat(popFlash()).isNotNull()
             .extracting(flash -> flash.message().key()).isEqualTo("dns_record_duplicate");
 
+        // A read-only zone (trashed, or under a trashed record) still reads its owner's records, but offers no add,
+        // no edit and no delete: the framework refuses its submit, and the tab says the same.
+        stub.status = 200;
+        stub.body = "{\"zone\":\"central.example\",\"serial\":10,\"records\":["
+            + "{\"id\":5,\"name\":\"www\",\"type\":\"A\",\"ttl\":300,\"value\":\"198.51.100.9\",\"enabled\":true}]}";
+        Map<String, Object> writable = renderRecordsTab(zoneId, false);
+        assertThat(writable.get("editable")).as("a writable zone offers the owner's records for editing")
+            .isEqualTo(true);
+        Map<String, Object> readOnly = renderRecordsTab(zoneId, true);
+        assertThat(readOnly.get("editable")).as("a read-only zone offers no remote edit").isEqualTo(false);
+        assertThat((List<?>) readOnly.get("records")).as("but still lists the owner's records").hasSize(1);
+        assertThat(readOnly.get("editRecord")).as("and opens no edit form").isNull();
+
         // An unreachable owner degrades the tab to the read-only replica view.
         stub.close();
         var fallback = adminGet("/admin/dns-zones/" + zoneId + "/page/records");
         assertThat(fallback.statusCode()).isEqualTo(200);
         assertThat(fallback.body()).doesNotContain("add-remote-record-link");
+    }
+
+    /** The Records tab's render for the test administrator, with the host zone stamped read-only or not. */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> renderRecordsTab(int zoneId, boolean hostReadOnly) {
+        Row admin = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        Conduit conduit = TenantConduits.stubFor(new UserPrincipal(admin.get(UserModel.ID), "Test Admin"));
+        conduit.setAttribute(RecordScopedPage.RECORD_READ_ONLY, hostReadOnly);
+        Row zone = Models.get(DnsZoneModel.class).findById(zoneId);
+        return (Map<String, Object>) new DnsZoneRecordsPage().render(conduit, AccessContext.of(conduit), zone).get();
     }
 
     /**
@@ -359,7 +387,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         // Every write the PAGE issues towards the forwarding route, in issue order.
         List<String> pagePosts = new CopyOnWriteArrayList<>();
         page.onRequest(request -> {
-            if ("POST".equals(request.method()) && request.url().contains("/remote-records")) {
+            if ("POST".equals(request.method()) && request.url().contains("/page/records")) {
                 pagePosts.add(request.url());
             }
         });
