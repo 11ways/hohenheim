@@ -135,10 +135,13 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
             .as("step 6: a path's update is refused").isEqualTo(403);
         assertThat(adminPostForm(pathDelete, confirmed("")).statusCode())
             .as("step 6: a path's delete is refused").isEqualTo(403);
-        assertThat(adminPostForm("/admin/protected-paths/new",
-            "site_id=" + cedar + "&access_list_id=" + list + "&path=%2Fnew").statusCode())
+        HttpResponse<String> newPath = adminPostForm("/admin/protected-paths/new",
+            "site_id=" + cedar + "&access_list_id=" + list + "&path=%2Fnew");
+        assertThat(newPath.statusCode())
             .as("step 6: a new path under it is refused as a write under a trashed record, ahead of the site pick's"
                 + " own validation").isEqualTo(403);
+        assertThat(newPath.body()).as("step 6: and the refusal says the record it belongs to is in the trash")
+            .contains("in the trash");
         assertThat(pathsOf(cedar)).as("step 6: no path was written under the trashed site")
             .containsExactly("/private");
 
