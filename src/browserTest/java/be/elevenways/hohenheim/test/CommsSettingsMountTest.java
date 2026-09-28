@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The comms transport chain is a group of the framework's own settings, edited on the admin settings page under
- * its own mount; the retired settings/comms.dry and COMMS__* are refused at boot.
+ * its own mount; the retired settings/comms.dry is adopted into settings/local.dry and COMMS__* refused at boot.
  */
 class CommsSettingsMountTest extends HohenheimTestBase {
 
@@ -19,7 +19,7 @@ class CommsSettingsMountTest extends HohenheimTestBase {
 
     @Test
     void theCommsGroupIsMountedOnceAndTheOldFileIsRetired() {
-        // 1. The host's old comms file and prefix are declared for every boot to refuse.
+        // 1. The host's old comms file and prefix are declared for every boot to judge.
         assertThat(RetiredConfiguration.declared()).as("step 1: the retired names are declared")
             .containsAll(HohenheimRetiredNames.RETIRED);
 

@@ -23,11 +23,12 @@ import java.util.List;
 public final class HohenheimRetiredNames {
 
     /**
-     * The comms settings file and environment prefix this host loaded by hand, and Hohenheim's own: its file is
-     * adopted into settings/local.dry under hohenheim.*, its prefix refused naming ZENIT__HOHENHEIM__*.
+     * The comms settings file and environment prefix this host loaded by hand, and Hohenheim's own: each file is
+     * adopted into settings/local.dry under its group (comms.*, hohenheim.*), each prefix refused naming its
+     * ZENIT__ spelling.
      */
     public static final List<RetiredName> RETIRED = RetiredConfiguration.declare(
-        RetiredName.file("settings/comms.dry", CommsSettings.ROOT),
+        RetiredName.adoptedFile("settings/comms.dry", CommsSettings.ROOT),
         RetiredName.variablePrefix("COMMS", CommsSettings.ROOT),
         RetiredName.adoptedFile("settings/hohenheim.dry", HohenheimSettings.HOHENHEIM),
         RetiredName.variablePrefix("HOHENHEIM", HohenheimSettings.HOHENHEIM));
