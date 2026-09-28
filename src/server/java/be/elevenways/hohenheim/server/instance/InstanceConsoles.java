@@ -503,7 +503,8 @@ public final class InstanceConsoles {
     }
 
     /**
-     * The exit policy, run once per stream end on the pump thread. An observed stop
+     * The exit policy, run once per stream end on the pump thread, which is detached system
+     * work (see InstanceConsoleSession), so a crash restart is the system's. An observed stop
      * (console stop command, or an operator stop/destroy) SUPPRESSES crash handling --
      * the same exit is "stopped" with it and "crashed" without it.
      */
