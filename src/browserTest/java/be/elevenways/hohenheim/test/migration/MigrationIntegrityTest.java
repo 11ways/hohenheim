@@ -55,7 +55,7 @@ class MigrationIntegrityTest {
     /**
      * The highest migration version any deployed install has applied; see the class note.
      */
-    private static final String DEPLOYED_THROUGH = "010";
+    private static final String DEPLOYED_THROUGH = "017";
 
     /**
      * The highest migration version shipped by commit 91191333, the build a production install

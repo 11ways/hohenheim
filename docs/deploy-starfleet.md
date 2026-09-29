@@ -1563,3 +1563,31 @@ jar built on this change (2026-09-29; before that they refused the boot):
 No hand edit is needed. An `AUTH__*` or `COMMS__*` variable in the unit still
 refuses the boot, naming its `ZENIT__` spelling.
 
+
+## Deploy 2026-09-29: the review-fix waves, starfleet and daystrom
+
+Jar: pushed build a71787e8 (15 repos, all stamps clean; zenit 0601a965,
+spamservice dad15fcb from its new home apps/spamservice).
+
+starfleet (from 91191333, 2026-09-05): `tools/deploy-host.sh` lane, green
+through both restarts. Applied hohenheim M011, M012, M015, M016, M017 and every
+framework migration since 09-05. The first boot adopted settings/hohenheim.dry,
+auth.dry and comms.dry into local.dry (`.bak-20260928-235401` beside them). The
+rehearsal ran on a settings COPY, so the live files moved only at the real
+boot. Step 10 reported "diverged" only because the local zenit/zenit-auth
+checkouts carried another session's unpushed work; the jar is exactly the
+pushed heads. Verified: SOA from @starfleet.life, apex/www/comms/microcopy 200,
+skeleton 202, `/admin` 302 to `/login` in a browser.
+
+daystrom (unstamped 2026-08-22 jar): its database predates the Phase 0 cutover
+(hohenheim 001 recorded 44aaed9e...), so the lane's rehearsal refused it before
+the swap. It was upgraded through the 2026-08-23 cutover lane instead, in
+`/opt/hh-cutover-20260929/`: fresh schema from the new jar, starfleet's
+`import.py` (every table carried, none lost, no refusal, foreign keys clean), an
+inert boot and a proxy-only boot on moved ports (13000/18080), then
+`cutover.sh` (stop, at-swap backup, import, swap, start) and a second restart,
+both healthy. nightstrom stays enrolled (admitted, vm_isolated). Rollback:
+`/root/hohenheim-preflight-20260928-235618/` (jar, database, settings,
+keyring) and `/opt/hh-cutover-20260929/hohenheim.db.pre-cutover`.
+
+Pins raised to 017.
