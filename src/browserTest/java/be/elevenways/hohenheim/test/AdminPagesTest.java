@@ -104,29 +104,28 @@ class AdminPagesTest extends HohenheimTestBase {
         fallback.fill("http://127.0.0.1:9999");
         var threshold = page.locator("[data-path='app.security.domain_miss_threshold'] input");
         threshold.fill("7");
-        String neverBan = "zf-array pl-field[data-path='app.security.never_ban']";
-        page.click(neverBan + " [data-array-add]");
+        // AIDEV-NOTE: a non-secret string-list setting edits as CHIPS (pl-select's tags mode)
+        // since zenit 8487f7f5 (SettingsForms.chips), never the zf-array rows editor: there is
+        // no add button and no move controls, so the rows editor's directives are proven by
+        // zenit-cms's ArrayAndKeyValueEditorBrowserTest, not here.
+        String neverBan = "pl-field[data-path='app.security.never_ban']";
+        assertThat(page.locator(neverBan + " pl-select").count())
+            .as("the never-ban list is a chip input").isEqualTo(1);
+        assertThat(page.locator(neverBan + " zf-array").count())
+            .as("and never the rows editor").isZero();
+        page.click(neverBan + " .pl-select-field");
+        String chipInput = "he-bottom .pl-select-popup[data-open] .pl-select-search input";
+        for (String entry : new String[] {"203.0.113.7", "198.51.100.0/24", "remove.example"}) {
+            page.locator(chipInput).pressSequentially(entry);
+            page.locator(chipInput).press("Enter");
+            waitForReactiveIdle();
+        }
+        String chips = neverBan + " pl-select-chip .chip";
+        assertThat(page.locator(chips).count()).as("each Enter took one chip").isEqualTo(3);
+        page.keyboard().press("Escape");
+        page.click(neverBan + " pl-select-chip .chip[data-value='remove.example'] button");
         waitForReactiveIdle();
-        page.locator(neverBan + " .zf-array-row:nth-child(1) input").fill("203.0.113.7");
-        page.click(neverBan + " [data-array-add]");
-        waitForReactiveIdle();
-        page.locator(neverBan + " .zf-array-row:nth-child(2) input").fill("198.51.100.0/24");
-        page.click(neverBan + " [data-array-add]");
-        waitForReactiveIdle();
-        page.locator(neverBan + " .zf-array-row:nth-child(3) input").fill("remove.example");
-        // The row controls are use:List.moveUp/moveDown/remove now, so the boundary
-        // disabled guard and the default aria-label are the DIRECTIVE's -- assert them
-        // here rather than only swapping the marker selector.
-        assertThat(page.locator(neverBan + " .zf-array-row:nth-child(1) [data-list-move-up][disabled]")
-            .count()).as("the first row cannot move up").isEqualTo(1);
-        assertThat(page.locator(neverBan + " .zf-array-row:nth-child(3) [data-list-move-down][disabled]")
-            .count()).as("the last row cannot move down").isEqualTo(1);
-        assertThat(page.locator(neverBan + " .zf-array-row:nth-child(3) [data-list-remove]")
-            .getAttribute("aria-label")).as("the remove control is still labelled").isEqualTo("Remove");
-        page.click(neverBan + " .zf-array-row:nth-child(3) [data-list-remove]");
-        waitForReactiveIdle();
-        page.click(neverBan + " .zf-array-row:nth-child(1) [data-list-move-down]");
-        waitForReactiveIdle();
+        assertThat(page.locator(chips).count()).as("the removed chip is gone").isEqualTo(2);
 
         page.click(".cms-settings-actions pl-button");
         page.waitForCondition(() -> page.locator("pl-toast").count() > 0);
@@ -141,13 +140,13 @@ class AdminPagesTest extends HohenheimTestBase {
         Map<?, ?> security = (Map<?, ?>) parsed.get("security");
         assertThat(((Number) security.get("domain_miss_threshold")).intValue()).isEqualTo(7);
         assertThat(security.get("never_ban"))
-            .isEqualTo(List.of("198.51.100.0/24", "203.0.113.7"));
+            .isEqualTo(List.of("203.0.113.7", "198.51.100.0/24"));
 
         // The live context applied the change without a restart.
         assertThat(Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Security.DOMAIN_MISS_THRESHOLD)).isEqualTo(7);
         assertThat(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.NEVER_BAN))
-            .isEqualTo(List.of("198.51.100.0/24", "203.0.113.7"));
+            .isEqualTo(List.of("203.0.113.7", "198.51.100.0/24"));
 
         // Settings edits are accountable: the touched keys land in the activity log.
         Row entry = Models.get(ActivityModel.class).find()
@@ -166,7 +165,7 @@ class AdminPagesTest extends HohenheimTestBase {
         waitForReactiveIdle();
         assertThat(page.locator(resetControl + " pl-checkbox button").getAttribute("aria-checked"))
             .as("the reset control is armed").isEqualTo("true");
-        assertThat(page.locator(neverBan + " .zf-array-row").count())
+        assertThat(page.locator(chips).count())
             .as("an armed reset leaves the editor untouched until save").isEqualTo(2);
         page.click(".cms-settings-actions pl-button");
         page.waitForCondition(() -> Zenit.SETTINGS_VALUES
@@ -180,7 +179,7 @@ class AdminPagesTest extends HohenheimTestBase {
         // on the RELOADED document before waiting for hydration -- the cleared never_ban
         // editor only exists after the reload, whereas the still-hydrated pre-reload page
         // satisfies waitForHydration() on its own, before the navigation even starts.
-        page.waitForCondition(() -> page.locator(neverBan + " .zf-array-row").count() == 0);
+        page.waitForCondition(() -> page.locator(chips).count() == 0);
         waitForHydration();
 
         // The filesystem-path browser picks a server directory; the pick is
