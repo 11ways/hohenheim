@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -50,6 +51,8 @@ class ProteusAuthGateTest {
     private static final String GATED = "hohenheim.site.gated";
     private static final String ADMIN = "hohenheim.site.admin";
     private static final Pattern RETURN_URL = Pattern.compile("\"return_url\"\\s*:\\s*\"([^\"]*)\"");
+    private static final Pattern RLID = Pattern.compile("\"rlid\"\\s*:\\s*\"([^\"]*)\"");
+    private static final Pattern CODE = Pattern.compile("\"code\"\\s*:\\s*\"([^\"]*)\"");
 
     private static boolean initialized = false;
     private static ProxyServer proxy;
@@ -59,8 +62,13 @@ class ProteusAuthGateTest {
 
     /** The permissions the fake realm grants the next identity it returns. */
     private static final AtomicReference<List<String>> GRANTED = new AtomicReference<>(List.of(GATED));
-    /** The return URL the gate handed the fake realm on its latest create_login_session. */
+    /**
+     * Where the fake realm sends the browser that completes its latest login: the gate's return URL plus the
+     * rlid and the one-shot completion code, as Proteus appends them.
+     */
     private static final AtomicReference<String> LAST_RETURN_URL = new AtomicReference<>();
+    /** The completion code each unconsumed rlid still accepts. */
+    private static final Map<String, String> CODES = new ConcurrentHashMap<>();
     private static final AtomicInteger LOGIN_RESULT_POLLS = new AtomicInteger();
     private static final AtomicInteger LOGIN_SESSIONS_CREATED = new AtomicInteger();
 
@@ -109,15 +117,25 @@ class ProteusAuthGateTest {
             String claims = "\"permissions\":{\"nodes\":[" + nodes + "]}";
             String json;
             if (path.endsWith("create_login_session")) {
-                LOGIN_SESSIONS_CREATED.incrementAndGet();
+                int created = LOGIN_SESSIONS_CREATED.incrementAndGet();
+                String rlid = "rlid-" + created;
+                String code = "code-" + created;
+                CODES.put(rlid, code);
                 Matcher matcher = RETURN_URL.matcher(body);
                 LAST_RETURN_URL.set(matcher.find()
-                    ? matcher.group(1).replace("\\/", "/").replace("\\u0026", "&") : null);
-                json = "{\"id\":\"rlid-" + LOGIN_SESSIONS_CREATED.get()
-                    + "\",\"login_url\":\"http://proteus.example/login\"}";
+                    ? matcher.group(1).replace("\\/", "/").replace("\\u0026", "&")
+                        + "&rlid=" + rlid + "&code=" + code
+                    : null);
+                json = "{\"id\":\"" + rlid + "\",\"login_url\":\"http://proteus.example/login\"}";
             } else if (path.endsWith("remote_login_result")) {
                 LOGIN_RESULT_POLLS.incrementAndGet();
-                json = "{\"success\":true,\"finished\":true,\"identity\":{\"handle\":\"bob\"}," + claims + "}";
+                // A missing, wrong or second presentation of the code answers like an unknown session.
+                Matcher rlid = RLID.matcher(body);
+                Matcher code = CODE.matcher(body);
+                boolean consumed = rlid.find() && code.find() && CODES.remove(rlid.group(1), code.group(1));
+                json = consumed
+                    ? "{\"success\":true,\"finished\":true,\"identity\":{\"handle\":\"bob\"}," + claims + "}"
+                    : "{\"success\":false,\"finished\":true}";
             } else if (path.endsWith("persistent_cookie_login_result")) {
                 json = "{\"success\":true,\"finished\":true,\"identity\":{\"handle\":\"bob\"}," + claims + "}";
             } else if (path.endsWith("register_persistent_cookie")) {
@@ -327,6 +345,21 @@ class ProteusAuthGateTest {
         proxy.reload();
         assertThat(request("gated.test", "/", cookie("hh_site_session_id", rotated)).status())
             .as("step 10: a session minted under the old realm no longer admits").isEqualTo(302);
+
+        // 11. Proteus's completion code binds the result to the browser Proteus returned: the initiator
+        //     holding its pending cookie and its state but not the code is refused by the realm.
+        Response retry = request("gated.test", "/");
+        String completed = pathAndQuery(LAST_RETURN_URL.get());
+        String withoutCode = completed.replaceAll("&code=[^&]*", "");
+        int pollsBeforeCode = LOGIN_RESULT_POLLS.get();
+        Response noCode = request("gated.test", withoutCode, cookie("hh_site_login", retry.cookie("hh_site_login")));
+        assertThat(noCode.status()).as("step 11: a return without the code starts over").isEqualTo(302);
+        assertThat(noCode.cookie("hh_site_session_id")).as("step 11: and mints no session").isNull();
+        assertThat(LOGIN_RESULT_POLLS.get()).as("step 11: the realm was asked and refused")
+            .isEqualTo(pollsBeforeCode + 1);
+        assertThat(pathAndQuery(LAST_RETURN_URL.get()))
+            .as("step 11: the fresh login's return URL carries no stale rlid or code")
+            .containsOnlyOnce("rlid=").containsOnlyOnce("code=");
 
         proxy.stop();
         proxy = null;

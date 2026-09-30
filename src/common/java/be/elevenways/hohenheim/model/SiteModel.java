@@ -68,7 +68,7 @@ public class SiteModel extends Model {
      * AIDEV-NOTE: it vouches for the OPERATOR's value only. A tenant can neither set it nor
      * write the settings it vouches for (TenantWrites freezes every site column outside its
      * allow-list), and a tenant-authored upstream move is judged at the tenant tier whatever
-     * this says. Read at dial time through TenantUpstreams.publicOnly; M012 set it on every
+     * this says. Read at dial time through TenantUpstreams.publicOnly; M011 set it on every
      * tenant-owned site stored before the tenant upstream gates existed.
      */
     public static final BooleanField TRUSTED_UPSTREAM = SCHEMA.addField(BooleanField.builder("trusted_upstream")

@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.test.migration;
 
-import be.elevenways.hohenheim.migration.M012_SiteTrustedUpstream;
+import be.elevenways.hohenheim.migration.M011_ReviewHardening;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -21,7 +21,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * M012 against the rows production holds: exactly the tenant-owned sites whose stored upstream
+ * M011 against the rows production holds: exactly the tenant-owned sites whose stored upstream
  * dials a judged target get {@code trusted_upstream}, because an operator wrote every such
  * setting (tenants could not author one before the tenant upstream gates).
  *
@@ -53,7 +53,7 @@ class SiteTrustedUpstreamMigrationTest {
         grant(datasource, viewOnly, "view", true, null);
 
         // 2. The data step trusts the three tenant-owned dialing sites.
-        M012_SiteTrustedUpstream.trustExistingTenantUpstreams(datasource);
+        M011_ReviewHardening.trustExistingTenantUpstreams(datasource);
         assertThat(trusted(datasource, address)).as("step 2: tenant address site trusted").isTrue();
         assertThat(trusted(datasource, passthrough)).as("step 2: tenant passthrough site trusted").isTrue();
         assertThat(trusted(datasource, staticSite)).as("step 2: tenant static site trusted").isTrue();
@@ -69,7 +69,7 @@ class SiteTrustedUpstreamMigrationTest {
             .isNotEqualTo(Boolean.TRUE);
 
         // 4. Running it again changes nothing.
-        M012_SiteTrustedUpstream.trustExistingTenantUpstreams(datasource);
+        M011_ReviewHardening.trustExistingTenantUpstreams(datasource);
         assertThat(trusted(datasource, address)).as("step 4: a second run keeps the flag").isTrue();
         assertThat(trusted(datasource, operator)).as("step 4: and adds none").isNotEqualTo(Boolean.TRUE);
     }

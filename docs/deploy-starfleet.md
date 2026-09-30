@@ -255,12 +255,15 @@ request that times out. No production deploy was performed for this review.
    write on a box that just proved it cannot boot.
 8. There is no `--run-migrations` step: the service migrates at boot. What the
    lane owes is proof of WHAT it applied, so it reads `zenit_migrations` before
-   and after and names the versions. When the deploy APPLIED migrations, run
-   `java -jar <new jar> --migration-checksums` (no database needed) and paste
-   the `<Class><TAB><digest>` lines of every migration at or below the new mark
-   into `src/browserTest/resources/migration-pins.txt`, then raise
+   and after and names the versions. When a PRODUCTION deploy (kuifje,
+   robbedoes) APPLIED migrations, run `java -jar <new jar> --migration-checksums`
+   (no database needed) and paste the `<Class><TAB><digest>` lines of every
+   migration at or below the new mark into
+   `src/browserTest/resources/migration-pins.txt`, then raise
    `MigrationIntegrityTest.DEPLOYED_THROUGH`. Those migrations are frozen now;
-   a pin is never regenerated to make a red build green.
+   a pin is never regenerated to make a red build green. A test deploy
+   (starfleet, daystrom) raises nothing: an unpinned migration it applied stays
+   editable, and its ledger is re-recorded when one is (2026-09-30 entry).
 9. Second restart, MANDATORY, and a second health probe. A jar that survives
    one restart and not the next is exactly what this catches.
 10. `zenit-dev deployed <target>` must answer `current` for every repo with no

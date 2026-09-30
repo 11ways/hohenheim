@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.test.migration;
 
-import be.elevenways.hohenheim.migration.M017_AccessRuleNetworkSpelling;
+import be.elevenways.hohenheim.migration.M011_ReviewHardening;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -19,7 +19,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * M017 against the network spellings the lax parser accepted: each is rewritten to the address the previous
+ * M011 against the network spellings the lax parser accepted: each is rewritten to the address the previous
  * build read, so no allow or deny leaf changes what it matches when zenit's parser turns strict.
  *
  * @author Jelle De Loecker
@@ -66,7 +66,7 @@ class AccessRuleNetworkSpellingMigrationTest {
         }
 
         // 2. The data step rewrites each to the canonical spelling of the address it meant.
-        M017_AccessRuleNetworkSpelling.canonicalizeNetworks(datasource);
+        M011_ReviewHardening.canonicalizeNetworks(datasource);
         assertThat(network(datasource, leadingZero)).as("step 2: decimal, as read before").isEqualTo("10.0.0.1");
         assertThat(network(datasource, zoned)).as("step 2: the zone dropped, as before").isEqualTo("fe80::1");
         assertThat(network(datasource, fullwidth)).as("step 2: the digit it read").isEqualTo("2001:db8::1");
@@ -92,9 +92,9 @@ class AccessRuleNetworkSpellingMigrationTest {
         assertThat(network(datasource, group)).as("step 3: not a network rule").isEqualTo("010.0.0.1");
 
         // 4. A second run is a no-op, and the migration says it cannot be undone.
-        M017_AccessRuleNetworkSpelling.canonicalizeNetworks(datasource);
+        M011_ReviewHardening.canonicalizeNetworks(datasource);
         assertThat(network(datasource, leadingZero)).as("step 4: stable").isEqualTo("10.0.0.1");
-        assertThat(new M017_AccessRuleNetworkSpelling().getIrreversibleReason())
+        assertThat(new M011_ReviewHardening().getIrreversibleReason())
             .as("step 4: the original spelling is not kept").isNotBlank();
     }
 

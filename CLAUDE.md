@@ -196,19 +196,21 @@ not files you will find.
   structural checksum, so editing an operation in one makes the next
   `--run-migrations` rehearsal REFUSE under `database.migration_integrity=fail`.
   The rule is ONE declared fact plus a committed table:
-  `MigrationIntegrityTest.DEPLOYED_THROUGH` is the highest version every deployed
-  install has applied (`003` today), and `src/browserTest/resources/migration-pins.txt`
+  `MigrationIntegrityTest.DEPLOYED_THROUGH` is the highest version a PRODUCTION
+  install (kuifje, robbedoes) has applied, and `src/browserTest/resources/migration-pins.txt`
   carries one `<class><TAB><digest>` line per migration at or below it. Editing a
   pinned migration fails the build naming both digests; a migration below the mark
   with no pin fails it as "deployed but unpinned" and the failure prints the lines
-  to paste. A migration ABOVE the mark is deliberately unpinned -- nothing has
-  applied it, so editing it is still free. A deploy that applied migrations raises
-  the mark and adds the pins (`docs/deploy-starfleet.md` step 8); a pin is never
-  regenerated to make a red build green. Comments and formatting are outside the
-  digest.
-- A schema change APPENDS a migration in the same package and stream, numbered
-  from `M002_` upwards (`M002_ManagedDatabaseFailureReason` is the first), using
-  the ORM DSL (`alterTable` + `addColumn`/`dropColumn`), never raw SQL. Existing
+  to paste. A migration ABOVE the mark is deliberately unpinned -- no production
+  install has applied it, so editing it is still free; the test installs
+  (starfleet, daystrom) that applied it get their ledger re-recorded. A production
+  deploy that applied migrations raises the mark and adds the pins
+  (`docs/deploy-starfleet.md` step 8); a pin is never regenerated to make a red
+  build green. Comments and formatting are outside the digest.
+- A schema change EDITS the newest migration while it sits above the mark, and
+  APPENDS one (same package and stream, the next number) only when every
+  migration is pinned. Use the ORM DSL (`alterTable` + `addColumn`/`dropColumn`),
+  never raw SQL. Existing
   rows are real now, so a column added to a populated table is nullable or
   carries a default, and a backfill is a `builder.data(...)` step -- never a
   hand-written `execute(sql)`.
