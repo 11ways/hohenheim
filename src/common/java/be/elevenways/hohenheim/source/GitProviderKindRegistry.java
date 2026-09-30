@@ -11,7 +11,7 @@ import be.elevenways.protoblast.common.registry.Registry;
 public final class GitProviderKindRegistry {
 
     public static final Registry<GitProviderKindInfo> REGISTRY =
-        new Registry.Simple<>(Identifier.of("hohenheim", "git_provider_kinds"));
+        new Registry.Simple<>(Identifier.of("hohenheim", "git_provider_kind"));
 
     /**
      * Entries arrive via the generated BlastAutoLoadInit (GitProviderKind is

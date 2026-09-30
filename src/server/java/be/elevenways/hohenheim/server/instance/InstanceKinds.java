@@ -158,7 +158,7 @@ public final class InstanceKinds {
 
         for (InstanceKindInfo entry : InstanceKindRegistry.REGISTRY) {
 
-            Identifier id = InstanceKindRegistry.REGISTRY.getId(entry);
+            Identifier id = InstanceKindRegistry.REGISTRY.idOf(entry);
 
             if (id == null) {
                 continue;
@@ -200,7 +200,7 @@ public final class InstanceKinds {
     public static @NonNull List<String> kindsWhere(@NonNull Predicate<InstanceKindHandler> predicate) {
         List<String> kinds = new ArrayList<>();
         for (InstanceKindInfo entry : InstanceKindRegistry.REGISTRY) {
-            Identifier id = InstanceKindRegistry.REGISTRY.getId(entry);
+            Identifier id = InstanceKindRegistry.REGISTRY.idOf(entry);
             InstanceKindHandler handler = id != null ? HANDLERS.get(id) : null;
             if (handler != null && predicate.test(handler)) {
                 kinds.add(id.toString());

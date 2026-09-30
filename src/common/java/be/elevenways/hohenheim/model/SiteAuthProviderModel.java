@@ -30,7 +30,7 @@ public class SiteAuthProviderModel extends Model {
 
     // RegistryEnumField: values come from SiteAuthProviderTypeRegistry at runtime.
     public static final EnumField PROVIDER_TYPE = SCHEMA.addField(
-        RegistryEnumField.builder("provider_type")
+        RegistryMemberField.builder("provider_type")
             .registry(SiteAuthProviderTypeRegistry.REGISTRY)
             .label(HohenheimFormCopy.label("auth_provider_type"))
             .help(HohenheimFormCopy.help("auth_provider_type"))

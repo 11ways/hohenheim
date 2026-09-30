@@ -22,7 +22,7 @@ final class ProjectRoleOwner implements RoleOwner {
 
     @Override
     public @NonNull Identifier id() {
-        return Identifier.of("hohenheim", "project-roles");
+        return Identifier.of("hohenheim", "project_role");
     }
 
     @Override

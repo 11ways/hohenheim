@@ -3,15 +3,7 @@ package be.elevenways.hohenheim.model;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.source.GitProviderKindRegistry;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.orm.field.BooleanField;
-import be.elevenways.zenit.common.orm.field.DateTimeField;
-import be.elevenways.zenit.common.orm.field.EnumField;
-import be.elevenways.zenit.common.orm.field.Field;
-import be.elevenways.zenit.common.orm.field.IntegerField;
-import be.elevenways.zenit.common.orm.field.RegistryEnumField;
-import be.elevenways.zenit.common.orm.field.SchemaField;
-import be.elevenways.zenit.common.orm.field.StringField;
-import be.elevenways.zenit.common.orm.field.TextField;
+import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 
@@ -45,7 +37,7 @@ public class GitProviderModel extends Model {
     // ONE discriminator over the kind registry: values enumerate it live, so a new kind is
     // one GitProviderKind class and no edit here. Stored value = "hohenheim:<kind>".
     public static final EnumField KIND = SCHEMA.addField(
-        RegistryEnumField.builder("kind")
+        RegistryMemberField.builder("kind")
             .registry(GitProviderKindRegistry.REGISTRY)
             // Required on the FIELD, not on one form: the kind selects the auth scheme and
             // the base-url policy, so every writer (admin form, /manage projection, API)

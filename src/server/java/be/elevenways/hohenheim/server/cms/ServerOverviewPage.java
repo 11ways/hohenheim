@@ -76,7 +76,7 @@ import java.util.function.UnaryOperator;
  *
  * The page IS a widget tree ({@link RecordDashboardPage}) and stays read-only: every
  * mutation on it is one of the resource's own {@code RowAction}s, projected through
- * {@code zenitcms:record_actions} so confirmations, permissions and per-row visibility
+ * {@code zenit:record_actions} so confirmations, permissions and per-row visibility
  * stay single-sourced.
  */
 public final class ServerOverviewPage extends RecordDashboardPage<Row> {

@@ -14,7 +14,7 @@ import be.elevenways.protoblast.common.registry.Registry;
 public final class SiteAuthProviderTypeRegistry {
 
     public static final Registry<SiteAuthProviderType> REGISTRY =
-        new Registry.Simple<>(Identifier.of("hohenheim", "site_auth_provider_types"));
+        new Registry.Simple<>(Identifier.of("hohenheim", "site_auth_provider_type"));
 
     /**
      * Entries arrive via the generated BlastAutoLoadInit (the handler interface

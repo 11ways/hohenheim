@@ -57,7 +57,7 @@ public class InstanceTemplateVariableModel extends Model {
         .build());
 
     public static final EnumField TYPE = SCHEMA.addField(
-        RegistryEnumField.builder("type")
+        RegistryMemberField.builder("type")
             .registry(VariableTypeRegistry.REGISTRY)
             .label(HohenheimFormCopy.label("variable_type"))
             .help(HohenheimFormCopy.help("variable_type"))

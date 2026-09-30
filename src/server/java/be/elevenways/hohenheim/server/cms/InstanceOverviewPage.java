@@ -63,7 +63,7 @@ import java.util.Map;
  * collector read, and the public endpoint resolved out of the port ledger.
  *
  * The page IS a widget tree ({@link RecordDashboardPage}), so the action row is the
- * resource's own row actions through {@code zenitcms:record_actions}, and the bespoke
+ * resource's own row actions through {@code zenit:record_actions}, and the bespoke
  * endpoint table is an app-local widget type rather than a hand-rendered template.
  *
  * AIDEV-NOTE: the delegated projection is applied FIELD BY FIELD in {@link #widgets},

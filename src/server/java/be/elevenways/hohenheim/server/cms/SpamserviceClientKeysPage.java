@@ -17,7 +17,7 @@ final class SpamserviceClientKeysPage implements RecordScopedPage<ManagedClient>
 
     static final String SLUG = "keys";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "spamservice_client_keys_page"); }
+    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "spamservice_client_keys"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("keys").withFilter("scope", "spamservice_client"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("key"); }

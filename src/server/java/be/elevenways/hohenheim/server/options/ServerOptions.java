@@ -19,7 +19,7 @@ import java.util.Set;
 public final class ServerOptions {
 
     public static final Registry.Simple<TypeDefinition> REGISTRY =
-        new Registry.Simple<>(Identifier.of("hohenheim", "servers"));
+        new Registry.Simple<>(Identifier.of("hohenheim", "server"));
 
     private static volatile boolean populated = false;
 

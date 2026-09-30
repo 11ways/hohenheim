@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
@@ -328,7 +327,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
     void sitesListOffersItsRowActions() throws Exception {
         String list = adminGet("/admin/sites").body();
         assertThat(list).as("the toggle verb renders").contains("toggle_site");
-        assertThat(list).as("the synthesized delete renders").contains("data-action-id=\"zenitcms:delete\"");
+        assertThat(list).as("the synthesized delete renders").contains("data-action-id=\"zenit:delete\"");
     }
 
     /**
@@ -427,7 +426,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
         // 1. Every registered kind answers from its own generatedOnly() declaration.
         List<String> deployable = new ArrayList<>();
         for (InstanceKindInfo entry : InstanceKindRegistry.REGISTRY) {
-            Identifier id = InstanceKindRegistry.REGISTRY.getId(entry);
+            Identifier id = InstanceKindRegistry.REGISTRY.idOf(entry);
             if (id == null) {
                 continue;
             }

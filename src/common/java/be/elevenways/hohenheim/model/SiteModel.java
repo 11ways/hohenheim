@@ -41,7 +41,7 @@ public class SiteModel extends Model {
 
     // RegistryEnumField: values come from UpstreamKinds at runtime
     public static final EnumField UPSTREAM_KIND = SCHEMA.addField(
-        RegistryEnumField.builder("upstream_kind")
+        RegistryMemberField.builder("upstream_kind")
             .registry(UpstreamKinds.REGISTRY)
             .label(HohenheimFormCopy.label("upstream_kind"))
             .help(HohenheimFormCopy.help("upstream_kind"))

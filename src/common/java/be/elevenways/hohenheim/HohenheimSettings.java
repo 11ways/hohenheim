@@ -1,10 +1,10 @@
 package be.elevenways.hohenheim;
 
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.annotation.ZenitAutoLoad;
 import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.common.setting.SettingGroup;
 import be.elevenways.zenit.common.setting.SettingsRule;
+import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.validation.PathKind;
 import be.elevenways.hohenheim.net.IpLiterals;
@@ -20,7 +20,7 @@ import java.util.regex.Pattern;
 /**
  * All Hohenheim configuration settings, organized by group.
  */
-@ZenitAutoLoad(loadInnerClasses = true)
+@BlastAutoLoad(loadInnerClasses = true)
 public class HohenheimSettings {
 
     // AIDEV-NOTE: every value is read through Zenit.SETTINGS_VALUES, the one context the default

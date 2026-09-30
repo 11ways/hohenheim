@@ -10,7 +10,7 @@ import be.elevenways.protoblast.common.registry.Registry;
 public final class InstanceKindRegistry {
 
     public static final Registry<InstanceKindInfo> REGISTRY =
-        new Registry.Simple<>(Identifier.of("hohenheim", "instance_kinds"));
+        new Registry.Simple<>(Identifier.of("hohenheim", "instance_kind"));
 
     /**
      * Entries arrive via the generated BlastAutoLoadInit (InstanceKindHandler is

@@ -20,7 +20,7 @@ import be.elevenways.hohenheim.schedule.ScheduleRunStatuses;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.zenit.common.orm.field.EnumField;
-import be.elevenways.zenit.common.orm.field.RegistryEnumField;
+import be.elevenways.zenit.common.orm.field.RegistryMemberField;
 import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
 import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
 import be.elevenways.zenit.common.task.record.RunStatus;
@@ -350,7 +350,7 @@ class StatusPresentationDriftTest {
                 // A registry enum has no declared values at all: it enumerates the
                 // registered TypeDefinitions at call time (which needs a datasource) and
                 // takes its labels from them, so there is no displayName here to audit.
-                if (enumField == null || enumField instanceof RegistryEnumField) {
+                if (enumField == null || enumField instanceof RegistryMemberField) {
                     continue;
                 }
                 for (EnumField.EnumValue value : enumField.getValues().values()) {

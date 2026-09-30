@@ -138,7 +138,7 @@ public class InstanceModel extends Model {
     // ONE discriminator: the kind implies the runtime (docker_container now; system_container
     // and vm reserved). Values enumerate the registry live; stored value = "hohenheim:<kind>".
     public static final EnumField KIND = SCHEMA.addField(
-        RegistryEnumField.builder("kind")
+        RegistryMemberField.builder("kind")
             .registry(InstanceKindRegistry.REGISTRY)
             .label(HohenheimFormCopy.label("kind"))
             .help(HohenheimFormCopy.help("instance_kind"))

@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim;
 
-import be.elevenways.hawkeye.common.annotation.HawkeyeAutoLoad;
+import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.protoblast.common.dry.BlastDrySerializers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -16,7 +16,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * @author Jelle De Loecker
  * @since  0.1.0
  */
-@HawkeyeAutoLoad
+@BlastAutoLoad
 public enum WorkloadTier {
 
     INSTANCE("instance", Microcopy.of("tier_instance").withFilter("scope", "server_overview")),

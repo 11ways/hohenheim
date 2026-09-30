@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.host;
 
-import be.elevenways.hawkeye.common.annotation.HawkeyeAutoLoad;
+import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.protoblast.common.dry.BlastDrySerializers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -21,7 +21,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * The static initializer registers the DRY serializer/reviver pair so the state crosses
  * the web boundary as its own name; {@code @HawkeyeAutoLoad} forces TeaVM to run it.
  */
-@HawkeyeAutoLoad
+@BlastAutoLoad
 public enum HostState {
 
     /** Security verdict, read off {@code quarantined_at} and winning over everything. */

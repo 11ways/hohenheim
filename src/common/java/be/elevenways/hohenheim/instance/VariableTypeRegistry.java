@@ -11,7 +11,7 @@ import be.elevenways.protoblast.common.registry.Registry;
 public final class VariableTypeRegistry {
 
     public static final Registry<VariableTypeInfo> REGISTRY =
-        new Registry.Simple<>(Identifier.of("hohenheim", "variable_types"));
+        new Registry.Simple<>(Identifier.of("hohenheim", "variable_type"));
 
     /**
      * Entries arrive via the generated BlastAutoLoadInit (VariableTypeHandler is
