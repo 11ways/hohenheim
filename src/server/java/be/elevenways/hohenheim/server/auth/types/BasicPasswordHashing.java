@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server.auth.types;
 
-import be.elevenways.hohenheim.migration.M011_HashBasicProviderPasswords;
+import be.elevenways.hohenheim.migration.M011_ReviewHardening;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.zenit.auth.server.PasswordHasher;
 import be.elevenways.zenit.common.annotation.ZenitAutoLoad;
@@ -17,7 +17,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * @since 0.1.0
  */
 @ZenitAutoLoad
-public final class BasicPasswordHashing implements M011_HashBasicProviderPasswords.PasswordHashing {
+public final class BasicPasswordHashing implements M011_ReviewHardening.PasswordHashing {
 
     public static final boolean LOADED = install();
 
@@ -25,7 +25,7 @@ public final class BasicPasswordHashing implements M011_HashBasicProviderPasswor
     }
 
     private static boolean install() {
-        M011_HashBasicProviderPasswords.HASHING.install(new BasicPasswordHashing());
+        M011_ReviewHardening.HASHING.install(new BasicPasswordHashing());
         return true;
     }
 

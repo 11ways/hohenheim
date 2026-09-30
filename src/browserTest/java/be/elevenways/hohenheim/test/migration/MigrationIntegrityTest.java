@@ -40,28 +40,30 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * (2026-08-29). Editing an APPLIED migration makes the next --run-migrations rehearsal
  * refuse under database.migration_integrity=fail, and "applied" stopped meaning "001" the
  * day starfleet ran M002/M003. So exactly one fact is declared here -- DEPLOYED_THROUGH,
- * the highest version any deployed install has applied -- and the rule derives from it:
- * every discovered migration at or below the mark MUST carry a digest in the committed
- * pin table, and that digest MUST still match. A migration ABOVE the mark is not pinned,
- * because nothing has applied it yet and editing it is still free. Raising the mark plus
- * pasting the pin lines the failure prints is the ONE edit a deploy that applied
- * migrations owes (docs/deploy-starfleet.md step 8); a pin is never regenerated to make a
- * red build green. Comments and formatting are outside the digest. The lines to paste are
+ * the highest version a PRODUCTION install (kuifje, robbedoes) has applied -- and the rule
+ * derives from it: every discovered migration at or below the mark MUST carry a digest in
+ * the committed pin table, and that digest MUST still match. A migration ABOVE the mark is
+ * not pinned and is edited, never followed by a new one: the test installs (starfleet,
+ * daystrom) that applied it have their ledger re-recorded instead (2026-09-30, when M011-M017
+ * became one M011). Raising the mark plus pasting the pin lines the failure prints is the
+ * ONE edit a production deploy that applied migrations owes (docs/deploy-starfleet.md step
+ * 8); a pin is never regenerated to make a red build green. Comments and formatting are outside the digest. The lines to paste are
  * printed by the offline command {@code --migration-checksums} of the deployed jar, so
  * raising the mark never needs a red run of this test to learn a digest.
  */
 class MigrationIntegrityTest {
 
     /**
-     * The highest migration version any deployed install has applied; see the class note.
+     * The highest migration version a production install has applied (robbedoes, build bc67eda4); see
+     * the class note.
      */
-    private static final String DEPLOYED_THROUGH = "017";
+    private static final String DEPLOYED_THROUGH = "010";
 
     /**
-     * The highest migration version shipped by commit 91191333, the build a production install
-     * still runs; its upgrade path is checked on its own because it sits below the mark.
+     * The highest migration version shipped by commit 91191333, the build the oldest production install
+     * (kuifje) still runs; every upgrade point from here on is checked.
      */
-    private static final String PRODUCTION_91191333_THROUGH = "009";
+    private static final String OLDEST_PRODUCTION_THROUGH = "009";
 
     /** Classpath resource holding one {@code <class><TAB><digest>} line per pinned migration. */
     private static final String PIN_RESOURCE = "migration-pins.txt";
@@ -161,7 +163,7 @@ class MigrationIntegrityTest {
         List<String> points = installPoints();
         assertThat(points)
             .as("the production install is among the checked ones")
-            .startsWith(PRODUCTION_91191333_THROUGH);
+            .startsWith(OLDEST_PRODUCTION_THROUGH);
         for (String shipped : points) {
             // 1. The install as it is: the discovered set with this stream cut at `shipped`.
             File file = File.createTempFile("hohenheim-migration-deployed-" + shipped, ".db");
@@ -206,9 +208,9 @@ class MigrationIntegrityTest {
      * is what the strict out-of-order check judges an upgraded install against.
      *
      * AIDEV-NOTE: this pins the CAUSE the intermediate-install upgrades above observe. The
-     * runner breaks ties by version text, and "0xx" sorts before every zenit timestamp, so a
-     * migration without an edge runs at the front while 012 waits behind zenit-auth's M007.
-     * An appended migration that forgets its dependsOn(predecessor) lands before 012 here.
+     * runner breaks ties by version text, and "0xx" sorts before every zenit timestamp, while
+     * 011 waits behind zenit-auth's M007; zenit's implicit same-stream chain keeps every later
+     * version behind it.
      */
     @Test
     void thisStreamRunsInVersionOrderInsideTheDependencyOrder() throws Exception {
@@ -227,8 +229,7 @@ class MigrationIntegrityTest {
         List<String> versions = InstallsAt.hohenheimMigrations(datasource.getDatasourceIdentifier())
             .stream().map(Migration::getVersion).toList();
         assertThat(executed)
-            .as("step 2: the %s migrations run in version order; a migration appended after 012"
-                + " must declare dependsOn(<its predecessor>) (see HohenheimMigration)",
+            .as("step 2: the %s migrations run in version order (see HohenheimMigration)",
                 HohenheimMigration.STREAM)
             .containsExactlyElementsOf(versions);
         datasource.close();
@@ -472,9 +473,9 @@ class MigrationIntegrityTest {
         List<Migration> own = InstallsAt.hohenheimMigrations(probe.getDatasourceIdentifier());
         probe.close();
         List<String> points = new ArrayList<>();
-        points.add(PRODUCTION_91191333_THROUGH);
+        points.add(OLDEST_PRODUCTION_THROUGH);
         for (Migration migration : own.subList(0, own.size() - 1)) {
-            if (migration.getVersion().compareTo(PRODUCTION_91191333_THROUGH) > 0) {
+            if (migration.getVersion().compareTo(OLDEST_PRODUCTION_THROUGH) > 0) {
                 points.add(migration.getVersion());
             }
         }

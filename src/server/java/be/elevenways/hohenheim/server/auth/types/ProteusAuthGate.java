@@ -34,7 +34,8 @@ import java.util.Set;
  * State machine, per request:
  *   ALLOW            -- a session this gate accepts exists (permission re-checked on the stored claim) -> forward.
  *   VERIFY_PENDING   -- {@code ?proteus=verify}: the sealed pending-login cookie and the returned state must
- *                       match; poll remote_login_result; on success mint a NEW session, set acpl, redirect back.
+ *                       match; read remote_login_result with Proteus's one-shot code; on success mint a NEW
+ *                       session, set acpl, redirect back.
  *   PERSISTENT       -- an acpl cookie: validate it with Proteus; on success establish + forward.
  *   REDIRECT_TO_LOGIN-- cold start: create a login session, seal rlid + nonce into a cookie, redirect to Proteus.
  *
@@ -43,9 +44,9 @@ import java.util.Set;
  * return URL handed to Proteus carries a state derived from that nonce, which only the browser that
  * completed the login at Proteus receives. A verify must present both, so an attacker who starts a
  * login and phishes someone into completing it holds the cookie but never the state, and a forged
- * verify link cannot complete a login in a victim's browser (login CSRF). RESIDUAL: if Proteus ever
- * shows the return URL to the initiator (inside the login URL), the state leaks with it; closing that
- * needs a one-time code from Proteus in the redirect.
+ * verify link cannot complete a login in a victim's browser (login CSRF). Proteus adds a third binding:
+ * ProteusClient opts every login into its completion code, which Proteus appends to the return URL
+ * only for the browser that completed the login, and hands the result out once for it.
  *
  * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.1.0
@@ -58,7 +59,18 @@ public class ProteusAuthGate implements SiteAuthGate, CredentialOwner, SessionAu
     /** The query parameter carrying the login's state back from Proteus. */
     static final String STATE_PARAM = "proteus_state";
 
+    /** The query parameter carrying Proteus's one-shot completion code back. */
+    static final String CODE_PARAM = "code";
+
     private static final Set<String> OWN_PARAMS = Set.of(VERIFY_PARAM, STATE_PARAM);
+
+    /**
+     * What a verify callback carries beyond the gate's own parameters: Proteus appends the rlid and the code.
+     *
+     * AIDEV-NOTE: stripped only from a verify callback, where Proteus put them; elsewhere a {@code code} is the
+     * upstream's own parameter (an OAuth callback) and survives the round trip to Proteus.
+     */
+    private static final Set<String> CALLBACK_PARAMS = Set.of(VERIFY_PARAM, STATE_PARAM, "rlid", CODE_PARAM);
 
     /**
      * The per-process key that seals pending logins.
@@ -161,7 +173,8 @@ public class ProteusAuthGate implements SiteAuthGate, CredentialOwner, SessionAu
 
         // The pending state is single-use whatever Proteus answers.
         ProxySessionSupport.clearPendingLoginCookie(exchange);
-        ProteusClient.LoginResult result = client.remoteLoginResult(pending[0]);
+        ProteusClient.LoginResult result = client.remoteLoginResult(pending[0],
+            firstQueryValue(exchange, CODE_PARAM));
         if (!result.success() || !result.finished()) {
             return startLogin(exchange);  // not finished / failed -> start fresh
         }
@@ -286,7 +299,8 @@ public class ProteusAuthGate implements SiteAuthGate, CredentialOwner, SessionAu
         if (host == null) {
             host = exchange.getHostAndPort();
         }
-        String query = stripOwnParams(exchange.getQueryString());
+        String query = stripParams(exchange.getQueryString(),
+            isVerifyCallback(exchange) ? CALLBACK_PARAMS : OWN_PARAMS);
         StringBuilder url = new StringBuilder(scheme).append("://").append(host)
             .append(exchange.getRequestPath());
         if (query != null && !query.isEmpty()) {
@@ -295,14 +309,14 @@ public class ProteusAuthGate implements SiteAuthGate, CredentialOwner, SessionAu
         return url.toString();
     }
 
-    private static @Nullable String stripOwnParams(@Nullable String query) {
+    private static @Nullable String stripParams(@Nullable String query, Set<String> stripped) {
         if (query == null || query.isEmpty()) {
             return query;
         }
         StringBuilder out = new StringBuilder();
         for (String pair : query.split("&")) {
             int equals = pair.indexOf('=');
-            if (OWN_PARAMS.contains(equals < 0 ? pair : pair.substring(0, equals))) {
+            if (stripped.contains(equals < 0 ? pair : pair.substring(0, equals))) {
                 continue;
             }
             if (out.length() > 0) {

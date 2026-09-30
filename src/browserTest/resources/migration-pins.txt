@@ -1,4 +1,4 @@
-# Structural checksums of every migration a deployed install has APPLIED.
+# Structural checksums of every migration a PRODUCTION install (kuifje, robbedoes) has APPLIED.
 # One line per migration: <class simple name><TAB><digest>.
 # The mark is MigrationIntegrityTest.DEPLOYED_THROUGH; a migration at or below it must
 # appear here and must still hash to its pinned digest. A deploy that applied migrations
@@ -12,8 +12,3 @@ M007_DnsNotifySerial	55b17ed621ef5921f49049453fe8c607716978bc40c5498a74f90d3164b
 M008_BanScope	bd341af0b6e9e356169012281295811f1a5b48d630184286e9c3761913912fd0
 M009_SharedDatabaseEngines	8048ec79ad38af00ea3ea64721e1a441a873c0861c59f3e0c05bb37b404324f0
 M010_ArtifactOperations	a8618ac358a91f5a1345fef681b5d8b6af5f436ea6d1e0d777c94e1bd2949305
-M011_HashBasicProviderPasswords	fef05e2fbbea1c07d42eb0fc98ae70836e690ced5300f34d5f8fa77766fc15e8
-M012_SiteTrustedUpstream	7293c4fd50a6ca6a15838926928d4299de0cccbb0b45015e44b31a2ff915f321
-M015_InstallMediaFetches	1c21294ae1ffa32e5958e0e23cf59cdf0b2f03e4d9618e27b22d6955e9ecbae8
-M016_InstanceWorkloadKilled	775b34625960b984ec8e55cce7615aa19f7de0b754b0da5cc4dbf78518dbd52f
-M017_AccessRuleNetworkSpelling	aedff72dee0d5208d1ade8def9e8cc2aa3f0da85080430ec61dd6d9042f35304

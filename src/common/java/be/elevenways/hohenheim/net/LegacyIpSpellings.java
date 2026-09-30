@@ -13,7 +13,7 @@ import java.util.List;
  * AIDEV-NOTE: FROZEN at zenit f0306e25, the parser production build 91191333 shipped. It accepted a zone
  * id (dropped), IPv4 octets with leading zeros (read as DECIMAL), any Unicode hex digit in an IPv6 group
  * and an embedded dotted quad in ANY group (1.2.3.4::1 read as 102:304::1); zenit refuses all of them
- * now. This is that old reading, kept only to canonicalize values stored under it (M017's access rules, the
+ * now. This is that old reading, kept only to canonicalize values stored under it (M011's access rules, the
  * trusted-source and never-ban settings) and never to match an address. Changing it changes what a
  * stored rule means.
  *

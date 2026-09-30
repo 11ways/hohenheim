@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.test.migration;
 
-import be.elevenways.hohenheim.migration.M011_HashBasicProviderPasswords;
+import be.elevenways.hohenheim.migration.M011_ReviewHardening;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.hohenheim.server.auth.types.BasicPasswordHashing;
@@ -56,7 +56,7 @@ class BasicProviderPasswordMigrationTest {
         int proteus = provider(datasource, "hohenheim:proteus", proteusConfig);
 
         // 2. The data step hashes every plaintext value and every user keeps their password.
-        M011_HashBasicProviderPasswords.hashPlaintext(datasource);
+        M011_ReviewHardening.hashPlaintext(datasource);
         Map<String, String> plainAfter = BasicAuthProviderType.credentials(config(datasource, plain));
         assertThat(plainAfter.values()).as("step 2: nothing is left in plaintext")
             .allMatch(BasicCredentials::isHashed);
@@ -79,10 +79,10 @@ class BasicProviderPasswordMigrationTest {
 
         // 4. Running the step again changes nothing, and the migration declares it cannot be undone.
         String aliceHash = plainAfter.get("alice");
-        M011_HashBasicProviderPasswords.hashPlaintext(datasource);
+        M011_ReviewHardening.hashPlaintext(datasource);
         assertThat(BasicAuthProviderType.credentials(config(datasource, plain)).get("alice"))
             .as("step 4: a second run is a no-op").isEqualTo(aliceHash);
-        assertThat(new M011_HashBasicProviderPasswords().getIrreversibleReason())
+        assertThat(new M011_ReviewHardening().getIrreversibleReason())
             .as("step 4: plaintext cannot be restored, so the migration is irreversible").isNotBlank();
     }
 
