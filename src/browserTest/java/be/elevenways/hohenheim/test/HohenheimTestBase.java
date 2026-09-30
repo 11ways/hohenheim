@@ -37,8 +37,11 @@ import be.elevenways.zenit.common.flash.FlashNotice;
 import be.elevenways.zenit.test.support.FlashHandoff;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.junit.jupiter.api.BeforeEach;
 
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Browser test base for Hohenheim. Authenticates via zenit-auth: seeds an admin user and mints
@@ -56,6 +59,8 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
     private static int port;
     protected static String sessionToken;
     protected static String csrfToken;
+    /** Every session {@link #sessionFor} minted in this JVM, drained with the admin one before each test. */
+    private static final Set<String> MINTED_SESSIONS = ConcurrentHashMap.newKeySet();
 
     @Override
     protected int startServer() throws Exception {
@@ -209,7 +214,35 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         String csrf = ZenitAuth.randomToken();
         session.set(CsrfTokens.TOKEN, csrf);
         Zenit.getSessionStore().save(session);
-        return new TestSession(session.token().secret(), csrf);
+        String token = session.token().secret();
+        MINTED_SESSIONS.add(token);
+        return new TestSession(token, csrf);
+    }
+
+    /**
+     * Discard every flash notice pending in the admin session and every session {@link #sessionFor} minted.
+     *
+     * AIDEV-NOTE: a test that asserts a redirect's landingOf(answer) without redeeming its notice through popFlash
+     * leaves that notice pending, and these sessions outlive the test (the admin one serves the whole JVM, a class may
+     * keep a tenant one in a static field), so the next test would start with a stranger's toast waiting. Both
+     * shipped session stores commit an update on the spot and make save a no-op, so no save follows the drain.
+     */
+    @BeforeEach
+    void drainPendingFlash() {
+        if (sessionToken != null) {
+            drainPendingFlash(sessionToken);
+        }
+        for (String token : MINTED_SESSIONS) {
+            drainPendingFlash(token);
+        }
+    }
+
+    private static void drainPendingFlash(@NonNull String token) {
+        // A revoked or expired session resolves to null: nothing of it can reach a later test.
+        Session session = Zenit.getSessionStore().get(SessionToken.of(token));
+        if (session != null) {
+            FlashHandoff.drain(session);
+        }
     }
 
     protected @NonNull String baseUrl() {
