@@ -17,7 +17,7 @@ import be.elevenways.protoblast.common.registry.Registry;
 public class UpstreamKinds {
 
     public static final Registry<UpstreamKindInfo> REGISTRY =
-        new Registry.Simple<>(Identifier.of("hohenheim", "upstream_kinds"));
+        new Registry.Simple<>(Identifier.of("hohenheim", "upstream_kind"));
 
     /**
      * Entries arrive via the generated BlastAutoLoadInit (UpstreamKindHandler is

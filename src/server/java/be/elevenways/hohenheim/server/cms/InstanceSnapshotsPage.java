@@ -20,7 +20,7 @@ public final class InstanceSnapshotsPage extends InstanceArtifactsPage {
         super(resource);
     }
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_snapshots_page"); }
+    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_snapshots"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_snapshot"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("camera"); }

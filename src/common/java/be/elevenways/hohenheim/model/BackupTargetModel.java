@@ -34,7 +34,7 @@ public class BackupTargetModel extends Model {
         .build());
 
     public static final EnumField KIND = SCHEMA.addField(
-        RegistryEnumField.builder("kind")
+        RegistryMemberField.builder("kind")
             .registry(BackupTargetRegistry.REGISTRY)
             .label(HohenheimFormCopy.label("kind"))
             .help(HohenheimFormCopy.help("backup_target_kind"))

@@ -33,7 +33,7 @@ public final class InstanceStatsPage implements RecordScopedPage<Row> {
 
     public static final String SLUG = "stats";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_stats_page"); }
+    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_stats"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("stats").withFilter("scope", "instance"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("chart-line"); }

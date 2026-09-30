@@ -65,7 +65,7 @@ public class InstanceTemplateModel extends Model {
 
     // Same ONE discriminator as InstanceModel: the kind implies the runtime.
     public static final EnumField KIND = SCHEMA.addField(
-        RegistryEnumField.builder("kind")
+        RegistryMemberField.builder("kind")
             .registry(InstanceKindRegistry.REGISTRY)
             .label(HohenheimFormCopy.label("kind"))
             .help(HohenheimFormCopy.help("template_kind"))

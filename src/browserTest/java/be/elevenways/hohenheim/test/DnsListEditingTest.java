@@ -458,7 +458,7 @@ class DnsListEditingTest extends HohenheimTestBase {
         page.setViewportSize(760, 844);
         navigateToApp(tab);
         waitForHydration();
-        assertIsNotVisible(row + ".cms-row-action-lane pl-button[data-action-id='zenitcms:edit']");
+        assertIsNotVisible(row + ".cms-row-action-lane pl-button[data-action-id='zenit:edit']");
         assertIsNotVisible(row + ".cms-row-action-more pl-button");
         assertIsVisible(row + ".cms-row-action-compact pl-button");
 
@@ -466,7 +466,7 @@ class DnsListEditingTest extends HohenheimTestBase {
         //    overflow's dyndns mint as a submitter associated with THIS page's form.
         String popup = "he-bottom .pl-dropdown-menu-content__popup:visible ";
         String compactEdit = popup + "a.cms-menu-action[data-cms-lane='compact']"
-            + "[data-action-id='zenitcms:edit']";
+            + "[data-action-id='zenit:edit']";
         String compactMint = popup + "button.cms-menu-action[data-cms-lane='compact']"
             + "[formaction^='/admin/dns-records/" + recordId + "/action/dyndns_token?']";
         page.locator(row + ".cms-row-action-compact pl-dropdown-menu-trigger")
@@ -490,7 +490,7 @@ class DnsListEditingTest extends HohenheimTestBase {
         page.setViewportSize(1400, 900);
         navigateToApp(tab);
         waitForHydration();
-        assertIsVisible(row + ".cms-row-action-lane pl-button[data-action-id='zenitcms:edit']");
+        assertIsVisible(row + ".cms-row-action-lane pl-button[data-action-id='zenit:edit']");
         assertIsNotVisible(row + ".cms-row-action-compact pl-button");
     }
 

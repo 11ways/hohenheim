@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim;
 
+import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.annotation.ZenitAutoLoad;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.widget.common.WidgetRegistry;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -17,7 +17,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * @author Jelle De Loecker
  * @since  0.1.0
  */
-@ZenitAutoLoad
+@BlastAutoLoad
 public final class HohenheimWidgets {
 
     /**
@@ -43,7 +43,7 @@ public final class HohenheimWidgets {
     /**
      * The host's live contact state: a status dot, the state word and the last-contact relative time.
      *
-     * AIDEV-NOTE: deliberately NOT folded into {@code zenitwidget:status}. That widget renders
+     * AIDEV-NOTE: deliberately NOT folded into {@code zenit:status}. That widget renders
      * BADGES, and this cell's whole point is that it is not one -- the dot carries the verdict and
      * the relative time carries when it was last true. Reducing it to a pill would drop the
      * timestamp, which is the half an operator reads.

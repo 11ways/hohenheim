@@ -1,7 +1,7 @@
 {% declare widget: WidgetInstance %}
 {#- The site resource lives on the admin panel; bound through the typed CMS route,
     never a path literal. -#}
-{% let newSiteTarget = BoundEndpoint.with(Endpoint.with(Zenit.Endpoints.cms.resource_create_form, Zenit.Params.cms.panel, "admin"), Zenit.Params.cms.resource, "sites") %}
+{% let newSiteTarget = BoundEndpoint.with(Endpoint.with(Zenit.Endpoints.zenit.resource_create_form, Zenit.Params.zenit.panel, "admin"), Zenit.Params.zenit.resource, "sites") %}
 <pl-empty-state>
     <pl-icon name="rocket"></pl-icon>
     <pl-empty-state-title>{{ t("title", scope: "onboarding") }}</pl-empty-state-title>

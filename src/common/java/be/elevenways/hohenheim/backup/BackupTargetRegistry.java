@@ -10,7 +10,7 @@ import be.elevenways.protoblast.common.registry.Registry;
 public final class BackupTargetRegistry {
 
     public static final Registry<BackupTargetInfo> REGISTRY =
-        new Registry.Simple<>(Identifier.of("hohenheim", "backup_target_kinds"));
+        new Registry.Simple<>(Identifier.of("hohenheim", "backup_target_kind"));
 
     /**
      * Entries arrive via the generated BlastAutoLoadInit (BackupTargetKindHandler is
