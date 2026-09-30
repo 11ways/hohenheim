@@ -1594,3 +1594,41 @@ both healthy. nightstrom stays enrolled (admitted, vm_isolated). Rollback:
 keyring) and `/opt/hh-cutover-20260929/hohenheim.db.pre-cutover`.
 
 Pins raised to 017.
+
+
+## Deploy 2026-09-30: M011-M017 merged into one M011, starfleet and daystrom
+
+Jar: pushed build 6564a495 (sha256 `0a7a5acf...e874d136`, 15 stamp rows clean;
+zenit 7587e459). M011-M017 became ONE `M011_ReviewHardening` (checksum
+`d38f6fdb...`); no production install had applied them, so the pin mark went
+back to 010 (robbedoes) and both test installs had their ledger RE-RECORDED
+before the lane ran, because the lane's rehearsal refuses an applied migration
+that changed or vanished (proven on a copy: 011 "modified after being applied",
+012/015/016 "absent from the discovered migrations").
+
+The re-record, per host, on the LIVE database with the old jar still running:
+`sqlite3 .backup` into `/root/hohenheim-rerecord-20260930/hohenheim.db`, then
+`rerecord.sql` beside it (one transaction: delete the 012/015/016/017 rows,
+set 011's name to "Review hardening" and its checksum to the merged digest,
+each guarded by the old name or checksum; 5 changes). A fresh schema from the
+old jar and from the new one carry identical `sites`, `instances` and
+`install_media_fetches`, so the rewritten ledger describes the schema exactly.
+Rehearsed locally on a copy of each database first (green, 4 framework
+migrations), then `tools/deploy-host.sh <target> <jar>`.
+
+starfleet: rehearsal green, applied the 4 framework migrations
+(content store, comment threads, share links, comment record key), healthy
+after both restarts, `zenit-dev deployed` current except hawkeye (another
+session's unpushed local commit; the jar is the pushed head). Verified: SOA
+from @starfleet.life, apex and www 200, `/admin` 302 to `/login` for a browser.
+Preflight `/root/hohenheim-preflight-20260930-113434/`.
+
+daystrom: the same, healthy after both restarts, nightstrom still enrolled, no
+error in the journal. Preflight `/root/hohenheim-preflight-20260930-113824/`.
+
+ROLLBACK needs the PRE-re-record database, not the preflight one: the rollback
+jar (a71787e8) expects the separate 011-017 rows. Stop the service, restore
+`/root/hohenheim-rerecord-20260930/hohenheim.db`, then
+`tools/deploy-host.sh --rollback <target> --preflight <preflight dir>`.
+
+Pins stay at 010: test deploys never raise the mark (procedure step 8).
