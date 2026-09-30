@@ -7,10 +7,9 @@ import be.elevenways.zenit.common.session.SessionToken;
 import be.elevenways.zenit.common.flash.FlashLevel;
 import be.elevenways.zenit.server.flash.Flash;
 import be.elevenways.zenit.test.support.EndpointConduit;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import be.elevenways.zenit.test.support.FlashHandoff;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.junit.jupiter.api.Test;
-
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -60,11 +59,11 @@ class SpamserviceAdminBrowserTest extends HohenheimTestBase {
     /** App-owned Spamservice pages leave flash extraction to the CMS dispatch. */
     @Test
     void appOwnedSpamservicePageRendersThePendingFlash() throws Exception {
-        Session session = Zenit.getSessionStore().get(SessionToken.of(sessionToken));
-        assertThat(session).isNotNull();
+        Session session = storedSession();
         // The admin session is shared by the whole JVM, but the base drains its pending flash before each test, so
         // nothing another test left untaken leaks in and the one notice stashed here is all that waits.
-        assertThat(pendingFlash()).as("the base drained the shared session before this test").isNull();
+        assertThat(FlashHandoff.pending(storedSession()))
+            .as("the base drained the shared session before this test").isZero();
         // Stashed the way an untabbed full-page request of this session does, never by writing its layout.
         Flash.stash(EndpointConduit.fullPageRequest().withSession(session),
             Microcopy.of("saved").withFilter("scope", "settings"), FlashLevel.ERROR);
@@ -76,16 +75,13 @@ class SpamserviceAdminBrowserTest extends HohenheimTestBase {
         assertThat(response.body())
             .as("the app-owned page must render the centrally injected flash")
             .contains("data-flash-toast");
-        // Flash.take removes the attribute outright once its last bucket is taken, so empty means null.
-        assertThat(pendingFlash()).as("rendering consumed the one-shot flash").isNull();
+        assertThat(FlashHandoff.pending(storedSession())).as("rendering consumed the one-shot flash").isZero();
     }
 
-    /**
-     * The session's pending flash; the render that shows it took it before its response was written.
-     */
-    private static @Nullable Map<String, String> pendingFlash() {
+    /** The admin session as the store holds it now, looked up afresh so a render's writes are seen. */
+    private static @NonNull Session storedSession() {
         Session session = Zenit.getSessionStore().get(SessionToken.of(sessionToken));
         assertThat(session).as("the session survives the render").isNotNull();
-        return session.get(Flash.PENDING_BY_TAB);
+        return session;
     }
 }
