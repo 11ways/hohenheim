@@ -143,7 +143,7 @@ class SiteLifecycleTest extends HohenheimTestBase {
 
         // The success toast rides the SESSION the browser shares, so pop it (proving the
         // outcome was reported) before asserting on the next render's content.
-        assertThat(popFlash()).as("the delete reports itself as a toast").isNotNull()
+        assertThat(popFlash(response)).as("the delete reports itself as a toast").isNotNull()
             .extracting(flash -> flash.message().key()).isEqualTo("deleted");
 
         // One list render proves both the live site is listed and the soft-deleted one is

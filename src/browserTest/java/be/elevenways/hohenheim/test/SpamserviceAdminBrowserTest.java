@@ -4,9 +4,10 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.session.SessionToken;
-import be.elevenways.zenit.common.flash.FlashEncoding;
 import be.elevenways.zenit.common.flash.FlashLevel;
 import be.elevenways.zenit.server.flash.Flash;
+import be.elevenways.zenit.test.support.EndpointConduit;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.Test;
 
@@ -62,9 +63,11 @@ class SpamserviceAdminBrowserTest extends HohenheimTestBase {
     void appOwnedSpamservicePageRendersThePendingFlash() throws Exception {
         Session session = Zenit.getSessionStore().get(SessionToken.of(sessionToken));
         assertThat(session).isNotNull();
-        session.set(Flash.PENDING_BY_TAB, Map.of(Flash.UNTABBED,
-            FlashEncoding.encode(Microcopy.of("saved").withFilter("scope", "settings"),
-                FlashLevel.ERROR, "spamservice-page")));
+        // The admin session is shared by the whole class run, so other tests' untaken notices may already wait.
+        Map<String, String> before = pendingCopy();
+        // Stashed the way an untabbed full-page request of this session does, never by writing its layout.
+        Flash.stash(EndpointConduit.fullPageRequest().withSession(session),
+            Microcopy.of("saved").withFilter("scope", "settings"), FlashLevel.ERROR);
         Zenit.getSessionStore().save(session);
 
         var response = adminGet("/admin/spamservice");
@@ -73,7 +76,14 @@ class SpamserviceAdminBrowserTest extends HohenheimTestBase {
         assertThat(response.body())
             .as("the app-owned page must render the centrally injected flash")
             .contains("data-flash-toast");
-        assertThat(pendingFlash()).as("rendering consumed the one-shot flash").isNull();
+        assertThat(pendingCopy()).as("rendering consumed the one-shot flash it showed and no other")
+            .isEqualTo(before);
+    }
+
+    /** A snapshot of the session's pending flash, empty when none waits. */
+    private static @NonNull Map<String, String> pendingCopy() {
+        Map<String, String> pending = pendingFlash();
+        return pending == null ? Map.of() : Map.copyOf(pending);
     }
 
     /**

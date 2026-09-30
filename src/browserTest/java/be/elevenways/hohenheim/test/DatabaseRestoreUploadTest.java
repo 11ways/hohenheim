@@ -67,10 +67,10 @@ class DatabaseRestoreUploadTest extends HohenheimTestBase {
             HttpResponse<String> response = postMultipartFile(
                 "/databases/" + name + "/restore", "dump", name + ".sql", dump);
             assertThat(response.statusCode()).isEqualTo(302);
-            assertThat(response.headers().firstValue("Location").orElse(""))
+            assertThat(landingOf(response))
                 .describedAs("the confirmation rides the session flash, so the URL stays clean")
                 .doesNotContain("restored");
-            var restoredFlash = popFlash();
+            var restoredFlash = popFlash(response);
             assertThat(restoredFlash).describedAs("the restore stashes a confirmation").isNotNull();
             assertThat(restoredFlash.message().key()).isEqualTo("restored");
 

@@ -166,8 +166,9 @@ class SiteAndDatabaseQuotaTest extends HohenheimTestBase {
 
         // 6b. The admin Trash's Restore is that same untrash: refused by the same name, the site
         //     stays trashed and the ledger stays full.
-        adminPostForm("/admin/sites/" + winner.get(SiteModel.ID) + "/action/trash_restore", "");
-        assertThat(popFlash()).as("step 6b: the refusal is toasted").isNotNull()
+        HttpResponse<String> restore = adminPostForm(
+            "/admin/sites/" + winner.get(SiteModel.ID) + "/action/trash_restore", "");
+        assertThat(popFlash(restore)).as("step 6b: the refusal is toasted").isNotNull()
             .extracting(flash -> flash.message().key()).isEqualTo("site_quota_reached");
         assertThat((Object) Models.get(SiteModel.class).find().withTrashed()
                 .where(SiteModel.ID.eq(winner.get(SiteModel.ID))).first().get(SiteModel.DELETED_AT))

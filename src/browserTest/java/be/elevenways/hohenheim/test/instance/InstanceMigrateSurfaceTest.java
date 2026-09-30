@@ -13,8 +13,8 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.action.RowAction;
-import be.elevenways.zenit.common.flash.FlashEncoding;
 import be.elevenways.zenit.common.flash.FlashLevel;
+import be.elevenways.zenit.common.flash.FlashNotice;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -219,10 +219,10 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
      * the two refusals it can meet (the same host, an ineligible other host) are told
      * apart by the name each carries, not by a status code both shapes share.
      *
-     * The flash is read out of the SESSION rather than off the redirect's landing page:
-     * the session bucket IS what this lane produces, so asserting it keeps the
-     * refusal-vs-success distinction under test independently of the rendering half
-     * (which zenitcms:record-tabs now performs for every app-owned subpage).
+     * The flash is taken the way the redirect's own Location would take it, rather than off
+     * the landing page's markup: the handed-off session message IS what this lane produces,
+     * so asserting it keeps the refusal-vs-success distinction under test independently of
+     * the rendering half (which zenitcms:record-tabs now performs for every app-owned subpage).
      */
     @Test
     void arefusedSubmitSurfacesTheRefusalInsteadOfASuccessToast() throws Exception {
@@ -237,15 +237,15 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
             .withFailMessage("step 1: the refused submit must answer with the lane's"
                 + " post-redirect-get, never an error page (HTTP %s)", sameHost.statusCode())
             .isIn(302, 303);
-        FlashEncoding.Decoded sameHostFlash = popFlash();
+        FlashNotice sameHostFlash = popFlash(sameHost);
         assertThat(sameHostFlash)
             .withFailMessage("step 1: the refused submit stashed no flash at all -- the"
                 + " operator would see the page reload as if the move had happened")
             .isNotNull();
-        assertThat(sameHostFlash.level())
-            .withFailMessage("step 1: a refused migration reported level %s -- anything"
-                + " but ERROR reads as a success", sameHostFlash.level())
-            .isEqualTo(FlashLevel.ERROR);
+        assertThat(sameHostFlash.variant())
+            .withFailMessage("step 1: a refused migration reported variant %s -- anything"
+                + " but ERROR reads as a success", sameHostFlash.variant())
+            .isEqualTo(FlashLevel.ERROR.variant());
         assertThat(sameHostFlash.message().key())
             .withFailMessage("step 1: the flash must NAME the refusal (found '%s')",
                 sameHostFlash.message().key())
@@ -265,10 +265,10 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
             .withFailMessage("step 2: the refused submit must answer with the lane's"
                 + " post-redirect-get (HTTP %s)", other.statusCode())
             .isIn(302, 303);
-        FlashEncoding.Decoded otherFlash = popFlash();
+        FlashNotice otherFlash = popFlash(other);
         assertThat(otherFlash).as("step 2: the second refusal stashed a flash too").isNotNull();
-        assertThat(otherFlash.level())
-            .as("step 2: also as an ERROR").isEqualTo(FlashLevel.ERROR);
+        assertThat(otherFlash.variant())
+            .as("step 2: also as an ERROR").isEqualTo(FlashLevel.ERROR.variant());
         assertThat(otherFlash.message().key())
             .withFailMessage("step 2: and named as the ADMISSION refusal, so the operator"
                 + " learns what to fix (found '%s')", otherFlash.message().key())

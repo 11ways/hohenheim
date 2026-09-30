@@ -102,7 +102,7 @@ class EnvironmentDeleteReasonTest extends HohenheimTestBase {
         assertThat(refused.statusCode()).as("step 4: the refusal redirects back").isEqualTo(302);
         assertThat(Models.get(EnvironmentModel.class).findById(environmentId))
             .as("step 4: the environment was not deleted").isNotNull();
-        var flash = popFlash();
+        var flash = popFlash(refused);
         assertThat(flash).as("step 4: the operator gets an error toast").isNotNull();
         assertThat(resolve(flash.message())).as("step 4: naming the holder").contains(KEY);
 

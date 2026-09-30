@@ -101,7 +101,7 @@ class CertificateAuthorityTest extends HohenheimTestBase {
             .describedAs("the request form answers with its error redirect")
             .isIn(302, 303);
         // The refusal rides the SESSION flash, never the redirect URL.
-        var refusal = popFlash();
+        var refusal = popFlash(response);
         assertThat(refusal)
             .describedAs("a refused request must stash a flash naming the refusal")
             .isNotNull();

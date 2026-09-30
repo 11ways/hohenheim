@@ -289,15 +289,15 @@ class ManagePanelTest extends HohenheimTestBase {
         HttpResponse<String> fromManage = operatorPost("/instances/" + appAId + "/deploy",
             "_return=" + java.net.URLEncoder.encode(manageTarget, java.nio.charset.StandardCharsets.UTF_8));
         assertThat(fromManage.statusCode()).isIn(302, 303);
-        assertThat(fromManage.headers().firstValue("Location")).hasValue(manageTarget);
+        assertThat(landingOf(fromManage)).isEqualTo(manageTarget);
 
         // A forged _return can never open-redirect: unsafe values fall back
         // to the admin page.
         HttpResponse<String> forged = operatorPost("/instances/" + appAId + "/deploy",
             "_return=" + java.net.URLEncoder.encode("https://evil.example/", java.nio.charset.StandardCharsets.UTF_8));
         assertThat(forged.statusCode()).isIn(302, 303);
-        assertThat(forged.headers().firstValue("Location"))
-            .hasValue("/admin/instances/" + appAId + "/page/deployments");
+        assertThat(landingOf(forged))
+            .isEqualTo("/admin/instances/" + appAId + "/page/deployments");
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, operatorId, InstanceModel.MODEL_ID,
                 appAId, HohenheimAccess.MANAGE);

@@ -10,8 +10,8 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
-import be.elevenways.zenit.common.flash.FlashEncoding;
 import be.elevenways.zenit.common.flash.FlashLevel;
+import be.elevenways.zenit.common.flash.FlashNotice;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -103,12 +103,12 @@ class DeployControlSettleTest extends HohenheimTestBase {
                 "", sessionToken, csrfToken);
             assertThat(rollback.statusCode()).as("step 4: the refusal is a redirect, not a 422 page")
                 .isIn(302, 303);
-            assertThat(rollback.headers().firstValue("Location").orElse(""))
+            assertThat(landingOf(rollback))
                 .as("step 4: back to the application's Deployments tab")
                 .endsWith("/instances/" + applicationId + "/page/deployments");
-            FlashEncoding.Decoded flash = popFlash();
+            FlashNotice flash = popFlash(rollback);
             assertThat(flash).as("step 4: the outcome rides the flash").isNotNull();
-            assertThat(flash.level()).as("step 4: as an error").isEqualTo(FlashLevel.ERROR);
+            assertThat(flash.variant()).as("step 4: as an error").isEqualTo(FlashLevel.ERROR.variant());
             assertThat(flash.message().key()).as("step 4: in the release engine's own words")
                 .isEqualTo("release_no_rollback_target");
             assertThat(Models.get(ReleaseOperationModel.class).find()

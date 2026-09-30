@@ -537,9 +537,9 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
                 .doesNotContain(PREFIX + "unapproved");
             HttpResponse<String> missing = tenantPost(createUrl,
                 "template_id=999999999&name=" + PREFIX + "sneaky");
-            assertThat(missing.headers().firstValue("Location").orElse(""))
+            assertThat(landingOf(missing))
                 .as("step 8: an unapproved id answers exactly like an id that does not exist")
-                .isEqualTo(unapproved.headers().firstValue("Location").orElse(""));
+                .isEqualTo(landingOf(unapproved));
             assertThat(Models.get(InstanceModel.class).find()
                     .where(InstanceModel.NAME.eq(PREFIX + "sneaky")).count())
                 .as("step 8: nothing landed").isZero();
@@ -676,7 +676,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
      * it stashed none. The refusal rides the session flash, never the redirect URL.
      */
     private static String refusalKeyOf(HttpResponse<String> response) {
-        var flash = popFlash(sessionA);
+        var flash = popFlash(response, sessionA);
         return flash == null ? "" : flash.message().key();
     }
     /**

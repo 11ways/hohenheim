@@ -383,7 +383,7 @@ class DnsListEditingTest extends HohenheimTestBase {
         assertThat(deleted.statusCode()).as("step 2: the delete redirects").isIn(302, 303);
         assertThat(Models.get(DnsRecordModel.class).findById(recordId))
             .as("step 2: the record is gone").isNull();
-        String back = deleted.headers().firstValue("Location").orElse("");
+        String back = landingOf(deleted);
         assertThat(path(back))
             .as("step 2: and the operator is back on the zone's Records tab")
             .isEqualTo(tab);
