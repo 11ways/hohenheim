@@ -12781,5 +12781,7 @@
   "setting_public_port_window": {
     "text": "The public port window must start above 1024 and end at or below {$max}",
     "scope": "violations"
-  }
+  },
+  "settings.hohenheim.security.never_ban.label": "Never ban",
+  "settings.hohenheim.security.never_ban.help": "IPs, CIDR ranges and hostnames that are never banned, automatically or manually; add your own operator addresses here. Hostnames resolve in the background and a resolved IPv6 address protects its whole /64."
 }

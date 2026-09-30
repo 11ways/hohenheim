@@ -113,6 +113,15 @@ class AdminPagesTest extends HohenheimTestBase {
             .as("the never-ban list is a chip input").isEqualTo(1);
         assertThat(page.locator(neverBan + " zf-array").count())
             .as("and never the rows editor").isZero();
+        // 1. The never-ban label and help come from Hohenheim's own catalog: a key no catalog declares
+        //    renders marked data-unresolved, showing only the code fallback.
+        for (String part : new String[] {"label", "help"}) {
+            String copy = "zn-microcopy[key='settings.hohenheim.security.never_ban." + part + "']";
+            assertThat(page.locator(copy).count())
+                .as("step 1: the never-ban " + part + " renders its catalog key").isGreaterThan(0);
+            assertThat(page.locator(copy + "[data-unresolved]").count())
+                .as("step 1: and the never-ban " + part + " resolves, never data-unresolved").isZero();
+        }
         page.click(neverBan + " .pl-select-field");
         String chipInput = "he-bottom .pl-select-popup[data-open] .pl-select-search input";
         for (String entry : new String[] {"203.0.113.7", "198.51.100.0/24", "remove.example"}) {
