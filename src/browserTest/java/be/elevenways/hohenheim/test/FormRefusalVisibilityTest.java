@@ -70,7 +70,8 @@ class FormRefusalVisibilityTest extends HohenheimTestBase {
         var commaDomains = adminPostForm("/admin/certificates-request",
             "domains=a.example.com%2Cb.example.com");
         assertThat(commaDomains.statusCode()).isEqualTo(302);
-        var followUp = httpGet("/admin/certificates-request", sessionToken);
+        assertThat(landingOf(commaDomains)).isEqualTo("/admin/certificates-request");
+        var followUp = httpGet(commaDomains.headers().firstValue("Location").orElseThrow(), sessionToken);
         assertThat(followUp.statusCode()).isEqualTo(200);
         assertThat(followUp.body())
             .as("the refusal flash renders on the page the redirect lands on")

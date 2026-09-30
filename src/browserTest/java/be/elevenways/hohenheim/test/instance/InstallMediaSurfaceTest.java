@@ -531,7 +531,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
             "name=media-surf-iso&url=file:///etc/passwd", sessionToken, csrfToken);
         assertThat(badUrl.statusCode())
             .as("step 4: the refusal is a redirect back to the tab").isIn(302, 303);
-        var flash = popFlash();
+        var flash = popFlash(badUrl);
         assertThat(flash)
             .as("step 4: a refusal flash was stashed").isNotNull();
         assertThat(flash.message().key())
@@ -549,7 +549,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
             assertThat(privateFetch.statusCode())
                 .as("step 4b: a private-address fetch redirects back to the tab: " + privateUrl)
                 .isIn(302, 303);
-            var privateFlash = popFlash();
+            var privateFlash = popFlash(privateFetch);
             assertThat(privateFlash)
                 .as("step 4b: a refusal flash was stashed for " + privateUrl).isNotNull();
             assertThat(privateFlash.message().key())
@@ -565,7 +565,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
             "name=held-iso", sessionToken, csrfToken);
         assertThat(inUse.statusCode())
             .as("step 5: the in-use refusal redirects back to the tab").isIn(302, 303);
-        var inUseFlash = popFlash();
+        var inUseFlash = popFlash(inUse);
         assertThat(inUseFlash)
             .as("step 5: an in-use refusal flash was stashed").isNotNull();
         assertThat(inUseFlash.message().key())

@@ -87,13 +87,12 @@ class NotificationAdminTest extends HohenheimTestBase {
         Integer id = row.get(NotificationChannelModel.ID);
 
         var test = adminPostForm("/admin/notifications/" + id + "/action/test_channel", "");
-        assertThat(test.statusCode()).isIn(200, 302, 303);
-        // The failure toast rides the SESSION (popped on the next render); the
-        // redirect URL stays clean.
-        String location = test.headers().firstValue("Location").orElse("");
-        assertThat(location).doesNotContain("_flash=");
+        assertThat(test.statusCode()).isIn(302, 303);
+        // The failure toast rides the SESSION; the redirect hands it off to the load of
+        // its own Location, so the test follows that Location to see it.
+        assertThat(landingOf(test)).isEqualTo("/admin/notifications/" + id);
 
-        navigateToApp("/admin/notifications/" + id);
+        navigateToApp(test.headers().firstValue("Location").orElseThrow());
         waitForHydration();
         String content = page.content();
         assertThat(content).contains("Test delivery failed");

@@ -371,7 +371,7 @@ class AdminPagesTest extends HohenheimTestBase {
         var response = adminPostForm("/admin/certificates-request",
             "nice_name=wildcard&domains=*.example.test&challenge_type=http&dns_mode=manual");
         assertThat(response.statusCode()).isIn(302, 303);
-        var wildcardRefusal = popFlash();
+        var wildcardRefusal = popFlash(response);
         assertThat(wildcardRefusal).describedAs("the refusal rides the session flash").isNotNull();
         assertThat(wildcardRefusal.message().key()).isEqualTo("wildcard_requires_dns");
 
@@ -380,7 +380,7 @@ class AdminPagesTest extends HohenheimTestBase {
             "nice_name=wildcard&domains=&domains=example.test&domains=*.example.test"
                 + "&challenge_type=http&dns_mode=manual");
         assertThat(response.statusCode()).isIn(302, 303);
-        var repeatedRefusal = popFlash();
+        var repeatedRefusal = popFlash(response);
         assertThat(repeatedRefusal).describedAs("the refusal rides the session flash").isNotNull();
         assertThat(repeatedRefusal.message().key()).isEqualTo("wildcard_requires_dns");
 

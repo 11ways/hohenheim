@@ -242,10 +242,10 @@ class DnsCentralEditTest extends HohenheimTestBase {
         var created = adminPostForm("/admin/dns-zones/" + zoneId + "/page/records",
             "name=api&type=CNAME&value=owned.example.&ttl=&priority=&weight=&port=&enabled=true");
         assertThat(created.statusCode()).isEqualTo(302);
-        assertThat(created.headers().firstValue("Location").orElse(""))
+        assertThat(landingOf(created))
             .describedAs("the confirmation rides the session flash, so the URL stays clean")
             .doesNotContain("saved");
-        var savedFlash = popFlash();
+        var savedFlash = popFlash(created);
         assertThat(savedFlash).describedAs("the save stashes a confirmation flash").isNotNull();
         assertThat(savedFlash.message().key()).isEqualTo("edit_saved");
 
@@ -261,16 +261,16 @@ class DnsCentralEditTest extends HohenheimTestBase {
         stub.body = "";
         var updated = adminPostForm("/admin/dns-zones/" + zoneId + "/page/records",
             "record_id=6&name=api&type=CNAME&value=other.example.&enabled=true");
-        assertThat(updated.headers().firstValue("Location").orElse("")).doesNotContain("saved");
-        assertThat(popFlash()).isNotNull()
+        assertThat(landingOf(updated)).doesNotContain("saved");
+        assertThat(popFlash(updated)).isNotNull()
             .extracting(flash -> flash.message().key()).isEqualTo("edit_saved");
         assertThat(stub.calls.get(0).path()).isEqualTo("/api/dns/zones/central.example/records/6");
 
         stub.calls.clear();
         var deleted = adminPostForm("/admin/dns-zones/" + zoneId + "/page/records",
             "action=delete&record_id=6");
-        assertThat(deleted.headers().firstValue("Location").orElse("")).doesNotContain("saved");
-        assertThat(popFlash()).isNotNull()
+        assertThat(landingOf(deleted)).doesNotContain("saved");
+        assertThat(popFlash(deleted)).isNotNull()
             .extracting(flash -> flash.message().key()).isEqualTo("edit_saved");
         assertThat(stub.calls.get(0).path()).isEqualTo("/api/dns/zones/central.example/records/6/delete");
 
@@ -317,13 +317,13 @@ class DnsCentralEditTest extends HohenheimTestBase {
         stub.body = "{\"error\":\"validation\",\"field\":\"value\",\"key\":\"dns_record_duplicate\"}";
         var refused = adminPostForm("/admin/dns-zones/" + zoneId + "/page/records",
             "name=www&type=A&value=198.51.100.9&enabled=true");
-        String location = refused.headers().firstValue("Location").orElse("");
+        String location = landingOf(refused);
         assertThat(location)
             .describedAs("the refusal rides the session flash, never the URL")
             .doesNotContain("error=");
         // The violation KEY round-trips: both instances ship the same catalogs, so the
         // toast resolves in the reader's own locale rather than the peer's.
-        assertThat(popFlash()).isNotNull()
+        assertThat(popFlash(refused)).isNotNull()
             .extracting(flash -> flash.message().key()).isEqualTo("dns_record_duplicate");
 
         // A read-only zone (trashed, or under a trashed record) still reads its owner's records, but offers no add,

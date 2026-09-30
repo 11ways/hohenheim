@@ -54,9 +54,9 @@ class SiteCloneNameTest extends HohenheimTestBase {
         // 2. A site that is trashed still holds its slug (the constraint spans every row), yet the
         //    list, and every plain read, no longer shows it.
         Integer retired = createRedirectSite("Retired Name");
-        assertThat(adminPostForm("/admin/sites/" + retired + "/delete", confirmed("")).statusCode())
-            .as("step 2: the site is deleted").isIn(200, 302, 303);
-        popFlash();
+        HttpResponse<String> deleted = adminPostForm("/admin/sites/" + retired + "/delete", confirmed(""));
+        assertThat(deleted.statusCode()).as("step 2: the site is deleted").isIn(200, 302, 303);
+        popFlash(deleted);
         assertThat((Object) site("Retired Name").get(SiteModel.DELETED_AT)).as("step 2: softly").isNotNull();
         assertThat(Models.get(SiteModel.class).find().where(SiteModel.NAME.eq("Retired Name")).first())
             .as("step 2: a plain read does not see it").isNull();

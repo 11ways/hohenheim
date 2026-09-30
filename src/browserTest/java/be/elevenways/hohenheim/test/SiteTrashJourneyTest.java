@@ -8,8 +8,8 @@ import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.quota.SiteQuota;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.common.flash.FlashNotice;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.flash.FlashEncoding;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -164,7 +164,7 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
         assertThat(refused.statusCode()).as("step 8: the refused restore answers back to the page").isIn(302, 303);
         assertThat((Object) stored(cedar).get(SiteModel.DELETED_AT)).as("step 8: the site stays in the Trash")
             .isNotNull();
-        FlashEncoding.Decoded toast = popFlash();
+        FlashNotice toast = popFlash(refused);
         assertThat(toast).as("step 8: the refusal rides the session flash").isNotNull();
         assertThat(toast.message().key()).as("step 8: as the route-conflict refusal, never a generic failure")
             .isEqualTo("restore_route_conflict");
@@ -174,10 +174,10 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
             .as("step 8: and the site holding it").contains(PREFIX + "birch");
 
         // 9. The bulk restore refuses the same way, by name.
-        adminPostForm("/admin/sites/bulk/trash_restore", "ids=" + cedar);
+        HttpResponse<String> bulk = adminPostForm("/admin/sites/bulk/trash_restore", "ids=" + cedar);
         assertThat((Object) stored(cedar).get(SiteModel.DELETED_AT)).as("step 9: the bulk restore left it trashed")
             .isNotNull();
-        FlashEncoding.Decoded bulkToast = popFlash();
+        FlashNotice bulkToast = popFlash(bulk);
         assertThat(bulkToast).as("step 9: the bulk refusal rides the flash too").isNotNull();
         assertThat(bulkToast.message().key()).as("step 9: with the same named refusal")
             .isEqualTo("restore_route_conflict");

@@ -33,14 +33,12 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import be.elevenways.zenit.common.session.SessionToken;
-import be.elevenways.zenit.common.flash.FlashEncoding;
-import be.elevenways.zenit.server.flash.Flash;
+import be.elevenways.zenit.common.flash.FlashNotice;
+import be.elevenways.zenit.test.support.FlashHandoff;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Browser test base for Hohenheim. Authenticates via zenit-auth: seeds an admin user and mints
@@ -167,32 +165,30 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
     }
 
     /**
-     * Pop the admin session's pending flash toast, the way a page render does.
+     * Take the admin session's flash toast that loading {@code answer}'s redirect would show.
      *
      * AIDEV-NOTE: outcome messages ride the SESSION, never the redirect URL -- the
-     * seven query parameters that used to carry them are deleted. A test that asserts
-     * on a Location header for an error/saved/restored message is asserting the old
-     * channel and must read the flash instead.
+     * seven query parameters that used to carry them are deleted. A redirect hands the
+     * stashed message off under a one-shot token on its Location, so a test follows that
+     * Location: it takes the message through Flash.take (FlashHandoff), which keeps the
+     * tests off the session layout, and compares landingOf(answer) for the destination.
      */
-    protected static FlashEncoding.@Nullable Decoded popFlash() {
-        return popFlash(sessionToken);
+    protected static @Nullable FlashNotice popFlash(@NonNull HttpResponse<?> answer) {
+        return popFlash(answer, sessionToken);
     }
 
-    /** Pop the pending flash toast of an ARBITRARY session (a tenant's, not the admin's). */
-    protected static FlashEncoding.@Nullable Decoded popFlash(String token) {
+    /** Take the flash toast of an ARBITRARY session (a tenant's, not the admin's) that {@code answer} leads to. */
+    protected static @Nullable FlashNotice popFlash(@NonNull HttpResponse<?> answer, @NonNull String token) {
         Session session = Zenit.getSessionStore().get(SessionToken.of(token));
         if (session == null) {
             return null;
         }
-        Map<String, String> pending = session.get(Flash.PENDING_BY_TAB);
-        if (pending == null || !pending.containsKey(Flash.UNTABBED)) {
-            return null;
-        }
-        LinkedHashMap<String, String> remaining = new LinkedHashMap<>(pending);
-        String encoded = remaining.remove(Flash.UNTABBED);
-        session.set(Flash.PENDING_BY_TAB, remaining);
-        Zenit.getSessionStore().save(session);
-        return FlashEncoding.decode(encoded);
+        return FlashHandoff.take(session, answer.headers().firstValue("Location").orElse(null));
+    }
+
+    /** @return the redirect's Location without its flash handoff token, or "" without a Location */
+    protected static @NonNull String landingOf(@NonNull HttpResponse<?> answer) {
+        return answer.headers().firstValue("Location").map(FlashHandoff::landing).orElse("");
     }
 
     // -- shared HTTP transport ------------------------------------------------
