@@ -87,6 +87,7 @@ class MicrocopyCatalogParsesTest {
 
     private static void assertSymmetric(TreeSet<String> english, TreeSet<String> dutch) {
         assertThat(english).as("the en catalog was actually loaded").hasSizeGreaterThan(1000);
+        assertThat(dutch).as("the nl catalog was actually loaded").hasSizeGreaterThan(1000);
 
         TreeSet<String> untranslated = new TreeSet<>(english);
         untranslated.removeAll(dutch);
