@@ -541,8 +541,8 @@ if [ "$DRY_RUN" = "no" ]; then
     APPLIED="$(comm -13 <(printf '%s\n' "$MIGRATIONS_BEFORE" | sort) <(printf '%s\n' "$MIGRATIONS_AFTER" | sort) | /usr/bin/grep . || true)"
     if [ -n "$APPLIED" ]; then
         printf '%s\n' "$APPLIED" | sed 's/^/   applied: /'
-        info "pin these: java -jar <new jar> --migration-checksums, paste the lines into"
-        info "src/browserTest/resources/migration-pins.txt and raise MigrationIntegrityTest.DEPLOYED_THROUGH"
+        info "a PRODUCTION install that applied hohenheim migrations pins them (java -jar <new jar>"
+        info "--migration-checksums); a test install never does (docs/deploy-starfleet.md, procedure step 8)"
     else
         info "no migrations applied by this deploy"
     fi
