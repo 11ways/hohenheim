@@ -1,7 +1,10 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.schedule.ScheduleRunView;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.cms.InstanceScheduleRunResource;
+import be.elevenways.hohenheim.server.cms.InstanceScheduleStepsPage;
 import be.elevenways.hohenheim.server.cms.ManageInstanceScheduleResource;
 import be.elevenways.hohenheim.server.cms.ManageInstanceScheduleStepResource;
 import be.elevenways.hohenheim.test.ApiSupport;
@@ -14,6 +17,9 @@ import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.schema.ColumnSpec;
+import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -21,12 +27,16 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
+import be.elevenways.zenit.common.task.record.RecordScheduleStepRunModel;
+import be.elevenways.zenit.common.task.record.StepStatus;
+import be.elevenways.zenit.server.task.record.RecordSchedules;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -47,6 +57,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class InstanceScheduleSurfaceTest extends HohenheimTestBase {
 
     private static final String PREFIX = "schedsurf-";
+
+    /** A step action nothing registers: the step ends unrun deterministically, without a daemon. */
+    private static final String UNKNOWN_ACTION = "hohenheim:schedsurf_no_such_action";
 
     private static Integer ownerId;
     private static Integer viewerId;
@@ -215,6 +228,71 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
         } finally {
             RecordGrants.grant(GrantSubjectType.USER, ownerId, InstanceModel.MODEL_ID, instanceId,
                 HohenheimAccess.MANAGE, true);
+        }
+    }
+
+    /**
+     * New runs record their steps as step-run rows and no longer write {@code step_results}: both screens that show a
+     * run's steps (the runs list column and the Steps tab) read them through {@code RecordScheduleRuns.steps}, so a
+     * new run never shows as an empty step list.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aNewRunShowsItsStepsOnBothScreens() {
+        RecordSchedules schedules = new RecordSchedules(Db.currentOrDefault());
+        Model scheduleModel = Models.get(RecordScheduleModel.class);
+        Row schedule = scheduleModel.createEmptyRow();
+        schedule.set(RecordScheduleModel.MODEL, InstanceModel.MODEL_ID.toString());
+        schedule.set(RecordScheduleModel.RECORD_ID, String.valueOf(instanceId));
+        schedule.set(RecordScheduleModel.NAME, PREFIX + "steps-read");
+        schedule.set(RecordScheduleModel.CRON, "0 4 * * *");
+        schedule.set(RecordScheduleModel.ENABLED, true);
+        schedule.set(RecordScheduleModel.RUN_AS, ownerId.longValue());
+        scheduleModel.save(schedule);
+        int readScheduleId = schedule.get(RecordScheduleModel.ID);
+
+        try {
+            Row step = Models.get(RecordScheduleStepModel.class).createEmptyRow();
+            step.set(RecordScheduleStepModel.SCHEDULE_ID, readScheduleId);
+            step.set(RecordScheduleStepModel.POSITION, 1);
+            step.set(RecordScheduleStepModel.ACTION, UNKNOWN_ACTION);
+            Models.get(RecordScheduleStepModel.class).save(step);
+
+            // 1. A run fired now: its one step ends unrun (no such action), recorded as a step-run row only.
+            Row run = schedules.runNow(readScheduleId);
+            assertThat(run).as("step 1: the schedule ran").isNotNull();
+            assertThat(run.get(RecordScheduleRunModel.STEP_RESULTS))
+                .as("step 1: a new run writes no step_results map, so a reader of it would show nothing")
+                .isNull();
+            Row stepRun = Models.get(RecordScheduleStepRunModel.class).find()
+                .where(RecordScheduleStepRunModel.RUN_ID.eq((Integer) run.get(RecordScheduleRunModel.ID))).first();
+            assertThat(stepRun).as("step 1: the step's outcome is a step-run row").isNotNull();
+            String status = stepRun.get(RecordScheduleStepRunModel.STATUS);
+            String error = stepRun.get(RecordScheduleStepRunModel.ERROR);
+            assertThat(StepStatus.fromKey(status).isOpen()).as("step 1: the step ended").isFalse();
+            assertThat(error).as("step 1: and says why").isNotBlank();
+            String expected = "1:" + UNKNOWN_ACTION + "=" + status + " (" + error + ")";
+
+            // 2. The runs list shows the step's verdict in its steps column.
+            InstanceScheduleRunResource runResource = new InstanceScheduleRunResource();
+            ColumnSpec stepsColumn = runResource.tableSpec().column("steps");
+            assertThat(stepsColumn).as("step 2: the runs list declares a steps column").isNotNull();
+            assertThat(runResource.cellValue(run, stepsColumn)).as("step 2: the runs list shows the step's verdict")
+                .isEqualTo(expected);
+
+            // 3. The schedule's Steps tab shows the same verdict for that run.
+            Conduit conduit = TenantConduits.stubFor(new UserPrincipal(ownerId, "Schedule Owner"));
+            Map<String, Object> vars = (Map<String, Object>) new InstanceScheduleStepsPage()
+                .render(conduit, AccessContext.of(conduit), scheduleModel.findById(readScheduleId)).get();
+            List<ScheduleRunView> runs = (List<ScheduleRunView>) vars.get("runs");
+            int runId = run.get(RecordScheduleRunModel.ID);
+            assertThat(runs).as("step 3: the Steps tab lists the run with its steps")
+                .filteredOn(view -> view.id() == runId)
+                .singleElement()
+                .extracting(ScheduleRunView::summary)
+                .isEqualTo(expected);
+        } finally {
+            schedules.deleteSchedule(readScheduleId);
         }
     }
 
