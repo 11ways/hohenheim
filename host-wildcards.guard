@@ -1,0 +1,5 @@
+Presence of this file opts the project into the protoblast plugin's checkHostWildcards
+compile gate (production Java matching a host wildcard by hand -- a "*." or "**." literal in a
+startsWith, contains or replace -- instead of through HostPattern, THE host grammar: "*." is
+exactly one label, "**." one or more; two private matchers once read the same pattern with
+different depths; see CheckHostWildcardsTask). HostPattern itself is exempt by the rule.

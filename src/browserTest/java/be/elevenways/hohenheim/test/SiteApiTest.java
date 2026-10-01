@@ -61,7 +61,7 @@ class SiteApiTest extends HohenheimTestBase {
         // The operator's catch-all: a live wildcard row nobody has a grant on, so every
         // free name under the zone is the operator's namespace.
         catchAllSiteId = site(PREFIX + "catch-all", true);
-        domain(catchAllSiteId, "*." + ZONE, SiteDomainModel.MATCH_WILDCARD);
+        domain(catchAllSiteId, "**." + ZONE, SiteDomainModel.MATCH_WILDCARD);
 
         int adminId = AuthModels.users().find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first().get(UserModel.ID);
@@ -329,7 +329,7 @@ class SiteApiTest extends HohenheimTestBase {
         assertThat(codeOf(tenant.body())).as("step 1: the neutral sentence")
             .isEqualTo("hostname_unavailable");
         assertThat(tenant.body()).as("step 1: the holder is not named")
-            .doesNotContain(PREFIX + "catch-all").doesNotContain("*." + ZONE);
+            .doesNotContain(PREFIX + "catch-all").doesNotContain("**." + ZONE);
 
         // 2. The SAME claim by an admin on the tenant's site is refused with the detailed
         //    overlap sentence: the route was never free, the reader may just know why.

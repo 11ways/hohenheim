@@ -5,15 +5,17 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPins;
-import be.elevenways.hohenheim.server.process.BoundedProcess;
 import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import java.time.Duration;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
@@ -125,12 +127,16 @@ public final class IncusTrust {
             directory = Files.createTempDirectory("hohenheim-incus-identity");
             Path key = directory.resolve("client.key");
             Path cert = directory.resolve("client.crt");
-            BoundedProcess.Result result = BoundedProcess.execute(List.of("openssl", "req",
-                "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1",
-                "-sha384", "-days", "3650", "-nodes",
-                "-subj", "/CN=" + ControllerScope.scoped(name),
-                "-keyout", key.toString(), "-out", cert.toString()),
-                null, OPENSSL_TIMEOUT_MILLIS, OPENSSL_OUTPUT_CAP_CHARS);
+            ProcessOutcome result = Subprocess.of("openssl", "req",
+                    "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1",
+                    "-sha384", "-days", "3650", "-nodes",
+                    "-subj", "/CN=" + ControllerScope.scoped(name),
+                    "-keyout", key.toString(), "-out", cert.toString())
+                .collectStdout(OPENSSL_OUTPUT_CAP_CHARS)
+                .stderrLimit(OPENSSL_OUTPUT_CAP_CHARS)
+                .timeout(Duration.ofMillis(OPENSSL_TIMEOUT_MILLIS))
+                .stopGrace(Duration.ZERO)
+                .runChecked();
             if (!result.succeeded() || !Files.exists(key) || !Files.exists(cert)) {
                 throw Violations.ofForm(violation("identity_generation_failed")
                     .withArg("detail", result.failureText()));

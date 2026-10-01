@@ -21,6 +21,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.session.SessionStore;
+import be.elevenways.zenit.server.http.HostPattern;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -166,9 +167,8 @@ final class RouteTableBuilder {
         // (*.example.com) and made renaming a site change production routing. Pattern-text
         // tie-break keeps equal-specificity ordering deterministic.
         this.wildcard.sort(Comparator
-            .comparingInt((WildcardRoute route) ->
-                WildcardHostname.literalSpecificity(route.entry().hostPattern)).reversed()
-            .thenComparing(route -> route.pattern().pattern()));
+            .comparingInt((WildcardRoute route) -> HostnamePatterns.specificity(route.pattern())).reversed()
+            .thenComparing(route -> route.pattern().text()));
 
         TlsPassthroughRoutes.Snapshot tlsSnapshot =
             this.tlsPassthroughRoutes.buildSnapshot(inputs.sites(), inputs.domainsBySite());
@@ -409,8 +409,12 @@ final class RouteTableBuilder {
                     RouteResolver.extractNamedGroups(hostname), entry));
             }
             case SiteDomainModel.MATCH_WILDCARD -> {
-                String glob = hostname.toLowerCase(Locale.ROOT);
-                this.wildcard.add(new WildcardRoute(WildcardHostname.compile(glob), entry));
+                HostPattern pattern = HostPattern.tryParse(hostname);
+                if (pattern == null || pattern.port() != null) {
+                    Blast.log("SiteDispatcher: wildcard", hostname, "is not a host pattern; it routes nothing");
+                    return false;
+                }
+                this.wildcard.add(new WildcardRoute(pattern, entry));
             }
             default -> this.exact.computeIfAbsent(hostname.toLowerCase(Locale.ROOT), k -> new ArrayList<>())
                 .add(entry);

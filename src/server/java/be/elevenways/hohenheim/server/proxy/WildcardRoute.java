@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server.proxy;
 
-import java.util.regex.Pattern;
+import be.elevenways.zenit.server.http.HostPattern;
 
-/** A glob hostname route with its pattern compiled once at load time. */
-record WildcardRoute(Pattern pattern, RouteEntry entry) {}
+/** A glob hostname route with its pattern parsed once at load time. */
+record WildcardRoute(HostPattern pattern, RouteEntry entry) {}

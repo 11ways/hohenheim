@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.net;
 
+import be.elevenways.protoblast.common.platform.PlatformSeam;
 import be.elevenways.protoblast.common.util.BlastString;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -21,6 +22,10 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * source set, because a hook on the model is the only seam EVERY writer passes -- CMS form,
  * revision restore, zone import, peer API, seeds and a bare {@code model.save} alike.
  *
+ * AIDEV-NOTE: a wildcard-tier pattern is the exception: its grammar is zenit's server-side
+ * HostPattern, the same one the dispatcher matches with, reached through {@link #PATTERNS}
+ * so that what this accepts and what routing matches cannot drift apart.
+ *
  * @author Jelle De Loecker
  */
 public final class Hostnames {
@@ -30,6 +35,19 @@ public final class Hostnames {
 
     /** RFC 1035 label ceiling. */
     public static final int MAX_LABEL_LENGTH = 63;
+
+    /** The host pattern grammar (zenit's HostPattern), installed by the server at class-load. */
+    public static final PlatformSeam<PatternGrammar> PATTERNS = PlatformSeam.required(PatternGrammar.class);
+
+    /** The host pattern grammar's answers the common side needs. */
+    public interface PatternGrammar {
+
+        /** @return whether a canonical value is an exact or wildcard host pattern naming no port */
+        boolean isPattern(@NonNull String value);
+
+        /** @return the value with a leading one-or-more wildcard label respelled to the grammar's own */
+        @NonNull String respellOneOrMoreLeading(@NonNull String value);
+    }
 
     private Hostnames() {
     }
@@ -106,15 +124,32 @@ public final class Hostnames {
      * a single-label proxy route ({@code localhost}, an internal short name) is legitimate.
      */
     public static boolean isValidLabelSequence(@Nullable String value) {
-        return isValidLabelSequence(value, false);
+        if (value == null) {
+            return false;
+        }
+        String name = normalize(value);
+        if (name.isEmpty() || name.length() > MAX_LENGTH) {
+            return false;
+        }
+        int labelStart = 0;
+        for (int i = 0; i <= name.length(); i++) {
+            if (i == name.length() || name.charAt(i) == '.') {
+                if (!isValidLabel(name, labelStart, i)) {
+                    return false;
+                }
+                labelStart = i + 1;
+            }
+        }
+        return true;
     }
 
     /**
-     * The same syntax with glob metacharacters allowed inside labels, which is what an
-     * operator-authored wildcard row legitimately stores.
+     * Whether the value is a host pattern the wildcard tier can route: {@code *} and {@code ?}
+     * inside a label, a leading {@code *.} for exactly one label or {@code **.} for one or more.
      */
     public static boolean isValidGlob(@Nullable String value) {
-        return isValidLabelSequence(value, true);
+        String name = normalize(value);
+        return !name.isEmpty() && PATTERNS.require().isPattern(name);
     }
 
     /**
@@ -122,7 +157,7 @@ public final class Hostnames {
      * least one dot and no glob (HTTP-01 cannot validate a wildcard).
      */
     public static boolean isValidHostname(@Nullable String value) {
-        if (!isValidLabelSequence(value, false)) {
+        if (!isValidLabelSequence(value)) {
             return false;
         }
         return normalize(value).indexOf('.') >= 0;
@@ -151,28 +186,8 @@ public final class Hostnames {
         return true;
     }
 
-    private static boolean isValidLabelSequence(@Nullable String value, boolean allowGlob) {
-        if (value == null) {
-            return false;
-        }
-        String name = normalize(value);
-        if (name.isEmpty() || name.length() > MAX_LENGTH) {
-            return false;
-        }
-        int labelStart = 0;
-        for (int i = 0; i <= name.length(); i++) {
-            if (i == name.length() || name.charAt(i) == '.') {
-                if (!isValidLabel(name, labelStart, i, allowGlob)) {
-                    return false;
-                }
-                labelStart = i + 1;
-            }
-        }
-        return true;
-    }
-
     /** One label of {@code name}, between {@code from} inclusive and {@code to} exclusive. */
-    private static boolean isValidLabel(@NonNull String name, int from, int to, boolean allowGlob) {
+    private static boolean isValidLabel(@NonNull String name, int from, int to) {
         int length = to - from;
         if (length == 0 || length > MAX_LABEL_LENGTH) {
             return false;
@@ -181,13 +196,12 @@ public final class Hostnames {
             char character = name.charAt(i);
             boolean alphanumeric = (character >= 'a' && character <= 'z')
                 || (character >= '0' && character <= '9');
-            boolean glob = allowGlob && (character == '*' || character == '?');
             if (character == '-') {
                 // A leading or trailing hyphen is the classic IDN/punycode spoofing hook.
                 if (i == from || i == to - 1) {
                     return false;
                 }
-            } else if (!alphanumeric && !glob) {
+            } else if (!alphanumeric) {
                 return false;
             }
         }

@@ -66,7 +66,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
     @BeforeAll
     static void seed() {
         // The two tenant sites, then the operator's catch-all over both -- the starfleet
-        // shape (site "Starfleet catch-all", domain *.starfleet.life). Grants come LAST:
+        // shape (site "Starfleet catch-all", domain **.starfleet.life). Grants come LAST:
         // the wildcard row is a system write judged owner-scoped, and two sites nobody
         // has been granted yet compare as one operator owner. The conflict scan names the
         // FIRST conflicting row in id order, so the identical row (Bob's) must be older
@@ -76,7 +76,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
         bobSiteId = site("Tenant-iso Bob", "tenant-iso-bob");
         domain(bobSiteId, "b." + ZONE, SiteDomainModel.MATCH_EXACT);
         catchAllSiteId = site("Tenant-iso catch-all", "tenant-iso-catch-all");
-        domain(catchAllSiteId, "*." + ZONE, SiteDomainModel.MATCH_WILDCARD);
+        domain(catchAllSiteId, "**." + ZONE, SiteDomainModel.MATCH_WILDCARD);
 
         aliceId = ApiSupport.user("alice-iso@hohenheim.local", "Alice Iso");
         alice = new UserPrincipal(aliceId, "Alice Iso");
@@ -143,7 +143,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
         assertThat(CertificateAuthority.authorize(tenant, List.of("a." + ZONE)))
             .as("step 5: the order is authorized and attributed to the deciding row")
             .containsEntry("a." + ZONE, aliceDomainId);
-        for (String foreign : List.of("zzz." + ZONE, "*." + ZONE, "b." + ZONE)) {
+        for (String foreign : List.of("zzz." + ZONE, "**." + ZONE, "b." + ZONE)) {
             assertThatThrownBy(() -> CertificateAuthority.authorize(tenant, List.of(foreign)))
                 .as("step 5: " + foreign + " is served by a site the tenant does not manage")
                 .isInstanceOf(CertificateAuthority.Refused.class)
@@ -201,7 +201,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
             .isEqualTo("route_overlaps_other_site");
         assertThat(adminFree.all().get(0).message().args().asMap())
             .as("step 2: pattern and holding site included")
-            .containsEntry("hostname", "*." + ZONE)
+            .containsEntry("hostname", "**." + ZONE)
             .containsEntry("site", "Tenant-iso catch-all");
 
         // 3. Nothing was written by any of the four refusals.

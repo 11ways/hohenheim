@@ -16,12 +16,12 @@ import be.elevenways.zenit.server.devtunnel.TunnelFrames;
 import be.elevenways.zenit.server.devtunnel.TunnelMessage;
 import be.elevenways.zenit.server.devtunnel.TunnelStream;
 import be.elevenways.zenit.server.devtunnel.TunnelTransport;
+import be.elevenways.zenit.server.http.HostPattern;
 import be.elevenways.zenit.server.security.SecureTokens;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.nio.channels.SocketChannel;
-import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -330,9 +330,10 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
     /** The ".dev.example.com" tail of the site's first wildcard domain, or null. */
     private static @Nullable String firstWildcardBase(int siteId) {
         for (Row domain : Models.get(SiteDomainModel.class).findBySiteId(siteId)) {
-            String hostname = domain.get(SiteDomainModel.HOSTNAME);
-            if (hostname != null && hostname.startsWith("*.") && hostname.length() > 2) {
-                return hostname.substring(1).toLowerCase(Locale.ROOT);
+            HostPattern pattern = HostPattern.tryParse(domain.get(SiteDomainModel.HOSTNAME));
+            String base = pattern != null && pattern.port() == null ? pattern.base() : null;
+            if (base != null) {
+                return "." + base;
             }
         }
         return null;

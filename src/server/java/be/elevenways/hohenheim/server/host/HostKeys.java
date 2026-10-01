@@ -4,16 +4,18 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
-import be.elevenways.hohenheim.server.process.BoundedProcess;
 import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import java.time.Duration;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -284,12 +286,25 @@ public final class HostKeys {
         }
         argv.add("--");
         argv.add(target.host());
-        BoundedProcess.Result result = BoundedProcess.execute(argv, null, SSH_KEYSCAN_TIMEOUT_MILLIS,
-            TOOL_OUTPUT_CAP_CHARS);
+        String scanned;
+        String failure;
+        try {
+            ProcessOutcome result = Subprocess.of(argv)
+                .collectStdout(TOOL_OUTPUT_CAP_CHARS)
+                .stderrLimit(TOOL_OUTPUT_CAP_CHARS)
+                .timeout(Duration.ofMillis(SSH_KEYSCAN_TIMEOUT_MILLIS))
+                .stopGrace(Duration.ZERO)
+                .runChecked();
+            scanned = result.stdout().text();
+            failure = result.failureText();
+        } catch (IOException notRun) {
+            scanned = "";
+            failure = String.valueOf(notRun.getMessage());
+        }
 
         Offer best = null;
         int bestRank = Integer.MAX_VALUE;
-        for (String line : result.stdout().split("\n")) {
+        for (String line : scanned.split("\n")) {
             String trimmed = line.trim();
             if (trimmed.isEmpty() || trimmed.startsWith("#")) {
                 continue;
@@ -311,8 +326,7 @@ public final class HostKeys {
         if (best == null) {
             throw Violations.ofForm(violation("host_key_scan_failed")
                 .withArg("target", String.valueOf((Object) server.get(ServerModel.SSH_TARGET)))
-                .withArg("detail", result.failureText().isEmpty()
-                    ? "no host keys offered" : result.failureText()));
+                .withArg("detail", failure.isEmpty() ? "no host keys offered" : failure));
         }
         return best;
     }
@@ -340,9 +354,13 @@ public final class HostKeys {
         try {
             directory = Files.createTempDirectory("hohenheim-hostkey");
             Path key = directory.resolve("id_ed25519");
-            BoundedProcess.Result result = BoundedProcess.execute(List.of("ssh-keygen",
-                "-q", "-t", "ed25519", "-N", "", "-C", "hohenheim-" + name,
-                "-f", key.toString()), null, SSH_KEYGEN_TIMEOUT_MILLIS, TOOL_OUTPUT_CAP_CHARS);
+            ProcessOutcome result = Subprocess.of("ssh-keygen",
+                    "-q", "-t", "ed25519", "-N", "", "-C", "hohenheim-" + name, "-f", key.toString())
+                .collectStdout(TOOL_OUTPUT_CAP_CHARS)
+                .stderrLimit(TOOL_OUTPUT_CAP_CHARS)
+                .timeout(Duration.ofMillis(SSH_KEYGEN_TIMEOUT_MILLIS))
+                .stopGrace(Duration.ZERO)
+                .runChecked();
             if (!result.succeeded() || !Files.exists(key)) {
                 throw Violations.ofForm(violation("identity_generation_failed")
                     .withArg("detail", result.failureText()));

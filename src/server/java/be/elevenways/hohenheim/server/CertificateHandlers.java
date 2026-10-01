@@ -81,7 +81,7 @@ final class CertificateHandlers {
                 return requestError(conduit, certificateError("unknown_validation")
                     .withArg("method", challengeType));
             }
-            if (!dns && hostnames.stream().anyMatch(name -> name.startsWith("*."))) {
+            if (!dns && hostnames.stream().anyMatch(name -> AcmeService.wildcardSanBase(name) != null)) {
                 return requestError(conduit, certificateError("wildcard_requires_dns"));
             }
             List<String> invalid = AcmeService.invalidHostnames(hostnames, dns);
@@ -142,7 +142,8 @@ final class CertificateHandlers {
                 List<String> replicated = new ArrayList<>();
                 String owningPeer = null;
                 for (String hostname : hostnames) {
-                    String base = hostname.startsWith("*.") ? hostname.substring(2) : hostname;
+                    String wildcardBase = AcmeService.wildcardSanBase(hostname);
+                    String base = wildcardBase != null ? wildcardBase : hostname;
                     InternalDnsTxtPublisher.Refusal refusal =
                         internal.refusalFor("_acme-challenge." + base);
                     if (refusal == null) {

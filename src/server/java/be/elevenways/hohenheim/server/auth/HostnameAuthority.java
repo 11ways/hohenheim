@@ -11,6 +11,7 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.server.http.HostPattern;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -275,7 +276,8 @@ public final class HostnameAuthority {
         for (Row domain : covering) {
             String pattern = SiteDomainModel.canonicalHostname(domain.get(SiteDomainModel.HOSTNAME),
                 domain.get(SiteDomainModel.MATCH_TYPE));
-            if (pattern == null || !pattern.startsWith("*.") || !pattern.substring(2).equals(level)) {
+            HostPattern wildcard = pattern != null ? HostPattern.tryParse(pattern) : null;
+            if (wildcard == null || !level.equals(wildcard.base())) {
                 continue;
             }
             Row site = snapshot.siteOf(domain);

@@ -856,7 +856,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         //    TENANT site: a subject other than the operator holds manage on it.
         Row tenantA = site("Overlap Tenant A", "overlap-tenant-a", true);
         tenantOf(tenantA, "overlap-tenant-a@test");
-        domain(tenantA, "*.tenant-a.example.com", SiteDomainModel.MATCH_WILDCARD, null);
+        domain(tenantA, "**.tenant-a.example.com", SiteDomainModel.MATCH_WILDCARD, null);
         assertThat(domainModel.find().where(SiteDomainModel.SITE_ID.eq(tenantA.get(SiteModel.ID)))
                 .count())
             .as("step 1: tenant A holds its wildcard row").isEqualTo(1);

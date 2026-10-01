@@ -624,8 +624,8 @@ public final class TenantWrites {
         // hostname's shape) while HostnameAuthority.covers read it as the sole covering row
         // for every name under victim.test -- which requireRecordAuthority below turns into
         // permission to write DNS inside the victim's zone. Neither the conflict scan nor
-        // the quarantine caught it, because "*." is one-or-more labels and so does not
-        // intersect the apex the victim actually holds.
+        // the quarantine caught it, because a leading wildcard never matches the apex and so
+        // does not intersect the apex the victim actually holds.
         Object matchType = effective(row, stored, SiteDomainModel.MATCH_TYPE);
         Object hostnameValue = effective(row, stored, SiteDomainModel.HOSTNAME);
         String tier = SiteDomainModel.effectiveMatchType(

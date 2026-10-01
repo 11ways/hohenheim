@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.server.http.HostPattern;
 import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -590,13 +591,25 @@ public class AcmeService {
         return invalidHostnames(hostnames, false);
     }
 
+    /**
+     * The domain a wildcard SAN names its hosts under: ACME's wildcard is exactly one leading
+     * label over a literal domain, which is HostPattern's one-label {@code *.}.
+     *
+     * @return the domain, null for an exact name or anything that is not such a wildcard
+     */
+    public static @Nullable String wildcardSanBase(@Nullable String san) {
+        HostPattern pattern = HostPattern.tryParse(san);
+        return pattern == null || pattern.port() != null || pattern.spansManyLabels() ? null : pattern.base();
+    }
+
     /** @return invalid names, optionally accepting one leading wildcard label for DNS-01 */
     public static List<String> invalidHostnames(List<String> hostnames, boolean allowWildcard) {
         List<String> invalid = new ArrayList<>();
         for (String hostname : hostnames) {
             String candidate = hostname != null ? hostname.trim().toLowerCase(Locale.ROOT) : null;
-            if (allowWildcard && candidate != null && candidate.startsWith("*.")) {
-                candidate = candidate.substring(2);
+            String base = allowWildcard ? wildcardSanBase(candidate) : null;
+            if (base != null) {
+                candidate = base;
             }
             if (!isValidHostname(candidate)) {
                 invalid.add(hostname);
@@ -924,9 +937,9 @@ public class AcmeService {
     /**
      * The declaring domain row for one authorization.
      *
-     * AIDEV-NOTE: the ACME identifier of a wildcard SAN drops the leading label, so
-     * "*.example.com" is authorized under identifier "example.com" -- both spellings must be
-     * looked up or a wildcard challenge lands unattributed.
+     * AIDEV-NOTE: the ACME identifier of a wildcard SAN drops the leading wildcard label, so
+     * the wildcard over example.com is authorized under identifier example.com -- both
+     * spellings must be looked up or a wildcard challenge lands unattributed.
      */
     private static GeneratedDnsRecords.Attribution attributionFor(DnsOrderContext context,
                                                                   DnsAuthorization authorization) {
@@ -934,7 +947,12 @@ public class AcmeService {
             ? authorization.identifier().toLowerCase(Locale.ROOT) : "";
         Integer domainId = context.declaring().get(identifier);
         if (domainId == null) {
-            domainId = context.declaring().get("*." + identifier);
+            for (Map.Entry<String, Integer> declared : context.declaring().entrySet()) {
+                if (identifier.equals(wildcardSanBase(declared.getKey()))) {
+                    domainId = declared.getValue();
+                    break;
+                }
+            }
         }
         return new GeneratedDnsRecords.Attribution(GeneratedDnsRecords.SOURCE_ACME,
             SiteDomainModel.MODEL_ID.toString(), domainId);

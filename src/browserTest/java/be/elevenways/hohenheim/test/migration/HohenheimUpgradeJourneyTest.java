@@ -5,9 +5,11 @@ import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
+import be.elevenways.hohenheim.server.proxy.RouteClaims;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.TenantConduits;
@@ -52,6 +54,7 @@ import be.elevenways.zenit.comms.server.CommsInboxModel;
 import be.elevenways.zenit.comms.server.hub.HubIdempotency;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.data.SavedViews;
+import be.elevenways.zenit.server.http.HostPattern;
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
@@ -110,6 +113,12 @@ class HohenheimUpgradeJourneyTest {
 
     /** The finished legacy run step 0 writes into the copy. */
     private static final int LEGACY_RUN = 901;
+
+    /** The wildcard route and the released wildcard claim step 0 writes, spelled as Hohenheim stored them. */
+    private static final int WILDCARD_DOMAIN = 901;
+    private static final int RELEASED_CLAIM = 901;
+    private static final String LEGACY_WILDCARD = "*.wild.upgrade.test";
+    private static final String RELEASED_WILDCARD = "*.gone.upgrade.test";
 
     private static Duration previousOffset;
 
@@ -172,6 +181,15 @@ class HohenheimUpgradeJourneyTest {
             + ranAt + "\",\"ended_at\":\"" + ranAt + "\"}]}', " + seededAt.minus(Duration.ofDays(1)).toEpochMilli()
             + ", " + seededAt.minus(Duration.ofDays(1)).toEpochMilli() + ")");
 
+        // A wildcard route and a released wildcard claim, whose leading '*.' meant one or more labels, each with
+        // the claim key the old code stamped: hostname, path and listeners joined by newlines, no path or listener.
+        execute(url, "INSERT INTO site_domains (id, site_id, hostname, match_type, live_route_key) VALUES ("
+            + WILDCARD_DOMAIN + ", " + siteId + ", '" + LEGACY_WILDCARD + "', 'wildcard', '" + LEGACY_WILDCARD
+            + "' || char(10) || char(10))");
+        execute(url, "INSERT INTO released_route_claims (id, claim_key, hostname, match_type, former_site_id,"
+            + " released_at) VALUES (" + RELEASED_CLAIM + ", '" + RELEASED_WILDCARD + "' || char(10) || char(10), '"
+            + RELEASED_WILDCARD + "', 'wildcard', " + siteId + ", " + seededAt.toEpochMilli() + ")");
+
         // 1. The deploy lane: the framework's --run-migrations over Hohenheim's datasource, exactly as ServerMain
         //    dispatches it, applies everything above the fixture and then reconciles the stored ids.
         HohenheimSettingsBoot.forceDefinitions();
@@ -227,6 +245,22 @@ class HohenheimUpgradeJourneyTest {
         Row site = Models.get(SiteModel.class).findById(siteId);
         assertThat(site.get(SiteModel.TRUSTED_UPSTREAM))
             .as("step 4: a tenant-owned dialing site written by an operator is trusted").isEqualTo(true);
+
+        // M011 respelled both wildcards into HostPattern's one-or-more '**.', their claim keys with them, so the route
+        // still names every depth under its domain and never the apex, and the quarantine still holds its claim.
+        Row wildcard = Models.get(SiteDomainModel.class).findById(WILDCARD_DOMAIN);
+        String respelled = wildcard.get(SiteDomainModel.HOSTNAME);
+        assertThat(respelled).as("step 4: the stored wildcard is respelled").isEqualTo("**.wild.upgrade.test");
+        assertThat((String) wildcard.get(SiteDomainModel.LIVE_ROUTE_KEY))
+            .as("step 4: its claim key is the one today's code computes").isEqualTo(RouteClaims.keyOf(wildcard));
+        HostPattern routed = HostPattern.parse(respelled);
+        assertThat(routed.matches("a.wild.upgrade.test") && routed.matches("a.b.wild.upgrade.test"))
+            .as("step 4: the route names one label and more under its domain, as before").isTrue();
+        assertThat(routed.matches("wild.upgrade.test")).as("step 4: and still never the apex").isFalse();
+        assertThat(strings(url, "SELECT hostname || '|' || claim_key FROM released_route_claims WHERE id = "
+            + RELEASED_CLAIM)).as("step 4: the released claim and its key are respelled")
+            .containsExactly("**.gone.upgrade.test|" + RouteClaims.keyOf("**.gone.upgrade.test", "wildcard", null,
+                null));
 
         // 5. The API key keeps its scopes, its zenit-auth model scope under today's spelling, and authenticates.
         Row key = AuthModels.apiKeys().find().noCache().where(ApiKeyModel.LABEL.eq("upgrade-key")).first();
