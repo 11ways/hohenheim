@@ -30,7 +30,7 @@ public class HohenheimSettings {
     public static final SettingGroup HOHENHEIM = Zenit.SETTINGS.createGroup("hohenheim")
         .label("Hohenheim");
 
-    // Nested groups below are force-loaded at compile time via @ZenitAutoLoad
+    // Nested groups below are force-loaded at compile time via @BlastAutoLoad
     // (loadInnerClasses=true): Protoblast's Gradle plugin emits a reference to
     // each into the generated BlastAutoLoadInit, fired on first Blast use. No
     // per-group boilerplate here; adding a group is enough.

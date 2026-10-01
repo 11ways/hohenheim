@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.plumage.component.Pager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -41,7 +43,7 @@ import java.util.Set;
  */
 public final class AdminInboxPage extends PanelPage {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "inbox"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("inbox"); }
     @Override public @NonNull String slug() { return "inbox"; }
     @Override public @NonNull Icon icon() { return Icon.of("envelope"); }
     @Override public @NonNull NavGroup navGroup() { return NavGroup.SYSTEM; }
@@ -89,7 +91,7 @@ public final class AdminInboxPage extends PanelPage {
         vars.put("items", items);
         vars.put("markAllTarget", CommsInbox.markAllTarget(conduit));
         vars.put("pager", Pager.of(window, total, page -> pageUrl(page).toUrl()));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/inbox"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INBOX, vars);
     }
 
     /**

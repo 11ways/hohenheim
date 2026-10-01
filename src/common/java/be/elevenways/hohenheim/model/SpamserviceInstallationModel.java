@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.BooleanField;
@@ -16,7 +17,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 /** Stores the single local Spamservice runtime installation supervised by Hohenheim. */
 public class SpamserviceInstallationModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "spamservice_installation");
+    public static final Identifier MODEL_ID = HohenheimIds.id("spamservice_installation");
     public static final int SINGLETON_ID = 1;
     public static final Schema SCHEMA = new Schema();
 

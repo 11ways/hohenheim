@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.security.BanScope;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -20,7 +21,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
  */
 public class BanModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "ban");
+    public static final Identifier MODEL_ID = HohenheimIds.id("ban");
     public static final Schema SCHEMA = new Schema();
 
     public static final String SOURCE_AUTO = "auto";

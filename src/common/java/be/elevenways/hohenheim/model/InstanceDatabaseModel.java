@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -31,7 +32,7 @@ import java.util.List;
  */
 public class InstanceDatabaseModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "instance_database");
+    public static final Identifier MODEL_ID = HohenheimIds.id("instance_database");
     public static final Schema SCHEMA = new Schema();
 
     /** Default {@link #ENV_PREFIX} when none is given; the site lane's spelling. */

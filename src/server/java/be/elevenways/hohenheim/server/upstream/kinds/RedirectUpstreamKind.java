@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.upstream.kinds;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.server.proxy.RequestPath;
@@ -20,7 +21,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  */
 public class RedirectUpstreamKind implements UpstreamKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "redirect");
+    public static final Identifier ID = HohenheimIds.id("redirect");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final StringField TARGET_URL = SETTINGS_SCHEMA.addField(

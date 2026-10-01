@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.net.IpLiterals;
@@ -26,7 +27,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public class ServerModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "server");
+    public static final Identifier MODEL_ID = HohenheimIds.id("server");
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #MODE} token of {@link HostMode#LOCAL}: the implicit local Docker daemon. */
@@ -868,7 +869,7 @@ public class ServerModel extends Model {
 
     /** The registry key a type-settings map stores for a server ({@code hohenheim:<id>}). */
     public static @NonNull String registryKeyOf(int serverId) {
-        return Identifier.of("hohenheim", String.valueOf(serverId)).toString();
+        return HohenheimIds.id(String.valueOf(serverId)).toString();
     }
 
     private static int requireExisting(int serverId) {

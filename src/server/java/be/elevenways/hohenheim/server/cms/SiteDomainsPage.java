@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.CertCoverage;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -39,7 +41,7 @@ import java.util.Map;
  */
 public final class SiteDomainsPage implements RecordScopedPage<Row> {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "site_domains"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("site_domains"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("domains").withFilter("scope", "site"); }
     @Override public @NonNull String slug() { return "domains"; }
     @Override public @NonNull Icon icon() { return Icon.of("at"); }
@@ -130,7 +132,7 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
             .with(CmsEndpoints.RESOURCE_PARAM, "certificates-request")
             .with(HohenheimParams.CERTIFICATE_REQUEST_SITE, siteId) : null);
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/site-domains"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.SITE_DOMAINS, vars);
     }
 
     /**

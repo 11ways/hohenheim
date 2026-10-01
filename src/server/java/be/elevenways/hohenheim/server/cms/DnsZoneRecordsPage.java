@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.dns.DnsRecordDto;
 import be.elevenways.hohenheim.dns.DnsRecordFormView;
 import be.elevenways.hohenheim.dns.DnsRecordView;
@@ -70,9 +72,9 @@ import java.util.Objects;
 public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row> {
 
     /** This page's template, shared by the available and unavailable branches. */
-    private static final Identifier TEMPLATE = Identifier.of("hohenheim", "cms/dns-zone-records");
+    private static final Identifier TEMPLATE = HohenheimTemplateIds.DNS_ZONE_RECORDS;
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dns_zone_records"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("dns_zone_records"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("records").withFilter("scope", "dns_zone"); }
     /** This tab's slug under the zone record. */
     public static final String SLUG = "records";
@@ -365,7 +367,7 @@ public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row
         vars.put("recordsTabTarget", CmsRoutes.subpage(PANEL, DnsZoneResource.SLUG, zoneId, this.slug()));
         vars.put("remoteFormTarget", CmsRoutes.subpageSubmit(PANEL, DnsZoneResource.SLUG, zoneId, this.slug()));
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/dns-zone-remote-records"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.DNS_ZONE_REMOTE_RECORDS, vars);
     }
 
     /**

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
@@ -41,7 +42,7 @@ import java.util.Map;
  */
 public final class DockerContainerKind implements InstanceKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "docker_container");
+    public static final Identifier ID = HohenheimIds.id("docker_container");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     /**

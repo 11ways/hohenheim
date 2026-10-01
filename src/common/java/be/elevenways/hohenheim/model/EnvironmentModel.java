@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -20,7 +21,7 @@ import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
  */
 public class EnvironmentModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "environment");
+    public static final Identifier MODEL_ID = HohenheimIds.id("environment");
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());

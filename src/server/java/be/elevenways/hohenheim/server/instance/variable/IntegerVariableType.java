@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance.variable;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -16,7 +17,7 @@ import java.util.Map;
 /** Whole-number variable with optional min/max bounds. */
 public final class IntegerVariableType implements VariableTypeHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "integer");
+    public static final Identifier ID = HohenheimIds.id("integer");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final IntegerField MIN = SETTINGS_SCHEMA.addField(

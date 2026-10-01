@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.CertificateModel;
@@ -130,7 +131,7 @@ public class SiteDomainResource extends RowResource {
             .label(FieldLabels.labelFor(SiteDomainModel.FORCE_SSL)).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "site_domain"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("site_domain"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "site_domain"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "site_domain"); }
     @Override public @NonNull String slug() { return "domains"; }

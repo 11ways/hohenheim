@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -87,7 +88,7 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
         .column(ColumnSpec.fromField(DnsRecordModel.ENABLED).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "manage_dns_record"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("manage_dns_record"); }
     @Override public @NonNull FormSpec formSpec() { return this.manageFormSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.manageTableSpec; }
     @Override public boolean showInNav() { return true; }

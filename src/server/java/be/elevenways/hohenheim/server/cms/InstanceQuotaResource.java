@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -57,7 +58,7 @@ public final class InstanceQuotaResource extends RowResource {
         .column(ColumnSpec.fromField(InstanceQuotaModel.MAX_DATABASES).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_quota"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_quota"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_quota"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "instance_quota"); }
     @Override public @NonNull String slug() { return SLUG; }

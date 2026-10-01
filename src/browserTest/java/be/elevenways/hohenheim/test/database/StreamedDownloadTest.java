@@ -41,7 +41,7 @@ class StreamedDownloadTest extends HohenheimTestBase {
 
     @SuppressWarnings("unused")
     private static final Endpoint<Object> DOWNLOAD_FIXTURE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheimtest", "streamed_download_fixture"))
+        .identifier(Identifier.of("hohenheim_test", "streamed_download_fixture"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("streamed-download-fixture").build())
         .requiresLogin()

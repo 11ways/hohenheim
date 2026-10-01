@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -66,7 +68,7 @@ public final class SpamserviceOverviewPage extends PanelPage {
             Microcopy.of("reputation_hint").withFilter("scope", "spamservice"),
             Icon.of("magnifying-glass")));
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "spamservice_overview"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("spamservice_overview"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("overview").withFilter("scope", "spamservice"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.SECURITY_GROUP; }
@@ -119,7 +121,7 @@ public final class SpamserviceOverviewPage extends PanelPage {
                 vars.put("error", failure.getMessage());
             }
         }
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/spamservice-overview"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.SPAMSERVICE_OVERVIEW, vars);
     }
 
     /** The demoted sub-surfaces as render state: resolved label, hint, icon token and URL. */

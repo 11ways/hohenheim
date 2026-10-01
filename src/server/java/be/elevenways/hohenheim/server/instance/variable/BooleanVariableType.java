@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance.variable;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.BooleanField;
@@ -13,7 +14,7 @@ import java.util.Map;
 /** On/off variable; stores "true"/"false". */
 public final class BooleanVariableType implements VariableTypeHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "boolean");
+    public static final Identifier ID = HohenheimIds.id("boolean");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     @Override

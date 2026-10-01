@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.backup.BackupTargetRegistry;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -24,7 +25,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  */
 public class BackupTargetModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "backup_target");
+    public static final Identifier MODEL_ID = HohenheimIds.id("backup_target");
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());

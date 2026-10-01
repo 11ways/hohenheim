@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.preview;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -20,7 +21,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public class PreviewExpireAction implements RecordScheduleActionHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "expire_preview");
+    public static final Identifier ID = HohenheimIds.id("expire_preview");
 
     @Override public @NonNull Identifier typeId() { return ID; }
     @Override public @NonNull Identifier appliesTo() { return PreviewDeploymentModel.MODEL_ID; }

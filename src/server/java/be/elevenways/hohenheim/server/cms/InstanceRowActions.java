@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -19,7 +20,6 @@ import be.elevenways.hohenheim.server.instance.InstanceTemplateCapture;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
@@ -91,7 +91,7 @@ final class InstanceRowActions {
      * the kind is what makes the offer and the driver answer to one declaration.
      */
     private @NonNull RowAction<Row> deployAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "deploy_instance"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("deploy_instance"))
             .label(Microcopy.of("deploy").withFilter("scope", "instance"))
             .icon(Icon.of("play"))
             // AIDEV-NOTE: deliberately NOT ActionStyle.PRIMARY (reverted 2026-08-22). The
@@ -126,7 +126,7 @@ final class InstanceRowActions {
      * red button per row -- the calm row the admin-UI wave promises.
      */
     private @NonNull RowAction<Row> stopAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "stop_instance"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("stop_instance"))
             .label(Microcopy.of("stop").withFilter("scope", "instance"))
             .icon(Icon.of("stop"))
             .inlineInRow(false)
@@ -155,7 +155,7 @@ final class InstanceRowActions {
      * composition the scheduled power action runs, never a UI-side stop-then-deploy pair.
      */
     private @NonNull RowAction<Row> restartAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "restart_instance"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("restart_instance"))
             .label(Microcopy.of("restart").withFilter("scope", "instance"))
             .icon(Icon.of("rotate-right"))
             .inlineInRow(false)
@@ -181,7 +181,7 @@ final class InstanceRowActions {
      * actually serve it (the kind declares {@code supportsSiteUpstream}).
      */
     private @NonNull RowAction<Row> exposeAction() {
-        return RowAction.Url.<Row>builder(Identifier.of("hohenheim", "expose_instance"))
+        return RowAction.Url.<Row>builder(HohenheimIds.id("expose_instance"))
             .label(Microcopy.of("expose").withFilter("scope", "instance"))
             .icon(Icon.of("globe"))
             .inlineOnRecord(false)
@@ -206,7 +206,7 @@ final class InstanceRowActions {
      * unexposed application can still be rolled back).
      */
     private @NonNull RowAction<Row> rollbackAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "rollback_instance"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("rollback_instance"))
             .label(Microcopy.of("rollback").withFilter("scope", "instance"))
             .icon(Icon.of("clock-rotate-left"))
             .inlineInRow(false)
@@ -238,7 +238,7 @@ final class InstanceRowActions {
 
     /** Run (or resume/retry) the template's install step. */
     private @NonNull RowAction<Row> installAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "install_instance"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("install_instance"))
             .label(Microcopy.of("install").withFilter("scope", "instance"))
             .icon(Icon.of("wand-magic-sparkles"))
             .inlineInRow(false)
@@ -262,7 +262,7 @@ final class InstanceRowActions {
      * is enforced in InstanceInstalls.
      */
     private @NonNull RowAction<Row> reinstallAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "reinstall_instance"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("reinstall_instance"))
             .label(Microcopy.of("reinstall").withFilter("scope", "instance"))
             .icon(Icon.of("rotate"))
             .inlineOnRecord(false)
@@ -302,7 +302,7 @@ final class InstanceRowActions {
 
     /** In-place app update: the template's update_script runs inside the RUNNING system. */
     private @NonNull RowAction<Row> appUpdateAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "app_update_instance"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("app_update_instance"))
             .label(Microcopy.of("app_update").withFilter("scope", "instance"))
             .icon(Icon.of("arrow-up-from-bracket"))
             .inlineOnRecord(false)
@@ -336,7 +336,7 @@ final class InstanceRowActions {
 
     /** Cold capture: a running instance is stopped for the copy and redeployed after. */
     private @NonNull RowAction<Row> snapshotAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "snapshot_instance"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("snapshot_instance"))
             .label(Microcopy.of("snapshot").withFilter("scope", "instance"))
             .icon(Icon.of("camera"))
             .inlineOnRecord(false)
@@ -359,7 +359,7 @@ final class InstanceRowActions {
 
     /** Export to the configured backup target (refuses, named, when none is set). */
     private @NonNull RowAction<Row> backupAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "backup_instance"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("backup_instance"))
             .label(Microcopy.of("backup_now").withFilter("scope", "instance"))
             .icon(Icon.of("box-archive"))
             .inlineOnRecord(false)
@@ -388,7 +388,7 @@ final class InstanceRowActions {
      * ({@link InstanceTemplateCapture}).
      */
     private @NonNull RowAction<Row> captureTemplateAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "capture_template"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("capture_template"))
             .label(Microcopy.of("capture_template").withFilter("scope", "instance"))
             .icon(Icon.of("box-archive"))
             .inlineOnRecord(false)
@@ -428,7 +428,7 @@ final class InstanceRowActions {
      * and offers no destination. A hidden control explains nothing.
      */
     private @NonNull RowAction<Row> migrateAction() {
-        return RowAction.Url.<Row>builder(Identifier.of("hohenheim", "migrate_instance"))
+        return RowAction.Url.<Row>builder(HohenheimIds.id("migrate_instance"))
             .label(Microcopy.of("migrate").withFilter("scope", "instance"))
             .icon(Icon.of("truck-fast"))
             .inlineOnRecord(false)
@@ -452,7 +452,7 @@ final class InstanceRowActions {
      * the same guard the reinstall-that-clears and the host-retire actions use.
      */
     private @NonNull RowAction<Row> destroyWithDataAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "destroy_instance_data"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("destroy_instance_data"))
             .label(Microcopy.of("delete_with_data").withFilter("scope", "instance"))
             .icon(Icon.of("trash-can"))
             .inlineInRow(false)

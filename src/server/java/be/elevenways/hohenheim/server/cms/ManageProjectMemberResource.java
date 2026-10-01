@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.project.Projects;
@@ -64,7 +65,7 @@ public final class ManageProjectMemberResource extends Resource<ManageProjectMem
 
     private final FormSpec formSpec = FormSpec.builder().add(PROJECT).add(MEMBER).add(KIND).build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "manage_project_member"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("manage_project_member"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("members").withFilter("scope", "project"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "project_member"); }
 

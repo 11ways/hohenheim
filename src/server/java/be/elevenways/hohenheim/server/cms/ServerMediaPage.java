@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.instance.InstallMediaFetchState;
 import be.elevenways.hohenheim.instance.InstallMediaFetchView;
 import be.elevenways.hohenheim.instance.InstallMediaView;
@@ -40,7 +42,7 @@ public final class ServerMediaPage implements RecordScopedPage<Row> {
 
     public static final String SLUG = "install-media";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "server_media"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("server_media"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("tab").withFilter("scope", "server_media"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("compact-disc"); }
@@ -82,7 +84,7 @@ public final class ServerMediaPage implements RecordScopedPage<Row> {
             .with(HohenheimEndpoints.SERVER_ID, serverId).toUrl());
         vars.put("maxIsoGb", InstallMedia.MAX_ISO_BYTES >> 30);
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/server-media"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.SERVER_MEDIA, vars);
     }
 
     /**

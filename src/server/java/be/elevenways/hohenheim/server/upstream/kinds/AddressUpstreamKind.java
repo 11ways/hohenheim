@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.upstream.kinds;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
@@ -40,7 +41,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  */
 public class AddressUpstreamKind implements UpstreamKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "address");
+    public static final Identifier ID = HohenheimIds.id("address");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final EnumField FORWARD_SCHEME = SETTINGS_SCHEMA.addField(

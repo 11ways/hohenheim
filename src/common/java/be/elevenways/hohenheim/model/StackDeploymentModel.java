@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -18,7 +19,7 @@ import java.util.List;
  */
 public class StackDeploymentModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "stack_deployment");
+    public static final Identifier MODEL_ID = HohenheimIds.id("stack_deployment");
     public static final Schema SCHEMA = new Schema();
 
     public static final String STATUS_RUNNING = "running";

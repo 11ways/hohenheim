@@ -75,7 +75,7 @@ class DevTunnelTest {
     // A WS echo endpoint the tunneled TARGET server will serve (registries are global).
     @SuppressWarnings("unused")
     private static final WebSocketEndpoint TUNNEL_ECHO = WebSocketEndpoint.builder()
-        .identifier(Identifier.of("hohenheimtest", "tunnel_echo"))
+        .identifier(Identifier.of("hohenheim_test", "tunnel_echo"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("tunnel-echo").build())
         // A test echo target reached THROUGH the dev tunnel: deliberately open, declared so

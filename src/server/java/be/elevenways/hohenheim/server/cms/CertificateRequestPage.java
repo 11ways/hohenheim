@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -35,7 +37,7 @@ import java.util.Map;
  */
 public final class CertificateRequestPage extends PanelPage {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "certificates_request"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("certificates_request"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("request_le").withFilter("scope", "certificate"); }
     @Override public @NonNull String slug() { return HohenheimSlugs.CERTIFICATES_REQUEST; }
     @Override public @NonNull Icon icon() { return Icon.of("lock"); }
@@ -84,7 +86,7 @@ public final class CertificateRequestPage extends PanelPage {
         List<String> reissued = prefillFromCertificate(conduit, accessContext, vars);
         vars.put("domainForm", CertificateRequestForm.state(accessContext,
             reissued.isEmpty() ? domains : reissued));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/certificate-request"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.CERTIFICATE_REQUEST, vars);
     }
 
     /**

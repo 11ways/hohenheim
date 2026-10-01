@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceShell;
@@ -32,7 +34,7 @@ public final class InstanceShellPage implements RecordScopedPage<Row> {
 
     public static final String SLUG = "shell";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_shell"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_shell"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("shell").withFilter("scope", "instance"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("terminal"); }
@@ -83,6 +85,6 @@ public final class InstanceShellPage implements RecordScopedPage<Row> {
             availability == InstanceShell.Availability.NO_RUNTIME_LANE);
         vars.put("runsAsRoot", availability == InstanceShell.Availability.RUNS_AS_ROOT);
 
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-shell"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_SHELL, vars);
     }
 }

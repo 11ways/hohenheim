@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimParams;
@@ -74,7 +75,7 @@ public class InstanceDeviceResource extends RowResource {
         .column(ColumnSpec.fromField(InstanceDeviceModel.CREATED_AT).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_device"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_device"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_device"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "instance_device"); }
     @Override public @NonNull String slug() { return "instance-devices"; }

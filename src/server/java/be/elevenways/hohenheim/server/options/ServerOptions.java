@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.options;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.HostMode;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -18,8 +19,7 @@ import java.util.Set;
 /** Live server-name registry used by type-specific placement fields. */
 public final class ServerOptions {
 
-    public static final Registry.Simple<TypeDefinition> REGISTRY =
-        new Registry.Simple<>(Identifier.of("hohenheim", "server"));
+    public static final Registry<TypeDefinition> REGISTRY = Registry.create(HohenheimIds.id("server"));
 
     private static volatile boolean populated = false;
 
@@ -43,7 +43,7 @@ public final class ServerOptions {
             if (name != null && !name.isBlank()) {
                 // Keyed by the server's ID (the canonical host key), never its name:
                 // stored settings keep pointing at the same host through a rename.
-                entries.put(Identifier.of("hohenheim", String.valueOf(row.get(ServerModel.ID))),
+                entries.put(HohenheimIds.id(String.valueOf(row.get(ServerModel.ID))),
                     new ServerEntry(name, HostMode.parse(row.get(ServerModel.MODE))));
             }
         }
@@ -51,7 +51,7 @@ public final class ServerOptions {
         // window in which a concurrent form render read an EMPTY registry and offered no
         // host at all. Readers now see either the old or the new entry for every live host,
         // and a removed host disappears only once every current one is in place.
-        entries.forEach(REGISTRY::add);
+        entries.forEach(REGISTRY::replace);
         for (Identifier previous : published) {
             if (!entries.containsKey(previous)) {
                 REGISTRY.remove(previous);

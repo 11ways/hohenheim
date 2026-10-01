@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
@@ -40,7 +41,7 @@ public final class ManageSiteResource extends SiteResource {
         .column(ColumnSpec.fromField(SiteModel.ENABLED).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "manage_site"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("manage_site"); }
     @Override public @NonNull FormSpec formSpec() { return this.manageFormSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.manageTableSpec; }
 

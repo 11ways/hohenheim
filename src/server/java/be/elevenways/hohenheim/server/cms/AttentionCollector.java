@@ -230,7 +230,7 @@ public final class AttentionCollector {
             return;
         }
         var history = Models.get(SystemTaskHistoryModel.class);
-        String typePath = BackupControlPlane.class.getName();
+        String typePath = BackupControlPlane.ID.toString();
         if (history.findRecentForType(typePath, 1).isEmpty()) {
             return;
         }

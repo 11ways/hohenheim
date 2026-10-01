@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.database.TenantDatabases;
@@ -63,7 +64,7 @@ public final class ManageDatabaseResource extends DatabaseResource {
         .column(ColumnSpec.fromField(DatabaseModel.STATUS).filterable().build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "manage_database"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("manage_database"); }
     @Override public @NonNull FormSpec formSpec() { return this.manageFormSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.manageTableSpec; }
 
@@ -134,7 +135,7 @@ public final class ManageDatabaseResource extends DatabaseResource {
     /** Backup only, and only for a holder of the capability the download itself demands. */
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
-        return List.of(RowAction.Url.<Row>builder(Identifier.of("hohenheim", "manage_backup_database"))
+        return List.of(RowAction.Url.<Row>builder(HohenheimIds.id("manage_backup_database"))
             .label(Microcopy.of("backup").withFilter("scope", "database"))
             .icon(Icon.of("download"))
             // reachesRecord, never hasDatabaseCapability: a visibleFor runs once per

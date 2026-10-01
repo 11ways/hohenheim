@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.spamservice.client.CreatedClientKey;
@@ -79,7 +80,7 @@ public final class SpamserviceClientKeysResource extends SpamserviceRemoteResour
 
     SpamserviceClientKeysResource(Supplier<SpamserviceClient> clientSupplier) { super(clientSupplier); }
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "spamservice_key"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("spamservice_key"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "spamservice_key"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "spamservice_key"); }
     @Override public @NonNull String slug() { return SLUG; }
@@ -232,7 +233,7 @@ public final class SpamserviceClientKeysResource extends SpamserviceRemoteResour
     @Override
     public @NonNull List<RowAction<ManagedClientKey>> rowActions() {
         return List.of(
-            RowAction.Invoke.<ManagedClientKey>builder(Identifier.of("hohenheim", "spamservice_key_enable"))
+            RowAction.Invoke.<ManagedClientKey>builder(HohenheimIds.id("spamservice_key_enable"))
                 .label(Microcopy.of("enable").withFilter("scope", "spamservice_key"))
                 .icon(Icon.of("check"))
                 .visibleFor((key, context) -> !key.active())
@@ -241,7 +242,7 @@ public final class SpamserviceClientKeysResource extends SpamserviceRemoteResour
                     return CmsActionResult.refreshWithToast(
                         Microcopy.of("key_enabled").withFilter("scope", "spamservice_key"));
                 }).build(),
-            RowAction.Invoke.<ManagedClientKey>builder(Identifier.of("hohenheim", "spamservice_key_revoke"))
+            RowAction.Invoke.<ManagedClientKey>builder(HohenheimIds.id("spamservice_key_revoke"))
                 .label(Microcopy.of("revoke").withFilter("scope", "spamservice_key"))
                 .icon(Icon.of("xmark"))
                 .visibleFor((key, context) -> key.active())

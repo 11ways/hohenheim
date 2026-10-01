@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
@@ -124,7 +125,7 @@ public final class NotificationChannelResource extends RowResource {
         return String.join(", ", labels);
     }
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "notification_channel"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("notification_channel"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "notification_channel"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "notification_channel"); }
     @Override public @NonNull String slug() { return "notifications"; }
@@ -246,7 +247,7 @@ public final class NotificationChannelResource extends RowResource {
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
-        actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "test_channel"))
+        actions.add(RowAction.Invoke.<Row>builder(HohenheimIds.id("test_channel"))
             .label(Microcopy.of("test").withFilter("scope", "notification_channel"))
             .icon(Icon.of("paper-plane"))
             .handler((row, ctx) -> {

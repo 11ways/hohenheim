@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.spamservice.client.SampleDetail;
@@ -32,7 +34,7 @@ public final class SpamserviceSampleAnalysisPage implements RecordScopedPage<Sam
         this.resource = Objects.requireNonNull(resource, "resource cannot be null");
     }
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "spamservice_sample_analysis"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("spamservice_sample_analysis"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("analysis").withFilter("scope", "spamservice_sample"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("magnifying-glass-chart"); }
@@ -54,7 +56,7 @@ public final class SpamserviceSampleAnalysisPage implements RecordScopedPage<Sam
             "flag", line.flag(), "points", line.points(), "detail", value(line.detail(), ""))).toList());
         Panel panel = PanelRegistry.getBySlug(HohenheimSlugs.ADMIN);
         vars.put("recordTabs", RecordTabs.build(panel, this.resource, record.id(), record, context, SLUG));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/spamservice-sample-analysis"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.SPAMSERVICE_SAMPLE_ANALYSIS, vars);
     }
 
     private static Map<String, Object> summary(SampleDetail detail) {

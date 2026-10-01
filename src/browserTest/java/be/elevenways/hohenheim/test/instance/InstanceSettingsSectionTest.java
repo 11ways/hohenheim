@@ -41,7 +41,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class InstanceSettingsSectionTest {
 
     /**
-     * AIDEV-NOTE: no server boots in this class, so the {@code @ZenitAutoLoad} sentinels
+     * AIDEV-NOTE: no server boots in this class, so the {@code @BlastAutoLoad} sentinels
      * that register these field-to-entry derivations must be touched by hand -- an
      * unregistered field class makes {@code deriveSpec} throw by name.
      */

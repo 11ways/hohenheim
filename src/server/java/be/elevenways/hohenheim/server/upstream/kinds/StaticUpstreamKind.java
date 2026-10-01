@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.upstream.kinds;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimPaths;
@@ -25,7 +26,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  */
 public class StaticUpstreamKind implements UpstreamKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "static");
+    public static final Identifier ID = HohenheimIds.id("static");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final StringField ROOT_PATH = SETTINGS_SCHEMA.addField(

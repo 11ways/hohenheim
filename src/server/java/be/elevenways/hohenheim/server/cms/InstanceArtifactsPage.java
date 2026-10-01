@@ -1,11 +1,11 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.instance.InstanceArtifactView;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.http.Uri;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.render.action.InvokeActionState;
@@ -135,7 +135,7 @@ abstract class InstanceArtifactsPage implements RecordScopedPage<Row> {
             conduit.getLocales(), conduit.getMessageResolver()));
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(
-            Identifier.of("hohenheim", "cms/instance-artifacts"), vars);
+            HohenheimTemplateIds.INSTANCE_ARTIFACTS, vars);
     }
 
     /** That resource's own actions for THIS row and viewer, targeting its invoke route. */

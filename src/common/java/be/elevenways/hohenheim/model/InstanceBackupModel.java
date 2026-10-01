@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.*;
@@ -20,7 +21,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
  */
 public class InstanceBackupModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "instance_backup");
+    public static final Identifier MODEL_ID = HohenheimIds.id("instance_backup");
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #STATUS}: the archive is being built or uploaded; not restorable. */

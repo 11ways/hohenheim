@@ -1,11 +1,11 @@
 package be.elevenways.hohenheim.upstream;
 
-import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Registry;
 
 /**
  * THE declaring home of a site's upstream vocabulary: what a hostname resolves TO. Drives
- * SiteModel's RegistryEnumField, its {@code schemaFrom} settings, the admin selector and
+ * SiteModel's RegistryMemberField, its {@code schemaFrom} settings, the admin selector and
  * the proxy's handler dispatch.
  *
  * AIDEV-NOTE: renamed from SiteTypeRegistry on 2026-08-22 (phase-0 design section 3) because
@@ -17,7 +17,7 @@ import be.elevenways.protoblast.common.registry.Registry;
 public class UpstreamKinds {
 
     public static final Registry<UpstreamKindInfo> REGISTRY =
-        new Registry.Simple<>(Identifier.of("hohenheim", "upstream_kind"));
+        Registry.create(HohenheimIds.id("upstream_kind"));
 
     /**
      * Entries arrive via the generated BlastAutoLoadInit (UpstreamKindHandler is

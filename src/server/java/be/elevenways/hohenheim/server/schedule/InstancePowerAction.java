@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.schedule;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -19,7 +20,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public class InstancePowerAction extends InstanceScheduleAction {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "power");
+    public static final Identifier ID = HohenheimIds.id("power");
 
     public static final String OP_START = "start";
     public static final String OP_STOP = "stop";

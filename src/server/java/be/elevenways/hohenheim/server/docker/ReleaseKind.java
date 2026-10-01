@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
@@ -53,7 +54,7 @@ import java.util.Map;
  */
 public final class ReleaseKind implements InstanceKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "release");
+    public static final Identifier ID = HohenheimIds.id("release");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     /** Same measured profile as every other container authority (see DockerContainerKind). */

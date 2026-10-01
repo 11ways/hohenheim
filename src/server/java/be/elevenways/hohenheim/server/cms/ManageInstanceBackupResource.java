@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -27,7 +28,7 @@ public final class ManageInstanceBackupResource extends InstanceBackupResource {
 
     @Override
     public @NonNull Identifier id() {
-        return Identifier.of("hohenheim", "manage_instance_backup");
+        return HohenheimIds.id("manage_instance_backup");
     }
 
     /**

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -28,7 +29,7 @@ public final class InstanceBackupsPage extends InstanceArtifactsPage {
         super(resource);
     }
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_backups"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_backups"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_backup"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("box-archive"); }

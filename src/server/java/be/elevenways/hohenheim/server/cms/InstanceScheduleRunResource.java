@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -53,7 +54,7 @@ public class InstanceScheduleRunResource extends RowResource {
         .column(ColumnSpec.fromField(RecordScheduleRunModel.ENDED_AT).hidden().build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_schedule_run"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_schedule_run"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("runs").withFilter("scope", "instance_schedule"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("run").withFilter("scope", "instance_schedule"); }
     @Override public @NonNull String slug() { return "instance-schedule-runs"; }

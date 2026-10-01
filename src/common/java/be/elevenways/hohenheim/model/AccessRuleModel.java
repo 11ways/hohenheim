@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.net.IpRanges;
@@ -35,7 +36,7 @@ import java.util.Map;
  */
 public class AccessRuleModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "access_rule");
+    public static final Identifier MODEL_ID = HohenheimIds.id("access_rule");
     public static final Schema SCHEMA = new Schema();
 
     /** A nested group of rules, combined by its own satisfy mode. */
@@ -54,7 +55,7 @@ public class AccessRuleModel extends Model {
     public static final String TYPE_AUTH_PROVIDER = "auth_provider";
 
     /** PermissionSuggestionSources key: the realm of the provider THIS rule points at. */
-    public static final String RULE_PROVIDER_SUGGESTION_SOURCE = "hohenheim:access_rule_realm";
+    public static final Identifier RULE_PROVIDER_SUGGESTION_SOURCE = HohenheimIds.id("access_rule_realm");
 
     // --- Per-type sub-schemas (the ONLY home for type-specific fields) ---
 

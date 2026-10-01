@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.util.BlastString;
@@ -22,7 +23,7 @@ import java.util.List;
  */
 public class DnsPeerModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "dns_peer");
+    public static final Identifier MODEL_ID = HohenheimIds.id("dns_peer");
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());

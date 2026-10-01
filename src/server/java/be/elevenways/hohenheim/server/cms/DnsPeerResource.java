@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.dns.DnsPeerKeyResponse;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.server.dns.DnsFederationKeys;
@@ -66,7 +67,7 @@ public final class DnsPeerResource extends RowResource {
             .label(FieldLabels.labelFor(DnsPeerModel.ENABLED)).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dns_peer"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("dns_peer"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "dns_peer"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "dns_peer"); }
     @Override public @NonNull String slug() { return "dns-peers"; }
@@ -125,7 +126,7 @@ public final class DnsPeerResource extends RowResource {
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
-        actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "negotiate_transfer_key"))
+        actions.add(RowAction.Invoke.<Row>builder(HohenheimIds.id("negotiate_transfer_key"))
             .label(Microcopy.of("negotiate_key").withFilter("scope", "dns_peer"))
             .description(Microcopy.of("negotiate_key_hint").withFilter("scope", "dns_peer"))
             .icon(Icon.of("key"))

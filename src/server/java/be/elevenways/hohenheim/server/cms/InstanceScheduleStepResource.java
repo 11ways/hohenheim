@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -61,7 +62,7 @@ public class InstanceScheduleStepResource extends RowResource {
         .column(ColumnSpec.fromField(RecordScheduleStepModel.FAILURE_POLICY).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_schedule_step"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_schedule_step"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "schedule_step"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "schedule_step"); }
     @Override public @NonNull String slug() { return "instance-schedule-steps"; }

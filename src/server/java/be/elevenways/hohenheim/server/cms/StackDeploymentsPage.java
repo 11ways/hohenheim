@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -30,7 +32,7 @@ import java.util.Map;
  */
 public final class StackDeploymentsPage implements RecordScopedPage<Row> {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "stack_deployments"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("stack_deployments"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("deployments").withFilter("scope", "stack"); }
     public static final String SLUG = "deployments";
 
@@ -67,7 +69,7 @@ public final class StackDeploymentsPage implements RecordScopedPage<Row> {
         vars.put("recordTabs", recordTabs(conduit));
         vars.put("timeWording", RelativeTimeWording.resolve(
             conduit.getLocales(), conduit.getMessageResolver()));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/stack-deployments"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.STACK_DEPLOYMENTS, vars);
     }
 
     private static String orEmpty(@Nullable Object value) {

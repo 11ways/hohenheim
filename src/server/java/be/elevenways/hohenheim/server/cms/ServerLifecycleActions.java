@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
@@ -9,7 +10,6 @@ import be.elevenways.hohenheim.server.incus.IncusReaper;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.server.task.ReapIncusControllers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
@@ -69,7 +69,7 @@ final class ServerLifecycleActions {
      */
     private static @NonNull RowAction<Row> reapControllerObjectsAction() {
         return RowAction.Invoke.<Row>builder(
-                Identifier.of("hohenheim", "reap_controller_objects"))
+                HohenheimIds.id("reap_controller_objects"))
             .label(serverCopy("reap_controller_objects"))
             .icon(Icon.of("broom"))
             .style(ActionStyle.DESTRUCTIVE)
@@ -112,7 +112,7 @@ final class ServerLifecycleActions {
      * the surface is the panel permission plus CSRF.
      */
     private static @NonNull RowAction<Row> acknowledgePostureAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "acknowledge_posture"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("acknowledge_posture"))
             .label(serverCopy("acknowledge"))
             .description(serverCopy("acknowledge_hint"))
             .icon(Icon.of("triangle-exclamation"))
@@ -146,7 +146,7 @@ final class ServerLifecycleActions {
      * probe, the typed outcome persisted and reported either way.
      */
     private static @NonNull RowAction<Row> probeAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "probe_server"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("probe_server"))
             .label(serverCopy("probe_now"))
             .description(serverCopy("probe_now_hint"))
             .icon(Icon.of("heart-pulse"))
@@ -170,7 +170,7 @@ final class ServerLifecycleActions {
 
     /** Run the full preflight and store its report; the toast states the verdict. */
     private static @NonNull RowAction<Row> preflightAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "preflight_server"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("preflight_server"))
             .label(Microcopy.of("preflight").withFilter("scope", "server"))
             .icon(Icon.of("stethoscope"))
             .inlineInRow(false)
@@ -189,7 +189,7 @@ final class ServerLifecycleActions {
 
     /** Admit for placement; refused unless the LAST preflight passed. */
     private static @NonNull RowAction<Row> admitAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "admit_server"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("admit_server"))
             .label(Microcopy.of("admit").withFilter("scope", "server"))
             .icon(Icon.of("circle-check"))
             .visibleFor((row, ctx) ->
@@ -212,7 +212,7 @@ final class ServerLifecycleActions {
      * admit and uncordon deliberately stay unconfirmed, being the reversals of this one.
      */
     private static @NonNull RowAction<Row> cordonAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "cordon_server"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("cordon_server"))
             .label(Microcopy.of("cordon").withFilter("scope", "server"))
             .icon(Icon.of("circle-pause"))
             .style(ActionStyle.DESTRUCTIVE)
@@ -239,7 +239,7 @@ final class ServerLifecycleActions {
      * is only complete when the host holds none.
      */
     private static @NonNull RowAction<Row> drainAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "drain_server"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("drain_server"))
             .label(Microcopy.of("drain").withFilter("scope", "server"))
             .icon(Icon.of("truck-arrow-right"))
             .style(ActionStyle.DESTRUCTIVE)
@@ -279,7 +279,7 @@ final class ServerLifecycleActions {
 
     /** Lift a cordon; the stored preflight verdict must still be green. */
     private static @NonNull RowAction<Row> uncordonAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "uncordon_server"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("uncordon_server"))
             .label(Microcopy.of("uncordon").withFilter("scope", "server"))
             .icon(Icon.of("circle-play"))
             .visibleFor((row, ctx) ->

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -21,6 +22,7 @@ import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.stack.StackServiceKind;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
@@ -74,6 +76,9 @@ import java.util.Map;
  */
 public class VerifyWorkloadIsolation extends ScheduledTask {
 
+    /** The task's catalog id, also the {@code system_task_history.task_type} its runs are stored under. */
+    public static final Identifier ID = HohenheimIds.id("verify_workload_isolation");
+
     public static final String STATIC_DESCRIPTION =
         "Verify workload isolation in the host kernel";
 
@@ -91,6 +96,11 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
     /** One policied network the kernel must carry, with its declared egress. */
     private record Expected(@NonNull String network, @NonNull Egress egress,
                             @NonNull String workload, @NonNull Containment containment) {
+    }
+
+    @Override
+    public @NonNull Identifier id() {
+        return ID;
     }
 
     @Override

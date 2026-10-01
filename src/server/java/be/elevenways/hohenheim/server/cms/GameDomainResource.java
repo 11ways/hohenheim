@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.GameDomainModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -58,7 +59,7 @@ public final class GameDomainResource extends RowResource {
         .column(ColumnSpec.fromField(GameDomainModel.ENABLED).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "game_domain"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("game_domain"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "game_domain"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "game_domain"); }
     @Override public @NonNull String slug() { return SLUG; }

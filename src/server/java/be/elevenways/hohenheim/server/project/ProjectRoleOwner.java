@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.project;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -22,7 +23,7 @@ final class ProjectRoleOwner implements RoleOwner {
 
     @Override
     public @NonNull Identifier id() {
-        return Identifier.of("hohenheim", "project_role");
+        return HohenheimIds.id("project_role");
     }
 
     @Override

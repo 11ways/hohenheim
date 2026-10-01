@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.auth.types;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.hohenheim.server.auth.SiteAuthContext;
 import be.elevenways.hohenheim.server.auth.SiteAuthGate;
@@ -29,7 +30,7 @@ import java.util.Map;
  */
 public class BasicAuthProviderType implements SiteAuthProviderTypeHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "basic");
+    public static final Identifier ID = HohenheimIds.id("basic");
 
     /** Config key holding the username -> password map. */
     public static final String CREDENTIALS = "credentials";

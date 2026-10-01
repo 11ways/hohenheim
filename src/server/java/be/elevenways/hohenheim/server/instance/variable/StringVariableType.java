@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance.variable;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -17,7 +18,7 @@ import java.util.Map;
 /** Free-text variable with optional regex pattern and length cap. */
 public final class StringVariableType implements VariableTypeHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "string");
+    public static final Identifier ID = HohenheimIds.id("string");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final StringField PATTERN = SETTINGS_SCHEMA.addField(

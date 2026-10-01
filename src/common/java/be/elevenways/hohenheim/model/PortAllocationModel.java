@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -22,7 +23,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
  */
 public class PortAllocationModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "port_allocation");
+    public static final Identifier MODEL_ID = HohenheimIds.id("port_allocation");
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());

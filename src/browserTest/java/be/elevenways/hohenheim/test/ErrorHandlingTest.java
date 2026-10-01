@@ -33,7 +33,7 @@ class ErrorHandlingTest extends HohenheimTestBase {
      * request still carries its principal.
      */
     static final PageEndpoint TEST_ERROR = Endpoint.pageBuilder()
-        .identifier(Identifier.of("hohenheimtest", "test_error"))
+        .identifier(Identifier.of("hohenheim_test", "test_error"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("_test").addDelimiter().addStatic("error").build())
         .authenticatesItself()

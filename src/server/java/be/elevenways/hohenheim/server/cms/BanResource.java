@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.security.BanStateCell;
 import be.elevenways.hohenheim.server.security.BanService;
@@ -46,7 +48,7 @@ import java.util.Map;
  */
 public final class BanResource extends RowResource {
 
-    private static final Identifier LIFT = Identifier.of("hohenheim", "lift_ban");
+    private static final Identifier LIFT = HohenheimIds.id("lift_ban");
 
     /** The form-only duration entry's name; it backs no column. */
     private static final String DURATION_NAME = "duration";
@@ -125,7 +127,7 @@ public final class BanResource extends RowResource {
     /** The list's state column: enforced, lifted or expired, derived from the stored facts. */
     static final String STATE_COLUMN = "state";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "ban"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("ban"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "ban"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "ban"); }
     @Override public @NonNull String slug() { return "bans"; }
@@ -163,7 +165,7 @@ public final class BanResource extends RowResource {
         // which read "No" for a lifted ban and an expired one alike. The `active` filter
         // below keeps answering "still enforced?" from the filter bar.
         .column(ColumnSpec.virtual(STATE_COLUMN, Microcopy.of("state").withFilter("scope", "ban"))
-            .renderer("hohenheim:cms/cell/ban-state").build())
+            .renderer(HohenheimTemplateIds.CELL_BAN_STATE).build())
         .column(ColumnSpec.fromField(BanModel.ACTIVE).hidden().build())
         .column(ColumnSpec.fromField(BanModel.EVENT_TYPE).filterable().build())
         .column(ColumnSpec.fromField(BanModel.EXPIRES_AT).build())

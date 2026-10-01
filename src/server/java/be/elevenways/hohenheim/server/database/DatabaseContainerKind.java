@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
@@ -56,7 +57,7 @@ import java.util.Map;
  */
 public final class DatabaseContainerKind implements InstanceKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "database_container");
+    public static final Identifier ID = HohenheimIds.id("database_container");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     /** Lowercase {@link ManagedDatabase.Engine} token; decides port, data path and hardening. */

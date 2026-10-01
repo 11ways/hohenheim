@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hawkeye.testSupport.HawkeyeBrowserTestBase;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
@@ -95,12 +94,11 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
             throw new RuntimeException("Failed to create the test database", e);
         }
 
-        // Install auth exactly as production does, BEFORE the boot stages run:
-        // ManagePanel wraps the permission checker zenit-auth installs, so the
-        // harness must not invert that order.
-        ZenitAuth.init(HohenheimDatabase.datasource());
-        // Production disables the module's default auth panel (ServerMain does the
-        // same): the users/roles resources are wired into HohenheimPanel instead.
+        // zenit-auth installs itself exactly as in production: the discovered ZenitAuthModule
+        // at the MODULES stage, which HohenheimHostWiring runs after (ManagePanel wraps the
+        // permission checker zenit-auth installs, so that order must not invert). Production
+        // disables the module's default auth panel BEFORE boot (ServerMain does the same):
+        // the users/roles resources are wired into HohenheimPanel instead.
         Zenit.SETTINGS_VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
         ServerMain.installAuthBaselines();
 

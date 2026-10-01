@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.backup;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.StringField;
@@ -20,7 +21,7 @@ import java.util.Map;
  */
 public final class FilesystemTargetKind implements BackupTargetKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "filesystem");
+    public static final Identifier ID = HohenheimIds.id("filesystem");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final StringField PATH = SETTINGS_SCHEMA.addField(

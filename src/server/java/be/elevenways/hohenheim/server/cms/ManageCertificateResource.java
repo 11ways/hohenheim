@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -51,7 +52,7 @@ public final class ManageCertificateResource extends CertificateResource {
         .defaultSort(SortSpec.desc(CertificateModel.EXPIRES_ON.getName()))
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "manage_certificate"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("manage_certificate"); }
     @Override public @NonNull FormSpec formSpec() { return this.manageFormSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.manageTableSpec; }
     @Override public boolean creatable() { return false; }

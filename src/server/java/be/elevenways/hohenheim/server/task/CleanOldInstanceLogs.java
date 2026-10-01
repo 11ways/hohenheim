@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
@@ -19,6 +21,11 @@ public class CleanOldInstanceLogs extends ScheduledTask {
     public static final String STATIC_DESCRIPTION = "Delete old instance console logs";
 
     private static final int RETENTION_DAYS = 30;
+
+    @Override
+    public @NonNull Identifier id() {
+        return HohenheimIds.id("clean_old_instance_logs");
+    }
 
     @Override
     public @NonNull CleanOldInstanceLogs newTask() {

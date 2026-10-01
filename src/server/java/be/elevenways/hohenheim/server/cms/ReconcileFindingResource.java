@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.server.docker.DockerReconciler;
 import be.elevenways.hohenheim.server.docker.OrphanActions;
@@ -87,7 +88,7 @@ public final class ReconcileFindingResource extends RowResource {
      */
     public static final Microcopy LABEL = Microcopy.of("plural").withFilter("scope", "reconcile_finding");
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "reconcile_finding"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("reconcile_finding"); }
     @Override public @NonNull Microcopy label() { return LABEL; }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "reconcile_finding"); }
     @Override public @NonNull String slug() { return "reconcile-findings"; }
@@ -172,7 +173,7 @@ public final class ReconcileFindingResource extends RowResource {
 
     /** Volumes never offer this: they are the one unrecoverable resource. */
     private @NonNull RowAction<Row> removeOrphanAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "remove_orphan"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("remove_orphan"))
             .label(Microcopy.of("remove_orphan").withFilter("scope", "reconcile_finding"))
             .icon(Icon.of("trash"))
             .style(ActionStyle.DESTRUCTIVE)

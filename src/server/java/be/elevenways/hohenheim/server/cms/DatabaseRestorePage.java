@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -30,7 +32,7 @@ import java.util.Map;
  */
 public final class DatabaseRestorePage implements RecordScopedPage<Row> {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "database_restore"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("database_restore"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("restore").withFilter("scope", "database"); }
     @Override public @NonNull String slug() { return "restore"; }
     @Override public @NonNull Icon icon() { return Icon.of("upload"); }
@@ -53,7 +55,7 @@ public final class DatabaseRestorePage implements RecordScopedPage<Row> {
         vars.put("recordId", record.get(DatabaseModel.ID));
         vars.put("usedBy", usedBy(record.get(DatabaseModel.ID)));
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/database-restore"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.DATABASE_RESTORE, vars);
     }
 
     /** Live INSTANCES this database is attached to (env injection), for the "Used by" line. */

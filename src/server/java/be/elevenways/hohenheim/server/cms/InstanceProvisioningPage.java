@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -37,7 +39,7 @@ public final class InstanceProvisioningPage implements RecordScopedPage<Row> {
     /** The admin config-file resource's slug; the panel is asked for it, never assumed. */
     private static final String FILE_RESOURCE_SLUG = "instance-files";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_provisioning"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_provisioning"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("provisioning").withFilter("scope", "instance"); }
     /**
      * Housekeeping, not an everyday destination: the tab lives in the strip's "More"
@@ -119,6 +121,6 @@ public final class InstanceProvisioningPage implements RecordScopedPage<Row> {
         vars.put("addFileTarget", addFileTarget);
         vars.put("canAddFile", addFileTarget != null);
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-provisioning"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_PROVISIONING, vars);
     }
 }

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
@@ -47,7 +48,7 @@ import java.util.Map;
  */
 public final class ManageDashboard extends DashboardPanelPeer {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "manage_dashboard"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("manage_dashboard"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("dashboard").withFilter("scope", "manage"); }
     @Override public @NonNull String slug() { return "dashboard"; }
     @Override public @NonNull Icon icon() { return Icon.LAYOUT_DASH; }

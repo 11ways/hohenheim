@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
@@ -52,7 +53,7 @@ public final class ManageInstanceTemplateResource extends InstanceTemplateResour
         .column(ColumnSpec.fromField(InstanceTemplateModel.VERSION).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "manage_instance_template"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("manage_instance_template"); }
     @Override public @NonNull FormSpec formSpec() { return this.manageFormSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.manageTableSpec; }
     @Override public boolean creatable() { return false; }
@@ -89,7 +90,7 @@ public final class ManageInstanceTemplateResource extends InstanceTemplateResour
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         return List.of(RowAction.Url.<Row>builder(
-                Identifier.of("hohenheim", "manage_template_create_instance"))
+                HohenheimIds.id("manage_template_create_instance"))
             .label(Microcopy.of("create_instance").withFilter("scope", "instance_template"))
             .icon(Icon.of("plus"))
             .visibleFor((row, ctx) -> HohenheimAccess.canCreateInstances(ctx))

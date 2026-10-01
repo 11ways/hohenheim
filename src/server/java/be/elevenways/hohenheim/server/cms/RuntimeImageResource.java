@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
@@ -67,7 +68,7 @@ public class RuntimeImageResource extends RowResource {
             .label(FieldLabels.labelFor(RuntimeImageModel.NAME)).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "runtime_image"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("runtime_image"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "runtime_image"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "runtime_image"); }
     @Override public @NonNull String slug() { return "runtime-images"; }

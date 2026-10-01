@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.schedule.ScheduleRunStatuses;
@@ -36,7 +38,7 @@ public final class InstanceScheduleStepsPage implements RecordScopedPage<Row> {
     /** The schedule's front door: a schedule without steps runs nothing, so creation lands here. */
     public static final String SLUG = "steps";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_schedule_steps"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_schedule_steps"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "schedule_step"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("list-ol"); }
@@ -101,6 +103,6 @@ public final class InstanceScheduleStepsPage implements RecordScopedPage<Row> {
             .with(CmsEndpoints.RESOURCE_PARAM, "instance-schedule-steps")
             .with(HohenheimParams.SCHEDULE_ID_PREFILL, scheduleId) : null);
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-schedule-steps"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_SCHEDULE_STEPS, vars);
     }
 }

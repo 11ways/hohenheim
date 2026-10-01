@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -18,7 +19,7 @@ public final class ManageProtectedPathResource extends ProtectedPathResource {
 
     @Override
     public @NonNull Identifier id() {
-        return Identifier.of("hohenheim", "manage_protected_path");
+        return HohenheimIds.id("manage_protected_path");
     }
 
     /** Admins see every row; everyone else only the guarded paths of managed sites. */

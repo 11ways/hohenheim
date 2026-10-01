@@ -57,7 +57,7 @@ public final class HohenheimSources implements ZenitModule {
     public static final Permission MEDIA_MANAGE = Permission.of("hohenheim.media.manage");
 
     public static final Identifier SPAMSERVICE_SYSTEM_USERS =
-        Identifier.of("hohenheim", "spamservice_system_users");
+        HohenheimIds.id("spamservice_system_users");
 
     private static volatile boolean registered = false;
 

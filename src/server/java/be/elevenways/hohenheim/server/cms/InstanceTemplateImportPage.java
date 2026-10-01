@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.server.instance.CommunityScripts;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -22,7 +24,7 @@ import java.util.Map;
  */
 public final class InstanceTemplateImportPage extends PanelPage {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_templates_import"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_templates_import"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("import").withFilter("scope", "instance_template"); }
     @Override public @NonNull String slug() { return HohenheimSlugs.INSTANCE_TEMPLATES_IMPORT; }
     @Override public @NonNull Icon icon() { return Icon.of("file-import"); }
@@ -37,6 +39,6 @@ public final class InstanceTemplateImportPage extends PanelPage {
         vars.put("catalogApps", CommunityScripts.catalogApps());
         vars.put("catalogRevision", CommunityScripts.catalogRevision());
         vars.put("templatesTarget", CmsRoutes.list(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_TEMPLATES));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/template-import"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.TEMPLATE_IMPORT, vars);
     }
 }

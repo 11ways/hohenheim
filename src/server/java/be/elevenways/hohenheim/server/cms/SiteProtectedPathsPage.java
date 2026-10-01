@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -34,7 +36,7 @@ import java.util.Map;
  */
 public final class SiteProtectedPathsPage implements RecordScopedPage<Row> {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "site_protected_paths"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("site_protected_paths"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("protected_paths").withFilter("scope", "site"); }
     @Override public @NonNull String slug() { return "protected-paths"; }
     @Override public @NonNull Icon icon() { return Icon.of("lock"); }
@@ -95,7 +97,7 @@ public final class SiteProtectedPathsPage implements RecordScopedPage<Row> {
             .with(CmsEndpoints.RESOURCE_PARAM, "protected-paths")
             .with(HohenheimParams.SITE_ID_PREFILL, siteId) : null);
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/site-protected-paths"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.SITE_PROTECTED_PATHS, vars);
     }
 
     /** The list's display name; a dangling reference reads as its id, never as unguarded. */

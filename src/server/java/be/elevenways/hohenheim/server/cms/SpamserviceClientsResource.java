@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -71,7 +72,7 @@ public final class SpamserviceClientsResource extends SpamserviceRemoteResource<
         super(clientSupplier);
     }
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "spamservice_client"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("spamservice_client"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "spamservice_client"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "spamservice_client"); }
     @Override public @NonNull String slug() { return SLUG; }
@@ -169,7 +170,7 @@ public final class SpamserviceClientsResource extends SpamserviceRemoteResource<
 
     @Override
     public @NonNull List<RowAction<ManagedClient>> rowActions() {
-        return List.of(RowAction.Url.<ManagedClient>builder(Identifier.of("hohenheim", "spamservice_client_keys"))
+        return List.of(RowAction.Url.<ManagedClient>builder(HohenheimIds.id("spamservice_client_keys"))
             .label(Microcopy.of("keys").withFilter("scope", "spamservice_client"))
             .description(Microcopy.of("keys_hint").withFilter("scope", "spamservice_client"))
             .icon(Icon.of("key"))

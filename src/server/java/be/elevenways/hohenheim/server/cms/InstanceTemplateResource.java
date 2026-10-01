@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimParams;
@@ -91,7 +92,7 @@ public class InstanceTemplateResource extends RowResource {
             .label(FieldLabels.labelFor(InstanceTemplateModel.KIND)).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_template"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_template"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_template"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "instance_template"); }
     @Override public @NonNull String slug() { return HohenheimSlugs.INSTANCE_TEMPLATES; }
@@ -182,7 +183,7 @@ public class InstanceTemplateResource extends RowResource {
     }
 
     private @NonNull RowAction<Row> createInstanceAction() {
-        return RowAction.Url.<Row>builder(Identifier.of("hohenheim", "template_create_instance"))
+        return RowAction.Url.<Row>builder(HohenheimIds.id("template_create_instance"))
             .label(Microcopy.of("create_instance").withFilter("scope", "instance_template"))
             .icon(Icon.of("plus"))
             // A CMS route PLUS a query parameter: composed off CmsEndpoints, since
@@ -197,7 +198,7 @@ public class InstanceTemplateResource extends RowResource {
 
     /** THE operator act that makes a template tenant-selectable. */
     private @NonNull RowAction<Row> approveAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "approve_template"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("approve_template"))
             .label(Microcopy.of("approve").withFilter("scope", "instance_template"))
             .icon(Icon.of("circle-check"))
             .visibleFor((row, ctx) -> row.get(InstanceTemplateModel.APPROVED_AT) == null)
@@ -227,7 +228,7 @@ public class InstanceTemplateResource extends RowResource {
     }
 
     private @NonNull RowAction<Row> unapproveAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "unapprove_template"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("unapprove_template"))
             .label(Microcopy.of("unapprove").withFilter("scope", "instance_template"))
             .icon(Icon.of("circle-xmark"))
             .visibleFor((row, ctx) -> row.get(InstanceTemplateModel.APPROVED_AT) != null)
@@ -250,7 +251,7 @@ public class InstanceTemplateResource extends RowResource {
     }
 
     private @NonNull RowAction<Row> exportAction() {
-        return RowAction.Url.<Row>builder(Identifier.of("hohenheim", "export_template"))
+        return RowAction.Url.<Row>builder(HohenheimIds.id("export_template"))
             .label(Microcopy.of("export").withFilter("scope", "instance_template"))
             .icon(Icon.of("download"))
             .url(row -> new Uri(HohenheimEndpoints.INSTANCE_TEMPLATES_EXPORT

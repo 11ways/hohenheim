@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.dns.DnsDelegationHealth;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
@@ -17,6 +19,11 @@ import java.util.List;
 public class CheckDnsDelegations extends ScheduledTask {
 
     public static final String STATIC_DESCRIPTION = "Check DNS delegations";
+
+    @Override
+    public @NonNull Identifier id() {
+        return HohenheimIds.id("check_dns_delegations");
+    }
 
     @Override
     public @NonNull CheckDnsDelegations newTask() {

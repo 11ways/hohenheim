@@ -179,13 +179,13 @@ class IsolationVisibilityTest {
         //    This is the projection the executor's throw is FOR -- before it, the task
         //    always recorded success, so this collector could never see it.
         registerTaskHistoryIfAbsent();
-        recordFailedRun(VerifyWorkloadIsolation.class.getName());
+        recordFailedRun(VerifyWorkloadIsolation.ID.toString());
         List<AttentionItem> items = new ArrayList<>();
         AttentionCollector.failedTasks(items);
         assertThat(items)
             .as("step 6: the failed isolation sweep must reach the dashboard")
             .anySatisfy(item -> assertThat(item.title().args().get("name"))
-                .isEqualTo(VerifyWorkloadIsolation.class.getName()));
+                .isEqualTo(VerifyWorkloadIsolation.ID.toString()));
     }
 
     /**

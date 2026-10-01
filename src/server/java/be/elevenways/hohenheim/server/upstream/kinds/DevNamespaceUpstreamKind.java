@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.upstream.kinds;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -31,7 +32,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  */
 public class DevNamespaceUpstreamKind implements UpstreamKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "dev_namespace");
+    public static final Identifier ID = HohenheimIds.id("dev_namespace");
     public static final String REGISTRATION_TOKEN_KEY = "registration_token";
     public static final Schema SETTINGS_SCHEMA = new Schema();
 

@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -36,7 +38,7 @@ public final class InstanceVolumesPage implements RecordScopedPage<Row> {
 
     public static final String SLUG = "volumes";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_volumes"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_volumes"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_volume"); }
     /**
      * Housekeeping, not an everyday destination: the tab lives in the strip's "More"
@@ -99,7 +101,7 @@ public final class InstanceVolumesPage implements RecordScopedPage<Row> {
         // renders it (the InstanceDevicesPage lesson).
         vars.put("addVolumeTarget", canEdit ? newVolumeTarget(panel, instanceId) : null);
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-volumes"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_VOLUMES, vars);
     }
 
     /** The volume create form, opened with its owning instance prefilled. */

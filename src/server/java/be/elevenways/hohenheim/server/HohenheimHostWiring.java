@@ -4,9 +4,14 @@ import be.elevenways.hohenheim.server.cms.AdminSources;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.hohenheim.server.security.HohenheimSecurity;
+import be.elevenways.zenit.auth.server.ZenitAuthModule;
+import be.elevenways.zenit.cms.server.boot.CmsBoot;
 import be.elevenways.zenit.cms.server.page.CmsPanels;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.ZenitModule;
+import org.checkerframework.checker.nullness.qual.NonNull;
+
+import java.util.Set;
 
 /**
  * The one owner of every wiring an incoming request depends on: the client
@@ -28,9 +33,25 @@ import be.elevenways.zenit.common.ZenitModule;
  * the test harness cannot wire a DIFFERENT order than production -- it used to,
  * which is why the split could survive a green suite.
  *
+ * AIDEV-NOTE: runs after {@link ZenitAuthModule}: both panels carry zenit-auth's users and roles resources and the
+ * request wiring below reads its installed services, so auth is installed before this module, in production and in
+ * every test host alike (the discovered module replaced the host's own ZenitAuth.init call). It runs before
+ * {@link CmsBoot}, which walks every registered panel (reserved-slug checks, the derived record sources of each
+ * panel's resources): both Hohenheim panels must exist by then. BootWiringWindowTest pins that order.
+ *
  * @author Jelle De Loecker
  */
 public final class HohenheimHostWiring implements ZenitModule {
+
+    @Override
+    public @NonNull Set<String> initializesAfter() {
+        return Set.of(ZenitAuthModule.class.getName());
+    }
+
+    @Override
+    public @NonNull Set<String> initializesBefore() {
+        return Set.of(CmsBoot.class.getName());
+    }
 
     @Override
     public void init() {

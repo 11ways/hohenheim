@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.HohenheimParams;
@@ -32,7 +34,7 @@ import java.util.Map;
  */
 public final class InstanceSchedulesPage implements RecordScopedPage<Row> {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_schedules"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_schedules"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_schedule"); }
     /**
      * Housekeeping, not an everyday destination: the tab lives in the strip's "More"
@@ -93,6 +95,6 @@ public final class InstanceSchedulesPage implements RecordScopedPage<Row> {
         vars.put("recordTabs", recordTabs(conduit));
         vars.put("timeWording", RelativeTimeWording.resolve(
             conduit.getLocales(), conduit.getMessageResolver()));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-schedules"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_SCHEDULES, vars);
     }
 }

@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -39,7 +41,7 @@ public final class InstanceConsolePage implements RecordScopedPage<Row> {
 
     public static final String SLUG = "console";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_console"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_console"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("console").withFilter("scope", "instance"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("terminal"); }
@@ -102,7 +104,7 @@ public final class InstanceConsolePage implements RecordScopedPage<Row> {
         vars.put("consoleWsUrl", HohenheimEndpoints.INSTANCE_CONSOLE.toUrl(
             Map.of(HohenheimEndpoints.INSTANCE_ID, instanceId)));
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-console"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_CONSOLE, vars);
     }
 
     @SuppressWarnings("unchecked")

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -22,7 +23,7 @@ import java.util.Map;
  */
 public final class ManagePreviewDeploymentResource extends PreviewDeploymentResource {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "manage_preview_deployment"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("manage_preview_deployment"); }
 
     /**
      * Visible here although the operator resource is not: /admin demoted previews behind a

@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.VmKind;
@@ -29,7 +31,7 @@ public final class InstanceFramebufferPage implements RecordScopedPage<Row> {
 
     public static final String SLUG = "framebuffer";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_framebuffer"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_framebuffer"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("framebuffer").withFilter("scope", "instance"); }
     /**
      * Housekeeping, not an everyday destination: the tab lives in the strip's "More"
@@ -74,6 +76,6 @@ public final class InstanceFramebufferPage implements RecordScopedPage<Row> {
             Map.of(HohenheimEndpoints.INSTANCE_ID, instanceId)));
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(
-            Identifier.of("hohenheim", "cms/instance-framebuffer"), vars);
+            HohenheimTemplateIds.INSTANCE_FRAMEBUFFER, vars);
     }
 }

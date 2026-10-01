@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.server.security.ReputationScore;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -41,7 +43,7 @@ public final class SpamserviceReputationPage extends PanelPage {
         this.clientSupplier = clientSupplier;
     }
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "spamservice_reputation"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("spamservice_reputation"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("reputation").withFilter("scope", "spamservice"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.SECURITY_GROUP; }
@@ -88,7 +90,7 @@ public final class SpamserviceReputationPage extends PanelPage {
                 }
             }
         }
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/spamservice-reputation"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.SPAMSERVICE_REPUTATION, vars);
     }
 
     private static ReputationScore weighted(ReputationDiagnostic diagnostic,

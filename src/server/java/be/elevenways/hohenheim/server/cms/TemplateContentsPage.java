@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.InstanceTemplateDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
@@ -32,7 +34,7 @@ import java.util.Map;
  */
 public final class TemplateContentsPage implements RecordScopedPage<Row> {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "template_contents"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("template_contents"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("contents").withFilter("scope", "instance_template"); }
     @Override public @NonNull String slug() { return "contents"; }
     @Override public @NonNull Icon icon() { return Icon.of("list-check"); }
@@ -121,6 +123,6 @@ public final class TemplateContentsPage implements RecordScopedPage<Row> {
             .with(CmsEndpoints.RESOURCE_PARAM, "instance-template-volumes")
             .with(HohenheimParams.TEMPLATE_ID_PREFILL, templateId));
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/template-contents"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.TEMPLATE_CONTENTS, vars);
     }
 }

@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
@@ -35,7 +37,7 @@ import java.util.Map;
  */
 public final class DnsZoneSecondariesPage implements RecordScopedPage<Row> {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dns_zone_secondaries"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("dns_zone_secondaries"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("secondaries").withFilter("scope", "dns_zone"); }
     @Override public @NonNull String slug() { return "secondaries"; }
     @Override public @NonNull Icon icon() { return Icon.of("handshake"); }
@@ -100,7 +102,7 @@ public final class DnsZoneSecondariesPage implements RecordScopedPage<Row> {
         vars.put("timeWording", RelativeTimeWording.resolve(
             conduit.getLocales(), conduit.getMessageResolver()));
 
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/dns-zone-secondaries"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.DNS_ZONE_SECONDARIES, vars);
     }
 
     /** The freshness pill a link row projects, as probed from this primary. */

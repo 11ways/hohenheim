@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
@@ -17,6 +19,11 @@ import java.util.List;
 public class MonitorStacks extends ScheduledTask {
 
     public static final String STATIC_DESCRIPTION = "Monitor managed stack health";
+
+    @Override
+    public @NonNull Identifier id() {
+        return HohenheimIds.id("monitor_stacks");
+    }
 
     @Override
     public @NonNull MonitorStacks newTask() {

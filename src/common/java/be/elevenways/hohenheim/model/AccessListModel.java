@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -19,7 +20,7 @@ import be.elevenways.zenit.common.validation.Violations;
  */
 public class AccessListModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "access_list");
+    public static final Identifier MODEL_ID = HohenheimIds.id("access_list");
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #SATISFY} value: any matching rule grants access. */

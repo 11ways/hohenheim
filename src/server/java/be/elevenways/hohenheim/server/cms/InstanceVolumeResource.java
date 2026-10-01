@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimFormCopy;
@@ -82,7 +83,7 @@ public class InstanceVolumeResource extends RowResource {
         .column(ColumnSpec.fromField(InstanceVolumeModel.EXCLUSIVE).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_volume"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_volume"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_volume"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "instance_volume"); }
     @Override public @NonNull String slug() { return "instance-volumes"; }
@@ -143,7 +144,7 @@ public class InstanceVolumeResource extends RowResource {
      * Admin-only and typed-name-confirmed, the delete-with-data guard, per volume.
      */
     private @NonNull RowAction<Row> destroyAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "destroy_volume"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("destroy_volume"))
             .label(Microcopy.of("destroy").withFilter("scope", "instance_volume"))
             .icon(Icon.of("trash-can"))
             .style(ActionStyle.DESTRUCTIVE)

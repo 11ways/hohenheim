@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.instance.StopKind;
@@ -40,7 +41,7 @@ import java.util.List;
  */
 public class InstanceTemplateModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "instance_template");
+    public static final Identifier MODEL_ID = HohenheimIds.id("instance_template");
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #REINSTALL_POLICY}: a reinstall keeps the instance's volumes and their data. */

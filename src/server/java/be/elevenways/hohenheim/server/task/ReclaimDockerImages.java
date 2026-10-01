@@ -1,10 +1,12 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.docker.DockerReclaim;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
@@ -25,6 +27,11 @@ public class ReclaimDockerImages extends ScheduledTask {
     public static final String STATIC_DESCRIPTION = "Reclaim disk from superseded Docker images";
 
     private static final int MIN_AGE_FLOOR_HOURS = 1;
+
+    @Override
+    public @NonNull Identifier id() {
+        return HohenheimIds.id("reclaim_docker_images");
+    }
 
     @Override
     public @NonNull ReclaimDockerImages newTask() {

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.dns.DelegationVerdict;
 import be.elevenways.hohenheim.model.DnsPeerModel;
@@ -148,7 +149,7 @@ public final class DnsZoneResource extends RowResource {
     /** The panel slug, referenced by the record resource's zone-scoped preset. */
     public static final String SLUG = HohenheimSlugs.DNS_ZONES;
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dns_zone"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("dns_zone"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "dns_zone"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "dns_zone"); }
     @Override public @NonNull String slug() { return SLUG; }
@@ -201,7 +202,7 @@ public final class DnsZoneResource extends RowResource {
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
-        actions.add(0, RowAction.Url.<Row>builder(Identifier.of("hohenheim", "dns_records"))
+        actions.add(0, RowAction.Url.<Row>builder(HohenheimIds.id("dns_records"))
             .label(Microcopy.of("records").withFilter("scope", "dns_zone"))
             .description(Microcopy.of("records_hint").withFilter("scope", "dns_zone"))
             .icon(Icon.of("list-ul"))
@@ -210,7 +211,7 @@ public final class DnsZoneResource extends RowResource {
             // an inline button beside Edit repeated it for 120px of every row.
             .inlineInRow(false)
             .build());
-        actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "check_dns_health"))
+        actions.add(RowAction.Invoke.<Row>builder(HohenheimIds.id("check_dns_health"))
             .label(Microcopy.of("check_health").withFilter("scope", "dns_zone"))
             .description(Microcopy.of("check_health_hint").withFilter("scope", "dns_zone"))
             .icon(Icon.of("stethoscope"))

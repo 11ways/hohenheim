@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
@@ -10,6 +11,7 @@ import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusClients;
 import be.elevenways.hohenheim.server.incus.IncusReaper;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -58,6 +60,11 @@ public class ReapIncusControllers extends ScheduledTask {
                               @NonNull List<IncusReaper.Candidate> plan,
                               @NonNull List<String> removed, @NonNull List<String> refused,
                               @NonNull List<String> errors) {
+    }
+
+    @Override
+    public @NonNull Identifier id() {
+        return HohenheimIds.id("reap_incus_controllers");
     }
 
     @Override

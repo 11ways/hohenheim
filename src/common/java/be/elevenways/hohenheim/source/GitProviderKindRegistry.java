@@ -1,17 +1,17 @@
 package be.elevenways.hohenheim.source;
 
-import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Registry;
 
 /**
  * Central registry for all git provider kinds. Drives the GitProviderModel's
- * RegistryEnumField, its per-kind settings sub-schema, the admin UI kind selector and
+ * RegistryMemberField, its per-kind settings sub-schema, the admin UI kind selector and
  * the server's client construction -- one home, so adding a kind is one class.
  */
 public final class GitProviderKindRegistry {
 
     public static final Registry<GitProviderKindInfo> REGISTRY =
-        new Registry.Simple<>(Identifier.of("hohenheim", "git_provider_kind"));
+        Registry.create(HohenheimIds.id("git_provider_kind"));
 
     /**
      * Entries arrive via the generated BlastAutoLoadInit (GitProviderKind is

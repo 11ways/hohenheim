@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
@@ -67,7 +68,7 @@ public class PreviewDeploymentResource extends RowResource {
         .column(ColumnSpec.fromField(PreviewDeploymentModel.CREATED_AT).sortable().build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "preview_deployment"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("preview_deployment"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "preview_deployment"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "preview_deployment"); }
     @Override public @NonNull String slug() { return "previews"; }
@@ -188,7 +189,7 @@ public class PreviewDeploymentResource extends RowResource {
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
-        actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "destroy_preview"))
+        actions.add(RowAction.Invoke.<Row>builder(HohenheimIds.id("destroy_preview"))
             .label(Microcopy.of("destroy_now").withFilter("scope", "preview_deployment"))
             .icon(Icon.of("trash"))
             .confirmation(ConfirmationSpec.builder()

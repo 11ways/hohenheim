@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HostTrustLane;
 import be.elevenways.hohenheim.WorkloadTier;
 import be.elevenways.hohenheim.HohenheimWidgets;
@@ -89,7 +90,7 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
         this.resource = resource;
     }
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "server_overview"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("server_overview"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("overview").withFilter("scope", "server"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("gauge"); }

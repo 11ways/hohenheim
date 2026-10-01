@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.server.source.GitProviders;
@@ -56,7 +57,7 @@ public class GitProviderResource extends RowResource {
         .column(ColumnSpec.fromField(GitProviderModel.CREATED_AT).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "git_provider"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("git_provider"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "git_provider"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "git_provider"); }
     @Override public @NonNull String slug() { return HohenheimSlugs.GIT_PROVIDERS; }
@@ -97,7 +98,7 @@ public class GitProviderResource extends RowResource {
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
-        actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "test_git_provider"))
+        actions.add(RowAction.Invoke.<Row>builder(HohenheimIds.id("test_git_provider"))
             .label(Microcopy.of("test_connection").withFilter("scope", "git_provider"))
             .icon(Icon.of("plug-circle-check"))
             .handler((row, ctx) -> this.testConnection(row))

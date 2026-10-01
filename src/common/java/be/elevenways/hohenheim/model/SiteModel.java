@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -24,7 +25,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 
 public class SiteModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "site");
+    public static final Identifier MODEL_ID = HohenheimIds.id("site");
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #STATUS} value for an active site. */
@@ -39,7 +40,7 @@ public class SiteModel extends Model {
         .label(HohenheimFormCopy.label("slug"))
         .build());
 
-    // RegistryEnumField: values come from UpstreamKinds at runtime
+    // RegistryMemberField: values come from UpstreamKinds at runtime
     public static final EnumField UPSTREAM_KIND = SCHEMA.addField(
         RegistryMemberField.builder("upstream_kind")
             .registry(UpstreamKinds.REGISTRY)

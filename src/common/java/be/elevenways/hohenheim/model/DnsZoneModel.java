@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.dns.DelegationVerdict;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -19,7 +20,7 @@ import java.util.List;
  */
 public class DnsZoneModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "dns_zone");
+    public static final Identifier MODEL_ID = HohenheimIds.id("dns_zone");
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());

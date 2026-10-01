@@ -1,16 +1,16 @@
 package be.elevenways.hohenheim.instance;
 
-import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Registry;
 
 /**
  * Central registry for all instance kinds. Drives the InstanceModel's
- * RegistryEnumField, the admin UI kind selector, and the server's runtime dispatch.
+ * RegistryMemberField, the admin UI kind selector, and the server's runtime dispatch.
  */
 public final class InstanceKindRegistry {
 
     public static final Registry<InstanceKindInfo> REGISTRY =
-        new Registry.Simple<>(Identifier.of("hohenheim", "instance_kind"));
+        Registry.create(HohenheimIds.id("instance_kind"));
 
     /**
      * Entries arrive via the generated BlastAutoLoadInit (InstanceKindHandler is

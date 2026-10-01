@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -112,7 +113,7 @@ public class DatabaseEngineResource extends RowResource {
             .label(FieldLabels.labelFor(DatabaseEngineModel.STATUS)).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "database_engine"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("database_engine"); }
     @Override public @NonNull Microcopy label() {
         return Microcopy.of("plural").withFilter("scope", "database_engine");
     }
@@ -337,7 +338,7 @@ public class DatabaseEngineResource extends RowResource {
      */
     private @NonNull RowAction<Row> forceDeleteAction() {
         return RowAction.Invoke.<Row>builder(
-                Identifier.of("hohenheim", "force_delete_database_engine"))
+                HohenheimIds.id("force_delete_database_engine"))
             .label(Microcopy.of("force_delete").withFilter("scope", "database_engine"))
             .description(Microcopy.of("force_delete_hint").withFilter("scope", "database_engine"))
             .icon(Icon.of("triangle-exclamation"))

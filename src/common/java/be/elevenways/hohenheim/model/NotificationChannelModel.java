@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -15,7 +16,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
  */
 public class NotificationChannelModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "notification_channel");
+    public static final Identifier MODEL_ID = HohenheimIds.id("notification_channel");
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #KIND} value for HTTP webhook delivery (the only transport today). */

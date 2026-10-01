@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackModel;
@@ -93,7 +94,7 @@ public class StackResource extends ValidatedRowResource {
             .label(FieldLabels.labelFor(StackModel.ENABLED)).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "stack"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("stack"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "stack"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "stack"); }
     /** The peer slug; the service and file resources name it as their parent. */
@@ -269,7 +270,7 @@ public class StackResource extends ValidatedRowResource {
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
-        actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "deploy_stack"))
+        actions.add(RowAction.Invoke.<Row>builder(HohenheimIds.id("deploy_stack"))
             .label(Microcopy.of("deploy").withFilter("scope", "stack"))
             .description(Microcopy.of("deploy_hint").withFilter("scope", "stack"))
             .icon(Icon.of("rocket"))
@@ -283,7 +284,7 @@ public class StackResource extends ValidatedRowResource {
                     Microcopy.of("deploy_queued").withFilter("scope", "stack"));
             })
             .build());
-        actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "stop_stack"))
+        actions.add(RowAction.Invoke.<Row>builder(HohenheimIds.id("stop_stack"))
             .label(Microcopy.of("stop").withFilter("scope", "stack"))
             .icon(Icon.of("circle-stop"))
             .confirmation(ConfirmationSpec.builder()
@@ -298,7 +299,7 @@ public class StackResource extends ValidatedRowResource {
                     Microcopy.of("stop_queued").withFilter("scope", "stack"));
             })
             .build());
-        actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "rollback_stack"))
+        actions.add(RowAction.Invoke.<Row>builder(HohenheimIds.id("rollback_stack"))
             .label(Microcopy.of("rollback").withFilter("scope", "stack"))
             .description(Microcopy.of("rollback_hint").withFilter("scope", "stack"))
             .icon(Icon.of("clock-rotate-left"))
@@ -314,7 +315,7 @@ public class StackResource extends ValidatedRowResource {
                     Microcopy.of("rollback_queued").withFilter("scope", "stack"));
             })
             .build());
-        actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "purge_stack_volumes"))
+        actions.add(RowAction.Invoke.<Row>builder(HohenheimIds.id("purge_stack_volumes"))
             .label(Microcopy.of("purge_volumes").withFilter("scope", "stack"))
             .description(Microcopy.of("purge_volumes_hint").withFilter("scope", "stack"))
             .icon(Icon.of("hard-drive"))
@@ -344,7 +345,7 @@ public class StackResource extends ValidatedRowResource {
                     Microcopy.of("purge_volumes_queued").withFilter("scope", "stack"));
             })
             .build());
-        actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "refresh_stack"))
+        actions.add(RowAction.Invoke.<Row>builder(HohenheimIds.id("refresh_stack"))
             .label(Microcopy.of("refresh_status").withFilter("scope", "stack"))
             .icon(Icon.of("rotate"))
             .handler((row, ctx) -> {
@@ -361,7 +362,7 @@ public class StackResource extends ValidatedRowResource {
         List<HeaderAction> actions = new ArrayList<>(super.headerActions());
         // Disk reclaim is per DAEMON, not per stack, so it belongs on the page rather
         // than on a row. The nightly ReclaimDockerImages task runs the same sweep.
-        actions.add(HeaderAction.Invoke.builder(Identifier.of("hohenheim", "reclaim_images"))
+        actions.add(HeaderAction.Invoke.builder(HohenheimIds.id("reclaim_images"))
             .label(Microcopy.of("reclaim_images").withFilter("scope", "stack"))
             .description(Microcopy.of("reclaim_images_hint").withFilter("scope", "stack"))
             .icon(Icon.of("broom"))
