@@ -65,27 +65,28 @@ final class InstanceActions {
      * inline band, and placed actions lead the declared row actions, so the first declared verb leads.
      */
     @NonNull List<PanelAction<Row>> placedOperator() {
-        return List.of(deployAction(), stopAction(), restartAction(), snapshotAction(), backupAction());
+        return List.of(deployAction(), stopAction(), restartAction(), snapshotAction(), backupAction(),
+            appUpdateAction());
     }
 
-    /** The delegated panel's placed subset: power without restart, and the two artifact actions. */
+    /** The delegated panel's placed subset: power without restart, the two artifact actions and the app update. */
     @NonNull List<PanelAction<Row>> placedDelegated() {
-        return List.of(deployAction(), stopAction(), snapshotAction(), backupAction());
+        return List.of(deployAction(), stopAction(), snapshotAction(), backupAction(), appUpdateAction());
     }
 
     /** The operator panel's legacy row actions. */
     @NonNull List<RowAction<Row>> operator() {
         return List.of(this.exposeAction(), this.rollbackAction(), this.installAction(),
-            this.reinstallAction(), this.appUpdateAction(), this.captureTemplateAction(), this.migrateAction(),
+            this.reinstallAction(), this.captureTemplateAction(), this.migrateAction(),
             this.destroyWithDataAction());
     }
 
     /**
-     * The delegated panel's legacy subset: the in-place app update. Placement, template capture, install and every
-     * destroy stay operator acts.
+     * The delegated panel's legacy subset: none. Placement, template capture, install and every destroy stay operator
+     * acts; the app update is placed.
      */
     @NonNull List<RowAction<Row>> delegated() {
-        return List.of(this.appUpdateAction());
+        return List.of();
     }
 
     /**
@@ -312,27 +313,24 @@ final class InstanceActions {
             .build();
     }
 
-    /** In-place app update: the template's update_script runs inside the RUNNING system. */
-    private @NonNull RowAction<Row> appUpdateAction() {
-        return RowAction.Invoke.<Row>builder(HohenheimIds.id("app_update_instance"))
+    /**
+     * In-place app update: the template's update_script runs inside the RUNNING system. The operation's gate (config)
+     * and its applies (no generated instance) decide who sees it; only an instance with an update script offers it.
+     */
+    private static @NonNull PanelAction<Row> appUpdateAction() {
+        return PanelAction.<Row, String>places(InstanceOperations.APP_UPDATE, ActionPlacement.ROW,
+                (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("app_updated_toast")
+                    .withFilter("scope", "instance").withArg("name", request.subject().get(InstanceModel.NAME))))
             .label(Microcopy.of("app_update").withFilter("scope", "instance"))
             .icon(Icon.of("arrow-up-from-bracket"))
             .inlineOnRecord(false)
             .inlineInRow(false)
-            .visibleFor((row, ctx) -> !InstanceResource.isGenerated(row) && InstanceAppUpdates.hasUpdateScript(row)
-                && HohenheimAccess.reachesRecord(ctx, InstanceModel.MODEL_ID,
-                    row.get(InstanceModel.ID), HohenheimAccess.CONFIG))
+            .hiddenWhen(row -> !InstanceAppUpdates.hasUpdateScript(row))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("app_update").withFilter("scope", "instance"))
                 .body(Microcopy.of("app_update_confirm").withFilter("scope", "instance"))
                 .confirmLabel(Microcopy.of("app_update").withFilter("scope", "instance"))
                 .build())
-            .handler((row, ctx) -> {
-                new InstanceAppUpdates().update(row.get(InstanceModel.ID));
-                return CmsActionResult.refreshWithToast(
-                    Microcopy.of("app_updated_toast").withFilter("scope", "instance")
-                        .withArg("name", row.get(InstanceModel.NAME)));
-            })
             .build();
     }
 

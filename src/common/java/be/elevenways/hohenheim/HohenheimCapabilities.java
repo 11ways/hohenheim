@@ -20,6 +20,15 @@ public final class HohenheimCapabilities {
     /** Export instance backups and restore them to new instances. */
     public static final String BACKUPS = "backups";
 
+    /** Send console commands to the workload's primary process. */
+    public static final String CONSOLE = "console";
+
+    /** Change what the workload runs: its configuration and the installed app. */
+    public static final String CONFIG = "config";
+
+    /** Ownership of a record: view, edit and operate together. */
+    public static final String MANAGE = "manage";
+
     private HohenheimCapabilities() {
     }
 }

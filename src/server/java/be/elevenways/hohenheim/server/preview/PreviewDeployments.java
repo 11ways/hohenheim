@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StoredRows;
+import be.elevenways.hohenheim.preview.PreviewOperations;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.build.BuildQuota;
@@ -476,7 +477,7 @@ public final class PreviewDeployments {
 
     /**
      * Arm (or EXTEND) the preview's bounded lifetime as a one-shot record schedule:
-     * the framework sweeper fires {@link PreviewExpireAction} once at the deadline --
+     * the framework sweeper runs {@link PreviewOperations#EXPIRE} once at the deadline --
      * stored in the database, so a controller that was down past it still enforces it
      * at its next sweep, delayed but never voided. The {@code expires_at} column is
      * DISPLAY data only; this schedule is the enforcement.
@@ -484,7 +485,7 @@ public final class PreviewDeployments {
     public static void armExpiry(int previewId, @NonNull Instant expiresAt) {
         new RecordSchedules(Datasources.getDefault()).armOnce(
             PreviewDeploymentModel.MODEL_ID, previewId, "expire",
-            expiresAt, PreviewExpireAction.ID, null, null);
+            expiresAt, PreviewOperations.EXPIRE.id(), null, null);
     }
 
     /**

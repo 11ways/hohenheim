@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.instance.InstanceOperations.ConsoleCommandInput;
 import be.elevenways.hohenheim.instance.InstanceOperations.PowerResult;
 import be.elevenways.hohenheim.instance.InstanceOperations.SnapshotInput;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -65,11 +66,17 @@ public final class InstanceOperationHandlers {
             .handle(InstanceOperationHandlers::backup);
         OperationHandlers.attach(InstanceOperations.SNAPSHOT).applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::snapshot);
+        // A console line runs on a generated instance too: product tiers (game servers) are driven through it.
+        OperationHandlers.attach(InstanceOperations.CONSOLE_COMMAND).handle(InstanceOperationHandlers::consoleCommand);
+        OperationHandlers.attach(InstanceOperations.APP_UPDATE).applies(InstanceOperationHandlers::authored)
+            .handle(InstanceOperationHandlers::appUpdate);
         SchedulePlacements.place(InstanceOperations.START);
         SchedulePlacements.place(InstanceOperations.STOP);
         SchedulePlacements.place(InstanceOperations.RESTART);
         SchedulePlacements.place(InstanceOperations.BACKUP).onFailure(InstanceOperationHandlers::alertBackupFailed);
         SchedulePlacements.place(InstanceOperations.SNAPSHOT);
+        SchedulePlacements.place(InstanceOperations.CONSOLE_COMMAND);
+        SchedulePlacements.place(InstanceOperations.APP_UPDATE);
     }
 
     private InstanceOperationHandlers() {
@@ -145,6 +152,28 @@ public final class InstanceOperationHandlers {
             note = SCHEDULED_NOTE;
         }
         return new InstanceSnapshots().create(instanceId(call), note);
+    }
+
+    /**
+     * Sends the line through {@link InstanceConsoles}, which asks the console capability on its own funnel; a surface
+     * that records the command in the activity log does so itself, as it did before.
+     *
+     * @throws IllegalStateException for a blank line: a schedule step that stores none fails rather than sending
+     *                               nothing
+     */
+    private static @NonNull String consoleCommand(@NonNull OperationCall<Row, ConsoleCommandInput> call) {
+        ConsoleCommandInput input = call.input();
+        String command = input == null ? null : input.command();
+        if (command == null || command.isBlank()) {
+            throw new IllegalStateException("no console command configured on this step");
+        }
+        InstanceConsoles.sendCommand(instanceId(call), command);
+        return "sent";
+    }
+
+    /** @return the update script's bounded output, shown to the operator */
+    private static @NonNull String appUpdate(@NonNull OperationCall<Row, Void> call) {
+        return new InstanceAppUpdates().update(instanceId(call));
     }
 
     /**

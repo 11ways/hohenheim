@@ -19,7 +19,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
- * The instance operations every surface places: start, stop, restart, backup and snapshot of one instance.
+ * The instance operations every surface places: start, stop, restart, backup, snapshot, a console command and the
+ * in-place app update of one instance.
  *
  * AIDEV-NOTE: no applies and no availability (stage 2 contract 6.10, S1). A stopped instance's stop is idempotent
  * and answers success, and a database that is not ready is the start handler's retriable refusal, so the API and a
@@ -93,6 +94,42 @@ public final class InstanceOperations {
     /** The snapshot's input. */
     public record SnapshotInput(@Nullable String note) {
     }
+
+    /** The console line to send. */
+    public static final StringField COMMAND = StringField.builder("command")
+        .label(HohenheimFormCopy.label("console_line"))
+        .build();
+
+    /**
+     * One line to the workload's primary process; a line equal to the template's stop command still counts as an
+     * observed stop (InstanceConsoles' funnel).
+     */
+    public static final Operation<Row, ConsoleCommandInput, String> CONSOLE_COMMAND =
+        Operation.declare(HohenheimIds.id("console_command_instance"))
+            .label(label("console_command", "schedule_action", "Console command"))
+            .icon(Icon.of("terminal"))
+            .one(INSTANCE)
+            .gate(gate(HohenheimCapabilities.CONSOLE))
+            .input(OperationInput.of(FormSpec.builder().add(COMMAND).build(), ConsoleCommandInput.class,
+                values -> new ConsoleCommandInput(values.get(COMMAND))))
+            .result(String.class)
+            .facts(OperationFact.REACHES_OUTSIDE)
+            .register();
+
+    /** The console command's input. */
+    public record ConsoleCommandInput(@Nullable String command) {
+    }
+
+    /** The template's in-place update script, run inside the running workload; it changes what runs: config. */
+    public static final Operation<Row, Void, String> APP_UPDATE =
+        Operation.declare(HohenheimIds.id("app_update_instance"))
+            .label(label("app_update", "schedule_action", "App update"))
+            .icon(Icon.of("arrow-up-from-bracket"))
+            .one(INSTANCE)
+            .gate(gate(HohenheimCapabilities.CONFIG))
+            .result(String.class)
+            .facts(OperationFact.REACHES_OUTSIDE)
+            .register();
 
     /**
      * What a power operation left behind.

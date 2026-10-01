@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
 
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -11,24 +12,30 @@ import be.elevenways.hohenheim.server.cms.InstanceConsolePage;
 import be.elevenways.hohenheim.server.devtunnel.DevTunnelServerHandler;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceConsoleHandler;
-import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceShellHandler;
 import be.elevenways.hohenheim.server.instance.VmFramebufferHandler;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.data.RecordSourceGate;
 import be.elevenways.zenit.server.http.ReturnTarget;
+import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.zenit.server.operation.OperationRequest;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Duration;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -190,10 +197,10 @@ final class SiteControlHandlers {
 
         HohenheimEndpoints.INSTANCE_CONSOLE_COMMAND.setHandler(conduit -> {
             Integer instanceId = conduit.getParameter(HohenheimEndpoints.INSTANCE_ID);
-            // The 403 is the UX half; InstanceConsoles.sendCommand asks the same CONSOLE
+            // The 403 is the UX half; the operation gate and InstanceConsoles ask the same CONSOLE
             // capability again on the funnel, so a direct POST is refused either way.
-            if (instanceId == null || !HohenheimAccess.hasInstanceCapability(
-                    RecordSourceGate.accessContextOf(conduit), instanceId,
+            AccessContext access = RecordSourceGate.accessContextOf(conduit);
+            if (instanceId == null || !HohenheimAccess.hasInstanceCapability(access, instanceId,
                     HohenheimAccess.CONSOLE)) {
                 conduit.forbidden();
                 return null;
@@ -207,10 +214,17 @@ final class SiteControlHandlers {
                 return HandlerSupport.redirectUntyped(backUrl);
             }
             try {
-                InstanceConsoles.sendCommand(instanceId, command);
+                OperationPipeline.invoke(OperationRequest.of(InstanceOperations.CONSOLE_COMMAND,
+                        CmsPlacementSurface.ADMIN_ACTION)
+                    .caller(access)
+                    .subjectKeys(List.of(String.valueOf(instanceId)))
+                    .form(Map.of(InstanceOperations.COMMAND.getName(), command)));
             } catch (Violations refused) {
                 // NEVER a silent swallow: the refusal rides the session flash.
                 HohenheimFlash.error(conduit, HandlerSupport.violationMessage(refused));
+                return HandlerSupport.redirectUntyped(backUrl);
+            } catch (DomainRefusal refused) {
+                HohenheimFlash.error(conduit, refused.shown());
                 return HandlerSupport.redirectUntyped(backUrl);
             }
             ActivityLog.record(Models.get(InstanceModel.class),
