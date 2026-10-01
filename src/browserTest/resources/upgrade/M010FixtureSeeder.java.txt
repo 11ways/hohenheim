@@ -1,0 +1,281 @@
+package be.elevenways.hohenheim.test.migration;
+
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
+import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.cms.InstanceScheduleResource;
+import be.elevenways.hohenheim.server.cms.InstanceScheduleStepResource;
+import be.elevenways.hohenheim.server.notification.Alerts;
+import be.elevenways.hohenheim.server.notification.NotificationEvents;
+import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.auth.AuthKeys;
+import be.elevenways.zenit.auth.AuthSettings;
+import be.elevenways.zenit.auth.model.GrantModel;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.GroupMembershipToken;
+import be.elevenways.zenit.auth.model.PermissionGroupModel;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.model.UserPrincipal;
+import be.elevenways.zenit.auth.server.ApiKeyService;
+import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.auth.server.ZenitAuth;
+import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.data.RecordSource;
+import be.elevenways.zenit.common.data.RecordSourceRegistry;
+import be.elevenways.zenit.common.data.view.SavedQuery;
+import be.elevenways.zenit.common.data.view.SavedView;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
+import be.elevenways.zenit.common.orm.field.BooleanField;
+import be.elevenways.zenit.common.orm.field.DateTimeField;
+import be.elevenways.zenit.common.orm.field.IntegerField;
+import be.elevenways.zenit.common.orm.field.SchemaField;
+import be.elevenways.zenit.common.orm.field.StringField;
+import be.elevenways.zenit.common.orm.migration.FrozenModel;
+import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.session.Session;
+import be.elevenways.zenit.common.task.record.RecordScheduleModel;
+import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
+import be.elevenways.zenit.comms.server.Comms;
+import be.elevenways.zenit.comms.server.hub.HubIdempotency;
+import be.elevenways.zenit.server.data.SavedViews;
+import be.elevenways.zenit.server.task.TaskRuntime;
+import org.junit.jupiter.api.Test;
+
+import java.io.Writer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.UUID;
+
+/**
+ * Writes the m010.sqlite upgrade fixture through the code of tag before-module-fit: Hohenheim's migrations through
+ * 010 (every other stream whole), then every seeded row through the old writers.
+ *
+ * AIDEV-NOTE: sites and instances are inserted at their M010 table shape through FrozenModel because the live
+ * models of this tag already carry M011's columns (trusted_upstream, workload_killed_at), which an M010 table lacks.
+ * Every framework row (users, grants, keys, activity, schedules, tasks, receipts, sessions, views, comms) is written
+ * by the old live code.
+ *
+ * @author Jelle De Loecker
+ * @since  0.1.0
+ */
+class M010FixtureSeeder {
+
+    static final String TARGET = System.getProperty("hohenheim.fixture.out",
+        "/home/skerit/projects/zenit-workspace-old/m010.sqlite");
+
+    @Test
+    void seed() throws Exception {
+        Path out = Path.of(TARGET);
+        Files.deleteIfExists(out);
+        Properties facts = new Properties();
+
+        // 1. Boot the way the browser harness does, over a database migrated through Hohenheim's 010.
+        HohenheimSettingsBoot.forceDefinitions();
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.PROXY, true);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.DNS, true);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.FIREWALL, true);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.STACKS, true);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.DATABASES, true);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.INSTANCES, true);
+        HohenheimSettingsBoot.load();
+        HohenheimEndpoints.init();
+        HohenheimTestRuntime.declareAccessModelsOnce();
+
+        InstallsAt.migrateThrough(out, "010");
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.PATH, out.toAbsolutePath().toString());
+        SqlDatasource datasource = HohenheimDatabase.openDatasource();
+        ZenitAuth.init(datasource);
+        Zenit.SETTINGS_VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
+        ServerMain.installAuthBaselines();
+        HohenheimTestRuntime.ensureBooted();
+
+        // 2. An administrator (the /setup shape: a "*" grant) and an operator who holds a role.
+        Row admin = user("admin@upgrade.local", "Upgrade Admin");
+        ZenitAuth.markSeeded();
+        Row adminGrant = AuthModels.grants().createEmptyRow();
+        adminGrant.set(GrantModel.SUBJECT_TYPE, GrantSubjectType.USER.key());
+        adminGrant.set(GrantModel.SUBJECT_ID, admin.get(UserModel.ID));
+        adminGrant.set(GrantModel.PERMISSION, "*");
+        adminGrant.set(GrantModel.VALUE, true);
+        AuthModels.grants().save(adminGrant);
+
+        Row operator = user("operator@upgrade.local", "Upgrade Operator");
+        Row role = AuthModels.permissionGroups().createEmptyRow();
+        role.set(PermissionGroupModel.SLUG, "upgrade_operators");
+        role.set(PermissionGroupModel.TITLE, "Upgrade operators");
+        AuthModels.permissionGroups().save(role);
+        grant(GrantSubjectType.GROUP, role.get(PermissionGroupModel.ID), "hohenheim.admin.access");
+        grant(GrantSubjectType.USER, operator.get(UserModel.ID), GroupMembershipToken.of("upgrade_operators"));
+
+        // 3. Sites and an instance at the M010 table shape, then a record grant on the site.
+        int siteId = insertSite("Upgrade Site");
+        int instanceId = insertInstance("upgrade-instance");
+        try {
+            Row site = Models.get(SiteModel.class).findById(siteId);
+            site.set(SiteModel.DESCRIPTION, "edited before the consolidation");
+            Models.get(SiteModel.class).save(site);
+            System.out.println("seeder: live site update ok");
+        } catch (RuntimeException refused) {
+            System.out.println("seeder: live site update refused: " + refused);
+        }
+        RecordGrants.grant(GrantSubjectType.USER, operator.get(UserModel.ID), SiteModel.MODEL_ID, siteId,
+            "manage", true);
+        RecordGrants.grant(GrantSubjectType.USER, operator.get(UserModel.ID), InstanceModel.MODEL_ID, instanceId,
+            "power", true);
+
+        // 4. An API key with capability scopes, a permission scope among them.
+        ApiKeyService.CreatedKey key = ApiKeyService.create(operator.get(UserModel.ID), "upgrade-key",
+            List.of("cap:hohenheim:instance#power", "cap:zenit-auth:user#read", "hohenheim.admin.access"), null);
+        facts.setProperty("api_key.plaintext", key.plaintext());
+        facts.setProperty("api_key.stored_scopes", String.valueOf(key.row().get(be.elevenways.zenit.auth.model.ApiKeyModel.SCOPES)));
+
+        // 5. A schedule on the instance written through the admin resources, with power, snapshot and backup steps.
+        AccessContext asAdmin = AccessContext.of(TenantConduits.stubFor(
+            new UserPrincipal(((Integer) admin.get(UserModel.ID)).longValue(), "Upgrade Admin")));
+        Map<String, Object> schedule = new LinkedHashMap<>();
+        schedule.put(RecordScheduleModel.RECORD_ID.getName(), String.valueOf(instanceId));
+        schedule.put(RecordScheduleModel.NAME.getName(), "nightly cycle");
+        schedule.put(RecordScheduleModel.CRON.getName(), "0 4 * * *");
+        schedule.put(RecordScheduleModel.TIMEZONE.getName(), "Europe/Brussels");
+        schedule.put(RecordScheduleModel.ENABLED.getName(), true);
+        Integer scheduleId = (Integer) new InstanceScheduleResource().persistRow(Map.copyOf(schedule), asAdmin);
+        facts.setProperty("schedule.id", String.valueOf(scheduleId));
+        step(scheduleId, 0, "hohenheim:power", Map.of("operation", "stop"), asAdmin);
+        step(scheduleId, 1, "hohenheim:snapshot", Map.of("note", "before nightly start"), asAdmin);
+        step(scheduleId, 2, "hohenheim:backup", Map.of(), asAdmin);
+        step(scheduleId, 3, "hohenheim:power", Map.of("operation", "start"), asAdmin);
+        step(scheduleId, 4, "hohenheim:power", Map.of(), asAdmin);
+
+        // 6. A named personal view on the media list (its source id is zenitmedia:media), which writes its own receipt.
+        RecordSource<?> media = RecordSourceRegistry.INSTANCE.requireById(Identifier.of("zenitmedia", "media"));
+        UUID viewCommand = UUID.randomUUID();
+        SavedView view = SavedViews.save(asAdmin, SavedViews.hostOf(media.id()), viewCommand,
+            SavedView.Draft.of("Recent uploads", false, SavedQuery.EMPTY), 0);
+        facts.setProperty("saved_view.id", view.id().toString());
+        facts.setProperty("saved_view.command", viewCommand.toString());
+        facts.setProperty("saved_view.source", media.id().toString());
+
+        // 7. A hub send receipt: its type key lived in the zenit-comms namespace.
+        String hubBody = "{\"to\":\"ops\",\"payload\":{\"text\":\"upgrade\"}}";
+        HubIdempotency.Outcome hub = HubIdempotency.begin(1, "upgrade-journey", hubBody);
+        HubIdempotency.complete(((HubIdempotency.Outcome.Fresh) hub).receiptKey(), "{\"acknowledged\":true}");
+        facts.setProperty("hub.project", "1");
+        facts.setProperty("hub.key", "upgrade-journey");
+        facts.setProperty("hub.body", hubBody);
+        facts.setProperty("hub.response", "{\"acknowledged\":true}");
+
+        // 8. An operator session.
+        Session session = Zenit.getSessionStore().create();
+        session.set(AuthKeys.USER_ID, ((Integer) operator.get(UserModel.ID)).longValue());
+        Zenit.getSessionStore().save(session);
+        facts.setProperty("session.secret", session.token().secret());
+
+        // 9. An alert for every administrator's inbox, swept through the comms outbox.
+        Alerts.send(NotificationEvents.CERT_EXPIRING, "Upgrade journey alert", "seeded before the consolidation");
+        Comms.sweep();
+
+        facts.setProperty("admin.id", String.valueOf(admin.get(UserModel.ID)));
+        facts.setProperty("operator.id", String.valueOf(operator.get(UserModel.ID)));
+        facts.setProperty("role.id", String.valueOf(role.get(PermissionGroupModel.ID)));
+        facts.setProperty("site.id", String.valueOf(siteId));
+        facts.setProperty("instance.id", String.valueOf(instanceId));
+        facts.setProperty("seeded_at", Now.instant().toString());
+        try (Writer writer = Files.newBufferedWriter(Path.of(TARGET + ".properties"))) {
+            facts.store(writer, "m010.sqlite seed facts (secrets of a throwaway fixture)");
+        }
+
+        // 10. The datasource closes so the WAL folds into the main file.
+        TaskRuntime.stop();
+        datasource.close();
+        System.out.println("fixture written: " + out);
+    }
+
+    private static Row user(String email, String name) {
+        Row user = AuthModels.users().createEmptyRow();
+        user.set(UserModel.EMAIL, email);
+        user.set(UserModel.DISPLAY_NAME, name);
+        user.set(UserModel.ENABLED, true);
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
+        return AuthModels.users().save(user);
+    }
+
+    private static void grant(GrantSubjectType subject, Integer subjectId, String permission) {
+        Row grant = AuthModels.grants().createEmptyRow();
+        grant.set(GrantModel.SUBJECT_TYPE, subject.key());
+        grant.set(GrantModel.SUBJECT_ID, subjectId);
+        grant.set(GrantModel.PERMISSION, permission);
+        grant.set(GrantModel.VALUE, true);
+        AuthModels.grants().save(grant);
+    }
+
+    private static void step(Integer scheduleId, int position, String action, Map<String, Object> payload,
+                             AccessContext access) {
+        Map<String, Object> step = new LinkedHashMap<>();
+        step.put(RecordScheduleStepModel.SCHEDULE_ID.getName(), scheduleId);
+        step.put(RecordScheduleStepModel.POSITION.getName(), position);
+        step.put(RecordScheduleStepModel.ACTION.getName(), action);
+        step.put(RecordScheduleStepModel.PAYLOAD.getName(), new LinkedHashMap<>(payload));
+        step.put(RecordScheduleStepModel.OFFSET_SECONDS.getName(), position * 60);
+        step.put(RecordScheduleStepModel.FAILURE_POLICY.getName(), "abort");
+        new InstanceScheduleStepResource().persistRow(step, access);
+    }
+
+    private static int insertSite(String name) {
+        IntegerField id = IntegerField.builder().name("id").build();
+        StringField siteName = StringField.builder().name("name").build();
+        StringField slug = StringField.builder().name("slug").build();
+        StringField upstreamKind = StringField.builder().name("upstream_kind").build();
+        BooleanField enabled = BooleanField.builder("enabled").build();
+        SchemaField settings = SchemaField.builder("settings").build();
+        StringField status = StringField.builder().name("status").build();
+        DateTimeField createdAt = DateTimeField.builder().name("created_at").build();
+        DateTimeField updatedAt = DateTimeField.builder().name("updated_at").build();
+        FrozenModel sites = new FrozenModel("sites", id, siteName, slug, upstreamKind, enabled, settings, status,
+            createdAt, updatedAt);
+        Row row = sites.createEmptyRow();
+        row.set(siteName, name);
+        row.set(slug, "upgrade-site");
+        row.set(upstreamKind, "hohenheim:address");
+        row.set(enabled, true);
+        row.set(settings, new LinkedHashMap<>(Map.of("forward_host", "127.0.0.1", "forward_port", 9090)));
+        row.set(status, "active");
+        row.set(createdAt, Now.instant());
+        row.set(updatedAt, Now.instant());
+        return sites.save(row).get(id);
+    }
+
+    private static int insertInstance(String name) {
+        IntegerField id = IntegerField.builder().name("id").build();
+        StringField instanceName = StringField.builder().name("name").build();
+        StringField kind = StringField.builder().name("kind").build();
+        SchemaField settings = SchemaField.builder("settings").build();
+        StringField status = StringField.builder().name("status").build();
+        DateTimeField createdAt = DateTimeField.builder().name("created_at").build();
+        DateTimeField updatedAt = DateTimeField.builder().name("updated_at").build();
+        FrozenModel instances = new FrozenModel("instances", id, instanceName, kind, settings, status, createdAt,
+            updatedAt);
+        Row row = instances.createEmptyRow();
+        row.set(instanceName, name);
+        row.set(kind, "hohenheim:docker_container");
+        row.set(settings, new LinkedHashMap<>(Map.of("image", "alpine", "tag", "latest", "command", "sleep 300")));
+        row.set(status, InstanceModel.STATUS_CREATED);
+        row.set(createdAt, Now.instant());
+        row.set(updatedAt, Now.instant());
+        return instances.save(row).get(id);
+    }
+}
