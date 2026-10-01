@@ -12742,6 +12742,10 @@
     "text": "De geplande back-up van instantie {$name} is mislukt: {$reason}",
     "scope": "alert"
   },
+  "instance_backup_unknown_body": {
+    "text": "De geplande back-up van instantie {$name} werd onderbroken voor er een resultaat was vastgelegd; het is niet bekend of de back-up voltooid is, controleer dus het back-updoel",
+    "scope": "alert"
+  },
   "database_backup_failed_subject": {
     "text": "Back-up van database mislukt: {$name}",
     "scope": "alert"

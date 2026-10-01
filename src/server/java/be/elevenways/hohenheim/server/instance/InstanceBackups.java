@@ -116,21 +116,31 @@ public final class InstanceBackups {
         return backupNow(instanceId, targetId, BackupTargetKinds.targetFor(targetId));
     }
 
-    /** Explicit-target variant (tests, future re-target flows). */
+    /**
+     * Explicit-target variant (tests, future re-target flows).
+     *
+     * AIDEV-NOTE: the backup's activity row is written HERE, once, on success, whichever surface asked (the API,
+     * the admin, a schedule step); no surface writes one of its own.
+     */
     public int backupNow(int instanceId, @Nullable Integer targetId, @NonNull BackupTarget target) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.BACKUPS);
         Row owner = requireRow(instanceId);
+        int backupId;
         if (InstanceKinds.isReleaseManaged(owner.get(InstanceModel.KIND))) {
             // QUEUED behind a running deploy, as the converge lock it replaces did: the
             // serving release a backup captures must be the one a finished converge left.
-            return this.instances.operations().exclusive(instanceId,
+            backupId = this.instances.operations().exclusive(instanceId,
                 InstanceOperationLock.Contention.QUEUE,
                 () -> backupApplication(instanceId, targetId, target));
+        } else {
+            backupId = this.instances.operations().exclusive(instanceId,
+                InstanceOperationLock.Contention.REFUSE,
+                () -> backupResolved(instanceId, targetId, target, requireRow(instanceId),
+                    this.instances.resolve(instanceId), false));
         }
-        return this.instances.operations().exclusive(instanceId,
-            InstanceOperationLock.Contention.REFUSE,
-            () -> backupResolved(instanceId, targetId, target, requireRow(instanceId),
-                this.instances.resolve(instanceId), false));
+        ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.BACKUP,
+            "backup #" + backupId);
+        return backupId;
     }
 
     /** The application lane of {@link #backupNow}; the caller holds the application's lock. */

@@ -958,8 +958,9 @@ public final class InstanceService {
     /**
      * Stop and deploy again, in one verb.
      *
-     * AIDEV-NOTE: THE restart composition, and there is exactly one. It used to live
-     * inline in {@code InstancePowerAction.execute} and nowhere else, so the CMS surface
+     * AIDEV-NOTE: THE restart composition, and there is exactly one: the restart operation
+     * ({@code InstanceOperations.RESTART}) runs it from every surface. It used to live
+     * inline in the scheduled power action and nowhere else, so the CMS surface
      * that wanted a restart button had to either hand-roll the pair (two independent
      * gate checks, two toasts, and a UI-side window where the workload is down with
      * nothing recording why) or grow a schedule to press it. stop() is idempotent when

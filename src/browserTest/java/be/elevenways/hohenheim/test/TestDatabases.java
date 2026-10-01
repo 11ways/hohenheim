@@ -149,6 +149,19 @@ public final class TestDatabases {
     }
 
     /**
+     * Re-point the datasource-bound services at the database {@code HohenheimDatabase} serves now, for a class that
+     * opened its own file (an upgrade fixture) instead of a fresh copy.
+     *
+     * AIDEV-NOTE: without it such a class passes only as the first in its JVM: zenit-auth kept answering from the
+     * database of the class before. The task models are registered on it too (the service stays stopped, as after
+     * every swap), so the class reads its own task rows.
+     */
+    public static synchronized void adoptCurrentDatabase() {
+        rebindDatasourceBoundServices();
+        TaskRuntime.registerModels(HohenheimDatabase.datasource());
+    }
+
+    /**
      * Re-point the process-global services that CAPTURED the outgoing datasource.
      *
      * AIDEV-NOTE: this is what makes a shared-JVM lane possible. `Datasources.register` and

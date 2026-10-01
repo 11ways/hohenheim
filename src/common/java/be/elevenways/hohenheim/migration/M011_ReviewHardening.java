@@ -27,7 +27,8 @@ import java.util.TreeSet;
 
 /**
  * The schema and stored-data changes of the 2026-09-24 review fixes: trusted upstreams, install-media fetches,
- * the observed workload kill, hashed Basic auth passwords and canonical access-rule networks.
+ * the observed workload kill, hashed Basic auth passwords and canonical access-rule networks; and module-fit's
+ * instance operations: stored power, backup and snapshot schedule steps name the operations that replaced them.
  *
  * AIDEV-NOTE: this is ONE migration on purpose (2026-09-30). It replaced M011, M012, M015, M016 and M017,
  * which no production install (kuifje at 009, robbedoes at 010) had applied; the two test installs that
@@ -67,6 +68,17 @@ public class M011_ReviewHardening extends HohenheimMigration {
     static final Set<String> DIALING_KINDS = Set.of(
         "hohenheim:address", "hohenheim:tls_passthrough", "hohenheim:static");
 
+    /** The legacy schedule actions, as production stored them. */
+    static final String POWER_ACTION = "hohenheim:power";
+    static final String BACKUP_ACTION = "hohenheim:backup";
+    static final String SNAPSHOT_ACTION = "hohenheim:snapshot";
+
+    /** A power step's stored operation, by the operation that replaces it; a missing or blank one meant restart. */
+    static final Map<String, String> POWER_OPERATIONS = Map.of(
+        "start", "hohenheim:start_instance",
+        "stop", "hohenheim:stop_instance",
+        "restart", "hohenheim:restart_instance");
+
     /** The rule types that carry a network, as production stored them. */
     static final Set<String> NETWORK_TYPES = Set.of("ip_allow", "ip_deny");
 
@@ -87,6 +99,8 @@ public class M011_ReviewHardening extends HohenheimMigration {
         super("011", "Review hardening");
         // The trusted-upstream backfill reads zenit-auth's grant table including its expires_at column.
         dependsOn("be.elevenways.zenit.auth.server.migration.M007_HardenGrantSchemas");
+        // The schedule-step rewrite moves payloads into the stored-input column zenit's M004 adds.
+        dependsOn("be.elevenways.zenit.common.task.record.M004_AddRecordScheduleStepInput");
         irreversible("plaintext Basic auth passwords are replaced by their argon2 hashes and access-rule"
             + " networks by their canonical spelling; neither original can be restored");
     }
@@ -119,6 +133,8 @@ public class M011_ReviewHardening extends HohenheimMigration {
             M011_ReviewHardening::trustExistingTenantUpstreams);
         schema.data("rewrite access-rule networks the strict parser refuses to their canonical spelling", "1",
             M011_ReviewHardening::canonicalizeNetworks);
+        schema.data("name the instance operations on stored power, backup and snapshot schedule steps", "1",
+            M011_ReviewHardening::renameInstanceScheduleSteps);
     }
 
     /** Never run: the migration is declared irreversible, and the executor refuses the DOWN first. */
@@ -192,6 +208,89 @@ public class M011_ReviewHardening extends HohenheimMigration {
                 rules.save(row);
             }
         });
+    }
+
+    /**
+     * The data step naming the instance operations on stored schedule steps: a power step by its stored
+     * {@code operation} (missing or blank is restart, the old default), a backup and a snapshot step by the operation
+     * that replaced them, a snapshot's payload moved into the stored input. Open step-runs of a rewritten step follow.
+     *
+     * AIDEV-NOTE: a data step, never a renameType in the stored-id holder: the target of a power step depends on its
+     * payload, and the holder's chains are global, so {@code hohenheim:backup -> hohenheim:backup_instance} would also
+     * carry the activity value {@code backup} on to an operation id (stage 2 contract 6.10).
+     *
+     * @throws IllegalStateException naming the step when a power step stores an operation no power operation replaces
+     */
+    public static void renameInstanceScheduleSteps(@NonNull Datasource datasource) {
+        Db.run(datasource, () -> {
+            IntegerField id = IntegerField.builder().name("id").build();
+            StringField action = StringField.builder().name("action").build();
+            SchemaField payload = SchemaField.builder("payload").build();
+            SchemaField input = SchemaField.builder("input").build();
+            FrozenModel steps = new FrozenModel("zenit_record_schedule_steps", id, action, payload, input);
+            Map<Integer, String> rewritten = new LinkedHashMap<>();
+            Map<Integer, Map<String, Object>> inputs = new LinkedHashMap<>();
+            for (Row step : steps.find()
+                    .where(action.in(List.of(POWER_ACTION, BACKUP_ACTION, SNAPSHOT_ACTION))).all()) {
+                String stored = step.get(action);
+                Map<String, Object> values = payloadOf(step.get(payload));
+                Map<String, Object> moved = null;
+                String operation;
+                if (POWER_ACTION.equals(stored)) {
+                    Object raw = values.get("operation");
+                    String op = raw == null || String.valueOf(raw).isBlank() ? "restart" : String.valueOf(raw).trim();
+                    operation = POWER_OPERATIONS.get(op);
+                    if (operation == null) {
+                        throw new IllegalStateException("Schedule step " + step.get(id) + " stores the power operation '"
+                            + op + "', which no instance operation replaces");
+                    }
+                } else if (BACKUP_ACTION.equals(stored)) {
+                    operation = "hohenheim:backup_instance";
+                } else {
+                    operation = "hohenheim:snapshot_instance";
+                    Object note = values.get("note");
+                    if (note != null && !String.valueOf(note).isBlank()) {
+                        moved = new LinkedHashMap<>();
+                        moved.put("note", String.valueOf(note));
+                    }
+                }
+                step.set(action, operation);
+                step.set(payload, null);
+                step.set(input, moved);
+                steps.save(step);
+                Integer stepId = step.get(id);
+                rewritten.put(stepId, operation);
+                inputs.put(stepId, moved);
+            }
+            if (rewritten.isEmpty()) {
+                return;
+            }
+            IntegerField runId = IntegerField.builder().name("id").build();
+            IntegerField stepId = IntegerField.builder().name("step_id").build();
+            StringField operation = StringField.builder().name("operation").build();
+            StringField status = StringField.builder().name("status").build();
+            SchemaField runInput = SchemaField.builder("input").build();
+            FrozenModel stepRuns = new FrozenModel("zenit_record_schedule_step_runs", runId, stepId, operation,
+                status, runInput);
+            for (Row stepRun : stepRuns.find().where(stepId.in(List.copyOf(rewritten.keySet()))).all()) {
+                Integer owner = stepRun.get(stepId);
+                stepRun.set(operation, rewritten.get(owner));
+                // Only a step-run still to run reads its input; an ended one keeps what it ran with.
+                if ("due".equals(stepRun.get(status))) {
+                    stepRun.set(runInput, inputs.get(owner));
+                }
+                stepRuns.save(stepRun);
+            }
+        });
+    }
+
+    /** @return a stored payload as a map, empty when it holds none */
+    private static Map<String, Object> payloadOf(Object stored) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        if (stored instanceof Map<?, ?> map) {
+            map.forEach((key, value) -> values.put(String.valueOf(key), value));
+        }
+        return values;
     }
 
     /**

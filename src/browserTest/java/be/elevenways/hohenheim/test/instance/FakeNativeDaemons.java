@@ -191,6 +191,12 @@ final class FakeNativeDaemons {
      */
     static final AtomicReference<Runnable> DURING_RESTORE = new AtomicReference<>();
 
+    /**
+     * Consumed by the next {@code start}: whatever arrives while the daemon starts the workload, on the caller's
+     * thread and inside the operation that started it (a rival asking for the same record).
+     */
+    static final AtomicReference<Runnable> DURING_START = new AtomicReference<>();
+
     // -- the install lane -----------------------------------------------------
 
     /**
@@ -346,6 +352,10 @@ final class FakeNativeDaemons {
 
         @Override
         public void start(@NonNull String handle) throws IOException {
+            Runnable during = DURING_START.getAndSet(null);
+            if (during != null) {
+                during.run();
+            }
             FakeWorkload workload = require(handle);
             workload.running = true;
             workload.oomKilled = false;   // a restart clears the daemon's kill flag

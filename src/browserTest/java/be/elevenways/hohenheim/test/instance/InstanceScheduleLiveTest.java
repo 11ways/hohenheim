@@ -1,34 +1,31 @@
 package be.elevenways.hohenheim.test.instance;
 
-import be.elevenways.hohenheim.model.StoredRows;
-import be.elevenways.hohenheim.test.ApiSupport;
-import be.elevenways.hohenheim.test.Poll;
-import be.elevenways.hohenheim.test.TestDatabases;
-import be.elevenways.hohenheim.test.docker.TestImages;
-import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.model.StoredRows;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.instance.InstanceService;
-import be.elevenways.hohenheim.server.schedule.InstanceBackupAction;
 import be.elevenways.hohenheim.server.schedule.InstanceConsoleCommandAction;
-import be.elevenways.hohenheim.server.schedule.InstancePowerAction;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
-import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
-import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
@@ -37,21 +34,22 @@ import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
 import be.elevenways.zenit.common.task.record.RunStatus;
 import be.elevenways.zenit.common.task.record.StepFailurePolicy;
 import be.elevenways.zenit.common.task.record.StepStatus;
+import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
+import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
-import java.time.Duration;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -256,8 +254,7 @@ class InstanceScheduleLiveTest {
                 int chainId = schedule(id, "restart with warning", tenantId);
                 step(chainId, 1, InstanceConsoleCommandAction.ID.toString(), 0,
                     Map.of("command", "echo warned >> /data/marker"));
-                step(chainId, 2, InstancePowerAction.ID.toString(), 2,
-                    Map.of("operation", InstancePowerAction.OP_RESTART));
+                step(chainId, 2, InstanceOperations.RESTART.id().toString(), 2, null);
 
                 // The restart waits its 2 s offset as a due row; the sweep runs it once due.
                 Row chainRun = finished(recordSchedules, recordSchedules.runNow(chainId));
@@ -316,7 +313,7 @@ class InstanceScheduleLiveTest {
                     .updateAll();
 
                 int backupScheduleId = schedule(id, "Nightly backup", null);
-                step(backupScheduleId, 1, InstanceBackupAction.ID.toString(), 0, null);
+                step(backupScheduleId, 1, InstanceOperations.BACKUP.id().toString(), 0, null);
 
                 Row backupRun = recordSchedules.runNow(backupScheduleId);
                 assertThat(backupRun.get(RecordScheduleRunModel.STATUS))

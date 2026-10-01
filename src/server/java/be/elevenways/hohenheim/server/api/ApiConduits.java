@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.api;
 
+import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
@@ -10,6 +11,8 @@ import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.conduit.ConduitAttributes;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violation;
@@ -112,6 +115,48 @@ public final class ApiConduits {
         }
         conduit.setResponseStatus(422);
         return json(body);
+    }
+
+    /**
+     * THE wire adapter of {@code /api/v1} for a refusal of the operation pipeline: every reason it can receive answers
+     * the status and body this API answered before the pipeline existed.
+     *
+     * AIDEV-NOTE: a frozen external wire keeps its shape (stage 2 contract 6.10, S3), so this maps reasons where every
+     * new API lets core's edge render them. Hohenheim's instance-tier reasons answer the 422 envelope a form-level
+     * {@code Violations} of the same key writes, byte-identical to the service gates' refusal; a core NOT_FOUND is the
+     * route's own 404 and a core FORBIDDEN or PERMISSION_DENIED the key gate's 403. Both switches are exhaustive with
+     * no default, so a new member is a compile error here; any other reason, and any other module's, is rethrown to
+     * core's edge, the answer an unexpected refusal escaping a handler always got.
+     *
+     * @return the answer, or null when the response has already been ended
+     * @throws DomainRefusal a refusal this wire has no answer of its own for
+     */
+    public static @Nullable ActionResult<Object> refusal(@NonNull Conduit conduit, @NonNull DomainRefusal refusal) {
+        DomainRefusal.Reason reason = refusal.reason();
+        if (reason instanceof HohenheimRefusalReason hohenheim) {
+            return switch (hohenheim) {
+                case INSTANCE_NOT_PERMITTED, DATABASE_NOT_READY -> refusal(conduit, Violations.ofForm(refusal.shown()));
+            };
+        }
+        if (reason instanceof ZenitRefusalReason zenit) {
+            boolean answered = switch (zenit) {
+                case NOT_FOUND -> {
+                    conduit.notFound();
+                    yield true;
+                }
+                case FORBIDDEN, PERMISSION_DENIED -> {
+                    conduit.forbidden();
+                    yield true;
+                }
+                case BAD_REQUEST, METHOD_NOT_ALLOWED, LOGIN_REQUIRED, INTERACTIVE_LOGIN_REQUIRED, RATE_LIMITED,
+                     CSRF_ORIGIN, CSRF_TOKEN_MISSING, CSRF_TOKEN_INVALID, STALE, RETRY_MISMATCH, INVALID, ARCHIVED,
+                     CYCLE, IN_USE, OPERATION_UNAVAILABLE -> false;
+            };
+            if (answered) {
+                return null;
+            }
+        }
+        throw refusal;
     }
 
     /** One violation on the wire: its path (absent when form-level), machine key and sentence. */
