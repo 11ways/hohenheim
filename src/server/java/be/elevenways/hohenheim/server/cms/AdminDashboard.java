@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.OnboardingStep;
@@ -45,7 +46,7 @@ public final class AdminDashboard extends DashboardPanelPeer {
     /** The dashboard is the OPERATOR surface; every tile links into the admin panel. */
     private static final String ADMIN = HohenheimSlugs.ADMIN;
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dashboard"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("dashboard"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("dashboard").withFilter("scope", "admin"); }
     @Override public @NonNull String slug() { return "dashboard"; }
     @Override public @NonNull Icon icon() { return Icon.LAYOUT_DASH; }

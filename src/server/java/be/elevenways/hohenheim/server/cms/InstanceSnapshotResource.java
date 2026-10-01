@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.model.StoredRows;
@@ -56,7 +57,7 @@ public class InstanceSnapshotResource extends RowResource {
         .column(ColumnSpec.fromField(InstanceSnapshotModel.CREATED_AT).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_snapshot"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_snapshot"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_snapshot"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "instance_snapshot"); }
     @Override public @NonNull String slug() { return "instance-snapshots"; }
@@ -141,7 +142,7 @@ public class InstanceSnapshotResource extends RowResource {
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
-        actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "restore_snapshot"))
+        actions.add(RowAction.Invoke.<Row>builder(HohenheimIds.id("restore_snapshot"))
             .label(Microcopy.of("restore").withFilter("scope", "instance_snapshot"))
             .icon(Icon.of("clock-rotate-left"))
             .style(ActionStyle.DESTRUCTIVE)

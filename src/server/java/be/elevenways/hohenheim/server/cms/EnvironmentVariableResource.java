@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.EnvironmentModel;
@@ -77,7 +78,7 @@ public final class EnvironmentVariableResource extends RowResource {
             .build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "environment_variable"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("environment_variable"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "environment_variable"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "environment_variable"); }
     @Override public @NonNull String slug() { return "environment-variables"; }

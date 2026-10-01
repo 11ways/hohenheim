@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.spamservice.client.PageResult;
@@ -56,7 +57,7 @@ public final class SpamserviceSecurityEventsResource extends SpamserviceRemoteRe
 
     SpamserviceSecurityEventsResource(Supplier<SpamserviceClient> clientSupplier) { super(clientSupplier); }
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "spamservice_security_event"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("spamservice_security_event"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "spamservice_event"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "spamservice_event"); }
 

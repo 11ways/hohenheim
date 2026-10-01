@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -59,7 +60,7 @@ public class InstanceBackupResource extends RowResource {
         .column(ColumnSpec.fromField(InstanceBackupModel.CREATED_AT).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_backup"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_backup"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_backup"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "instance_backup"); }
     @Override public @NonNull String slug() { return "instance-backups"; }
@@ -107,7 +108,7 @@ public class InstanceBackupResource extends RowResource {
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
-        actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "restore_backup"))
+        actions.add(RowAction.Invoke.<Row>builder(HohenheimIds.id("restore_backup"))
             .label(Microcopy.of("restore_new").withFilter("scope", "instance_backup"))
             .icon(Icon.of("clone"))
             .visibleFor((row, ctx) -> InstanceBackupModel.STATUS_COMPLETE

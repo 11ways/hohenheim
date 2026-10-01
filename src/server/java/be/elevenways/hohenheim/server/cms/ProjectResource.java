@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -59,7 +60,7 @@ public class ProjectResource extends RowResource {
             Microcopy.of("instance_quota").withFilter("scope", "project")).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "project"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("project"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "project"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "project"); }
     @Override public @NonNull String slug() { return "projects"; }

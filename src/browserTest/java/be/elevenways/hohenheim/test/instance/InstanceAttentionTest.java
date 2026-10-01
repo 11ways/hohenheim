@@ -243,8 +243,8 @@ class InstanceAttentionTest {
             if (Models.get(SystemTaskHistoryModel.MODEL_ID) == null) {
                 Models.registerInstance(new SystemTaskHistoryModel(datasource));
             }
-            String nightly = BackupControlPlane.class.getName();
-            String chatty = CleanOldInstanceLogs.class.getName();
+            String nightly = BackupControlPlane.ID.toString();
+            String chatty = new CleanOldInstanceLogs().id().toString();
 
             // 1. One FAILED nightly run, then 250 newer successful runs of another task.
             taskRun(nightly, TaskStatus.FAILED,

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -37,7 +38,7 @@ import java.util.function.Predicate;
  */
 public class ReleaseOperationModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "release_operation");
+    public static final Identifier MODEL_ID = HohenheimIds.id("release_operation");
     public static final Schema SCHEMA = new Schema();
 
     /** A forward release of a new spec. */

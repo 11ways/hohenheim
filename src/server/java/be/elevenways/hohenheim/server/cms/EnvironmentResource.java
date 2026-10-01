@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.ProjectModel;
@@ -60,7 +61,7 @@ public final class EnvironmentResource extends RowResource {
             .build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "environment"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("environment"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "environment"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "environment"); }
     @Override public @NonNull String slug() { return "environments"; }

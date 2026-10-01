@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.instance.InstanceBlockerView;
@@ -84,7 +85,7 @@ public final class InstanceOverviewPage extends RecordDashboardPage<Row> {
         this.resource = resource;
     }
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_overview"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_overview"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("overview").withFilter("scope", "instance"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("gauge"); }

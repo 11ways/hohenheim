@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
@@ -34,7 +36,7 @@ public final class StackServicesPage implements RecordScopedPage<Row> {
     /** The stack's front door: a stack without services runs nothing, so this is where creation lands. */
     public static final String SLUG = "services";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "stack_services"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("stack_services"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("services").withFilter("scope", "stack"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("cubes"); }
@@ -111,7 +113,7 @@ public final class StackServicesPage implements RecordScopedPage<Row> {
         vars.put("deploymentsTarget", failure != null
             ? CmsRoutes.subpage(panel, StackResource.SLUG, stackId, StackDeploymentsPage.SLUG) : null);
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/stack-services"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.STACK_SERVICES, vars);
     }
 
     /** Container states are a closed vocabulary, so they localize as scoped microcopy. */

@@ -42,7 +42,6 @@ import be.elevenways.zenit.common.security.KnownPermissions;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.server.AuthRegistry;
 import be.elevenways.zenit.auth.server.AuthRequirement;
-import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.auth.server.identity.AutoProvisioningSink;
 import be.elevenways.zenit.auth.server.identity.IdentityProviderRegistry;
 import be.elevenways.zenit.auth.server.identity.proteus.ProteusClient;
@@ -96,11 +95,12 @@ public class ServerMain {
         HohenheimAccess.declareGrantableModels();
         HohenheimDatabase.init();   // also registers the SQLite datasource as the framework default
 
-        // Install zenit-auth (session store, CSRF, middleware, /login + /setup + /account + /admin).
-        // Password login is native; Proteus SSO is added below when configured.
-        ZenitAuth.init(HohenheimDatabase.datasource());
-        // The users/roles resources live in HohenheimPanel's security group;
-        // zenit-auth's own default panel would be a second UI over the same records.
+        // zenit-auth (session store, CSRF, middleware, /login + /setup + /account + /admin) is the
+        // discovered ZenitAuthModule, installed at the MODULES stage over the default datasource
+        // HohenheimDatabase.init just registered. Password login is native; Proteus SSO is added
+        // below when configured. The users/roles resources live in HohenheimPanel's security
+        // group, so zenit-auth's own default panel would be a second UI over the same records:
+        // the module's drain reads this setting, so it is set BEFORE boot.
         Zenit.SETTINGS_VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
         installAuthBaselines();
         registerProteusIfConfigured();

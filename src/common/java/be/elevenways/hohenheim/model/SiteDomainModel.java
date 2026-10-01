@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.net.Hostnames;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -18,7 +19,7 @@ import be.elevenways.zenit.common.validation.Violations;
 
 public class SiteDomainModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "site_domain");
+    public static final Identifier MODEL_ID = HohenheimIds.id("site_domain");
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #MATCH_TYPE} value for an exact hostname match. */

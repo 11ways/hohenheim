@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.stack;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
@@ -62,7 +63,7 @@ import java.util.Map;
  */
 public final class StackServiceKind implements InstanceKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "stack_service");
+    public static final Identifier ID = HohenheimIds.id("stack_service");
 
     /**
      * The BASELINE isolation profile every stack service container starts from.

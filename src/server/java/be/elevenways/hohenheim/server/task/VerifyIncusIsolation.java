@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
@@ -7,6 +8,7 @@ import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
@@ -59,6 +61,11 @@ public class VerifyIncusIsolation extends ScheduledTask {
     public record HostOutcome(@NonNull String server, boolean verifiable,
                               @NonNull List<String> enforced, @NonNull List<String> repaired,
                               @NonNull List<String> stopped, @NonNull List<String> errors) {
+    }
+
+    @Override
+    public @NonNull Identifier id() {
+        return HohenheimIds.id("verify_incus_isolation");
     }
 
     @Override

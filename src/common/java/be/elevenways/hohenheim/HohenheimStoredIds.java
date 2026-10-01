@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim;
 
 import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.registry.StoredIdChains;
 import be.elevenways.protoblast.common.registry.StoredTypeMigrations;
 
@@ -23,18 +22,8 @@ public final class HohenheimStoredIds {
     static {
         StoredTypeMigrations migrations = CHAIN;
         // zenit-dev rename: begin
-        migrations.renameType(Identifier.of("hohenheim", "instance_backups_page"), Identifier.of("hohenheim", "instance_backups"));
-        migrations.renameType(Identifier.of("hohenheim", "instance_snapshots_page"), Identifier.of("hohenheim", "instance_snapshots"));
-        migrations.renameType(Identifier.of("hohenheim", "instance_stats_page"), Identifier.of("hohenheim", "instance_stats"));
-        migrations.renameType(Identifier.of("hohenheim", "spamservice_client_keys_page"), Identifier.of("hohenheim", "spamservice_client_keys"));
-        migrations.renameType(Identifier.of("hohenheim", "backup_target_kinds"), Identifier.of("hohenheim", "backup_target_kind"));
-        migrations.renameType(Identifier.of("hohenheim", "git_provider_kinds"), Identifier.of("hohenheim", "git_provider_kind"));
-        migrations.renameType(Identifier.of("hohenheim", "instance_kinds"), Identifier.of("hohenheim", "instance_kind"));
-        migrations.renameType(Identifier.of("hohenheim", "servers"), Identifier.of("hohenheim", "server"));
-        migrations.renameType(Identifier.of("hohenheim", "site_auth_provider_types"), Identifier.of("hohenheim", "site_auth_provider_type"));
-        migrations.renameType(Identifier.of("hohenheim", "upstream_kinds"), Identifier.of("hohenheim", "upstream_kind"));
-        migrations.renameType(Identifier.of("hohenheim", "variable_types"), Identifier.of("hohenheim", "variable_type"));
-        migrations.renameType(Identifier.of("hohenheim", "project-roles"), Identifier.of("hohenheim", "project_role"));
+        // No hohenheim id that is ever stored changed spelling: the sweep renamed only panel page, role owner and
+        // registry ids, which are never stored, so their lines were dropped (G12).
         // zenit-dev rename: end
     }
 

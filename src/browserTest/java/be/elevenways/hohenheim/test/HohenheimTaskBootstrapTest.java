@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.hohenheim.server.task.BackupControlPlane;
@@ -57,6 +58,9 @@ class HohenheimTaskBootstrapTest {
     /** Only Hohenheim's own tasks are this suite's business; the catalog also holds framework ones. */
     private static final String TASK_PACKAGE = "be.elevenways.hohenheim.";
 
+    /** A Hohenheim task's stored type is its id, {@code hohenheim:<path>}. */
+    private static final String TASK_NAMESPACE = HohenheimIds.PRODUCT.namespace() + ":";
+
     /**
      * Every Hohenheim {@link ScheduledTask} that exists.
      *
@@ -111,7 +115,7 @@ class HohenheimTaskBootstrapTest {
 
     @Test
     void everyDiscoveredTaskIsPinned() {
-        assertThat(discoveredTypes())
+        assertThat(discovered().stream().map(descriptor -> descriptor.taskClass().getName()).toList())
             .as("every discovered Hohenheim ScheduledTask must be named in PINNED"
                 + " -- a new task declares boot behaviour and a role gate, both reviewed here")
             .containsExactlyInAnyOrderElementsOf(
@@ -122,7 +126,7 @@ class HohenheimTaskBootstrapTest {
     void everyDeclaredScheduleIsReconciledIntoSystemTask() {
         List<String> reconciled = service.taskModel().findAllSystemRows().stream()
             .map(row -> (String) row.get(SystemTaskModel.TYPE))
-            .filter(type -> type != null && type.startsWith(TASK_PACKAGE))
+            .filter(type -> type != null && type.startsWith(TASK_NAMESPACE))
             .distinct()
             .toList();
 
@@ -166,10 +170,6 @@ class HohenheimTaskBootstrapTest {
         return TaskCatalog.all().stream()
             .filter(descriptor -> descriptor.taskClass().getName().startsWith(TASK_PACKAGE))
             .toList();
-    }
-
-    private static List<String> discoveredTypes() {
-        return discovered().stream().map(TaskDescriptor::typePath).toList();
     }
 
     /** @param declaring true for tasks declaring at least one schedule, false for the rest */

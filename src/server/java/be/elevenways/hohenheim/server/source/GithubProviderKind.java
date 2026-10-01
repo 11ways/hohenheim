@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.source;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -21,7 +22,7 @@ import java.util.Map;
  */
 public final class GithubProviderKind implements GitProviderKind {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "github");
+    public static final Identifier ID = HohenheimIds.id("github");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     /** GitHub App id; with {@link #APP_INSTALLATION_ID} and the key, tokens are MINTED. */

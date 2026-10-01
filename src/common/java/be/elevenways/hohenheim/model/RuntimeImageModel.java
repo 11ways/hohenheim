@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -31,7 +32,7 @@ import java.util.List;
  */
 public class RuntimeImageModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "runtime_image");
+    public static final Identifier MODEL_ID = HohenheimIds.id("runtime_image");
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #UID_MODE}: the workload runs as the instance's mapped host uid. */

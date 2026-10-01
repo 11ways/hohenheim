@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -34,7 +36,7 @@ import java.util.Map;
  */
 public final class InstanceDevicesPage implements RecordScopedPage<Row> {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_devices"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_devices"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_device"); }
     /**
      * Housekeeping, not an everyday destination: the tab lives in the strip's "More"
@@ -115,7 +117,7 @@ public final class InstanceDevicesPage implements RecordScopedPage<Row> {
         vars.put("addMediaTarget", canAttachMedia
             ? newDeviceTarget(panel, DeviceType.CDROM, instanceId) : null);
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-devices"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_DEVICES, vars);
     }
 
     /** The device create form, opened with its kind and owning instance prefilled. */

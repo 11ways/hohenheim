@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.HohenheimEndpoints;
@@ -182,7 +183,7 @@ public class CertificateResource extends RowResource {
         return ColumnSpec.fromField(field).sortable().dateStyle(ColumnSpec.DateStyle.ABSOLUTE);
     }
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "certificate"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("certificate"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "certificate"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "certificate"); }
     @Override public @NonNull String slug() { return HohenheimSlugs.CERTIFICATES; }
@@ -402,7 +403,7 @@ public class CertificateResource extends RowResource {
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
-        actions.add(RowAction.Url.<Row>builder(Identifier.of("hohenheim", "download_certificate"))
+        actions.add(RowAction.Url.<Row>builder(HohenheimIds.id("download_certificate"))
             .label(Microcopy.of("download").withFilter("scope", "certificate"))
             .icon(Icon.of("download"))
             .url(row -> new Uri(HohenheimEndpoints.CERTIFICATES_DOWNLOAD
@@ -413,7 +414,7 @@ public class CertificateResource extends RowResource {
         // Re-ordering a certificate is how a domain is added or HTTP-01/DNS-01 is switched:
         // the row's own domain list and challenge are readonly on the form because they
         // describe what the CA actually issued, and only a new order may change them.
-        actions.add(RowAction.Url.<Row>builder(Identifier.of("hohenheim", "reissue_certificate"))
+        actions.add(RowAction.Url.<Row>builder(HohenheimIds.id("reissue_certificate"))
             .label(Microcopy.of("reissue").withFilter("scope", "certificate"))
             .icon(Icon.of("rotate"))
             .url(row -> new Uri(CmsRoutes.list(HohenheimSlugs.ADMIN, HohenheimSlugs.CERTIFICATES_REQUEST)

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -61,7 +62,7 @@ public final class ManageInstanceResource extends InstanceResource {
         .column(ColumnSpec.fromField(InstanceModel.INSTALL_STATE).hidden().build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "manage_instance"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("manage_instance"); }
     @Override public @NonNull FormSpec formSpec() { return this.manageFormSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.manageTableSpec; }
 

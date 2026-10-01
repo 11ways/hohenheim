@@ -20,6 +20,7 @@ import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelPeer;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.task.TaskCatalog;
 import be.elevenways.zenit.common.task.orm.SystemTaskModel;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.http.ZenitHttpServer;
@@ -143,17 +144,22 @@ class RoleRestrictedBootTest {
             .toList();
         assertThat(taskTypes)
             .as("step 7: role-free and DNS tasks are scheduled")
-            .contains(BackupControlPlane.class.getName(), ResignDnssecZones.class.getName());
+            .contains(typeOf(BackupControlPlane.class), typeOf(ResignDnssecZones.class));
         assertThat(taskTypes)
             .as("step 7: disabled roles' tasks declared no schedules")
             .doesNotContain(
-                MonitorStacks.class.getName(),
-                ReclaimDockerImages.class.getName(),
-                BackupDatabases.class.getName(),
-                UpdateSystemUsers.class.getName(),
-                SecuritySweep.class.getName(),
-                CleanOrphanCertificates.class.getName(),
-                UpdateSystemIpAddresses.class.getName());
+                typeOf(MonitorStacks.class),
+                typeOf(ReclaimDockerImages.class),
+                typeOf(BackupDatabases.class),
+                typeOf(UpdateSystemUsers.class),
+                typeOf(SecuritySweep.class),
+                typeOf(CleanOrphanCertificates.class),
+                typeOf(UpdateSystemIpAddresses.class));
+    }
+
+    /** @return the stored task type the catalog writes for a task class (its id, never the class name) */
+    private static String typeOf(Class<?> taskClass) {
+        return TaskCatalog.currentSpelling(taskClass.getName());
     }
 
     /**

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.SpamserviceInstallationModel;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
@@ -37,7 +38,7 @@ public final class SpamserviceInstallationResource extends RowSingleton {
         .add(SpamserviceInstallationModel.MAX_HEAP_MB)
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "spamservice_installation"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("spamservice_installation"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("installation").withFilter("scope", "spamservice"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Model model() { return Models.get(SpamserviceInstallationModel.class); }
@@ -70,7 +71,7 @@ public final class SpamserviceInstallationResource extends RowSingleton {
                 manager -> manager.stop()),
             action("restart", "rotate", SpamserviceInstallationResource::configurationReason,
                 manager -> manager.restart()),
-            HeaderAction.Invoke.builder(Identifier.of("hohenheim", "spamservice_test"))
+            HeaderAction.Invoke.builder(HohenheimIds.id("spamservice_test"))
                 .label(Microcopy.of("test").withFilter("scope", "spamservice"))
                 .description(Microcopy.of("test_hint").withFilter("scope", "spamservice"))
                 .icon(Icon.of("stethoscope"))
@@ -145,7 +146,7 @@ public final class SpamserviceInstallationResource extends RowSingleton {
                                        Function<SpamserviceManager, Microcopy> unavailableWhen,
                                        ManagerAction action) {
         HeaderAction.Invoke.Builder builder = HeaderAction.Invoke.builder(
-                Identifier.of("hohenheim", "spamservice_" + name))
+                HohenheimIds.id("spamservice_" + name))
             .label(Microcopy.of(name).withFilter("scope", "spamservice"))
             .description(Microcopy.of(name + "_hint").withFilter("scope", "spamservice"))
             .icon(Icon.of(icon))

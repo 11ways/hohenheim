@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.dns.DnsSecondaryFreshness;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
@@ -16,6 +18,11 @@ import java.util.List;
 public class ProbeDnsSecondaries extends ScheduledTask {
 
     public static final String STATIC_DESCRIPTION = "Probe DNS secondaries";
+
+    @Override
+    public @NonNull Identifier id() {
+        return HohenheimIds.id("probe_dns_secondaries");
+    }
 
     @Override
     public @NonNull ProbeDnsSecondaries newTask() {

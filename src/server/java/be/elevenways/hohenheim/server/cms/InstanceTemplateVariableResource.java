@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
@@ -72,7 +73,7 @@ public final class InstanceTemplateVariableResource extends RowResource {
             .build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_template_variable"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_template_variable"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "template_variable"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "template_variable"); }
     @Override public @NonNull String slug() { return "instance-template-variables"; }

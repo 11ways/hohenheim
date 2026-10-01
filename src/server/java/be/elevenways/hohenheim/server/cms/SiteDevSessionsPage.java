@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.devtunnel.DevLease;
 import be.elevenways.hohenheim.server.devtunnel.DevLeases;
@@ -26,7 +28,7 @@ import java.util.Map;
  */
 public final class SiteDevSessionsPage implements RecordScopedPage<Row> {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "site_dev_sessions"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("site_dev_sessions"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("dev_sessions").withFilter("scope", "site"); }
     /**
      * Housekeeping, not an everyday destination: the tab lives in the strip's "More"
@@ -64,6 +66,6 @@ public final class SiteDevSessionsPage implements RecordScopedPage<Row> {
         vars.put("sessions", sessions);
         vars.put("recordTabs", recordTabs(conduit));
 
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/site-dev-sessions"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.SITE_DEV_SESSIONS, vars);
     }
 }

@@ -1,16 +1,16 @@
 package be.elevenways.hohenheim.backup;
 
-import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Registry;
 
 /**
  * Central registry for backup-target kinds. Drives the BackupTargetModel's
- * RegistryEnumField, the admin kind selector, and the server's target dispatch.
+ * RegistryMemberField, the admin kind selector, and the server's target dispatch.
  */
 public final class BackupTargetRegistry {
 
     public static final Registry<BackupTargetInfo> REGISTRY =
-        new Registry.Simple<>(Identifier.of("hohenheim", "backup_target_kind"));
+        Registry.create(HohenheimIds.id("backup_target_kind"));
 
     /**
      * Entries arrive via the generated BlastAutoLoadInit (BackupTargetKindHandler is

@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.server.cms;
 
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.host.HostState;
 import be.elevenways.hohenheim.host.HostStatusCell;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -131,7 +133,7 @@ public final class ServerResource extends RowResource {
         .column(ColumnSpec.fromField(ServerModel.ADMISSION).filterable().build())
         .column(ColumnSpec.fromField(ServerModel.POSTURE).filterable().build())
         .column(ColumnSpec.virtual("host_status", Microcopy.of("host_status").withFilter("scope", "server"))
-            .renderer("hohenheim:cms/cell/host-status").build())
+            .renderer(HohenheimTemplateIds.CELL_HOST_STATUS).build())
         .filter(FilterSpec.forField(ServerModel.NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(ServerModel.NAME)).build())
         .filter(FilterSpec.forField(ServerModel.RUNTIME, FilterSpec.Kind.SELECT)
@@ -142,7 +144,7 @@ public final class ServerResource extends RowResource {
             .label(FieldLabels.labelFor(ServerModel.SSH_TARGET)).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "server"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("server"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "server"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "server"); }
     @Override public @NonNull String slug() { return "servers"; }

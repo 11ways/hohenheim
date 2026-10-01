@@ -32,6 +32,14 @@ import java.util.Set;
  */
 public final class ProjectGuards {
 
+    /**
+     * The project tier's role owner.
+     *
+     * AIDEV-NOTE: one instance per JVM: zenit-auth's role-ownership registry refuses a second, different owner under
+     * a taken id, while re-registering the same instance is its no-op.
+     */
+    private static final ProjectRoleOwner ROLE_OWNER = new ProjectRoleOwner();
+
     private static boolean installed;
 
     private ProjectGuards() {
@@ -94,7 +102,7 @@ public final class ProjectGuards {
         // takes the Delete affordance off a project-owned role entirely, so the hook above
         // is the last line of defence (a direct save, a second surface) rather than the
         // only one. The hook alone left the operator pressing a button that always failed.
-        RoleOwnership.INSTANCE.register(new ProjectRoleOwner());
+        RoleOwnership.INSTANCE.register(ROLE_OWNER);
 
         // An environment cannot move to another project while anything references it:
         // that would re-home the grouping across owners without any grant moving.

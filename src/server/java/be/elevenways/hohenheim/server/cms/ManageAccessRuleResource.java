@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -21,7 +22,7 @@ public final class ManageAccessRuleResource extends AccessRuleResource {
 
     @Override
     public @NonNull Identifier id() {
-        return Identifier.of("hohenheim", "manage_access_rule");
+        return HohenheimIds.id("manage_access_rule");
     }
 
     /** Admins see every rule; everyone else only the rows of lists they manage. */

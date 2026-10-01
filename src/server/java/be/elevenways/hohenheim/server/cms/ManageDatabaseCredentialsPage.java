@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
@@ -32,7 +34,7 @@ import java.util.Map;
  */
 public final class ManageDatabaseCredentialsPage implements RecordScopedPage<Row> {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "database_credentials"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("database_credentials"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("credentials").withFilter("scope", "database"); }
     @Override public @NonNull String slug() { return "credentials"; }
     @Override public @NonNull Icon icon() { return Icon.of("key"); }
@@ -65,6 +67,6 @@ public final class ManageDatabaseCredentialsPage implements RecordScopedPage<Row
         vars.put("port", live.port() == null ? "" : String.valueOf(live.port()));
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(
-            Identifier.of("hohenheim", "cms/database-credentials"), vars);
+            HohenheimTemplateIds.DATABASE_CREDENTIALS, vars);
     }
 }

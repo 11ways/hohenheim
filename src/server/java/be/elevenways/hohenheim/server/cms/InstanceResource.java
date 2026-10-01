@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimPickRules;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.instance.ManagedByCell;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
@@ -209,7 +211,7 @@ public class InstanceResource extends RowResource {
         // appear here at all without becoming a second UI over their owner.
         .column(ColumnSpec.virtual(MANAGED_BY_COLUMN,
                 Microcopy.of("managed_by").withFilter("scope", "instance"))
-            .renderer("hohenheim:cms/cell/managed-by").build())
+            .renderer(HohenheimTemplateIds.CELL_MANAGED_BY).build())
         .column(ColumnSpec.fromField(InstanceModel.CREATED_AT).filterable().hidden().build())
         .filter(FilterSpec.forField(InstanceModel.NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(InstanceModel.NAME)).build())
@@ -391,7 +393,7 @@ public class InstanceResource extends RowResource {
             : CmsRoutes.subpage(panel, SLUG, application, InstanceDeploymentsPage.SLUG);
     }
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Model model() { return Models.get(InstanceModel.class); }

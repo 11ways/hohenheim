@@ -1,11 +1,11 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HostTrustLane;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.incus.IncusTrust;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
@@ -125,7 +125,7 @@ final class ServerTrustActions {
      * a man-in-the-middle needs.
      */
     private static @NonNull RowAction<Row> scanAction(@NonNull TrustLane lane) {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "scan_" + lane.id()))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("scan_" + lane.id()))
             .label(serverCopy(lane.copy().scan()))
             .description(serverCopy(lane.copy().scan() + "_hint"))
             .icon(Icon.of("fingerprint"))
@@ -160,7 +160,7 @@ final class ServerTrustActions {
      * the host's own administrator reports. Nothing else in the product sets this flag.
      */
     private static @NonNull RowAction<Row> confirmAction(@NonNull TrustLane lane) {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "confirm_" + lane.id()))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("confirm_" + lane.id()))
             .label(serverCopy(lane.copy().confirm()))
             .description(serverCopy(lane.copy().confirm() + "_hint"))
             .icon(Icon.of("shield-halved"))
@@ -193,7 +193,7 @@ final class ServerTrustActions {
      * and unadmitted.
      */
     private static @NonNull RowAction<Row> repinAction(@NonNull TrustLane lane) {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "repin_" + lane.id()))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("repin_" + lane.id()))
             .label(serverCopy(lane.copy().repin()))
             .description(serverCopy(lane.copy().repin() + "_hint"))
             .icon(Icon.of("triangle-exclamation"))
@@ -233,7 +233,7 @@ final class ServerTrustActions {
 
     /** Mint a fresh per-host client credential; the old one stops working immediately. */
     private static @NonNull RowAction<Row> rotateAction(@NonNull TrustLane lane) {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "rotate_" + lane.id()))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("rotate_" + lane.id()))
             .label(serverCopy(lane.copy().rotate()))
             .description(serverCopy(lane.copy().rotate() + "_hint"))
             .icon(Icon.of("key"))

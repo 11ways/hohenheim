@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -30,7 +31,7 @@ import java.util.Map;
  */
 public class DnsRecordModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "dns_record");
+    public static final Identifier MODEL_ID = HohenheimIds.id("dns_record");
     public static final Schema SCHEMA = new Schema();
 
     public static final String TYPE_A = "A";

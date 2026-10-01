@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
@@ -22,6 +24,11 @@ public class UpdateSystemIpAddresses extends ScheduledTask {
     public static final String STATIC_DESCRIPTION = "Discover local IP addresses";
 
     private static volatile List<String> localAddresses = List.of();
+
+    @Override
+    public @NonNull Identifier id() {
+        return HohenheimIds.id("update_system_ip_addresses");
+    }
 
     @Override
     public @NonNull UpdateSystemIpAddresses newTask() {

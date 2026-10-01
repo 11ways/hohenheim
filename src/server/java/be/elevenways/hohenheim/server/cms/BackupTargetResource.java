@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -48,7 +49,7 @@ public final class BackupTargetResource extends RowResource {
         .column(ColumnSpec.fromField(BackupTargetModel.CREATED_AT).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "backup_target"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("backup_target"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "backup_target"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "backup_target"); }
     @Override public @NonNull String slug() { return SLUG; }
@@ -78,7 +79,7 @@ public final class BackupTargetResource extends RowResource {
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
-        actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "test_backup_target"))
+        actions.add(RowAction.Invoke.<Row>builder(HohenheimIds.id("test_backup_target"))
             .label(Microcopy.of("test_connection").withFilter("scope", "backup_target"))
             .icon(Icon.of("plug-circle-check"))
             .handler((row, ctx) -> {

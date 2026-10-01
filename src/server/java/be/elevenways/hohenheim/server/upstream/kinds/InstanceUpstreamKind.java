@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.upstream.kinds;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.application.InstanceUpstreamHandler;
 import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
@@ -33,7 +34,7 @@ import java.util.Map;
  */
 public final class InstanceUpstreamKind implements UpstreamKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "instance");
+    public static final Identifier ID = HohenheimIds.id("instance");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     /**

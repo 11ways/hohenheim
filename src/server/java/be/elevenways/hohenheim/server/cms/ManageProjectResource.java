@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
@@ -36,7 +37,7 @@ import java.util.List;
  */
 public final class ManageProjectResource extends ProjectResource {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "manage_project"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("manage_project"); }
     @Override public @NonNull String slug() { return "projects"; }
     @Override public int navOrder() { return 40; }
 

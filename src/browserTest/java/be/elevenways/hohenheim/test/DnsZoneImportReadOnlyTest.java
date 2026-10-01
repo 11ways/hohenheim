@@ -104,7 +104,7 @@ class DnsZoneImportReadOnlyTest extends HohenheimTestBase {
         private final List<PanelPeer> peers;
 
         ZonesUnderSites(Map<Integer, Integer> siteOfZone) {
-            super(Identifier.of("hohenheim-test", "zones_under_sites"), "zones-under-sites",
+            super(Identifier.of("hohenheim_test", "zones_under_sites"), "zones-under-sites",
                 Microcopy.of("zones_under_sites"), Permission.of("hohenheim-test.zones_under_sites"));
             this.peers = List.of(new Sites(), new SiteOwnedZones(siteOfZone));
         }
@@ -117,7 +117,7 @@ class DnsZoneImportReadOnlyTest extends HohenheimTestBase {
 
     private static final class Sites extends RowResource {
 
-        @Override public @NonNull Identifier id() { return Identifier.of("hohenheim-test", "owner_sites"); }
+        @Override public @NonNull Identifier id() { return Identifier.of("hohenheim_test", "owner_sites"); }
         @Override public @NonNull Microcopy label() { return Microcopy.of("owner_sites"); }
         @Override public @NonNull String slug() { return "owner-sites"; }
         @Override public @NonNull Model model() { return Models.get(SiteModel.class); }
@@ -144,7 +144,7 @@ class DnsZoneImportReadOnlyTest extends HohenheimTestBase {
             this.siteOfZone = siteOfZone;
         }
 
-        @Override public @NonNull Identifier id() { return Identifier.of("hohenheim-test", "site_owned_zones"); }
+        @Override public @NonNull Identifier id() { return Identifier.of("hohenheim_test", "site_owned_zones"); }
         @Override public @NonNull Microcopy label() { return Microcopy.of("site_owned_zones"); }
         @Override public @NonNull String slug() { return DnsZoneResource.SLUG; }
         @Override public @NonNull Model model() { return Models.get(DnsZoneModel.class); }

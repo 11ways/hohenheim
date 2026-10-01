@@ -33,12 +33,21 @@ import java.util.Map;
  */
 public final class HohenheimHandlers {
 
+    /**
+     * The server-files browser source.
+     *
+     * AIDEV-NOTE: one instance per JVM on purpose: the filesystem-source registry refuses a second, different source
+     * under a taken id, and a JVM that boots twice (test hosts) runs {@link #init} twice; re-adding the same instance
+     * is the registry's no-op.
+     */
+    private static final FilesystemBrowserSource SERVER_FILES = FilesystemBrowserSource.of(
+        HohenheimPaths.SERVER_FILES, HohenheimPanel.ACCESS, Path.of("/"));
+
     private HohenheimHandlers() {
     }
 
     public static void init() {
-        FilesystemBrowserRegistry.INSTANCE.register(FilesystemBrowserSource.of(
-            HohenheimPaths.SERVER_FILES, HohenheimPanel.ACCESS, Path.of("/")));
+        FilesystemBrowserRegistry.INSTANCE.register(SERVER_FILES);
         initHealth();
         InstanceTemplateHandlers.init();
         CertificateHandlers.init();

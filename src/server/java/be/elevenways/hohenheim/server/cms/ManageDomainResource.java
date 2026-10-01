@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -33,7 +34,7 @@ public final class ManageDomainResource extends SiteDomainResource {
         .add(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT)
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "manage_site_domain"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("manage_site_domain"); }
     @Override public @NonNull FormSpec formSpec() { return this.manageFormSpec; }
 
     /**

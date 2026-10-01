@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.DnsPeerModel;
@@ -70,7 +71,7 @@ public final class DnsZonePeerResource extends RowResource {
         .column(ColumnSpec.virtual("peer_name", Microcopy.of("peer_name").withFilter("scope", "field")).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dns_zone_peer"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("dns_zone_peer"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "dns_zone_peer"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "dns_zone_peer"); }
     /** The panel slug, which the zone's Secondaries tab links peer records by. */

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviderTypeHandler;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
@@ -64,7 +65,7 @@ public final class AuthProviderResource extends RowResource {
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
     @Override public @NonNull ListChrome listChrome() { return ListChrome.MINIMAL; }
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "auth_provider"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("auth_provider"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "auth_provider"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "auth_provider"); }
     @Override public @NonNull String slug() { return "auth-providers"; }

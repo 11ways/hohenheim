@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -36,7 +37,7 @@ abstract class OperationHistoryResource extends RowResource {
         this.scope = scope;
     }
 
-    @Override public final @NonNull Identifier id() { return Identifier.of("hohenheim", this.scope); }
+    @Override public final @NonNull Identifier id() { return HohenheimIds.id(this.scope); }
     @Override public final @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", this.scope); }
     @Override public final @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", this.scope); }
     @Override public final @NonNull ListChrome listChrome() { return CmsSupport.WIDE_LIST; }

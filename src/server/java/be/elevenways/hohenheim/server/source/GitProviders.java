@@ -27,7 +27,7 @@ import java.util.Map;
  *
  * ADDING A KIND is ONE class: a {@link GitProviderKind} implementation (plus its
  * {@link ApiProviderClient} subclass). It registers itself, its label/icon/schema enter
- * the model's RegistryEnumField live, and nothing here changes. Everything downstream is
+ * the model's RegistryMemberField live, and nothing here changes. Everything downstream is
  * kind-agnostic on purpose -- the repository/branch pickers, the credential environment
  * below, the connection test and the webhook receiver all route through this funnel or
  * through provider-neutral headers.

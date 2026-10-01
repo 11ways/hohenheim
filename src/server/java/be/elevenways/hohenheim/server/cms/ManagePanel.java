@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.AccessListModel;
@@ -21,7 +22,6 @@ import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelPeer;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -60,7 +60,7 @@ public final class ManagePanel extends Panel {
     private static volatile boolean sourceRegistered = false;
 
     public ManagePanel() {
-        super(Identifier.of("hohenheim", SLUG), SLUG,
+        super(HohenheimIds.id(SLUG), SLUG,
             Microcopy.of("title").withFilter("scope", "manage"), ACCESS);
     }
 

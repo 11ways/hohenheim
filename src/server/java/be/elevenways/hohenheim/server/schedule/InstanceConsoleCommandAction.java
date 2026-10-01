@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.schedule;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -19,7 +20,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public class InstanceConsoleCommandAction extends InstanceScheduleAction {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "console_command");
+    public static final Identifier ID = HohenheimIds.id("console_command");
 
     static final Schema PAYLOAD = new Schema();
     static final StringField COMMAND = PAYLOAD.addField(

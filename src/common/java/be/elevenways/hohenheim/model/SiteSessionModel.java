@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -11,7 +12,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
  */
 public class SiteSessionModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "site_session");
+    public static final Identifier MODEL_ID = HohenheimIds.id("site_session");
     public static final Schema SCHEMA = new Schema();
 
     public static final StringField ID = SCHEMA.addField(StringField.builder().name("id").build());

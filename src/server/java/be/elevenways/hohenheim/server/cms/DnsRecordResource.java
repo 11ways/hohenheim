@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -96,7 +97,7 @@ public class DnsRecordResource extends RowResource {
             .label(FieldLabels.labelFor(DnsRecordModel.ENABLED)).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dns_record"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("dns_record"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "dns_record"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "dns_record"); }
     /** The panel slug, which the zone's Records tab looks this resource up by. */
@@ -335,7 +336,7 @@ public class DnsRecordResource extends RowResource {
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
-        actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "dyndns_token"))
+        actions.add(RowAction.Invoke.<Row>builder(HohenheimIds.id("dyndns_token"))
             .label(Microcopy.of("dyndns_token").withFilter("scope", "dns_record"))
             .icon(Icon.of("rotate"))
             .description(Microcopy.of("dyndns_token_hint").withFilter("scope", "dns_record")
@@ -353,7 +354,7 @@ public class DnsRecordResource extends RowResource {
             // A credential chore, not a per-row affordance: it belongs in the overflow menu.
             .inlineInRow(false)
             .build());
-        actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "dyndns_revoke"))
+        actions.add(RowAction.Invoke.<Row>builder(HohenheimIds.id("dyndns_revoke"))
             .label(Microcopy.of("dyndns_revoke").withFilter("scope", "dns_record"))
             .icon(Icon.of("ban"))
             .description(Microcopy.of("dyndns_revoke_hint").withFilter("scope", "dns_record"))

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -91,7 +92,7 @@ public class InstanceScheduleResource extends RowResource {
         .column(ColumnSpec.fromField(RecordScheduleModel.DISABLED_REASON).hidden().build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_schedule"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_schedule"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_schedule"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "instance_schedule"); }
     /** The peer slug, shared with the step resource's parent link. */
@@ -291,7 +292,7 @@ public class InstanceScheduleResource extends RowResource {
         // view-only delegate AND refuses a direct POST (the dispatcher re-checks it on
         // invoke), and the handler asks once more because visibility alone is not a gate:
         // runNow itself authorizes execution against the stored run_as, never the invoker.
-        actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "run_schedule"))
+        actions.add(RowAction.Invoke.<Row>builder(HohenheimIds.id("run_schedule"))
             .label(Microcopy.of("run_now").withFilter("scope", "instance_schedule"))
             .icon(Icon.of("play"))
             .visibleFor((row, ctx) -> Boolean.TRUE.equals(row.get(RecordScheduleModel.ENABLED))

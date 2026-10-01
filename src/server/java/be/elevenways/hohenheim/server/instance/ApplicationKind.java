@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
@@ -42,7 +43,7 @@ import java.util.Map;
  */
 public final class ApplicationKind implements InstanceKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "application");
+    public static final Identifier ID = HohenheimIds.id("application");
     public static final Schema SETTINGS_SCHEMA = GitSourceSchema.addTo(new Schema());
 
     /**

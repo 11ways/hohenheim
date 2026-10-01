@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.notification;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.comms.CommsChannel;
@@ -43,7 +44,7 @@ public final class AlertNotification extends Notification {
 
     @Override
     public @NonNull Identifier getKey() {
-        return Identifier.of("hohenheim", this.event);
+        return HohenheimIds.id(this.event);
     }
 
     /** A platform alert is what an operator is meant to act on, so it badges in the inbox. */

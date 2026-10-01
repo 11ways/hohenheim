@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -35,7 +36,7 @@ import java.util.List;
  */
 public class InstanceModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "instance");
+    public static final Identifier MODEL_ID = HohenheimIds.id("instance");
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #STATUS}: record exists, nothing was ever deployed. */

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
@@ -66,7 +67,7 @@ import java.util.Set;
  */
 public final class WorkspaceKind implements InstanceKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "workspace");
+    public static final Identifier ID = HohenheimIds.id("workspace");
     public static final Schema SETTINGS_SCHEMA = GitSourceSchema.addTo(new Schema());
 
     /** The one declared volume of every workspace, named in {@code instance_volumes}. */

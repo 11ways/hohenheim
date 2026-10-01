@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -36,7 +37,7 @@ import java.util.List;
  */
 public class BuildOperationModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "build_operation");
+    public static final Identifier MODEL_ID = HohenheimIds.id("build_operation");
     public static final Schema SCHEMA = new Schema();
 
     /** A Dockerfile build inside the sandbox (the shipped builder). */

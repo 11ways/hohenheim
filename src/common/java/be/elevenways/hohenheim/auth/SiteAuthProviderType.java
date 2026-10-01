@@ -6,7 +6,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
  * Common metadata for a per-site auth-provider type, used by the SiteAuthProviderModel's
- * RegistryEnumField and the admin form's polymorphic schema. The server-side gate-creation
+ * RegistryMemberField and the admin form's polymorphic schema. The server-side gate-creation
  * extension lives in SiteAuthProviderTypeHandler (it depends on Undertow).
  *
  * @author Jelle De Loecker <jelle@elevenways.be>

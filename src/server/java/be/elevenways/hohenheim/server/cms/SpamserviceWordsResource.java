@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.spamservice.client.PageResult;
@@ -44,7 +45,7 @@ public final class SpamserviceWordsResource extends SpamserviceRemoteResource<Sp
 
     SpamserviceWordsResource(Supplier<SpamserviceClient> clientSupplier) { super(clientSupplier); }
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "spamservice_word"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("spamservice_word"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "spamservice_word"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "spamservice_word"); }
     @Override public @NonNull String slug() { return SLUG; }

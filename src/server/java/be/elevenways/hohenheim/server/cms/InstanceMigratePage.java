@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.instance.MigrationTargetView;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -42,7 +44,7 @@ public final class InstanceMigratePage implements SubmittableRecordScopedPage<Ro
     /** The submitted destination host id. */
     private static final String TARGET_FIELD = "target_server_id";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_migrate"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_migrate"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("migrate").withFilter("scope", "instance"); }
     /**
      * Housekeeping, not an everyday destination: the tab lives in the strip's "More"
@@ -80,7 +82,7 @@ public final class InstanceMigratePage implements SubmittableRecordScopedPage<Ro
         vars.put("status", instance.get(InstanceModel.STATUS));
         vars.put("targets", targetsFor(conduit, instanceId));
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-migrate"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_MIGRATE, vars);
     }
 
     /**

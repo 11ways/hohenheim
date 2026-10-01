@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.server.HohenheimRoles;
@@ -24,6 +26,11 @@ import java.util.List;
 public class ResignDnssecZones extends ScheduledTask {
 
     public static final String STATIC_DESCRIPTION = "Re-sign DNSSEC zones";
+
+    @Override
+    public @NonNull Identifier id() {
+        return HohenheimIds.id("resign_dnssec_zones");
+    }
 
     @Override
     public @NonNull ResignDnssecZones newTask() {

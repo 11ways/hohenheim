@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.auth.types;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.server.auth.SiteAuthContext;
@@ -26,7 +27,7 @@ import java.util.Map;
  */
 public class ProteusAuthProviderType implements SiteAuthProviderTypeHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "proteus");
+    public static final Identifier ID = HohenheimIds.id("proteus");
 
     public static final String ENDPOINT = "endpoint";
     public static final String REALM_CLIENT = "realm_client";

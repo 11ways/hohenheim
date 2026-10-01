@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 
@@ -103,7 +104,7 @@ public final class ManageInstanceDeviceResource extends InstanceDeviceResource {
 
     @Override
     public @NonNull Identifier id() {
-        return Identifier.of("hohenheim", "manage_instance_device");
+        return HohenheimIds.id("manage_instance_device");
     }
 
     @Override

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.backup;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.options.ServerOptions;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -28,7 +29,7 @@ import java.util.Map;
  */
 public final class SshTargetKind implements BackupTargetKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "ssh");
+    public static final Identifier ID = HohenheimIds.id("ssh");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     /**

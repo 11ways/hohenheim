@@ -19,7 +19,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * ONLY {@link #OK} is online.
  *
  * The static initializer registers the DRY serializer/reviver pair so the state crosses
- * the web boundary as its own name; {@code @HawkeyeAutoLoad} forces TeaVM to run it.
+ * the web boundary as its own name; {@code @BlastAutoLoad} forces TeaVM to run it.
  */
 @BlastAutoLoad
 public enum HostState {

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -25,7 +26,7 @@ import java.util.List;
  */
 public class InstanceVariableModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "instance_variable");
+    public static final Identifier MODEL_ID = HohenheimIds.id("instance_variable");
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #KIND}: the value is visible data ({@code plain_value}). */

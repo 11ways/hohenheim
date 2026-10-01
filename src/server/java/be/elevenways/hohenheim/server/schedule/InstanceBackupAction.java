@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.schedule;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
@@ -22,7 +23,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public class InstanceBackupAction extends InstanceScheduleAction {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "backup");
+    public static final Identifier ID = HohenheimIds.id("backup");
 
     @Override public @NonNull Identifier typeId() { return ID; }
     @Override public @NonNull String getDisplayName() { return "Backup"; }

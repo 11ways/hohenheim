@@ -1,12 +1,12 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.server.cms.AuthRolesResource;
 import be.elevenways.zenit.auth.server.cms.AuthUsersResource;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -27,7 +27,7 @@ import java.util.List;
 /**
  * CMS panel served at /admin. Constructed by the discovered
  * {@code HohenheimHostWiring} module at the MODULES boot stage (not
- * {@code @ZenitAutoLoad}) because its resources reach server services, and
+ * {@code @BlastAutoLoad}) because its resources reach server services, and
  * because the registration must be complete before STARTHTTP binds.
  */
 public final class HohenheimPanel extends Panel {
@@ -109,7 +109,7 @@ public final class HohenheimPanel extends Panel {
             .withSeparatorBefore(true);
 
     public HohenheimPanel() {
-        super(Identifier.of("hohenheim", "admin"), SLUG, Microcopy.of("title").withFilter("scope", "admin"), ACCESS);
+        super(HohenheimIds.id("admin"), SLUG, Microcopy.of("title").withFilter("scope", "admin"), ACCESS);
     }
 
     /** Below ManagePanel's default 100: an operator holding both panels lands on /admin. */
@@ -247,7 +247,7 @@ public final class HohenheimPanel extends Panel {
      * the spamservice backend. The file-backed mounts only appear when this boot loaded that file.
      */
     private static @Nullable SettingsPage settingsPage() {
-        return SettingsPage.standard(Identifier.of("hohenheim", "settings"))
+        return SettingsPage.standard(HohenheimIds.id("settings"))
             .mount(SettingsPage.frameworkGroup("app", Microcopy.literal("Hohenheim"), HohenheimSettings.HOHENHEIM))
             .frameworkMount()
             .mount(SettingsPage.frameworkGroup(CommsSettingsLabels.MOUNT_KEY, CommsSettingsLabels.mount(),

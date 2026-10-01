@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DnsSecMaterial;
@@ -27,7 +29,7 @@ import java.util.Map;
  */
 public final class DnsZoneFilePage implements RecordScopedPage<Row> {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dns_zone_file"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("dns_zone_file"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("zone_file").withFilter("scope", "dns_zone"); }
     @Override public @NonNull String slug() { return "zonefile"; }
     @Override public @NonNull Icon icon() { return Icon.of("file-lines"); }
@@ -63,6 +65,6 @@ public final class DnsZoneFilePage implements RecordScopedPage<Row> {
             ? DnsSecMaterial.dsRecord(zone) : null;
         vars.put("dsRecord", ds != null ? ds.toString() : "");
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/dns-zone-file"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.DNS_ZONE_FILE, vars);
     }
 }

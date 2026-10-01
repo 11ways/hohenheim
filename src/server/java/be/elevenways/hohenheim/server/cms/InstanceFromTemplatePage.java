@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -41,7 +43,7 @@ import java.util.Map;
  */
 public final class InstanceFromTemplatePage extends PanelPage {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instances_from_template"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instances_from_template"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("create_instance").withFilter("scope", "instance_template"); }
     @Override public @NonNull String slug() { return "instances-from-template"; }
     @Override public @NonNull Icon icon() { return Icon.of("plus"); }
@@ -140,7 +142,7 @@ public final class InstanceFromTemplatePage extends PanelPage {
         vars.put("variableForm", new FormStateTranslator().translate(
             templates.variableFormSpec(templateId), Map.of(), EditView.CREATE, accessContext,
             values, violations != null ? violations.all() : List.of(), null));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-from-template"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_FROM_TEMPLATE, vars);
     }
 
     /**

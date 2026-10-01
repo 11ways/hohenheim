@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.access.AccessRuleOption;
 import be.elevenways.hohenheim.access.AccessRuleView;
 import be.elevenways.hohenheim.model.AccessListModel;
@@ -45,7 +47,7 @@ public final class AccessListRulesPage implements RecordScopedPage<Row> {
     private final AccessRuleResource resource = new AccessRuleResource();
     private final ActionStateTranslator actions = new ActionStateTranslator();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "access_list_rules"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("access_list_rules"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "access_rule"); }
     @Override public @NonNull String slug() { return "rules"; }
     @Override public @NonNull Icon icon() { return Icon.of("sitemap"); }
@@ -90,7 +92,7 @@ public final class AccessListRulesPage implements RecordScopedPage<Row> {
             : HohenheimEndpoints.MANAGE_ACCESS_RULES_ADD)
             .with(HohenheimEndpoints.ACCESS_LIST_ID, listId));
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/access-list-rules"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.ACCESS_LIST_RULES, vars);
     }
 
     /** Walk one level in order, emitting a view per node and an option per group. */

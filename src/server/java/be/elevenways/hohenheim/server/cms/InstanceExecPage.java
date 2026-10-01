@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.routing.RouteTarget;
@@ -36,7 +38,7 @@ public final class InstanceExecPage implements SubmittableRecordScopedPage<Row> 
 
     public static final String SLUG = "exec";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_exec"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_exec"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("exec").withFilter("scope", "instance"); }
     /**
      * Housekeeping, not an everyday destination: the tab lives in the strip's "More"
@@ -76,7 +78,7 @@ public final class InstanceExecPage implements SubmittableRecordScopedPage<Row> 
         // ReturnTarget is server-only, so the common template cannot reach it.
         vars.put("returnParam", ReturnTarget.PARAM);
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-exec"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_EXEC, vars);
     }
 
     /**

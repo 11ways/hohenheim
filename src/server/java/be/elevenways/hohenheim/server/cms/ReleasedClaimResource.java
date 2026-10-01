@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StoredRows;
@@ -75,7 +76,7 @@ public class ReleasedClaimResource extends RowResource {
         .defaultSort(SortSpec.desc(ReleasedRouteClaimModel.RELEASED_AT.getName()))
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "released_claim"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("released_claim"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "released_claim"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "released_claim"); }
     @Override public @NonNull String slug() { return "released-claims"; }
@@ -144,7 +145,7 @@ public class ReleasedClaimResource extends RowResource {
      * ability to free a hostname another tenant still points a CNAME at.
      */
     private @NonNull RowAction<Row> liftAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "lift_quarantine"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("lift_quarantine"))
             .label(Microcopy.of("lift").withFilter("scope", "released_claim"))
             .icon(Icon.of("unlock"))
             .description(Microcopy.of("lift_hint").withFilter("scope", "released_claim"))

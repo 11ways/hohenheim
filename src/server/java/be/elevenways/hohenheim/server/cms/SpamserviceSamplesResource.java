@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -61,7 +62,7 @@ public final class SpamserviceSamplesResource extends SpamserviceRemoteResource<
 
     SpamserviceSamplesResource(Supplier<SpamserviceClient> clientSupplier) { super(clientSupplier); }
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "spamservice_sample"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("spamservice_sample"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "spamservice_sample"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "spamservice_sample"); }
 
@@ -155,21 +156,21 @@ public final class SpamserviceSamplesResource extends SpamserviceRemoteResource<
     @Override
     public @NonNull List<RowAction<SampleSummary>> rowActions() {
         return List.of(
-            RowAction.Invoke.<SampleSummary>builder(Identifier.of("hohenheim", "spamservice_mark_spam"))
+            RowAction.Invoke.<SampleSummary>builder(HohenheimIds.id("spamservice_mark_spam"))
                 .label(Microcopy.of("mark_spam").withFilter("scope", "spamservice_sample"))
                 .icon(Icon.of("triangle-exclamation")).handler((row, context) -> {
                     this.requireClient().markSpam(row.id());
                     return CmsActionResult.refreshWithToast(
                         Microcopy.of("marked_spam").withFilter("scope", "spamservice_sample"));
                 }).build(),
-            RowAction.Invoke.<SampleSummary>builder(Identifier.of("hohenheim", "spamservice_mark_ham"))
+            RowAction.Invoke.<SampleSummary>builder(HohenheimIds.id("spamservice_mark_ham"))
                 .label(Microcopy.of("mark_ham").withFilter("scope", "spamservice_sample"))
                 .icon(Icon.of("check")).handler((row, context) -> {
                     this.requireClient().markHam(row.id());
                     return CmsActionResult.refreshWithToast(
                         Microcopy.of("marked_ham").withFilter("scope", "spamservice_sample"));
                 }).build(),
-            RowAction.Invoke.<SampleSummary>builder(Identifier.of("hohenheim", "spamservice_rescore"))
+            RowAction.Invoke.<SampleSummary>builder(HohenheimIds.id("spamservice_rescore"))
                 .label(Microcopy.of("rescore").withFilter("scope", "spamservice_sample"))
                 .icon(Icon.of("rotate")).visibleFor((row, context) -> !row.confirmed())
                 .handler((row, context) -> {

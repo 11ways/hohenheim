@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -44,7 +46,7 @@ public final class InstanceDatabasesPage implements RecordScopedPage<Row> {
 
     public static final String SLUG = "databases";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_databases"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_databases"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_database"); }
     @Override public boolean secondaryTab() { return true; }
     @Override public @NonNull String slug() { return SLUG; }
@@ -103,7 +105,7 @@ public final class InstanceDatabasesPage implements RecordScopedPage<Row> {
         // renders it (the InstanceDevicesPage lesson).
         vars.put("attachTarget", canEdit ? attachTarget(panel, instanceId) : null);
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-databases"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_DATABASES, vars);
     }
 
     /** The attachment create form, opened with its owning instance prefilled. */

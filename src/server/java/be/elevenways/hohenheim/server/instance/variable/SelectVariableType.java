@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance.variable;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.EnumField;
@@ -20,7 +21,7 @@ import java.util.Map;
  */
 public final class SelectVariableType implements VariableTypeHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "select");
+    public static final Identifier ID = HohenheimIds.id("select");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final ListField<String> OPTIONS = SETTINGS_SCHEMA.addField(

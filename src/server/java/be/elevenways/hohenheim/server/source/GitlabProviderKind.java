@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.source;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -16,7 +17,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public final class GitlabProviderKind implements GitProviderKind {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "gitlab");
+    public static final Identifier ID = HohenheimIds.id("gitlab");
 
     @Override public @NonNull Identifier typeId() { return ID; }
 

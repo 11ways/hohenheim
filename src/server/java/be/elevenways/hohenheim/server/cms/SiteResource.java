@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimPickRules;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
@@ -250,12 +252,12 @@ public class SiteResource extends RowResource {
         .column(ColumnSpec.fromField(SiteModel.SLUG).hidden().build())
         .column(ColumnSpec.virtual(HOSTNAMES_COLUMN,
                 Microcopy.of("hostnames").withFilter("scope", "site"))
-            .renderer("hohenheim:cms/cell/site-hostnames").build())
+            .renderer(HohenheimTemplateIds.CELL_SITE_HOSTNAMES).build())
         .column(ColumnSpec.virtual(UPSTREAM_COLUMN,
                 Microcopy.of("upstream").withFilter("scope", "site"))
-            .renderer("hohenheim:cms/cell/site-upstream").build())
+            .renderer(HohenheimTemplateIds.CELL_SITE_UPSTREAM).build())
         .column(ColumnSpec.virtual(TLS_COLUMN, Microcopy.of("tls").withFilter("scope", "site"))
-            .renderer("hohenheim:cms/cell/site-tls").build())
+            .renderer(HohenheimTemplateIds.CELL_SITE_TLS).build())
         // Enabled reads as ROW STATE (a disabled site renders muted, the strip keeps
         // the tri-state filter) instead of costing a column; the picker still offers it.
         .column(ColumnSpec.fromField(SiteModel.ENABLED).filterable().hidden().build())
@@ -352,7 +354,7 @@ public class SiteResource extends RowResource {
             instanceName, instanceUrl);
     }
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "site"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("site"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "site"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "site"); }
     @Override public @NonNull String slug() { return HohenheimSlugs.SITES; }
@@ -666,7 +668,7 @@ public class SiteResource extends RowResource {
      * engine refuses with a toast when no rollback target exists.
      */
     private @NonNull RowAction<Row> rollbackAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "rollback_release"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("rollback_release"))
             .label(Microcopy.of("rollback").withFilter("scope", "site"))
             .icon(Icon.of("clock-rotate-left"))
             .inlineInRow(false)
@@ -703,7 +705,7 @@ public class SiteResource extends RowResource {
      * of THIS record the operator can act on, not a permission.
      */
     protected final @NonNull RowAction<Row> toggleAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "toggle_site"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("toggle_site"))
             .label(Microcopy.of("toggle").withFilter("scope", "site"))
             .dynamicLabel(row -> Microcopy.of(Boolean.TRUE.equals(row.get(SiteModel.ENABLED))
                 ? "disable" : "enable").withFilter("scope", "site"))
@@ -742,7 +744,7 @@ public class SiteResource extends RowResource {
 
     /** The record-creating clone action; deliberately admin-panel-only. */
     protected final @NonNull RowAction<Row> cloneAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "clone_site"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("clone_site"))
             .label(Microcopy.of("clone").withFilter("scope", "site"))
             .icon(Icon.of("copy"))
             .inlineOnRecord(false)

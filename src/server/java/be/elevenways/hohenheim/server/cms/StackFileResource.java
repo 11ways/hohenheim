@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
@@ -49,7 +50,7 @@ public class StackFileResource extends ValidatedRowResource {
             .build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "stack_file"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("stack_file"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "stack_file"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "stack_file"); }
     @Override public @NonNull String slug() { return "stack-files"; }

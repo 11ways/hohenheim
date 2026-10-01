@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -150,7 +151,7 @@ public class DatabaseResource extends RowResource {
         return Map.copyOf(values);
     }
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "database"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("database"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "database"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "database"); }
     @Override public @NonNull String slug() { return "databases"; }
@@ -445,7 +446,7 @@ public class DatabaseResource extends RowResource {
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
-        actions.add(RowAction.Url.<Row>builder(Identifier.of("hohenheim", "backup_database"))
+        actions.add(RowAction.Url.<Row>builder(HohenheimIds.id("backup_database"))
             .label(Microcopy.of("backup").withFilter("scope", "database"))
             .icon(Icon.of("download"))
             .url(row -> new Uri(HohenheimEndpoints.DATABASES_BACKUP
@@ -466,7 +467,7 @@ public class DatabaseResource extends RowResource {
      */
     private @NonNull RowAction<Row> moveToSharedAction() {
         RowAction.Invoke.Builder<Row> action =
-            RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "move_database_shared"))
+            RowAction.Invoke.<Row>builder(HohenheimIds.id("move_database_shared"))
                 .label(Microcopy.of("move_shared").withFilter("scope", "database"))
                 .description(Microcopy.of("move_shared_hint").withFilter("scope", "database"))
                 .icon(Icon.of("layer-group"))
@@ -517,7 +518,7 @@ public class DatabaseResource extends RowResource {
      * claim stays parked in {@code releasing} via the model's remove hooks.
      */
     private @NonNull RowAction<Row> forceDeleteAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "force_delete_database"))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id("force_delete_database"))
             .label(Microcopy.of("force_delete").withFilter("scope", "database"))
             .description(Microcopy.of("force_delete_hint").withFilter("scope", "database"))
             .icon(Icon.of("triangle-exclamation"))

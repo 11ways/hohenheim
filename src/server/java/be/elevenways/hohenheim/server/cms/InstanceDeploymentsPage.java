@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
@@ -56,7 +58,7 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
 
     public static final String SLUG = "deployments";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_deployments"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_deployments"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("title").withFilter("scope", "deployments"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("rocket"); }
@@ -115,7 +117,7 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
         vars.put("timeWording", RelativeTimeWording.resolve(
             conduit.getLocales(), conduit.getMessageResolver()));
 
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-deployments"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_DEPLOYMENTS, vars);
     }
 
     /** The application lane: release operations, the serving commit and the rollback offer. */

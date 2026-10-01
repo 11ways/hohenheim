@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimStatsFunctions.Metric;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -33,7 +35,7 @@ public final class InstanceStatsPage implements RecordScopedPage<Row> {
 
     public static final String SLUG = "stats";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_stats"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_stats"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("stats").withFilter("scope", "instance"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("chart-line"); }
@@ -69,7 +71,7 @@ public final class InstanceStatsPage implements RecordScopedPage<Row> {
         // nothing", which is wrong in one direction and right in the other.
         vars.put("disk", InstanceOverviewPage.diskViewOf(instance));
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-stats"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_STATS, vars);
     }
 
     private static @NonNull List<Object> seriesOf(@NonNull List<InstanceStats.Sample> history,

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.activity.ActivityRecordCell;
 import be.elevenways.hohenheim.server.auth.GrantSubjects;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -32,7 +33,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public final class AdminActivityResource extends ActivityResource {
 
     /** The cell renderer for the record column; see {@code cms/cell/activity-record.hwk}. */
-    private static final String RECORD_RENDERER = "hohenheim:cms/cell/activity-record";
+    private static final String RECORD_RENDERER = HohenheimTemplateIds.CELL_ACTIVITY_RECORD;
 
     /**
      * The default scope: everything a PERSON did, background writes excluded --

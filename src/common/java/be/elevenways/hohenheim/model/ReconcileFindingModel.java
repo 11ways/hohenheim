@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -18,7 +19,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
  */
 public class ReconcileFindingModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "reconcile_finding");
+    public static final Identifier MODEL_ID = HohenheimIds.id("reconcile_finding");
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #BUCKET}: owner resolves to a live record. */

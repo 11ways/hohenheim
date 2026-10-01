@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
@@ -19,7 +20,7 @@ public final class ManageInstanceScheduleStepResource extends InstanceScheduleSt
 
     @Override
     public @NonNull Identifier id() {
-        return Identifier.of("hohenheim", "manage_instance_schedule_step");
+        return HohenheimIds.id("manage_instance_schedule_step");
     }
 
     /** Visible exactly when the parent schedule is: {@link TenantScopes#INSTANCE_SCHEDULE_STEPS}. */

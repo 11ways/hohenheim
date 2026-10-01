@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
@@ -116,7 +117,7 @@ public class AccessRuleResource extends RowResource {
         return title != null && !title.isBlank() ? title : super.recordTitle(record);
     }
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "access_rule"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("access_rule"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "access_rule"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "access_rule"); }
     @Override public @NonNull String slug() { return "access-rules"; }
@@ -165,7 +166,7 @@ public class AccessRuleResource extends RowResource {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
         actions.add(moveAction("access_rule_move_up", "move_up", "arrow-up", -1));
         actions.add(moveAction("access_rule_move_down", "move_down", "arrow-down", 1));
-        actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "access_rule_toggle"))
+        actions.add(RowAction.Invoke.<Row>builder(HohenheimIds.id("access_rule_toggle"))
             .label(Microcopy.of("toggle").withFilter("scope", "access_rule"))
             // The button says what the CLICK does, not what the field is called: a single
             // "On or off" label left the operator to guess which way this row would move.
@@ -185,7 +186,7 @@ public class AccessRuleResource extends RowResource {
                     .of(enabled ? "turned_off" : "turned_on").withFilter("scope", "access_rule"));
             })
             .build());
-        actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "access_rule_delete"))
+        actions.add(RowAction.Invoke.<Row>builder(HohenheimIds.id("access_rule_delete"))
             .label(Microcopy.of("delete").withFilter("scope", "access_rule"))
             .icon(Icon.of("trash-can"))
             .description(Microcopy.of("delete_hint").withFilter("scope", "access_rule"))
@@ -218,7 +219,7 @@ public class AccessRuleResource extends RowResource {
      */
     private @NonNull RowAction<Row> moveAction(@NonNull String actionId, @NonNull String copyKey,
                                                @NonNull String icon, int direction) {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", actionId))
+        return RowAction.Invoke.<Row>builder(HohenheimIds.id(actionId))
             .label(Microcopy.of(copyKey).withFilter("scope", "access_rule"))
             .icon(Icon.of(icon))
             .description(Microcopy.of(copyKey + "_hint").withFilter("scope", "access_rule"))

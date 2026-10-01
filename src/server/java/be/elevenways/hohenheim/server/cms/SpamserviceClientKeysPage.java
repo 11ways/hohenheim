@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -17,7 +18,7 @@ final class SpamserviceClientKeysPage implements RecordScopedPage<ManagedClient>
 
     static final String SLUG = "keys";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "spamservice_client_keys"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("spamservice_client_keys"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("keys").withFilter("scope", "spamservice_client"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("key"); }

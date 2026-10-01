@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.AccessListModel;
@@ -61,7 +62,7 @@ public class ProtectedPathResource extends RowResource {
             .build())
         .build();
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "protected_path"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("protected_path"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "protected_path"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "protected_path"); }
     @Override public @NonNull String slug() { return "protected-paths"; }

@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.proxy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hawkeye.common.Hawkeye;
 import be.elevenways.hawkeye.common.render.RenderBlock;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -31,7 +32,7 @@ import java.util.Map;
 public final class ErrorPages {
 
     private static final Identifier ERROR_TEMPLATE =
-        Identifier.of("hohenheim", "hohenheim/error");
+        HohenheimTemplateIds.ERROR_PAGE;
 
     /** The microcopy scope every proxy error string lives in. */
     private static final String SCOPE = "proxy_error";

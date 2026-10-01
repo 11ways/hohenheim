@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.upstream.kinds;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.server.sitetype.TlsPassthroughProvider;
@@ -20,7 +21,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 /** Passes the original TLS stream to a backend selected by the domain's SNI pattern. */
 public final class TlsPassthroughUpstreamKind implements TlsPassthroughProvider {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "tls_passthrough");
+    public static final Identifier ID = HohenheimIds.id("tls_passthrough");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final StringField FORWARD_HOST = SETTINGS_SCHEMA.addField(
