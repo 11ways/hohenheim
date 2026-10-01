@@ -7,10 +7,10 @@ import be.elevenways.hohenheim.server.auth.HostnameAuthority;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Principal;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -126,7 +126,7 @@ public final class CertificateAuthority {
          * The renewal lane: authority is re-derived from the stored subject, never from a
          * snapshot taken at issuance time.
          *
-         * AIDEV-NOTE: an API-key request stores its OWNING user (ApiKeyPrincipal.id() is
+         * AIDEV-NOTE: an API-key request stores its OWNING user (ApiKeyPrincipal's reference is
          * the human), so a renewal re-checks the owner's authority and not the key's scope
          * narrowing. That is deliberate -- the key may be long gone while the certificate
          * is not -- but it does mean a renewal can succeed on authority a scope-narrowed
@@ -143,8 +143,8 @@ public final class CertificateAuthority {
             if (this.context != null) {
                 return HohenheimAccess.isAdmin(this.context);
             }
-            return this.principal != null && Zenit.getWebSocketAuthenticator()
-                .hasPermission(this.principal, HohenheimPanel.ACCESS);
+            return this.principal != null
+                && AccessContext.detached(this.principal).hasPermission(HohenheimPanel.ACCESS);
         }
 
         boolean canManageSite(int siteId) {
@@ -162,8 +162,9 @@ public final class CertificateAuthority {
          *         anonymous work (nothing to re-authorize against later)
          */
         public @Nullable Integer subjectId() {
+            PrincipalRef reference = this.principal != null ? this.principal.reference() : null;
             Long id = this.context != null ? this.context.principalId()
-                : this.principal != null && !this.principal.isAnonymous() ? this.principal.id() : null;
+                : reference != null && reference.kind().account() ? reference.id() : null;
             return id != null ? id.intValue() : null;
         }
     }

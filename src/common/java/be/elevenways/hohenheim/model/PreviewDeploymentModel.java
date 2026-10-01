@@ -17,6 +17,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 
 import java.util.List;
 
@@ -63,15 +64,15 @@ public class PreviewDeploymentModel extends Model {
 
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_DEPLOYING, v -> v.displayName("Deploying")
-            .label(statusLabel(STATUS_DEPLOYING)).icon("rotate").color("info"))
+            .label(statusLabel(STATUS_DEPLOYING)).icon("rotate").color(BadgeVariant.INFO))
         .value(STATUS_RUNNING, v -> v.displayName("Running")
-            .label(statusLabel(STATUS_RUNNING)).icon("circle-play").color("success"))
+            .label(statusLabel(STATUS_RUNNING)).icon("circle-play").color(BadgeVariant.SUCCESS))
         .value(STATUS_FAILED, v -> v.displayName("Failed")
-            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color("destructive"))
+            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color(BadgeVariant.DESTRUCTIVE))
         .value(STATUS_EXPIRED, v -> v.displayName("Expired")
-            .label(statusLabel(STATUS_EXPIRED)).icon("hourglass-end").color("secondary"))
+            .label(statusLabel(STATUS_EXPIRED)).icon("hourglass-end").color(BadgeVariant.SECONDARY))
         .value(STATUS_DESTROYED, v -> v.displayName("Destroyed")
-            .label(statusLabel(STATUS_DESTROYED)).icon("trash").color("secondary"))
+            .label(statusLabel(STATUS_DESTROYED)).icon("trash").color(BadgeVariant.SECONDARY))
         .defaultValue(STATUS_DEPLOYING)
         .label(HohenheimFormCopy.label("status"))
         .visibleIn(EditView.EDIT, EditView.DETAIL)

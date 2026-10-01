@@ -25,6 +25,8 @@ import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.StringMapField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -111,10 +113,10 @@ public final class DockerContainerKind implements InstanceKindHandler {
         EnumField.builder("port_exposure")
             .value(EXPOSURE_LOOPBACK, v -> v.displayName("Loopback only").icon("house-lock")
                 .label(Microcopy.of("loopback").withFilter("scope", "port_exposure"))
-                .color("teal"))
+                .color(ColorHue.TEAL))
             .value(EXPOSURE_PUBLIC, v -> v.displayName("Public").icon("globe")
                 .label(Microcopy.of("public").withFilter("scope", "port_exposure"))
-                .color("orange"))
+                .color(ColorHue.ORANGE))
             .defaultValue(EXPOSURE_LOOPBACK)
             .label(HohenheimFormCopy.label("port_exposure"))
             .help(HohenheimFormCopy.help("port_exposure"))
@@ -186,7 +188,7 @@ public final class DockerContainerKind implements InstanceKindHandler {
     public Icon getIcon() { return Icon.of("box"); }
 
     @Override
-    public String getColor() { return "blue"; }
+    public BadgeColor color() { return ColorHue.BLUE; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }

@@ -11,7 +11,7 @@ import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.security.KnownPermission;
 import be.elevenways.zenit.common.security.KnownPermissions;
-import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -42,7 +42,7 @@ class PermissionVocabularyTest {
 
     /** A permission literal at its DECLARATION site; group 1 is the permission string. */
     private static final Pattern DECLARED =
-        Pattern.compile("Permission\\.of\\(\"(hohenheim\\.[^\"]+)\"\\)");
+        Pattern.compile("Permission\\.declare\\(\"(hohenheim\\.[^\"]+)\"");
 
     @BeforeAll
     static void boot() {
@@ -100,7 +100,7 @@ class PermissionVocabularyTest {
         // The half the scanner structurally cannot see: a permission offered without
         // resolvable copy renders as a raw token in the editor, in one locale or both.
         List<String> undescribed = new ArrayList<>();
-        DefaultCatalogLoader catalogs = new DefaultCatalogLoader();
+        ShippedCatalogs catalogs = new ShippedCatalogs();
         for (KnownPermission entry : KnownPermissions.entries()) {
             if (!declared.contains(entry.permission())) {
                 continue;

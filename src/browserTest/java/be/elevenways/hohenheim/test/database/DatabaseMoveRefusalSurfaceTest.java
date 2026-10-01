@@ -55,7 +55,7 @@ class DatabaseMoveRefusalSurfaceTest extends HohenheimTestBase {
         // 3. The refusal is an ERROR flash naming the claim's own reason.
         var flash = popFlash(moved);
         assertThat(flash).as("step 3: a flash was stashed").isNotNull();
-        assertThat(flash.variant()).as("step 3: it is an error").isEqualTo(FlashLevel.ERROR.variant());
+        assertThat(flash.toast()).as("step 3: it is an error").isEqualTo(FlashLevel.ERROR.toast());
         assertThat(flash.message().key())
             .as("step 3: naming why the claim refused").isEqualTo("database_logical_identifier");
 

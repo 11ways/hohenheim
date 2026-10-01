@@ -26,6 +26,8 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.http.ReturnTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -254,8 +256,8 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
     private static String variantOf(@NonNull EnumField field, @Nullable Object status) {
         EnumField.EnumValue value = status == null
             ? null : field.getValues().get(String.valueOf(status));
-        String color = value != null ? value.getColor() : null;
-        return color != null ? color : "secondary";
+        BadgeColor color = value != null ? value.color() : null;
+        return (color != null ? color : BadgeVariant.SECONDARY).token();
     }
 
     private static String shortSha(Object sha) {

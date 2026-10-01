@@ -37,6 +37,8 @@ import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.StringMapField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -171,7 +173,7 @@ public final class WorkspaceKind implements InstanceKindHandler {
 
     @Override public Icon getIcon() { return Icon.of("code"); }
 
-    @Override public String getColor() { return "violet"; }
+    @Override public BadgeColor color() { return ColorHue.VIOLET; }
 
     @Override public Schema getSchema() { return SETTINGS_SCHEMA; }
 

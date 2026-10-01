@@ -394,38 +394,29 @@ public class ServerMain {
             // therefore mint a peer admin. Do not reintroduce the asymmetry without the
             // owner saying so; the mechanism still exists upstream (auth.grants.manage) for
             // permissions that genuinely need it.
-            KnownPermission.of(
-                HohenheimPanel.ACCESS.value(),
-                Microcopy.of("hohenheim_admin_access").withFilter("scope", "permission")),
-            KnownPermission.of(
-                ManagePanel.ACCESS.value(),
-                Microcopy.of("hohenheim_manage_access").withFilter("scope", "permission")),
+            KnownPermission.of(HohenheimPanel.ACCESS.value(), HohenheimPanel.ACCESS.description()),
+            KnownPermission.of(ManagePanel.ACCESS.value(), ManagePanel.ACCESS.description()),
             // Every-site authority WITHOUT the admin permission (the walk's type-level row on
             // SiteModel). Delegable for the reason above, and it could not be otherwise once
             // admin.access is: guarding the lesser authority while the greater one flows
             // freely protects nothing.
-            KnownPermission.of(
-                HohenheimAccess.SITES_MANAGE_ALL.value(),
-                Microcopy.of("hohenheim_sites_manage_all").withFilter("scope", "permission")),
+            KnownPermission.of(HohenheimAccess.SITES_MANAGE_ALL.value(),
+                HohenheimAccess.SITES_MANAGE_ALL.description()),
             // Install media on a host: publishing ISOs onto its storage and removing them.
             // Its own permission on purpose (HohenheimSources.MEDIA_MANAGE says why), which
             // is exactly why it must appear HERE -- an enforced permission missing from this
             // corpus is a permission no admin can find to grant.
-            KnownPermission.of(
-                HohenheimSources.MEDIA_MANAGE.value(),
-                Microcopy.of("hohenheim_media_manage").withFilter("scope", "permission")),
+            KnownPermission.of(HohenheimSources.MEDIA_MANAGE.value(), HohenheimSources.MEDIA_MANAGE.description()),
             // Tenant self-service creation: eligibility only. It provisions a workload on
             // an operator's iron, and the per-owner quota is what bounds how many.
-            KnownPermission.of(
-                HohenheimAccess.INSTANCES_CREATE.value(),
-                Microcopy.of("hohenheim_instances_create").withFilter("scope", "permission")),
+            KnownPermission.of(HohenheimAccess.INSTANCES_CREATE.value(),
+                HohenheimAccess.INSTANCES_CREATE.description()),
             // The managed-database sibling of INSTANCES_CREATE, and registered for the
             // same reason: this block IS the grants editor's autocomplete corpus
             // (KnownPermissions.all()), so an enforced permission missing from it is a
             // permission no admin can find. PermissionVocabularyTest is the guard.
-            KnownPermission.of(
-                TenantDatabases.DATABASES_CREATE.value(),
-                Microcopy.of("hohenheim_databases_create").withFilter("scope", "permission")));
+            KnownPermission.of(TenantDatabases.DATABASES_CREATE.value(),
+                TenantDatabases.DATABASES_CREATE.description()));
         ProteusRealmSuggestions.register();
     }
 

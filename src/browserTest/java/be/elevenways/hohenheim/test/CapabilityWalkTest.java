@@ -12,7 +12,6 @@ import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -159,11 +158,11 @@ class CapabilityWalkTest extends HohenheimTestBase {
             //    on the principal-only face terminals use.
             ApiKeyPrincipal key = new ApiKeyPrincipal(walkOperatorId, "Walk Operator",
                 1, "walk-ci", List.of(scope));
-            assertThat(Zenit.getWebSocketAuthenticator()
-                    .hasCapability(key, SiteModel.MODEL_ID, walkSiteId, HohenheimAccess.MANAGE))
+            assertThat(AccessContext.detached(key)
+                    .hasCapability(SiteModel.MODEL_ID, walkSiteId, HohenheimAccess.MANAGE))
                 .as("step 3: the minted key must hold manage on the granted site").isTrue();
-            assertThat(Zenit.getWebSocketAuthenticator()
-                    .hasCapability(key, SiteModel.MODEL_ID, walkSiteId + 1000, HohenheimAccess.MANAGE))
+            assertThat(AccessContext.detached(key)
+                    .hasCapability(SiteModel.MODEL_ID, walkSiteId + 1000, HohenheimAccess.MANAGE))
                 .as("step 3: the key must hold nothing on other records").isFalse();
 
             // 4. An UNREGISTERED capability on the site model stays unmintable,

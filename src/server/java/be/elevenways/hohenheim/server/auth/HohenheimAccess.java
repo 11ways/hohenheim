@@ -8,7 +8,6 @@ import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
@@ -176,7 +175,8 @@ public final class HohenheimAccess {
      * transactional quota (headroom), the image policy (approved templates only) and
      * {@link be.elevenways.hohenheim.server.instance.InstancePlacement} (which host).
      */
-    public static final Permission INSTANCES_CREATE = Permission.of("hohenheim.instances.create");
+    public static final Permission INSTANCES_CREATE = Permission.declare("hohenheim.instances.create",
+        Microcopy.of("hohenheim_instances_create").withFilter("scope", "permission"), Permission.Delegation.DELEGABLE);
 
     /**
      * Type-level authority over EVERY site: {@link #MANAGE} on all of them, WITHOUT
@@ -193,11 +193,11 @@ public final class HohenheimAccess {
      * instances-wide equivalent needs per-capability narrowing in the framework FIRST. Do not
      * copy this declaration onto another model without it.
      *
-     * Registered NON-DELEGABLE (ServerMain.installAuthBaselines), following the
-     * {@code auth.grants.manage} precedent: a holder of every-site authority minting peers is
-     * exactly the spread containment exists to prevent, and admins bypass containment anyway.
+     * Declared DELEGABLE (the owner's call of 2026-08-15, see ServerMain.installAuthBaselines): a
+     * permission is a leaf, and holding it includes handing it on.
      */
-    public static final Permission SITES_MANAGE_ALL = Permission.of("hohenheim.sites.manage_all");
+    public static final Permission SITES_MANAGE_ALL = Permission.declare("hohenheim.sites.manage_all",
+        Microcopy.of("hohenheim_sites_manage_all").withFilter("scope", "permission"), Permission.Delegation.DELEGABLE);
 
     /** How a packed subject set separates its entries; no subject token can contain it. */
     public static final String SUBJECT_SEPARATOR = "\n";
@@ -234,13 +234,11 @@ public final class HohenheimAccess {
     }
 
     /**
-     * Principal-only variant for WebSocket contexts (no conduit at open time):
-     * the installed WebSocket authenticator is the sanctioned principal-only
-     * path, and it rides the SAME precedence walk as the context variant.
+     * Principal-only variant for WebSocket contexts (no conduit at open time): a
+     * detached context rides the SAME precedence walk as the context variant.
      */
     public static boolean canManageSite(@NonNull Principal principal, int siteId) {
-        return Zenit.getWebSocketAuthenticator()
-            .hasCapability(principal, SiteModel.MODEL_ID, siteId, MANAGE);
+        return AccessContext.detached(principal).hasCapability(SiteModel.MODEL_ID, siteId, MANAGE);
     }
 
     /**
@@ -258,7 +256,7 @@ public final class HohenheimAccess {
 
     /**
      * Principal-only variant for WebSocket contexts (no conduit at open time), riding
-     * the installed WebSocket authenticator's precedence walk.
+     * a detached context's precedence walk.
      */
     public static boolean canManageInstance(@NonNull Principal principal, int instanceId) {
         return hasInstanceCapability(principal, instanceId, MANAGE);
@@ -272,8 +270,7 @@ public final class HohenheimAccess {
      */
     public static boolean hasInstanceCapability(@NonNull Principal principal, int instanceId,
                                                 @NonNull String capability) {
-        return Zenit.getWebSocketAuthenticator()
-            .hasCapability(principal, InstanceModel.MODEL_ID, instanceId, capability);
+        return AccessContext.detached(principal).hasCapability(InstanceModel.MODEL_ID, instanceId, capability);
     }
 
     /**

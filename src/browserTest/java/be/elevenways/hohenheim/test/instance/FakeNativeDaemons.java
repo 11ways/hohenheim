@@ -29,6 +29,8 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -601,7 +603,7 @@ final class FakeNativeDaemons {
         public Icon getIcon() { return Icon.of("flask"); }
 
         @Override
-        public String getColor() { return "gray"; }
+        public BadgeColor color() { return ColorHue.GRAY; }
 
         @Override
         public Schema getSchema() { return SETTINGS_SCHEMA; }
@@ -671,7 +673,7 @@ final class FakeNativeDaemons {
         public Icon getIcon() { return Icon.of("flask"); }
 
         @Override
-        public String getColor() { return "gray"; }
+        public BadgeColor color() { return ColorHue.GRAY; }
 
         @Override
         public Schema getSchema() { return FakeNativeKind.SETTINGS_SCHEMA; }
@@ -917,7 +919,7 @@ final class FakeNativeDaemons {
         public Icon getIcon() { return Icon.of("flask"); }
 
         @Override
-        public String getColor() { return "gray"; }
+        public BadgeColor color() { return ColorHue.GRAY; }
 
         @Override
         public Schema getSchema() { return FakeNativeKind.SETTINGS_SCHEMA; }

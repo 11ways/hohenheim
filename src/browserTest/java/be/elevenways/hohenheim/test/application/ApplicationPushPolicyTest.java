@@ -28,6 +28,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -363,7 +364,7 @@ class ApplicationPushPolicyTest {
     }
 
     private static Accountability operator(String id) {
-        return new Accountability(id, "Operator " + id, "10.0.0.1", "junit",
-            Accountability.ORIGIN_WEB);
+        return new Accountability(id, PrincipalRef.account(Long.parseLong(id)).storedKind(), "Operator " + id,
+            "10.0.0.1", "junit", Accountability.ORIGIN_WEB);
     }
 }

@@ -10,6 +10,8 @@ import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.RegistryMemberField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -70,7 +72,7 @@ public final class SshTargetKind implements BackupTargetKindHandler {
     public Icon getIcon() { return Icon.of("server"); }
 
     @Override
-    public String getColor() { return "blue"; }
+    public BadgeColor color() { return ColorHue.BLUE; }
 
     @Override
     public Schema getSchema() {

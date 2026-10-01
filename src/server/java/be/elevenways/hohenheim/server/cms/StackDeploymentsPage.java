@@ -15,6 +15,8 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -96,8 +98,8 @@ public final class StackDeploymentsPage implements RecordScopedPage<Row> {
     private static String statusVariant(@Nullable Object status) {
         EnumField.EnumValue value = status == null
             ? null : StackDeploymentModel.STATUS.getValues().get(String.valueOf(status));
-        String color = value != null ? value.getColor() : null;
-        return color != null ? color : "secondary";
+        BadgeColor color = value != null ? value.color() : null;
+        return (color != null ? color : BadgeVariant.SECONDARY).token();
     }
 
     private static String durationLabel(@Nullable Object durationMs) {

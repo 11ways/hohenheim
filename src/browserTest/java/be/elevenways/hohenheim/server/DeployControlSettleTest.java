@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
@@ -84,10 +85,11 @@ class DeployControlSettleTest extends HohenheimTestBase {
         int adminId = admin.get(UserModel.ID);
         TenantConduits.as(new UserPrincipal(adminId, "Test Admin"), () -> SiteControlHandlers.settleWithin(
             Duration.ofSeconds(5), "test verb",
-            () -> ActivityLog.record(Models.get(InstanceModel.class), SETTLE_RECORD, "settle_attribution", null)));
+            () -> ActivityLog.record(Models.get(InstanceModel.class), SETTLE_RECORD,
+                HohenheimActivityAction.TESTED, null)));
         Row attributed = new ActivityModel(Models.get(InstanceModel.class).getResolvedDatasource()).find()
             .where(ActivityModel.RECORD_ID.eq(String.valueOf(SETTLE_RECORD)))
-            .where(ActivityModel.ACTION.eq("settle_attribution")).first();
+            .where(ActivityModel.ACTION.eq(HohenheimActivityAction.TESTED.id().toString())).first();
         assertThat(attributed).as("step 3b: the background verb recorded its activity").isNotNull();
         assertThat((String) attributed.get(ActivityModel.ACTOR))
             .as("step 3b: naming the caller who asked, not the system").isEqualTo(String.valueOf(adminId));
@@ -108,7 +110,7 @@ class DeployControlSettleTest extends HohenheimTestBase {
                 .endsWith("/instances/" + applicationId + "/page/deployments");
             FlashNotice flash = popFlash(rollback);
             assertThat(flash).as("step 4: the outcome rides the flash").isNotNull();
-            assertThat(flash.variant()).as("step 4: as an error").isEqualTo(FlashLevel.ERROR.variant());
+            assertThat(flash.toast()).as("step 4: as an error").isEqualTo(FlashLevel.ERROR.toast());
             assertThat(flash.message().key()).as("step 4: in the release engine's own words")
                 .isEqualTo("release_no_rollback_target");
             assertThat(Models.get(ReleaseOperationModel.class).find()

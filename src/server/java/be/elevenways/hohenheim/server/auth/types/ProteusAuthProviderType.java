@@ -14,6 +14,8 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.UrlField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 
 import java.util.Map;
@@ -69,8 +71,8 @@ public class ProteusAuthProviderType implements SiteAuthProviderTypeHandler {
     }
 
     @Override
-    public String getColor() {
-        return "indigo";
+    public BadgeColor color() {
+        return ColorHue.INDIGO;
     }
 
     @Override

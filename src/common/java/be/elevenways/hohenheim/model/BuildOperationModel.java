@@ -15,6 +15,8 @@ import be.elevenways.zenit.common.orm.field.TextField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.ui.BadgeVariant;
+import be.elevenways.zenit.common.ui.ColorHue;
 
 import java.util.List;
 
@@ -86,11 +88,11 @@ public class BuildOperationModel extends Model {
 
     public static final EnumField BUILDER_KIND = SCHEMA.addField(EnumField.builder("builder_kind")
         .value(KIND_DOCKERFILE, v -> v.displayName("Dockerfile")
-            .label(kindLabel(KIND_DOCKERFILE)).icon("file-code").color("info"))
+            .label(kindLabel(KIND_DOCKERFILE)).icon("file-code").color(BadgeVariant.INFO))
         .value(KIND_NIXPACKS, v -> v.displayName("Nixpacks")
-            .label(kindLabel(KIND_NIXPACKS)).icon("box").color("secondary"))
+            .label(kindLabel(KIND_NIXPACKS)).icon("box").color(BadgeVariant.SECONDARY))
         .value(KIND_WORKSPACE, v -> v.displayName("Workspace")
-            .label(kindLabel(KIND_WORKSPACE)).icon("code").color("violet"))
+            .label(kindLabel(KIND_WORKSPACE)).icon("code").color(ColorHue.VIOLET))
         .build());
 
     /** The translation token for a builder kind; the key IS the stored value. */
@@ -106,17 +108,17 @@ public class BuildOperationModel extends Model {
 
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_RUNNING, v -> v.displayName("Running")
-            .label(statusLabel(STATUS_RUNNING)).icon("rotate").color("info"))
+            .label(statusLabel(STATUS_RUNNING)).icon("rotate").color(BadgeVariant.INFO))
         .value(STATUS_SUCCEEDED, v -> v.displayName("Succeeded")
-            .label(statusLabel(STATUS_SUCCEEDED)).icon("check").color("success"))
+            .label(statusLabel(STATUS_SUCCEEDED)).icon("check").color(BadgeVariant.SUCCESS))
         .value(STATUS_FAILED, v -> v.displayName("Failed")
-            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color("destructive"))
+            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color(BadgeVariant.DESTRUCTIVE))
         .value(STATUS_TIMED_OUT, v -> v.displayName("Timed out")
-            .label(statusLabel(STATUS_TIMED_OUT)).icon("clock").color("warning"))
+            .label(statusLabel(STATUS_TIMED_OUT)).icon("clock").color(BadgeVariant.WARNING))
         .value(STATUS_QUOTA_EXCEEDED, v -> v.displayName("Quota exceeded")
-            .label(statusLabel(STATUS_QUOTA_EXCEEDED)).icon("gauge-high").color("warning"))
+            .label(statusLabel(STATUS_QUOTA_EXCEEDED)).icon("gauge-high").color(BadgeVariant.WARNING))
         .value(STATUS_REFUSED, v -> v.displayName("Refused")
-            .label(statusLabel(STATUS_REFUSED)).icon("ban").color("destructive"))
+            .label(statusLabel(STATUS_REFUSED)).icon("ban").color(BadgeVariant.DESTRUCTIVE))
         .build());
 
     /** The translation token for a build status; the key IS the stored value. */

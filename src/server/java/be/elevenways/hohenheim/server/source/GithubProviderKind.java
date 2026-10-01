@@ -8,6 +8,8 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -54,7 +56,7 @@ public final class GithubProviderKind implements GitProviderKind {
 
     @Override public Icon getIcon() { return Icon.of("github"); }
 
-    @Override public String getColor() { return "info"; }
+    @Override public BadgeColor color() { return BadgeVariant.INFO; }
 
     @Override public Schema getSchema() { return SETTINGS_SCHEMA; }
 

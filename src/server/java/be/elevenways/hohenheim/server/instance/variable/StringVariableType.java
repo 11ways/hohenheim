@@ -8,6 +8,8 @@ import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.validator.MaxLength;
 import be.elevenways.zenit.common.validation.validator.Regex;
@@ -47,7 +49,7 @@ public final class StringVariableType implements VariableTypeHandler {
     public Icon getIcon() { return Icon.of("font"); }
 
     @Override
-    public String getColor() { return "gray"; }
+    public BadgeColor color() { return ColorHue.GRAY; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }

@@ -9,6 +9,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 
 /**
  * A managed multi-container Docker stack: one private policied bridge network, named volumes,
@@ -81,17 +82,17 @@ public class StackModel extends Model {
 
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_INACTIVE, v -> v.displayName("Inactive")
-            .label(statusLabel(STATUS_INACTIVE)).icon("circle-pause").color("secondary"))
+            .label(statusLabel(STATUS_INACTIVE)).icon("circle-pause").color(BadgeVariant.SECONDARY))
         .value(STATUS_DEPLOYING, v -> v.displayName("Deploying")
-            .label(statusLabel(STATUS_DEPLOYING)).icon("rotate").color("warning"))
+            .label(statusLabel(STATUS_DEPLOYING)).icon("rotate").color(BadgeVariant.WARNING))
         .value(STATUS_ACTIVE, v -> v.displayName("Active")
-            .label(statusLabel(STATUS_ACTIVE)).icon("circle-check").color("success"))
+            .label(statusLabel(STATUS_ACTIVE)).icon("circle-check").color(BadgeVariant.SUCCESS))
         .value(STATUS_DEGRADED, v -> v.displayName("Degraded")
-            .label(statusLabel(STATUS_DEGRADED)).icon("triangle-exclamation").color("warning"))
+            .label(statusLabel(STATUS_DEGRADED)).icon("triangle-exclamation").color(BadgeVariant.WARNING))
         .value(STATUS_FAILED, v -> v.displayName("Failed")
-            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color("destructive"))
+            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color(BadgeVariant.DESTRUCTIVE))
         .value(STATUS_STOPPED, v -> v.displayName("Stopped")
-            .label(statusLabel(STATUS_STOPPED)).icon("circle-stop").color("secondary"))
+            .label(statusLabel(STATUS_STOPPED)).icon("circle-stop").color(BadgeVariant.SECONDARY))
         .defaultValue(STATUS_INACTIVE)
         .build());
 

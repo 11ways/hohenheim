@@ -16,6 +16,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -100,9 +101,9 @@ public class ServerModel extends Model {
      */
     public static final EnumField RUNTIME = SCHEMA.addField(EnumField.builder("runtime")
         .value(RUNTIME_DOCKER, v -> v.displayName("Docker").icon("box")
-            .label(Microcopy.of("docker").withFilter("scope", "host_runtime")).color("blue"))
+            .label(Microcopy.of("docker").withFilter("scope", "host_runtime")).color(ColorHue.BLUE))
         .value(RUNTIME_INCUS, v -> v.displayName("Incus").icon("cubes")
-            .label(Microcopy.of("incus").withFilter("scope", "host_runtime")).color("green"))
+            .label(Microcopy.of("incus").withFilter("scope", "host_runtime")).color(ColorHue.GREEN))
         .defaultValue(RUNTIME_DOCKER)
         .build());
 
@@ -146,13 +147,13 @@ public class ServerModel extends Model {
      */
     public static final EnumField POSTURE = SCHEMA.addField(EnumField.builder("posture")
         .value(POSTURE_TRUSTED_ONLY, v -> v.displayName("Trusted only").icon("user-shield")
-            .label(Microcopy.of("trusted_only").withFilter("scope", "host_posture")).color("teal"))
+            .label(Microcopy.of("trusted_only").withFilter("scope", "host_posture")).color(ColorHue.TEAL))
         .value(POSTURE_DEDICATED, v -> v.displayName("Dedicated").icon("user-lock")
-            .label(Microcopy.of("dedicated").withFilter("scope", "host_posture")).color("indigo"))
+            .label(Microcopy.of("dedicated").withFilter("scope", "host_posture")).color(ColorHue.INDIGO))
         .value(POSTURE_SHARED_CONTAINER, v -> v.displayName("Shared containers").icon("cubes")
-            .label(Microcopy.of("shared_container").withFilter("scope", "host_posture")).color("orange"))
+            .label(Microcopy.of("shared_container").withFilter("scope", "host_posture")).color(ColorHue.ORANGE))
         .value(POSTURE_VM_ISOLATED, v -> v.displayName("VM isolated").icon("boxes-stacked")
-            .label(Microcopy.of("vm_isolated").withFilter("scope", "host_posture")).color("green"))
+            .label(Microcopy.of("vm_isolated").withFilter("scope", "host_posture")).color(ColorHue.GREEN))
         .defaultValue(POSTURE_TRUSTED_ONLY)
         .label(HohenheimFormCopy.label("posture")).help(HohenheimFormCopy.help("posture"))
         .build());
@@ -172,11 +173,11 @@ public class ServerModel extends Model {
      */
     public static final EnumField ADMISSION = SCHEMA.addField(EnumField.builder("admission")
         .value(ADMISSION_BLOCKED, v -> v.displayName("Blocked").icon("circle-xmark")
-            .label(Microcopy.of("blocked").withFilter("scope", "host_admission")).color("red"))
+            .label(Microcopy.of("blocked").withFilter("scope", "host_admission")).color(ColorHue.RED))
         .value(ADMISSION_ADMITTED, v -> v.displayName("Admitted").icon("circle-check")
-            .label(Microcopy.of("admitted").withFilter("scope", "host_admission")).color("green"))
+            .label(Microcopy.of("admitted").withFilter("scope", "host_admission")).color(ColorHue.GREEN))
         .value(ADMISSION_CORDONED, v -> v.displayName("Cordoned").icon("circle-pause")
-            .label(Microcopy.of("cordoned").withFilter("scope", "host_admission")).color("orange"))
+            .label(Microcopy.of("cordoned").withFilter("scope", "host_admission")).color(ColorHue.ORANGE))
         .defaultValue(ADMISSION_BLOCKED)
         .label(HohenheimFormCopy.label("admission")).help(HohenheimFormCopy.help("admission"))
         .build());

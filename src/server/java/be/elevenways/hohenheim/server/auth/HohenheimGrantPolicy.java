@@ -11,7 +11,6 @@ import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.server.GrantableModel;
-import be.elevenways.zenit.auth.server.RecordGrantCapabilityChecker;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.security.KnownCapabilities;
 import be.elevenways.zenit.common.security.KnownCapability;
@@ -80,7 +79,7 @@ final class HohenheimGrantPolicy {
                 .label(Microcopy.of("manage").withFilter("scope", "capability"))
                 .elevated()
                 .asDelegable());
-        RecordGrantCapabilityChecker.declareRules(SiteModel.MODEL_ID,
+        RecordCapabilityRules.declare(SiteModel.MODEL_ID,
             RecordCapabilityRules.create()
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS)
@@ -122,7 +121,7 @@ final class HohenheimGrantPolicy {
             KnownCapability.of(DYNDNS)
                 .label(Microcopy.of("dyndns").withFilter("scope", "capability"))
                 .elevated());
-        RecordGrantCapabilityChecker.declareRules(DnsRecordModel.MODEL_ID,
+        RecordCapabilityRules.declare(DnsRecordModel.MODEL_ID,
             RecordCapabilityRules.create()
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS));
@@ -244,7 +243,7 @@ final class HohenheimGrantPolicy {
                 .label(Microcopy.of("shell").withFilter("scope", "capability"))
                 .elevated()
                 .asDelegable());
-        RecordGrantCapabilityChecker.declareRules(InstanceModel.MODEL_ID,
+        RecordCapabilityRules.declare(InstanceModel.MODEL_ID,
             RecordCapabilityRules.create()
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS));
@@ -308,7 +307,7 @@ final class HohenheimGrantPolicy {
                 .elevated()
                 .asDelegable()
                 .impliedBy(MANAGE));
-        RecordGrantCapabilityChecker.declareRules(DatabaseModel.MODEL_ID,
+        RecordCapabilityRules.declare(DatabaseModel.MODEL_ID,
             RecordCapabilityRules.create()
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS));
@@ -325,7 +324,7 @@ final class HohenheimGrantPolicy {
                 .label(Microcopy.of("manage").withFilter("scope", "capability"))
                 .elevated()
                 .asDelegable());
-        RecordGrantCapabilityChecker.declareRules(GitProviderModel.MODEL_ID,
+        RecordCapabilityRules.declare(GitProviderModel.MODEL_ID,
             RecordCapabilityRules.create()
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS));
@@ -342,7 +341,7 @@ final class HohenheimGrantPolicy {
                 .label(Microcopy.of("manage").withFilter("scope", "capability"))
                 .elevated()
                 .asDelegable());
-        RecordGrantCapabilityChecker.declareRules(AccessListModel.MODEL_ID,
+        RecordCapabilityRules.declare(AccessListModel.MODEL_ID,
             RecordCapabilityRules.create()
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS));
@@ -360,7 +359,7 @@ final class HohenheimGrantPolicy {
                 .label(Microcopy.of("view").withFilter("scope", "capability"))
                 .asDelegable()
                 .asOwnerImplied());
-        RecordGrantCapabilityChecker.declareRules(CertificateModel.MODEL_ID,
+        RecordCapabilityRules.declare(CertificateModel.MODEL_ID,
             RecordCapabilityRules.create()
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS)

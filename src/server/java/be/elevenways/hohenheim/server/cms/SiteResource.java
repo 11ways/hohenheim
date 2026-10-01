@@ -65,6 +65,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.text.Slugs;
 import be.elevenways.zenit.common.text.Texts;
+import be.elevenways.zenit.common.ui.BadgeColor;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.security.SecureTokens;
@@ -330,7 +331,7 @@ public class SiteResource extends RowResource {
             : Microcopy.of("upstream").withFilter("scope", "site");
         String icon = handler != null && handler.getIcon() != null
             ? handler.getIcon().name() : null;
-        String color = handler != null ? handler.getColor() : null;
+        String color = handler != null ? BadgeColor.tokenOf(handler.color()) : null;
 
         String instanceName = null;
         String instanceUrl = null;

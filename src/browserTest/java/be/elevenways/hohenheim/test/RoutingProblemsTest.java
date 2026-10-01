@@ -12,7 +12,7 @@ import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -201,7 +201,7 @@ class RoutingProblemsTest {
      */
     @Test
     void everyRoutingReasonReadsAsASentenceInBothLocales() {
-        DefaultCatalogLoader catalogs = new DefaultCatalogLoader();
+        ShippedCatalogs catalogs = new ShippedCatalogs();
         List<String> missing = new ArrayList<>();
         for (RoutingProblem.Reason reason : RoutingProblem.Reason.values()) {
             List<AttentionItem> items = new ArrayList<>();

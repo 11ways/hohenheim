@@ -241,7 +241,7 @@ final class RecordOwners {
         if (pinned != null) {
             return pinned;
         }
-        if (ctx == null || HohenheimAccess.isAdmin(ctx) || ctx.isAnonymous()) {
+        if (ctx == null || HohenheimAccess.isAdmin(ctx) || !ctx.isAccount()) {
             return Set.of();
         }
         Long principalId = ctx.principalId();

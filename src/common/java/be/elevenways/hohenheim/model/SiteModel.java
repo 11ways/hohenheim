@@ -17,6 +17,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -98,7 +99,7 @@ public class SiteModel extends Model {
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_ACTIVE, v -> v.displayName("Active")
             .label(Microcopy.of(STATUS_ACTIVE).withFilter("scope", "site_status"))
-            .icon("circle-check").color("success"))
+            .icon("circle-check").color(BadgeVariant.SUCCESS))
         .build());
     public static final IntegerField ACCESS_LIST_ID = SCHEMA.addField(IntegerField.builder().name("access_list_id")
         .label(HohenheimFormCopy.label("access_list"))

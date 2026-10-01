@@ -89,7 +89,7 @@ public final class GeneratedRows {
         ACTIVE.set(scope);
         try {
             Exception[] failure = new Exception[1];
-            Accountability.runAs(new Accountability(null, null, null, null, origin), () -> {
+            Accountability.runAs(new Accountability(null, null, null, null, null, origin), () -> {
                 try {
                     body.run();
                 } catch (Exception e) {

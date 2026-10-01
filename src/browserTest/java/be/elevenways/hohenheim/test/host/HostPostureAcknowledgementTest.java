@@ -26,7 +26,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.microcopy.Translation;
-import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -164,7 +164,7 @@ class HostPostureAcknowledgementTest {
             assertThat(action.isVisibleFor(unacknowledged, AccessContext.anonymous()))
                 .as("step 4: the action offers itself on a host that needs it")
                 .isTrue();
-            Accountability.runAs(new Accountability("user:7", "Ada Operator",
+            Accountability.runAs(new Accountability("user:7", null, "Ada Operator",
                     "203.0.113.9", "test-agent", Accountability.ORIGIN_WEB),
                 () -> action.handler().apply(unacknowledged,
                     ActionContext.of(AccessContext.anonymous())));
@@ -237,7 +237,7 @@ class HostPostureAcknowledgementTest {
             //     exists for. (The step-6 full-row save masked it -- findById loads every
             //     column.) The gate still refused the mismatched pair, so nothing was ever
             //     wrongly granted; what was open is the away-and-back resurrection.
-            Accountability.runAs(new Accountability("user:7", "Ada Operator",
+            Accountability.runAs(new Accountability("user:7", null, "Ada Operator",
                     "203.0.113.9", "test-agent", Accountability.ORIGIN_WEB),
                 () -> HostPostureAcknowledgement.record(servers.findById(hostId)));
             assertThat(ServerModel.postureAcknowledged(servers.findById(hostId)))
@@ -267,7 +267,7 @@ class HostPostureAcknowledgementTest {
 
             // 6c. And the hook does NOT fire on a save that never touches the posture: an
             //     eraser that ran on every write would wipe acknowledgements at random.
-            Accountability.runAs(new Accountability("user:7", "Ada Operator",
+            Accountability.runAs(new Accountability("user:7", null, "Ada Operator",
                     "203.0.113.9", "test-agent", Accountability.ORIGIN_WEB),
                 () -> HostPostureAcknowledgement.record(servers.findById(hostId)));
             Row unrelated = servers.createEmptyRow();
@@ -293,7 +293,7 @@ class HostPostureAcknowledgementTest {
             // 7. INVALIDATOR TWO: a warning-version bump goes stale WITHOUT touching the
             //    row. Simulated by storing an older version -- the arithmetic is the same
             //    one a real bump performs, and it needs no write to invalidate.
-            Accountability.runAs(new Accountability("user:7", "Ada Operator",
+            Accountability.runAs(new Accountability("user:7", null, "Ada Operator",
                     "203.0.113.9", "test-agent", Accountability.ORIGIN_WEB),
                 () -> HostPostureAcknowledgement.record(servers.findById(hostId)));
             Row current = servers.findById(hostId);
@@ -399,9 +399,9 @@ class HostPostureAcknowledgementTest {
             .as("the check needs the hohenheim project dir as its working directory").isTrue();
         try (URLClassLoader own = new URLClassLoader(
                 new URL[] {resources.toUri().toURL()}, null)) {
-            DefaultCatalogLoader loader = new DefaultCatalogLoader("META-INF/microcopy/", own);
-            for (Translation candidate : loader.findCandidates("acknowledge_body",
-                    LocaleChain.ofTags(tag))) {
+            ShippedCatalogs loader = new ShippedCatalogs("META-INF/microcopy/", own);
+            for (Translation candidate : loader.variants("acknowledge_body",
+                    LocaleChain.ofTags(tag)).stream().map(Translation::of).toList()) {
                 for (Translation.Filter filter : candidate.getFilters()) {
                     if ("scope".equals(filter.getName()) && "server".equals(filter.getValue())) {
                         return String.valueOf(candidate.getSource());

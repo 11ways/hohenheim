@@ -13,6 +13,7 @@ import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import java.util.List;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.ui.ColorHue;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import be.elevenways.zenit.common.validation.Violations;
@@ -46,13 +47,13 @@ public class SiteDomainModel extends Model {
         return EnumField.builder("match_type")
             .value(MATCH_EXACT, v -> v.displayName("Exact")
                 .label(Microcopy.of("exact").withFilter("scope", "domain_match"))
-                .icon("check").color("green"))
+                .icon("check").color(ColorHue.GREEN))
             .value(MATCH_WILDCARD, v -> v.displayName("Wildcard")
                 .label(Microcopy.of("wildcard").withFilter("scope", "domain_match"))
-                .icon("sitemap").color("orange"))
+                .icon("sitemap").color(ColorHue.ORANGE))
             .value(MATCH_REGEX, v -> v.displayName("Regex")
                 .label(Microcopy.of("regex").withFilter("scope", "domain_match"))
-                .icon("code").color("purple"));
+                .icon("code").color(ColorHue.PURPLE));
     }
 
     /**

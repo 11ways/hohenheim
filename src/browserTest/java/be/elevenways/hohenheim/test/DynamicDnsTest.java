@@ -12,7 +12,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import be.elevenways.zenit.server.setting.ServerSettings;
 import org.junit.jupiter.api.Test;
 
@@ -247,7 +247,7 @@ class DynamicDnsTest extends HohenheimTestBase {
             .description();
 
         assertThat(description).as("the mint action declares a description").isNotNull();
-        return description.resolve(LocaleChain.ofTags(tag), new DefaultCatalogLoader());
+        return description.resolve(LocaleChain.ofTags(tag), new ShippedCatalogs());
     }
 
     // ------------------------------------------------------------------

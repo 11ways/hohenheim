@@ -25,7 +25,7 @@ public final class HostFixtures {
 
     /** The attribution a fixture acknowledges under; a real one is required, never null. */
     private static final Accountability OPERATOR =
-        new Accountability("user:1", "Test operator", null, null, "test");
+        new Accountability("user:1", null, "Test operator", null, null, "test");
 
     private HostFixtures() {
     }

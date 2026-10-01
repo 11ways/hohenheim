@@ -26,6 +26,8 @@ import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.TextField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -177,7 +179,7 @@ public final class VmKind implements InstanceKindHandler {
     public Icon getIcon() { return Icon.of("server"); }
 
     @Override
-    public String getColor() { return "purple"; }
+    public BadgeColor color() { return ColorHue.PURPLE; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }

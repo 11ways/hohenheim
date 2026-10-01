@@ -14,6 +14,8 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 
 import java.nio.file.Path;
 import java.util.Map;
@@ -74,7 +76,7 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
     public Icon getIcon() { return Icon.of("folder"); }
 
     @Override
-    public String getColor() { return "teal"; }
+    public BadgeColor color() { return ColorHue.TEAL; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }

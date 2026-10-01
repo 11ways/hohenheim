@@ -19,6 +19,7 @@ import be.elevenways.protoblast.common.dry.Dry;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
 import be.elevenways.zenit.common.ui.Icon;
 import com.sun.net.httpserver.HttpServer;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -423,7 +424,7 @@ public final class FakeDockerDaemon implements DockerTransport {
         public Icon getIcon() { return this.real.getIcon(); }
 
         @Override
-        public String getColor() { return this.real.getColor(); }
+        public BadgeColor color() { return this.real.color(); }
 
         @Override
         public Schema getSchema() { return this.real.getSchema(); }
@@ -490,7 +491,7 @@ public final class FakeDockerDaemon implements DockerTransport {
         public Icon getIcon() { return this.real.getIcon(); }
 
         @Override
-        public String getColor() { return this.real.getColor(); }
+        public BadgeColor color() { return this.real.color(); }
 
         @Override
         public Schema getSchema() { return this.real.getSchema(); }

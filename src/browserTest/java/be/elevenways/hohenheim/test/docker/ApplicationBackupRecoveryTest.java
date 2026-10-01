@@ -35,6 +35,7 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.common.validation.Violations;
@@ -241,7 +242,7 @@ class ApplicationBackupRecoveryTest {
         public Microcopy getLabel() { return REAL.getLabel(); }
         public Microcopy getDescription() { return REAL.getDescription(); }
         public Icon getIcon() { return REAL.getIcon(); }
-        public String getColor() { return REAL.getColor(); }
+        public BadgeColor color() { return REAL.color(); }
         public Schema getSchema() { return REAL.getSchema(); }
         public boolean tenantAuthored() { return REAL.tenantAuthored(); }
         public boolean generatedOnly() { return REAL.generatedOnly(); }
