@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.test.preview;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.DnsRecordModel;
+import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
@@ -14,6 +16,7 @@ import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
+import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
@@ -112,6 +115,84 @@ class PreviewMechanicsTest extends HohenheimTestBase {
         assertThat(PreviewDeployments.hostnameFor("shop", "a".repeat(70), "preview.test"))
             .as("step 4: distinct over-long refs on one site stay distinct")
             .isNotEqualTo(PreviewDeployments.hostnameFor("shop", "b".repeat(70), "preview.test"));
+    }
+
+    /**
+     * An existing preview keeps the hostname it was minted with across a redeploy, whatever slug fold minted it;
+     * only a new preview derives one, under today's fold.
+     */
+    @Test
+    void anExistingPreviewKeepsItsHostnameAcrossARedeploy() throws Exception {
+        String owner = Objects.requireNonNull(
+            OwnerQuota.currentOwnerPack(InstanceModel.MODEL_ID, applicationId), "the application's owner is readable");
+        Integer savedCap = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Previews.MAX_PER_OWNER);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Previews.MAX_PER_OWNER,
+            Math.toIntExact(PreviewQuota.usedBy(owner) + 2));
+        try {
+            // 1. A live preview of a ref with a g-breve and an s-comma, minted under the 2026-09 fold, which dropped
+            //    both letters, with its generated domain row and DNS row.
+            String oldRef = "feature/\u011e\u00fcne\u015f-\u0218ase";
+            String minted = "prev-mech--feature-unes-ase.preview.test";
+            assertThat(PreviewDeployments.hostnameFor("prev-mech", oldRef, "preview.test"))
+                .as("step 1: today's fold would name it differently").isNotEqualTo(minted);
+            Row existing = newPreviewRow(oldRef, minted, null);
+            int existingId = existing.get(PreviewDeploymentModel.ID);
+            var zones = Models.get(DnsZoneModel.class);
+            Row zone = zones.createEmptyRow();
+            zone.set(DnsZoneModel.ORIGIN, "refold-preview.test");
+            zone.set(DnsZoneModel.ENABLED, true);
+            zones.save(zone);
+            GeneratedRows.as(new GeneratedRows.Attribution(PreviewDomains.SOURCE,
+                PreviewDeploymentModel.MODEL_ID.toString(), existingId), () -> {
+                    Row domain = Models.get(SiteDomainModel.class).createEmptyRow();
+                    domain.set(SiteDomainModel.SITE_ID, siteId);
+                    domain.set(SiteDomainModel.HOSTNAME, minted);
+                    domain.set(SiteDomainModel.MATCH_TYPE, "exact");
+                    domain.set(SiteDomainModel.FORCE_SSL, false);
+                    domain.set(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT, true);
+                    Models.get(SiteDomainModel.class).save(domain);
+                    Row record = Models.get(DnsRecordModel.class).createEmptyRow();
+                    record.set(DnsRecordModel.ZONE_ID, zone.get(DnsZoneModel.ID));
+                    record.set(DnsRecordModel.NAME, "prev-mech--feature-unes-ase");
+                    record.set(DnsRecordModel.TYPE, DnsRecordModel.TYPE_A);
+                    record.set(DnsRecordModel.VALUE, "192.0.2.10");
+                    record.set(DnsRecordModel.ENABLED, true);
+                    Models.get(DnsRecordModel.class).save(record);
+                });
+
+            // 2. A redeploy of that ref claims the SAME row and keeps its stored hostname; the build then fails
+            //    (no such repository), which touches neither the domain row nor the DNS row.
+            Row redeployed = PreviewDeployments.queue(applicationId, oldRef, null, null, DeployTrigger.MANUAL);
+            assertThat((Integer) redeployed.get(PreviewDeploymentModel.ID))
+                .as("step 2: the redeploy claims the existing row").isEqualTo(existingId);
+            assertThat((String) redeployed.get(PreviewDeploymentModel.HOSTNAME))
+                .as("step 2: and keeps the hostname it was minted with").isEqualTo(minted);
+            awaitStatus(existingId, PreviewDeploymentModel.STATUS_FAILED);
+            assertThat((String) Models.get(PreviewDeploymentModel.class).findById(existingId)
+                .get(PreviewDeploymentModel.HOSTNAME)).as("step 2: still after the build ran").isEqualTo(minted);
+            assertThat((String) generatedDomainOf(existingId).get(SiteDomainModel.HOSTNAME))
+                .as("step 2: the generated domain row is unchanged").isEqualTo(minted);
+            assertThat(generatedDnsOf(existingId)).as("step 2: and so is the DNS row")
+                .extracting(row -> (String) row.get(DnsRecordModel.NAME))
+                .containsExactly("prev-mech--feature-unes-ase");
+
+            // 3. A NEW preview of such a ref derives its hostname under today's fold.
+            String newRef = "fix/\u011eiri\u0219";
+            Row fresh = PreviewDeployments.queue(applicationId, newRef, null, null, DeployTrigger.MANUAL);
+            int freshId = fresh.get(PreviewDeploymentModel.ID);
+            assertThat((String) fresh.get(PreviewDeploymentModel.HOSTNAME))
+                .as("step 3: a new preview gets the 2026-10 fold's name")
+                .isEqualTo("prev-mech--fix-giris.preview.test")
+                .isEqualTo(PreviewDeployments.hostnameFor("prev-mech", newRef, "preview.test"));
+            awaitStatus(freshId, PreviewDeploymentModel.STATUS_FAILED);
+
+            PreviewDeployments.destroy(existingId, "operator");
+            PreviewDeployments.destroy(freshId, "operator");
+            assertThat(generatedDnsOf(existingId)).as("step 4: teardown reclaims the DNS row").isEmpty();
+            zones.delete(zone.get(DnsZoneModel.ID));
+        } finally {
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Previews.MAX_PER_OWNER, savedCap);
+        }
     }
 
     @Test
@@ -509,6 +590,22 @@ class PreviewMechanicsTest extends HohenheimTestBase {
             expiresAt != null ? expiresAt : Now.instant().plusSeconds(3600));
         model.save(preview);
         return preview;
+    }
+
+    private static List<Row> generatedDnsOf(int previewId) {
+        return Models.get(DnsRecordModel.class).find()
+            .where(DnsRecordModel.GENERATED_BY.eq(PreviewDomains.SOURCE))
+            .where(DnsRecordModel.GENERATED_FOR_MODEL.eq(PreviewDeploymentModel.MODEL_ID.toString()))
+            .where(DnsRecordModel.GENERATED_FOR_ID.eq(previewId))
+            .all();
+    }
+
+    private static void awaitStatus(int previewId, String status) {
+        Poll.until("preview " + previewId + " reaches status " + status, Duration.ofSeconds(20),
+            Duration.ofMillis(100), () -> {
+                Row row = Models.get(PreviewDeploymentModel.class).findById(previewId);
+                return row != null && status.equals(row.get(PreviewDeploymentModel.STATUS));
+            });
     }
 
     private static Row generatedDomainOf(int previewId) {
