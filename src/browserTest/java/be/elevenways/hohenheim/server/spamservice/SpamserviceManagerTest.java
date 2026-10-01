@@ -27,10 +27,15 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.jar.Attributes;
+import java.util.jar.JarEntry;
+import java.util.jar.JarOutputStream;
+import java.util.jar.Manifest;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.UnaryOperator;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Exercises the managed Spamservice lifecycle without loading its nested classes in-process. */
 class SpamserviceManagerTest {
@@ -83,10 +88,50 @@ class SpamserviceManagerTest {
     }
 
     @Test
+    void theGeneratedEnvironmentCarriesTheDatabaseNameTheNestedBuildReads() throws Exception {
+        SpamserviceManager.RuntimePaths paths = new SpamserviceManager.RuntimePaths(this.temp, this.temp,
+            this.temp, this.temp.resolve("data"), this.temp, this.temp);
+        String url = "jdbc:sqlite:" + this.temp.resolve("data").resolve("spamservice.db");
+
+        // 1. A build declaring the settings contract reads database.url: ZENIT__DATABASE__URL, and never the retired
+        //    ZENIT_DB_URL, which would make it refuse boot.
+        SpamserviceDatabaseEnvironment settings = SpamserviceDatabaseEnvironment.of(jar("settings"));
+        assertThat(settings).as("step 1: the declared contract").isEqualTo(SpamserviceDatabaseEnvironment.SETTINGS);
+        assertThat(SpamserviceManager.environment(config(true, "k"), paths, settings, null, false))
+            .as("step 1: the settings name only")
+            .containsEntry("ZENIT__DATABASE__URL", url).doesNotContainKey("ZENIT_DB_URL");
+
+        // 2. A build from before the contract declares nothing and still reads ZENIT_DB_URL.
+        SpamserviceDatabaseEnvironment legacy = SpamserviceDatabaseEnvironment.of(jar(null));
+        assertThat(legacy).as("step 2: no declaration").isEqualTo(SpamserviceDatabaseEnvironment.LEGACY);
+        assertThat(SpamserviceManager.environment(config(true, "k"), paths, legacy, null, false))
+            .as("step 2: the legacy name only")
+            .containsEntry("ZENIT_DB_URL", url).doesNotContainKey("ZENIT__DATABASE__URL");
+
+        // 3. A declaration this Hohenheim does not know refuses rather than guessing a database.
+        assertThatThrownBy(() -> SpamserviceDatabaseEnvironment.of(jar("other")))
+            .as("step 3: unknown contract").isInstanceOf(IllegalStateException.class);
+    }
+
+    private Path jar(String declaration) throws IOException {
+        Manifest manifest = new Manifest();
+        manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
+        if (declaration != null) {
+            manifest.getMainAttributes().putValue(SpamserviceDatabaseEnvironment.MANIFEST_ATTRIBUTE, declaration);
+        }
+        Path jar = Files.createTempFile(this.temp, "spamservice-", ".jar");
+        try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar), manifest)) {
+            out.putNextEntry(new JarEntry("be/elevenways/spamservice/server/ServerMain.class"));
+            out.closeEntry();
+        }
+        return jar;
+    }
+
+    @Test
     void occupiedLoopbackPortFailsPreflight() throws Exception {
         try (ServerSocket occupied = new ServerSocket()) {
             occupied.bind(new InetSocketAddress("127.0.0.1", 0));
-            org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+            assertThatThrownBy(() ->
                 SpamserviceManager.ensurePortAvailable(occupied.getLocalPort()))
                 .isInstanceOf(IOException.class)
                 .hasMessageContaining("already in use");
@@ -118,7 +163,7 @@ class SpamserviceManagerTest {
         Files.createDirectories(root.resolve("managed-services"));
         Files.createSymbolicLink(root.resolve("managed-services/spamservice"), outside);
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+        assertThatThrownBy(() ->
             SpamserviceManager.prepareRuntimePaths(root,
                 new SystemUsers.RunAsUser("spamservice", 4242, 4242, this.temp.toString()),
                 (path, runAs) -> {}))

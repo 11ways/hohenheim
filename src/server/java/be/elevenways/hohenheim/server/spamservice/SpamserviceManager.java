@@ -348,13 +348,14 @@ public final class SpamserviceManager {
         ExtractedArtifact artifact = extractArtifact(this.artifactSource, paths.executableDirectory());
         this.artifactHash = artifact.sha256();
         verifyArtifact(artifact);
+        SpamserviceDatabaseEnvironment database = SpamserviceDatabaseEnvironment.of(artifact.path());
         synchronized (this.lock) {
             ensureCurrentLocked(requested);
             this.activeConfig = config;
         }
 
         UnaryOperator<String> redactor = redactor(config.controllerKey());
-        Map<String, String> migrationEnvironment = environment(config, paths, null, false);
+        Map<String, String> migrationEnvironment = environment(config, paths, database, null, false);
         setState(requested, SpamserviceState.MIGRATING);
         ManagedServiceProcess migration = launch(config, paths.instanceDirectory(), migrationEnvironment,
             command(config.maxHeapMb(), artifact.path(), true), redactor, null);
@@ -378,7 +379,7 @@ public final class SpamserviceManager {
         verifyArtifact(artifact);
         this.portPreflight.check(config.port());
         String nonce = SecureTokens.randomToken(24);
-        Map<String, String> runtimeEnvironment = environment(config, paths, nonce, true);
+        Map<String, String> runtimeEnvironment = environment(config, paths, database, nonce, true);
         String runtimeBaseUrl = baseUrl(config.port());
         setState(requested, SpamserviceState.STARTING);
         ManagedServiceProcess started = launch(config, paths.instanceDirectory(), runtimeEnvironment,
@@ -759,6 +760,7 @@ public final class SpamserviceManager {
 
     static @NonNull Map<String, String> environment(@NonNull Config config,
                                                      @NonNull RuntimePaths paths,
+                                                     @NonNull SpamserviceDatabaseEnvironment database,
                                                      @Nullable String launchNonce,
                                                      boolean controllerStdin) {
         Map<String, String> environment = new LinkedHashMap<>(
@@ -767,7 +769,8 @@ public final class SpamserviceManager {
         environment.put("SPAMSERVICE_PORT", String.valueOf(config.port()));
         environment.put("ZENIT__NETWORK__PORT", String.valueOf(config.port()));
         environment.put("ZENIT__NETWORK__BIND_ADDRESS", "127.0.0.1");
-        environment.put("ZENIT_DB_URL", "jdbc:sqlite:" + paths.dataDirectory().resolve("spamservice.db"));
+        // No username or password: SQLite ignores both, and the build's own defaults stay in force.
+        database.put(environment, "jdbc:sqlite:" + paths.dataDirectory().resolve("spamservice.db"));
         environment.put("JANEWAY_DISABLED", "1");
         environment.put("TMPDIR", paths.tempDirectory().toString());
         if (controllerStdin) {
