@@ -1,5 +1,6 @@
 {#- Console tab on an instance: the live output terminal (instance-console
-    WebSocket) and, for a PLAIN console, the command form (POST; a non-TTY
+    WebSocket) and, for a PLAIN console, the command form (the console operation's
+    invoke POST; a non-TTY
     container echoes nothing, so input never rides raw terminal keystrokes).
     An INTERACTIVE console (console_kind=tty, the Janeway shape) is a real
     pseudo-terminal: keystrokes and resize ride the socket and there is no form. -#}
@@ -18,7 +19,11 @@
 {% declare storedLogs: List %}
 {% declare selectedLogText: String = "" %}
 {% declare selectedLogTitle: String = "" %}
+{#- The placed console operation's invoke and the confirmation proof its dialog would post
+    (CmsConfirmation, server side), both supplied by the page. -#}
 {% declare commandTarget: RouteTarget %}
+{% declare confirmParam: String %}
+{% declare confirmProof: String %}
 {% declare consoleWsUrl: String %}
 {% declare recordTabs: List<RecordTabState> %}
 {% extend "zenitcms:shell" var:title=title %}
@@ -54,6 +59,7 @@
                     {% if !interactive %}
                         <form use:Zenit.form={% commandTarget %} class="instance-console-command">
                             <input type="hidden" name={% returnParam %} value={% returnUrl %}>
+                            <input type="hidden" name={% confirmParam %} value={% confirmProof %}>
                             <pl-input name="command" placeholder={% t("command_placeholder", scope: "instance_console") %}></pl-input>
                             <pl-button variant="outline" type={% "submit" %}>{{ t("send", scope: "instance_console") }}</pl-button>
                         </form>

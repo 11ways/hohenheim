@@ -21,6 +21,7 @@ import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.ZenitPrincipalKind;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -105,11 +106,13 @@ class InstanceConsoleCrashRestartTest {
                 .as("step 5: the record is running again, never left down by a refused restart")
                 .isEqualTo(InstanceModel.STATUS_RUNNING);
             Row restart = deploys(instanceId).get(0);
+            // System work names the system principal as its actor (zenit 133dccf4), never the viewer.
             assertThat(Map.of(
-                    "actor", String.valueOf((Object) restart.get(ActivityModel.ACTOR)),
+                    "actorKind", String.valueOf((Object) restart.get(ActivityModel.ACTOR_KIND)),
                     "origin", String.valueOf((Object) restart.get(ActivityModel.ORIGIN))))
                 .as("step 5: the restart is the system's action, never the viewer's")
-                .isEqualTo(Map.of("actor", "null", "origin", Accountability.ORIGIN_SYSTEM));
+                .isEqualTo(Map.of("actorKind", ZenitPrincipalKind.SYSTEM.id().toString(),
+                    "origin", Accountability.ORIGIN_SYSTEM));
         });
     }
 

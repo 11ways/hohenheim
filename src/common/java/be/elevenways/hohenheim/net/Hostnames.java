@@ -42,8 +42,8 @@ public final class Hostnames {
     /** The host pattern grammar's answers the common side needs. */
     public interface PatternGrammar {
 
-        /** @return whether a canonical value is an exact or wildcard host pattern naming no port */
-        boolean isPattern(@NonNull String value);
+        /** @return why a canonical value is no exact or wildcard host pattern naming no port, null when it is one */
+        @Nullable String refusal(@NonNull String value);
 
         /** @return the value with a leading one-or-more wildcard label respelled to the grammar's own */
         @NonNull String respellOneOrMoreLeading(@NonNull String value);
@@ -149,7 +149,7 @@ public final class Hostnames {
      */
     public static boolean isValidGlob(@Nullable String value) {
         String name = normalize(value);
-        return !name.isEmpty() && PATTERNS.require().isPattern(name);
+        return !name.isEmpty() && PATTERNS.require().refusal(name) == null;
     }
 
     /**

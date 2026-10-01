@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
@@ -247,6 +248,15 @@ final class HohenheimGrantPolicy {
             RecordCapabilityRules.create().visibility(VIEW)
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS));
+
+        // Preview deployments: no vocabulary and not grantable. A preview is a projection of its application, so
+        // its authority is the application's (TenantScopes.PREVIEWS lists exactly these): manage on the preview is
+        // manage on the instance it previews, the one hop the expire_preview operation's gate asks.
+        RecordCapabilityRules.declare(PreviewDeploymentModel.MODEL_ID,
+            RecordCapabilityRules.create()
+                .gate(ManagePanel.ACCESS)
+                .admin(HohenheimPanel.ACCESS)
+                .derivedFrom(InstanceModel.MODEL_ID, PreviewDeploymentModel.APPLICATION_ID));
 
         // Managed databases: the tenant-allocation tier (Phase 5). MANAGE stays THE
         // ownership identity for exactly the reason it does on instances -- there is no

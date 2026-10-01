@@ -8092,6 +8092,14 @@
       "scope": "schedule_action"
     }
   ],
+  "console_command_confirm": {
+    "text": "Send this line to the instance's console?",
+    "scope": "instance"
+  },
+  "console_command_sent_toast": {
+    "text": "Sent the console line to {$name}",
+    "scope": "instance"
+  },
   "app_update_confirm": {
     "text": "Run the template's update script inside the running instance?",
     "scope": "instance"

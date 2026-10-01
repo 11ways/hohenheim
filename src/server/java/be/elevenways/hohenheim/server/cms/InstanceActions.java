@@ -37,9 +37,9 @@ import java.util.List;
 
 /**
  * THE instance verbs, built once for both panels: the operator list and the delegated subset read the same builders,
- * so an action's gate and handler exist exactly once. Power, backup and snapshot are placed operations
- * ({@link InstanceOperations}, invoked through the one invoke route); the other verbs stay legacy row actions until
- * their operations land (stage 5).
+ * so an action's gate and handler exist exactly once. Power, backup, snapshot, the app update and the console line are
+ * placed operations ({@link InstanceOperations}, invoked through the one invoke route); the other verbs stay legacy row
+ * actions until their operations land (stage 5).
  *
  * AIDEV-NOTE: a placed operation's record capability is its gate's {@code subjectCapability}, asked by the same offer
  * that draws the button and by the pipeline on invoke, for an admin and a /manage principal alike; a generated row is
@@ -66,12 +66,16 @@ final class InstanceActions {
      */
     @NonNull List<PanelAction<Row>> placedOperator() {
         return List.of(deployAction(), stopAction(), restartAction(), snapshotAction(), backupAction(),
-            appUpdateAction());
+            appUpdateAction(), consoleCommandAction());
     }
 
-    /** The delegated panel's placed subset: power without restart, the two artifact actions and the app update. */
+    /**
+     * The delegated panel's placed subset: power without restart, the two artifact actions, the app update and the
+     * console line.
+     */
     @NonNull List<PanelAction<Row>> placedDelegated() {
-        return List.of(deployAction(), stopAction(), snapshotAction(), backupAction(), appUpdateAction());
+        return List.of(deployAction(), stopAction(), snapshotAction(), backupAction(), appUpdateAction(),
+            consoleCommandAction());
     }
 
     /** The operator panel's legacy row actions. */
@@ -330,6 +334,26 @@ final class InstanceActions {
                 .title(Microcopy.of("app_update").withFilter("scope", "instance"))
                 .body(Microcopy.of("app_update_confirm").withFilter("scope", "instance"))
                 .confirmLabel(Microcopy.of("app_update").withFilter("scope", "instance"))
+                .build())
+            .build();
+    }
+
+    /**
+     * One line to the workload's primary process, asked in the action's dialog; the console tab's own form posts to
+     * the same invoke. The operation's gate (console) and its applies (no generated instance) decide who sees it;
+     * only a running instance offers it.
+     */
+    private static @NonNull PanelAction<Row> consoleCommandAction() {
+        return PanelAction.<Row, String>places(InstanceOperations.CONSOLE_COMMAND, ActionPlacement.ROW,
+                (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("console_command_sent_toast")
+                    .withFilter("scope", "instance").withArg("name", request.subject().get(InstanceModel.NAME))))
+            .inlineOnRecord(false)
+            .inlineInRow(false)
+            .hiddenWhen(row -> !InstanceModel.STATUS_RUNNING.equals(row.get(InstanceModel.STATUS)))
+            .confirmation(ConfirmationSpec.builder()
+                .title(InstanceOperations.CONSOLE_COMMAND.label())
+                .body(Microcopy.of("console_command_confirm").withFilter("scope", "instance"))
+                .confirmLabel(Microcopy.of("send").withFilter("scope", "instance_console"))
                 .build())
             .build();
     }

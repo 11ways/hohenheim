@@ -180,8 +180,7 @@ public final class InstanceApi {
             } catch (DomainRefusal refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.CONSOLE_COMMAND,
-                command);
+            // The operation records the line on the instance, from every surface.
             return ApiConduits.json(Map.of("id", instanceId, "status", "sent"));
         });
 

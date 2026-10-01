@@ -8092,6 +8092,14 @@
       "scope": "schedule_action"
     }
   ],
+  "console_command_confirm": {
+    "text": "Deze regel naar de console van de instantie sturen?",
+    "scope": "instance"
+  },
+  "console_command_sent_toast": {
+    "text": "Consoleregel naar {$name} verstuurd",
+    "scope": "instance"
+  },
   "app_update_confirm": {
     "text": "Het updatescript van het sjabloon in de draaiende instantie uitvoeren?",
     "scope": "instance"
