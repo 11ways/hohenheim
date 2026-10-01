@@ -33,7 +33,11 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.task.TaskHold;
+import be.elevenways.zenit.server.task.TaskRuntime;
+import be.elevenways.zenit.server.task.TaskService;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
+import be.elevenways.zenit.server.task.record.RunRecordSchedulesTask;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -331,39 +335,49 @@ class PreviewMechanicsTest extends HohenheimTestBase {
         //    minute) fires the due one-shot; the reached preview is fully reclaimed.
         // AIDEV-NOTE: runDue starts each due step on its own virtual thread and returns. The destroy that step runs
         // stamps deleted_at BEFORE it deletes the schedule rows, so awaiting deleted_at (as this test once did)
-        // read the half-finished teardown. awaitRunningSteps waits for every step this process started, the
-        // ambient minute sweeper's included, so whoever fired the one-shot, its whole destroy has ended here.
-        new RecordSchedules(Datasources.getDefault()).runDue(null);
-        assertThat(RecordSchedules.awaitRunningSteps(Duration.ofSeconds(20)))
-            .as("step 3: the sweep's steps ended").isTrue();
+        // read the half-finished teardown. awaitRunningSteps waits for every step this process started. The ambient
+        // minute sweeper is HELD (and any sweep already running awaited) while this test sweeps: a background sweep
+        // that had claimed the one-shot but not yet counted its step let our runDue skip it and
+        // awaitRunningSteps return before the destroy began. A null service means no background sweeper runs.
+        TaskService taskService = TaskRuntime.service();
+        try (TaskHold sweeperHold = taskService == null ? null
+                : taskService.hold(RunRecordSchedulesTask.ID.toString())) {
+            if (sweeperHold != null) {
+                assertThat(sweeperHold.awaitIdle(Duration.ofSeconds(20)))
+                    .as("step 3: a background sweep already running has ended").isTrue();
+            }
+            new RecordSchedules(Datasources.getDefault()).runDue(null);
+            assertThat(RecordSchedules.awaitRunningSteps(Duration.ofSeconds(20)))
+                .as("step 3: the sweep's steps ended").isTrue();
 
-        Row dead = StoredRows.byId(Models.get(PreviewDeploymentModel.class), previewId);
-        assertThat((String) dead.get(PreviewDeploymentModel.STATUS))
-            .as("step 3: expiry is stamped as EXPIRED, visibly")
-            .isEqualTo(PreviewDeploymentModel.STATUS_EXPIRED);
-        assertThat((Object) dead.get(PreviewDeploymentModel.DELETED_AT))
-            .as("the reached preview is soft-deleted").isNotNull();
-        assertThat(generatedDomainOf(previewId))
-            .as("step 3: its generated hostname row is gone").isNull();
-        assertThat(schedulesOf(previewId))
-            .as("step 3: the dead preview left no schedule rows behind").isEmpty();
+            Row dead = StoredRows.byId(Models.get(PreviewDeploymentModel.class), previewId);
+            assertThat((String) dead.get(PreviewDeploymentModel.STATUS))
+                .as("step 3: expiry is stamped as EXPIRED, visibly")
+                .isEqualTo(PreviewDeploymentModel.STATUS_EXPIRED);
+            assertThat((Object) dead.get(PreviewDeploymentModel.DELETED_AT))
+                .as("the reached preview is soft-deleted").isNotNull();
+            assertThat(generatedDomainOf(previewId))
+                .as("step 3: its generated hostname row is gone").isNull();
+            assertThat(schedulesOf(previewId))
+                .as("step 3: the dead preview left no schedule rows behind").isEmpty();
 
-        // 4. The healthy preview survived, its one-shot still armed and unspent.
-        Row alive = StoredRows.byId(Models.get(PreviewDeploymentModel.class), healthyId);
-        assertThat((Object) alive.get(PreviewDeploymentModel.DELETED_AT))
-            .as("step 4: the unexpired preview survived the sweep").isNull();
-        List<Row> armed = schedulesOf(healthyId);
-        assertThat(armed).as("step 4: its one-shot schedule is still armed").hasSize(1);
-        assertThat((Object) armed.get(0).get(RecordScheduleModel.COMPLETED_AT))
-            .as("step 4: and is not spent").isNull();
+            // 4. The healthy preview survived, its one-shot still armed and unspent.
+            Row alive = StoredRows.byId(Models.get(PreviewDeploymentModel.class), healthyId);
+            assertThat((Object) alive.get(PreviewDeploymentModel.DELETED_AT))
+                .as("step 4: the unexpired preview survived the sweep").isNull();
+            List<Row> armed = schedulesOf(healthyId);
+            assertThat(armed).as("step 4: its one-shot schedule is still armed").hasSize(1);
+            assertThat((Object) armed.get(0).get(RecordScheduleModel.COMPLETED_AT))
+                .as("step 4: and is not spent").isNull();
 
-        // 5. A second sweep changes nothing: the healthy deadline is still ahead.
-        new RecordSchedules(Datasources.getDefault()).runDue(null);
-        assertThat(RecordSchedules.awaitRunningSteps(Duration.ofSeconds(20)))
-            .as("step 5: the second sweep's steps ended").isTrue();
-        alive = StoredRows.byId(Models.get(PreviewDeploymentModel.class), healthyId);
-        assertThat((Object) alive.get(PreviewDeploymentModel.DELETED_AT))
-            .as("step 5: still untouched after another sweep").isNull();
+            // 5. A second sweep changes nothing: the healthy deadline is still ahead.
+            new RecordSchedules(Datasources.getDefault()).runDue(null);
+            assertThat(RecordSchedules.awaitRunningSteps(Duration.ofSeconds(20)))
+                .as("step 5: the second sweep's steps ended").isTrue();
+            alive = StoredRows.byId(Models.get(PreviewDeploymentModel.class), healthyId);
+            assertThat((Object) alive.get(PreviewDeploymentModel.DELETED_AT))
+                .as("step 5: still untouched after another sweep").isNull();
+        }
 
         // 6. Operator teardown reclaims the schedule with the record: soft delete
         //    fires no remove hooks, so destroy must (and does) delete it explicitly.
