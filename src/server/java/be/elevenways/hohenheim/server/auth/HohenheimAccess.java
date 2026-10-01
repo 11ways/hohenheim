@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -87,7 +88,7 @@ public final class HohenheimAccess {
     public static final String CONSOLE = "console";
 
     /** Start, stop and restart the workload. ORDINARY: it changes runtime state, never content. */
-    public static final String POWER = "power";
+    public static final String POWER = HohenheimCapabilities.POWER;
 
     /**
      * Author what the instance IS: its record fields, its devices, its schedules and an
@@ -140,10 +141,10 @@ public final class HohenheimAccess {
     public static final String CREDENTIALS = "credentials";
 
     /** Take and restore driver-level snapshots of an instance (data-destructive on restore). */
-    public static final String SNAPSHOTS = "snapshots";
+    public static final String SNAPSHOTS = HohenheimCapabilities.SNAPSHOTS;
 
     /** Export instance backups and restore them to new instances. */
-    public static final String BACKUPS = "backups";
+    public static final String BACKUPS = HohenheimCapabilities.BACKUPS;
 
     /**
      * Browse, read and download the files inside an instance's own volumes. An ORDINARY

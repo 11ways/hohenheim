@@ -1,9 +1,9 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.ManageInstanceScheduleStepResource;
-import be.elevenways.hohenheim.server.schedule.InstancePowerAction;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -142,7 +142,7 @@ class ScheduleStepAuthorityTest extends HohenheimTestBase {
         Map<String, Object> values = new LinkedHashMap<>();
         values.put(RecordScheduleStepModel.SCHEDULE_ID.getName(), forSchedule);
         values.put(RecordScheduleStepModel.POSITION.getName(), 1);
-        values.put(RecordScheduleStepModel.ACTION.getName(), InstancePowerAction.ID.toString());
+        values.put(RecordScheduleStepModel.ACTION.getName(), InstanceOperations.RESTART.id().toString());
         return Map.copyOf(values);
     }
 

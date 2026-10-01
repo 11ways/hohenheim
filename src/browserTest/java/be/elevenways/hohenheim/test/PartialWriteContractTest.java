@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -14,7 +15,6 @@ import be.elevenways.hohenheim.server.cms.InstanceScheduleStepResource;
 import be.elevenways.hohenheim.server.cms.ManageSiteResource;
 import be.elevenways.hohenheim.server.cms.ServerResource;
 import be.elevenways.hohenheim.server.cms.SiteResource;
-import be.elevenways.hohenheim.server.schedule.InstanceSnapshotAction;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -145,7 +145,7 @@ class PartialWriteContractTest extends HohenheimTestBase {
         Row step = steps.createEmptyRow();
         step.set(RecordScheduleStepModel.SCHEDULE_ID, scheduleId);
         step.set(RecordScheduleStepModel.POSITION, 1);
-        step.set(RecordScheduleStepModel.ACTION, InstanceSnapshotAction.ID.toString());
+        step.set(RecordScheduleStepModel.ACTION, InstanceOperations.SNAPSHOT.id().toString());
         step.set(RecordScheduleStepModel.OFFSET_SECONDS, 0);
         steps.save(step);
         stepId = step.get(RecordScheduleStepModel.ID);

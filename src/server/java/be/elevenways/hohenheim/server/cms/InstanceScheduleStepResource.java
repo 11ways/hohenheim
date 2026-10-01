@@ -18,7 +18,10 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.RegistryMemberField;
+import be.elevenways.zenit.common.orm.field.TypeDefinition;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -26,7 +29,9 @@ import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.zenit.server.task.record.RecordScheduleActions;
+import be.elevenways.zenit.server.task.record.SchedulePlacements;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -284,9 +289,7 @@ public class InstanceScheduleStepResource extends RowResource {
         InstanceScheduleResource.requireManage(accessContext,
             InstanceScheduleResource.parseInstanceId(recordId));
         Object action = CmsSupport.valueOf(coerced, existing, RecordScheduleStepModel.ACTION);
-        String refusal = RecordScheduleActions.editRefusal(accessContext,
-            InstanceModel.MODEL_ID, recordId,
-            action instanceof String key ? key : null);
+        String refusal = actionRefusal(accessContext, recordId, action instanceof String key ? key : null);
 
         if (refusal != null) {
             throw Violations.ofField("action", action,
@@ -294,6 +297,38 @@ public class InstanceScheduleStepResource extends RowResource {
         }
 
         return schedule;
+    }
+
+    /**
+     * Why the editor may not put this action on the instance's chain, or null: an operation is asked what the pipeline
+     * would offer the editor on that instance now (its gate's authorization half), a legacy action its declared
+     * capability.
+     *
+     * @return the refusal token, the same vocabulary for both
+     */
+    @SuppressWarnings("removal")
+    private static @Nullable String actionRefusal(@NonNull AccessContext editor, @NonNull String recordId,
+                                                 @Nullable String action) {
+        TypeDefinition member = ((RegistryMemberField) RecordScheduleStepModel.ACTION).memberFor(action);
+        if (!(member instanceof Operation<?, ?, ?> operation)) {
+            return RecordScheduleActions.editRefusal(editor, InstanceModel.MODEL_ID, recordId, action);
+        }
+        if (SchedulePlacements.find(operation.id()) == null) {
+            return RecordScheduleActions.REFUSAL_UNKNOWN_ACTION;
+        }
+        if (operation.subjectType() == null
+                || !InstanceModel.MODEL_ID.equals(operation.subjectType().modelId())) {
+            return RecordScheduleActions.REFUSAL_MODEL_MISMATCH;
+        }
+        Row instance = Models.get(InstanceModel.class).findById(
+            InstanceScheduleResource.parseInstanceId(recordId));
+        if (instance == null) {
+            return RecordScheduleActions.REFUSAL_UNKNOWN_ACTION;
+        }
+        @SuppressWarnings("unchecked")
+        Operation<Row, ?, ?> onInstance = (Operation<Row, ?, ?>) operation;
+        return OperationPipeline.offer(onInstance, editor, instance) instanceof OperationPipeline.Offer.Hidden
+            ? RecordScheduleActions.REFUSAL_CAPABILITY_DENIED : null;
     }
 
     /** The last editor of the chain owns the intent its executions are checked against. */

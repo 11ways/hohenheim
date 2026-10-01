@@ -2,12 +2,13 @@ package be.elevenways.hohenheim.test.migration;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
-import be.elevenways.hohenheim.server.schedule.InstancePowerAction;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
@@ -48,10 +49,10 @@ import be.elevenways.zenit.comms.server.CommsInboxModel;
 import be.elevenways.zenit.comms.server.hub.HubIdempotency;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.data.SavedViews;
+import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
-import be.elevenways.zenit.server.task.record.RecordScheduleActionHandler;
-import be.elevenways.zenit.server.task.record.RecordScheduleActions;
+import be.elevenways.zenit.server.task.record.SchedulePlacements;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
@@ -88,10 +89,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * AIDEV-NOTE: the clock is pinned to one hour after the seed for the whole journey. The session and the hub receipt
  * carry 24h windows; an upgrade on the deploy day is the case under test, never a fixture that ages out.
- *
- * AIDEV-TODO: module-fit stage 2 slice one rewrites every hohenheim:power step to start_instance, stop_instance or
- * restart_instance by its stored operation (contract 5.1); until that migration exists step 9 pins that the stored
- * steps keep resolving to the power action with their operation intact. Slice one replaces step 9 with the rewrite.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -160,9 +157,10 @@ class HohenheimUpgradeJourneyTest {
             .contains("zenit-auth:user", "zenitmedia:media",
                 "be.elevenways.hohenheim.server.task.SuperviseProxyListeners");
 
-        // 2. Today's code boots over the upgraded file.
+        // 2. Today's code boots over the upgraded file, its datasource-bound services on it whatever ran before.
         HohenheimDatabase.init();
         HohenheimTestRuntime.ensureBooted();
+        TestDatabases.adoptCurrentDatabase();
 
         // 3. The role grant and both record grants decide as before.
         assertThat(PermissionHolders.userIdsHolding(HohenheimSources.ADMIN_ACCESS))
@@ -224,32 +222,35 @@ class HohenheimUpgradeJourneyTest {
         assertThat(view).as("step 8: the owner finds the view on the media list").isNotNull();
         assertThat(view.name()).as("step 8: under its name").isEqualTo("Recent uploads");
 
-        // 9. The schedule and its steps keep running: every stored action resolves to its handler, payload intact.
+        // 9. The schedule and its steps keep running: M011 named the operation each stored power, snapshot and backup
+        //    step now runs (a power step by its stored operation, a blank one as the old default restart), moved the
+        //    snapshot's note into the stored input, and every step resolves to an operation placed as a schedule step
+        //    whose form reads that input.
         Row schedule = Models.get(RecordScheduleModel.class)
             .findById(Integer.parseInt(facts.getProperty("schedule.id")));
         assertThat(schedule.get(RecordScheduleModel.MODEL)).as("step 9: the schedule targets the instance model")
             .isEqualTo(InstanceModel.MODEL_ID.toString());
         List<Row> steps = Models.get(RecordScheduleStepModel.class).findChain(schedule.get(RecordScheduleModel.ID));
         assertThat(steps).extracting(step -> step.get(RecordScheduleStepModel.ACTION))
-            .as("step 9: the five steps in order")
-            .containsExactly("hohenheim:power", "hohenheim:snapshot", "hohenheim:backup", "hohenheim:power",
-                "hohenheim:power");
+            .as("step 9: the five steps in order, each naming its operation")
+            .containsExactly(InstanceOperations.STOP.id().toString(), InstanceOperations.SNAPSHOT.id().toString(),
+                InstanceOperations.BACKUP.id().toString(), InstanceOperations.START.id().toString(),
+                InstanceOperations.RESTART.id().toString());
         for (Row step : steps) {
-            RecordScheduleActionHandler handler = RecordScheduleActions.getHandler(
-                step.get(RecordScheduleStepModel.ACTION));
-            assertThat(handler).as("step 9: step %s resolves to a handler", step.get(RecordScheduleStepModel.ID))
+            Identifier action = Identifier.tryParse(step.get(RecordScheduleStepModel.ACTION));
+            assertThat(SchedulePlacements.find(action))
+                .as("step 9: step %s runs an operation placed as a schedule step", step.get(RecordScheduleStepModel.ID))
                 .isNotNull();
+            assertThat(step.get(RecordScheduleStepModel.PAYLOAD))
+                .as("step 9: step %s keeps no legacy payload", step.get(RecordScheduleStepModel.ID)).isNull();
         }
-        assertThat(RecordScheduleActions.getHandler(steps.get(0).get(RecordScheduleStepModel.ACTION)))
-            .as("step 9: a power step is the power action").isInstanceOf(InstancePowerAction.class);
-        assertThat(steps.subList(0, 4)).extracting(step -> payloadValue(step, "operation"))
-            .as("step 9: each power step keeps its stored operation; the others carry none")
-            .containsExactly("stop", null, null, "start");
-        assertThat(payloadValue(steps.get(4), "operation"))
-            .as("step 9: the power step saved without an operation still reads as a restart")
-            .isIn(null, "", InstancePowerAction.OP_RESTART);
-        assertThat(payloadValue(steps.get(1), "note")).as("step 9: the snapshot step keeps its note")
-            .isEqualTo("before nightly start");
+        assertThat(steps).extracting(step -> step.get(RecordScheduleStepModel.INPUT))
+            .as("step 9: only the snapshot step carries an input, its note")
+            .containsExactly(null, Map.of("note", "before nightly start"), null, null, null);
+        assertThat(OperationPipeline.readJson(InstanceOperations.SNAPSHOT,
+                steps.get(1).get(RecordScheduleStepModel.INPUT), null))
+            .as("step 9: the stored input reads through the snapshot operation's form")
+            .isEqualTo(new InstanceOperations.SnapshotInput("before nightly start"));
 
         // 10. Every system task row names a catalog task by its id, history included; none is a class name.
         List<Row> tasks = Models.get(SystemTaskModel.class).find().noCache().all();
@@ -314,11 +315,6 @@ class HohenheimUpgradeJourneyTest {
             entries.addAll(group.entries());
         }
         return entries;
-    }
-
-    private static Object payloadValue(Row step, String key) {
-        Object payload = step.get(RecordScheduleStepModel.PAYLOAD);
-        return payload instanceof Map<?, ?> map ? map.get(key) : null;
     }
 
     private static InputStream resource(String path) {

@@ -41,6 +41,12 @@ public enum DeployTrigger {
     SYSTEM(InstanceService.DEFAULT_DEPLOY_REASON, true),
 
     /**
+     * A record schedule step placed the start or restart. Exactly {@link #SYSTEM}'s start policy, so a scheduled
+     * deploy behaves as before; only its recorded word names the surface that asked.
+     */
+    SCHEDULE("schedule", true),
+
+    /**
      * Someone else's {@code git push}, relayed by a forge.
      *
      * This is the ONE trigger that may not start a stopped workload. An operator who

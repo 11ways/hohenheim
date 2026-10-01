@@ -73,8 +73,12 @@ public final class InstanceSnapshots {
      */
     public int create(int instanceId, @Nullable String note) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.SNAPSHOTS);
-        return this.instances.operations().exclusive(instanceId,
+        int snapshotId = this.instances.operations().exclusive(instanceId,
             InstanceOperationLock.Contention.REFUSE, () -> createLocked(instanceId, note));
+        // Written here, once, on success, whichever surface asked; no surface writes one of its own.
+        ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.SNAPSHOT,
+            "snapshot #" + snapshotId);
+        return snapshotId;
     }
 
     /** {@link #create}'s body; the caller holds the instance's operation lock. */

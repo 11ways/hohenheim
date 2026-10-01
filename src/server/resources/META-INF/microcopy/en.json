@@ -12742,6 +12742,10 @@
     "text": "The scheduled backup of instance {$name} failed: {$reason}",
     "scope": "alert"
   },
+  "instance_backup_unknown_body": {
+    "text": "The scheduled backup of instance {$name} was interrupted before it recorded an outcome; it is not known whether the backup completed, so check the backup target",
+    "scope": "alert"
+  },
   "database_backup_failed_subject": {
     "text": "Database backup failed: {$name}",
     "scope": "alert"
