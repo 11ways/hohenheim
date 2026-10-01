@@ -44,8 +44,10 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.RecordCapabilityRules;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
@@ -101,6 +103,15 @@ class InstancePowerOperationsTest {
     }
 
     @Test
+    void anInProgressRefusalKeepsTheCoreEdgeAnswer() {
+        DomainRefusal refusal = new DomainRefusal(ZenitRefusalReason.IN_PROGRESS, "another command is running");
+        int[] status = {0};
+        assertThatThrownBy(() -> ApiConduits.refusal(answering(status), refusal))
+            .as("an unmapped core refusal reaches core unchanged").isSameAs(refusal);
+        assertThat(status[0]).as("the frozen API adapter writes no replacement status").isZero();
+    }
+
+    @Test
     void theInstanceOperationsRunFromEverySurfaceJourney() {
         Db.run(datasource, () -> {
             int instanceId = BackupLaneFixture.instanceRecord("ops-target", fixture.hostId);
@@ -111,6 +122,9 @@ class InstancePowerOperationsTest {
             }
             AccessContext tenant = AccessContext.of(TenantConduits.stubFor(
                 new UserPrincipal(tenantId, "Power Operator")));
+            assertThat(RecordCapabilityRules.of(InstanceModel.MODEL_ID).visibilityCapability())
+                .as("instances declare their existing view capability for concealment")
+                .isEqualTo(HohenheimAccess.VIEW);
 
             // 1. The slice one migration rewrites stored power steps by their stored operation (start, stop,
             //    restart, and a blank one as the old default restart), names the backup and snapshot operations,
