@@ -105,6 +105,12 @@ class HohenheimUpgradeJourneyTest {
     private static final int OPERATOR_CERT = 901;
     private static final int UNATTENDED_CERT = 902;
 
+    /** The disabled chain step 0 writes with the console and app update steps. */
+    private static final int CONSOLE_SCHEDULE = 901;
+
+    /** The finished legacy run step 0 writes into the copy. */
+    private static final int LEGACY_RUN = 901;
+
     private static Duration previousOffset;
 
     @AfterAll
@@ -146,6 +152,25 @@ class HohenheimUpgradeJourneyTest {
             + " requested_by_user_id) VALUES (" + OPERATOR_CERT + ", 'Operator order', 'letsencrypt', 'active',"
             + " 'operator.upgrade.test', " + operatorId + "), (" + UNATTENDED_CERT + ", 'Unattended order',"
             + " 'letsencrypt', 'active', 'unattended.upgrade.test', NULL)");
+        // A second, disabled chain holds the two legacy actions the fixture never stored: a console line and an app
+        // update, at their M010 shape.
+        execute(url, "INSERT INTO zenit_record_schedules (id, model, record_id, name, cron, enabled, kind) VALUES ("
+            + CONSOLE_SCHEDULE + ", 'hohenheim:instance', '" + instanceId + "', 'warn and update', '0 5 * * *', 0,"
+            + " 'cron')");
+        execute(url, "INSERT INTO zenit_record_schedule_steps (schedule_id, step_order, action, payload) VALUES ("
+            + CONSOLE_SCHEDULE + ", 0, 'hohenheim:console_command', '{\"command\":\"say upgrading\"}'), ("
+            + CONSOLE_SCHEDULE + ", 1, 'hohenheim:app_update', NULL)");
+        // And one finished run of the schedule as the legacy executor recorded it: step 1 ran a backup, step 4 a power
+        // action, before step 1 was edited to the stop it is today.
+        String ranAt = seededAt.minus(Duration.ofDays(1)).toString();
+        execute(url, "INSERT INTO zenit_record_schedule_runs (id, schedule_id, model, record_id, status, fired_by,"
+            + " claim_fence, step_results, started_at, ended_at) VALUES (" + LEGACY_RUN + ", "
+            + facts.getProperty("schedule.id") + ", 'hohenheim:instance', '" + instanceId + "', 'completed', 'cron', 0,"
+            + " '{\"steps\":[{\"step_id\":1,\"position\":0,\"action\":\"hohenheim:backup\",\"status\":\"ok\","
+            + "\"attempts\":1,\"started_at\":\"" + ranAt + "\",\"ended_at\":\"" + ranAt + "\"},{\"step_id\":4,"
+            + "\"position\":3,\"action\":\"hohenheim:power\",\"status\":\"ok\",\"attempts\":1,\"started_at\":\""
+            + ranAt + "\",\"ended_at\":\"" + ranAt + "\"}]}', " + seededAt.minus(Duration.ofDays(1)).toEpochMilli()
+            + ", " + seededAt.minus(Duration.ofDays(1)).toEpochMilli() + ")");
 
         // 1. The deploy lane: the framework's --run-migrations over Hohenheim's datasource, exactly as ServerMain
         //    dispatches it, applies everything above the fixture and then reconciles the stored ids.
@@ -277,6 +302,36 @@ class HohenheimUpgradeJourneyTest {
                 steps.get(1).get(RecordScheduleStepModel.INPUT), null))
             .as("step 9: the stored input reads through the snapshot operation's form")
             .isEqualTo(new InstanceOperations.SnapshotInput("before nightly start"));
+
+        List<Row> consoleChain = Models.get(RecordScheduleStepModel.class).findChain(CONSOLE_SCHEDULE);
+        assertThat(consoleChain).extracting(step -> step.get(RecordScheduleStepModel.ACTION))
+            .as("step 9: the console line and the app update name their operations")
+            .containsExactly(InstanceOperations.CONSOLE_COMMAND.id().toString(),
+                InstanceOperations.APP_UPDATE.id().toString());
+        assertThat(consoleChain).extracting(step -> step.get(RecordScheduleStepModel.INPUT))
+            .as("step 9: the console line moved into the stored input; the app update takes none")
+            .containsExactly(Map.of("command", "say upgrading"), null);
+        assertThat(OperationPipeline.readJson(InstanceOperations.CONSOLE_COMMAND,
+                consoleChain.get(0).get(RecordScheduleStepModel.INPUT), null))
+            .as("step 9: and reads through the console operation's form")
+            .isEqualTo(new InstanceOperations.ConsoleCommandInput("say upgrading"));
+        for (Row step : consoleChain) {
+            assertThat(SchedulePlacements.find(Identifier.tryParse(step.get(RecordScheduleStepModel.ACTION))))
+                .as("step 9: step %s runs a placed operation", step.get(RecordScheduleStepModel.ID)).isNotNull();
+            assertThat(step.get(RecordScheduleStepModel.PAYLOAD))
+                .as("step 9: step %s keeps no legacy payload", step.get(RecordScheduleStepModel.ID)).isNull();
+        }
+
+        // The finished run keeps what it ran, not what its step runs today: the backup is respelled to the backup
+        // operation although step 1 is now a stop, and the power action, whose record never named which, stays.
+        assertThat(scalar(url, "SELECT operation FROM zenit_record_schedule_step_runs WHERE run_id = " + LEGACY_RUN
+            + " AND step_id = 1")).as("step 9: a run recorded as backup still reads as backup")
+            .isEqualTo(InstanceOperations.BACKUP.id().toString());
+        assertThat(scalar(url, "SELECT operation FROM zenit_record_schedule_step_runs WHERE run_id = " + LEGACY_RUN
+            + " AND step_id = 4")).as("step 9: a recorded power run keeps the action it recorded")
+            .isEqualTo("hohenheim:power");
+        assertThat(scalar(url, "SELECT COUNT(*) FROM zenit_record_schedule_step_runs WHERE run_id = " + LEGACY_RUN
+            + " AND input IS NOT NULL")).as("step 9: and no input was invented for its history").isEqualTo("0");
 
         // 10. Every system task row names a catalog task by its id, history included; none is a class name.
         List<Row> tasks = Models.get(SystemTaskModel.class).find().noCache().all();

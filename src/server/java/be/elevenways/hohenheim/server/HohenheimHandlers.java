@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.instance.InstanceApi;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.server.instance.InstanceStatsHandler;
 import be.elevenways.hohenheim.server.instance.InstanceTemplateHandlers;
+import be.elevenways.hohenheim.server.preview.PreviewOperationHandlers;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -65,6 +66,7 @@ public final class HohenheimHandlers {
         SiteControlHandlers.initDevTunnel();
         initApi();
         InstanceOperationHandlers.init();
+        PreviewOperationHandlers.init();
         InstanceApi.init();
         PaasApi.init();
         DatabaseApi.init();

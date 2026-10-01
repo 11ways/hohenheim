@@ -29,7 +29,8 @@ import java.util.TreeSet;
 /**
  * The schema and stored-data changes of the 2026-09-24 review fixes: trusted upstreams, install-media fetches,
  * the observed workload kill, hashed Basic auth passwords and canonical access-rule networks; and module-fit's
- * instance operations: stored power, backup and snapshot schedule steps name the operations that replaced them;
+ * instance operations: stored power, backup, snapshot, console command and app update schedule steps name the
+ * operations that replaced them;
  * and a certificate's requester stored as its principal reference ({@code requested_by_kind} beside the id).
  *
  * AIDEV-NOTE: this is ONE migration on purpose (2026-09-30). It replaced M011, M012, M015, M016 and M017,
@@ -74,12 +75,25 @@ public class M011_ReviewHardening extends HohenheimMigration {
     static final String POWER_ACTION = "hohenheim:power";
     static final String BACKUP_ACTION = "hohenheim:backup";
     static final String SNAPSHOT_ACTION = "hohenheim:snapshot";
+    static final String CONSOLE_ACTION = "hohenheim:console_command";
+    static final String APP_UPDATE_ACTION = "hohenheim:app_update";
+
+    /** The operations replacing the legacy actions that take no power-style choice, by legacy id. */
+    static final String CONSOLE_OPERATION = "hohenheim:console_command_instance";
+    static final String APP_UPDATE_OPERATION = "hohenheim:app_update_instance";
 
     /** A power step's stored operation, by the operation that replaces it; a missing or blank one meant restart. */
     static final Map<String, String> POWER_OPERATIONS = Map.of(
         "start", "hohenheim:start_instance",
         "stop", "hohenheim:stop_instance",
         "restart", "hohenheim:restart_instance");
+
+    /** A step-run's recorded legacy id, by the operation that replaced the same verb; power names no single one. */
+    static final Map<String, String> RECORDED_OPERATIONS = Map.of(
+        BACKUP_ACTION, "hohenheim:backup_instance",
+        SNAPSHOT_ACTION, "hohenheim:snapshot_instance",
+        CONSOLE_ACTION, CONSOLE_OPERATION,
+        APP_UPDATE_ACTION, APP_UPDATE_OPERATION);
 
     /** The rule types that carry a network, as production stored them. */
     static final Set<String> NETWORK_TYPES = Set.of("ip_allow", "ip_deny");
@@ -103,6 +117,8 @@ public class M011_ReviewHardening extends HohenheimMigration {
         dependsOn("be.elevenways.zenit.auth.server.migration.M007_HardenGrantSchemas");
         // The schedule-step rewrite moves payloads into the stored-input column zenit's M004 adds.
         dependsOn("be.elevenways.zenit.common.task.record.M004_AddRecordScheduleStepInput");
+        // The step-run respelling reads the rows zenit's M005 converts from each legacy run's step_results.
+        dependsOn("be.elevenways.zenit.common.task.record.M005_ConvertLegacyStepResults");
         irreversible("plaintext Basic auth passwords are replaced by their argon2 hashes and access-rule"
             + " networks by their canonical spelling; neither original can be restored");
     }
@@ -137,8 +153,8 @@ public class M011_ReviewHardening extends HohenheimMigration {
             M011_ReviewHardening::trustExistingTenantUpstreams);
         schema.data("rewrite access-rule networks the strict parser refuses to their canonical spelling", "1",
             M011_ReviewHardening::canonicalizeNetworks);
-        schema.data("name the instance operations on stored power, backup and snapshot schedule steps", "1",
-            M011_ReviewHardening::renameInstanceScheduleSteps);
+        schema.data("name the instance operations on stored power, backup, snapshot, console and app update steps",
+            "1", M011_ReviewHardening::renameInstanceScheduleSteps);
         schema.data("store every certificate requester with its kind", "1", PrincipalColumns.stampAccountKinds(
             "certificates", () -> IntegerField.builder().name("id").build(),
             () -> IntegerField.builder().name("requested_by_user_id").build(), "requested_by_kind", true));
@@ -235,10 +251,9 @@ public class M011_ReviewHardening extends HohenheimMigration {
             SchemaField payload = SchemaField.builder("payload").build();
             SchemaField input = SchemaField.builder("input").build();
             FrozenModel steps = new FrozenModel("zenit_record_schedule_steps", id, action, payload, input);
-            Map<Integer, String> rewritten = new LinkedHashMap<>();
-            Map<Integer, Map<String, Object>> inputs = new LinkedHashMap<>();
             for (Row step : steps.find()
-                    .where(action.in(List.of(POWER_ACTION, BACKUP_ACTION, SNAPSHOT_ACTION))).all()) {
+                    .where(action.in(List.of(POWER_ACTION, BACKUP_ACTION, SNAPSHOT_ACTION, CONSOLE_ACTION,
+                        APP_UPDATE_ACTION))).all()) {
                 String stored = step.get(action);
                 Map<String, Object> values = payloadOf(step.get(payload));
                 Map<String, Object> moved = null;
@@ -253,6 +268,15 @@ public class M011_ReviewHardening extends HohenheimMigration {
                     }
                 } else if (BACKUP_ACTION.equals(stored)) {
                     operation = "hohenheim:backup_instance";
+                } else if (APP_UPDATE_ACTION.equals(stored)) {
+                    operation = APP_UPDATE_OPERATION;
+                } else if (CONSOLE_ACTION.equals(stored)) {
+                    operation = CONSOLE_OPERATION;
+                    Object command = values.get("command");
+                    if (command != null) {
+                        moved = new LinkedHashMap<>();
+                        moved.put("command", String.valueOf(command));
+                    }
                 } else {
                     operation = "hohenheim:snapshot_instance";
                     Object note = values.get("note");
@@ -265,28 +289,18 @@ public class M011_ReviewHardening extends HohenheimMigration {
                 step.set(payload, null);
                 step.set(input, moved);
                 steps.save(step);
-                Integer stepId = step.get(id);
-                rewritten.put(stepId, operation);
-                inputs.put(stepId, moved);
             }
-            if (rewritten.isEmpty()) {
-                return;
-            }
+            // Each step-run keeps what IT recorded, never its step's current operation: the step may have been
+            // edited since. A recorded backup or snapshot is respelled to the operation that replaced that same
+            // verb; a recorded power run keeps hohenheim:power, since its own record never named start, stop or
+            // restart (a still-open one the sweep refuses as a recorded operation gone). Inputs are never touched.
             IntegerField runId = IntegerField.builder().name("id").build();
-            IntegerField stepId = IntegerField.builder().name("step_id").build();
             StringField operation = StringField.builder().name("operation").build();
-            StringField status = StringField.builder().name("status").build();
-            SchemaField runInput = SchemaField.builder("input").build();
-            FrozenModel stepRuns = new FrozenModel("zenit_record_schedule_step_runs", runId, stepId, operation,
-                status, runInput);
-            for (Row stepRun : stepRuns.find().where(stepId.in(List.copyOf(rewritten.keySet()))).all()) {
-                Integer owner = stepRun.get(stepId);
-                stepRun.set(operation, rewritten.get(owner));
-                // Only a step-run still to run reads its input; an ended one keeps what it ran with.
-                if ("due".equals(stepRun.get(status))) {
-                    stepRun.set(runInput, inputs.get(owner));
-                }
-                stepRuns.save(stepRun);
+            FrozenModel stepRuns = new FrozenModel("zenit_record_schedule_step_runs", runId, operation);
+            for (Map.Entry<String, String> respelled : RECORDED_OPERATIONS.entrySet()) {
+                stepRuns.find().where(operation.eq(respelled.getKey()))
+                    .assign(operation, respelled.getValue())
+                    .updateAll();
             }
         });
     }

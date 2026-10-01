@@ -57,7 +57,7 @@ import java.util.function.Function;
 public final class HohenheimAccess {
 
     /** The single v1 capability on a site record. */
-    public static final String MANAGE = "manage";
+    public static final String MANAGE = HohenheimCapabilities.MANAGE;
 
     /** Read a record's own state: DNS record fields, certificate status (never key material). */
     public static final String VIEW = "view";
@@ -84,7 +84,7 @@ public final class HohenheimAccess {
      * classes, and deliberately NOT {@link #EXEC}: a console line reaches the workload's
      * stdin, never an arbitrary program as an arbitrary user.
      */
-    public static final String CONSOLE = "console";
+    public static final String CONSOLE = HohenheimCapabilities.CONSOLE;
 
     /** Start, stop and restart the workload. ORDINARY: it changes runtime state, never content. */
     public static final String POWER = HohenheimCapabilities.POWER;
@@ -93,7 +93,7 @@ public final class HohenheimAccess {
      * Author what the instance IS: its record fields, its devices, its schedules and an
      * in-place app update. ELEVATED -- editing what runs is one step from running anything.
      */
-    public static final String CONFIG = "config";
+    public static final String CONFIG = HohenheimCapabilities.CONFIG;
 
     /**
      * Tear the workload down and trash the record. ELEVATED: it is irreversible for the

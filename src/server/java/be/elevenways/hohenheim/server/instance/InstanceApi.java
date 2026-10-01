@@ -168,11 +168,16 @@ public final class InstanceApi {
                     ApiConduits.violationText("console_command_required")));
             }
             try {
-                // InstanceConsoles.sendCommand IS the console gate now (it asks
-                // requireOperationCapability for CONSOLE itself), so this lane must not
-                // carry a second, drifting copy of it.
-                InstanceConsoles.sendCommand(instanceId, command);
+                // The operation's gate and InstanceConsoles' own funnel ask the console capability; this lane
+                // carries no copy of either.
+                OperationPipeline.invoke(OperationRequest.of(InstanceOperations.CONSOLE_COMMAND,
+                        ZenitPlacementSurface.HTTP_API)
+                    .caller(ctx)
+                    .subjects(List.of(row))
+                    .form(Map.of(InstanceOperations.COMMAND.getName(), command)));
             } catch (Violations refused) {
+                return ApiConduits.refusal(conduit, refused);
+            } catch (DomainRefusal refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
             ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.CONSOLE_COMMAND,

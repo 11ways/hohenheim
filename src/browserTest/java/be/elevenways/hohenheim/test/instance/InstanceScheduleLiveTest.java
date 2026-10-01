@@ -11,7 +11,6 @@ import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.instance.InstanceService;
-import be.elevenways.hohenheim.server.schedule.InstanceConsoleCommandAction;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.Poll;
@@ -152,15 +151,15 @@ class InstanceScheduleLiveTest {
     }
 
     private static void step(int scheduleId, int position, String action, int offsetSeconds,
-                             Map<String, Object> payload) {
+                             Map<String, Object> input) {
         Row row = Models.get(RecordScheduleStepModel.class).createEmptyRow();
         row.set(RecordScheduleStepModel.SCHEDULE_ID, scheduleId);
         row.set(RecordScheduleStepModel.POSITION, position);
         row.set(RecordScheduleStepModel.ACTION, action);
         row.set(RecordScheduleStepModel.OFFSET_SECONDS, offsetSeconds);
         row.set(RecordScheduleStepModel.FAILURE_POLICY, StepFailurePolicy.ABORT.storageKey());
-        if (payload != null) {
-            row.set(RecordScheduleStepModel.PAYLOAD, payload);
+        if (input != null) {
+            row.set(RecordScheduleStepModel.INPUT, input);
         }
         Models.get(RecordScheduleStepModel.class).save(row);
     }
@@ -252,7 +251,7 @@ class InstanceScheduleLiveTest {
 
                 // 2. THE Pterodactyl-parity chain: warn on the console, restart 2s later.
                 int chainId = schedule(id, "restart with warning", tenantId);
-                step(chainId, 1, InstanceConsoleCommandAction.ID.toString(), 0,
+                step(chainId, 1, InstanceOperations.CONSOLE_COMMAND.id().toString(), 0,
                     Map.of("command", "echo warned >> /data/marker"));
                 step(chainId, 2, InstanceOperations.RESTART.id().toString(), 2, null);
 
