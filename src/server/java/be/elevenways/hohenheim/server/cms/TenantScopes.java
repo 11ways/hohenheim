@@ -59,7 +59,10 @@ import java.util.Set;
  * is written down: access lists and git providers list only the rows a tenant MANAGES
  * ({@link #MANAGED_ACCESS_LISTS}, {@link #MANAGED_GIT_PROVIDERS}), while their pickers also
  * offer the operator's SHARED rows ({@link #USABLE_ACCESS_LISTS}, {@link #USABLE_GIT_PROVIDERS}).
- * A tenant may USE a shared row and must never open, retype or delete it.
+ * A tenant may USE a shared row and must never open, retype or delete it. The usable scope is
+ * each model's core REFERENCE policy ({@code RecordSource.Builder.referencePolicy()}, declared in
+ * ManagePanel.declareSources), which every relation picker over the model reads, so the owned
+ * scope never has to widen to make a shared row attachable.
  *
  * @author Jelle De Loecker
  * @since 0.1.0

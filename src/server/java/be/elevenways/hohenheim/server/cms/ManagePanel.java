@@ -293,13 +293,17 @@ public final class ManagePanel extends Panel {
             .scopedBy(TenantScopes.DOMAINS)
             .build());
 
-        // Access lists: the pickers (a site's list, a protected path's list) offer shared
-        // rows plus the principal's managed ones -- the git-provider policy verbatim, and
-        // an explicit override for the same two-panel shadowing reason as site_domain
+        // Access lists: the model's REFERENCE policy. The pickers (a site's list, a protected
+        // path's list) offer shared rows plus the principal's managed ones -- the git-provider
+        // policy verbatim -- while the /manage list keeps its OWNED scope
+        // (TenantScopes.MANAGED_ACCESS_LISTS): a picker reads the reference policy ahead of any
+        // panel resource's source, so the tenant list is never widened to offer a shared row.
+        // An explicit override for the same two-panel shadowing reason as site_domain
         // (AccessListResource and ManageAccessListResource both expose the model).
         RecordSourceRegistry.INSTANCE.override(RecordSource.of(AccessListModel.class)
             .search(AccessListModel.NAME)
             .scopedBy(TenantScopes.USABLE_ACCESS_LISTS)
+            .referencePolicy()
             .build());
 
         // Protected paths: child rows scoped by their parent SITE, like domains.
@@ -422,10 +426,12 @@ public final class ManagePanel extends Panel {
         // tenant's forge installation -- host included -- to whoever a picker rendered
         // for. The scope IS the visibility policy (shared rows plus the ones the
         // principal manages), so the site form's provider picker and this source can
-        // never disagree.
+        // never disagree. It is the model's REFERENCE policy, as access lists' is: the
+        // /manage list keeps its owned scope (TenantScopes.MANAGED_GIT_PROVIDERS).
         RecordSourceRegistry.INSTANCE.override(RecordSource.of(GitProviderModel.class)
             .search(GitProviderModel.NAME)
             .scopedBy(TenantScopes.USABLE_GIT_PROVIDERS)
+            .referencePolicy()
             .build());
 
         // Instance-database attachments: the row names both a workload and a credential
