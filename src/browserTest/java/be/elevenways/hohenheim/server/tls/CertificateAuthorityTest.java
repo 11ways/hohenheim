@@ -14,6 +14,7 @@ import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.KnownCapabilities;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -59,7 +60,7 @@ class CertificateAuthorityTest extends HohenheimTestBase {
 
         RecordGrants.grant(GrantSubjectType.USER, tenantUserId, SiteModel.MODEL_ID, ownedSiteId,
             HohenheimAccess.MANAGE, true);
-        tenant = CertificateAuthority.Requester.ofSubject(tenantUserId);
+        tenant = CertificateAuthority.Requester.ofSubject(PrincipalRef.account(tenantUserId));
 
         // The POST handler reaches the service through the proxy; an unstarted one is
         // enough (nothing here contacts a CA).
@@ -225,9 +226,9 @@ class CertificateAuthorityTest extends HohenheimTestBase {
         Row cert = Models.get(CertificateModel.class).find()
             .where(CertificateModel.NICE_NAME.eq("Certauth Legit")).first();
         assertThat(cert).describedAs("an authorized request creates its order row").isNotNull();
-        assertThat((Integer) cert.get(CertificateModel.REQUESTED_BY_USER_ID))
-            .describedAs("the order records the subject a renewal must re-authorize")
-            .isEqualTo(tenantUserId);
+        assertThat(CertificateModel.requesterOf(cert))
+            .describedAs("the order records the subject a renewal must re-authorize, as an account")
+            .isEqualTo(PrincipalRef.account(tenantUserId));
         assertThat((String) cert.get(CertificateModel.RENEWAL_ERROR))
             .describedAs("the gate opened; the failure is hostname syntax")
             .contains("Invalid hostnames");
@@ -248,7 +249,7 @@ class CertificateAuthorityTest extends HohenheimTestBase {
         cert.set(CertificateModel.DOMAIN_NAMES_TEXT, "owned." + ZONE);
         cert.set(CertificateModel.CHALLENGE_TYPE, CertificateModel.CHALLENGE_HTTP);
         cert.set(CertificateModel.AUTO_RENEW, true);
-        cert.set(CertificateModel.REQUESTED_BY_USER_ID, tenantUserId);
+        CertificateModel.setRequester(cert, PrincipalRef.account(tenantUserId));
         certModel.save(cert);
 
         // 1. The authority that issued it is withdrawn (and restored whatever happens, since
@@ -265,6 +266,35 @@ class CertificateAuthorityTest extends HohenheimTestBase {
         assertThat(CertificateAuthority.authorize(tenant, List.of("owned." + ZONE)))
             .describedAs("step 3: the restored grant authorizes the owned hostname again")
             .containsKey("owned." + ZONE);
+    }
+
+    /**
+     * A stored requester id that names no account (a pair without its kind) renews as nobody: the sweep refuses it
+     * by name instead of treating the certificate as an unattended, system-authorized order.
+     */
+    @Test
+    void aStoredRequesterThatIsNoAccountRenewsAsNobodyNeverAsTheSystem() {
+        var certModel = Models.get(CertificateModel.class);
+        Row cert = certModel.createEmptyRow();
+        cert.set(CertificateModel.NICE_NAME, "Certauth Kindless");
+        cert.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_LETSENCRYPT);
+        cert.set(CertificateModel.STATUS, CertificateModel.STATUS_ACTIVE);
+        cert.set(CertificateModel.DOMAIN_NAMES_TEXT, "owned." + ZONE);
+        cert.set(CertificateModel.CHALLENGE_TYPE, CertificateModel.CHALLENGE_HTTP);
+        cert.set(CertificateModel.AUTO_RENEW, true);
+        // 1. The manager's id is stored, but without the kind that makes it an account.
+        cert.set(CertificateModel.REQUESTED_BY_USER_ID, tenantUserId);
+        certModel.save(cert);
+        assertThat(CertificateModel.requesterOf(cert)).describedAs("step 1: the pair names no principal").isNull();
+
+        // 2. The sweep refuses the names the account itself could have renewed.
+        acme().renewCertificate(cert, certModel);
+        Row after = certModel.findById(cert.get(CertificateModel.ID));
+        assertThat((String) after.get(CertificateModel.STATUS))
+            .describedAs("step 2: a renewal without an account subject is an error")
+            .isEqualTo(CertificateModel.STATUS_ERROR);
+        assertThat((String) after.get(CertificateModel.RENEWAL_ERROR))
+            .describedAs("step 2: refused by authority, never ordered as the system").contains("NOT_MANAGED");
     }
 
     private void renewalAfterRevocation(Row cert, CertificateModel certModel) {

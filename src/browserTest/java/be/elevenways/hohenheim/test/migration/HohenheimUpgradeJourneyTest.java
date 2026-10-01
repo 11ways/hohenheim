@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.migration;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
@@ -35,6 +36,8 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.revision.RevisionModel;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.PrincipalRef;
+import be.elevenways.zenit.common.security.RecordOwnership;
 import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.session.SessionToken;
 import be.elevenways.zenit.common.task.TaskCatalog;
@@ -98,6 +101,10 @@ class HohenheimUpgradeJourneyTest {
     private static final Identifier OLD_MEDIA_SOURCE = Identifier.of("zenitmedia", "media");
     private static final Identifier MEDIA_SOURCE = Identifier.of("zenit", "media");
 
+    /** The certificate ids step 0 writes into the copy; the fixture holds none. */
+    private static final int OPERATOR_CERT = 901;
+    private static final int UNATTENDED_CERT = 902;
+
     private static Duration previousOffset;
 
     @AfterAll
@@ -133,6 +140,12 @@ class HohenheimUpgradeJourneyTest {
 
         assertThat(scalar(url, "SELECT MAX(version) FROM zenit_migrations WHERE stream = 'be.elevenways.hohenheim'"))
             .as("step 0: the fixture is an install at Hohenheim's production level").isEqualTo("010");
+        // The fixture predates certificate owners, so two orders are written at their M010 shape: the operator's and
+        // an unattended one (no requester).
+        execute(url, "INSERT INTO certificates (id, nice_name, provider, status, domain_names_text,"
+            + " requested_by_user_id) VALUES (" + OPERATOR_CERT + ", 'Operator order', 'letsencrypt', 'active',"
+            + " 'operator.upgrade.test', " + operatorId + "), (" + UNATTENDED_CERT + ", 'Unattended order',"
+            + " 'letsencrypt', 'active', 'unattended.upgrade.test', NULL)");
 
         // 1. The deploy lane: the framework's --run-migrations over Hohenheim's datasource, exactly as ServerMain
         //    dispatches it, applies everything above the fixture and then reconciles the stored ids.
@@ -162,7 +175,7 @@ class HohenheimUpgradeJourneyTest {
         HohenheimTestRuntime.ensureBooted();
         TestDatabases.adoptCurrentDatabase();
 
-        // 3. The role grant and both record grants decide as before.
+        // 3. The role grant and both record grants decide as before, and each certificate keeps its owner.
         assertThat(PermissionHolders.userIdsHolding(HohenheimSources.ADMIN_ACCESS))
             .as("step 3: the admin's * grant and the operator's role both hold the admin permission")
             .contains(adminId, operatorId);
@@ -171,6 +184,19 @@ class HohenheimUpgradeJourneyTest {
             .as("step 3: the operator still manages the site").contains(String.valueOf(siteId));
         assertThat(RecordGrants.recordIds(operator, InstanceModel.MODEL_ID, "power"))
             .as("step 3: and still powers the instance").contains(String.valueOf(instanceId));
+        CertificateModel certificates = Models.get(CertificateModel.class);
+        Row operatorCert = certificates.findById(OPERATOR_CERT);
+        assertThat((Integer) operatorCert.get(CertificateModel.REQUESTED_BY_USER_ID))
+            .as("step 3: the operator's certificate keeps its stored requester id").isEqualTo(operatorId);
+        assertThat(CertificateModel.requesterOf(operatorCert))
+            .as("step 3: and reads it back as the operator's account").isEqualTo(PrincipalRef.account(operatorId));
+        assertThat(RecordOwnership.ownerOf(CertificateModel.MODEL_ID, OPERATOR_CERT))
+            .as("step 3: whom the owner rule names as its owner").isEqualTo(PrincipalRef.account(operatorId));
+        Row unattendedCert = certificates.findById(UNATTENDED_CERT);
+        assertThat(CertificateModel.requesterOf(unattendedCert))
+            .as("step 3: an unattended certificate still has no requester").isNull();
+        assertThat((String) unattendedCert.get(CertificateModel.REQUESTED_BY_KIND))
+            .as("step 3: and no kind was invented for it").isNull();
 
         // 4. M011 ran on production data: the operator-owned address site is marked a trusted upstream.
         Row site = Models.get(SiteModel.class).findById(siteId);
@@ -326,6 +352,13 @@ class HohenheimUpgradeJourneyTest {
     private static void copyResource(String path, Path target) throws Exception {
         try (InputStream stream = resource(path)) {
             Files.copy(stream, target);
+        }
+    }
+
+    private static void execute(String url, String sql) throws SQLException {
+        try (Connection connection = DriverManager.getConnection(url);
+             Statement statement = connection.createStatement()) {
+            statement.executeUpdate(sql);
         }
     }
 

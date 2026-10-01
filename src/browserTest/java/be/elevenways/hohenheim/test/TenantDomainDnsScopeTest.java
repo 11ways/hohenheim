@@ -24,6 +24,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Principal;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -892,7 +893,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         mine.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_LETSENCRYPT);
         mine.set(CertificateModel.STATUS, CertificateModel.STATUS_ACTIVE);
         mine.set(CertificateModel.DOMAIN_NAMES_TEXT, "owned.tenantscope.test");
-        mine.set(CertificateModel.REQUESTED_BY_USER_ID, tenantId);
+        CertificateModel.setRequester(mine, PrincipalRef.account(tenantId));
         mine.set(CertificateModel.CERTIFICATE_PEM, "-----BEGIN CERTIFICATE-----ownedcert");
         mine.set(CertificateModel.PRIVATE_KEY_PEM, "-----BEGIN PRIVATE KEY-----ownedsecret");
         certModel.save(mine);

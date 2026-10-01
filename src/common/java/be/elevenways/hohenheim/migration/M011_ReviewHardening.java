@@ -15,6 +15,7 @@ import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.migration.ForeignKeyAction;
 import be.elevenways.zenit.common.orm.migration.FrozenModel;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
+import be.elevenways.zenit.common.orm.migration.PrincipalColumns;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.time.Instant;
@@ -28,7 +29,8 @@ import java.util.TreeSet;
 /**
  * The schema and stored-data changes of the 2026-09-24 review fixes: trusted upstreams, install-media fetches,
  * the observed workload kill, hashed Basic auth passwords and canonical access-rule networks; and module-fit's
- * instance operations: stored power, backup and snapshot schedule steps name the operations that replaced them.
+ * instance operations: stored power, backup and snapshot schedule steps name the operations that replaced them;
+ * and a certificate's requester stored as its principal reference ({@code requested_by_kind} beside the id).
  *
  * AIDEV-NOTE: this is ONE migration on purpose (2026-09-30). It replaced M011, M012, M015, M016 and M017,
  * which no production install (kuifje at 009, robbedoes at 010) had applied; the two test installs that
@@ -127,6 +129,8 @@ public class M011_ReviewHardening extends HohenheimMigration {
         // No default and no backfill: "no kill observed" until the next sweep asks the daemon.
         schema.alterTable("instances", table ->
             table.addColumn("workload_killed_at", ColumnType.DATETIME, column -> column.nullable(true)));
+        // Every requester id stored before kinds existed was an account's: the stamp step reads it so.
+        schema.alterTable("certificates", table -> PrincipalColumns.addKindColumn(table, "requested_by_kind"));
         schema.data("hash every plaintext Basic auth provider password", "1",
             M011_ReviewHardening::hashPlaintext);
         schema.data("trust the operator-authored upstream of every tenant-owned site", "1",
@@ -135,6 +139,9 @@ public class M011_ReviewHardening extends HohenheimMigration {
             M011_ReviewHardening::canonicalizeNetworks);
         schema.data("name the instance operations on stored power, backup and snapshot schedule steps", "1",
             M011_ReviewHardening::renameInstanceScheduleSteps);
+        schema.data("store every certificate requester with its kind", "1", PrincipalColumns.stampAccountKinds(
+            "certificates", () -> IntegerField.builder().name("id").build(),
+            () -> IntegerField.builder().name("requested_by_user_id").build(), "requested_by_kind", true));
     }
 
     /** Never run: the migration is declared irreversible, and the executor refuses the DOWN first. */

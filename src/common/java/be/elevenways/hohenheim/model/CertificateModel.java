@@ -12,8 +12,12 @@ import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.security.PrincipalKinds;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.common.ui.ColorHue;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -151,8 +155,9 @@ public class CertificateModel extends Model {
             .help(HohenheimFormCopy.help("cert_dns_publisher")).build());
 
     /**
-     * The user whose authority this certificate was issued under, or null for operator and
-     * unattended orders.
+     * The id of the principal whose authority this certificate was issued under, beside
+     * {@link #REQUESTED_BY_KIND}; null for unattended orders. Read the pair through
+     * {@link #requesterOf}, never the id alone.
      *
      * AIDEV-NOTE: renewal re-runs CertificateAuthority against THIS subject rather than
      * trusting the fact that issuance once succeeded. Without it a certificate ordered by a
@@ -162,6 +167,9 @@ public class CertificateModel extends Model {
      */
     public static final IntegerField REQUESTED_BY_USER_ID = SCHEMA.addField(
         IntegerField.builder().name("requested_by_user_id").build());
+
+    /** The kind of {@link #REQUESTED_BY_USER_ID}'s principal; together they are the certificate's owner. */
+    public static final StringField REQUESTED_BY_KIND = SCHEMA.addField(PrincipalKinds.kindField("requested_by_kind"));
 
     /** Dedup stamp for the expiring-soon alert; a renewal moves expires_on forward, re-arming it. */
     public static final DateTimeField EXPIRY_NOTIFIED_AT = SCHEMA.addField(DateTimeField.builder().name("expiry_notified_at").build());
@@ -198,4 +206,15 @@ public class CertificateModel extends Model {
 
     @Override
     public Schema getSchema() { return SCHEMA; }
+
+    /** @return the stored requester, or null for an unattended order or a pair naming no known principal */
+    public static @Nullable PrincipalRef requesterOf(@NonNull Row certificate) {
+        return PrincipalRef.stored(certificate.get(REQUESTED_BY_KIND), certificate.get(REQUESTED_BY_USER_ID));
+    }
+
+    /** Stores {@code requester} as the (id, kind) pair, both null for an unattended order. */
+    public static void setRequester(@NonNull Row certificate, @Nullable PrincipalRef requester) {
+        certificate.set(REQUESTED_BY_USER_ID, requester == null ? null : Math.toIntExact(requester.id()));
+        certificate.set(REQUESTED_BY_KIND, requester == null ? null : requester.storedKind());
+    }
 }

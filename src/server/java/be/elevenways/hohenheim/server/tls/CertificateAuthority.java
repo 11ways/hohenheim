@@ -131,9 +131,14 @@ public final class CertificateAuthority {
          * narrowing. That is deliberate -- the key may be long gone while the certificate
          * is not -- but it does mean a renewal can succeed on authority a scope-narrowed
          * key could no longer request fresh.
+         *
+         * @param subject the stored requester; null or a non-account subject is refused every name
          */
-        public static @NonNull Requester ofSubject(int userId) {
-            return new Requester(null, new UserPrincipal(userId, ""), false);
+        public static @NonNull Requester ofSubject(@Nullable PrincipalRef subject) {
+            // A stored subject that is no account holds nothing here: it never falls back to SYSTEM.
+            Principal principal = subject != null && subject.kind().account()
+                ? new UserPrincipal(Math.toIntExact(subject.id()), "") : null;
+            return new Requester(null, principal, false);
         }
 
         boolean isAdmin() {
@@ -158,14 +163,16 @@ public final class CertificateAuthority {
         }
 
         /**
-         * @return the subject id to stamp on the certificate row, or null for system and
-         *         anonymous work (nothing to re-authorize against later)
+         * @return the account to store as the certificate's requester, or null for system and
+         *         non-account work (nothing to re-authorize against later)
          */
-        public @Nullable Integer subjectId() {
+        public @Nullable PrincipalRef subject() {
+            Long id = this.context != null ? this.context.principalId() : null;
+            if (id != null) {
+                return PrincipalRef.account(id);
+            }
             PrincipalRef reference = this.principal != null ? this.principal.reference() : null;
-            Long id = this.context != null ? this.context.principalId()
-                : reference != null && reference.kind().account() ? reference.id() : null;
-            return id != null ? id.intValue() : null;
+            return reference != null && reference.kind().account() ? reference : null;
         }
     }
 
