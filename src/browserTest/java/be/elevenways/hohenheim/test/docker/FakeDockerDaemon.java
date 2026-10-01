@@ -363,11 +363,12 @@ public final class FakeDockerDaemon implements DockerTransport {
 
     /**
      * Point {@code hohenheim:release} and the local daemon at this fake, and
-     * return the restore hook. The kind registry maps identifier to handler, so a
-     * re-register REPLACES -- and {@link #restore()} puts the production pair back.
+     * return the restore hook. The kind registry maps identifier to handler, so this is a
+     * deliberate replace (a plain register of a held id is a conflict) -- and
+     * {@link #restore()} puts the production pair back.
      */
     public void install() {
-        InstanceKinds.register(new FakeReleaseKind(this));
+        InstanceKinds.replace(new FakeReleaseKind(this));
         DockerClient.overrideLocalTransportForTest(() -> this);
     }
 
@@ -383,13 +384,13 @@ public final class FakeDockerDaemon implements DockerTransport {
      * points at DIRECTLY, whose host port really moves when the workload restarts.
      */
     public void installContainerKind() {
-        InstanceKinds.register(new FakeContainerKind(this));
+        InstanceKinds.replace(new FakeContainerKind(this));
     }
 
     /** Undo {@link #install()} and {@link #installContainerKind()}; safe either way. */
     public static void restore() {
-        InstanceKinds.register(new ReleaseKind());
-        InstanceKinds.register(new DockerContainerKind());
+        InstanceKinds.replace(new ReleaseKind());
+        InstanceKinds.replace(new DockerContainerKind());
         DockerClient.overrideLocalTransportForTest(null);
     }
 

@@ -46,6 +46,11 @@ public final class InstanceKinds {
         InstanceKindRegistry.REGISTRY.add(handler.typeId(), handler);
     }
 
+    /** Deliberately points a kind's id at another handler (a test standing a fake in for a production kind). */
+    public static void replace(InstanceKindHandler handler) {
+        InstanceKindRegistry.REGISTRY.replace(handler.typeId(), handler);
+    }
+
     public static InstanceKindHandler getHandler(String typeIdentifier) {
         if (typeIdentifier == null) {
             return null;

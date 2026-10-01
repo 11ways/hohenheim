@@ -72,13 +72,13 @@ final class FakeWorkspaceDaemon implements InstanceRuntime, ExecSupport {
     /** Install this daemon behind the real workspace kind's identifier. */
     static FakeWorkspaceDaemon install() {
         FakeWorkspaceDaemon daemon = new FakeWorkspaceDaemon();
-        InstanceKinds.register(new FakeWorkspaceKind(daemon));
+        InstanceKinds.replace(new FakeWorkspaceKind(daemon));
         return daemon;
     }
 
     /** Put the real kind back, so a later class in this JVM gets the production handler. */
     static void uninstall() {
-        InstanceKinds.register(new WorkspaceKind());
+        InstanceKinds.replace(new WorkspaceKind());
     }
 
     /** The daemon answers nothing at all: UNREACHABLE, never ABSENT. */

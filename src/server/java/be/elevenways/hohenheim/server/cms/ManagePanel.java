@@ -33,6 +33,7 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.security.PermissionChecker;
+import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.server.data.RecordSourceGate;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -139,6 +140,15 @@ public final class ManagePanel extends Panel {
         @Override
         public @Nullable Boolean decide(Conduit conduit, @NonNull Permission permission) {
             return this.delegate.decide(conduit, permission);
+        }
+
+        /**
+         * AIDEV-NOTE: the principal face passes through too. A detached context (a hop, a channel) asks only this
+         * face; inheriting the interface default abstained, which denied every detached check in hohenheim.
+         */
+        @Override
+        public @Nullable Boolean decide(@NonNull Principal principal, @NonNull Permission permission) {
+            return this.delegate.decide(principal, permission);
         }
     }
 

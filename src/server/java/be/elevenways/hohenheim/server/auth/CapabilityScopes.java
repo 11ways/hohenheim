@@ -340,6 +340,9 @@ final class CapabilityScopes {
      * {@code out_of_scope} and rolls back a perfectly legitimate allocation. Call it from
      * the funnel that planted the grant, never speculatively;
      * {@link RecordOwners#grantCreatorManage} already does.
+     *
+     * AIDEV-NOTE: core's AccessContext memoizes the same walk beneath this memo (zenit:capability_scopes), so both
+     * are dropped; keeping only this one served the stale "none" from core's.
      */
     static void forgetCapabilityScopes(@NonNull AccessContext ctx) {
         Conduit conduit = ctx.conduit();
@@ -348,6 +351,7 @@ final class CapabilityScopes {
         if (cache != null) {
             cache.clear();
         }
+        ctx.forgetCapabilityScopes();
     }
 
     /**
