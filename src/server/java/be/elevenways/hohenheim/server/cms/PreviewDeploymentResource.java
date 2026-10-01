@@ -4,14 +4,16 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
+import be.elevenways.hohenheim.preview.PreviewOperations;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
-import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
@@ -112,7 +114,7 @@ public class PreviewDeploymentResource extends RowResource {
 
     /**
      * No generic delete: removing the row alone would leave the preview's container, generated
-     * domain and DNS rows behind; the destroy_preview row action is the one way a preview goes.
+     * domain and DNS rows behind; the placed expire_preview action is the one way a preview goes.
      */
     @Override public boolean deletable() { return false; }
 
@@ -187,10 +189,17 @@ public class PreviewDeploymentResource extends RowResource {
                                           @NonNull AccessContext accessContext) {
     }
 
+    /**
+     * Destroy now: the expire_preview operation, which the deadline's schedule step runs too. Its gate is manage on
+     * the preview, which is manage on its application (the preview's capability rules), so an admin sees it on every
+     * preview and a /manage tenant on the previews of the applications it manages, as before.
+     */
     @Override
-    public @NonNull List<RowAction<Row>> rowActions() {
-        List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
-        actions.add(RowAction.Invoke.<Row>builder(HohenheimIds.id("destroy_preview"))
+    public @NonNull List<PanelAction<Row>> actions() {
+        return List.of(PanelAction.<Row, String>places(PreviewOperations.EXPIRE, ActionPlacement.ROW,
+                (request, result) -> CmsActionResult.toast(Microcopy.of("destroyed")
+                    .withFilter("scope", "preview_deployment")
+                    .withArg("hostname", request.subject().get(PreviewDeploymentModel.HOSTNAME))))
             .label(Microcopy.of("destroy_now").withFilter("scope", "preview_deployment"))
             .icon(Icon.of("trash"))
             .confirmation(ConfirmationSpec.builder()
@@ -198,22 +207,6 @@ public class PreviewDeploymentResource extends RowResource {
                 .body(Microcopy.of("destroy_confirm").withFilter("scope", "preview_deployment"))
                 .style(ActionStyle.DESTRUCTIVE)
                 .build())
-            .handler((row, ctx) -> {
-                try {
-                    PreviewDeployments.destroy(
-                        row.get(PreviewDeploymentModel.ID), "operator");
-                    return CmsActionResult.toast(
-                        Microcopy.of("destroyed").withFilter("scope", "preview_deployment")
-                            .withArg("hostname",
-                                row.get(PreviewDeploymentModel.HOSTNAME)));
-                } catch (Exception failed) {
-                    return CmsActionResult.errorToast(
-                        Microcopy.of("destroy_failed").withFilter("scope", "preview_deployment")
-                            .withArg("reason", failed.getMessage() != null
-                                ? failed.getMessage() : failed.toString()));
-                }
-            })
             .build());
-        return actions;
     }
 }

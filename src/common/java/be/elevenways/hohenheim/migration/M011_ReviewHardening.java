@@ -106,6 +106,9 @@ public class M011_ReviewHardening extends HohenheimMigration {
     /** The match type of a regex route, as production stored it; every other row holds a host pattern. */
     static final String REGEX_MATCH = "regex";
 
+    /** The match type of a wildcard route, as production stored it. */
+    static final String WILDCARD_MATCH = "wildcard";
+
     /** The rule types that carry a network, as production stored them. */
     static final Set<String> NETWORK_TYPES = Set.of("ip_allow", "ip_deny");
 
@@ -246,36 +249,90 @@ public class M011_ReviewHardening extends HohenheimMigration {
         });
     }
 
-    /** The data step respelling the leading wildcard of every routed and every released hostname. */
+    /**
+     * The data step respelling the leading wildcard of every routed and every released hostname.
+     *
+     * AIDEV-NOTE: every wildcard-tier row is checked against the grammar BEFORE anything is written, and one the
+     * grammar refuses fails the migration naming every such row: the dispatcher drops a pattern it cannot parse,
+     * so letting it through would silently take a live site offline on upgrade. The operator corrects or deletes
+     * the rows and migrates again; the runtime log in RouteTableBuilder stays the second line of defence.
+     *
+     * @throws IllegalStateException listing table, id, site, pattern and reason of every refused row
+     */
     public static void respellHostWildcards(@NonNull Datasource datasource) {
         Db.run(datasource, () -> {
-            respellHostWildcards("site_domains", "live_route_key");
-            respellHostWildcards("released_route_claims", "claim_key");
+            Hostnames.PatternGrammar grammar = Hostnames.PATTERNS.require();
+            List<PatternTable> tables = List.of(new PatternTable("site_domains", "live_route_key", "site_id"),
+                new PatternTable("released_route_claims", "claim_key", "former_site_id"));
+            List<String> refused = new ArrayList<>();
+            Map<PatternTable, List<Row>> respelled = new LinkedHashMap<>();
+            for (PatternTable table : tables) {
+                respelled.put(table, table.respell(grammar, refused));
+            }
+            if (!refused.isEmpty()) {
+                throw new IllegalStateException("M011 cannot carry " + refused.size() + " stored host pattern(s)"
+                    + " into the HostPattern grammar; correct or delete them, then migrate again:\n  "
+                    + String.join("\n  ", refused));
+            }
+            respelled.forEach((table, rows) -> rows.forEach(table::save));
         });
     }
 
-    private static void respellHostWildcards(@NonNull String tableName, @NonNull String keyName) {
-        IntegerField id = IntegerField.builder().name("id").build();
-        StringField hostname = StringField.builder().name("hostname").build();
-        StringField matchType = StringField.builder().name("match_type").build();
-        StringField key = StringField.builder().name(keyName).build();
-        FrozenModel table = new FrozenModel(tableName, id, hostname, matchType, key);
-        Hostnames.PatternGrammar grammar = Hostnames.PATTERNS.require();
-        for (Row row : table.find().all()) {
-            String stored = row.get(hostname);
-            if (stored == null || REGEX_MATCH.equals(row.get(matchType))) {
-                continue;
+    /** One table of stored host patterns: its claim key and the site column naming who holds the row. */
+    private static final class PatternTable {
+
+        // A field belongs to one schema, so every table builds its own.
+        private final IntegerField id = IntegerField.builder().name("id").build();
+        private final StringField hostname = StringField.builder().name("hostname").build();
+        private final StringField matchType = StringField.builder().name("match_type").build();
+        private final String name;
+        private final StringField key;
+        private final IntegerField site;
+        private final FrozenModel model;
+
+        PatternTable(@NonNull String name, @NonNull String keyName, @NonNull String siteName) {
+            this.name = name;
+            this.key = StringField.builder().name(keyName).build();
+            this.site = IntegerField.builder().name(siteName).build();
+            this.model = new FrozenModel(name, this.id, this.hostname, this.matchType, this.key, this.site);
+        }
+
+        void save(@NonNull Row row) {
+            this.model.save(row);
+        }
+
+        /**
+         * @param refused collects one line per wildcard-tier row the grammar refuses after respelling
+         * @return the rows whose hostname the respelling changed, not yet saved
+         */
+        @NonNull List<Row> respell(Hostnames.@NonNull PatternGrammar grammar, @NonNull List<String> refused) {
+            List<Row> changed = new ArrayList<>();
+            for (Row row : this.model.find().all()) {
+                String stored = row.get(this.hostname);
+                String matchType = row.get(this.matchType);
+                if (stored == null || REGEX_MATCH.equals(matchType)) {
+                    continue;
+                }
+                String hostname = grammar.respellOneOrMoreLeading(stored);
+                if (WILDCARD_MATCH.equals(matchType) || Hostnames.hasGlobCharacters(hostname)) {
+                    String refusal = grammar.refusal(hostname);
+                    if (refusal != null) {
+                        refused.add(this.name + " #" + row.get(this.id) + " (site " + row.get(this.site) + "): '"
+                            + stored + "' -- " + refusal);
+                        continue;
+                    }
+                }
+                if (hostname.equals(stored)) {
+                    continue;
+                }
+                row.set(this.hostname, hostname);
+                String claim = row.get(this.key);
+                if (claim != null) {
+                    row.set(this.key, grammar.respellOneOrMoreLeading(claim));
+                }
+                changed.add(row);
             }
-            String respelled = grammar.respellOneOrMoreLeading(stored);
-            if (respelled.equals(stored)) {
-                continue;
-            }
-            row.set(hostname, respelled);
-            String claim = row.get(key);
-            if (claim != null) {
-                row.set(key, grammar.respellOneOrMoreLeading(claim));
-            }
-            table.save(row);
+            return changed;
         }
     }
 

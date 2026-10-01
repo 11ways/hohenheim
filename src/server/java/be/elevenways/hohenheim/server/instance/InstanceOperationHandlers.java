@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations.ConsoleCommandInput;
@@ -14,6 +15,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.common.operation.PlacementSurface;
 import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
@@ -31,7 +33,8 @@ import java.util.Map;
  *
  * AIDEV-NOTE: every handler funnels through the service a surface used before ({@link InstanceService},
  * {@link InstanceBackups}, {@link InstanceSnapshots}), which keeps its own gates, its operation lock and its activity
- * rows; a handler writes no activity row and takes no lock of its own. A restart is {@link InstanceService#restart},
+ * rows; a handler takes no lock of its own. The console line is the one handler that writes its activity row itself:
+ * {@link InstanceConsoles} is also the product's own lane (GameDomains), whose lines are no operator's act. A restart is {@link InstanceService#restart},
  * ONE lock hold across both halves, from every surface.
  *
  * AIDEV-NOTE: attached in a static initializer, so a JVM that boots twice (test hosts) attaches nothing twice;
@@ -66,8 +69,9 @@ public final class InstanceOperationHandlers {
             .handle(InstanceOperationHandlers::backup);
         OperationHandlers.attach(InstanceOperations.SNAPSHOT).applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::snapshot);
-        // A console line runs on a generated instance too: product tiers (game servers) are driven through it.
-        OperationHandlers.attach(InstanceOperations.CONSOLE_COMMAND).handle(InstanceOperationHandlers::consoleCommand);
+        // A generated instance's console is its product's (GameDomains sends through InstanceConsoles directly).
+        OperationHandlers.attach(InstanceOperations.CONSOLE_COMMAND).applies(InstanceOperationHandlers::authored)
+            .handle(InstanceOperationHandlers::consoleCommand);
         OperationHandlers.attach(InstanceOperations.APP_UPDATE).applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::appUpdate);
         SchedulePlacements.place(InstanceOperations.START);
@@ -155,8 +159,8 @@ public final class InstanceOperationHandlers {
     }
 
     /**
-     * Sends the line through {@link InstanceConsoles}, which asks the console capability on its own funnel; a surface
-     * that records the command in the activity log does so itself, as it did before.
+     * Sends the line through {@link InstanceConsoles}, which asks the console capability on its own funnel, and
+     * records it on the instance from every surface.
      *
      * @throws IllegalStateException for a blank line: a schedule step that stores none fails rather than sending
      *                               nothing
@@ -167,7 +171,10 @@ public final class InstanceOperationHandlers {
         if (command == null || command.isBlank()) {
             throw new IllegalStateException("no console command configured on this step");
         }
-        InstanceConsoles.sendCommand(instanceId(call), command);
+        int instanceId = instanceId(call);
+        InstanceConsoles.sendCommand(instanceId, command);
+        ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.CONSOLE_COMMAND,
+            command);
         return "sent";
     }
 

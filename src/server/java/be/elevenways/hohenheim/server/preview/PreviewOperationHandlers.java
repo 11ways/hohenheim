@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.preview;
 
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.preview.PreviewOperations;
+import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.server.operation.OperationCall;
 import be.elevenways.zenit.server.operation.OperationHandlers;
@@ -22,6 +23,9 @@ public final class PreviewOperationHandlers {
     /** The reason the reclaim records for an expiry. */
     static final String EXPIRED = "expired";
 
+    /** The reason the reclaim records for a person's click, as the admin row action recorded it. */
+    static final String OPERATOR = "operator";
+
     static {
         OperationHandlers.attach(PreviewOperations.EXPIRE).handle(PreviewOperationHandlers::expire);
         SchedulePlacements.place(PreviewOperations.EXPIRE);
@@ -35,9 +39,11 @@ public final class PreviewOperationHandlers {
         // The static initializer did the work.
     }
 
+    /** The deadline's step reclaims as expired; every other surface is a person's click. */
     private static @NonNull String expire(@NonNull OperationCall<Row, Void> call) {
         Integer id = call.subject().get(PreviewDeploymentModel.ID);
-        PreviewDeployments.destroy(id, EXPIRED);
-        return EXPIRED;
+        String reason = call.surface() == ZenitPlacementSurface.SCHEDULE_STEP ? EXPIRED : OPERATOR;
+        PreviewDeployments.destroy(id, reason);
+        return reason;
     }
 }

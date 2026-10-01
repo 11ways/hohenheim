@@ -98,6 +98,7 @@ public final class InstanceOperations {
     /** The console line to send. */
     public static final StringField COMMAND = StringField.builder("command")
         .label(HohenheimFormCopy.label("console_line"))
+        .required()
         .build();
 
     /**

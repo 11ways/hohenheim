@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.instance.ConsoleKind;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
@@ -14,6 +15,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -96,8 +98,13 @@ public final class InstanceConsolePage implements RecordScopedPage<Row> {
         // AIDEV-NOTE: the hidden field NAME comes from the framework constant --
         // ReturnTarget is server-only, so the common template cannot reach it.
         vars.put("returnParam", ReturnTarget.PARAM);
-        vars.put("commandTarget", HohenheimEndpoints.INSTANCE_CONSOLE_COMMAND
-            .with(HohenheimEndpoints.INSTANCE_ID, instanceId));
+        // The command form is the placed console operation's own invoke, its line asked here instead of in the
+        // action's dialog: the form posts the confirmation proof the dialog would, and lands back on this tab.
+        vars.put("commandTarget", CmsRoutes.invoke(CmsSupport.panelSlug(conduit), HohenheimSlugs.INSTANCES,
+                InstanceOperations.CONSOLE_COMMAND.id())
+            .with(CmsEndpoints.SUBJECT_PARAM, String.valueOf(instanceId)));
+        vars.put("confirmParam", CmsConfirmation.FIELD);
+        vars.put("confirmProof", CmsConfirmation.PLAIN_PROOF);
         // AIDEV-NOTE: WebSocketEndpoint is not a RouteTarget and has no with(...), and
         // pl-terminal takes a wsUrl STRING anyway, so the socket route is RENDERED from
         // its own declaration here -- endpoint-derived, never concatenated.

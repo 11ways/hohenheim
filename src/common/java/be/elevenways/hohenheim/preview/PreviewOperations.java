@@ -16,7 +16,10 @@ import be.elevenways.zenit.common.ui.Icon;
  *
  * AIDEV-NOTE: the id is the legacy schedule action's own, {@code hohenheim:expire_preview}: it names no activity
  * member, so the one-shot schedules armed before this class existed run it unchanged. The deploy lane arms it with
- * system authority (no run_as), which the pipeline runs without admission; the gate binds an editor's own chain.
+ * system authority (no run_as), which the pipeline runs without admission; the gate binds everyone else. It is also
+ * the admin's and /manage's "destroy now" (PreviewDeploymentResource), where manage on a preview is manage on its
+ * application through the preview's capability rules (HohenheimGrantPolicy); a click reclaims as destroyed, the
+ * deadline's step as expired.
  *
  * @author Jelle De Loecker
  * @since  0.9.0

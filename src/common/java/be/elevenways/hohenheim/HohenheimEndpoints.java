@@ -1352,11 +1352,11 @@ public class HohenheimEndpoints {
     /** How often a live terminal session's per-record manage grant is re-checked (revoked = 1008). */
     public static final long TERMINAL_REVALIDATION_INTERVAL_MS = 15_000;
 
-    // --- Instance console: live output over a WebSocket, commands over a POST form ---
+    // --- Instance console: live output over a WebSocket; commands are the placed console operation ---
 
     /**
      * Live console of one instance for pl-terminal. A PLAIN console is read-only here --
-     * commands go through {@link #INSTANCE_CONSOLE_COMMAND}, never raw keystrokes: a
+     * commands go through the console operation's invoke (InstanceOperations.CONSOLE_COMMAND), never raw keystrokes: a
      * non-TTY container echoes nothing, so keystroke input would be invisible typing.
      * An INTERACTIVE console ({@code console_kind=tty}: the workload's primary process
      * sits behind a pseudo-terminal) carries keystrokes up and the
@@ -1412,22 +1412,6 @@ public class HohenheimEndpoints {
         .requiresLogin()
         .revalidateEvery(TERMINAL_REVALIDATION_INTERVAL_MS)
         .handler(session -> null) // Placeholder: set in HohenheimHandlers.init(), at the MODULES stage
-        .build();
-
-    /**
-     * One console command line to a running instance (the console tab's form). The
-     * handler demands per-record CONSOLE; requiresLogin is declared EXPLICITLY even
-     * though ServerMain's baseline("/") catch-all already implies it, so the declaration
-     * can be audited in place. The rule for this file: every endpoint states its own
-     * requirement -- a permission, requiresLogin, or a public stance with its reason
-     * (DYNDNS_UPDATE, HEALTH, DEV_TUNNEL) -- and never leans on the catch-all.
-     */
-    public static final Endpoint<Object> INSTANCE_CONSOLE_COMMAND = Endpoint.<Object>builder()
-        .identifier(HohenheimIds.id("instance_console_command"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
-            .addDelimiter().addStatic("console").addDelimiter().addStatic("command").build())
-        .requiresLogin()
         .build();
 
     // --- Dev-tunnel registration (remote dev servers; token-authenticated in-band) ---
