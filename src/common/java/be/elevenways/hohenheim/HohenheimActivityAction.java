@@ -6,6 +6,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.activity.ActivityAction;
 import be.elevenways.zenit.common.orm.activity.ActivityActions;
 import be.elevenways.zenit.common.orm.activity.ActivitySeverity;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -78,12 +79,21 @@ public enum HohenheimActivityAction implements ActivityAction {
 
     static {
         ActivityActions.register(values());
+        // Each member's spelling before ids, a legacy key of the activity registry alone.
+        for (HohenheimActivityAction action : values()) {
+            ActivityActions.legacyKey(action.value, action);
+        }
+        ActivityActions.legacyKey("created", ZenitActivityAction.CREATE);
+        ActivityActions.legacyKey("updated", ZenitActivityAction.UPDATE);
+        ActivityActions.legacyKey("deleted", ZenitActivityAction.DELETE);
     }
 
+    private final @NonNull String value;
     private final @NonNull Identifier id;
     private final @NonNull Microcopy label;
 
     HohenheimActivityAction(@NonNull String value) {
+        this.value = value;
         this.id = HohenheimIds.id(value);
         // The one verb without copy of its own reads as its former spelling.
         this.label = "move_shared".equals(value) ? Microcopy.literal(value)
