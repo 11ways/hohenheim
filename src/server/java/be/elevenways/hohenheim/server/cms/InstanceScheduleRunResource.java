@@ -17,12 +17,12 @@ import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
+import be.elevenways.zenit.common.task.record.RecordScheduleRuns;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * Read-only run history of instance schedules: which chain ran, what each step did,
@@ -113,31 +113,18 @@ public class InstanceScheduleRunResource extends RowResource {
         return describeSteps(row);
     }
 
-    @SuppressWarnings("unchecked")
     static @NonNull String describeSteps(@NonNull Row run) {
-        Object raw = run.get(RecordScheduleRunModel.STEP_RESULTS);
-
-        if (!(raw instanceof Map<?, ?> map)
-                || !(map.get(RecordScheduleRunModel.KEY_STEPS) instanceof List<?> steps)
-                || steps.isEmpty()) {
-            return "";
-        }
-
         StringBuilder summary = new StringBuilder();
 
-        for (Object entry : steps) {
-            if (!(entry instanceof Map<?, ?> step)) {
-                continue;
-            }
+        for (RecordScheduleRuns.Step step : RecordScheduleRuns.steps(run)) {
             if (summary.length() > 0) {
                 summary.append(" | ");
             }
-            summary.append(step.get(RecordScheduleRunModel.KEY_POSITION))
-                .append(':').append(step.get(RecordScheduleRunModel.KEY_ACTION))
-                .append('=').append(step.get(RecordScheduleRunModel.KEY_STATUS));
-            Object error = step.get(RecordScheduleRunModel.KEY_ERROR);
-            if (error != null) {
-                summary.append(" (").append(error).append(')');
+            summary.append(step.position())
+                .append(':').append(step.action())
+                .append('=').append(step.status() == null ? null : step.status().storageKey());
+            if (step.error() != null) {
+                summary.append(" (").append(step.error()).append(')');
             }
         }
 

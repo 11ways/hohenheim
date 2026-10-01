@@ -32,6 +32,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
+import be.elevenways.zenit.common.task.record.RecordScheduleRuns;
 import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
 import be.elevenways.zenit.common.task.record.RunStatus;
 import be.elevenways.zenit.common.task.record.StepFailurePolicy;
@@ -45,6 +46,8 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -182,12 +185,40 @@ class InstanceScheduleLiveTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
+    /** Sweeps until the run has a verdict: a step with an offset is a due row, run by a later sweep. */
+    private static Row finished(RecordSchedules recordSchedules, Row run) {
+        if (run == null) {
+            return null;
+        }
+        int runId = run.get(RecordScheduleRunModel.ID);
+        long deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos();
+        Row current = run;
+        while (RunStatus.RUNNING.storageKey().equals(current.get(RecordScheduleRunModel.STATUS))
+                && System.nanoTime() < deadline) {
+            try {
+                Thread.sleep(250);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return current;
+            }
+            recordSchedules.runDue(null);
+            RecordSchedules.awaitRunningSteps(Duration.ofSeconds(60));
+            current = Models.get(RecordScheduleRunModel.class).find().noCache()
+                .where(RecordScheduleRunModel.ID.eq(runId)).first();
+        }
+        return current;
+    }
+
+    /** The run's steps through the one reader, as status and error maps. */
     private static List<Map<String, Object>> stepsOf(Row run) {
-        Object raw = run.get(RecordScheduleRunModel.STEP_RESULTS);
-        Object steps = raw instanceof Map<?, ?> map
-            ? ((Map<String, Object>) map).get(RecordScheduleRunModel.KEY_STEPS) : null;
-        return steps instanceof List<?> list ? (List<Map<String, Object>>) list : List.of();
+        List<Map<String, Object>> outcomes = new ArrayList<>();
+        for (RecordScheduleRuns.Step step : RecordScheduleRuns.steps(run)) {
+            Map<String, Object> outcome = new HashMap<>();
+            outcome.put(RecordScheduleRunModel.KEY_STATUS, step.status() == null ? null : step.status().storageKey());
+            outcome.put(RecordScheduleRunModel.KEY_ERROR, step.error());
+            outcomes.add(outcome);
+        }
+        return outcomes;
     }
 
     // -- the journey ----------------------------------------------------------
@@ -228,7 +259,8 @@ class InstanceScheduleLiveTest {
                 step(chainId, 2, InstancePowerAction.ID.toString(), 2,
                     Map.of("operation", InstancePowerAction.OP_RESTART));
 
-                Row chainRun = recordSchedules.runNow(chainId);
+                // The restart waits its 2 s offset as a due row; the sweep runs it once due.
+                Row chainRun = finished(recordSchedules, recordSchedules.runNow(chainId));
                 assertThat(chainRun).as("step 2: the chain ran").isNotNull();
                 assertThat(chainRun.get(RecordScheduleRunModel.STATUS))
                     .as("step 2: both steps completed")
