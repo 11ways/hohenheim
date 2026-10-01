@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -8,18 +9,17 @@ import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
-import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceAppUpdates;
-import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceInstalls;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceService;
-import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.hohenheim.server.instance.InstanceTemplateCapture;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.cms.common.action.ActionPlacement;
+import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
@@ -36,142 +36,154 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import java.util.List;
 
 /**
- * THE instance row actions, built once for both panels: the operator list and the delegated subset
- * read the same builders, so an action's capability gate and handler exist exactly once.
+ * THE instance verbs, built once for both panels: the operator list and the delegated subset read the same builders,
+ * so an action's gate and handler exist exactly once. Power, backup and snapshot are placed operations
+ * ({@link InstanceOperations}, invoked through the one invoke route); the other verbs stay legacy row actions until
+ * their operations land (stage 5).
  *
- * AIDEV-NOTE: every action declares the record capability it needs in its own visibleFor, even
- * though the operator panel is admin-gated. zenit-cms re-checks visibleFor on INVOKE (so the
- * declaration is a gate, not a hint), and the /manage panel offers these very instances -- a
- * capability spelled only for one panel would be a second policy over one action. For an admin
- * the predicate is a no-op: the precedence walk's admin bypass answers first. A row action has no
- * conduit to ask for its panel, so the operator-only ones name {@link HohenheimSlugs#ADMIN}.
+ * AIDEV-NOTE: a placed operation's record capability is its gate's {@code subjectCapability}, asked by the same offer
+ * that draws the button and by the pipeline on invoke, for an admin and a /manage principal alike; a generated row is
+ * outside every operation's {@code applies}, so it is hidden and its invoke reads as missing. Its
+ * {@code hiddenWhen}/{@code disabledWhen} are presentation only (stop of a stopped instance is idempotent, start of an
+ * instance whose database is not ready refuses with the same words). A legacy row action still declares its record
+ * capability in visibleFor, which zenit-cms re-checks on INVOKE; it has no panel to ask, so the operator-only ones
+ * name {@link HohenheimSlugs#ADMIN}.
  *
  * @author Jelle De Loecker
  * @since 0.1.0
  */
-final class InstanceRowActions {
+final class InstanceActions {
 
     private final InstanceService instances;
 
-    InstanceRowActions(@NonNull InstanceService instances) {
+    InstanceActions(@NonNull InstanceService instances) {
         this.instances = instances;
     }
 
     /**
-     * The operator panel's actions, Deploy first: RecordActionBands keeps declaration order
-     * inside the inline band, so the first declared verb leads.
+     * The operator panel's placed operations, Deploy first: the record band keeps declaration order inside the
+     * inline band, and placed actions lead the declared row actions, so the first declared verb leads.
      */
+    @NonNull List<PanelAction<Row>> placedOperator() {
+        return List.of(deployAction(), stopAction(), restartAction(), snapshotAction(), backupAction());
+    }
+
+    /** The delegated panel's placed subset: power without restart, and the two artifact actions. */
+    @NonNull List<PanelAction<Row>> placedDelegated() {
+        return List.of(deployAction(), stopAction(), snapshotAction(), backupAction());
+    }
+
+    /** The operator panel's legacy row actions. */
     @NonNull List<RowAction<Row>> operator() {
-        return List.of(this.deployAction(), this.stopAction(), this.restartAction(),
-            this.exposeAction(), this.rollbackAction(), this.installAction(),
-            this.reinstallAction(), this.appUpdateAction(), this.snapshotAction(),
-            this.backupAction(), this.captureTemplateAction(), this.migrateAction(),
+        return List.of(this.exposeAction(), this.rollbackAction(), this.installAction(),
+            this.reinstallAction(), this.appUpdateAction(), this.captureTemplateAction(), this.migrateAction(),
             this.destroyWithDataAction());
     }
 
     /**
-     * The delegated panel's subset: power, the two artifact actions and the in-place app update.
-     * Placement, template capture, install and every destroy stay operator acts.
+     * The delegated panel's legacy subset: the in-place app update. Placement, template capture, install and every
+     * destroy stay operator acts.
      */
     @NonNull List<RowAction<Row>> delegated() {
-        return List.of(this.deployAction(), this.stopAction(), this.snapshotAction(),
-            this.backupAction(), this.appUpdateAction());
+        return List.of(this.appUpdateAction());
     }
 
     /**
-     * Deploy, offered only where it means something: the record is not owned by a product
-     * tier AND its KIND is one a person may power at all
-     * ({@link InstanceKinds#isUserDeployable}, which reads the kind's own
-     * {@code generatedOnly()} declaration).
+     * Deploy (the start operation), offered only where it means something: the record is not owned by a product
+     * tier AND its KIND is one a person may power at all ({@link InstanceKinds#isUserDeployable}, which reads the
+     * kind's own {@code generatedOnly()} declaration). Dead, with the database and its state on screen, while an
+     * attached managed database is not active: the same words the handler refuses a direct POST with.
      *
-     * AIDEV-NOTE: the kind half is not a restatement of {@code isGenerated(row)}. That one
-     * is a per-RECORD fact (generated_by), so it says nothing about a record of an
-     * owner-managed kind whose attribution column is unset, and it answers TRUE for a kind
-     * that has no handler at all -- a Deploy button whose invoke could only refuse. Asking
-     * the kind is what makes the offer and the driver answer to one declaration.
+     * AIDEV-NOTE: deliberately NOT ActionStyle.PRIMARY (reverted 2026-08-22): the style renders the button FILLED, a
+     * solid accent Deploy beside the red Delete on every row; it already leads as the first declared verb.
      */
-    private @NonNull RowAction<Row> deployAction() {
-        return RowAction.Invoke.<Row>builder(HohenheimIds.id("deploy_instance"))
+    private static @NonNull PanelAction<Row> deployAction() {
+        return PanelAction.<Row, InstanceOperations.PowerResult>places(InstanceOperations.START, ActionPlacement.ROW,
+                (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("deployed")
+                    .withFilter("scope", "instance").withArg("name", request.subject().get(InstanceModel.NAME))))
             .label(Microcopy.of("deploy").withFilter("scope", "instance"))
             .icon(Icon.of("play"))
-            // AIDEV-NOTE: deliberately NOT ActionStyle.PRIMARY (reverted 2026-08-22). The
-            // style is what makes a button render FILLED, and on a list row that put a
-            // solid accent-coloured Deploy beside the red Delete on every single row --
-            // louder than a row deserves. It bought nothing on the record surface either:
-            // Deploy is the FIRST action rowActions() declares, and RecordActionBands
-            // keeps declaration order inside the inline band, so it already leads.
-            .visibleFor((row, ctx) -> !InstanceResource.isGenerated(row)
-                && InstanceKinds.isUserDeployable(row.get(InstanceModel.KIND))
-                && HohenheimAccess.reachesRecord(ctx, InstanceModel.MODEL_ID,
-                    row.get(InstanceModel.ID), HohenheimAccess.POWER))
-            // Offered but DEAD while an attached managed database is not active, with the
-            // database and its state on screen: the same resolver InstanceService refuses
-            // the POST with, so the button is never the gate.
-            .unavailableWhen((row, ctx) -> {
+            .hiddenWhen(row -> !InstanceKinds.isUserDeployable(row.get(InstanceModel.KIND)))
+            .disabledWhen(row -> {
                 Integer id = row.get(InstanceModel.ID);
                 return id == null ? null : InstanceDatabaseLinks.notReadyReason(id);
-            })
-            .handler((row, ctx) -> {
-                this.instances.deploy(row.get(InstanceModel.ID), DeployTrigger.MANUAL);
-                return CmsActionResult.refreshWithToast(
-                    Microcopy.of("deployed").withFilter("scope", "instance")
-                        .withArg("name", row.get(InstanceModel.NAME)));
             })
             .build();
     }
 
     /**
-     * Stop rides the OVERFLOW menu: it is confirmed anyway (so the dialog was always a
-     * second click), and keeping it out of the strip leaves ONE inline verb and one
-     * red button per row -- the calm row the admin-UI wave promises.
+     * Stop rides the OVERFLOW menu: it is confirmed anyway, and keeping it out of the strip leaves ONE inline verb and
+     * one red button per row. Hidden unless the instance runs; a direct POST on a stopped one is a no-op success.
      */
-    private @NonNull RowAction<Row> stopAction() {
-        return RowAction.Invoke.<Row>builder(HohenheimIds.id("stop_instance"))
+    private static @NonNull PanelAction<Row> stopAction() {
+        return PanelAction.<Row, InstanceOperations.PowerResult>places(InstanceOperations.STOP, ActionPlacement.ROW,
+                (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("stopped_toast")
+                    .withFilter("scope", "instance").withArg("name", request.subject().get(InstanceModel.NAME))))
             .label(Microcopy.of("stop").withFilter("scope", "instance"))
             .icon(Icon.of("stop"))
             .inlineInRow(false)
             .style(ActionStyle.DESTRUCTIVE)
-            .visibleFor((row, ctx) -> !InstanceResource.isGenerated(row)
-                && InstanceModel.STATUS_RUNNING.equals(row.get(InstanceModel.STATUS))
-                    && HohenheimAccess.reachesRecord(ctx, InstanceModel.MODEL_ID,
-                        row.get(InstanceModel.ID), HohenheimAccess.POWER))
+            .hiddenWhen(row -> !InstanceModel.STATUS_RUNNING.equals(row.get(InstanceModel.STATUS)))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("stop").withFilter("scope", "instance"))
                 .body(Microcopy.of("stop_confirm").withFilter("scope", "instance"))
                 .confirmLabel(Microcopy.of("stop").withFilter("scope", "instance"))
                 .style(ActionStyle.DESTRUCTIVE)
                 .build())
-            .handler((row, ctx) -> {
-                this.instances.stop(row.get(InstanceModel.ID));
-                return CmsActionResult.refreshWithToast(
-                    Microcopy.of("stopped_toast").withFilter("scope", "instance")
-                        .withArg("name", row.get(InstanceModel.NAME)));
-            })
             .build();
     }
 
-    /**
-     * Stop and start again, through {@link InstanceService#restart} -- the SAME
-     * composition the scheduled power action runs, never a UI-side stop-then-deploy pair.
-     */
-    private @NonNull RowAction<Row> restartAction() {
-        return RowAction.Invoke.<Row>builder(HohenheimIds.id("restart_instance"))
+    /** Stop and start again: the restart operation, ONE lock hold across both halves. */
+    private static @NonNull PanelAction<Row> restartAction() {
+        return PanelAction.<Row, InstanceOperations.PowerResult>places(InstanceOperations.RESTART, ActionPlacement.ROW,
+                (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("restarted_toast")
+                    .withFilter("scope", "instance").withArg("name", request.subject().get(InstanceModel.NAME))))
             .label(Microcopy.of("restart").withFilter("scope", "instance"))
             .icon(Icon.of("rotate-right"))
             .inlineInRow(false)
-            .visibleFor((row, ctx) -> !InstanceResource.isGenerated(row) && HohenheimAccess.reachesRecord(ctx,
-                InstanceModel.MODEL_ID, row.get(InstanceModel.ID), HohenheimAccess.POWER))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("restart").withFilter("scope", "instance"))
                 .body(Microcopy.of("restart_confirm").withFilter("scope", "instance"))
                 .confirmLabel(Microcopy.of("restart").withFilter("scope", "instance"))
                 .build())
-            .handler((row, ctx) -> {
-                this.instances.restart(row.get(InstanceModel.ID), DeployTrigger.MANUAL);
-                return CmsActionResult.refreshWithToast(
-                    Microcopy.of("restarted_toast").withFilter("scope", "instance")
-                        .withArg("name", row.get(InstanceModel.NAME)));
-            })
+            .build();
+    }
+
+    /**
+     * Cold capture: a running instance is stopped for the copy and redeployed after. The admin asks no note (preset
+     * empty), as before; note editing waits for the operation input forms (F.16).
+     */
+    private static @NonNull PanelAction<Row> snapshotAction() {
+        return PanelAction.<Row, Integer>places(InstanceOperations.SNAPSHOT, ActionPlacement.ROW,
+                (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("snapshot_taken")
+                    .withFilter("scope", "instance").withArg("name", request.subject().get(InstanceModel.NAME))))
+            .label(Microcopy.of("snapshot").withFilter("scope", "instance"))
+            .icon(Icon.of("camera"))
+            .inlineOnRecord(false)
+            .inlineInRow(false)
+            .preset(row -> new InstanceOperations.SnapshotInput(null))
+            .confirmation(ConfirmationSpec.builder()
+                .title(Microcopy.of("snapshot").withFilter("scope", "instance"))
+                .body(Microcopy.of("snapshot_confirm").withFilter("scope", "instance"))
+                .confirmLabel(Microcopy.of("snapshot").withFilter("scope", "instance"))
+                .build())
+            .build();
+    }
+
+    /** Export to the configured backup target (refuses, named, when none is set). */
+    private static @NonNull PanelAction<Row> backupAction() {
+        return PanelAction.<Row, Integer>places(InstanceOperations.BACKUP, ActionPlacement.ROW,
+                (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("backup_done")
+                    .withFilter("scope", "instance").withArg("name", request.subject().get(InstanceModel.NAME))))
+            .label(Microcopy.of("backup_now").withFilter("scope", "instance"))
+            .icon(Icon.of("box-archive"))
+            .inlineOnRecord(false)
+            .inlineInRow(false)
+            .confirmation(ConfirmationSpec.builder()
+                .title(Microcopy.of("backup_now").withFilter("scope", "instance"))
+                .body(Microcopy.of("backup_confirm").withFilter("scope", "instance"))
+                .confirmLabel(Microcopy.of("backup_now").withFilter("scope", "instance"))
+                .build())
             .build();
     }
 
@@ -332,52 +344,6 @@ final class InstanceRowActions {
         Row template = Models.get(InstanceTemplateModel.class).findById(id);
         return template != null && InstanceTemplateModel.REINSTALL_CLEAR
             .equals(template.get(InstanceTemplateModel.REINSTALL_POLICY));
-    }
-
-    /** Cold capture: a running instance is stopped for the copy and redeployed after. */
-    private @NonNull RowAction<Row> snapshotAction() {
-        return RowAction.Invoke.<Row>builder(HohenheimIds.id("snapshot_instance"))
-            .label(Microcopy.of("snapshot").withFilter("scope", "instance"))
-            .icon(Icon.of("camera"))
-            .inlineOnRecord(false)
-            .inlineInRow(false)
-            .visibleFor((row, ctx) -> !InstanceResource.isGenerated(row) && HohenheimAccess.reachesRecord(ctx,
-                InstanceModel.MODEL_ID, row.get(InstanceModel.ID), HohenheimAccess.SNAPSHOTS))
-            .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("snapshot").withFilter("scope", "instance"))
-                .body(Microcopy.of("snapshot_confirm").withFilter("scope", "instance"))
-                .confirmLabel(Microcopy.of("snapshot").withFilter("scope", "instance"))
-                .build())
-            .handler((row, ctx) -> {
-                new InstanceSnapshots().create(row.get(InstanceModel.ID), null);
-                return CmsActionResult.refreshWithToast(
-                    Microcopy.of("snapshot_taken").withFilter("scope", "instance")
-                        .withArg("name", row.get(InstanceModel.NAME)));
-            })
-            .build();
-    }
-
-    /** Export to the configured backup target (refuses, named, when none is set). */
-    private @NonNull RowAction<Row> backupAction() {
-        return RowAction.Invoke.<Row>builder(HohenheimIds.id("backup_instance"))
-            .label(Microcopy.of("backup_now").withFilter("scope", "instance"))
-            .icon(Icon.of("box-archive"))
-            .inlineOnRecord(false)
-            .inlineInRow(false)
-            .visibleFor((row, ctx) -> !InstanceResource.isGenerated(row) && HohenheimAccess.reachesRecord(ctx,
-                InstanceModel.MODEL_ID, row.get(InstanceModel.ID), HohenheimAccess.BACKUPS))
-            .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("backup_now").withFilter("scope", "instance"))
-                .body(Microcopy.of("backup_confirm").withFilter("scope", "instance"))
-                .confirmLabel(Microcopy.of("backup_now").withFilter("scope", "instance"))
-                .build())
-            .handler((row, ctx) -> {
-                new InstanceBackups().backupNow(row.get(InstanceModel.ID));
-                return CmsActionResult.refreshWithToast(
-                    Microcopy.of("backup_done").withFilter("scope", "instance")
-                        .withArg("name", row.get(InstanceModel.NAME)));
-            })
-            .build();
     }
 
     /**

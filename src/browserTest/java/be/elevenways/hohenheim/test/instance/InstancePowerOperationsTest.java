@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -183,6 +184,8 @@ class InstancePowerOperationsTest {
             };
             assertThatThrownBy(() -> InstanceOperationHandlers.triggerOf(elsewhere))
                 .as("step 4: an undeclared surface has no trigger").isInstanceOf(IllegalStateException.class);
+            assertThat(InstanceOperationHandlers.triggerOf(CmsPlacementSurface.ADMIN_ACTION))
+                .as("step 4: an admin panel click deploys under the manual trigger").isEqualTo(DeployTrigger.MANUAL);
 
             // 5. The restart holds ONE lock across both halves: a start asked while its deploy half runs is refused
             //    by the in-progress refusal.

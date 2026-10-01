@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -11,13 +12,14 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The instance list's two shared parts: {@link InstanceResource#recordRoute}, the one way a
  * surface links an instance row (a release row, which the list does not serve, goes to its
- * application's Deploys tab instead of a 404), and {@link InstanceRowActions}, the one set of
+ * application's Deploys tab instead of a 404), and {@link InstanceActions}, the one set of
  * action builders both panels offer.
  */
 class InstanceRecordRouteTest {
@@ -54,12 +56,14 @@ class InstanceRecordRouteTest {
 
     @Test
     void bothPanelsOfferTheSameBuildersAndTheDelegatedSetIsTheirSubset() {
-        List<String> operator = ids(new InstanceResource().rowActions());
-        List<String> delegated = ids(new ManageInstanceResource().rowActions());
+        InstanceResource operatorResource = new InstanceResource();
+        InstanceResource delegatedResource = new ManageInstanceResource();
+        List<String> operator = ids(operatorResource.actions(), operatorResource.rowActions());
+        List<String> delegated = ids(delegatedResource.actions(), delegatedResource.rowActions());
 
         // 1. The delegated panel offers exactly power, the two artifacts and the app update.
         assertThat(delegated).as("step 1: the delegated instance verbs")
-            .containsExactly("deploy_instance", "stop_instance", "snapshot_instance",
+            .containsExactly("start_instance", "stop_instance", "snapshot_instance",
                 "backup_instance", "app_update_instance");
 
         // 2. Every one of them is an operator verb too: one builder, two panels.
@@ -84,7 +88,9 @@ class InstanceRecordRouteTest {
         return row;
     }
 
-    private static List<String> ids(List<RowAction<Row>> actions) {
-        return actions.stream().map(RowAction::id).map(Identifier::getPath).toList();
+    /** The placed operations' ids, then the legacy row actions' ids: the order both bands draw them in. */
+    private static List<String> ids(List<PanelAction<Row>> placed, List<RowAction<Row>> legacy) {
+        return Stream.concat(placed.stream().map(PanelAction::id), legacy.stream().map(RowAction::id))
+            .map(Identifier::getPath).toList();
     }
 }

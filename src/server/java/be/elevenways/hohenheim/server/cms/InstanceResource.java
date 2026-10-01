@@ -25,6 +25,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
+import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -78,7 +79,7 @@ import java.util.Map;
  * projection ({@link ManageInstanceResource}). Create persists the record; deploy,
  * stop and the verified destroy are row actions through {@link InstanceService}.
  *
- * AIDEV-NOTE: every row action (built in {@link InstanceRowActions}) declares the record
+ * AIDEV-NOTE: every row action (built in {@link InstanceActions}) declares the record
  * capability it needs in its own visibleFor, even though this panel is admin-gated. Two
  * reasons, both structural: zenit-cms re-checks visibleFor on INVOKE (so the declaration
  * is a gate, not a hint), and the /manage subclass offers the same builders -- a
@@ -99,7 +100,7 @@ public class InstanceResource extends RowResource {
     protected final InstanceService instances = new InstanceService();
 
     /** The instance verbs both panels offer, built once over {@link #instances}. */
-    final InstanceRowActions rowActionSet = new InstanceRowActions(this.instances);
+    final InstanceActions rowActionSet = new InstanceActions(this.instances);
 
     /**
      * The create/edit form: choice cards decide the kind, and every placement pick
@@ -650,12 +651,18 @@ public class InstanceResource extends RowResource {
         return names.isEmpty() ? null : String.join(", ", names);
     }
 
-    /** The synthesized affordances, then the operator's instance verbs ({@link InstanceRowActions}). */
+    /** The synthesized affordances, then the operator's instance verbs ({@link InstanceActions}). */
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
         actions.addAll(this.rowActionSet.operator());
         return actions;
+    }
+
+    /** The operator's placed instance operations: power, backup and snapshot ({@link InstanceActions}). */
+    @Override
+    public @NonNull List<PanelAction<Row>> actions() {
+        return this.rowActionSet.placedOperator();
     }
 
     /**

@@ -187,10 +187,10 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
 
         // The power verb is not offered AND its invoke answers missing.
         HttpResponse<String> deploy = httpPostForm(
-            "/admin/instances/" + generatedDbInstanceId + "/action/deploy_instance",
+            "/admin/instances/invoke/hohenheim.start_instance?ids=" + generatedDbInstanceId,
             "", sessionToken, csrfToken);
         assertThat(deploy.statusCode())
-            .as("a hidden action's invoke answers 404, the unoffered-slug rule")
+            .as("an operation that does not apply to a generated row answers 404 on the one invoke route")
             .isEqualTo(404);
     }
 
@@ -462,13 +462,13 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
         //    offers Deploy, the generated database engine does not.
         assertThat(adminGet("/admin/instances?filter.name=ui-wave-workspace").body())
             .as("step 4: the control -- an authored workspace offers Deploy")
-            .contains("deploy_instance");
+            .contains("start_instance");
         String engine = adminGet("/admin/instances?filter.name=ui-wave-db-engine").body();
         assertThat(engine).as("step 4: the engine row is the one listed")
             .contains("ui-wave-db-engine");
         assertThat(engine)
             .as("step 4: an owner-managed kind is never offered Deploy")
-            .doesNotContain("deploy_instance");
+            .doesNotContain("start_instance");
     }
 
     /**
@@ -587,16 +587,16 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
         String inline = page.substring(band, menu);
         String overflow = page.substring(menu);
 
-        // 2. Deploy is the FIRST action rowActions() declares, and the band keeps
+        // 2. Deploy is the FIRST placed operation actions() declares, and the band keeps
         //    declaration order, so it leads without any style saying so -- which is why
         //    it no longer declares ActionStyle.PRIMARY (that only made it render filled,
         //    on every list row, next to the red Delete). The band never grows past its
         //    cap however many actions the resource declares.
         assertThat(inline).as("step 2: the leading verb is inline")
-            .contains("deploy_instance");
+            .contains("start_instance");
         int secondAction = inline.indexOf("data-action-id=",
             inline.indexOf("data-action-id=") + 1);
-        assertThat(inline.indexOf("deploy_instance"))
+        assertThat(inline.indexOf("start_instance"))
             .as("step 2: and it is the FIRST one, on declaration order alone")
             .isLessThan(secondAction < 0 ? inline.length() : secondAction);
         assertThat(countOf(inline, "data-action-id="))

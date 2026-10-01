@@ -21,7 +21,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
-import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -55,7 +55,7 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
 
     private static final String PREFIX = "dbsurface-";
 
-    private static final Identifier DEPLOY = Identifier.of("hohenheim", "deploy_instance");
+    private static final Identifier DEPLOY = Identifier.of("hohenheim", "start_instance");
 
     private static Integer hostId;
     private static Integer instanceId;
@@ -211,13 +211,11 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
         link.set(InstanceDatabaseModel.DATABASE_ID, waitingDatabaseId);
         link.set(InstanceDatabaseModel.ENV_PREFIX, "WORDPRESS_DB");
         links.save(link);
-        RowAction.Invoke<Row> deploy = deployAction();
+        PanelAction<Row> deploy = deployAction();
         Model databases = Models.get(DatabaseModel.class);
 
         // 1. Still provisioning: the button is DEAD, naming the database and its state.
-        Microcopy provisioning = deploy.unavailableReasonFor(
-            Models.get(InstanceModel.class).findById(waitingInstanceId),
-            AccessContext.anonymous());
+        Microcopy provisioning = deploy.disabledFor(Models.get(InstanceModel.class).findById(waitingInstanceId));
         assertThat(provisioning)
             .as("step 1: deploy is offered dead while the database provisions")
             .isNotNull();
@@ -240,9 +238,7 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
         database.set(DatabaseModel.STATUS, DatabaseModel.STATUS_FAILED);
         database.set(DatabaseModel.FAILURE_REASON, "image pull refused: no such tag");
         databases.save(database);
-        Microcopy failed = deploy.unavailableReasonFor(
-            Models.get(InstanceModel.class).findById(waitingInstanceId),
-            AccessContext.anonymous());
+        Microcopy failed = deploy.disabledFor(Models.get(InstanceModel.class).findById(waitingInstanceId));
         assertThat(failed).as("step 3: a failed database is still a dead deploy").isNotNull();
         assertThat(failed.key()).isEqualTo("database_not_ready");
         assertThat(String.valueOf(failed.args().get("reason")))
@@ -262,9 +258,7 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
         database.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
         database.set(DatabaseModel.FAILURE_REASON, null);
         databases.save(database);
-        assertThat(deploy.unavailableReasonFor(
-                Models.get(InstanceModel.class).findById(waitingInstanceId),
-                AccessContext.anonymous()))
+        assertThat(deploy.disabledFor(Models.get(InstanceModel.class).findById(waitingInstanceId)))
             .as("step 4: an active database refuses nothing")
             .isNull();
         Map<String, String> env = DatabaseEnvInjection.envForInstance(waitingInstanceId,
@@ -278,10 +272,9 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
 
     // -- fixtures -------------------------------------------------------------
 
-    /** The deploy action, read off the resource rather than rebuilt here. */
-    @SuppressWarnings("unchecked")
-    private static RowAction.Invoke<Row> deployAction() {
-        return (RowAction.Invoke<Row>) new InstanceResource().rowActions().stream()
+    /** The deploy action (the placed start operation), read off the resource rather than rebuilt here. */
+    private static PanelAction<Row> deployAction() {
+        return new InstanceResource().actions().stream()
             .filter(action -> DEPLOY.equals(action.id()))
             .findFirst()
             .orElseThrow(() -> new AssertionError("the instances resource offers no deploy"));
