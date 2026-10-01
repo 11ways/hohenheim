@@ -329,9 +329,15 @@ class PreviewMechanicsTest extends HohenheimTestBase {
 
         // 3. The FRAMEWORK sweeper (the exact call RunRecordSchedulesTask makes every
         //    minute) fires the due one-shot; the reached preview is fully reclaimed.
+        // AIDEV-NOTE: runDue starts each due step on its own virtual thread and returns. The destroy that step runs
+        // stamps deleted_at BEFORE it deletes the schedule rows, so awaiting deleted_at (as this test once did)
+        // read the half-finished teardown. awaitRunningSteps waits for every step this process started, the
+        // ambient minute sweeper's included, so whoever fired the one-shot, its whole destroy has ended here.
         new RecordSchedules(Datasources.getDefault()).runDue(null);
+        assertThat(RecordSchedules.awaitRunningSteps(Duration.ofSeconds(20)))
+            .as("step 3: the sweep's steps ended").isTrue();
 
-        Row dead = awaitDestroyed(previewId);
+        Row dead = StoredRows.byId(Models.get(PreviewDeploymentModel.class), previewId);
         assertThat((String) dead.get(PreviewDeploymentModel.STATUS))
             .as("step 3: expiry is stamped as EXPIRED, visibly")
             .isEqualTo(PreviewDeploymentModel.STATUS_EXPIRED);
@@ -353,6 +359,8 @@ class PreviewMechanicsTest extends HohenheimTestBase {
 
         // 5. A second sweep changes nothing: the healthy deadline is still ahead.
         new RecordSchedules(Datasources.getDefault()).runDue(null);
+        assertThat(RecordSchedules.awaitRunningSteps(Duration.ofSeconds(20)))
+            .as("step 5: the second sweep's steps ended").isTrue();
         alive = StoredRows.byId(Models.get(PreviewDeploymentModel.class), healthyId);
         assertThat((Object) alive.get(PreviewDeploymentModel.DELETED_AT))
             .as("step 5: still untouched after another sweep").isNull();
@@ -461,18 +469,6 @@ class PreviewMechanicsTest extends HohenheimTestBase {
             Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS, savedWindow);
         }
-    }
-
-    /**
-     * The ambient minute sweeper can win the lease race for a due one-shot; whoever
-     * fires it, the destroyed STATE is what matters -- await it briefly.
-     */
-    private static Row awaitDestroyed(int previewId) {
-        return Poll.value("preview " + previewId + " is soft-deleted", Duration.ofSeconds(10),
-            Duration.ofMillis(100), () -> {
-                Row row = StoredRows.byId(Models.get(PreviewDeploymentModel.class), previewId);
-                return row != null && row.get(PreviewDeploymentModel.DELETED_AT) != null ? row : null;
-            });
     }
 
     private static List<Row> schedulesOf(int previewId) {
