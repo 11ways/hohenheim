@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.sitetype;
 
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.UpstreamForwarder;
+import be.elevenways.protoblast.common.text.HtmlEscape;
 import io.undertow.io.IoCallback;
 import io.undertow.io.Sender;
 import io.undertow.server.HttpServerExchange;
@@ -157,7 +158,8 @@ public class StaticFileHandler implements SiteRequestHandler {
 
             StringBuilder html = new StringBuilder();
             html.append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">");
-            String safeRelPath = escapeHtml(relativePath);
+            // Attribute escaping (the double quote too) in every position keeps the listing byte-identical to before.
+            String safeRelPath = HtmlEscape.attribute(relativePath);
             html.append("<title>Index of ").append(safeRelPath).append("</title>");
             html.append("<style>:root{color-scheme:light dark}body{font-family:monospace;padding:2rem}a{color:LinkText}");
             html.append("table{border-collapse:collapse}td{padding:0.25rem 1rem}</style>");
@@ -182,8 +184,8 @@ public class StaticFileHandler implements SiteRequestHandler {
                         if (!isDir) size = formatSize(Files.size(entry));
                     } catch (IOException ignored) {}
 
-                    html.append("<tr><td><a href=\"").append(escapeHtml(href)).append("\">")
-                        .append(escapeHtml(display)).append("</a></td><td>").append(size)
+                    html.append("<tr><td><a href=\"").append(HtmlEscape.attribute(href)).append("\">")
+                        .append(HtmlEscape.attribute(display)).append("</a></td><td>").append(size)
                         .append("</td></tr>");
                 });
             }
@@ -211,13 +213,6 @@ public class StaticFileHandler implements SiteRequestHandler {
         } catch (IOException e) {
             return false;
         }
-    }
-
-    static String escapeHtml(String text) {
-        return text.replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace("\"", "&quot;");
     }
 
     static String formatSize(long bytes) {
