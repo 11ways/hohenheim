@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
@@ -341,8 +342,9 @@ class InstanceOverviewTest extends HohenheimTestBase {
         try {
             // 1. One recorded action per instance, so a band filtered on the model alone
             //    would show both and a correctly filtered one shows exactly one.
-            ActivityLog.record(instances, instance(), "deploy", "overview band fixture");
-            ActivityLog.record(instances, decoy.get(InstanceModel.ID), "deploy", "decoy fixture");
+            ActivityLog.record(instances, instance(), HohenheimActivityAction.DEPLOYED, "overview band fixture");
+            ActivityLog.record(instances, decoy.get(InstanceModel.ID), HohenheimActivityAction.DEPLOYED,
+                "decoy fixture");
 
             Object mine = latestActivityId(String.valueOf(instance()));
             Object theirs = latestActivityId(String.valueOf(decoy.get(InstanceModel.ID)));

@@ -21,9 +21,10 @@ import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.RegistryMemberField;
-import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
 import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
 import be.elevenways.zenit.common.task.record.RunStatus;
+import be.elevenways.zenit.common.ui.BadgeVariant;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -76,20 +77,20 @@ class StatusPresentationDriftTest {
         //    outcome is green -- "completed with failures" must not read as success.
         for (EnumField.EnumValue value : ScheduleRunStatuses.FIELD.getValues().values()) {
             assertThat(value.getIcon()).as("step 3: %s declares an icon", value.getKey()).isNotNull();
-            assertThat(value.getColor()).as("step 3: %s declares a colour", value.getKey()).isNotNull();
+            assertThat(value.color()).as("step 3: %s declares a colour", value.getKey()).isNotNull();
             assertThat(value.getMicrocopy()).as("step 3: %s declares a label", value.getKey()).isNotNull();
         }
         assertThat(ScheduleRunStatuses.FIELD.getValues()
-                .get(RunStatus.COMPLETED.storageKey()).getColor())
-            .as("step 3: a clean completion is the success colour").isEqualTo("success");
+                .get(RunStatus.COMPLETED.storageKey()).color())
+            .as("step 3: a clean completion is the success colour").isEqualTo(BadgeVariant.SUCCESS);
         assertThat(ScheduleRunStatuses.FIELD.getValues()
-                .get(RunStatus.COMPLETED_WITH_FAILURES.storageKey()).getColor())
+                .get(RunStatus.COMPLETED_WITH_FAILURES.storageKey()).color())
             .as("step 3: a partial completion is neither success nor outright failure")
-            .isEqualTo("warning");
+            .isEqualTo(BadgeVariant.WARNING);
         assertThat(ScheduleRunStatuses.FIELD.getValues()
-                .get(RunStatus.RUNNING.storageKey()).getColor())
+                .get(RunStatus.RUNNING.storageKey()).color())
             .as("step 3: a chain still running is not painted as a failure")
-            .isNotEqualTo("destructive");
+            .isNotEqualTo(BadgeVariant.DESTRUCTIVE);
 
         // 4. An unknown status gets no colour at all rather than a wrong one.
         assertThat(ScheduleRunStatuses.badgeFor("teleported").known())
@@ -111,13 +112,13 @@ class StatusPresentationDriftTest {
         // 2. Each carries the badge facets the tab and the list both read off the field.
         for (EnumField.EnumValue value : DatabaseModel.STATUS.getValues().values()) {
             assertThat(value.getIcon()).as("step 2: %s declares an icon", value.getKey()).isNotNull();
-            assertThat(value.getColor()).as("step 2: %s declares a colour", value.getKey()).isNotNull();
+            assertThat(value.color()).as("step 2: %s declares a colour", value.getKey()).isNotNull();
             assertThat(value.getMicrocopy()).as("step 2: %s is localizable", value.getKey()).isNotNull();
         }
 
         // 3. The state an operator must act on is destructive, not neutral.
-        assertThat(DatabaseModel.STATUS.getValues().get(DatabaseModel.STATUS_DESTROY_FAILED).getColor())
-            .as("step 3: a failed destroy shouts").isEqualTo("destructive");
+        assertThat(DatabaseModel.STATUS.getValues().get(DatabaseModel.STATUS_DESTROY_FAILED).color())
+            .as("step 3: a failed destroy shouts").isEqualTo(BadgeVariant.DESTRUCTIVE);
     }
 
     @Test
@@ -205,11 +206,11 @@ class StatusPresentationDriftTest {
         //    the refusing member is the one that shouts.
         for (VolumeBackend backend : VolumeBackend.values()) {
             assertThat(backend.icon()).as("step 3: %s declares an icon", backend).isNotBlank();
-            assertThat(backend.color()).as("step 3: %s declares a colour", backend).isNotBlank();
+            assertThat(backend.color()).as("step 3: %s declares a colour", backend).isNotNull();
         }
         assertThat(VolumeBackend.NONE.color())
             .as("step 3: a volume root that can enforce nothing shouts")
-            .isEqualTo("destructive");
+            .isEqualTo(BadgeVariant.DESTRUCTIVE);
 
         // 4. Every lookup fails CLOSED: an unknown token is null, never a default member
         //    that would promise a capability the filesystem does not have.
@@ -260,7 +261,7 @@ class StatusPresentationDriftTest {
                 assertThat(value.getIcon())
                     .as("step 2: %s / %s declares an icon", vocabulary.name(), value.getKey())
                     .isNotNull();
-                assertThat(value.getColor())
+                assertThat(value.color())
                     .as("step 2: %s / %s declares a colour", vocabulary.name(), value.getKey())
                     .isNotNull();
                 assertThat(value.getMicrocopy())
@@ -290,7 +291,7 @@ class StatusPresentationDriftTest {
     @Test
     @DisplayName("the dns zone role badge shows the role word and explains itself elsewhere")
     void dnsZoneRoleLabelsAreShortAndDescribed() {
-        DefaultCatalogLoader catalogs = new DefaultCatalogLoader();
+        ShippedCatalogs catalogs = new ShippedCatalogs();
 
         for (EnumField.EnumValue value : DnsZoneModel.ROLE.getValues().values()) {
             for (String tag : List.of("en", "nl")) {
@@ -325,7 +326,7 @@ class StatusPresentationDriftTest {
     @Test
     @DisplayName("every enum value an admin surface renders carries localizable copy")
     void everyEnumValueIsLocalizable() throws Exception {
-        DefaultCatalogLoader catalogs = new DefaultCatalogLoader();
+        ShippedCatalogs catalogs = new ShippedCatalogs();
         List<String> unlocalizable = new ArrayList<>();
         List<String> unresolved = new ArrayList<>();
 

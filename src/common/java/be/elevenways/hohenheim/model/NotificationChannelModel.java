@@ -8,6 +8,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.ColorHue;
 
 /**
  * A delivery target for platform notifications. {@code kind} is the transport (today: only
@@ -33,11 +34,11 @@ public class NotificationChannelModel extends Model {
     public static final EnumField FORMAT = SCHEMA.addField(EnumField.builder("format")
         .required()
         .value(FORMAT_SLACK, v -> v.displayName("Slack")
-            .label(formatLabel(FORMAT_SLACK)).icon("message").color("purple"))
+            .label(formatLabel(FORMAT_SLACK)).icon("message").color(ColorHue.PURPLE))
         .value(FORMAT_DISCORD, v -> v.displayName("Discord")
-            .label(formatLabel(FORMAT_DISCORD)).icon("comments").color("indigo"))
+            .label(formatLabel(FORMAT_DISCORD)).icon("comments").color(ColorHue.INDIGO))
         .value(FORMAT_GENERIC, v -> v.displayName("Generic JSON")
-            .label(formatLabel(FORMAT_GENERIC)).icon("code").color("gray"))
+            .label(formatLabel(FORMAT_GENERIC)).icon("code").color(ColorHue.GRAY))
         .build());
 
     /** The translation token for a webhook payload format; the key IS the stored value. */

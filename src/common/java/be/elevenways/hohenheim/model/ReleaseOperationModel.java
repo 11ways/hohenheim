@@ -13,6 +13,7 @@ import be.elevenways.zenit.common.orm.field.TextField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -138,9 +139,9 @@ public class ReleaseOperationModel extends Model {
 
     public static final EnumField KIND = SCHEMA.addField(EnumField.builder("kind")
         .value(KIND_RELEASE, v -> v.displayName("Release")
-            .label(kindLabel(KIND_RELEASE)).icon("rocket").color("info"))
+            .label(kindLabel(KIND_RELEASE)).icon("rocket").color(BadgeVariant.INFO))
         .value(KIND_ROLLBACK, v -> v.displayName("Rollback")
-            .label(kindLabel(KIND_ROLLBACK)).icon("clock-rotate-left").color("warning"))
+            .label(kindLabel(KIND_ROLLBACK)).icon("clock-rotate-left").color(BadgeVariant.WARNING))
         .build());
 
     /** The translation token for a release kind; the key IS the stored value. */
@@ -156,21 +157,21 @@ public class ReleaseOperationModel extends Model {
 
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_PENDING, v -> v.displayName("Pending")
-            .label(statusLabel(STATUS_PENDING)).icon("clock").color("secondary"))
+            .label(statusLabel(STATUS_PENDING)).icon("clock").color(BadgeVariant.SECONDARY))
         .value(STATUS_DEPLOYING, v -> v.displayName("Deploying")
-            .label(statusLabel(STATUS_DEPLOYING)).icon("rotate").color("info"))
+            .label(statusLabel(STATUS_DEPLOYING)).icon("rotate").color(BadgeVariant.INFO))
         .value(STATUS_PROBING, v -> v.displayName("Probing")
-            .label(statusLabel(STATUS_PROBING)).icon("stethoscope").color("info"))
+            .label(statusLabel(STATUS_PROBING)).icon("stethoscope").color(BadgeVariant.INFO))
         .value(STATUS_SWITCHING, v -> v.displayName("Switching")
-            .label(statusLabel(STATUS_SWITCHING)).icon("shuffle").color("info"))
+            .label(statusLabel(STATUS_SWITCHING)).icon("shuffle").color(BadgeVariant.INFO))
         .value(STATUS_DRAINING, v -> v.displayName("Draining")
-            .label(statusLabel(STATUS_DRAINING)).icon("hourglass-half").color("info"))
+            .label(statusLabel(STATUS_DRAINING)).icon("hourglass-half").color(BadgeVariant.INFO))
         .value(STATUS_SUCCEEDED, v -> v.displayName("Succeeded")
-            .label(statusLabel(STATUS_SUCCEEDED)).icon("check").color("success"))
+            .label(statusLabel(STATUS_SUCCEEDED)).icon("check").color(BadgeVariant.SUCCESS))
         .value(STATUS_FAILED, v -> v.displayName("Failed")
-            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color("destructive"))
+            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color(BadgeVariant.DESTRUCTIVE))
         .value(STATUS_INTERRUPTED, v -> v.displayName("Interrupted")
-            .label(statusLabel(STATUS_INTERRUPTED)).icon("power-off").color("warning"))
+            .label(statusLabel(STATUS_INTERRUPTED)).icon("power-off").color(BadgeVariant.WARNING))
         .build());
 
     /** The translation token for a release status; the key IS the stored value. */

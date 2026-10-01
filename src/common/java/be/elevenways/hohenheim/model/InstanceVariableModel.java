@@ -9,6 +9,7 @@ import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.validation.Violations;
 
 import java.util.List;
@@ -53,9 +54,9 @@ public class InstanceVariableModel extends Model {
 
     public static final EnumField KIND = SCHEMA.addField(EnumField.builder("kind")
         .value(KIND_PLAIN, v -> v.displayName("Plain")
-            .label(Microcopy.of("plain").withFilter("scope", "variable_kind")).color("gray"))
+            .label(Microcopy.of("plain").withFilter("scope", "variable_kind")).color(ColorHue.GRAY))
         .value(KIND_SECRET, v -> v.displayName("Secret").icon("key")
-            .label(Microcopy.of("secret").withFilter("scope", "variable_kind")).color("orange"))
+            .label(Microcopy.of("secret").withFilter("scope", "variable_kind")).color(ColorHue.ORANGE))
         .defaultValue(KIND_PLAIN)
         .build());
 

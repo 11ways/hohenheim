@@ -17,6 +17,8 @@ import be.elevenways.zenit.common.orm.field.PathField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.StringMapField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.validation.validator.Range;
@@ -186,7 +188,7 @@ public final class ApplicationKind implements InstanceKindHandler {
 
     @Override public Icon getIcon() { return Icon.of("rocket"); }
 
-    @Override public String getColor() { return "indigo"; }
+    @Override public BadgeColor color() { return ColorHue.INDIGO; }
 
     @Override public Schema getSchema() { return SETTINGS_SCHEMA; }
 

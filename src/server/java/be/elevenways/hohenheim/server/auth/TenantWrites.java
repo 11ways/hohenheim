@@ -360,7 +360,7 @@ public final class TenantWrites {
                 // Removing a row is authority over the row, so it asks the SAME question a
                 // write does -- minus the claim half, since a delete claims no new name. An
                 // anonymous caller holds none of it: /nic/update updates, it never deletes.
-                boolean authorized = ctx != null && !ctx.isAnonymous()
+                boolean authorized = ctx != null && ctx.isAccount()
                     && (ctx.hasCapability(DnsRecordModel.MODEL_ID, doomed.get(DnsRecordModel.ID),
                             HohenheimAccess.EDIT)
                         || HostnameAuthority.canManage(snapshot, ctx, fqdnOf(doomed, doomed)));
@@ -484,7 +484,7 @@ public final class TenantWrites {
     /** @throws Violations when the acting tenant holds no {@code manage} on the provider */
     private static void requireGitProviderAuthority(@Nullable Object providerId) {
         AccessContext ctx = acting();
-        boolean authorized = ctx != null && !ctx.isAnonymous() && providerId != null
+        boolean authorized = ctx != null && ctx.isAccount() && providerId != null
             && ctx.hasCapability(GitProviderModel.MODEL_ID, providerId, HohenheimAccess.MANAGE);
         if (!authorized) {
             throw Violations.ofForm(CmsSupport.violationText("tenant_git_provider_not_managed"));
@@ -566,7 +566,7 @@ public final class TenantWrites {
     /** @throws Violations when the acting tenant holds no {@code manage} on the list */
     private static void requireAccessListAuthority(@Nullable Object listId) {
         AccessContext ctx = acting();
-        boolean authorized = ctx != null && !ctx.isAnonymous() && listId != null
+        boolean authorized = ctx != null && ctx.isAccount() && listId != null
             && ctx.hasCapability(AccessListModel.MODEL_ID, listId, HohenheimAccess.MANAGE);
         if (!authorized) {
             throw Violations.ofField(AccessRuleModel.ACCESS_LIST_ID.getName(), listId,
@@ -998,7 +998,7 @@ public final class TenantWrites {
         }
 
         AccessContext ctx = acting();
-        if (ctx == null || ctx.isAnonymous()
+        if (ctx == null || !ctx.isAccount()
                 || !ctx.hasCapability(InstanceModel.MODEL_ID, idValue, HohenheimAccess.CONFIG)) {
             throw Violations.ofForm(Microcopy.of("instance_not_permitted")
                 .withFilter("scope", "violations"));
@@ -1157,7 +1157,7 @@ public final class TenantWrites {
     public static void requireInstanceLinkAuthority(@Nullable Object instanceIdValue,
                                                     @Nullable Object databaseIdValue) {
         AccessContext ctx = acting();
-        if (!(instanceIdValue instanceof Integer instanceId) || ctx == null || ctx.isAnonymous()
+        if (!(instanceIdValue instanceof Integer instanceId) || ctx == null || !ctx.isAccount()
                 || !HohenheimAccess.hasInstanceCapability(ctx, instanceId,
                     HohenheimAccess.CONFIG)) {
             throw Violations.ofField(InstanceDatabaseModel.INSTANCE_ID.getName(), instanceIdValue,
@@ -1214,7 +1214,7 @@ public final class TenantWrites {
             return;
         }
         AccessContext ctx = acting();
-        if (ctx == null || ctx.isAnonymous()
+        if (ctx == null || !ctx.isAccount()
                 || !ctx.hasCapability(InstanceModel.MODEL_ID, instanceId,
                     HohenheimAccess.CONFIG)) {
             throw Violations.ofForm(Microcopy.of("instance_not_permitted")
@@ -1289,7 +1289,7 @@ public final class TenantWrites {
         // hold. It is bounded instead: a stored row holding a dyndns CREDENTIAL, and
         // VALUE the only column that may move. Without that bound the exemption would be
         // the bypass shape it looks like.
-        if (ctx.isAnonymous()) {
+        if (!ctx.isAccount()) {
             if (stored == null
                     || DynamicDnsService.credentialFor(stored.get(DnsRecordModel.ID)) == null) {
                 throw refusal(DnsRecordModel.NAME.getName(), effective(row, stored, DnsRecordModel.NAME));
@@ -1358,7 +1358,7 @@ public final class TenantWrites {
      */
     private static void checkCredentialWrite(@Nullable Object recordId) {
         AccessContext ctx = acting();
-        boolean authorized = ctx != null && !ctx.isAnonymous() && recordId != null
+        boolean authorized = ctx != null && ctx.isAccount() && recordId != null
             && ctx.hasCapability(DnsRecordModel.MODEL_ID, recordId, HohenheimAccess.DYNDNS);
         if (!authorized) {
             throw refusal(DnsDyndnsCredentialModel.RECORD_ID.getName(), recordId);
@@ -1383,7 +1383,7 @@ public final class TenantWrites {
         if (HohenheimAccess.isAdmin(ctx)) {
             return true;
         }
-        if (ctx.isAnonymous()) {
+        if (!ctx.isAccount()) {
             return false;
         }
         if (!RECORD_TYPES.contains(String.valueOf(stored.get(DnsRecordModel.TYPE)))) {

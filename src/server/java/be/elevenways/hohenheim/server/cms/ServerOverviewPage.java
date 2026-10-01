@@ -139,7 +139,7 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
             .withData(List.of(WidgetFact.badge(
                 text("volume_backend", locales, resolver),
                 WidgetBadge.of(volumeBackend.label().resolve(locales, resolver),
-                    volumeBackend.color(), volumeBackend.icon())))));
+                    volumeBackend.color().token(), volumeBackend.icon())))));
         if (!volumeBackend.supportsQuota() && volumeBackend.filesystemEnforcesQuota()) {
             // The filesystem COULD enforce a quota; this build has no operations for it.
             // Telling the operator to mount something else here would be a lie in the

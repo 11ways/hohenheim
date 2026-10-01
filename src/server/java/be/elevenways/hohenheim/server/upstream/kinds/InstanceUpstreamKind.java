@@ -15,6 +15,8 @@ import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -83,7 +85,7 @@ public final class InstanceUpstreamKind implements UpstreamKindHandler {
 
     @Override public Icon getIcon() { return Icon.of("box"); }
 
-    @Override public String getColor() { return "blue"; }
+    @Override public BadgeColor color() { return ColorHue.BLUE; }
 
     @Override public Schema getSchema() { return SETTINGS_SCHEMA; }
 

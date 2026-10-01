@@ -14,6 +14,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.validation.Violations;
 
 import java.util.List;
@@ -117,9 +118,9 @@ public class InstanceTemplateModel extends Model {
     /** The EXPLICIT reinstall data policy (the plan's requirement: never an implicit wipe). */
     public static final EnumField REINSTALL_POLICY = SCHEMA.addField(EnumField.builder("reinstall_policy")
         .value(REINSTALL_PRESERVE, v -> v.displayName("Preserve data").icon("shield")
-            .label(Microcopy.of("preserve").withFilter("scope", "reinstall_policy")).color("green"))
+            .label(Microcopy.of("preserve").withFilter("scope", "reinstall_policy")).color(ColorHue.GREEN))
         .value(REINSTALL_CLEAR, v -> v.displayName("Clear data").icon("eraser")
-            .label(Microcopy.of("clear").withFilter("scope", "reinstall_policy")).color("red"))
+            .label(Microcopy.of("clear").withFilter("scope", "reinstall_policy")).color(ColorHue.RED))
         .defaultValue(REINSTALL_PRESERVE)
         .label(HohenheimFormCopy.label("reinstall_policy"))
         .help(HohenheimFormCopy.help("reinstall_policy"))

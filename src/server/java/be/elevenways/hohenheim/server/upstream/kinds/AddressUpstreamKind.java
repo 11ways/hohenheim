@@ -20,6 +20,8 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import be.elevenways.zenit.server.net.PinnedUpstreamDial;
 import io.undertow.server.HttpServerExchange;
@@ -117,7 +119,7 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
     public Icon getIcon() { return Icon.of("arrow-right"); }
 
     @Override
-    public String getColor() { return "violet"; }
+    public BadgeColor color() { return ColorHue.VIOLET; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }

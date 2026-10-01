@@ -7,11 +7,11 @@ import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,9 +34,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class UpstreamKindVocabularyTest {
 
+    // The instance-link invariant is a write hook boot installs (HohenheimWriteHooks, after
+    // TenantWrites), so the class boots instead of relying on an earlier class having done so.
     @BeforeAll
     static void bootRegistry() {
-        HohenheimTestRuntime.ensureDatasource();
+        HohenheimTestRuntime.ensureBooted();
     }
 
     private static List<Identifier> registeredIds() {
@@ -147,7 +149,7 @@ class UpstreamKindVocabularyTest {
     /** Both shipped languages must resolve the token to something other than the token. */
     private static void assertLocalized(Microcopy copy, String token, String what) {
         assertThat(copy).as("'%s' declares a %s token", token, what).isNotNull();
-        DefaultCatalogLoader catalogs = new DefaultCatalogLoader();
+        ShippedCatalogs catalogs = new ShippedCatalogs();
         for (String tag : List.of("en", "nl")) {
             String resolved = copy.resolve(LocaleChain.ofTags(tag), catalogs);
             assertThat(resolved)

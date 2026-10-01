@@ -124,7 +124,7 @@ public final class Projects {
             return true;
         }
         Long principalId = ctx.principalId();
-        if (principalId == null || ctx.isAnonymous()) {
+        if (principalId == null || !ctx.isAccount()) {
             return false;
         }
         String subject = subjectOf(project);
@@ -169,7 +169,7 @@ public final class Projects {
                 .orderBy(ProjectModel.ID, SortOrder.ASC).all();
         }
         Long principalId = ctx.principalId();
-        if (principalId == null || ctx.isAnonymous() || !coversOwnedVocabulary(ctx)) {
+        if (principalId == null || !ctx.isAccount() || !coversOwnedVocabulary(ctx)) {
             return List.of();
         }
         return projectsOf(principalId.intValue());

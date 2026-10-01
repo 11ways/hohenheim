@@ -98,7 +98,7 @@ public final class AccessListApi {
             // The ONE gate a create needs of its own: there is no record yet, so the
             // capability walk that guards every other verb here has nothing to walk, and
             // the panel permission is what admits an operator to the form.
-            if (!HohenheimAccess.isAdmin(ctx) && !ctx.hasPermission(ManagePanel.ACCESS.value())) {
+            if (!HohenheimAccess.isAdmin(ctx) && !ctx.hasPermission(ManagePanel.ACCESS)) {
                 conduit.forbidden();
                 return null;
             }

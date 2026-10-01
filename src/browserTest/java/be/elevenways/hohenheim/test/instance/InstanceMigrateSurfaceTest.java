@@ -242,10 +242,10 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
             .withFailMessage("step 1: the refused submit stashed no flash at all -- the"
                 + " operator would see the page reload as if the move had happened")
             .isNotNull();
-        assertThat(sameHostFlash.variant())
+        assertThat(sameHostFlash.toast())
             .withFailMessage("step 1: a refused migration reported variant %s -- anything"
-                + " but ERROR reads as a success", sameHostFlash.variant())
-            .isEqualTo(FlashLevel.ERROR.variant());
+                + " but ERROR reads as a success", sameHostFlash.toast())
+            .isEqualTo(FlashLevel.ERROR.toast());
         assertThat(sameHostFlash.message().key())
             .withFailMessage("step 1: the flash must NAME the refusal (found '%s')",
                 sameHostFlash.message().key())
@@ -267,8 +267,8 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
             .isIn(302, 303);
         FlashNotice otherFlash = popFlash(other);
         assertThat(otherFlash).as("step 2: the second refusal stashed a flash too").isNotNull();
-        assertThat(otherFlash.variant())
-            .as("step 2: also as an ERROR").isEqualTo(FlashLevel.ERROR.variant());
+        assertThat(otherFlash.toast())
+            .as("step 2: also as an ERROR").isEqualTo(FlashLevel.ERROR.toast());
         assertThat(otherFlash.message().key())
             .withFailMessage("step 2: and named as the ADMISSION refusal, so the operator"
                 + " learns what to fix (found '%s')", otherFlash.message().key())

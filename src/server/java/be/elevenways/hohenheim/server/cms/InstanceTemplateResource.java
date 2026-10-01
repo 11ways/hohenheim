@@ -217,7 +217,7 @@ public class InstanceTemplateResource extends RowResource {
                 CommunityScripts.requireVocabularyImplemented(
                     row.get(InstanceTemplateModel.UPDATE_SCRIPT), "update script");
                 row.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
-                row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, ctx.access().principal().id());
+                row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, ctx.access().principalId());
                 this.model().save(row);
                 ActivityLog.record(this.model(), row.get(InstanceTemplateModel.ID),
                     HohenheimActivityAction.APPROVED, "operator approval");

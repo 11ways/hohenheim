@@ -10,6 +10,8 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.server.PasswordHasher;
 import be.elevenways.zenit.common.orm.field.StringMapField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.server.security.SecureTokens;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -75,8 +77,8 @@ public class BasicAuthProviderType implements SiteAuthProviderTypeHandler {
     }
 
     @Override
-    public String getColor() {
-        return "amber";
+    public BadgeColor color() {
+        return ColorHue.AMBER;
     }
 
     @Override

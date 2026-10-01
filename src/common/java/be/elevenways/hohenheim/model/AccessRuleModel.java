@@ -11,6 +11,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -63,10 +64,10 @@ public class AccessRuleModel extends Model {
     public static final EnumField GROUP_SATISFY = GROUP_DATA_SCHEMA.addField(EnumField.builder("satisfy")
         .value(AccessListModel.SATISFY_ANY, v -> v.displayName("Any")
             .label(Microcopy.of("any").withFilter("scope", "access_satisfy"))
-            .icon("check").color("blue"))
+            .icon("check").color(ColorHue.BLUE))
         .value(AccessListModel.SATISFY_ALL, v -> v.displayName("All")
             .label(Microcopy.of("all").withFilter("scope", "access_satisfy"))
-            .icon("list-check").color("orange"))
+            .icon("list-check").color(ColorHue.ORANGE))
         .defaultValue(AccessListModel.SATISFY_ANY)
         .label(HohenheimFormCopy.label("satisfy"))
         .help(HohenheimFormCopy.help("rule_satisfy"))
@@ -129,19 +130,19 @@ public class AccessRuleModel extends Model {
         .label(HohenheimFormCopy.label("rule_type")).help(HohenheimFormCopy.help("rule_type"))
         .value(TYPE_GROUP, v -> v.displayName("Group")
             .label(Microcopy.of("group").withFilter("scope", "access_rule_type"))
-            .icon("layer-group").color("gray").schema(GROUP_DATA_SCHEMA))
+            .icon("layer-group").color(ColorHue.GRAY).schema(GROUP_DATA_SCHEMA))
         .value(TYPE_BASIC_AUTH, v -> v.displayName("Basic auth")
             .label(Microcopy.of("basic_auth").withFilter("scope", "access_rule_type"))
-            .icon("lock").color("amber").schema(BASIC_AUTH_DATA_SCHEMA))
+            .icon("lock").color(ColorHue.AMBER).schema(BASIC_AUTH_DATA_SCHEMA))
         .value(TYPE_IP_ALLOW, v -> v.displayName("Allowed network")
             .label(Microcopy.of("ip_allow").withFilter("scope", "access_rule_type"))
-            .icon("check").color("green").schema(NETWORK_DATA_SCHEMA))
+            .icon("check").color(ColorHue.GREEN).schema(NETWORK_DATA_SCHEMA))
         .value(TYPE_IP_DENY, v -> v.displayName("Denied network")
             .label(Microcopy.of("ip_deny").withFilter("scope", "access_rule_type"))
-            .icon("ban").color("red").schema(NETWORK_DATA_SCHEMA))
+            .icon("ban").color(ColorHue.RED).schema(NETWORK_DATA_SCHEMA))
         .value(TYPE_AUTH_PROVIDER, v -> v.displayName("Auth provider")
             .label(Microcopy.of("auth_provider").withFilter("scope", "access_rule_type"))
-            .icon("shield-halved").color("indigo").schema(AUTH_PROVIDER_DATA_SCHEMA))
+            .icon("shield-halved").color(ColorHue.INDIGO).schema(AUTH_PROVIDER_DATA_SCHEMA))
         .build());
 
     /** Type-specific configuration, shaped by the sub-schema the rule's TYPE declares. */

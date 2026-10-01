@@ -10,6 +10,8 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import io.undertow.util.Headers;
 
 import java.util.Map;
@@ -64,7 +66,7 @@ public class RedirectUpstreamKind implements UpstreamKindHandler {
     public Icon getIcon() { return Icon.of("up-right-from-square"); }
 
     @Override
-    public String getColor() { return "cyan"; }
+    public BadgeColor color() { return ColorHue.CYAN; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }

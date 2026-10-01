@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
@@ -173,8 +174,8 @@ class ServerOverviewTest extends HohenheimTestBase {
         //    record id), so an entry written about ANOTHER host never lands here. The decoy
         //    is what makes this a filter assertion rather than a "band exists" one.
         var servers = Models.get(ServerModel.class);
-        ActivityLog.record(servers, hostId, "admit", "overview band fixture");
-        ActivityLog.record(servers, hostId + 100000, "admit", "decoy fixture");
+        ActivityLog.record(servers, hostId, HohenheimActivityAction.RECONCILED, "overview band fixture");
+        ActivityLog.record(servers, hostId + 100000, HohenheimActivityAction.RECONCILED, "decoy fixture");
         Object mine = latestActivityId(String.valueOf(hostId));
         Object theirs = latestActivityId(String.valueOf(hostId + 100000));
         assertThat(mine).as("step 5: this host has an activity row").isNotNull();

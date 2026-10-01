@@ -4,7 +4,7 @@ import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.format.MessageParseException;
 import be.elevenways.protoblast.common.i18n.format.ZenitMessageFormat;
 import be.elevenways.zenit.microcopy.Translation;
-import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import org.junit.jupiter.api.Test;
 
 import java.net.URL;
@@ -28,13 +28,13 @@ class MicrocopyCatalogParsesTest {
 
     @Test
     void everyShippedMicrocopyMessageParses() {
-        DefaultCatalogLoader loader = new DefaultCatalogLoader();
+        ShippedCatalogs loader = new ShippedCatalogs();
         List<String> failures = new ArrayList<>();
         int parsed = 0;
         for (String tag : List.of("en", "nl")) {
             LocaleChain chain = LocaleChain.ofTags(tag);
             for (String key : loader.keysFor(chain)) {
-                for (Translation candidate : loader.findCandidates(key, chain)) {
+                for (Translation candidate : loader.variants(key, chain).stream().map(Translation::of).toList()) {
                     String source = candidate.getSource();
                     if (source == null) {
                         continue;
@@ -75,10 +75,10 @@ class MicrocopyCatalogParsesTest {
         Path resources = Path.of("src/server/resources");
         assertThat(Files.isDirectory(resources))
             .as("the check needs the hohenheim project dir as its working directory").isTrue();
-        DefaultCatalogLoader loader;
+        ShippedCatalogs loader;
         try (URLClassLoader own = new URLClassLoader(
                 new URL[] {resources.toUri().toURL()}, null)) {
-            loader = new DefaultCatalogLoader("META-INF/microcopy/", own);
+            loader = new ShippedCatalogs("META-INF/microcopy/", own);
             TreeSet<String> english = pairsOf(loader, "en");
             TreeSet<String> dutch = pairsOf(loader, "nl");
             assertSymmetric(english, dutch);
@@ -119,11 +119,12 @@ class MicrocopyCatalogParsesTest {
 
         try (URLClassLoader own = new URLClassLoader(
                 new URL[] {resources.toUri().toURL()}, null)) {
-            DefaultCatalogLoader loader = new DefaultCatalogLoader("META-INF/microcopy/", own);
+            ShippedCatalogs loader = new ShippedCatalogs("META-INF/microcopy/", own);
 
             for (String tag : List.of("en", "nl")) {
                 for (Translation candidate
-                        : loader.findCandidates("test_failed", LocaleChain.ofTags(tag))) {
+                        : loader.variants("test_failed", LocaleChain.ofTags(tag)).stream()
+                            .map(Translation::of).toList()) {
                     String source = candidate.getSource();
 
                     if (source == null) {
@@ -145,11 +146,11 @@ class MicrocopyCatalogParsesTest {
     }
 
     /** Every {@code key|filters} pair one locale's catalog declares. */
-    private static TreeSet<String> pairsOf(DefaultCatalogLoader loader, String tag) {
+    private static TreeSet<String> pairsOf(ShippedCatalogs loader, String tag) {
         LocaleChain chain = LocaleChain.ofTags(tag);
         TreeSet<String> pairs = new TreeSet<>();
         for (String key : loader.keysFor(chain)) {
-            for (Translation candidate : loader.findCandidates(key, chain)) {
+            for (Translation candidate : loader.variants(key, chain).stream().map(Translation::of).toList()) {
                 TreeSet<String> filters = new TreeSet<>();
                 for (Translation.Filter filter : candidate.getFilters()) {
                     filters.add(filter.getName() + "=" + filter.getValue());

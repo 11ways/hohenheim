@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.ActivitySources;
 import be.elevenways.zenit.common.ZenitModule;
@@ -32,7 +33,8 @@ public final class HohenheimSources implements ZenitModule {
      * constant (the server-side HohenheimPanel.ACCESS is the same string) so
      * common-registered sources can declare it without a server import.
      */
-    public static final Permission ADMIN_ACCESS = Permission.of("hohenheim.admin.access");
+    public static final Permission ADMIN_ACCESS = Permission.declare("hohenheim.admin.access",
+        Microcopy.of("hohenheim_admin_access").withFilter("scope", "permission"), Permission.Delegation.DELEGABLE);
 
     /**
      * The delegated /manage eligibility gate, kept as a common constant for the same
@@ -40,7 +42,8 @@ public final class HohenheimSources implements ZenitModule {
      * lanes) must name it without a server import. The server-side ManagePanel.ACCESS
      * aliases this so the two faces can never spell it differently.
      */
-    public static final Permission MANAGE_ACCESS = Permission.of("hohenheim.manage.access");
+    public static final Permission MANAGE_ACCESS = Permission.declare("hohenheim.manage.access",
+        Microcopy.of("hohenheim_manage_access").withFilter("scope", "permission"), Permission.Delegation.DELEGABLE);
 
     /**
      * Managing a host's install media: publishing ISOs onto its storage and removing
@@ -54,7 +57,8 @@ public final class HohenheimSources implements ZenitModule {
      * this permission unable to say no to anyone. The bootstrap operator holds the "*"
      * grant and is therefore unaffected.
      */
-    public static final Permission MEDIA_MANAGE = Permission.of("hohenheim.media.manage");
+    public static final Permission MEDIA_MANAGE = Permission.declare("hohenheim.media.manage",
+        Microcopy.of("hohenheim_media_manage").withFilter("scope", "permission"), Permission.Delegation.DELEGABLE);
 
     public static final Identifier SPAMSERVICE_SYSTEM_USERS =
         HohenheimIds.id("spamservice_system_users");

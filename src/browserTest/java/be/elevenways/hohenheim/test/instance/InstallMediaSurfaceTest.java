@@ -45,6 +45,8 @@ import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -860,7 +862,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
 
         @Override public Icon getIcon() { return Icon.of("flask"); }
 
-        @Override public String getColor() { return "gray"; }
+        @Override public BadgeColor color() { return ColorHue.GRAY; }
 
         @Override public Schema getSchema() { return SETTINGS_SCHEMA; }
 

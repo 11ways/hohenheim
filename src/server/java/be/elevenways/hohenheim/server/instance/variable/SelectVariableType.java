@@ -9,6 +9,8 @@ import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.ListField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -45,7 +47,7 @@ public final class SelectVariableType implements VariableTypeHandler {
     public Icon getIcon() { return Icon.of("list"); }
 
     @Override
-    public String getColor() { return "purple"; }
+    public BadgeColor color() { return ColorHue.PURPLE; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }

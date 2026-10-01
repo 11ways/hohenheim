@@ -50,10 +50,10 @@ final class OperationGates {
             return;
         }
         AccessContext ctx = TenantWrites.acting();
-        // ctx.isAnonymous() aligns this with requireDatabaseCapability. The walk already
+        // !ctx.isAccount() aligns this with requireDatabaseCapability. The walk already
         // returns false for an anonymous principal before any lookup, so this is an explicit
         // fail-closed spelling for readability, not a behaviour change.
-        if (ctx == null || ctx.isAnonymous()
+        if (ctx == null || !ctx.isAccount()
                 || !HohenheimAccess.hasInstanceCapability(ctx, instanceId, capability)) {
             throw Violations.ofForm(instanceNotPermitted());
         }
@@ -101,7 +101,7 @@ final class OperationGates {
      */
     private static @Nullable Microcopy destroyRefusal(@NonNull AccessContext ctx, int instanceId,
                                                       boolean memoized) {
-        if (ctx.isAnonymous()) {
+        if (!ctx.isAccount()) {
             return instanceNotPermitted();
         }
         boolean holds = memoized
@@ -134,7 +134,7 @@ final class OperationGates {
             return;
         }
         AccessContext ctx = TenantWrites.acting();
-        if (ctx == null || ctx.isAnonymous() || !HohenheimAccess.isAdmin(ctx)) {
+        if (ctx == null || !ctx.isAccount() || !HohenheimAccess.isAdmin(ctx)) {
             throw Violations.ofForm(instanceNotPermitted());
         }
     }
@@ -158,7 +158,7 @@ final class OperationGates {
             return;
         }
         AccessContext ctx = TenantWrites.acting();
-        if (ctx == null || ctx.isAnonymous()
+        if (ctx == null || !ctx.isAccount()
                 || !HohenheimAccess.hasDatabaseCapability(ctx, databaseId, capability)) {
             throw databaseRefusal();
         }

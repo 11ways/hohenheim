@@ -7,6 +7,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.ColorHue;
 
 /**
  * A driver-level snapshot of one instance's volumes: a point-in-time copy stored on
@@ -35,9 +36,9 @@ public class InstanceSnapshotModel extends Model {
 
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_COMPLETE, v -> v.displayName("Complete").icon("circle-check")
-            .label(Microcopy.of("complete").withFilter("scope", "snapshot_status")).color("green"))
+            .label(Microcopy.of("complete").withFilter("scope", "snapshot_status")).color(ColorHue.GREEN))
         .value(STATUS_FAILED, v -> v.displayName("Failed").icon("circle-exclamation")
-            .label(Microcopy.of("failed").withFilter("scope", "snapshot_status")).color("red"))
+            .label(Microcopy.of("failed").withFilter("scope", "snapshot_status")).color(ColorHue.RED))
         .defaultValue(STATUS_FAILED)
         .build());
 

@@ -17,7 +17,7 @@ import be.elevenways.protoblast.guard.SourceRuleScanner;
 import be.elevenways.protoblast.guard.Violation;
 import be.elevenways.zenit.common.setting.ContentLocales;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -100,7 +100,7 @@ class DisplayNameLocalizationTest {
      */
     @Test
     void everyRegisteredTypeLabelResolvesInBothLocales() {
-        DefaultCatalogLoader catalogs = new DefaultCatalogLoader();
+        ShippedCatalogs catalogs = new ShippedCatalogs();
         List<String> broken = new ArrayList<>();
 
         // Touch the registration hooks so BlastAutoLoadInit has populated both registries.
@@ -167,7 +167,7 @@ class DisplayNameLocalizationTest {
      */
     @Test
     void everyTypeLabelSurvivesBeingReadBackOutOfARefusal() {
-        DefaultCatalogLoader catalogs = new DefaultCatalogLoader();
+        ShippedCatalogs catalogs = new ShippedCatalogs();
         LocaleChain described = LocaleChain.of(ContentLocales.getDefault());
         List<String> broken = new ArrayList<>();
 
@@ -210,7 +210,7 @@ class DisplayNameLocalizationTest {
         return !registration.getClass().getName().startsWith(TEST_PACKAGE);
     }
 
-    private static void checkRefusal(Microcopy label, String what, DefaultCatalogLoader catalogs,
+    private static void checkRefusal(Microcopy label, String what, ShippedCatalogs catalogs,
                                      LocaleChain described, List<String> broken) {
         String message = Violations.ofField("kind", "unused",
             Microcopy.of("instance_kind_owner_managed").withFilter("scope", "violations")
@@ -222,7 +222,7 @@ class DisplayNameLocalizationTest {
         }
     }
 
-    private static void check(Microcopy label, String what, DefaultCatalogLoader catalogs,
+    private static void check(Microcopy label, String what, ShippedCatalogs catalogs,
                               List<String> broken) {
         for (String tag : List.of("en", "nl")) {
             String resolved = label.resolve(LocaleChain.ofTags(tag), catalogs);

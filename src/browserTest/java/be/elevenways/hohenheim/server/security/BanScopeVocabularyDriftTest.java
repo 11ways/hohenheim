@@ -33,7 +33,7 @@ class BanScopeVocabularyDriftTest {
             EnumField.EnumValue value = BanModel.SCOPE.getValues().get(scope.token());
             assertThat(value.getDisplayName()).as("step 2: " + scope + " display name")
                 .isEqualTo(scope.displayName());
-            assertThat(value.getColor()).as("step 2: " + scope + " color").isEqualTo(scope.color());
+            assertThat(value.color()).as("step 2: " + scope + " color").isEqualTo(scope.color());
             assertThat(value.getLabel()).as("step 2: " + scope + " label").isEqualTo(scope.label());
         }
 

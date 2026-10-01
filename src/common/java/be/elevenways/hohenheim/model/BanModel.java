@@ -13,6 +13,7 @@ import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.ColorHue;
 
 /**
  * An IP ban: auto-created by the threat scorer or the spamservice reputation
@@ -37,10 +38,10 @@ public class BanModel extends Model {
     public static final EnumField SOURCE = SCHEMA.addField(EnumField.builder("source")
         .value(SOURCE_AUTO, v -> v.displayName("Auto")
             .label(Microcopy.of("auto").withFilter("scope", "ban_source"))
-            .icon("robot").color("orange"))
+            .icon("robot").color(ColorHue.ORANGE))
         .value(SOURCE_MANUAL, v -> v.displayName("Manual")
             .label(Microcopy.of("manual").withFilter("scope", "ban_source"))
-            .icon("pen").color("blue"))
+            .icon("pen").color(ColorHue.BLUE))
         .label(HohenheimFormCopy.label("ban_source"))
         .build());
     /**

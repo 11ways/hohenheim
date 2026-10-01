@@ -134,7 +134,7 @@ class ErrorHandlingTest extends HohenheimTestBase {
         assertThat(surface.count())
             .as("the error surfaces instead of the navigation silently failing").isEqualTo(1);
         assertThat(surface.getAttribute("variant"))
-            .as("as a failure, not a notice").isEqualTo(FlashLevel.ERROR.variant());
+            .as("as a failure, not a notice").isEqualTo(FlashLevel.ERROR.toast().token());
         assertThat(surface.textContent())
             .as("stated in words, and without quoting the exception in this posture")
             .isNotBlank()

@@ -8,6 +8,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.validation.Violations;
 
 /**
@@ -39,10 +40,10 @@ public class AccessListModel extends Model {
     public static final EnumField SATISFY = SCHEMA.addField(EnumField.builder("satisfy")
         .value(SATISFY_ANY, v -> v.displayName("Any")
             .label(Microcopy.of("any").withFilter("scope", "access_satisfy"))
-            .icon("check").color("blue"))
+            .icon("check").color(ColorHue.BLUE))
         .value(SATISFY_ALL, v -> v.displayName("All")
             .label(Microcopy.of("all").withFilter("scope", "access_satisfy"))
-            .icon("list-check").color("orange"))
+            .icon("list-check").color(ColorHue.ORANGE))
         .defaultValue(SATISFY_ANY)
         .label(HohenheimFormCopy.label("satisfy"))
         .build());

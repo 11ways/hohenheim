@@ -19,13 +19,14 @@ import be.elevenways.hohenheim.server.cms.AdminActivityResource;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.server.ServerZenitRuntime;
-import be.elevenways.zenit.server.http.RateLimitMiddleware;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
+import be.elevenways.zenit.test.support.RateLimitExemption;
 import com.microsoft.playwright.Locator;
 import org.junit.jupiter.api.*;
 
@@ -291,7 +292,7 @@ class AdminPagesTest extends HohenheimTestBase {
             .orderBy(ActivityModel.ID, SortOrder.DESC)
             .first();
         assertThat(logged).as("the site creation was logged").isNotNull();
-        assertThat((String) logged.get(ActivityModel.ACTION)).isEqualTo("create");
+        assertThat((String) logged.get(ActivityModel.ACTION)).isEqualTo(ZenitActivityAction.CREATE.id().toString());
         assertThat(adminGet("/admin/activity?filter.record_id=" + siteId).body())
             .as("the activity resource is mounted in the hohenheim panel and lists the creation")
             .contains("/admin/activity/" + logged.get(ActivityModel.ID));
@@ -761,9 +762,9 @@ class AdminPagesTest extends HohenheimTestBase {
             domainModel.delete(bare);
         }
 
-        // The base installs a disable-all resolver (suite-wide buckets would
-        // trip across classes); unset it so the DECLARED policies apply.
-        RateLimitMiddleware.setPolicyResolver(null);
+        // The base exempts every endpoint (suite-wide buckets would trip
+        // across classes); lift the exemption so the DECLARED policies apply.
+        RateLimitExemption.restore();
         try {
             boolean limited = false;
             for (int i = 0; i < 40 && !limited; i++) {
@@ -773,7 +774,7 @@ class AdminPagesTest extends HohenheimTestBase {
                 .as("the declared download policy (30/min) must answer 429 under a hammer")
                 .isTrue();
         } finally {
-            RateLimitMiddleware.setPolicyResolver((conduit, endpoint, declared) -> null);
+            RateLimitExemption.exemptAll();
         }
     }
 
@@ -875,7 +876,7 @@ class AdminPagesTest extends HohenheimTestBase {
             assertThat(notice)
                 .as("step 1: the activity resource declares a recording-off notice")
                 .isNotNull();
-            String sentence = notice.resolve(LocaleChain.ofTags("en"), new DefaultCatalogLoader());
+            String sentence = notice.resolve(LocaleChain.ofTags("en"), new ShippedCatalogs());
 
             // 2. The dashboard band carries it, above the list it explains.
             navigateToApp("/admin/dashboard");

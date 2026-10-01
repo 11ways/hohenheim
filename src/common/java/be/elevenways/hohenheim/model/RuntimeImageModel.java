@@ -9,6 +9,7 @@ import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 
 import java.util.List;
 
@@ -113,7 +114,7 @@ public class RuntimeImageModel extends Model {
 
     public static final EnumField UID_MODE = SCHEMA.addField(EnumField.builder("uid_mode")
         .value(UID_MAPPED, v -> v.displayName("Mapped uid").icon("user-shield")
-            .label(Microcopy.of(UID_MAPPED).withFilter("scope", "uid_mode")).color("secondary"))
+            .label(Microcopy.of(UID_MAPPED).withFilter("scope", "uid_mode")).color(BadgeVariant.SECONDARY))
         .defaultValue(UID_MAPPED)
         .label(HohenheimFormCopy.label("uid_mode"))
         .help(HohenheimFormCopy.help("uid_mode"))

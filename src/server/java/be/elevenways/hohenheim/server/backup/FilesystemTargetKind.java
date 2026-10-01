@@ -6,6 +6,8 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -50,7 +52,7 @@ public final class FilesystemTargetKind implements BackupTargetKindHandler {
     public Icon getIcon() { return Icon.of("folder"); }
 
     @Override
-    public String getColor() { return "orange"; }
+    public BadgeColor color() { return ColorHue.ORANGE; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }

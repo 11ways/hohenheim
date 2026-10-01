@@ -23,6 +23,7 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
@@ -176,8 +177,8 @@ class StackAuditTest {
     }
 
     private static Accountability operator(String id) {
-        return new Accountability(id, "Operator " + id, "10.0.0.1", "junit",
-            Accountability.ORIGIN_WEB);
+        return new Accountability(id, PrincipalRef.account(Long.parseLong(id)).storedKind(), "Operator " + id,
+            "10.0.0.1", "junit", Accountability.ORIGIN_WEB);
     }
 
     private static int stackRecord(String name) {

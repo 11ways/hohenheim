@@ -19,6 +19,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.security.Principal;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -198,7 +199,7 @@ public final class InstanceShell {
 
         // GATE 1, first and on the funnel: nothing about the instance is resolved for a
         // caller who may not shell into it, so this is not an existence oracle either.
-        if (principal == null || principal.isAnonymous()
+        if (principal == null || !principal.kind().account()
                 || !HohenheimAccess.hasInstanceCapability(principal, instanceId,
                     HohenheimAccess.SHELL)) {
             throw Violations.ofForm(Microcopy.of("instance_not_permitted")
@@ -379,8 +380,9 @@ public final class InstanceShell {
 
     /** The same attribution shape zenit-auth's request resolver produces, off-request. */
     private static @NonNull Accountability accountabilityOf(@NonNull Principal principal) {
-        return new Accountability(String.valueOf(principal.id()), principal.displayName(),
-            null, null, Accountability.ORIGIN_WEB);
+        PrincipalRef actor = principal.reference();
+        return new Accountability(actor == null ? null : String.valueOf(actor.id()),
+            actor == null ? null : actor.storedKind(), principal.displayName(), null, null, Accountability.ORIGIN_WEB);
     }
 
     private static void startSweeper() {

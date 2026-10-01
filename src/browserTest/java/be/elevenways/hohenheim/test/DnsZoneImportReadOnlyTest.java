@@ -26,7 +26,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.security.Permission;
+import be.elevenways.zenit.test.support.TestPermissions;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.Test;
@@ -105,7 +105,7 @@ class DnsZoneImportReadOnlyTest extends HohenheimTestBase {
 
         ZonesUnderSites(Map<Integer, Integer> siteOfZone) {
             super(Identifier.of("hohenheim_test", "zones_under_sites"), "zones-under-sites",
-                Microcopy.of("zones_under_sites"), Permission.of("hohenheim-test.zones_under_sites"));
+                Microcopy.of("zones_under_sites"), TestPermissions.declared("hohenheim_test.zones_under_sites"));
             this.peers = List.of(new Sites(), new SiteOwnedZones(siteOfZone));
         }
 

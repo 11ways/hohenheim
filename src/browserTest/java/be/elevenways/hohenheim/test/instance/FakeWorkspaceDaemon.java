@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -180,7 +181,7 @@ final class FakeWorkspaceDaemon implements InstanceRuntime, ExecSupport {
         @Override public @NonNull Microcopy getLabel() { return this.real.getLabel(); }
         @Override public @NonNull Microcopy getDescription() { return this.real.getDescription(); }
         @Override public Icon getIcon() { return this.real.getIcon(); }
-        @Override public String getColor() { return this.real.getColor(); }
+        @Override public BadgeColor color() { return this.real.color(); }
         @Override public Schema getSchema() { return this.real.getSchema(); }
         @Override public @NonNull Set<String> supportedRuntimes() {
             return this.real.supportedRuntimes();

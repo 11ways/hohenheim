@@ -19,7 +19,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.rules.RuleCompiler;
 import be.elevenways.zenit.common.orm.query.rules.RuleVocabulary;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -48,7 +48,7 @@ class DependentFieldApplicabilityTest extends HohenheimTestBase {
      */
     @Test
     void theRuntimeImagePickerSaysWhyItOffersNothing() {
-        DefaultCatalogLoader catalogs = new DefaultCatalogLoader();
+        ShippedCatalogs catalogs = new ShippedCatalogs();
         // Built as InstanceResource declares it, off the kind handlers' own facts, minus the
         // Incus-only kinds: this test never picks one.
         HohenheimPickRules.RuntimeImageRules rules = new HohenheimPickRules.RuntimeImageRules(
@@ -101,7 +101,7 @@ class DependentFieldApplicabilityTest extends HohenheimTestBase {
      */
     @Test
     void theInstancePickerSaysWhyItOffersNothing() {
-        DefaultCatalogLoader catalogs = new DefaultCatalogLoader();
+        ShippedCatalogs catalogs = new ShippedCatalogs();
         // Built exactly as SiteResource declares it, off the kind handlers' own facts.
         HohenheimPickRules.UpstreamInstanceRules rules = new HohenheimPickRules.UpstreamInstanceRules(
             "upstream_kind",
