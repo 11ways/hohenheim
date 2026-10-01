@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -213,7 +214,7 @@ final class SiteControlHandlers {
                 return HandlerSupport.redirectUntyped(backUrl);
             }
             ActivityLog.record(Models.get(InstanceModel.class),
-                instanceId, "console_command", command);
+                instanceId, HohenheimActivityAction.CONSOLE_COMMAND, command);
             return HandlerSupport.redirectUntyped(backUrl);
         });
     }

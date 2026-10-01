@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.dns.DnsTsig;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -68,7 +69,7 @@ final class DnsPeerApiHandlers {
                 port(form.get("transfer_port")));
             Row peer = installed.peer();
             ActivityLog.record(Models.get(DnsPeerModel.class), peer.get(DnsPeerModel.ID),
-                "updated", keyName);
+                ZenitActivityAction.UPDATE, keyName);
             Blast.log("DNS: transfer key", keyName, "installed for peer",
                 peer.get(DnsPeerModel.NAME), "transferring from", installed.transferHost());
             return new JsonResult<Object>(new DnsPeerKeyResponse("ok", keyName,

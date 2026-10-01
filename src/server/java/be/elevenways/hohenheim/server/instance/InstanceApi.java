@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.instance.VariableKind;
@@ -16,6 +17,7 @@ import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -165,7 +167,7 @@ public final class InstanceApi {
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "console_command",
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.CONSOLE_COMMAND,
                 command);
             return ApiConduits.json(Map.of("id", instanceId, "status", "sent"));
         });
@@ -182,7 +184,7 @@ public final class InstanceApi {
             int instanceId = row.get(InstanceModel.ID);
             try {
                 int backupId = new InstanceBackups().backupNow(instanceId);
-                ActivityLog.record(Models.get(InstanceModel.class), instanceId, "backup",
+                ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.BACKUP,
                     "backup #" + backupId);
                 return ApiConduits.json(Map.of("id", instanceId, "backup", backupId));
             } catch (Violations refused) {
@@ -203,7 +205,7 @@ public final class InstanceApi {
             try {
                 int snapshotId = new InstanceSnapshots().create(instanceId,
                     emptyToNull(ApiConduits.formValue(conduit, "note")));
-                ActivityLog.record(Models.get(InstanceModel.class), instanceId, "snapshot",
+                ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.SNAPSHOT,
                     "snapshot #" + snapshotId);
                 return ApiConduits.json(Map.of("id", instanceId, "snapshot", snapshotId));
             } catch (Violations refused) {
@@ -235,7 +237,7 @@ public final class InstanceApi {
                     HandlerSupport.submittedString(form, "name"),
                     HandlerSupport.submittedInteger(form, "server_id"), form, ctx);
                 Row created = reload(instanceId);
-                ActivityLog.record(Models.get(InstanceModel.class), instanceId, "created",
+                ActivityLog.record(Models.get(InstanceModel.class), instanceId, ZenitActivityAction.CREATE,
                     created.get(InstanceModel.NAME));
                 return ApiConduits.json(projection(created));
             } catch (Violations refused) {
@@ -267,7 +269,7 @@ public final class InstanceApi {
                 conduit.forbidden();
                 return null;
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "deleted", name);
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, ZenitActivityAction.DELETE, name);
             return ApiConduits.json(Map.of("id", instanceId, "status", "deleted"));
         });
 
@@ -321,7 +323,7 @@ public final class InstanceApi {
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "variable_set", key);
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.VARIABLE_SET, key);
             return ApiConduits.json(Map.of("id", instanceId, "status", "set", "key", key));
         });
 
@@ -351,7 +353,7 @@ public final class InstanceApi {
                 return ApiConduits.refusal(conduit, Violations.ofField("key", key,
                     ApiConduits.violationText("variable_not_found")));
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "variable_deleted",
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.VARIABLE_DELETED,
                 key);
             return ApiConduits.json(Map.of("id", instanceId, "status", "deleted", "key", key));
         });
@@ -416,7 +418,7 @@ public final class InstanceApi {
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "device_attached",
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.DEVICE_ATTACHED,
                 type + " " + name);
             return ApiConduits.json(Map.of("id", instanceId, "status", "attached",
                 "device", name, "type", type));
@@ -441,7 +443,7 @@ public final class InstanceApi {
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "device_resized",
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.DEVICE_RESIZED,
                 name);
             return ApiConduits.json(Map.of("id", instanceId, "status", "resized",
                 "device", name, "size_gb", sizeGb != null ? sizeGb : 0));
@@ -463,7 +465,7 @@ public final class InstanceApi {
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "device_detached",
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.DEVICE_DETACHED,
                 name);
             return ApiConduits.json(Map.of("id", instanceId, "status", "detached",
                 "device", name));
@@ -508,7 +510,7 @@ public final class InstanceApi {
         try {
             int instanceId = (Integer) ResourceWrites.create(ApiConduits.adminPanel(), INSTANCES, form, ctx);
             Row created = reload(instanceId);
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "created",
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, ZenitActivityAction.CREATE,
                 created.get(InstanceModel.NAME));
             return ApiConduits.json(projection(created));
         } catch (Violations refused) {

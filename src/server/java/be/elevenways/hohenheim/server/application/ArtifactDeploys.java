@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.application;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ArtifactOperationModel;
 import be.elevenways.hohenheim.model.ArtifactSourceModel;
@@ -136,7 +137,7 @@ public final class ArtifactDeploys {
                 });
                 completed = true;
                 ActivityLog.record(Models.get(InstanceModel.class), applicationId,
-                    InstanceService.ACTIVITY_DEPLOY_ACTION, trigger.word());
+                    HohenheimActivityAction.DEPLOYED, trigger.word());
             } catch (IOException invalid) {
                 finish(operation, ArtifactOperationModel.FAILED, "artifact_unreadable");
             } catch (RuntimeException failed) {

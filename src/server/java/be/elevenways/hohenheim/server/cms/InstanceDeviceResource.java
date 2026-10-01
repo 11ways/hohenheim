@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.HohenheimSlugs;
@@ -23,6 +24,7 @@ import be.elevenways.zenit.common.data.RowScope;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -179,7 +181,7 @@ public class InstanceDeviceResource extends RowResource {
             case CDROM -> this.devices.attachCdrom(instanceId, name,
                 String.valueOf(coerced.getOrDefault("source_media", "")).trim());
         }
-        ActivityLog.record(Models.get(InstanceModel.class), instanceId, "device_attached", null);
+        ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.DEVICE_ATTACHED, null);
 
         Row created = Models.get(InstanceDeviceModel.class).find()
             .where(InstanceDeviceModel.INSTANCE_ID.eq(instanceId))
@@ -238,7 +240,7 @@ public class InstanceDeviceResource extends RowResource {
             throw Violations.ofForm(CmsSupport.violationText("device_resize_not_a_disk"));
         }
         this.devices.resizeDisk(instanceId, name, sizeOf(coerced, existing));
-        ActivityLog.record(Models.get(InstanceModel.class), instanceId, "device_resized", null);
+        ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.DEVICE_RESIZED, null);
     }
 
     /** Delete IS the detach: daemon first (volume deleted VERIFIED), then the row. */
@@ -246,7 +248,7 @@ public class InstanceDeviceResource extends RowResource {
     public void deleteRow(@NonNull Row existing, @NonNull AccessContext accessContext) {
         int instanceId = instanceIdOf(existing);
         String name = existing.get(InstanceDeviceModel.NAME);
-        ActivityLog.withAction(ActivityLog.ACTION_DELETE, "device_detached",
+        ActivityLog.withAction(ZenitActivityAction.DELETE, "device_detached",
             () -> this.devices.detach(instanceId, name));
     }
 

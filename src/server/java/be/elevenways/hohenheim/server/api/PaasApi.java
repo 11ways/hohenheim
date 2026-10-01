@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.api;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ArtifactOperationModel;
@@ -644,7 +645,7 @@ public final class PaasApi {
                 return ApiConduits.refusal(conduit, refused);
             }
             ActivityLog.record(Models.get(EnvironmentModel.class), environmentId,
-                "variable_set", key);
+                HohenheimActivityAction.VARIABLE_SET, key);
             return ApiConduits.json(Map.of("id", environmentId, "status", "set", "key", key));
         });
 
@@ -660,7 +661,7 @@ public final class PaasApi {
                     ApiConduits.violationText("variable_not_found")));
             }
             ActivityLog.record(Models.get(EnvironmentModel.class), environmentId,
-                "variable_deleted", key);
+                HohenheimActivityAction.VARIABLE_DELETED, key);
             return ApiConduits.json(Map.of("id", environmentId, "status", "deleted", "key", key));
         });
     }

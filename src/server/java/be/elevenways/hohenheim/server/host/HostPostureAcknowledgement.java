@@ -5,6 +5,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Accountability;
@@ -65,7 +66,7 @@ public final class HostPostureAcknowledgement {
         }
         String label = who.actorLabel() != null ? who.actorLabel() : actor;
         String posture = server.get(ServerModel.POSTURE);
-        ActivityLog.withAction(ActivityLog.ACTION_UPDATE, ACTIVITY_DETAIL, () -> {
+        ActivityLog.withAction(ZenitActivityAction.UPDATE, ACTIVITY_DETAIL, () -> {
             server.set(ServerModel.ACKNOWLEDGED_POSTURE, posture);
             server.set(ServerModel.ACKNOWLEDGED_WARNING_VERSION,
                 ServerModel.POSTURE_WARNING_VERSION);

@@ -20,6 +20,7 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -135,7 +136,7 @@ public class InstanceSnapshotResource extends RowResource {
     @Override
     public void deleteRow(@NonNull Row existing, @NonNull AccessContext accessContext) {
         Integer id = existing.get(InstanceSnapshotModel.ID);
-        ActivityLog.withAction(ActivityLog.ACTION_DELETE, "delete_snapshot",
+        ActivityLog.withAction(ZenitActivityAction.DELETE, "delete_snapshot",
             () -> this.snapshots.delete(id));
     }
 

@@ -18,6 +18,7 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -101,7 +102,7 @@ public class InstanceBackupResource extends RowResource {
     @Override
     public void deleteRow(@NonNull Row existing, @NonNull AccessContext accessContext) {
         Integer id = existing.get(InstanceBackupModel.ID);
-        ActivityLog.withAction(ActivityLog.ACTION_DELETE, "delete_backup",
+        ActivityLog.withAction(ZenitActivityAction.DELETE, "delete_backup",
             () -> this.backups.delete(id));
     }
 
@@ -124,7 +125,7 @@ public class InstanceBackupResource extends RowResource {
                 // resembled. Traced 2026-08-07: restoreToNew ends in a real
                 // InstanceModel.save() of the new record, so a create hook DOES fire
                 // inside and there is a row for this name to rename.
-                ActivityLog.withAction(ActivityLog.ACTION_CREATE, "restore_backup",
+                ActivityLog.withAction(ZenitActivityAction.CREATE, "restore_backup",
                     () -> restored.set(this.backups.restoreToNew(
                         row.get(InstanceBackupModel.ID), null, null)));
                 // A restore that could not bring everything back says so HERE, at the

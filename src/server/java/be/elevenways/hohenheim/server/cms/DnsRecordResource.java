@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
@@ -404,7 +405,7 @@ public class DnsRecordResource extends RowResource {
     /** Arms (or re-keys) the record's dyndns credential; the plaintext is disclosed ONCE in the toast. */
     private CmsActionResult mintDynamicToken(@NonNull Row row) {
         String token = DynamicDnsService.mintFor(row.get(DnsRecordModel.ID));
-        ActivityLog.record(this.model(), row.get(DnsRecordModel.ID), "dyndns_token_minted", null);
+        ActivityLog.record(this.model(), row.get(DnsRecordModel.ID), HohenheimActivityAction.DYNDNS_TOKEN_MINTED, null);
 
         // AIDEV-NOTE: only the digest is at rest (dns_dyndns_credentials), so this
         // toast is the ONLY disclosure. Re-mint is the recovery path. withSecretArg
@@ -418,7 +419,7 @@ public class DnsRecordResource extends RowResource {
     /** Deletes the credential: the record stops being dynamic and its token dies now. */
     private CmsActionResult revokeDynamicToken(@NonNull Row row) {
         DynamicDnsService.revokeFor(row.get(DnsRecordModel.ID));
-        ActivityLog.record(this.model(), row.get(DnsRecordModel.ID), "dyndns_token_revoked", null);
+        ActivityLog.record(this.model(), row.get(DnsRecordModel.ID), HohenheimActivityAction.DYNDNS_TOKEN_REVOKED, null);
         return CmsActionResult.refreshWithToast(
             Microcopy.of("dyndns_revoked").withFilter("scope", "dns_record"));
     }

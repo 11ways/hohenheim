@@ -15,6 +15,7 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
@@ -81,7 +82,7 @@ final class ServerLifecycleActions {
             .visibleFor((row, ctx) -> ServerModel.isIncus(row))
             .handler((row, ctx) -> {
                 IncusReaper.Reaped[] reaped = new IncusReaper.Reaped[1];
-                ActivityLog.withAction(ActivityLog.ACTION_DELETE, "reap_controller_objects",
+                ActivityLog.withAction(ZenitActivityAction.DELETE, "reap_controller_objects",
                     () -> reaped[0] = ReapIncusControllers.reapIncludingUnstamped(row));
                 return CmsActionResult.refreshWithToast(serverCopy("controller_objects_reaped")
                     .withArg("name", row.get(ServerModel.NAME))
@@ -177,7 +178,7 @@ final class ServerLifecycleActions {
             .handler((row, ctx) -> {
                 String name = row.get(ServerModel.NAME);
                 HostPreflight.Report[] report = new HostPreflight.Report[1];
-                ActivityLog.withAction(ActivityLog.ACTION_UPDATE, "preflight",
+                ActivityLog.withAction(ZenitActivityAction.UPDATE, "preflight",
                     () -> report[0] = HostPreflight.runAndStore(name));
                 return CmsActionResult.refreshWithToast(
                     Microcopy.of(report[0].passed() ? "preflight_passed" : "preflight_failed")
@@ -296,7 +297,7 @@ final class ServerLifecycleActions {
 
     private static void setAdmission(@NonNull Row row, @NonNull String admission,
                                      @NonNull String action) {
-        ActivityLog.withAction(ActivityLog.ACTION_UPDATE, action, () -> {
+        ActivityLog.withAction(ZenitActivityAction.UPDATE, action, () -> {
             row.set(ServerModel.ADMISSION, admission);
             Models.get(ServerModel.class).save(row);
         });

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
@@ -90,7 +91,7 @@ public final class InstanceExec {
 
         // Recorded on the record, never only in a log line: an arbitrary command inside a
         // tenant workload is exactly the act an audit trail exists for.
-        ActivityLog.record(Models.get(InstanceModel.class), instanceId, "exec", command);
+        ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.EXEC, command);
 
         String output = outcome.outputTail();
         if (output.length() > OUTPUT_TAIL_LIMIT) {

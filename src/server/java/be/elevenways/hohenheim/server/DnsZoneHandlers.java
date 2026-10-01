@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -61,7 +62,7 @@ final class DnsZoneHandlers {
             try {
                 DnsZoneFiles.ImportResult result = DnsZoneFiles.importText(zone, text,
                     DnsZoneFiles.ApexNsPolicy.forKeepFlag(form.get("keep_ns")));
-                ActivityLog.record(Models.get(DnsZoneModel.class), zoneId, "imported",
+                ActivityLog.record(Models.get(DnsZoneModel.class), zoneId, HohenheimActivityAction.IMPORTED,
                     zone.get(DnsZoneModel.ORIGIN));
                 String notes = String.join("; ", result.notes());
                 if (!result.skipped().isEmpty()) {

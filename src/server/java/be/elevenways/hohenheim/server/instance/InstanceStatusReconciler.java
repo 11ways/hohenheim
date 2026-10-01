@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -50,8 +51,6 @@ import java.util.List;
  */
 public final class InstanceStatusReconciler {
 
-    /** The activity action a correction is recorded under. */
-    public static final String ACTIVITY_RECONCILE_ACTION = "reconciled";
 
     /** What one record's reconciliation decided. */
     public enum Verdict {
@@ -260,7 +259,7 @@ public final class InstanceStatusReconciler {
         // A correction is accountability, not decoration: the record just contradicted
         // itself and the operator must be able to see when, and on whose evidence.
         ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-            ACTIVITY_RECONCILE_ACTION,
+            HohenheimActivityAction.RECONCILED,
             stored + " -> " + settled + " (died without an observed stop; the daemon"
                 + " reports the workload "
                 + (state == ContainerState.ABSENT ? "absent" : "stopped")

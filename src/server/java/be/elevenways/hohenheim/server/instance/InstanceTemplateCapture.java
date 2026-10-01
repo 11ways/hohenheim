@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -11,6 +12,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -96,7 +98,7 @@ public final class InstanceTemplateCapture {
 
         int templateId = mintTemplate(resolved, instanceId, alias);
         ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-            "template_captured", alias);
+            HohenheimActivityAction.TEMPLATE_CAPTURED, alias);
         Blast.log("TEMPLATE: captured instance", nameOf(resolved.row()), "as alias",
             alias, "-> template", templateId, "(unapproved)");
         return templateId;
@@ -124,7 +126,7 @@ public final class InstanceTemplateCapture {
         // APPROVED_AT stays null by construction: capture and approval are two acts.
         templates.save(template);
         int templateId = template.get(InstanceTemplateModel.ID);
-        ActivityLog.record(templates, templateId, ActivityLog.ACTION_CREATE, alias);
+        ActivityLog.record(templates, templateId, ZenitActivityAction.CREATE, alias);
         return templateId;
     }
 

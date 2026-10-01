@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimEndpoints;
@@ -219,7 +220,7 @@ public class InstanceTemplateResource extends RowResource {
                 row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, ctx.access().principal().id());
                 this.model().save(row);
                 ActivityLog.record(this.model(), row.get(InstanceTemplateModel.ID),
-                    "approved", "operator approval");
+                    HohenheimActivityAction.APPROVED, "operator approval");
                 return CmsActionResult.refreshWithToast(
                     Microcopy.of("approved_toast").withFilter("scope", "instance_template")
                         .withArg("name", row.get(InstanceTemplateModel.NAME)));
@@ -242,7 +243,7 @@ public class InstanceTemplateResource extends RowResource {
                 row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, null);
                 this.model().save(row);
                 ActivityLog.record(this.model(), row.get(InstanceTemplateModel.ID),
-                    "unapproved", "operator withdrawal");
+                    HohenheimActivityAction.UNAPPROVED, "operator withdrawal");
                 return CmsActionResult.refreshWithToast(
                     Microcopy.of("unapproved_toast").withFilter("scope", "instance_template")
                         .withArg("name", row.get(InstanceTemplateModel.NAME)));

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -74,7 +75,7 @@ public final class InstanceExposure {
             String name = String.valueOf((Object) site.get(SiteModel.NAME));
             try {
                 site.set(SiteModel.ENABLED, false);
-                ActivityLog.withAction("disabled", ACTIVITY_STRANDED_DETAIL,
+                ActivityLog.withAction(HohenheimActivityAction.DISABLED, ACTIVITY_STRANDED_DETAIL,
                     () -> Models.get(SiteModel.class).save(site));
                 disabled.add(name);
             } catch (RuntimeException refused) {

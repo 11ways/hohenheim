@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
@@ -725,7 +726,7 @@ public class SiteResource extends RowResource {
                 // runs inside model.save below and throws the enable_route_conflict Violations,
                 // which the row-action handler surfaces as a refusal toast.
                 row.set(SiteModel.ENABLED, !current);
-                ActivityLog.withAction(current ? "disabled" : "enabled", null,
+                ActivityLog.withAction(current ? HohenheimActivityAction.DISABLED : HohenheimActivityAction.ENABLED, null,
                     () -> this.model().save(row));
                 return CmsActionResult.refreshWithToast(Microcopy.of(
                     current ? "disabled_toast" : "enabled_toast").withFilter("scope", "site"));
@@ -811,7 +812,7 @@ public class SiteResource extends RowResource {
         // plain find hides it) and lost the race to a concurrent clone; either way the insert
         // conflict reached the operator as the generic failure instead of a refusal on the name.
         try {
-            ActivityLog.withAction("cloned", "of site #" + site.get(SiteModel.ID),
+            ActivityLog.withAction(HohenheimActivityAction.CLONED, "of site #" + site.get(SiteModel.ID),
                 () -> siteModel.save(clone));
         } catch (DuplicateKeyException conflict) {
             if (!SiteModel.SLUG.getName().equals(conflict.getColumnName())) {

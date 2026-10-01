@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.build.BuildLog;
@@ -186,7 +187,7 @@ public final class WorkspaceBuilds {
             // InstanceService.deploy, whose workspace branch is THIS method.
             InstanceStatus status = this.instances.restartWorkload(instanceId);
             ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-                InstanceService.ACTIVITY_DEPLOY_ACTION, trigger.word());
+                HohenheimActivityAction.DEPLOYED, trigger.word());
             DeployStatuses.report(settings, commitSha, GitProviderClient.StatusState.SUCCESS,
                 DeployStatuses.CONTEXT_DEPLOY, "Deployed", null);
             finish(operationId, BuildOperationModel.STATUS_SUCCEEDED, commitSha, null, log,

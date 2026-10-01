@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -158,7 +159,7 @@ public class ReleasedClaimResource extends RowResource {
                     return CmsActionResult.errorToast(
                         Microcopy.of("lift_denied").withFilter("scope", "released_claim"));
                 }
-                ActivityLog.withAction("quarantine_lifted",
+                ActivityLog.withAction(HohenheimActivityAction.QUARANTINE_LIFTED,
                     String.valueOf(row.get(ReleasedRouteClaimModel.HOSTNAME)),
                     () -> this.model().delete(row));
                 return CmsActionResult.refreshWithToast(

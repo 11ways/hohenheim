@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.quota.SiteQuota;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -94,7 +95,7 @@ class SoftDeleteJourneyTest {
             assertThat(Quotas.usedOf(SITE_BUCKET))
                 .as("step 2: the trash transition handed the slot back").isEqualTo(beforeTrash - 1);
             List<Row> deletes = activityFor(SiteModel.MODEL_ID.toString(), siteId,
-                ActivityLog.ACTION_DELETE);
+                ZenitActivityAction.DELETE.id().toString());
             assertThat(deletes).as("step 2: the trash is recorded as one delete").hasSize(1);
             assertThat((String) deletes.get(0).get(ActivityModel.DETAIL))
                 .as("step 2: named as the soft delete it is").isEqualTo("soft-delete");
@@ -128,7 +129,7 @@ class SoftDeleteJourneyTest {
                 .as("step 6: no longer stamped").isNull();
             assertThat(Quotas.usedOf(SITE_BUCKET))
                 .as("step 6: the restore re-booked its slot").isEqualTo(beforeRestore + 1);
-            assertThat(activityFor(SiteModel.MODEL_ID.toString(), siteId, ActivityLog.ACTION_RESTORE))
+            assertThat(activityFor(SiteModel.MODEL_ID.toString(), siteId, ZenitActivityAction.RESTORE.id().toString()))
                 .as("step 6: the restore is recorded as one").hasSize(1);
             assertThat(gatingKey(lists, listId))
                 .as("step 6: the restored site is gated by the list again")
@@ -166,13 +167,13 @@ class SoftDeleteJourneyTest {
                 // 2. BUG FIXED: the application lane saved deleted_at bare, recorded as an
                 //    "update"; it now takes the one trash write every destroy shares.
                 List<Row> deletes = activityFor(InstanceModel.MODEL_ID.toString(), applicationId,
-                    ActivityLog.ACTION_DELETE);
+                    ZenitActivityAction.DELETE.id().toString());
                 assertThat(deletes).as("step 2: the destroy is recorded as one delete").hasSize(1);
                 assertThat((String) deletes.get(0).get(ActivityModel.DETAIL))
                     .as("step 2: named as the verified destroy it is")
                     .isEqualTo(InstanceService.ACTIVITY_DESTROY_DETAIL);
                 assertThat(activityFor(InstanceModel.MODEL_ID.toString(), applicationId,
-                        ActivityLog.ACTION_UPDATE))
+                        ZenitActivityAction.UPDATE.id().toString()))
                     .as("step 2: and never as a bare update").isEmpty();
 
                 // 3. Destroying it again refuses (there is no live record) and writes nothing.
@@ -180,7 +181,7 @@ class SoftDeleteJourneyTest {
                     .as("step 3: a trashed record is not destroyed twice")
                     .isInstanceOf(Violations.class);
                 assertThat(activityFor(InstanceModel.MODEL_ID.toString(), applicationId,
-                        ActivityLog.ACTION_DELETE))
+                        ZenitActivityAction.DELETE.id().toString()))
                     .as("step 3: and nothing more is recorded").hasSize(1);
             } finally {
                 HardDeletes.byId(instances, applicationId);

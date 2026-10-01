@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.AttentionItem;
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.cms.InstanceAttention;
 import be.elevenways.hohenheim.server.host.HostLeases;
@@ -116,7 +117,7 @@ class InstanceStatusReconcileTest {
             // 4. The correction is ACCOUNTABLE: an operator can find out when their box
             //    stopped and on whose evidence, without reading a log file.
             List<Row> reconciled = activity(id,
-                InstanceStatusReconciler.ACTIVITY_RECONCILE_ACTION);
+                HohenheimActivityAction.RECONCILED.id().toString());
             assertThat(reconciled)
                 .as("step 4: the correction is recorded on the record's own activity")
                 .hasSize(1);
@@ -372,7 +373,7 @@ class InstanceStatusReconcileTest {
             awaitStatus(id, InstanceModel.STATUS_ERROR,
                 "step 3: but flap protection suspends the restarts");
             List<Row> reconciled = activity(id,
-                InstanceStatusReconciler.ACTIVITY_RECONCILE_ACTION);
+                HohenheimActivityAction.RECONCILED.id().toString());
             assertThat((String) reconciled.get(0).get(ActivityModel.DETAIL))
                 .as("step 3: and the suspension is named where the operator looks")
                 .contains("crash loop");

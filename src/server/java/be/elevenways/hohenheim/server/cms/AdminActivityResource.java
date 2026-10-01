@@ -15,6 +15,7 @@ import be.elevenways.zenit.cms.common.schema.FilterState;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
+import be.elevenways.zenit.common.orm.activity.ActivityActions;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ActivityText;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -121,9 +122,10 @@ public final class AdminActivityResource extends ActivityResource {
 
         if (ActivityModel.ACTION.getName().equals(name)) {
             String action = row.get(ActivityModel.ACTION);
-            // ActivityPresentation.label falls open to the raw verb for a key nobody
-            // registered, which is what the detail page and the dashboard feed show too.
-            return action == null || action.isBlank() ? null : ActivityPresentation.label(action);
+            // An old spelling and an id read as the same member; an undeclared verb reads as the
+            // one unknown label, which is what the detail page and the dashboard feed show too.
+            return action == null || action.isBlank() ? null
+                : ActivityPresentation.label(ActivityActions.fromStored(action));
         }
 
         if (ActivityModel.MODEL.getName().equals(name)) {

@@ -31,6 +31,7 @@ import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -364,7 +365,7 @@ public class DatabaseEngineResource extends RowResource {
             .handler((row, ctx) -> {
                 Integer engineId = row.get(DatabaseEngineModel.ID);
                 String name = row.get(DatabaseEngineModel.NAME);
-                ActivityLog.withAction(ActivityLog.ACTION_DELETE, "force-destroy", () -> {
+                ActivityLog.withAction(ZenitActivityAction.DELETE, "force-destroy", () -> {
                     try {
                         if (engineId != null) {
                             DatabaseEngines.forceDestroy(engineId);

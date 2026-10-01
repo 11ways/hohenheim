@@ -25,6 +25,7 @@ import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -280,7 +281,7 @@ public class InstanceScheduleResource extends RowResource {
     public void deleteRow(@NonNull Row existing, @NonNull AccessContext accessContext) {
         requireManage(accessContext, parseInstanceId(existing.get(RecordScheduleModel.RECORD_ID)));
         Integer id = existing.get(RecordScheduleModel.ID);
-        ActivityLog.withAction(ActivityLog.ACTION_DELETE, "delete_schedule",
+        ActivityLog.withAction(ZenitActivityAction.DELETE, "delete_schedule",
             () -> recordSchedules().deleteSchedule(id));
     }
 

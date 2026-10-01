@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.server.ControllerScope;
@@ -233,7 +234,7 @@ class InstanceShellLiveTest {
 
                 // 5. Opening the session was audited, attributed to the tenant.
                 mark("step5-activity");
-                List<Row> opened = activityFor(id, InstanceShell.ACTIVITY_OPEN);
+                List<Row> opened = activityFor(id, HohenheimActivityAction.SHELL_OPEN.id().toString());
                 assertThat(opened)
                     .as("step 5: opening a shell writes EXACTLY ONE activity row")
                     .hasSize(1);
@@ -252,7 +253,7 @@ class InstanceShellLiveTest {
                 session.close(InstanceShell.EndReason.CLIENT);
                 assertThat(session.isOpen()).as("step 6: a closed session reports closed")
                     .isFalse();
-                assertThat(activityFor(id, InstanceShell.ACTIVITY_CLOSE))
+                assertThat(activityFor(id, HohenheimActivityAction.SHELL_CLOSE.id().toString()))
                     .as("step 6: closing writes exactly one activity row")
                     .hasSize(1);
                 assertThat(ended.get())
@@ -269,7 +270,7 @@ class InstanceShellLiveTest {
                 session.close(InstanceShell.EndReason.EXITED);
                 session.write("echo after-close\n");
                 session.resize(80, 24);
-                assertThat(activityFor(id, InstanceShell.ACTIVITY_CLOSE))
+                assertThat(activityFor(id, HohenheimActivityAction.SHELL_CLOSE.id().toString()))
                     .withFailMessage("step 7: a second close wrote a SECOND close entry --"
                         + " teardown must be exactly-once whichever end fires it")
                     .hasSize(1);
@@ -390,7 +391,7 @@ class InstanceShellLiveTest {
                     assertThat(session.isOpen())
                         .as("step 2: the session opened despite the declared shell missing")
                         .isTrue();
-                    List<Row> opened = activityFor(id, InstanceShell.ACTIVITY_OPEN);
+                    List<Row> opened = activityFor(id, HohenheimActivityAction.SHELL_OPEN.id().toString());
                     assertThat(opened).as("step 2: and it was audited").hasSize(1);
                     assertThat((String) opened.get(0).get(ActivityModel.DETAIL))
                         .withFailMessage("step 2: the audit names the shell that was NOT"

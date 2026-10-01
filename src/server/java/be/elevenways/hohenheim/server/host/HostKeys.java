@@ -10,6 +10,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -349,7 +350,7 @@ public final class HostKeys {
             String privateKey = Files.readString(key, StandardCharsets.UTF_8);
             String publicKey = Files.readString(directory.resolve("id_ed25519.pub"),
                 StandardCharsets.UTF_8).trim();
-            ActivityLog.withAction(ActivityLog.ACTION_UPDATE, "host_identity_rotated", () -> {
+            ActivityLog.withAction(ZenitActivityAction.UPDATE, "host_identity_rotated", () -> {
                 server.set(HostTrustSlot.SSH.clientPrivate(), privateKey);
                 server.set(HostTrustSlot.SSH.clientPublic(), publicKey);
                 Models.get(ServerModel.class).save(server);

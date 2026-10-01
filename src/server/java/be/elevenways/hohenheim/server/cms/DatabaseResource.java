@@ -39,6 +39,7 @@ import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -547,7 +548,7 @@ public class DatabaseResource extends RowResource {
                 // is abandoned: the funnel would refuse the row delete anyway, but by then
                 // the abandon has already run.
                 refuseWhileAttached(name, id);
-                ActivityLog.withAction(ActivityLog.ACTION_DELETE, "force-destroy",
+                ActivityLog.withAction(ZenitActivityAction.DELETE, "force-destroy",
                     () -> this.databaseService.forceDestroyRecord(name));
                 return CmsActionResult.refreshWithToast(
                     Microcopy.of("force_delete_done").withFilter("scope", "database")
