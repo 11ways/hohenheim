@@ -13,7 +13,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * {@code data-cert-status} key, the badge variant and the wording a reader who may not open the
  * certificate sees -- is a fact on the member, so the domains tab compares no literal. An unknown
  * certificate status fails CLOSED onto {@link #ERROR}: a coverage badge never claims coverage it
- * cannot vouch for. CertCoverageVocabularyTest binds the members to the model's status values.
+ * cannot vouch for. DashboardVocabularyDriftTest binds the members to the model's status values.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
