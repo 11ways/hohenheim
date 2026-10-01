@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim;
 
 import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.registry.StoredIdChains;
 import be.elevenways.protoblast.common.registry.StoredTypeMigrations;
 
@@ -22,18 +23,18 @@ public final class HohenheimStoredIds {
     static {
         StoredTypeMigrations migrations = CHAIN;
         // zenit-dev rename: begin
-        migrations.renameType("hohenheim:instance_backups_page", "hohenheim:instance_backups");
-        migrations.renameType("hohenheim:instance_snapshots_page", "hohenheim:instance_snapshots");
-        migrations.renameType("hohenheim:instance_stats_page", "hohenheim:instance_stats");
-        migrations.renameType("hohenheim:spamservice_client_keys_page", "hohenheim:spamservice_client_keys");
-        migrations.renameType("hohenheim:backup_target_kinds", "hohenheim:backup_target_kind");
-        migrations.renameType("hohenheim:git_provider_kinds", "hohenheim:git_provider_kind");
-        migrations.renameType("hohenheim:instance_kinds", "hohenheim:instance_kind");
-        migrations.renameType("hohenheim:servers", "hohenheim:server");
-        migrations.renameType("hohenheim:site_auth_provider_types", "hohenheim:site_auth_provider_type");
-        migrations.renameType("hohenheim:upstream_kinds", "hohenheim:upstream_kind");
-        migrations.renameType("hohenheim:variable_types", "hohenheim:variable_type");
-        migrations.renameType("hohenheim:project-roles", "hohenheim:project_role");
+        migrations.renameType(Identifier.of("hohenheim", "instance_backups_page"), Identifier.of("hohenheim", "instance_backups"));
+        migrations.renameType(Identifier.of("hohenheim", "instance_snapshots_page"), Identifier.of("hohenheim", "instance_snapshots"));
+        migrations.renameType(Identifier.of("hohenheim", "instance_stats_page"), Identifier.of("hohenheim", "instance_stats"));
+        migrations.renameType(Identifier.of("hohenheim", "spamservice_client_keys_page"), Identifier.of("hohenheim", "spamservice_client_keys"));
+        migrations.renameType(Identifier.of("hohenheim", "backup_target_kinds"), Identifier.of("hohenheim", "backup_target_kind"));
+        migrations.renameType(Identifier.of("hohenheim", "git_provider_kinds"), Identifier.of("hohenheim", "git_provider_kind"));
+        migrations.renameType(Identifier.of("hohenheim", "instance_kinds"), Identifier.of("hohenheim", "instance_kind"));
+        migrations.renameType(Identifier.of("hohenheim", "servers"), Identifier.of("hohenheim", "server"));
+        migrations.renameType(Identifier.of("hohenheim", "site_auth_provider_types"), Identifier.of("hohenheim", "site_auth_provider_type"));
+        migrations.renameType(Identifier.of("hohenheim", "upstream_kinds"), Identifier.of("hohenheim", "upstream_kind"));
+        migrations.renameType(Identifier.of("hohenheim", "variable_types"), Identifier.of("hohenheim", "variable_type"));
+        migrations.renameType(Identifier.of("hohenheim", "project-roles"), Identifier.of("hohenheim", "project_role"));
         // zenit-dev rename: end
     }
 
