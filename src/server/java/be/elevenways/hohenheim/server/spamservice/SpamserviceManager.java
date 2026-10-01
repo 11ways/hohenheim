@@ -4,9 +4,11 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SpamserviceInstallationModel;
 import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.host.PrivilegedHelper;
-import be.elevenways.hohenheim.server.process.BoundedProcess;
 import be.elevenways.hohenheim.server.security.SecurityReportEnv;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
+import be.elevenways.protoblast.server.process.Termination;
 import be.elevenways.spamservice.client.SpamserviceClient;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -118,8 +120,7 @@ public final class SpamserviceManager {
 
     private SpamserviceManager() {
         this(new OrmInstallationStore(), SpamserviceManager::openNestedArtifact,
-            (builder, runAs, redactor, stdinLine) ->
-                ManagedServiceProcess.start(builder, runAs, redactor, stdinLine),
+            ManagedServiceProcess::start,
             SpamserviceManager::probeReadiness, SpamserviceManager::ensureOwned,
             new FrameworkSinkInstaller(), SpamserviceManager::configuredRuntimeRoot,
             SecurityReportEnv::reconcilePersistedReporters, SpamserviceManager::ensurePortAvailable,
@@ -180,10 +181,10 @@ public final class SpamserviceManager {
             current = this.process;
         }
         if (current != null) {
-            current.process().destroy();
+            current.terminate();
         }
         this.lifecycle.shutdownNow();
-        if (current != null && !current.stop(STOP_TIMEOUT_MS)) {
+        if (current != null && !current.stop()) {
             synchronized (this.lock) {
                 this.cleanupBlocked = true;
                 this.lastError = "Spamservice process-group cleanup was incomplete during shutdown";
@@ -225,7 +226,7 @@ public final class SpamserviceManager {
             current = this.process;
         }
         if (current != null) {
-            current.process().destroy();
+            current.terminate();
         }
         submit(() -> stopGeneration(requested, SpamserviceState.STOPPED));
     }
@@ -250,7 +251,7 @@ public final class SpamserviceManager {
             }
         }
         if (current != null) {
-            current.process().destroy();
+            current.terminate();
         }
         submit(() -> reconcileGeneration(requested, forceRestart));
     }
@@ -361,7 +362,7 @@ public final class SpamserviceManager {
             command(config.maxHeapMb(), artifact.path(), true), redactor, null);
         adoptProcess(requested, migration);
         boolean migrated = migration.waitFor(MIGRATION_TIMEOUT_MS);
-        boolean migrationClean = migration.stop(STOP_TIMEOUT_MS);
+        boolean migrationClean = migration.stop();
         if (!migrationClean) {
             blockCleanup(migration, "Spamservice migration process-group cleanup was incomplete");
             return;
@@ -387,13 +388,13 @@ public final class SpamserviceManager {
             Objects.requireNonNull(config.controllerKey()));
         adoptProcess(requested, started);
         Config startedConfig = config;
-        started.process().onExit().thenRun(() -> submit(() -> processExited(started, startedConfig, requested)));
+        started.onExit(() -> submit(() -> processExited(started, startedConfig, requested)));
 
         boolean ready = this.readinessProbe.await(runtimeBaseUrl, started, nonce,
             READINESS_TIMEOUT_MS, () -> !isCurrent(requested));
         ensureCurrent(requested);
         if (!ready) {
-            if (!started.stop(STOP_TIMEOUT_MS)) {
+            if (!started.stop()) {
                 blockCleanup(started, "Spamservice readiness cleanup was incomplete");
                 return;
             }
@@ -409,9 +410,10 @@ public final class SpamserviceManager {
                                           Map<String, String> environment, List<String> command,
                                           UnaryOperator<String> redactor, @Nullable String stdinLine)
             throws IOException {
-        ProcessBuilder builder = SystemUsers.executionBuilder(config.runAs(), environment, command, true);
-        builder.directory(workingDirectory.toFile());
-        return this.processLauncher.launch(builder, config.runAs(), redactor, stdinLine);
+        Subprocess process = SystemUsers.execution(config.runAs(), environment, command, true)
+            .directory(workingDirectory)
+            .stopGrace(Duration.ofMillis(STOP_TIMEOUT_MS));
+        return this.processLauncher.launch(process, redactor, stdinLine);
     }
 
     private void installIntegration(long requested, Config config, String runtimeBaseUrl) {
@@ -451,7 +453,7 @@ public final class SpamserviceManager {
     }
 
     private void processExited(ManagedServiceProcess exited, Config config, long requested) {
-        boolean cleaned = exited.stop(STOP_TIMEOUT_MS);
+        boolean cleaned = exited.stop();
         synchronized (this.lock) {
             if (this.process != exited) {
                 return;
@@ -540,7 +542,7 @@ public final class SpamserviceManager {
             this.client = null;
             this.baseUrl = null;
         }
-        if (current != null && !current.stop(STOP_TIMEOUT_MS)) {
+        if (current != null && !current.stop()) {
             blockCleanup(current, "Spamservice process-group cleanup was incomplete");
             return false;
         }
@@ -865,19 +867,23 @@ public final class SpamserviceManager {
         }
 
         // The narrow helper when the installer put one here; the legacy chown grant otherwise.
-        ProcessBuilder builder = new ProcessBuilder(PrivilegedHelper.installedLocally()
-            ? helperOwnershipCommand(path) : ownershipCommand(path, runAs));
-        SystemUsers.setEnvironment(builder, SystemUsers.safeEnvironment(System.getProperty("user.home")));
-        builder.redirectErrorStream(true);
-        // AIDEV-NOTE: bounded and drained concurrently (BoundedProcess). An inline
-        // readAllBytes followed by an unbounded waitFor held the lifecycle thread forever
-        // behind a sudo that hung, and no later start, stop or restart could run.
-        BoundedProcess.Result result = BoundedProcess.run(builder, OWNERSHIP_TIMEOUT_MS, 8_192);
-        if (result.timedOut()) {
+        // AIDEV-NOTE: bounded and drained concurrently (Subprocess). An inline readAllBytes
+        // followed by an unbounded waitFor held the lifecycle thread forever behind a sudo
+        // that hung, and no later start, stop or restart could run.
+        ProcessOutcome result = SystemUsers.withEnvironment(
+                Subprocess.of(PrivilegedHelper.installedLocally()
+                    ? helperOwnershipCommand(path) : ownershipCommand(path, runAs)),
+                SystemUsers.safeEnvironment(System.getProperty("user.home")))
+            .mergeStderr()
+            .collectStdout(8_192)
+            .timeout(Duration.ofMillis(OWNERSHIP_TIMEOUT_MS))
+            .stopGrace(Duration.ZERO)
+            .runChecked();
+        if (result.termination() == Termination.TIMED_OUT) {
             throw new IOException("Assigning Spamservice path ownership timed out after "
                 + OWNERSHIP_TIMEOUT_MS + " ms");
         }
-        String output = result.stdout().trim();
+        String output = result.stdout().text().trim();
         if (!result.succeeded()) {
             throw new IOException("Could not assign Spamservice path ownership"
                 + (output.isEmpty() ? "" : ": " + output));
@@ -1030,8 +1036,7 @@ public final class SpamserviceManager {
     }
 
     interface ProcessLauncher {
-        @NonNull ManagedServiceProcess launch(@NonNull ProcessBuilder builder,
-                                               SystemUsers.@NonNull RunAsUser runAs,
+        @NonNull ManagedServiceProcess launch(@NonNull Subprocess process,
                                                @NonNull UnaryOperator<String> redactor,
                                                @Nullable String stdinLine) throws IOException;
     }

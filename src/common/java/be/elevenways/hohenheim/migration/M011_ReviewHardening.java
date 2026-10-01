@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
+import be.elevenways.hohenheim.net.Hostnames;
 import be.elevenways.hohenheim.net.LegacyIpSpellings;
 import be.elevenways.protoblast.common.platform.PlatformSeam;
 import be.elevenways.protoblast.common.time.Now;
@@ -31,7 +32,8 @@ import java.util.TreeSet;
  * the observed workload kill, hashed Basic auth passwords and canonical access-rule networks; and module-fit's
  * instance operations: stored power, backup, snapshot, console command and app update schedule steps name the
  * operations that replaced them;
- * and a certificate's requester stored as its principal reference ({@code requested_by_kind} beside the id).
+ * and a certificate's requester stored as its principal reference ({@code requested_by_kind} beside the id);
+ * and every stored host wildcard respelled into zenit's HostPattern grammar.
  *
  * AIDEV-NOTE: this is ONE migration on purpose (2026-09-30). It replaced M011, M012, M015, M016 and M017,
  * which no production install (kuifje at 009, robbedoes at 010) had applied; the two test installs that
@@ -52,6 +54,12 @@ import java.util.TreeSet;
  * stored in such a spelling now parses to nothing, which AccessRuleTree refuses. {@link LegacyIpSpellings}
  * is the reading of production build 91191333; a value it also refused matched nothing before and is
  * left untouched.
+ *
+ * AIDEV-NOTE: Hohenheim's leading {@code *.} spanned one or more labels; in HostPattern, which the dispatcher
+ * now matches with, it spans exactly one and {@code **.} spans one or more. The respelling keeps every stored
+ * route's hosts, and rewrites the claim key beside it, which opens with the hostname (RouteClaims.keyOf). A regex
+ * row is not a host pattern and is left alone. {@link Hostnames#PATTERNS} spells the rewrite: the host-wildcards
+ * guard refuses the literal outside HostPattern.
  *
  * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.1.0
@@ -94,6 +102,9 @@ public class M011_ReviewHardening extends HohenheimMigration {
         SNAPSHOT_ACTION, "hohenheim:snapshot_instance",
         CONSOLE_ACTION, CONSOLE_OPERATION,
         APP_UPDATE_ACTION, APP_UPDATE_OPERATION);
+
+    /** The match type of a regex route, as production stored it; every other row holds a host pattern. */
+    static final String REGEX_MATCH = "regex";
 
     /** The rule types that carry a network, as production stored them. */
     static final Set<String> NETWORK_TYPES = Set.of("ip_allow", "ip_deny");
@@ -158,6 +169,8 @@ public class M011_ReviewHardening extends HohenheimMigration {
         schema.data("store every certificate requester with its kind", "1", PrincipalColumns.stampAccountKinds(
             "certificates", () -> IntegerField.builder().name("id").build(),
             () -> IntegerField.builder().name("requested_by_user_id").build(), "requested_by_kind", true));
+        schema.data("respell every stored one-or-more host wildcard into the HostPattern grammar", "1",
+            M011_ReviewHardening::respellHostWildcards);
     }
 
     /** Never run: the migration is declared irreversible, and the executor refuses the DOWN first. */
@@ -231,6 +244,39 @@ public class M011_ReviewHardening extends HohenheimMigration {
                 rules.save(row);
             }
         });
+    }
+
+    /** The data step respelling the leading wildcard of every routed and every released hostname. */
+    public static void respellHostWildcards(@NonNull Datasource datasource) {
+        Db.run(datasource, () -> {
+            respellHostWildcards("site_domains", "live_route_key");
+            respellHostWildcards("released_route_claims", "claim_key");
+        });
+    }
+
+    private static void respellHostWildcards(@NonNull String tableName, @NonNull String keyName) {
+        IntegerField id = IntegerField.builder().name("id").build();
+        StringField hostname = StringField.builder().name("hostname").build();
+        StringField matchType = StringField.builder().name("match_type").build();
+        StringField key = StringField.builder().name(keyName).build();
+        FrozenModel table = new FrozenModel(tableName, id, hostname, matchType, key);
+        Hostnames.PatternGrammar grammar = Hostnames.PATTERNS.require();
+        for (Row row : table.find().all()) {
+            String stored = row.get(hostname);
+            if (stored == null || REGEX_MATCH.equals(row.get(matchType))) {
+                continue;
+            }
+            String respelled = grammar.respellOneOrMoreLeading(stored);
+            if (respelled.equals(stored)) {
+                continue;
+            }
+            row.set(hostname, respelled);
+            String claim = row.get(key);
+            if (claim != null) {
+                row.set(key, grammar.respellOneOrMoreLeading(claim));
+            }
+            table.save(row);
+        }
     }
 
     /**

@@ -2,16 +2,18 @@ package be.elevenways.hohenheim.server.host;
 
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.SystemUsers;
-import be.elevenways.hohenheim.server.process.BoundedProcess;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
+import be.elevenways.protoblast.server.process.Termination;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import java.time.Duration;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 /**
  * THE way this controller runs a shell snippet on a host it manages: locally for a local
@@ -20,7 +22,7 @@ import java.util.concurrent.TimeUnit;
  * AIDEV-NOTE: this is a SEAM, not a convenience. Everything that has to read or change the
  * host filesystem (the volume-backend probe, the btrfs volume operations) goes through it,
  * which is what lets a unit test hand those mechanisms a fake shell and assert on the
- * COMMANDS instead of needing a real kernel. A second hand-rolled ProcessBuilder beside it
+ * COMMANDS instead of needing a real kernel. A second hand-rolled Subprocess beside it
  * would put half of that behaviour outside every test that matters.
  *
  * @author Jelle De Loecker
@@ -126,19 +128,22 @@ public interface HostShell {
                 return new Result(1, "no ssh lane could be built for this host");
             }
 
-            // AIDEV-NOTE: BoundedProcess drains the output on its own thread and enforces
+            // AIDEV-NOTE: Subprocess drains the output on its own thread and enforces
             // the deadline with the wait, never a read. Reading inline made the timeout
             // decorative -- readAllBytes blocks until the pipe closes, so a snippet that never
             // finished was waited on forever; a runtime-image build runs for minutes through
             // here, which is where that would have shown up as a thread nobody can free.
             try {
-                BoundedProcess.Result result = BoundedProcess.run(
-                    new ProcessBuilder(argv).redirectErrorStream(true),
-                    TimeUnit.SECONDS.toMillis(timeoutSeconds), MAX_OUTPUT_CHARS);
-                if (result.timedOut()) {
+                ProcessOutcome result = Subprocess.of(argv)
+                    .mergeStderr()
+                    .collectStdout(MAX_OUTPUT_CHARS)
+                    .timeout(Duration.ofSeconds(timeoutSeconds))
+                    .stopGrace(Duration.ZERO)
+                    .runChecked();
+                if (result.termination() == Termination.TIMED_OUT) {
                     return new Result(1, "the host command timed out");
                 }
-                return new Result(result.exitCode(), result.stdout().trim());
+                return new Result(result.exitCode(), result.stdout().text().trim());
             } catch (InterruptedIOException interrupted) {
                 return new Result(1, "the host command was interrupted");
             } catch (IOException failed) {

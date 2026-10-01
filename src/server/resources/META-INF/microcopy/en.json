@@ -1390,7 +1390,7 @@
       "scope": "field"
     },
     {
-      "text": "The Host header to match. Wildcard mode allows * and ?; regex mode takes a full regular expression.",
+      "text": "The Host header to match. Wildcard mode allows * and ? inside a label, a leading *. for exactly one label and **. for one or more; regex mode takes a full regular expression.",
       "scope": "help"
     }
   ],

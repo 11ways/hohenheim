@@ -1390,7 +1390,7 @@
       "scope": "field"
     },
     {
-      "text": "De Host-header die moet overeenkomen. Wildcardmodus laat * en ? toe; regexmodus neemt een volledige reguliere expressie.",
+      "text": "De Host-header die moet overeenkomen. Wildcardmodus laat * en ? toe binnen een label, een leidende *. voor precies een label en **. voor een of meer; regexmodus neemt een volledige reguliere expressie.",
       "scope": "help"
     }
   ],

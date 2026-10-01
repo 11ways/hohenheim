@@ -7,6 +7,8 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.ProcessConfinement;
 import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -95,18 +97,19 @@ class SystemUsersTest {
         environment.put("HOME", "/srv/site");
         environment.put("DATABASE_PASSWORD", "argv-secret-value");
 
-        ProcessBuilder builder = SystemUsers.executionBuilder(
+        Subprocess process = SystemUsers.execution(
             new SystemUsers.RunAsUser("site", 4242, 4243, "/srv/site"), environment,
             List.of("node", "server.js"), true);
 
-        assertThat(builder.command())
+        assertThat(process.command())
             .containsExactly("/usr/bin/setsid", "--wait", "--", "/usr/bin/sudo", "-n",
                 "--preserve-env", "-u", "#4242", "-g", "#4243", "--",
                 "/usr/bin/prlimit", "--nproc=" + ProcessConfinement.pidsLimit(), "--",
                 "/usr/bin/setpriv", "--no-new-privs", "--", "node", "server.js")
             .noneMatch(argument -> argument.contains("argv-secret-value"))
             .noneMatch(argument -> argument.startsWith("DATABASE_PASSWORD="));
-        assertThat(builder.environment()).containsEntry("DATABASE_PASSWORD", "argv-secret-value");
+        assertThat(process.environmentVariables()).containsEntry("DATABASE_PASSWORD", "argv-secret-value");
+        assertThat(process.inheritsEnvironment()).as("the daemon environment is never the base").isFalse();
     }
 
     /**
@@ -118,12 +121,13 @@ class SystemUsersTest {
     @Test
     void everySpawnedChildRunsWithNoNewPrivileges() throws Exception {
         // 1. Positive anchor: the spawn path works at all and the child can report.
-        ProcessBuilder builder = SystemUsers.executionBuilder(null,
-            SystemUsers.safeEnvironment(System.getProperty("java.io.tmpdir")),
-            List.of("/usr/bin/setpriv", "--dump"), false);
-        Process process = builder.redirectErrorStream(true).start();
-        String dump = new String(process.getInputStream().readAllBytes());
-        assertThat(process.waitFor()).as("step 1: the child must run").isZero();
+        ProcessOutcome spawned = SystemUsers.execution(null,
+                SystemUsers.safeEnvironment(System.getProperty("java.io.tmpdir")),
+                List.of("/usr/bin/setpriv", "--dump"), false)
+            .mergeStderr()
+            .run();
+        String dump = spawned.stdout().text();
+        assertThat(spawned.exitCode()).as("step 1: the child must run").isZero();
         assertThat(dump).as("step 1: setpriv --dump must report the child's own state")
             .contains("uid:");
 
@@ -134,10 +138,7 @@ class SystemUsersTest {
 
         // 3. Counter-anchor: a child spawned WITHOUT this path does not have it, so
         //    step 2 measured the floor and not a machine that sets it for everything.
-        Process bare = new ProcessBuilder("/usr/bin/setpriv", "--dump")
-            .redirectErrorStream(true).start();
-        String bareDump = new String(bare.getInputStream().readAllBytes());
-        bare.waitFor();
+        String bareDump = Subprocess.of("/usr/bin/setpriv", "--dump").mergeStderr().run().stdout().text();
         assertThat(bareDump.lines().map(String::trim).toList())
             .as("step 3: an unmanaged process on this host does NOT have the bit")
             .contains("no_new_privs: 0");
@@ -150,13 +151,13 @@ class SystemUsersTest {
      */
     @Test
     void theProcessCapIsNotAppliedToTheDaemonsSharedIdentity() {
-        assertThat(SystemUsers.executionBuilder(null, Map.of(),
+        assertThat(SystemUsers.execution(null, Map.of(),
                 List.of("node", "server.js"), false).command())
             .as("no dedicated user means no per-uid process cap")
             .doesNotContain("/usr/bin/prlimit")
             .containsSequence("/usr/bin/setpriv", "--no-new-privs", "--", "node", "server.js");
 
-        assertThat(SystemUsers.executionBuilder(
+        assertThat(SystemUsers.execution(
                 new SystemUsers.RunAsUser("site", 4242, 4243, "/srv/site"), Map.of(),
                 List.of("node", "server.js"), false).command())
             .as("a dedicated user gets the per-uid process cap")
@@ -166,7 +167,7 @@ class SystemUsersTest {
     /** A confinement prefix wraps the spawn OUTSIDE the privilege drop, never inside it. */
     @Test
     void theConfinementScopeWrapsTheSpawnOutsideTheDrop() {
-        List<String> command = SystemUsers.executionBuilder(
+        List<String> command = SystemUsers.execution(
             new SystemUsers.RunAsUser("site", 4242, 4243, "/srv/site"), Map.of(),
             List.of("node", "server.js"), true,
             List.of("/usr/bin/systemd-run", "--scope", "--")).command();
@@ -182,14 +183,13 @@ class SystemUsersTest {
 
     @Test
     void explicitChildEnvironmentDoesNotInheritDaemonSecrets() throws Exception {
-        ProcessBuilder builder = new ProcessBuilder("sh", "-c", "env");
         Map<String, String> environment = SystemUsers.safeEnvironment("/srv/site");
         environment.put("PORT", "4321");
-        SystemUsers.setEnvironment(builder, environment);
-
-        Process process = builder.redirectErrorStream(true).start();
-        String output = new String(process.getInputStream().readAllBytes());
-        assertThat(process.waitFor()).isZero();
+        ProcessOutcome env = SystemUsers.withEnvironment(Subprocess.of("sh", "-c", "env"), environment)
+            .mergeStderr()
+            .run();
+        String output = env.stdout().text();
+        assertThat(env.exitCode()).isZero();
         assertThat(output)
             .contains("PATH=")
             .contains("HOME=/srv/site")

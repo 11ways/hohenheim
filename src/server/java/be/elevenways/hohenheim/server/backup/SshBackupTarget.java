@@ -3,15 +3,16 @@ package be.elevenways.hohenheim.server.backup;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
-import be.elevenways.hohenheim.server.process.BoundedProcess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
+import be.elevenways.protoblast.server.process.Termination;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
@@ -21,6 +22,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -57,6 +59,9 @@ public final class SshBackupTarget implements BackupTarget {
     private static final long COMMAND_IDLE_TIMEOUT_MS = 600_000;
 
     private static final int STDERR_CAP_CHARS = 64 * 1024;
+
+    /** The bound on a captured answer: a listing of every stored archive fits many times over. */
+    private static final int CAPTURE_CAP_BYTES = 16 * 1024 * 1024;
 
     private final int serverId;
     private final @NonNull String basePath;
@@ -256,32 +261,53 @@ public final class SshBackupTarget implements BackupTarget {
     }
 
     /**
-     * AIDEV-NOTE: the bound is IDLE time ({@link BoundedProcess#stream}): an archive's
+     * AIDEV-NOTE: the bound is IDLE time ({@link Subprocess#idleTimeout}): an archive's
      * upload or download takes as long as its size needs, so a wall clock would cut a
      * large backup, while an ssh that stopped moving bytes is abandoned. The exchange this
      * replaced read stdout to its end before ever consulting the clock, so a wedged ssh
-     * held the backup job forever.
+     * held the backup job forever. A captured answer (a listing, a checksum) is bounded and
+     * refused when it overflows, never silently cut.
      */
     private static byte @NonNull [] exchange(@NonNull List<String> argv,
                                              @Nullable InputStream stdin,
                                              @Nullable OutputStream stdout,
                                              @NonNull String what) throws IOException {
-        ByteArrayOutputStream captured = stdout == null ? new ByteArrayOutputStream() : null;
-        BoundedProcess.Result result;
+        Subprocess ssh = Subprocess.of(argv)
+            .idleTimeout(Duration.ofMillis(COMMAND_IDLE_TIMEOUT_MS))
+            .stderrLimit(STDERR_CAP_CHARS)
+            .stopGrace(Duration.ZERO);
+        if (stdin != null) {
+            ssh.stdin(stdin);
+        }
+        if (stdout != null) {
+            ssh.stdoutTo(stdout);
+        } else {
+            ssh.collectStdout(CAPTURE_CAP_BYTES);
+        }
+        ProcessOutcome result;
         try {
-            result = BoundedProcess.stream(new ProcessBuilder(argv), stdin,
-                stdout != null ? stdout : captured, COMMAND_IDLE_TIMEOUT_MS, STDERR_CAP_CHARS);
+            result = ssh.runChecked();
         } catch (InterruptedIOException interrupted) {
             throw new IOException("SSH backup-target command interrupted: " + what, interrupted);
         }
-        if (result.timedOut()) {
+        if (result.failure() != null) {
+            throw result.failure();
+        }
+        if (result.termination() == Termination.TIMED_OUT) {
             throw new IOException("SSH backup-target command timed out: " + what);
         }
         if (!result.succeeded()) {
             throw new IOException("SSH backup-target command failed (exit "
-                + result.exitCode() + "): " + what + " -- " + result.stderr().trim());
+                + result.exitCode() + "): " + what + " -- " + result.stderr().text().trim());
         }
-        return captured != null ? captured.toByteArray() : new byte[0];
+        if (!result.stdout().complete()) {
+            throw new IOException("SSH backup-target command output never ended: " + what);
+        }
+        if (result.stdout().truncated()) {
+            throw new IOException("SSH backup-target command answered more than "
+                + CAPTURE_CAP_BYTES + " bytes: " + what);
+        }
+        return stdout != null ? new byte[0] : result.stdout().bytes();
     }
 
     /** A remote command flushing one path to disk, degrading to a whole-system sync. */

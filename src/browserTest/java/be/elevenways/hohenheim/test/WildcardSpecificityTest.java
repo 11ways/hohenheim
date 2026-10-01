@@ -48,11 +48,12 @@ class WildcardSpecificityTest {
         broadUpstream = respondingWith("broad-wildcard");
         narrowUpstream = respondingWith("narrow-wildcard");
 
-        // "Alpha" sorts before "Zeta", so pre-fix the broad pattern was consulted first.
+        // "Alpha" sorts before "Zeta", so pre-fix the broad pattern was consulted first; "**." spans every depth,
+        // so it matches foo.example.com too.
         Row alpha = ProxyTestSupport.setupSite("hohenheim:address", "Alpha Broad", "alpha-broad",
             Map.of("forward_host", "127.0.0.1",
                    "forward_port", broadUpstream.getAddress().getPort()));
-        ProxyTestSupport.addDomain(alpha, "*.com", "wildcard", null, false);
+        ProxyTestSupport.addDomain(alpha, "**.com", "wildcard", null, false);
         Row zeta = ProxyTestSupport.setupSite("hohenheim:address", "Zeta Narrow", "zeta-narrow",
             Map.of("forward_host", "127.0.0.1",
                    "forward_port", narrowUpstream.getAddress().getPort()));

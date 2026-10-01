@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.spamservice;
 import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.process.ProcessGroupSupport;
 import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.server.process.Subprocess;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
@@ -140,9 +141,10 @@ class SpamserviceManagerTest {
 
     @Test
     void readinessRequiresTheCurrentLaunchNonce() throws Exception {
-        ProcessBuilder builder = SystemUsers.executionBuilder(null,
-            SystemUsers.safeEnvironment(this.temp.toString()), List.of("/bin/sleep", "60"), true);
-        ManagedServiceProcess process = ManagedServiceProcess.start(builder, null, value -> value);
+        Subprocess spec = SystemUsers.execution(null,
+            SystemUsers.safeEnvironment(this.temp.toString()), List.of("/bin/sleep", "60"), true)
+            .stopGrace(Duration.ofMillis(100));
+        ManagedServiceProcess process = ManagedServiceProcess.start(spec, value -> value);
         try {
             String base = "http://127.0.0.1:" + this.port;
             assertThat(SpamserviceManager.probeReadiness(base, process, "expected", 300, () -> false))
@@ -151,7 +153,7 @@ class SpamserviceManagerTest {
             assertThat(SpamserviceManager.probeReadiness(base, process, "expected", 1_000, () -> false))
                 .isTrue();
         } finally {
-            process.stop(100);
+            process.stop();
         }
     }
 
@@ -310,15 +312,17 @@ class SpamserviceManagerTest {
                 return ProcessGroupSupport.GroupState.UNKNOWN;
             }
         };
-        SpamserviceManager.ProcessLauncher launcher = (requested, runAs, redactor, stdinLine) -> {
+        SpamserviceManager.ProcessLauncher launcher = (requested, redactor, stdinLine) -> {
             List<String> command = List.copyOf(requested.command());
             commands.add(command);
             boolean migration = command.contains("--run-migrations");
-            ProcessBuilder actual = SystemUsers.executionBuilder(null, requested.environment(),
-                List.of("/bin/sh", "-c", migration ? "exit 0" : "sleep 60"), true);
-            return migration
-                ? ManagedServiceProcess.start(actual, null, redactor, stdinLine)
-                : ManagedServiceProcess.start(actual, null, redactor, failedCleanup, stdinLine);
+            Subprocess actual = SystemUsers.execution(null, environmentOf(requested),
+                List.of("/bin/sh", "-c", migration ? "exit 0" : "sleep 60"), true)
+                .stopGrace(Duration.ofMillis(100));
+            if (!migration) {
+                actual.stopOperator(ProcessGroupSupport.stopOperator(null, failedCleanup));
+            }
+            return ManagedServiceProcess.start(actual, redactor, stdinLine);
         };
         SpamserviceManager manager = new SpamserviceManager(new FakeStore(config(true, "key")),
             () -> new ByteArrayInputStream("artifact".getBytes(StandardCharsets.UTF_8)), launcher,
@@ -389,7 +393,7 @@ class SpamserviceManagerTest {
             manager.start();
             await(() -> "ready".equals(manager.snapshot().state()), 5_000);
             assertThat(manager.snapshot().state()).isEqualTo("ready");
-            launcher.processes.get(1).stop(100);
+            launcher.processes.get(1).stop();
 
             await(() -> launcher.commands.size() >= 4, 5_000);
             await(() -> "ready".equals(manager.snapshot().state()), 5_000);
@@ -479,6 +483,19 @@ class SpamserviceManagerTest {
         exchange.close();
     }
 
+    /** The explicit environment a launch was described with (it inherits nothing). */
+    private static Map<String, String> environmentOf(Subprocess requested) {
+        assertThat(requested.inheritsEnvironment()).as("a managed launch never inherits the daemon environment")
+            .isFalse();
+        Map<String, String> environment = new java.util.LinkedHashMap<>();
+        requested.environmentVariables().forEach((name, value) -> {
+            if (value != null) {
+                environment.put(name, value);
+            }
+        });
+        return environment;
+    }
+
     private static void await(Check condition, long timeoutMs) {
         Poll.until("the manager reaches the awaited condition", Duration.ofMillis(timeoutMs),
             Duration.ofMillis(20), condition::ok);
@@ -496,20 +513,19 @@ class SpamserviceManagerTest {
         }
 
         @Override
-        public synchronized ManagedServiceProcess launch(ProcessBuilder requested,
-                                                          SystemUsers.RunAsUser runAs,
+        public synchronized ManagedServiceProcess launch(Subprocess requested,
                                                           UnaryOperator<String> redactor,
                                                           String stdinLine)
                 throws IOException {
             List<String> command = List.copyOf(requested.command());
             this.commands.add(command);
-            this.environments.add(Map.copyOf(requested.environment()));
+            this.environments.add(Map.copyOf(environmentOf(requested)));
             this.stdinLines.add(stdinLine);
             boolean migration = command.contains("--run-migrations");
-            ProcessBuilder actual = SystemUsers.executionBuilder(null, requested.environment(),
+            Subprocess actual = SystemUsers.execution(null, environmentOf(requested),
                 List.of("/bin/sh", "-c", migration || this.serverExits ? "exit 0" : "sleep 60"),
-                true);
-            ManagedServiceProcess process = ManagedServiceProcess.start(actual, null, redactor, stdinLine);
+                true).stopGrace(Duration.ofMillis(100));
+            ManagedServiceProcess process = ManagedServiceProcess.start(actual, redactor, stdinLine);
             this.processes.add(process);
             return process;
         }

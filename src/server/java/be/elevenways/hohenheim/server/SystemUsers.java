@@ -2,8 +2,11 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.SystemUserModel;
+import be.elevenways.hohenheim.server.process.ProcessGroupSupport;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.server.process.Subprocess;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
@@ -13,7 +16,7 @@ import java.util.Map;
 
 /**
  * Resolves a configured system user to the numeric unix uid used for privilege drop,
- * and builds the hardened ProcessBuilder every spawn goes through. Single source of truth
+ * and describes the hardened {@link Subprocess} every spawn goes through. Single source of truth
  * for the git provisioning and spamservice paths.
  *
  * @author  Jelle De Loecker
@@ -54,22 +57,24 @@ public final class SystemUsers {
         return result;
     }
 
-    /** Replaces ProcessBuilder's daemon environment rather than overlaying secrets onto it. */
-    public static void setEnvironment(ProcessBuilder builder, Map<String, String> environment) {
-        builder.environment().clear();
-        builder.environment().putAll(environment);
+    /** Replaces the daemon's environment rather than overlaying secrets onto it. */
+    public static @NonNull Subprocess withEnvironment(@NonNull Subprocess process,
+                                                      @NonNull Map<String, String> environment) {
+        process.withoutInheritedEnvironment();
+        environment.forEach(process::environment);
+        return process;
     }
 
-    /** Builds a process with an explicit environment, optional uid drop, and optional new session. */
-    public static ProcessBuilder executionBuilder(@Nullable RunAsUser runAs,
-                                                   Map<String, String> environment,
-                                                   List<String> command,
-                                                   boolean newSession) {
-        return executionBuilder(runAs, environment, command, newSession, List.of());
+    /** Describes a process with an explicit environment, optional uid drop, and optional new session. */
+    public static @NonNull Subprocess execution(@Nullable RunAsUser runAs,
+                                                Map<String, String> environment,
+                                                List<String> command,
+                                                boolean newSession) {
+        return execution(runAs, environment, command, newSession, List.of());
     }
 
     /**
-     * The same builder with a CONFINEMENT prefix (a cgroup scope, see
+     * The same description with a CONFINEMENT prefix (a cgroup scope, see
      * {@link ProcessConfinement#scopePrefix}) wrapped around the spawn.
      *
      * AIDEV-NOTE: the layer order is load-bearing in both directions and is the whole
@@ -91,11 +96,11 @@ public final class SystemUsers {
      * no_new_privs closes the lane the bounding set protects: an unprivileged child cannot
      * gain capabilities through a setuid or file-capability exec at all.
      */
-    public static ProcessBuilder executionBuilder(@Nullable RunAsUser runAs,
-                                                   Map<String, String> environment,
-                                                   List<String> command,
-                                                   boolean newSession,
-                                                   List<String> confinementPrefix) {
+    public static @NonNull Subprocess execution(@Nullable RunAsUser runAs,
+                                                Map<String, String> environment,
+                                                List<String> command,
+                                                boolean newSession,
+                                                List<String> confinementPrefix) {
         List<String> result = new ArrayList<>();
         if (newSession) {
             // Keep the session leader outside sudo: sudo may fork a command monitor, but
@@ -108,7 +113,7 @@ public final class SystemUsers {
         if (runAs != null) {
             result.add("/usr/bin/sudo");
             result.add("-n");
-            // ProcessBuilder has already reduced the environment to the explicit map below.
+            // The environment is already reduced to the explicit map below (withEnvironment).
             // Preserving it carries secrets in envp, never in the inspectable argument vector.
             // AIDEV-NOTE: --preserve-env needs a SETENV run-as grant for this uid and
             // /usr/bin/prlimit; tools/install-host.sh writes it for the spamservice account
@@ -131,9 +136,13 @@ public final class SystemUsers {
         result.add("--no-new-privs");
         result.add("--");
         result.addAll(command);
-        ProcessBuilder builder = new ProcessBuilder(result);
-        setEnvironment(builder, environment);
-        return builder;
+        Subprocess process = withEnvironment(Subprocess.of(result), environment);
+        if (newSession) {
+            // The session IS the tree: every process the child starts shares the group whose id is the
+            // session leader's pid, and a uid-dropped member is signalled only through its own uid.
+            process.stopOperator(ProcessGroupSupport.stopOperator(runAs));
+        }
+        return process;
     }
 
     /**

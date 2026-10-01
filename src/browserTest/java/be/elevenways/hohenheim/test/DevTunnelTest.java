@@ -154,7 +154,7 @@ class DevTunnelTest {
         var domainModel = Models.get(SiteDomainModel.class);
         Row domain = domainModel.createEmptyRow();
         domain.set(SiteDomainModel.SITE_ID, site.get(SiteModel.ID));
-        domain.set(SiteDomainModel.HOSTNAME, "*." + BASE);
+        domain.set(SiteDomainModel.HOSTNAME, "**." + BASE);
         domain.set(SiteDomainModel.MATCH_TYPE, "wildcard");
         domain.set(SiteDomainModel.FORCE_SSL, false);
         domainModel.save(domain);
@@ -398,7 +398,7 @@ class DevTunnelTest {
         // 4. The namespace's own wildcard row, by contrast, IS an ordinary route claim --
         //    that is the row the quarantine covers when a dev namespace is torn down.
         Row wildcard = domains.find()
-            .where(SiteDomainModel.HOSTNAME.eq("*." + BASE)).first();
+            .where(SiteDomainModel.HOSTNAME.eq("**." + BASE)).first();
         assertThat(wildcard).as("step 4: the namespace wildcard is a real domain row").isNotNull();
         assertThat((String) wildcard.get(SiteDomainModel.LIVE_ROUTE_KEY))
             .as("step 4: holding a real live route claim").isNotNull();

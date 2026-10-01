@@ -6,11 +6,14 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.incus.IncusClient;
-import be.elevenways.hohenheim.server.process.BoundedProcess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
+import be.elevenways.protoblast.server.process.Termination;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import java.time.Duration;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
@@ -159,17 +162,21 @@ public final class RestoreCapacity {
     private static long remoteAvailable(Row server, String dockerRoot) throws IOException {
         List<String> argv = HostKeys.sshArgv(server,
             List.of("df", "-B1", "--output=avail", dockerRoot));
-        // AIDEV-NOTE: BoundedProcess waits with the deadline; the inline read-then-wait this
+        // AIDEV-NOTE: Subprocess waits with the deadline; the inline read-then-wait this
         // replaced blocked on the pipe until ssh exited, so the 30s bound never applied.
-        BoundedProcess.Result result = BoundedProcess.run(new ProcessBuilder(argv),
-            REMOTE_DF_TIMEOUT_MILLIS, 8_192);
-        if (result.timedOut()) {
+        ProcessOutcome result = Subprocess.of(argv)
+            .collectStdout(8_192)
+            .stderrLimit(8_192)
+            .timeout(Duration.ofMillis(REMOTE_DF_TIMEOUT_MILLIS))
+            .stopGrace(Duration.ZERO)
+            .runChecked();
+        if (result.termination() == Termination.TIMED_OUT) {
             throw new IOException("Remote df timed out");
         }
         if (!result.succeeded()) {
             throw new IOException("Remote df failed (exit " + result.exitCode() + ")");
         }
-        String[] lines = result.stdout().trim().split("\n");
+        String[] lines = result.stdout().text().trim().split("\n");
         try {
             return Long.parseLong(lines[lines.length - 1].trim());
         } catch (NumberFormatException unparseable) {

@@ -74,7 +74,7 @@ final class RouteResolver {
         for (WildcardRoute wildcardRoute : rt.wildcardRoutes) {
             RouteEntry entry = wildcardRoute.entry();
             if (!entry.acceptsListener(listenerIp)) continue;
-            if (!wildcardRoute.pattern().matcher(hostname).matches()) continue;
+            if (!wildcardRoute.pattern().matches(hostname)) continue;
             hostnameKnown = true;
             if (!entry.matchesPath(requestPath)) continue;
             if (bestWildcard == null || entry.pathLength() > bestWildcard.pathLength()) {
