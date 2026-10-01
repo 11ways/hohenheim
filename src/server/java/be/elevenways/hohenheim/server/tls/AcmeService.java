@@ -242,7 +242,7 @@ public class AcmeService {
         certRow.set(CertificateModel.DOMAIN_NAMES_TEXT, String.join(",", hostnames));
         certRow.set(CertificateModel.CHALLENGE_TYPE, challengeType);
         certRow.set(CertificateModel.DNS_PUBLISHER, dnsPublisher);
-        certRow.set(CertificateModel.REQUESTED_BY_USER_ID, requester.subjectId());
+        CertificateModel.setRequester(certRow, requester.subject());
         if (email != null && !email.isBlank()) {
             certRow.set(CertificateModel.LETSENCRYPT_EMAIL, email.trim());
         }
@@ -282,7 +282,7 @@ public class AcmeService {
      * the alternative (stamping the new names first) would point every later renewal at a
      * set no certificate was ever issued for.
      *
-     * AIDEV-NOTE: REQUESTED_BY_USER_ID moves to the re-issuing actor, which is what renewal
+     * AIDEV-NOTE: the stored requester moves to the re-issuing actor, which is what renewal
      * re-authorizes as from here on. That is the correct accountability -- the names on the
      * certificate are now the ones THIS actor asked for -- but it does mean an operator
      * re-issuing a tenant's certificate takes over its renewal authority.
@@ -336,7 +336,7 @@ public class AcmeService {
             certRow.set(CertificateModel.DNS_PUBLISHER, dnsPublisher);
             certRow.set(CertificateModel.LETSENCRYPT_EMAIL,
                 email != null && !email.isBlank() ? email.trim() : null);
-            certRow.set(CertificateModel.REQUESTED_BY_USER_ID, requester.subjectId());
+            CertificateModel.setRequester(certRow, requester.subject());
             certModel.save(certRow);
 
             certificateStore.loadFromDatabase();
@@ -474,7 +474,7 @@ public class AcmeService {
             certRow.set(CertificateModel.CHALLENGE_TYPE, CertificateModel.CHALLENGE_DNS);
             certRow.set(CertificateModel.DNS_PUBLISHER, CertificateModel.DNS_PUBLISHER_MANUAL);
             certRow.set(CertificateModel.AUTO_RENEW, false);
-            certRow.set(CertificateModel.REQUESTED_BY_USER_ID, requester.subjectId());
+            CertificateModel.setRequester(certRow, requester.subject());
             if (email != null && !email.isBlank()) {
                 certRow.set(CertificateModel.LETSENCRYPT_EMAIL, email.trim());
             }
@@ -710,10 +710,11 @@ public class AcmeService {
         List<String> hostnames = Arrays.asList(domainsText.split(","));
 
         try {
-            Integer requestedBy = certRow.get(CertificateModel.REQUESTED_BY_USER_ID);
-            Map<String, Integer> declaring = CertificateAuthority.authorize(requestedBy != null
-                ? CertificateAuthority.Requester.ofSubject(requestedBy)
-                : CertificateAuthority.Requester.SYSTEM, hostnames);
+            // No stored requester is an unattended order; a stored one is re-decided as the pair it is.
+            boolean unattended = certRow.get(CertificateModel.REQUESTED_BY_USER_ID) == null;
+            Map<String, Integer> declaring = CertificateAuthority.authorize(unattended
+                ? CertificateAuthority.Requester.SYSTEM
+                : CertificateAuthority.Requester.ofSubject(CertificateModel.requesterOf(certRow)), hostnames);
 
             String challengeType = certRow.get(CertificateModel.CHALLENGE_TYPE);
             if (challengeType == null || challengeType.isBlank()) {

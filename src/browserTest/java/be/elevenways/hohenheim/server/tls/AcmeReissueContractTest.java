@@ -13,6 +13,7 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -110,7 +111,7 @@ class AcmeReissueContractTest {
             Row cert = certModel.findById(certId);
             String firstPem = cert.get(CertificateModel.CERTIFICATE_PEM);
             // A stored requester the re-issue must overwrite with the actor that re-issued.
-            cert.set(CertificateModel.REQUESTED_BY_USER_ID, 4242);
+            CertificateModel.setRequester(cert, PrincipalRef.account(4242));
             certModel.save(cert);
 
             // 2. RE-ISSUE WITH AN ADDED NAME: same row, new material, new name list.
@@ -135,9 +136,11 @@ class AcmeReissueContractTest {
                 .isEqualTo("one." + ZONE + ",two." + ZONE);
             assertThat((String) afterAdd.get(CertificateModel.STATUS))
                 .as("step 2: and the row is active").isEqualTo(CertificateModel.STATUS_ACTIVE);
-            assertThat((Integer) afterAdd.get(CertificateModel.REQUESTED_BY_USER_ID))
+            assertThat(CertificateModel.requesterOf(afterAdd))
                 .as("step 2: the re-issuing actor is who renewal re-authorizes as from now on")
                 .isNull();
+            assertThat((String) afterAdd.get(CertificateModel.REQUESTED_BY_KIND))
+                .as("step 2: and its kind went with the id").isNull();
 
             // 3. RENEWAL FOLLOWS: the sweep re-orders the NEW set, not the one the row was
             //    created with. This is the whole point of writing the names on success.

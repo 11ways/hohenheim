@@ -22,6 +22,7 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.widget.common.WidgetInstance;
@@ -138,7 +139,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
         // 5. And so does a certificate order: the exact hostname is authorized and
         //    attributed to the tenant's OWN row, the wildcard's names refuse NOT_MANAGED
         //    (served by the catch-all, so never NOT_SERVED), an unserved name NOT_SERVED.
-        CertificateAuthority.Requester tenant = CertificateAuthority.Requester.ofSubject(aliceId);
+        CertificateAuthority.Requester tenant = CertificateAuthority.Requester.ofSubject(PrincipalRef.account(aliceId));
         assertThat(CertificateAuthority.authorize(tenant, List.of("a." + ZONE)))
             .as("step 5: the order is authorized and attributed to the deciding row")
             .containsEntry("a." + ZONE, aliceDomainId);

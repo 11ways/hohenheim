@@ -100,7 +100,7 @@ final class HohenheimGrantPolicy {
         // owner row only runs when the model's rules name an ownerField, and dns_records has
         // no owning-principal column. It is written down anyway because the decision is that
         // ownership WOULD imply them; the day a column lands, ownedBy() is the only edit.
-        // CertificateModel's owner row is live (requested_by_user_id).
+        // CertificateModel's owner row is live (requested_by_user_id with requested_by_kind).
         RecordGrants.declareGrantable(GrantableModel.of(DnsRecordModel.MODEL_ID));
         KnownCapabilities.register(DnsRecordModel.MODEL_ID,
             KnownCapability.of(VIEW)
@@ -363,8 +363,8 @@ final class HohenheimGrantPolicy {
             RecordCapabilityRules.create()
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS)
-                // The requester IS the owner: the column already exists because renewal
-                // re-decides authority against it every sweep.
-                .ownedBy(CertificateModel.REQUESTED_BY_USER_ID.getName()));
+                // The requester IS the owner: the (id, kind) pair renewal re-decides authority
+                // against every sweep.
+                .ownedBy(CertificateModel.REQUESTED_BY_USER_ID, CertificateModel.REQUESTED_BY_KIND));
     }
 }
