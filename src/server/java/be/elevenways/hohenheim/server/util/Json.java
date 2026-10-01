@@ -1,11 +1,15 @@
 package be.elevenways.hohenheim.server.util;
 
+import be.elevenways.protoblast.common.dry.Dry;
 import java.util.Map;
 
 /**
- * Minimal plain-JSON writer for a {@code Map / List / String / Number / Boolean / null} tree --
- * used where DRY's {@code stringify} can't be (it emits DRY's extended, non-JSON syntax), e.g.
- * Docker request bodies and webhook payloads.
+ * Minimal plain-JSON writer for a {@code Map / List / String / Number / Boolean / null} tree, for Docker request
+ * bodies and webhook payloads; its strings are Dry's literal spelling ({@link Dry#appendQuoted}).
+ *
+ * AIDEV-NOTE: not {@code Dry.toJson}, which writes a solidus as {@code \/} and serializes an unknown object through
+ * its registered serializer; this writer keeps the bytes its consumers always sent (a bare solidus, an unknown
+ * object as its {@code toString()} string).
  *
  * AIDEV-NOTE: the deleted IPC channel kept its own JSON writer: it paired with a parser
  * shared with the Node child (a wire contract). Don't fold it into this utility.
@@ -57,26 +61,6 @@ public final class Json {
     }
 
     private static void writeString(String s, StringBuilder sb) {
-        sb.append('"');
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            switch (c) {
-                case '"' -> sb.append("\\\"");
-                case '\\' -> sb.append("\\\\");
-                case '\n' -> sb.append("\\n");
-                case '\r' -> sb.append("\\r");
-                case '\t' -> sb.append("\\t");
-                case '\b' -> sb.append("\\b");
-                case '\f' -> sb.append("\\f");
-                default -> {
-                    if (c < 0x20) {
-                        sb.append(String.format("\\u%04x", (int) c));
-                    } else {
-                        sb.append(c);
-                    }
-                }
-            }
-        }
-        sb.append('"');
+        Dry.appendQuoted(sb, s);
     }
 }

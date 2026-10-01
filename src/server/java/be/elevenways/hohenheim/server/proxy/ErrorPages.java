@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.text.HtmlEscape;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.setting.ContentLocales;
 import be.elevenways.zenit.common.setting.SettingDefinition;
@@ -148,19 +149,16 @@ public final class ErrorPages {
                                    String message) {
         // The same narrowing the template's {% Locales.current() %} applies: never the raw
         // first preference, which would declare "de" over copy the site does not ship in.
-        return "<!DOCTYPE html><html lang=\"" + escapeHtml(ContentLocales.resolve(locales, Zenit.getMessageResolver()).tag())
+        // Attribute escaping (the double quote too) in every position keeps this page byte-identical to before.
+        return "<!DOCTYPE html><html lang=\""
+            + HtmlEscape.attribute(ContentLocales.resolve(locales, Zenit.getMessageResolver()).tag())
             + "\"><head><meta charset=\"UTF-8\">"
-            + "<title>" + escapeHtml(statusCode) + " - " + escapeHtml(title) + "</title></head>"
+            + "<title>" + HtmlEscape.attribute(statusCode) + " - " + HtmlEscape.attribute(title)
+            + "</title></head>"
             + "<body style=\"font-family:sans-serif;text-align:center;padding:4rem\">"
-            + "<h1>" + escapeHtml(statusCode) + "</h1>"
-            + "<p>" + escapeHtml(title) + "</p>"
-            + "<p>" + escapeHtml(message) + "</p>"
+            + "<h1>" + HtmlEscape.attribute(statusCode) + "</h1>"
+            + "<p>" + HtmlEscape.attribute(title) + "</p>"
+            + "<p>" + HtmlEscape.attribute(message) + "</p>"
             + "</body></html>";
-    }
-
-    private static String escapeHtml(String s) {
-        if (s == null) return "";
-        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                .replace("\"", "&quot;");
     }
 }
