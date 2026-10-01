@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
@@ -167,7 +168,7 @@ public class PreviewDeploymentResource extends RowResource {
             Row preview = PreviewDeployments.queue(applicationNumber.intValue(), ref, null, null,
                 DeployTrigger.MANUAL);
             ActivityLog.record(Models.get(InstanceModel.class), applicationNumber.intValue(),
-                "preview_triggered", "manual:" + ref);
+                HohenheimActivityAction.PREVIEW_TRIGGERED, "manual:" + ref);
             return preview.get(PreviewDeploymentModel.ID);
         } catch (Violations refused) {
             throw refused;

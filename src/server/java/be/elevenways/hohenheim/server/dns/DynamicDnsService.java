@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.dns;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.DnsDyndnsCredentialModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -220,7 +221,7 @@ public final class DynamicDnsService {
 
         record.set(DnsRecordModel.VALUE, newIp);
         model.save(record);
-        ActivityLog.record(model, record.get(DnsRecordModel.ID), "dyndns_update", newIp);
+        ActivityLog.record(model, record.get(DnsRecordModel.ID), HohenheimActivityAction.DYNDNS_UPDATE, newIp);
         this.store.bumpSerialAndReload(zone.get(DnsZoneModel.ID));
         Blast.log("DNS: dyndns update", fqdn, type, "->", newIp);
         return new UpdateResult(Status.GOOD, newIp);

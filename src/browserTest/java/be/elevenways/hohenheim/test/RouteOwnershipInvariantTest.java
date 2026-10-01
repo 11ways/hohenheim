@@ -720,7 +720,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         // 5b. An override nobody can attribute is not an override: the lift must be in the
         //     activity log, naming the hostname AND the administrator who freed it.
         Row entry = Models.get(ActivityModel.class).find()
-            .where(ActivityModel.ACTION.eq("quarantine_lifted"))
+            .where(ActivityModel.ACTION.eq("hohenheim:quarantine_lifted"))
             .and(ActivityModel.DETAIL.eq(hostname))
             .orderBy(ActivityModel.ID, SortOrder.DESC).first();
         assertThat(entry).as("step 5b: the lift is recorded as its own action").isNotNull();

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.api;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -9,6 +10,7 @@ import be.elevenways.hohenheim.server.cms.SiteResource;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -60,7 +62,7 @@ public final class SiteApi {
                     FormSubmissionRawValues.fromConduit(conduit), ctx);
                 Row created = Objects.requireNonNull(
                     Models.get(SiteModel.class).findById(siteId));
-                ActivityLog.record(Models.get(SiteModel.class), siteId, "created",
+                ActivityLog.record(Models.get(SiteModel.class), siteId, ZenitActivityAction.CREATE,
                     created.get(SiteModel.NAME));
                 return ApiConduits.json(PaasApi.siteProjection(created, true));
             } catch (Violations refused) {
@@ -132,7 +134,7 @@ public final class SiteApi {
                 int domainId = (Integer) ResourceWrites.create(ApiConduits.adminPanel(), DOMAINS, raw, ctx);
                 Row added = Objects.requireNonNull(
                     Models.get(SiteDomainModel.class).findById(domainId));
-                ActivityLog.record(Models.get(SiteModel.class), siteId, "domain_added",
+                ActivityLog.record(Models.get(SiteModel.class), siteId, HohenheimActivityAction.DOMAIN_ADDED,
                     added.get(SiteDomainModel.HOSTNAME));
                 return ApiConduits.json(domainProjection(added));
             } catch (Violations refused) {
@@ -165,7 +167,7 @@ public final class SiteApi {
             }
             try {
                 ResourceWrites.delete(ApiConduits.adminPanel(), DOMAINS, domain, ctx);
-                ActivityLog.record(Models.get(SiteModel.class), siteId, "domain_removed",
+                ActivityLog.record(Models.get(SiteModel.class), siteId, HohenheimActivityAction.DOMAIN_REMOVED,
                     domain.get(SiteDomainModel.HOSTNAME));
                 return ApiConduits.json(Map.of("id", domainId, "site_id", siteId,
                     "status", "deleted"));

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.model.BackupTargetModel;
@@ -1231,8 +1232,6 @@ public final class InstanceBackups {
         }
     }
 
-    /** The activity action a restore-to-new is recorded under on the NEW record. */
-    public static final String ACTIVITY_RESTORE_ACTION = "restored_backup";
 
     /**
      * Record the restore on the NEW instance, naming its losses.
@@ -1245,7 +1244,7 @@ public final class InstanceBackups {
     private static void recordRestore(int instanceId, @Nullable Object backupId,
                                       @NonNull Restored restored) {
         ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-            ACTIVITY_RESTORE_ACTION, restored.complete()
+            HohenheimActivityAction.RESTORED_BACKUP, restored.complete()
                 ? "backup #" + backupId
                 : "backup #" + backupId + " -- NOT restored: " + restored.describeLosses());
     }

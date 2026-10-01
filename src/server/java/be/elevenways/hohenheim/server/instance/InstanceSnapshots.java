@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
@@ -330,8 +331,6 @@ public final class InstanceSnapshots {
             InstanceModel.STATUS_STOPPED, wasRunning, InstanceMaintenanceWindow.Failure.HOLD_ERROR);
     }
 
-    /** The activity action an in-place snapshot restore is recorded under. */
-    public static final String ACTIVITY_RESTORE_ACTION = "restored_snapshot";
 
     /**
      * Record the restore on the INSTANCE record.
@@ -346,7 +345,7 @@ public final class InstanceSnapshots {
      */
     private static void recordRestore(int instanceId, String detail) {
         ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-            ACTIVITY_RESTORE_ACTION, detail);
+            HohenheimActivityAction.RESTORED_SNAPSHOT, detail);
     }
 
     /**

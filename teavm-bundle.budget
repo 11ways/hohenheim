@@ -5,5 +5,7 @@
 # breach can report how much the bundle GREW since this baseline.
 # 2026-09-28: hawkeye's render-error containment gives every generated template region its own catch (the
 # generated template packages dominate the growth): raw 6046963 -> 6572760, gzip 1425643 -> 1523166.
-cms.js.raw=6901398 measured=6572760
-cms.js.gzip=1599325 measured=1523166
+# 2026-10-01: module-fit stages 1-2 (principal kinds, registries, the common activity action members and their
+# legacy keys in the StoredIds holders): raw 6572760 -> 6746997, gzip 1523166 -> 1599874.
+cms.js.raw=7084347 measured=6746997
+cms.js.gzip=1679868 measured=1599874

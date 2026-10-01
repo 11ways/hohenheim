@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -76,11 +77,7 @@ public final class InstanceMigrations {
     private static final DateTimeFormatter STAMP = DateTimeFormatter
         .ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
 
-    /** The activity action a completed cold migration is recorded under. */
-    public static final String ACTIVITY_MIGRATE_ACTION = "migrated";
 
-    /** The activity action a host drain is recorded under, on the SERVER record. */
-    public static final String ACTIVITY_DRAIN_ACTION = "drained";
 
     private final @NonNull InstanceService instances;
 
@@ -498,7 +495,7 @@ public final class InstanceMigrations {
         // The drain itself is an operator act on the HOST, distinct from the per-instance
         // rows recordMigration wrote: an incomplete drain must be as answerable as a
         // complete one, so this is recorded on both outcomes.
-        ActivityLog.record(Models.get(ServerModel.class), serverId, ACTIVITY_DRAIN_ACTION,
+        ActivityLog.record(Models.get(ServerModel.class), serverId, HohenheimActivityAction.DRAINED,
             "moved " + moved.size() + ", refused " + refused.size()
                 + (complete ? ", host holds none" : ", INCOMPLETE"));
         return new DrainReport(moved, refused, complete);
@@ -517,7 +514,7 @@ public final class InstanceMigrations {
      */
     private static void recordMigration(int instanceId, String sourceName, String targetName) {
         ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-            ACTIVITY_MIGRATE_ACTION, sourceName + " -> " + targetName);
+            HohenheimActivityAction.MIGRATED, sourceName + " -> " + targetName);
     }
 
     private static @NonNull List<Row> instancesOn(int serverId) {

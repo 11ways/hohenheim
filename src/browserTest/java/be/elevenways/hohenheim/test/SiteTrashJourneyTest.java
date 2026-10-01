@@ -11,6 +11,7 @@ import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.flash.FlashNotice;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -78,7 +79,7 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
         assertThat((Object) stored(oak).get(SiteModel.DELETED_AT)).as("step 2: the restore untrashed the site")
             .isNull();
         assertThat(Quotas.usedOf(SITE_BUCKET)).as("step 2: its slot is booked again").isEqualTo(beforeTrash);
-        Row restore = lastActivity(oak, ActivityLog.ACTION_RESTORE);
+        Row restore = lastActivity(oak, ZenitActivityAction.RESTORE.id().toString());
         assertThat(restore).as("step 2: the restore is recorded").isNotNull();
         assertThat((String) restore.get(ActivityModel.ACTOR)).as("step 2: attributed to the administrator")
             .isEqualTo(adminId());
@@ -90,7 +91,7 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
         assertThat(stored(oak)).as("step 3: the permanent delete removed the row").isNull();
         assertThat(Quotas.usedOf(SITE_BUCKET)).as("step 3: a purge of a trashed site releases nothing twice")
             .isEqualTo(beforePurge);
-        Row purge = lastActivity(oak, ActivityLog.ACTION_DELETE);
+        Row purge = lastActivity(oak, ZenitActivityAction.DELETE.id().toString());
         assertThat((String) purge.get(ActivityModel.DETAIL)).as("step 3: recorded as the hard delete it is")
             .isNull();
         assertThat((String) purge.get(ActivityModel.ACTOR)).as("step 3: attributed to the administrator")

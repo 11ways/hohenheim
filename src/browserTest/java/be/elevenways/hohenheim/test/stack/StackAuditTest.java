@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.stack;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.cms.StackResource;
@@ -79,7 +80,7 @@ class StackAuditTest {
         // 1. The SYNCHRONOUS door (adoption, scripts, tests). It hops onto the stack's
         //    worker exactly like the panel does, so it is the same carry under test.
         Accountability.runAs(operator("7"), () -> deployQuietly(stackId, "manual"));
-        Row deployed = onlyActivity(stackId, StackRuntime.ACTIVITY_DEPLOY_ACTION);
+        Row deployed = onlyActivity(stackId, HohenheimActivityAction.DEPLOYED.id().toString());
         assertThat(Map.of(
                 "actor", String.valueOf((Object) deployed.get(ActivityModel.ACTOR)),
                 "origin", String.valueOf((Object) deployed.get(ActivityModel.ORIGIN)),
@@ -97,11 +98,11 @@ class StackAuditTest {
                 throw new IllegalStateException(e);
             }
         });
-        Row rolledBack = onlyActivity(stackId, StackRuntime.ACTIVITY_ROLLBACK_ACTION);
+        Row rolledBack = onlyActivity(stackId, HohenheimActivityAction.ROLLED_BACK.id().toString());
         assertThat((String) rolledBack.get(ActivityModel.ACTOR))
             .as("step 2: attributed to whoever rolled back, not to whoever deployed")
             .isEqualTo("42");
-        assertThat(activityFor(stackId, StackRuntime.ACTIVITY_DEPLOY_ACTION))
+        assertThat(activityFor(stackId, HohenheimActivityAction.DEPLOYED.id().toString()))
             .as("step 2: and a rollback does NOT also count as a forward deploy")
             .hasSize(1);
 
@@ -114,7 +115,7 @@ class StackAuditTest {
                 throw new IllegalStateException(e);
             }
         });
-        Row stopped = onlyActivity(stackId, StackRuntime.ACTIVITY_STOP_ACTION);
+        Row stopped = onlyActivity(stackId, HohenheimActivityAction.STOPPED.id().toString());
         assertThat((String) stopped.get(ActivityModel.DETAIL))
             .as("step 3: the stop names the stack it settled against")
             .isEqualTo("audit-stack");
@@ -132,8 +133,8 @@ class StackAuditTest {
         Accountability.runAs(operator("99"),
             () -> deployAction.handler().apply(panelRow, ctx));
         await("step 4: the queued panel deploy settles",
-            () -> activityFor(panelId, StackRuntime.ACTIVITY_DEPLOY_ACTION).size() == 1);
-        Row panelDeploy = onlyActivity(panelId, StackRuntime.ACTIVITY_DEPLOY_ACTION);
+            () -> activityFor(panelId, HohenheimActivityAction.DEPLOYED.id().toString()).size() == 1);
+        Row panelDeploy = onlyActivity(panelId, HohenheimActivityAction.DEPLOYED.id().toString());
         assertThat(Map.of(
                 "actor", String.valueOf((Object) panelDeploy.get(ActivityModel.ACTOR)),
                 "origin", String.valueOf((Object) panelDeploy.get(ActivityModel.ORIGIN))))
@@ -144,7 +145,7 @@ class StackAuditTest {
         //    adoption, boot recovery) must record as system rather than borrow an actor.
         int systemId = stackRecord("audit-system-stack");
         deployQuietly(systemId, "adoption");
-        Row systemDeploy = onlyActivity(systemId, StackRuntime.ACTIVITY_DEPLOY_ACTION);
+        Row systemDeploy = onlyActivity(systemId, HohenheimActivityAction.DEPLOYED.id().toString());
         assertThat(Map.of(
                 "actor", String.valueOf((Object) systemDeploy.get(ActivityModel.ACTOR)),
                 "origin", String.valueOf((Object) systemDeploy.get(ActivityModel.ORIGIN)),
@@ -158,7 +159,7 @@ class StackAuditTest {
         int tenantStackId = stackRecord("audit-tenant-stack");
         TenantConduits.as(new UserPrincipal(4343, "Stack Tenant"),
             () -> deployQuietly(tenantStackId, "manual"));
-        assertThat((String) onlyActivity(tenantStackId, StackRuntime.ACTIVITY_DEPLOY_ACTION)
+        assertThat((String) onlyActivity(tenantStackId, HohenheimActivityAction.DEPLOYED.id().toString())
                 .get(ActivityModel.ACTOR))
             .as("step 6: a tenant-started stack deploy is the tenant's action, never SYSTEM")
             .isEqualTo("4343");

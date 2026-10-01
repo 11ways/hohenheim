@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.application;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -81,8 +82,6 @@ import java.util.TreeMap;
  */
 public final class ReleaseEngine {
 
-    /** The activity action a SETTLED application rollback is recorded under. */
-    public static final String ACTIVITY_ROLLBACK_ACTION = "rolled_back";
 
     /** Keys of {@code adjustPaths}-injected checkout paths: per-slot, never source identity. */
     private static final List<String> VOLATILE_SETTINGS =
@@ -357,7 +356,7 @@ public final class ReleaseEngine {
         // recorded "rollback_triggered" -- the same one-surface-audited asymmetry the
         // instance power path had. The engine writes its state through role saves and
         // ReleaseOperation rows, neither of which is an activity row about the SITE.
-        ActivityLog.record(Models.get(InstanceModel.class), applicationId, ACTIVITY_ROLLBACK_ACTION,
+        ActivityLog.record(Models.get(InstanceModel.class), applicationId, HohenheimActivityAction.ROLLED_BACK,
             null);
     }
 

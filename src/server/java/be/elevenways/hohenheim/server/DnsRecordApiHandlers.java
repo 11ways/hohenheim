@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -83,7 +84,7 @@ final class DnsRecordApiHandlers {
             }
             applyRecordValues(row, values);
             model.save(row);
-            ActivityLog.record(model, row.get(DnsRecordModel.ID), "created", recordDetail(row));
+            ActivityLog.record(model, row.get(DnsRecordModel.ID), ZenitActivityAction.CREATE, recordDetail(row));
             DnsZoneStore.INSTANCE.bumpSerialAndReload(zoneId);
             return new JsonResult<Object>(
                 new DnsRecordMutationResponse(row.get(DnsRecordModel.ID)));
@@ -108,7 +109,7 @@ final class DnsRecordApiHandlers {
             }
             applyRecordValues(record, values);
             model.save(record);
-            ActivityLog.record(model, record.get(DnsRecordModel.ID), "updated",
+            ActivityLog.record(model, record.get(DnsRecordModel.ID), ZenitActivityAction.UPDATE,
                 recordDetail(record));
             DnsZoneStore.INSTANCE.bumpSerialAndReload(zone.get(DnsZoneModel.ID));
             return new JsonResult<Object>(
@@ -127,7 +128,7 @@ final class DnsRecordApiHandlers {
             Integer recordId = record.get(DnsRecordModel.ID);
             String detail = recordDetail(record);
             model.delete(record);
-            ActivityLog.record(model, recordId, "deleted", detail);
+            ActivityLog.record(model, recordId, ZenitActivityAction.DELETE, detail);
             DnsZoneStore.INSTANCE.bumpSerialAndReload(zone.get(DnsZoneModel.ID));
             return new JsonResult<Object>(new DnsRecordDeleteResponse("deleted"));
         });

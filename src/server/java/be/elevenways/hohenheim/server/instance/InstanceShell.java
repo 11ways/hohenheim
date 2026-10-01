@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -98,9 +99,6 @@ public final class InstanceShell {
      */
     private static final long START_SETTLE_MS = 250;
 
-    /** Activity actions: a shell opening and a shell closing are both audit events. */
-    public static final String ACTIVITY_OPEN = "shell_open";
-    public static final String ACTIVITY_CLOSE = "shell_close";
 
     private static final Map<Integer, List<Session>> LIVE = new ConcurrentHashMap<>();
 
@@ -259,7 +257,7 @@ public final class InstanceShell {
         session.start();
         startSweeper();
 
-        session.record(ACTIVITY_OPEN, started.shell() + " as uid " + runUser);
+        session.record(HohenheimActivityAction.SHELL_OPEN, started.shell() + " as uid " + runUser);
         Blast.log("SHELL: opened on instance", instanceId, "as uid", runUser,
             "->", started.shell());
         return session;
@@ -521,7 +519,7 @@ public final class InstanceShell {
             if (sessions != null) {
                 sessions.remove(this);
             }
-            this.record(ACTIVITY_CLOSE, this.shell + " as uid " + this.runUser
+            this.record(HohenheimActivityAction.SHELL_CLOSE, this.shell + " as uid " + this.runUser
                 + " (" + reason.name().toLowerCase(java.util.Locale.ROOT) + ")");
             Blast.log("SHELL: closed on instance", this.instanceId, "-", reason);
             try {
@@ -543,7 +541,7 @@ public final class InstanceShell {
          * this runs on a pump/sweeper thread where neither ThreadLocal survives -- without
          * them an audited act would be recorded as system work, or not at all.
          */
-        void record(@NonNull String action, @NonNull String detail) {
+        void record(@NonNull HohenheimActivityAction action, @NonNull String detail) {
             Runnable write = () -> Accountability.runAs(this.accountability, () ->
                 ActivityLog.record(Models.get(InstanceModel.class), this.instanceId,
                     action, detail));

@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -136,7 +137,7 @@ public final class IncusTrust {
             }
             String privateKey = Files.readString(key, StandardCharsets.UTF_8);
             String certificate = Files.readString(cert, StandardCharsets.UTF_8);
-            ActivityLog.withAction(ActivityLog.ACTION_UPDATE, "host_identity_rotated", () -> {
+            ActivityLog.withAction(ZenitActivityAction.UPDATE, "host_identity_rotated", () -> {
                 server.set(HostTrustSlot.INCUS_TLS.clientPrivate(), privateKey);
                 server.set(HostTrustSlot.INCUS_TLS.clientPublic(), certificate);
                 Models.get(ServerModel.class).save(server);

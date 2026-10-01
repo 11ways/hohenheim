@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
@@ -116,7 +117,7 @@ class InstanceConsoleCrashRestartTest {
         return Models.get(ActivityModel.class).find()
             .where(ActivityModel.MODEL.eq(InstanceModel.MODEL_ID.toString()))
             .where(ActivityModel.RECORD_ID.eq(String.valueOf(instanceId)))
-            .where(ActivityModel.ACTION.eq(InstanceService.ACTIVITY_DEPLOY_ACTION))
+            .where(ActivityModel.ACTION.eq(HohenheimActivityAction.DEPLOYED.id().toString()))
             .orderBy(ActivityModel.ID, SortOrder.DESC)
             .all();
     }

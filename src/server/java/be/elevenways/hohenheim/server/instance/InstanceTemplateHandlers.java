@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.HandlerSupport;
@@ -64,7 +65,7 @@ public final class InstanceTemplateHandlers {
                 try {
                     int templateId = CommunityScripts.importApp(catalogApp);
                     ActivityLog.record(Models.get(InstanceTemplateModel.class), templateId,
-                        "imported", "vendored catalog: " + catalogApp);
+                        HohenheimActivityAction.IMPORTED, "vendored catalog: " + catalogApp);
                     return HandlerSupport.redirect(
                         CmsRoutes.detail(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_TEMPLATES, templateId));
                 } catch (Violations violations) {
@@ -79,7 +80,7 @@ public final class InstanceTemplateHandlers {
             try {
                 int templateId = new TemplatePortability().importDocument(document, source);
                 ActivityLog.record(Models.get(InstanceTemplateModel.class), templateId,
-                    "imported", source.isEmpty() ? "paste" : source);
+                    HohenheimActivityAction.IMPORTED, source.isEmpty() ? "paste" : source);
                 return HandlerSupport.redirect(
                     CmsRoutes.detail(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_TEMPLATES, templateId));
             } catch (Violations violations) {

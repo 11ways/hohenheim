@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.stack;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.live.LiveLane;
@@ -275,7 +276,7 @@ class StackRuntimeFlowTest {
             List<Row> purged = Models.get(ActivityModel.class).find()
                 .where(ActivityModel.MODEL.eq(StackModel.MODEL_ID.toString()))
                 .where(ActivityModel.RECORD_ID.eq(String.valueOf(stackId)))
-                .where(ActivityModel.ACTION.eq(StackRuntime.ACTIVITY_PURGE_ACTION))
+                .where(ActivityModel.ACTION.eq(HohenheimActivityAction.VOLUMES_PURGED.id().toString()))
                 .all();
             assertThat(purged)
                 .withFailMessage("step 2: the volume purge must name who destroyed the"

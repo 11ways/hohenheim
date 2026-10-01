@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.notification.Alerts;
@@ -260,7 +261,7 @@ public final class NotificationChannelResource extends RowResource {
                         .resolve(locales, Zenit.getMessageResolver()),
                     Microcopy.of("test_body").withFilter("scope", "notification_channel")
                         .resolve(locales, Zenit.getMessageResolver()));
-                ActivityLog.record(this.model(), row.get(NotificationChannelModel.ID), "tested", name);
+                ActivityLog.record(this.model(), row.get(NotificationChannelModel.ID), HohenheimActivityAction.TESTED, name);
                 return outcome.sent()
                     ? CmsActionResult.refreshWithToast(testSucceeded(outcome))
                     : CmsActionResult.errorToast(Microcopy.of("test_failed").withFilter("scope", "notification_channel")

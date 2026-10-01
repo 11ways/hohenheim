@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.server.host.HostLeases;
@@ -11,6 +12,7 @@ import be.elevenways.zenit.cms.common.action.ActionContext;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -119,10 +121,10 @@ class InstancePowerAuditTest {
             //    -- the composition is the service's, so the audit trail shows the pair
             //    rather than a single unexplained "restarted" row nobody can reconcile.
             Accountability.runAs(operator("9"), () -> service.restart(id));
-            assertThat(activityFor(id, InstanceService.ACTIVITY_STOP_ACTION))
+            assertThat(activityFor(id, HohenheimActivityAction.STOPPED.id().toString()))
                 .as("step 2: the restart's stop half is recorded")
                 .hasSize(1);
-            assertThat(activityFor(id, InstanceService.ACTIVITY_DEPLOY_ACTION))
+            assertThat(activityFor(id, HohenheimActivityAction.DEPLOYED.id().toString()))
                 .as("step 2: and its deploy half, beside the initial deploy")
                 .hasSize(2);
             assertThat(FakeNativeDaemons.daemonOf(hostId).get(handle).running)
@@ -157,10 +159,10 @@ class InstancePowerAuditTest {
                     + " deploy's own error state -- anything else (stopped, running) reads"
                     + " as an outcome nobody produced")
                 .isEqualTo(InstanceModel.STATUS_ERROR);
-            assertThat(activityFor(id, InstanceService.ACTIVITY_STOP_ACTION))
+            assertThat(activityFor(id, HohenheimActivityAction.STOPPED.id().toString()))
                 .as("step 3: the stop half that DID land is still recorded")
                 .hasSize(2);
-            assertThat(activityFor(id, InstanceService.ACTIVITY_DEPLOY_ACTION))
+            assertThat(activityFor(id, HohenheimActivityAction.DEPLOYED.id().toString()))
                 .as("step 3: and the failed deploy recorded nothing -- only settled"
                     + " operations are answerable")
                 .hasSize(2);
@@ -182,7 +184,7 @@ class InstancePowerAuditTest {
             InstanceService service = new InstanceService();
             Accountability.runAs(operator("7"), () -> service.deploy(serviceId));
 
-            List<Row> deployed = activityFor(serviceId, InstanceService.ACTIVITY_DEPLOY_ACTION);
+            List<Row> deployed = activityFor(serviceId, HohenheimActivityAction.DEPLOYED.id().toString());
             assertThat(deployed)
                 .as("step 1: a settled deploy writes EXACTLY ONE activity row"
                     + " (the outcome write is a fenced updateAll and fires no hooks)")
@@ -200,7 +202,7 @@ class InstancePowerAuditTest {
 
             // 2. Stop is the same contract, not a second policy.
             Accountability.runAs(operator("7"), () -> service.stop(serviceId));
-            List<Row> stopped = activityFor(serviceId, InstanceService.ACTIVITY_STOP_ACTION);
+            List<Row> stopped = activityFor(serviceId, HohenheimActivityAction.STOPPED.id().toString());
             assertThat(stopped).as("step 2: a settled stop records once").hasSize(1);
             assertThat((String) stopped.get(0).get(ActivityModel.ORIGIN))
                 .as("step 2: with the same attribution the deploy carried")
@@ -219,7 +221,7 @@ class InstancePowerAuditTest {
 
             Accountability.runAs(operator("42"),
                 () -> deployAction.handler().apply(panelRow, ctx));
-            List<Row> panelDeploy = activityFor(panelId, InstanceService.ACTIVITY_DEPLOY_ACTION);
+            List<Row> panelDeploy = activityFor(panelId, HohenheimActivityAction.DEPLOYED.id().toString());
             assertThat(panelDeploy)
                 .withFailMessage("step 3: the PANEL deploy row action must be as answerable"
                     + " as the API one; found %s activity rows", panelDeploy.size())
@@ -230,7 +232,7 @@ class InstancePowerAuditTest {
 
             Accountability.runAs(operator("42"),
                 () -> stopAction.handler().apply(panelRow, ctx));
-            List<Row> panelStop = activityFor(panelId, InstanceService.ACTIVITY_STOP_ACTION);
+            List<Row> panelStop = activityFor(panelId, HohenheimActivityAction.STOPPED.id().toString());
             assertThat(panelStop)
                 .withFailMessage("step 3: the PANEL stop row action must record too;"
                     + " found %s activity rows", panelStop.size())
@@ -245,14 +247,14 @@ class InstancePowerAuditTest {
                 service.deploy(destroyId);
                 new InstanceService().destroy(destroyId);
             });
-            List<Row> destroyed = activityFor(destroyId, ActivityLog.ACTION_DELETE);
+            List<Row> destroyed = activityFor(destroyId, ZenitActivityAction.DELETE.id().toString());
             assertThat(destroyed)
                 .as("step 4: a service-lane destroy is recorded as a DELETE, not an update")
                 .hasSize(1);
             assertThat((String) destroyed.get(0).get(ActivityModel.DETAIL))
                 .as("step 4: named as the verified destroy it is")
                 .isEqualTo(InstanceService.ACTIVITY_DESTROY_DETAIL);
-            assertThat(activityFor(destroyId, ActivityLog.ACTION_UPDATE))
+            assertThat(activityFor(destroyId, ZenitActivityAction.UPDATE.id().toString()))
                 .as("step 4: and NOT additionally as a bare update -- the soft delete's"
                     + " own hook row is the one that got renamed, not a second row")
                 .isEmpty();
@@ -265,7 +267,7 @@ class InstancePowerAuditTest {
                 service.deploy(panelDestroyId);
                 panel.deleteRow(toDelete, AccessContext.anonymous());
             });
-            List<Row> panelDestroyed = activityFor(panelDestroyId, ActivityLog.ACTION_DELETE);
+            List<Row> panelDestroyed = activityFor(panelDestroyId, ZenitActivityAction.DELETE.id().toString());
             assertThat(panelDestroyed)
                 .as("step 5: the panel destroy records exactly one delete row")
                 .hasSize(1);

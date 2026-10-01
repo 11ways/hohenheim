@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -85,17 +86,17 @@ public final class InstanceAppUpdates {
                 script, env, UPDATE_TIMEOUT_MS);
             if (!outcome.succeeded()) {
                 ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-                    "app_update_failed", "exit " + outcome.exitCode());
+                    HohenheimActivityAction.APP_UPDATE_FAILED, "exit " + outcome.exitCode());
                 throw refusal("app_update_failed", resolved.row(),
                     new IOException("exit " + outcome.exitCode() + "\n" + outcome.outputTail()));
             }
             ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-                "app_updated", "in-place update script completed");
+                HohenheimActivityAction.APP_UPDATED, "in-place update script completed");
             Blast.log("INSTANCE: app update completed for", resolved.spec().handle());
             return outcome.outputTail();
         } catch (IOException error) {
             ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-                "app_update_failed", String.valueOf(error.getMessage()));
+                HohenheimActivityAction.APP_UPDATE_FAILED, String.valueOf(error.getMessage()));
             throw refusal("app_update_failed", resolved.row(), error);
         }
     }

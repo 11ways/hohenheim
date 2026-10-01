@@ -11,7 +11,9 @@ import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.ActivityResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
+import be.elevenways.zenit.common.orm.activity.ActivityActions;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.Accountability;
 import org.junit.jupiter.api.Test;
@@ -121,27 +123,27 @@ class AdminActivityListTest extends HohenheimTestBase {
             .as("step 4: the origin filter narrows to that origin")
             .doesNotContain(OPERATOR_TITLE);
 
-        // 5. A verb leaves the resource as the SHARED localized label, not as the raw
-        //    snake_case token the column used to print.
+        // 5. A verb leaves the resource as its member's localized label, not as the raw
+        //    snake_case token the column used to print; the legacy "created" reads as the core verb (F6).
         Object verbCell = resource.cellValue(rowFor(OPERATOR_RECORD_ID),
             column(resource, ActivityModel.ACTION.getName()));
         assertThat(verbCell)
             .as("step 5: the verb cell is the localized label")
             .isInstanceOf(Microcopy.class);
         assertThat(((Microcopy) verbCell).key())
-            .as("step 5: the label is keyed by the stored verb")
-            .isEqualTo("created");
+            .as("step 5: the label is the core create verb's")
+            .isEqualTo(ZenitActivityAction.CREATE.label().key());
 
-        // 6. An unregistered verb still says what happened: the shared label falls open to
-        //    the raw verb, so a new hohenheim action is never a blank cell.
+        // 6. An undeclared verb reads as the one unknown label, never as its raw text and
+        //    never as a blank cell.
         Object unknownCell = resource.cellValue(rowFor(UNLINKABLE_RECORD_ID),
             column(resource, ActivityModel.ACTION.getName()));
         assertThat(((Microcopy) unknownCell).key())
-            .as("step 6: an unregistered verb keeps its own text")
-            .isEqualTo(UNREGISTERED_VERB);
+            .as("step 6: an undeclared verb reads as the unknown label")
+            .isEqualTo(ActivityActions.unknownLabel().key());
         assertThat(defaultList.body())
-            .as("step 6: and that text is what the list prints")
-            .contains(UNREGISTERED_VERB);
+            .as("step 6: and that label is what the list prints")
+            .contains("Unknown action");
 
         // 7. A record a registered resource serves is a LINK to that record; the label is
         //    the title the row stored, never a fresh lookup.

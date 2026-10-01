@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.instance.InstallMediaFetchState;
 import be.elevenways.hohenheim.model.InstallMediaFetchModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -201,7 +202,7 @@ public final class InstallMediaFetches {
             write(fetchId, InstallMediaFetchState.DOWNLOADING, null, null, false);
             transfer.run(progress);
             write(fetchId, InstallMediaFetchState.READY, 1.0, null, true);
-            ActivityLog.record(Models.get(ServerModel.class), serverId, "media_fetched", name);
+            ActivityLog.record(Models.get(ServerModel.class), serverId, HohenheimActivityAction.MEDIA_FETCHED, name);
         } catch (IOException | RuntimeException failure) {
             String reason = failure.getMessage() != null && !failure.getMessage().isBlank()
                 ? failure.getMessage() : failure.getClass().getSimpleName();

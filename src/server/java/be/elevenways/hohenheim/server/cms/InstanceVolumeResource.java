@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimParams;
@@ -30,6 +31,7 @@ import be.elevenways.zenit.common.data.RowScope;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -214,7 +216,7 @@ public class InstanceVolumeResource extends RowResource {
             String.valueOf(coerced.get("container_path")),
             quotaBytesOf(coerced, null), Boolean.TRUE.equals(coerced.get("exclusive")));
         ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-            "volume_declared", name);
+            HohenheimActivityAction.VOLUME_DECLARED, name);
         return declared.get(InstanceVolumeModel.ID);
     }
 
@@ -247,7 +249,7 @@ public class InstanceVolumeResource extends RowResource {
             Boolean.TRUE.equals(CmsSupport.valueOf(coerced, existing,
                 InstanceVolumeModel.EXCLUSIVE)));
         ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-            "volume_redeclared", name);
+            HohenheimActivityAction.VOLUME_REDECLARED, name);
     }
 
     /**
@@ -269,7 +271,7 @@ public class InstanceVolumeResource extends RowResource {
         }
         String serverName = ServerModel.nameOf(ServerModel.canonicalServerId(
             instance != null ? instance.get(InstanceModel.SERVER_ID) : null));
-        ActivityLog.withAction(ActivityLog.ACTION_DELETE, "volume_destroyed",
+        ActivityLog.withAction(ZenitActivityAction.DELETE, "volume_destroyed",
             () -> InstanceVolumes.destroyOne(instanceId, name, serverName));
     }
 

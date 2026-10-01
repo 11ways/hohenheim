@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.api;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -12,6 +13,7 @@ import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -73,7 +75,7 @@ public final class DnsZoneApi {
                     FormSubmissionRawValues.fromConduit(conduit), ctx);
                 Row created = Objects.requireNonNull(
                     Models.get(DnsZoneModel.class).findById(zoneId));
-                ActivityLog.record(Models.get(DnsZoneModel.class), zoneId, "created",
+                ActivityLog.record(Models.get(DnsZoneModel.class), zoneId, ZenitActivityAction.CREATE,
                     created.get(DnsZoneModel.ORIGIN));
                 return ApiConduits.json(projection(created));
             } catch (Violations refused) {
@@ -109,7 +111,7 @@ public final class DnsZoneApi {
             try {
                 DnsZoneFiles.ImportResult result = DnsZoneFiles.importText(zone, text,
                     DnsZoneFiles.ApexNsPolicy.forKeepFlag(ApiConduits.formValue(conduit, "keep_ns")));
-                ActivityLog.record(Models.get(DnsZoneModel.class), zoneId, "imported",
+                ActivityLog.record(Models.get(DnsZoneModel.class), zoneId, HohenheimActivityAction.IMPORTED,
                     zone.get(DnsZoneModel.ORIGIN));
                 Row reloaded = Objects.requireNonNull(Models.get(DnsZoneModel.class).findById(zoneId));
                 Map<String, Object> body = new LinkedHashMap<>();

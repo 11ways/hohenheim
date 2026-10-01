@@ -12,6 +12,7 @@ import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -161,7 +162,7 @@ class SiteApiTest extends HohenheimTestBase {
         // The accountability of an API write is TWO columns, never one: zenit-auth's
         // resolver stamps the origin off the ApiKeyPrincipal, so the detail slot is free
         // to name the site instead of repeating the origin token.
-        Row logged = activityOf(proxySiteId, "created");
+        Row logged = activityOf(proxySiteId, ZenitActivityAction.CREATE.id().toString());
         assertThat(logged).as("step 1: the API create is recorded").isNotNull();
         assertThat((Object) logged.get(ActivityModel.ORIGIN))
             .as("step 1: an API key stamps the origin column").isEqualTo("api");

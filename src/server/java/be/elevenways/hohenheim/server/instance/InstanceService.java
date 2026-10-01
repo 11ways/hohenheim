@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -27,6 +28,7 @@ import be.elevenways.hohenheim.server.runtime.WorkloadAttribution;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -78,14 +80,10 @@ public final class InstanceService {
     /** Publications bind loopback (DockerInstanceRuntime.HOST_BIND_ADDRESS's ledger spelling). */
     private static final String BIND_ADDRESS = "127.0.0.1";
 
-    /** The activity action a SETTLED deploy is recorded under. */
-    public static final String ACTIVITY_DEPLOY_ACTION = "deployed";
 
     /** The trigger a deploy records when its caller names none. */
     public static final String DEFAULT_DEPLOY_REASON = "deploy";
 
-    /** The activity action a SETTLED stop is recorded under. */
-    public static final String ACTIVITY_STOP_ACTION = "stopped";
 
     /** The activity detail a verified destroy renames its soft-delete row with. */
     public static final String ACTIVITY_DESTROY_DETAIL = "destroy";
@@ -381,7 +379,7 @@ public final class InstanceService {
             // The published port is fresh (loopback publications are ephemeral), so any
             // generated SRV rows riding this proxy re-reconcile now.
             GameDomains.afterInstanceDeploy(instanceId);
-            recordPower(instanceId, ACTIVITY_DEPLOY_ACTION, resolved);
+            recordPower(instanceId, HohenheimActivityAction.DEPLOYED, resolved);
             return status;
         } catch (IOException e) {
             InstanceConsoles.closeSession(instanceId);
@@ -444,7 +442,7 @@ public final class InstanceService {
             this.beforeOutcomeWrite.run();
             stampGuarded(resolved, fence, InstanceModel.STATUS_STOPPED);
             PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
-            recordPower(instanceId, ACTIVITY_STOP_ACTION, resolved);
+            recordPower(instanceId, HohenheimActivityAction.STOPPED, resolved);
         } catch (IOException e) {
             stampGuarded(resolved, fence, InstanceModel.STATUS_ERROR);
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
@@ -549,7 +547,7 @@ public final class InstanceService {
      * it settled against; a failed operation is answered by the {@code error} status
      * stamp and its named refusal, not by an activity row claiming it happened.
      */
-    private static void recordPower(int instanceId, @NonNull String action,
+    private static void recordPower(int instanceId, @NonNull HohenheimActivityAction action,
                                     @NonNull Resolved resolved) {
         ActivityLog.record(Models.get(InstanceModel.class), instanceId, action,
             resolved.spec().handle());
@@ -653,7 +651,7 @@ public final class InstanceService {
         // wrapper, which left every OTHER destroy caller (the release engine, preview expiry,
         // database teardown) recording a bare "update" for an irreversible teardown.
         boolean[] trashed = {false};
-        ActivityLog.withAction(ActivityLog.ACTION_DELETE, ACTIVITY_DESTROY_DETAIL,
+        ActivityLog.withAction(ZenitActivityAction.DELETE, ACTIVITY_DESTROY_DETAIL,
             () -> TenantWrites.inAuthorizedOperation(
                 () -> trashed[0] = Models.get(InstanceModel.class).delete(instanceId)));
         return trashed[0];
@@ -769,8 +767,6 @@ public final class InstanceService {
 
     // -- interrupted capture/restore recovery ---------------------------------------
 
-    /** The activity action an interrupted-status settle is recorded under. */
-    public static final String ACTIVITY_SETTLE_ACTION = "settled_interrupted";
 
     /**
      * Boot recovery: settle every instance a killed controller left {@code capturing} or
@@ -869,7 +865,7 @@ public final class InstanceService {
         InstanceOperationGuard.stamp(this.leases, instanceId, resolved.serverId(), fence,
             settled, row.get(InstanceModel.NAME));
         ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-            ACTIVITY_SETTLE_ACTION, status + " -> " + settled
+            HohenheimActivityAction.SETTLED_INTERRUPTED, status + " -> " + settled
                 + " (interrupted by a controller restart)");
         Blast.log("INSTANCE: settled interrupted", status, "state of",
             row.get(InstanceModel.NAME), "->", settled);
@@ -914,7 +910,7 @@ public final class InstanceService {
         }
         List<String> removed = new ArrayList<>(removeNamedVolumes(row, serverName));
         removed.addAll(InstanceVolumes.destroyAll(instanceId, serverName));
-        ActivityLog.record(Models.get(InstanceModel.class), instanceId, "deleted_data",
+        ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.DELETED_DATA,
             String.join(", ", removed));
         Blast.log("INSTANCE: deleted data of", row.get(InstanceModel.NAME), "-",
             removed.isEmpty() ? "nothing to remove" : String.join(", ", removed));

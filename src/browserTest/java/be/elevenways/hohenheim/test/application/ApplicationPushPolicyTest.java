@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.application;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -231,7 +232,7 @@ class ApplicationPushPolicyTest {
                 //    person standing there asking, and the one whose permission to start
                 //    a stopped workload is a decision rather than a default.
                 List<Row> deployed = activityFor(applicationId,
-                    InstanceService.ACTIVITY_DEPLOY_ACTION);
+                    HohenheimActivityAction.DEPLOYED.id().toString());
                 assertThat(deployed)
                     .as("step 2: the row action recorded the deploy")
                     .isNotEmpty();

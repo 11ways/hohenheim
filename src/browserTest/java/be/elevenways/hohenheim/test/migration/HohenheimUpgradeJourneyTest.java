@@ -28,6 +28,7 @@ import be.elevenways.zenit.common.orm.activity.ActivityEntry;
 import be.elevenways.zenit.common.orm.activity.ActivityGroup;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityPageRequest;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -192,7 +193,7 @@ class HohenheimUpgradeJourneyTest {
         // 6. Activity on framework models reads through today's model ids; no old spelling is left behind.
         List<ActivityEntry> userHistory = history(AuthModels.users(), operatorId);
         assertThat(userHistory).as("step 6: the operator's creation is in its history")
-            .anySatisfy(entry -> assertThat(entry.action()).isEqualTo(ActivityLog.ACTION_CREATE));
+            .anySatisfy(entry -> assertThat(entry.action()).isEqualTo(ZenitActivityAction.CREATE.id().toString()));
         assertThat(strings(url, "SELECT DISTINCT model FROM zenit_activity"))
             .as("step 6: every activity row names today's model id")
             .contains("zenit:user", "zenit:grant", "zenit:permission_group", "zenit:record_grant", "zenit:api_key",
@@ -207,7 +208,7 @@ class HohenheimUpgradeJourneyTest {
         assertThat(history(Models.get(SiteModel.class), siteId))
             .as("step 7: the site's update is in its history, linked to revision 1")
             .anySatisfy(entry -> {
-                assertThat(entry.action()).isEqualTo(ActivityLog.ACTION_UPDATE);
+                assertThat(entry.action()).isEqualTo(ZenitActivityAction.UPDATE.id().toString());
                 assertThat(entry.revision()).isEqualTo(1);
             });
 

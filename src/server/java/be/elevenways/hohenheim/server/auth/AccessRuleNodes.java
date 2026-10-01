@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.auth;
 
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -47,7 +48,7 @@ public final class AccessRuleNodes {
         rule.set(AccessRuleModel.SORT, model.findChildren(listId, parentId).size());
         rule.set(AccessRuleModel.ENABLED, AccessRuleModel.TYPE_GROUP.equals(type));
         model.save(rule);
-        ActivityLog.record(model, rule.get(AccessRuleModel.ID), "created", type);
+        ActivityLog.record(model, rule.get(AccessRuleModel.ID), ZenitActivityAction.CREATE, type);
         return rule;
     }
 

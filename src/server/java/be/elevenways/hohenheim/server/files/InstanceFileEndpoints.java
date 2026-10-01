@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.files;
 
 import be.elevenways.domino.common.DominoFile;
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
@@ -83,13 +84,14 @@ public final class InstanceFileEndpoints {
             String action = string(form, "action");
             String path = string(form, "path");
             String back = string(form, "directory");
+            HohenheimActivityAction performed;
             try {
-                perform(instanceId, action, form, path);
+                performed = perform(instanceId, action, form, path);
             } catch (Violations refused) {
                 return HandlerSupport.redirectUntyped(filesUrl(conduit, instanceId,
                     back.isEmpty() ? parentOf(path) : back, refused));
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "files_" + action, path);
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, performed, path);
             return HandlerSupport.redirectUntyped(filesUrl(conduit, instanceId,
                 back.isEmpty() ? parentOf(path) : back, null));
         });
@@ -158,7 +160,7 @@ public final class InstanceFileEndpoints {
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "files_write", path);
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.FILES_WRITE, path);
             return ApiConduits.json(Map.of("id", instanceId, "path", path, "status", "written"));
         });
 
@@ -171,13 +173,13 @@ public final class InstanceFileEndpoints {
             Map<String, Object> form = FormSubmissionRawValues.fromConduit(conduit);
             String action = string(form, "action");
             String path = string(form, "path");
+            HohenheimActivityAction performed;
             try {
-                perform(instanceId, action, form, path);
+                performed = perform(instanceId, action, form, path);
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-                "files_" + action, path);
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, performed, path);
             return ApiConduits.json(Map.of("id", instanceId, "path", path, "action", action));
         });
     }
@@ -188,20 +190,37 @@ public final class InstanceFileEndpoints {
      * Every mutating verb, in one place, so the HTML form and the API call cannot drift on
      * what an action means.
      *
+     * @return the activity verb the performed action is recorded under
      * @throws Violations {@code files_unknown_action} for anything not named here
      */
-    private static void perform(int instanceId, @NonNull String action,
-                                @NonNull Map<String, Object> form, @NonNull String path) {
+    private static @NonNull HohenheimActivityAction perform(int instanceId, @NonNull String action,
+                                                            @NonNull Map<String, Object> form,
+                                                            @NonNull String path) {
         InstanceFiles files = new InstanceFiles();
-        switch (action) {
-            case "save" -> files.write(instanceId, path, contentOf(form));
-            case "upload" -> files.write(instanceId, path, uploadOf(form));
-            case "mkdir" -> files.makeDirectory(instanceId, path);
-            case "rename" -> files.rename(instanceId, path, string(form, "target"));
-            case "delete" -> files.delete(instanceId, path);
+        return switch (action) {
+            case "save" -> {
+                files.write(instanceId, path, contentOf(form));
+                yield HohenheimActivityAction.FILES_SAVE;
+            }
+            case "upload" -> {
+                files.write(instanceId, path, uploadOf(form));
+                yield HohenheimActivityAction.FILES_UPLOAD;
+            }
+            case "mkdir" -> {
+                files.makeDirectory(instanceId, path);
+                yield HohenheimActivityAction.FILES_MKDIR;
+            }
+            case "rename" -> {
+                files.rename(instanceId, path, string(form, "target"));
+                yield HohenheimActivityAction.FILES_RENAME;
+            }
+            case "delete" -> {
+                files.delete(instanceId, path);
+                yield HohenheimActivityAction.FILES_DELETE;
+            }
             default -> throw Violations.ofForm(
                 Microcopy.of("files_unknown_action").withFilter("scope", "violations"));
-        }
+        };
     }
 
     /**
