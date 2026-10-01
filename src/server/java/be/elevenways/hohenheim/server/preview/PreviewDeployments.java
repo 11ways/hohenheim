@@ -209,20 +209,16 @@ public final class PreviewDeployments {
             throw Violations.ofField("application_id", applicationId,
                 violation("preview_no_exposing_site"));
         }
-        String hostname = hostnameFor(str(site.get(SiteModel.SLUG)), ref, baseDomain);
-
         PreviewDeploymentModel model = Models.get(PreviewDeploymentModel.class);
         Row preview = model.find()
             .where(PreviewDeploymentModel.APPLICATION_ID.eq(applicationId))
             .where(PreviewDeploymentModel.REF.eq(ref))
             .first();
-        if (preview != null) {
-            // A live preview minted under the legacy label keeps it (see legacyHostnameFor).
-            String legacy = legacyHostnameFor(str(site.get(SiteModel.SLUG)), ref, baseDomain);
-            if (legacy.equals(str(preview.get(PreviewDeploymentModel.HOSTNAME)))) {
-                hostname = legacy;
-            }
-        }
+        // AIDEV-NOTE: an existing preview keeps the hostname it was minted with, whatever slug fold minted it: a
+        // redeploy recomputing it would move a live preview's hostname, its generated domain row and its DNS rows
+        // under whoever is reviewing it. Only a new preview derives one.
+        String stored = preview == null ? "" : str(preview.get(PreviewDeploymentModel.HOSTNAME));
+        String hostname = stored.isEmpty() ? hostnameFor(str(site.get(SiteModel.SLUG)), ref, baseDomain) : stored;
         if (preview == null) {
             // The quota hook charges the application's owner bucket on this save and refuses
             // over-cap creates atomically -- no separate count-then-create window.
@@ -794,21 +790,6 @@ public final class PreviewDeployments {
         return composeHostname(labelOf(siteSlug) + "--" + labelOf(ref), baseDomain);
     }
 
-    /**
-     * The hostname a preview row created before the shared slugifier was adopted derives:
-     * the same composition over the regex label, which does not fold diacritics.
-     *
-     * AIDEV-NOTE: kept ONLY so an existing preview keeps its hostname across a refresh
-     * ({@link #claimLocked}). The two derivations agree on every ASCII ref; they differ
-     * where a ref or slug carries a letter Slugs.slugify folds ("cafe" vs "caf"), and a
-     * refresh recomputing a different name would move a live preview's hostname, its
-     * generated domain row and its DNS rows under whoever is reviewing it.
-     */
-    static @NonNull String legacyHostnameFor(@NonNull String siteSlug, @NonNull String ref,
-                                             @NonNull String baseDomain) {
-        return composeHostname(legacyLabelOf(siteSlug) + "--" + legacyLabelOf(ref), baseDomain);
-    }
-
     private static @NonNull String composeHostname(@NonNull String composed,
                                                    @NonNull String baseDomain) {
         String label = composed;
@@ -826,14 +807,6 @@ public final class PreviewDeployments {
     /** One DNS-safe label: THE shared slugifier, with a placeholder for an empty result. */
     private static @NonNull String labelOf(@NonNull String value) {
         String label = Slugs.slugify(value);
-        return label.isEmpty() ? "x" : label;
-    }
-
-    /** The pre-Slugs label; see {@link #legacyHostnameFor}. */
-    private static @NonNull String legacyLabelOf(@NonNull String value) {
-        String label = value.toLowerCase(Locale.ROOT)
-            .replaceAll("[^a-z0-9]+", "-")
-            .replaceAll("^-+|-+$", "");
         return label.isEmpty() ? "x" : label;
     }
 
