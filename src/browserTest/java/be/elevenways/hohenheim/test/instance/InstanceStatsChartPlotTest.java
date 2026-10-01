@@ -25,7 +25,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * Pinned defects (QA 2026-09-01), both fixed: (a) the hawkeye {@code {% let %}} lane
  * unwrapped a returned live ref into a dead snapshot (fixed in the compiler,
- * {@code LetBoundLiveReferenceTest}); (b) the channel subscription lived inside a render
+ * {@code ReactiveReadJourneyTest.aLetBoundReturnedReferenceStaysLive}); (b) the channel subscription lived inside
+ * a render
  * expression, and hydration revives values without re-running {@code {% let %}} calls, so
  * after a hard load no browser ever opened the socket at all. The subscription now belongs
  * to the mounted {@code hh-instance-stats} element ({@code @mount} + {@code Cleanup.on},

@@ -73,9 +73,7 @@ import java.util.function.BooleanSupplier;
  * 127.0.0.0/8 is not in {@link TenantNetworkRanges} for any tier, but only here can a
  * workload use it to reach the host: a managed process CAN still reach a host service bound
  * to 127.0.0.1. It has to be able to -- its own IPC channel is a loopback port
- * ({@code HOHENHEIM_IPC_PORT}), its upstream listener is a loopback port, and attached
- * managed databases are injected into host-process sites as loopback addresses by design
- * ({@code DatabaseEnvInjection}, pinned by EnvInjectionFlowTest). Closing that would mean a
+ * ({@code HOHENHEIM_IPC_PORT}) and its upstream listener is a loopback port. Closing that would mean a
  * per-process netns, which is the other mechanism this slice weighed and rejected as much
  * larger. What IS closed is every host service reachable on the host's own private
  * addresses, the whole rest of the private network, and the metadata service.

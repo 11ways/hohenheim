@@ -124,7 +124,7 @@ public final class TenantWrites {
      *
      * AIDEV-NOTE: the allow-list above already fails closed on an unlisted type, so this
      * set changes no behaviour -- it exists so a new record type cannot be UNDECIDED. It
-     * lands as a `TenantWriteVocabularyTest` failure naming itself, instead of being
+     * lands as a `DnsRecordTypeVocabularyTest` failure naming itself, instead of being
      * quietly unauthorable for whoever added it. NS delegates a subtree away, CAA
      * redirects or disables issuance for the whole name, MX repoints a domain's mail.
      */
