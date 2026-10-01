@@ -17,6 +17,8 @@ import be.elevenways.zenit.common.security.KnownCapabilities;
 import be.elevenways.zenit.common.security.KnownCapability;
 import be.elevenways.zenit.common.security.RecordCapabilityRules;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import static be.elevenways.hohenheim.server.auth.HohenheimAccess.BACKUPS;
 import static be.elevenways.hohenheim.server.auth.HohenheimAccess.CONFIG;
 import static be.elevenways.hohenheim.server.auth.HohenheimAccess.CONSOLE;
@@ -44,6 +46,9 @@ import static be.elevenways.hohenheim.server.auth.HohenheimAccess.VIEW;
  */
 final class HohenheimGrantPolicy {
 
+    /** The declarations are registry adds, which refuse a second add of a held id: one process declares once. */
+    private static final AtomicBoolean DECLARED = new AtomicBoolean();
+
     private HohenheimGrantPolicy() {
     }
 
@@ -55,9 +60,12 @@ final class HohenheimGrantPolicy {
      * every other model's deletes. Each model's capability VOCABULARY (e.g. site manage is
      * delegable, so a holder may mint the {@code cap:hohenheim:site#manage} API-key scope)
      * and the walk's composition RULES land here too, so the enforcement path and the
-     * delegation path can never see different policies.
+     * delegation path can never see different policies. A repeat (a second host main in one JVM) is a no-op.
      */
     static void declareGrantableModels() {
+        if (!DECLARED.compareAndSet(false, true)) {
+            return;
+        }
         // AIDEV-NOTE: a trashed site must NOT count as alive, or its grants survive the
         // orphan sweep and come straight back the moment the site is restored, handing an
         // operator authority the delete had already withdrawn (and a new grant could be

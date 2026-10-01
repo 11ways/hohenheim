@@ -71,7 +71,7 @@ class ApplicationBackupRecoveryTest {
         FakeDockerDaemon daemon = new FakeDockerDaemon();
         daemon.install();
         SnapshotRuntime runtime = new SnapshotRuntime(daemon.runtime());
-        InstanceKinds.register(new SnapshotKind(runtime));
+        InstanceKinds.replace(new SnapshotKind(runtime));
         ImageTransport transport = new ImageTransport(daemon);
         String priorData = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
         DockerClient.overrideLocalTransportForTest(() -> transport);
