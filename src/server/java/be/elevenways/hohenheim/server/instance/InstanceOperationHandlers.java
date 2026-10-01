@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.common.operation.PlacementSurface;
 import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -42,24 +43,28 @@ public final class InstanceOperationHandlers {
 
     /**
      * The deploy trigger per surface: the trigger decides {@link DeployStartPolicy}, so a surface missing here fails
-     * closed rather than guessing.
-     *
-     * AIDEV-TODO: the admin placement ({@code zenit:admin_action} -> {@link DeployTrigger#MANUAL}) lands with stage 4
-     * section 6, when the instance row actions move onto these operations.
+     * closed rather than guessing. The admin's placed instance actions ({@code InstanceActions}) are a person's
+     * click: MANUAL.
      */
     private static final Map<Identifier, DeployTrigger> TRIGGERS = Map.of(
         ZenitPlacementSurface.SCHEDULE_STEP.id(), DeployTrigger.SCHEDULE,
-        ZenitPlacementSurface.HTTP_API.id(), DeployTrigger.API);
+        ZenitPlacementSurface.HTTP_API.id(), DeployTrigger.API,
+        CmsPlacementSurface.ADMIN_ACTION.id(), DeployTrigger.MANUAL);
 
     /** The note a scheduled snapshot carries when its step stores none. */
     static final String SCHEDULED_NOTE = "scheduled";
 
     static {
-        OperationHandlers.attach(InstanceOperations.START).handle(InstanceOperationHandlers::start);
-        OperationHandlers.attach(InstanceOperations.STOP).handle(InstanceOperationHandlers::stop);
-        OperationHandlers.attach(InstanceOperations.RESTART).handle(InstanceOperationHandlers::restart);
-        OperationHandlers.attach(InstanceOperations.BACKUP).handle(InstanceOperationHandlers::backup);
-        OperationHandlers.attach(InstanceOperations.SNAPSHOT).handle(InstanceOperationHandlers::snapshot);
+        OperationHandlers.attach(InstanceOperations.START).applies(InstanceOperationHandlers::authored)
+            .handle(InstanceOperationHandlers::start);
+        OperationHandlers.attach(InstanceOperations.STOP).applies(InstanceOperationHandlers::authored)
+            .handle(InstanceOperationHandlers::stop);
+        OperationHandlers.attach(InstanceOperations.RESTART).applies(InstanceOperationHandlers::authored)
+            .handle(InstanceOperationHandlers::restart);
+        OperationHandlers.attach(InstanceOperations.BACKUP).applies(InstanceOperationHandlers::authored)
+            .handle(InstanceOperationHandlers::backup);
+        OperationHandlers.attach(InstanceOperations.SNAPSHOT).applies(InstanceOperationHandlers::authored)
+            .handle(InstanceOperationHandlers::snapshot);
         SchedulePlacements.place(InstanceOperations.START);
         SchedulePlacements.place(InstanceOperations.STOP);
         SchedulePlacements.place(InstanceOperations.RESTART);
@@ -86,6 +91,14 @@ public final class InstanceOperationHandlers {
                 + "; it decides whether a stopped workload may start, so it is never guessed");
         }
         return trigger;
+    }
+
+    /**
+     * Whether an operation applies to this instance at all: a generated instance (a product tier's lowered runtime) is
+     * managed only through its owning record's surface, on every surface (the API never lists it either).
+     */
+    private static boolean authored(@NonNull Row instance) {
+        return instance.get(InstanceModel.GENERATED_BY) == null;
     }
 
     /**

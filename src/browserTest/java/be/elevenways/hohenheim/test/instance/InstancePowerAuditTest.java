@@ -6,10 +6,10 @@ import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.PlacedActionClicks;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TestDatabases;
-import be.elevenways.zenit.cms.common.action.ActionContext;
-import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
@@ -47,17 +47,6 @@ class InstancePowerAuditTest {
 
     private static SqlDatasource datasource;
     private static int hostId;
-
-    /** One of the panel's own row actions, found by id the way the record page finds it. */
-    @SuppressWarnings("unchecked")
-    private static RowAction.Invoke<Row> panelAction(InstanceResource panel, String path) {
-        for (RowAction<Row> action : panel.rowActions()) {
-            if (path.equals(action.id().getPath())) {
-                return (RowAction.Invoke<Row>) action;
-            }
-        }
-        throw new AssertionError("the instance panel offers no " + path);
-    }
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -216,12 +205,10 @@ class InstancePowerAuditTest {
             int panelId = instanceRecord("audit-panel");
             InstanceResource panel = new InstanceResource();
             Row panelRow = Models.get(InstanceModel.class).findById(panelId);
-            ActionContext ctx = ActionContext.of(AccessContext.anonymous());
-            RowAction.Invoke<Row> deployAction = panelAction(panel, "deploy_instance");
-            RowAction.Invoke<Row> stopAction = panelAction(panel, "stop_instance");
+            PanelAction<Row> deployAction = PlacedActionClicks.placed(panel, "start_instance");
+            PanelAction<Row> stopAction = PlacedActionClicks.placed(panel, "stop_instance");
 
-            Accountability.runAs(operator("42"),
-                () -> deployAction.handler().apply(panelRow, ctx));
+            Accountability.runAs(operator("42"), () -> PlacedActionClicks.click(deployAction, panelRow));
             List<Row> panelDeploy = activityFor(panelId, HohenheimActivityAction.DEPLOYED.id().toString());
             assertThat(panelDeploy)
                 .withFailMessage("step 3: the PANEL deploy row action must be as answerable"
@@ -231,8 +218,7 @@ class InstancePowerAuditTest {
                 .as("step 3: attributed to the operator who clicked, not to the system")
                 .isEqualTo("42");
 
-            Accountability.runAs(operator("42"),
-                () -> stopAction.handler().apply(panelRow, ctx));
+            Accountability.runAs(operator("42"), () -> PlacedActionClicks.click(stopAction, panelRow));
             List<Row> panelStop = activityFor(panelId, HohenheimActivityAction.STOPPED.id().toString());
             assertThat(panelStop)
                 .withFailMessage("step 3: the PANEL stop row action must record too;"

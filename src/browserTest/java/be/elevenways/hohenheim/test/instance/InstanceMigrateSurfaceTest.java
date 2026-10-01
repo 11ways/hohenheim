@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.common.flash.FlashLevel;
 import be.elevenways.zenit.common.flash.FlashNotice;
@@ -338,10 +339,10 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
 
         // 5. The tenant is not merely locked out of everything: their own power action is
         //    still declared, so step 2's absence is the migrate decision, not an empty list.
-        assertThat(new ManageInstanceResource().rowActions().stream()
-                .map(RowAction::id).map(Object::toString))
+        assertThat(new ManageInstanceResource().actions().stream()
+                .map(PanelAction::id).map(Object::toString))
             .as("step 5: positive anchor -- the delegated surface still offers power")
-            .anyMatch(id -> id.contains("deploy_instance"));
+            .anyMatch(id -> id.contains("start_instance"));
     }
 
     /**

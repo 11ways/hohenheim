@@ -13,11 +13,11 @@ import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.PlacedActionClicks;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.zenit.cms.common.action.ActionContext;
-import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
@@ -26,7 +26,6 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.validation.Violations;
@@ -59,17 +58,6 @@ class ApplicationPushPolicyTest {
     private static Integer savedProbeTimeout;
     private static Integer savedProbeInterval;
     private static Integer savedDrain;
-
-    /** One of the panel's own row actions, found by id the way the record page finds it. */
-    @SuppressWarnings("unchecked")
-    private static RowAction.Invoke<Row> panelAction(InstanceResource panel, String path) {
-        for (RowAction<Row> action : panel.rowActions()) {
-            if (path.equals(action.id().getPath())) {
-                return (RowAction.Invoke<Row>) action;
-            }
-        }
-        throw new AssertionError("the instance panel offers no " + path);
-    }
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -222,12 +210,11 @@ class ApplicationPushPolicyTest {
                 .isTrue();
             int applicationId = application("row-action-app");
             try {
-                // 1. The panel's OWN row action, invoked directly: no HTTP, no markup.
+                // 1. The panel's OWN placed deploy, run as its invoke route runs it: no HTTP, no markup.
                 InstanceResource panel = new InstanceResource();
-                RowAction.Invoke<Row> deploy = panelAction(panel, "deploy_instance");
+                PanelAction<Row> deploy = PlacedActionClicks.placed(panel, "start_instance");
                 Row row = Models.get(InstanceModel.class).findById(applicationId);
-                Accountability.runAs(operator("42"), () -> deploy.handler().apply(row,
-                    ActionContext.of(AccessContext.anonymous())));
+                Accountability.runAs(operator("42"), () -> PlacedActionClicks.click(deploy, row));
 
                 // 2. The deploy is recorded as MANUAL -- the trigger that describes a
                 //    person standing there asking, and the one whose permission to start
