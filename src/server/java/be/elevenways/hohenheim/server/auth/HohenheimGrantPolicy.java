@@ -244,7 +244,7 @@ final class HohenheimGrantPolicy {
                 .elevated()
                 .asDelegable());
         RecordCapabilityRules.declare(InstanceModel.MODEL_ID,
-            RecordCapabilityRules.create()
+            RecordCapabilityRules.create().visibility(VIEW)
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS));
 
