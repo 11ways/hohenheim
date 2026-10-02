@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.spamservice.client.SettingEntry;
 import be.elevenways.spamservice.client.SettingsApplyResult;
@@ -122,8 +123,8 @@ public final class SpamserviceSettingsBackend implements SettingsBackend {
     private @NonNull Snapshot unavailableSnapshot() {
         BuiltSnapshot cached = this.lastSnapshot;
         if (cached == null) {
-            return new Snapshot(new SettingGroup("spamservice").label("Spamservice"), Map.of(), "",
-                false, null);
+            return new Snapshot(new SettingGroup("spamservice").label(Microcopy.of("settings.spamservice.label")),
+                Map.of(), "", false, null);
         }
         Snapshot snapshot = cached.snapshot();
         return new Snapshot(snapshot.rootGroup(), snapshot.settings(), snapshot.revision(), false, null);
@@ -134,7 +135,7 @@ public final class SpamserviceSettingsBackend implements SettingsBackend {
     }
 
     private static @NonNull BuiltSnapshot buildData(be.elevenways.spamservice.client.SettingsSnapshot remote) {
-        SettingGroup root = new SettingGroup("spamservice").label("Spamservice");
+        SettingGroup root = new SettingGroup("spamservice").label(Microcopy.of("settings.spamservice.label"));
         Map<String, SettingGroup> groups = new LinkedHashMap<>();
         groups.put("", root);
         Map<String, SettingState> states = new LinkedHashMap<>();
@@ -166,7 +167,8 @@ public final class SpamserviceSettingsBackend implements SettingsBackend {
             String key = full.toString();
             SettingGroup known = groups.get(key);
             if (known == null) {
-                known = current.createGroup(part).label(humanize(part));
+                known = current.createGroup(part).label(Microcopy.of("settings.spamservice." + key + ".label")
+                    .withFallback(humanize(part)));
                 groups.put(key, known);
             }
             current = known;

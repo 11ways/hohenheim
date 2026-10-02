@@ -101,10 +101,6 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(page.locator(
             ".cms-setting:has([data-path='app.auth_proteus.authenticator']) .cms-setting-note-restart").count()).isEqualTo(1);
 
-        var fallback = page.locator("[data-path='app.proxy.fallback_address'] input");
-        fallback.fill("http://127.0.0.1:9999");
-        var threshold = page.locator("[data-path='app.security.domain_miss_threshold'] input");
-        threshold.fill("7");
         // AIDEV-NOTE: a non-secret string-list setting edits as CHIPS (pl-select's tags mode)
         // since zenit 8487f7f5 (SettingsForms.chips), never the zf-array rows editor: there is
         // no add button and no move controls, so the rows editor's directives are proven by
@@ -114,15 +110,42 @@ class AdminPagesTest extends HohenheimTestBase {
             .as("the never-ban list is a chip input").isEqualTo(1);
         assertThat(page.locator(neverBan + " zf-array").count())
             .as("and never the rows editor").isZero();
-        // 1. The never-ban label and help come from Hohenheim's own catalog: a key no catalog declares
-        //    renders marked data-unresolved, showing only the code fallback.
-        for (String part : new String[] {"label", "help"}) {
-            String copy = "zn-microcopy[key='settings.hohenheim.security.never_ban." + part + "']";
-            assertThat(page.locator(copy).count())
-                .as("step 1: the never-ban " + part + " renders its catalog key").isGreaterThan(0);
-            assertThat(page.locator(copy + "[data-unresolved]").count())
-                .as("step 1: and the never-ban " + part + " resolves, never data-unresolved").isZero();
+        // 1. Judge the label/help the operator actually reads, in BOTH languages: English alone can pass on a
+        //    humanized/code fallback. SettingsGroupCoverageTest pins the source tokens before render translation.
+        //    The caption's private microcopy-wrapper shape is not the association or localization contract.
+        ShippedCatalogs catalogs = new ShippedCatalogs();
+        try {
+            for (String language : new String[] {"en", "nl"}) {
+                page.setExtraHTTPHeaders(Map.of("Accept-Language", language));
+                navigateToApp("/admin/settings?section=setting-app-security");
+                waitForHydration();
+                var field = page.locator(neverBan);
+                String fieldMarkup = (String) field.evaluate("el => el.outerHTML");
+                assertThat(field.locator("pl-label").count())
+                    .as("step 1: the never-ban field has its associated label in %s: %s", language, fieldMarkup)
+                    .isEqualTo(1);
+                assertThat(field.locator("pl-label").innerText().trim())
+                    .as("step 1: the never-ban label resolves from the %s catalog", language)
+                    .isEqualTo(Microcopy.of("settings.hohenheim.security.never_ban.label")
+                        .resolve(LocaleChain.ofTags(language), catalogs));
+                assertThat(field.locator("pl-field-description").innerText().trim())
+                    .as("step 1: the never-ban help resolves from the %s catalog", language)
+                    .isEqualTo(Microcopy.of("settings.hohenheim.security.never_ban.help")
+                        .resolve(LocaleChain.ofTags(language), catalogs));
+                assertThat(field.locator("[data-unresolved]").count())
+                    .as("step 1: no unresolved never-ban copy in %s", language).isZero();
+            }
+        } finally {
+            page.setExtraHTTPHeaders(Map.of());
         }
+        navigateToApp("/admin/settings?section=setting-app-proxy,setting-app-security,"
+            + "setting-app-ssl,setting-app-storage,setting-app-auth_proteus,"
+            + "setting-framework-network,setting-framework-compression");
+        waitForHydration();
+        var fallback = page.locator("[data-path='app.proxy.fallback_address'] input");
+        fallback.fill("http://127.0.0.1:9999");
+        var threshold = page.locator("[data-path='app.security.domain_miss_threshold'] input");
+        threshold.fill("7");
         page.click(neverBan + " .pl-select-field");
         String chipInput = "he-bottom .pl-select-popup[data-open] .pl-select-search input";
         for (String entry : new String[] {"203.0.113.7", "198.51.100.0/24", "remove.example"}) {
