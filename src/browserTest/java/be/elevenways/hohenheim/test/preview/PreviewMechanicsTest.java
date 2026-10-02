@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
+import be.elevenways.hohenheim.preview.PreviewOperations;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -28,6 +29,10 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -37,6 +42,7 @@ import be.elevenways.zenit.server.task.TaskHold;
 import be.elevenways.zenit.server.task.TaskRuntime;
 import be.elevenways.zenit.server.task.TaskService;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
+import be.elevenways.zenit.server.operation.OperationRequest;
 import be.elevenways.zenit.server.task.record.RunRecordSchedulesTask;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -50,6 +56,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
@@ -84,6 +91,27 @@ class PreviewMechanicsTest extends HohenheimTestBase {
         siteModel.save(site);
         siteId = site.get(SiteModel.ID);
         applicationId = site.get(SiteModel.INSTANCE_ID);
+    }
+
+    @Test
+    void previewExpirySubjectsAdmitDeclaredSystemWorkOnly() {
+        // 1. Expiry's explicit source admits the system identity but not an anonymous caller.
+        Row preview = newPreviewRow("system-source-ref", "prev-mech--system-source-ref.preview.test", null);
+        String key = String.valueOf(preview.get(PreviewDeploymentModel.ID));
+        Row loaded = OperationRequest.of(PreviewOperations.EXPIRE, ZenitPlacementSurface.SCHEDULE_STEP)
+            .asSystem(RecordSchedules.systemIdentity(1).reason(), null).subjectKeys(List.of(key)).loadSubjects().getFirst();
+        assertThat(loaded.get(PreviewDeploymentModel.ID)).as("1: system loads the expiry subject")
+            .isEqualTo(preview.get(PreviewDeploymentModel.ID));
+        assertThatThrownBy(() -> OperationRequest.of(PreviewOperations.EXPIRE, ZenitPlacementSurface.SCHEDULE_STEP)
+            .caller(AccessContext.anonymous()).subjectKeys(List.of(key)).loadSubjects())
+            .as("1: anonymous cannot load the expiry subject").isInstanceOfSatisfying(DomainRefusal.class,
+                refusal -> assertThat(refusal.reason()).isSameAs(ZenitRefusalReason.NOT_FOUND));
+        assertThatThrownBy(() -> OperationRequest.of(PreviewOperations.EXPIRE, ZenitPlacementSurface.SCHEDULE_STEP)
+            .asSystem("unrelated system work", null).subjectKeys(List.of(key)).loadSubjects())
+            .as("1: a different system purpose cannot load the expiry subject")
+            .isInstanceOfSatisfying(DomainRefusal.class,
+                refusal -> assertThat(refusal.reason()).isSameAs(ZenitRefusalReason.NOT_FOUND));
+        PreviewDeployments.destroy(preview.get(PreviewDeploymentModel.ID), "operator");
     }
 
     @Test
