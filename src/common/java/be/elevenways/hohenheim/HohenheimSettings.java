@@ -880,9 +880,12 @@ public class HohenheimSettings {
             .description("Lifetime of a proxy-auth persistent (remember-me) cookie (seconds)")
             .build();
 
-        /** Explicit operator opt-in for site auth providers whose Proteus realm is on a private network. */
+        /**
+         * Explicit operator opt-in for site auth providers whose Proteus realm is on a private network. Declared without
+         * a label, as it always was: the settings page keeps its fallback name.
+         */
         public static final SettingDefinition<Boolean> PROTEUS_ALLOW_PRIVATE_NETWORKS = PrivateNetworkOptIn.declare(
-            GROUP, "proteus_allow_private_networks", "Allow private-network Proteus realms",
+            GROUP, "proteus_allow_private_networks", null,
             "Allow site auth providers to reach a Proteus realm on a private network (RFC 1918, IPv6"
                 + " unique-local); this host, link-local and special-purpose addresses stay refused");
     }
