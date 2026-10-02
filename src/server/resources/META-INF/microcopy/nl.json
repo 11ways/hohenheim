@@ -13066,5 +13066,9 @@
   "settings.spamservice.label": "Spamservice",
   "settings.spamservice.scoring.label": "Scoring",
   "settings.spamservice.reputation.label": "Reputatie",
-  "settings.spamservice.events.label": "Gebeurtenissen"
+  "settings.spamservice.events.label": "Gebeurtenissen",
+  "settings.spamservice.help": "Spamscoring en bronnen van reputatiegegevens",
+  "settings.spamservice.scoring.help": "Drempels voor spamverdicts",
+  "settings.spamservice.reputation.help": "Downloadbare IP-informatiedatabases; een lege URL schakelt die bron uit",
+  "settings.spamservice.events.help": "Bewaartermijn voor ontvangen beveiligingsgebeurtenissen"
 }

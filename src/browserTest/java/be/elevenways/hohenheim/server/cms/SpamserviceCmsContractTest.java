@@ -130,7 +130,9 @@ class SpamserviceCmsContractTest {
                     {"revision":"r1","settings":[
                       {"path":"scoring.threshold","label":"Threshold","description":"Cutoff","type":"integer","secret":false,"multiline":false,"suffix":"points","filesystem_path":false,"restart_required":true,"configured":true,"readonly":false,"source":"settings/spamservice.dry","value":50,"has_secret":false,"default_value":40,"allowed_values":[]},
                       {"path":"datasets.token","label":"Token","description":null,"type":"string","secret":true,"multiline":false,"suffix":null,"filesystem_path":false,"restart_required":false,"configured":true,"readonly":false,"source":"settings/spamservice.dry","value":null,"has_secret":true,"default_value":null,"allowed_values":[]},
-                      {"path":"network.port","label":"Port","description":null,"type":"integer","secret":false,"multiline":false,"suffix":null,"filesystem_path":false,"restart_required":false,"configured":true,"readonly":true,"source":"env:PORT","value":8095,"has_secret":false,"default_value":8095,"allowed_values":[]}
+                      {"path":"network.port","label":"Port","description":null,"type":"integer","secret":false,"multiline":false,"suffix":null,"filesystem_path":false,"restart_required":false,"configured":true,"readonly":true,"source":"env:PORT","value":8095,"has_secret":false,"default_value":8095,"allowed_values":[]},
+                      {"path":"reputation.refresh_days","label":"Refresh interval","description":null,"type":"integer","secret":false,"multiline":false,"suffix":null,"filesystem_path":false,"restart_required":false,"configured":false,"readonly":false,"source":"default","value":15,"has_secret":false,"default_value":15,"allowed_values":[]},
+                      {"path":"events.retention_days","label":"Retention","description":null,"type":"integer","secret":false,"multiline":false,"suffix":null,"filesystem_path":false,"restart_required":false,"configured":false,"readonly":false,"source":"default","value":90,"has_secret":false,"default_value":90,"allowed_values":[]}
                     ]}
                     """;
             }
@@ -154,8 +156,25 @@ class SpamserviceCmsContractTest {
         ShippedCatalogs catalogs = new ShippedCatalogs();
         assertThat(scoring.displayLabel().resolve(LocaleChain.ofTags("en"), catalogs)).isEqualTo("Scoring");
         assertThat(scoring.displayLabel().resolve(LocaleChain.ofTags("nl"), catalogs)).isEqualTo("Scoring");
+        assertThat(snapshot.rootGroup().displayDescription().key()).isEqualTo("settings.spamservice.help");
+        assertThat(scoring.displayDescription().key()).isEqualTo("settings.spamservice.scoring.help");
+        assertThat(scoring.displayDescription().resolve(LocaleChain.ofTags("en"), catalogs))
+            .isEqualTo("Spam verdict thresholds");
+        assertThat(scoring.displayDescription().resolve(LocaleChain.ofTags("nl"), catalogs))
+            .isEqualTo("Drempels voor spamverdicts");
+        for (String name : List.of("scoring", "reputation", "events")) {
+            var description = snapshot.rootGroup().getChildGroup(name).displayDescription();
+            assertThat(description.key()).isEqualTo("settings.spamservice." + name + ".help");
+            assertThat(description.fallback()).as("group copy is declared, not a remote-data fallback").isNull();
+            for (String language : List.of("en", "nl")) {
+                assertThat(catalogs.resolveSource(description.key(), LocaleChain.ofTags(language), description.filters()))
+                    .as("%s group description is shipped in %s", name, language).isNotNull();
+            }
+        }
         assertThat(snapshot.rootGroup().getChildGroup("datasets").displayLabel().fallback())
             .as("an unknown remote group retains its offered fallback title").isEqualTo("Datasets");
+        assertThat(snapshot.rootGroup().getChildGroup("datasets").displayDescription())
+            .as("an unknown remote group has no invented description identity").isNull();
         assertThat(scoring.getDefinition("threshold").getLabel()).isEqualTo("Threshold");
         assertThat(scoring.getDefinition("threshold").getDescription()).isEqualTo("Cutoff");
         assertThat(scoring.isAdvanced()).as("translated labels do not change remote grouping facts").isFalse();

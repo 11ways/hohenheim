@@ -133,6 +133,10 @@ class AdminPagesTest extends HohenheimTestBase {
                     .as("step 1: the never-ban help resolves from the %s catalog", language)
                     .isEqualTo(Microcopy.of("settings.hohenheim.security.never_ban.help")
                         .resolve(LocaleChain.ofTags(language), catalogs));
+                assertThat(page.locator("#setting-app-security .cms-settings-section-description").innerText().trim())
+                    .as("step 1: the declared security-group description renders in %s", language)
+                    .isEqualTo(HohenheimSettings.Security.GROUP.displayDescription()
+                        .resolve(LocaleChain.ofTags(language), catalogs));
                 assertThat(field.locator("[data-unresolved]").count())
                     .as("step 1: no unresolved never-ban copy in %s", language).isZero();
             }
