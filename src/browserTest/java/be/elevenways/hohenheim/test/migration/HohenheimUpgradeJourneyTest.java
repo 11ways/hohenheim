@@ -146,7 +146,8 @@ class HohenheimUpgradeJourneyTest {
         previousOffset = Now.offset();
         Now.setOffset(Duration.ZERO);
         Instant seededAt = Instant.parse(facts.getProperty("seeded_at"));
-        Now.setOffset(Duration.between(Now.instant(), seededAt.plus(Duration.ofHours(1))));
+        Duration seedClock = Duration.between(Now.instant(), seededAt.plus(Duration.ofHours(1)));
+        Now.setOffset(seedClock);
 
         int adminId = Integer.parseInt(facts.getProperty("admin.id"));
         int operatorId = Integer.parseInt(facts.getProperty("operator.id"));
@@ -217,6 +218,9 @@ class HohenheimUpgradeJourneyTest {
         // 2. Today's code boots over the upgraded file, its datasource-bound services on it whatever ran before.
         HohenheimDatabase.init();
         HohenheimTestRuntime.ensureBooted();
+        // Boot installs the configured clock.offset (ServerZenitRuntime, ClockOffset.install), which replaced the
+        // seed-relative pin: put it back, or every 24h window here ages out one day after the fixture was seeded.
+        Now.setOffset(seedClock);
         TestDatabases.adoptCurrentDatabase();
 
         // 3. The role grant and both record grants decide as before, and each certificate keeps its owner.
