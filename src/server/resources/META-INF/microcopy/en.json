@@ -2075,6 +2075,15 @@
   },
   "plural": [
     {
+      "text": "Variables",
+      "scope": "instance_variable"
+    },
+    {
+      "text": "variables",
+      "scope": "instance_variable",
+      "case": "sentence"
+    },
+    {
       "text": "Game domains",
       "scope": "game_domain"
     },
@@ -6860,6 +6869,10 @@
     "text": "Create instance from",
     "scope": "instance_from_template"
   },
+  "step_details": {
+    "text": "Details",
+    "scope": "instance_from_template"
+  },
   "instance_name": {
     "text": "Instance name",
     "scope": "instance_from_template"
@@ -8646,6 +8659,15 @@
     "scope": "server"
   },
   "singular": [
+    {
+      "text": "Variable",
+      "scope": "instance_variable"
+    },
+    {
+      "text": "variable",
+      "scope": "instance_variable",
+      "case": "sentence"
+    },
     {
       "text": "Schedule",
       "scope": "instance_schedule"

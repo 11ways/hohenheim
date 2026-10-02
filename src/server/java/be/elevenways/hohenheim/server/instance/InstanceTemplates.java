@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
@@ -20,6 +21,7 @@ import be.elevenways.zenit.common.edit.submit.SubmittedValueCoercion;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.Secret;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -28,6 +30,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntFunction;
 
 /**
  * The create-from-template flow and the tenant-selectability gate. A template's
@@ -112,26 +115,32 @@ public final class InstanceTemplates {
     }
 
     /**
-     * The submitted values with every BLANK secret replaced by its declared default, so a
-     * required secret whose default the form no longer prefills still validates.
+     * The declared defaults of the template's SECRET variables, by key: THE server-only value a blank secret falls back
+     * to before validation, on the raw lane here and as the wizard operation's server default (O04).
+     *
+     * AIDEV-NOTE: a generating secret's default is included too: the declared default beats generation
+     * ({@link InstanceVariables#writeForInstance} keeps the same order). Never a prefill: it is never rendered.
      */
-    private @NonNull Map<String, Object> withSecretDefaults(int templateId,
-                                                           @NonNull Map<String, Object> raw) {
-        Map<String, Object> values = new LinkedHashMap<>(raw);
+    public @NonNull Map<String, Object> secretDefaults(int templateId) {
+        Map<String, Object> defaults = new LinkedHashMap<>();
         for (Row declared : declaredVariables(templateId)) {
-            String key = declared.get(InstanceTemplateVariableModel.KEY);
             String fallback = declared.get(InstanceTemplateVariableModel.DEFAULT_VALUE);
-            Object submitted = values.get(key);
-            boolean blank = submitted == null || submitted.toString().isEmpty();
-            // A generating secret is filled too: the declared default beats generation
-            // (InstanceVariables.writeForInstance keeps the same order). Until the prefill
-            // was withheld the form submitted the default, so an untouched create stored it;
-            // skipping generating secrets here would have minted a random value instead.
-            if (blank && fallback != null && !fallback.isEmpty()
-                    && InstanceVariables.handlerOf(declared).isSecretValue()) {
-                values.put(key, fallback);
+            if (fallback != null && !fallback.isEmpty() && InstanceVariables.handlerOf(declared).isSecretValue()) {
+                defaults.put(declared.get(InstanceTemplateVariableModel.KEY), fallback);
             }
         }
+        return defaults;
+    }
+
+    /** The submitted values with every BLANK secret replaced by its declared default. */
+    private @NonNull Map<String, Object> withSecretDefaults(int templateId, @NonNull Map<String, Object> raw) {
+        Map<String, Object> values = new LinkedHashMap<>(raw);
+        secretDefaults(templateId).forEach((key, fallback) -> {
+            Object submitted = values.get(key);
+            if (submitted == null || submitted.toString().isEmpty()) {
+                values.put(key, fallback);
+            }
+        });
         return values;
     }
 
@@ -166,6 +175,47 @@ public final class InstanceTemplates {
                                   @Nullable Integer serverId,
                                   @NonNull Map<String, Object> rawVariableValues,
                                   @Nullable AccessContext ctx) {
+        Integer projectId = HandlerSupport.submittedInteger(rawVariableValues, "project_id");
+        Integer environmentId = HandlerSupport.submittedInteger(rawVariableValues, "environment_id");
+        return create(template, name, serverId, projectId, environmentId, RAW_OWNER_FIELDS, templateId -> {
+            FormSpec spec = variableFormSpec(templateId);
+            Map<String, Object> coerced = SubmittedValueCoercion.coerceFormOrThrow(spec,
+                withSecretDefaults(templateId, rawVariableValues));
+            FormValidator.validateCoercedFormOrThrow(spec, coerced);
+            return coerced;
+        }, ctx);
+    }
+
+    /**
+     * The same funnel over an input the operation pipeline already coerced and validated against this template's
+     * variable form, its blank secrets filled from {@link #secretDefaults}: the typed lane never parses raw text.
+     *
+     * @throws Violations the funnel's refusals; an owner refusal names {@code projectId} or {@code environmentId}
+     */
+    public int createFromTemplate(@NonNull Row template,
+                                  InstanceTemplateOperations.@NonNull CreateFromTemplate input,
+                                  @Nullable AccessContext ctx) {
+        Map<String, Object> variables = new LinkedHashMap<>();
+        // The pipeline sealed every secret as a Secret; the variable writer stores its text, so it is revealed once here.
+        input.variables().forEach((key, value) -> variables.put(key, value instanceof Secret secret
+            ? secret.reveal() : value));
+        String name = input.name() == null ? "" : input.name();
+        return create(template, name, input.serverId(), input.projectId(), input.environmentId(),
+            TYPED_OWNER_FIELDS, templateId -> variables, ctx);
+    }
+
+    /** The field names an owner refusal lands on: the raw submit's, or the typed input's. */
+    private record OwnerFields(@NonNull String project, @NonNull String environment) {
+    }
+
+    private static final OwnerFields RAW_OWNER_FIELDS = new OwnerFields("project_id", "environment_id");
+
+    private static final OwnerFields TYPED_OWNER_FIELDS = new OwnerFields(
+        InstanceTemplateOperations.PROJECT_ID.getName(), InstanceTemplateOperations.ENVIRONMENT_ID.getName());
+
+    private int create(@NonNull Row template, @NonNull String name, @Nullable Integer serverId,
+                       @Nullable Integer projectId, @Nullable Integer environmentId, @NonNull OwnerFields fields,
+                       @NonNull IntFunction<Map<String, Object>> variableValues, @Nullable AccessContext ctx) {
         if (ctx != null && !HohenheimAccess.canCreateInstances(ctx)) {
             throw Violations.ofForm(HohenheimViolations.text("instance_create_not_permitted"));
         }
@@ -175,19 +225,16 @@ public final class InstanceTemplates {
         // becomes the creation OWNER -- the quota charge, the placement decision, the
         // environment-grouping guard and the planted manage grant all follow the one
         // pinned derivation (HohenheimAccess.withCreationOwner). Membership is the gate.
-        Integer projectId = HandlerSupport.submittedInteger(rawVariableValues, "project_id");
-        Integer environmentId = HandlerSupport.submittedInteger(rawVariableValues, "environment_id");
         if (projectId == null && environmentId == null) {
-            return createRecord(template, name, serverId, null, rawVariableValues, ctx);
+            return createRecord(template, name, serverId, null, variableValues, ctx);
         }
         Row project = projectFor(projectId, environmentId);
         if (project == null || !Projects.mayCreateInto(ctx, project)) {
-            throw notAProjectMember(projectId, environmentId);
+            throw notAProjectMember(projectId, environmentId, fields);
         }
         int[] created = new int[1];
         HohenheimAccess.withCreationOwner(Projects.ownerSubjectsOf(project), () ->
-            created[0] = createRecord(template, name, serverId, environmentId,
-                rawVariableValues, ctx));
+            created[0] = createRecord(template, name, serverId, environmentId, variableValues, ctx));
         return created[0];
     }
 
@@ -222,16 +269,17 @@ public final class InstanceTemplates {
      * tenant could enumerate the installation's project and environment ids by probing.
      */
     private static @NonNull Violations notAProjectMember(@Nullable Integer projectId,
-                                                         @Nullable Integer environmentId) {
+                                                         @Nullable Integer environmentId,
+                                                         @NonNull OwnerFields fields) {
         return projectId != null
-            ? Violations.ofField("project_id", projectId, HohenheimViolations.text("project_member_required"))
-            : Violations.ofField("environment_id", environmentId,
+            ? Violations.ofField(fields.project(), projectId, HohenheimViolations.text("project_member_required"))
+            : Violations.ofField(fields.environment(), environmentId,
                 HohenheimViolations.text("project_member_required"));
     }
 
     private int createRecord(@NonNull Row template, @NonNull String name,
                              @Nullable Integer serverId, @Nullable Integer environmentId,
-                             @NonNull Map<String, Object> rawVariableValues,
+                             @NonNull IntFunction<Map<String, Object>> variableValues,
                              @Nullable AccessContext ctx) {
         if (name.isBlank()) {
             throw Violations.ofField("name", name, HohenheimViolations.text("name_required"));
@@ -248,10 +296,7 @@ public final class InstanceTemplates {
             InstancePlacement.Workload.of(kindHandler, placedSettings));
         int templateId = template.get(InstanceTemplateModel.ID);
 
-        FormSpec spec = variableFormSpec(templateId);
-        Map<String, Object> coerced = SubmittedValueCoercion.coerceFormOrThrow(spec,
-            withSecretDefaults(templateId, rawVariableValues));
-        FormValidator.validateCoercedFormOrThrow(spec, coerced);
+        Map<String, Object> coerced = variableValues.apply(templateId);
         // The declared databases' cheap refusals (engine, injectability, label taken)
         // come BEFORE the instance row exists, so the common failures never need the
         // compensation below. The declared VOLUMES answer the same way, for the same

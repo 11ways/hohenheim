@@ -172,7 +172,11 @@ public class HohenheimEndpoints {
             .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
             .named("hh_instance_artifact");
 
-    private static final RateLimitPolicy INSTANCE_CREATE_LIMIT =
+    /**
+     * THE instance-create budget: the API create and delete endpoints and the from-template operation draw from one
+     * named family, so one principal's creates across every surface share it.
+     */
+    public static final RateLimitPolicy INSTANCE_CREATE_LIMIT =
         RateLimitPolicy.of(10, Duration.ofMinutes(10))
             .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
             .named("hh_instance_create");
@@ -249,23 +253,6 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic(HohenheimSlugs.ADMIN).addDelimiter().addStatic(HohenheimSlugs.INSTANCE_TEMPLATES_IMPORT).build())
         .requiresPermission(HohenheimSources.ADMIN_ACCESS)
-        .build();
-
-    /**
-     * The create-from-template submit, for BOTH panels. Deliberately NOT gated on the
-     * admin permission and deliberately NOT under an {@code /admin} path: the authority
-     * to create is {@code hohenheim.instances.create} (plus the template's approval
-     * stamp, the quota and placement), all decided inside
-     * {@code InstanceTemplates.createFromTemplate} so the HTML surfaces and the
-     * automation API answer to ONE gate. requiresLogin keeps anonymous callers out
-     * before any of that runs.
-     */
-    public static final Endpoint<Object> INSTANCES_FROM_TEMPLATE = Endpoint.<Object>builder()
-        .identifier(HohenheimIds.id("instances_from_template"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("instances").addDelimiter().addStatic("from-template").build())
-        .requiresLogin()
-        .rateLimit(INSTANCE_CREATE_LIMIT)
         .build();
 
     // --- Git provider repository/branch selection (admin pickers + automation) ---

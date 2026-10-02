@@ -17,7 +17,7 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.cms.common.panel.PanelPeer;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -283,7 +283,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
     /**
      * AIDEV-NOTE: the role snapshot is process-global, Panel.peers() memoizes per instance
      * and a Panel self-registers in its constructor, so this asserts the panel's peer
-     * DECLARATION for each role set (ManagePanel.declarePeers, which buildPeers returns and
+     * DECLARATION for each role set (ManagePanel.declareEntries, which buildEntries returns and
      * peersBySlug -- the route dispatch -- memoizes) rather than an HTTP round trip against
      * the shared server, exactly like DashboardRoleGatingTest asserts the collectors.
      */
@@ -299,7 +299,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
         try {
             // 1. The full node: every projection is declared and the overview lists instances.
             roles(EnumSet.allOf(Role.class));
-            assertThat(slugsOf(ManagePanel.declarePeers()))
+            assertThat(slugsOf(ManagePanel.declareEntries()))
                 .as("step 1: a full node projects the instance tier")
                 .contains("instances", "databases", "instance-databases");
             assertThat(instanceSources(new ManageDashboard().widgets(ctx)))
@@ -310,7 +310,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
             //    instance, database and instance-database projections have no route, the
             //    overview offers no instance list, and the proxy tier's own peers stay.
             roles(EnumSet.of(Role.PROXY, Role.DNS, Role.FIREWALL));
-            List<String> appliance = slugsOf(ManagePanel.declarePeers());
+            List<String> appliance = slugsOf(ManagePanel.declareEntries());
             assertThat(appliance)
                 .as("step 2: every workload-tier projection is absent with its role off")
                 .doesNotContain("instances", "databases", "instance-databases",
@@ -325,7 +325,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
 
             // 3. DNS off drops the record authoring peer and nothing else of the proxy tier.
             roles(EnumSet.of(Role.PROXY));
-            List<String> proxyOnly = slugsOf(ManagePanel.declarePeers());
+            List<String> proxyOnly = slugsOf(ManagePanel.declareEntries());
             assertThat(proxyOnly)
                 .as("step 3: no DNS authoring without the DNS role")
                 .doesNotContain("dns-records");
@@ -360,9 +360,9 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
 
     // --- Fixture helpers ---------------------------------------------------------------
 
-    private static List<String> slugsOf(List<PanelPeer> peers) {
+    private static List<String> slugsOf(List<PanelEntry> peers) {
         List<String> slugs = new ArrayList<>();
-        for (PanelPeer peer : peers) {
+        for (PanelEntry peer : peers) {
             slugs.add(peer.slug());
         }
         return slugs;
