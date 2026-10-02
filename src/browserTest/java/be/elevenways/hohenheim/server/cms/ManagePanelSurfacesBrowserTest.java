@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
@@ -8,6 +9,7 @@ import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
@@ -21,6 +23,7 @@ import be.elevenways.zenit.cms.test.support.PanelSurfaceComparer;
 import be.elevenways.zenit.cms.test.support.PanelSurfaces;
 import be.elevenways.zenit.cms.test.support.SurfaceBaselines;
 import be.elevenways.zenit.cms.test.support.SurfaceCase;
+import be.elevenways.zenit.cms.common.resource.ListLane;
 import be.elevenways.zenit.cms.test.support.TwinCorrespondence;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -34,14 +37,16 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * The slice-three entries' surfaces, admin and tenant twins, stored before the move and compared exactly after it;
  * each tenant twin against its admin twin through its explicit difference table (stage 4 contract 4.9, journey "the
  * tenant panel offers exactly what it offers today", DECIDED D2-B07/B08).
  *
- * AIDEV-NOTE: the stored set ({@code /panel-surfaces/manage-slice-three.txt}) is today's behaviour, captured once on
- * the stage 4 branch before SiteResource, SiteDomainResource and the template resources move onto parts; a failing
+ * AIDEV-NOTE: the stored set ({@code /panel-surfaces/manage-slice-three.txt}) is today's behaviour, captured on the
+ * stage 4 branch before SiteResource, SiteDomainResource and the template resources move onto parts (recaptured once
+ * with the complete control, confirmation and destination facts, still before the move); a failing
  * comparison is a changed /manage or /admin surface, never a file to refresh. A twin table entry states one
  * deliberate tenant difference; an unlisted difference fails closed.
  */
@@ -54,11 +59,17 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
     private static final String DOMAINS = "domains";
     private static final String TEMPLATES = HohenheimSlugs.INSTANCE_TEMPLATES;
     private static final String DEVICES = "instance-devices";
+    /** The plain Select binding the device type control carries on both twins. */
+    private static final String SELECT_BINDING = " binding=searchable:false,clearable:true,presentation:DEFAULT";
 
     private static String siteId;
+    private static String disabledSiteId;
+    private static String trashedSiteId;
     private static String domainId;
+    private static String trashedDomainId;
     private static String approvedTemplateId;
     private static String unapprovedTemplateId;
+    private static String instanceId;
     private static String diskId;
     private static String cdromId;
     private static String unknownDeviceId;
@@ -72,15 +83,25 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
     static void seed() {
         int oneId = ApiSupport.user(PREFIX + "one@hohenheim.local", "Surfaces Tenant One");
         int emptyId = ApiSupport.user(PREFIX + "empty@hohenheim.local", "Surfaces Tenant Empty");
-        int site = site(PREFIX + "site");
+        int site = site(PREFIX + "site", true);
         siteId = String.valueOf(site);
         domainId = String.valueOf(domain(site, PREFIX + "site.surfaces.test"));
+        int disabled = site(PREFIX + "disabled", false);
+        disabledSiteId = String.valueOf(disabled);
+        int trashed = site(PREFIX + "trashed", true);
+        trashedSiteId = String.valueOf(trashed);
+        trashedDomainId = String.valueOf(domain(trashed, PREFIX + "trashed.surfaces.test"));
+        Row trashedRow = Models.get(SiteModel.class).findById(trashed);
+        trashedRow.set(SiteModel.DELETED_AT, Now.instant());
+        Models.get(SiteModel.class).save(trashedRow);
         approvedTemplateId = String.valueOf(template(PREFIX + "approved", true));
         unapprovedTemplateId = String.valueOf(template(PREFIX + "unapproved", false));
         RecordGrants.grant(GrantSubjectType.USER, oneId, SiteModel.MODEL_ID, site, HohenheimAccess.MANAGE, true);
+        RecordGrants.grant(GrantSubjectType.USER, oneId, SiteModel.MODEL_ID, disabled, HohenheimAccess.MANAGE, true);
         int viewId = ApiSupport.user(PREFIX + "view@hohenheim.local", "Surfaces Instance Viewer");
         int configId = ApiSupport.user(PREFIX + "config@hohenheim.local", "Surfaces Instance Configurer");
         int instance = instance(PREFIX + "instance");
+        instanceId = String.valueOf(instance);
         diskId = String.valueOf(device(instance, InstanceDeviceModel.TYPE_DISK, "data"));
         cdromId = String.valueOf(device(instance, InstanceDeviceModel.TYPE_CDROM, "install"));
         unknownDeviceId = String.valueOf(unknownDevice(instance));
@@ -114,6 +135,23 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
             .onRecord(approvedTemplateId, "approved")));
         stored.check(capture(SurfaceCase.of(ADMIN, TEMPLATES, "operator", operator)
             .onRecord(unapprovedTemplateId, "unapproved")));
+        // An enabled and a disabled site (the toggle's two states), the trash lane on a trashed site, a domain under
+        // that trashed parent, the domain create form prefilled with its parent, and bulk selections per lane.
+        stored.check(capture(SurfaceCase.of(ADMIN, SITES, "operator", operator)
+            .onRecord(disabledSiteId, "disabled")));
+        stored.check(capture(SurfaceCase.of(ADMIN, SITES, "operator", operator).inLane(ListLane.TRASH)));
+        stored.check(capture(SurfaceCase.of(ADMIN, SITES, "operator", operator).inLane(ListLane.TRASH)
+            .onRecord(trashedSiteId, "trashed").selecting(List.of(trashedSiteId), "sel")));
+        stored.check(capture(SurfaceCase.of(ADMIN, SITES, "operator", operator)
+            .selecting(List.of(siteId, disabledSiteId), "sel")));
+        stored.check(capture(SurfaceCase.of(ADMIN, DOMAINS, "operator", operator)
+            .onRecord(trashedDomainId, "trashed-parent")));
+        stored.check(capture(SurfaceCase.of(ADMIN, DOMAINS, "operator", operator).named(ADMIN + "." + DOMAINS
+            + ".operator.prefill").withParameter(HohenheimParams.SITE_ID_PREFILL.getName(), siteId)));
+        stored.check(capture(SurfaceCase.of(ADMIN, DOMAINS, "operator", operator)
+            .selecting(List.of(domainId, trashedDomainId), "sel")));
+        stored.check(capture(SurfaceCase.of(ADMIN, TEMPLATES, "operator", operator)
+            .selecting(List.of(approvedTemplateId, unapprovedTemplateId), "sel")));
 
         // 2. The /manage twins for a one-site tenant, record-less and on each record; the panel refuses a tenant
         //    holding nothing.
@@ -130,15 +168,29 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
             .onRecord(approvedTemplateId, "approved")));
         stored.check(capture(SurfaceCase.of(MANAGE, TEMPLATES, "tenant-one", tenantOne)
             .onRecord(unapprovedTemplateId, "unapproved")));
+        stored.check(capture(SurfaceCase.of(MANAGE, SITES, "tenant-one", tenantOne)
+            .onRecord(disabledSiteId, "disabled")));
+        stored.check(capture(SurfaceCase.of(MANAGE, SITES, "tenant-one", tenantOne)
+            .onRecord(trashedSiteId, "trashed")));
+        stored.check(capture(SurfaceCase.of(MANAGE, SITES, "tenant-one", tenantOne)
+            .selecting(List.of(siteId, disabledSiteId, trashedSiteId), "sel")));
+        stored.check(capture(SurfaceCase.of(MANAGE, DOMAINS, "tenant-one", tenantOne).named(MANAGE + "." + DOMAINS
+            + ".tenant-one.prefill").withParameter(HohenheimParams.SITE_ID_PREFILL.getName(), siteId)));
+        stored.check(capture(SurfaceCase.of(MANAGE, DOMAINS, "tenant-one", tenantOne)
+            .selecting(List.of(domainId, trashedDomainId), "sel")));
+        stored.check(capture(SurfaceCase.of(MANAGE, TEMPLATES, "tenant-one", tenantOne)
+            .selecting(List.of(approvedTemplateId, unapprovedTemplateId), "sel")));
 
         // 3. Each tenant twin against its admin twin on the same record, through its explicit difference table.
         List<AssertionError> twins = new ArrayList<>();
         twin(twins, stored, MANAGE + "." + SITES + ".tenant-one.site", ADMIN + "." + SITES + ".operator.site",
-            sitesTable());
+            () -> sitesTable());
+        twin(twins, stored, MANAGE + "." + SITES + ".tenant-one.disabled", ADMIN + "." + SITES + ".operator.disabled",
+            () -> sitesTable());
         twin(twins, stored, MANAGE + "." + DOMAINS + ".tenant-one.domain", ADMIN + "." + DOMAINS + ".operator.domain",
-            domainsTable());
+            () -> domainsTable());
         twin(twins, stored, MANAGE + "." + TEMPLATES + ".tenant-one.approved",
-            ADMIN + "." + TEMPLATES + ".operator.approved", templatesTable());
+            ADMIN + "." + TEMPLATES + ".operator.approved", () -> templatesTable());
 
         // 4. Every stored case matched exactly, and every twin difference is listed.
         List<String> failures = new ArrayList<>();
@@ -153,9 +205,28 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
         }
     }
 
-    /** A capture whose domain listen_on Select lists the host's own addresses, which no stored set can pin. */
+    /**
+     * A capture whose domain listen_on Select writes the host's own addresses as one element: no stored set can pin
+     * them, while any other choice it offers stays compared.
+     */
     private static PanelSurfaces capture(SurfaceCase fixture) {
-        return PanelSurfaces.capture(fixture).withHostOptions("listen_on");
+        SurfaceCase keyed = fixture.hostOptions("listen_on", UpdateSystemIpAddresses.getLocalAddresses());
+        // Every generated fixture id at the bindings a destination carries it (an entry's key segment, a query
+        // parameter), so a stored capture pins it across runs while every other value stays literal.
+        if (DEVICES.equals(fixture.entrySlug())) {
+            keyed = keyed.key(DEVICES, "disk", diskId).key(DEVICES, "cdrom", cdromId)
+                .key(DEVICES, "unknown_device", unknownDeviceId).key(HohenheimSlugs.INSTANCES, "instance", instanceId)
+                .key("parent", "instance", instanceId).key("instance_id", "instance", instanceId);
+        } else {
+            keyed = keyed.key(SITES, "site", siteId).key(SITES, "disabled_site", disabledSiteId)
+                .key(SITES, "trashed_site", trashedSiteId).key(DOMAINS, "domain", domainId)
+                .key(DOMAINS, "trashed_domain", trashedDomainId).key(TEMPLATES, "approved_template", approvedTemplateId)
+                .key(TEMPLATES, "unapproved_template", unapprovedTemplateId)
+                .key("site_id", "site", siteId).key("parent", "site", siteId)
+                .key("template", "approved_template", approvedTemplateId)
+                .key("template", "unapproved_template", unapprovedTemplateId);
+        }
+        return PanelSurfaces.capture(keyed);
     }
 
     @Test
@@ -182,7 +253,7 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
         List<AssertionError> twins = new ArrayList<>();
         for (String type : List.of("disk", "cdrom", "unknown")) {
             twin(twins, stored, MANAGE + "." + DEVICES + ".tenant-config." + type,
-                ADMIN + "." + DEVICES + ".operator." + type, devicesTable(type));
+                ADMIN + "." + DEVICES + ".operator." + type, () -> devicesTable(type));
         }
 
         // 3. Every stored case matched exactly, and every twin difference is listed.
@@ -206,23 +277,28 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
      */
     private static TwinCorrespondence devicesTable(String type) {
         TwinCorrespondence table = TwinCorrespondence.between(MANAGE + "/" + DEVICES, ADMIN + "/" + DEVICES)
-            .own("control CREATE%20type kind=zenitforms:form/select required=false readonly=false options=disk,nic");
+            .own("control CREATE%20type kind=zenitforms:form/select input=select required=false readonly=false"
+                + " options=disk,nic" + SELECT_BINDING);
         return switch (type) {
             case "disk" -> table
-                .own("control EDIT%20type kind=zenitforms:form/select required=false readonly=false options=disk,nic");
-            case "unknown" -> table.own("control EDIT%20type kind=zenitforms:form/select required=false"
-                + " readonly=false options=disk,nic,floppy");
+                .own("control EDIT%20type kind=zenitforms:form/select input=select required=false readonly=false"
+                    + " options=disk,nic" + SELECT_BINDING);
+            case "unknown" -> table.own("control EDIT%20type kind=zenitforms:form/select input=select"
+                + " required=false readonly=false options=disk,nic,floppy" + SELECT_BINDING);
             case "cdrom" -> table;
             default -> throw new IllegalArgumentException("No device fixture " + type);
         };
     }
 
+    /** A twin comparison whose failure, or whose table refusing a stale line, joins the run's failures. */
     private static void twin(List<AssertionError> twins, SurfaceBaselines stored, String tenantCase,
-                             String adminCase, TwinCorrespondence table) {
+                             String adminCase, Supplier<TwinCorrespondence> table) {
         try {
-            PanelSurfaceComparer.assertNarrower(stored.captured(tenantCase), stored.captured(adminCase), table);
+            PanelSurfaceComparer.assertNarrower(stored.captured(tenantCase), stored.captured(adminCase), table.get());
         } catch (AssertionError difference) {
             twins.add(difference);
+        } catch (IllegalArgumentException stale) {
+            twins.add(new AssertionError("Twin " + tenantCase + " table: " + stale.getMessage(), stale));
         }
     }
 
@@ -255,9 +331,12 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
             .own("column version shown=true hidden=false sortable=false filterable=false copyable=false subtext="
                 + " relation=false")
             // A tenant reads an approved template's form; it never edits it.
-            .own("control EDIT%20name kind=zenitforms:form/plain required=true readonly=true options=")
-            .own("control EDIT%20description kind=zenitforms:form/plain required=false readonly=true options=")
-            .own("control EDIT%20version kind=zenitforms:form/plain required=false readonly=true options=");
+            .own("control EDIT%20name kind=zenitforms:form/plain input=text required=true readonly=true options="
+                + " binding=")
+            .own("control EDIT%20description kind=zenitforms:form/plain input=multiline required=false readonly=true"
+                + " options= binding=")
+            .own("control EDIT%20version kind=zenitforms:form/plain input=number required=false readonly=true"
+                + " options= binding=");
     }
 
     private static AccessContext access(UserPrincipal principal) {
@@ -269,7 +348,7 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
         return new UserPrincipal(admin.get(UserModel.ID), "Test Admin");
     }
 
-    private static int site(String slug) {
+    private static int site(String slug, boolean enabled) {
         Model sites = Models.get(SiteModel.class);
         Row row = sites.createEmptyRow();
         row.set(SiteModel.NAME, slug);
@@ -277,7 +356,7 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
         row.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         row.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
         row.set(SiteModel.STATUS, "active");
-        row.set(SiteModel.ENABLED, true);
+        row.set(SiteModel.ENABLED, enabled);
         sites.save(row);
         return row.get(SiteModel.ID);
     }

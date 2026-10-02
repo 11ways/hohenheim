@@ -73,6 +73,8 @@ dependencies {
     browserTestImplementation libs.zenit.test.support
     // PanelSurfaces: the stored before/after and twin captures of the /manage entries (stage 4 contract 4.9).
     browserTestImplementation libs.zenit.cms.test.support
+    // The permission editor's capture projection, read by the surface captures through its service file.
+    browserTestImplementation libs.zenit.auth.test.support
 }
 
 // The runtime-image build contexts ride the SERVER resources, so a host that has to
