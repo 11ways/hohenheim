@@ -879,6 +879,14 @@ public class HohenheimSettings {
             .suffix("s")
             .description("Lifetime of a proxy-auth persistent (remember-me) cookie (seconds)")
             .build();
+
+        /** Explicit operator opt-in for site auth providers whose Proteus realm is on a private network. */
+        public static final SettingDefinition<Boolean> PROTEUS_ALLOW_PRIVATE_NETWORKS = GROUP
+            .buildSetting("proteus_allow_private_networks", Boolean.class)
+            .defaultValue(false)
+            .description("Allow site auth providers to reach a Proteus realm on a private network (RFC 1918, IPv6"
+                + " unique-local); this host, link-local and special-purpose addresses stay refused")
+            .build();
     }
 
     // --- Per-owner consumption caps (the reservation ledger's policy side) ---
