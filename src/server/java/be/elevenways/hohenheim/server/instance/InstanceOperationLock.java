@@ -178,6 +178,12 @@ public final class InstanceOperationLock {
         return threads != null && threads.contains(thread);
     }
 
+    /** Whether any thread is waiting for the record's claim (a test seam for the ordering proofs). */
+    public boolean isQueued(int instanceId) {
+        Set<Thread> threads = this.waiting.get(instanceId);
+        return threads != null && !threads.isEmpty();
+    }
+
     private ClaimedRows<Integer>.@Nullable Held hold(int instanceId, @NonNull Contention contention) {
         int wait = switch (contention) {
             case REFUSE -> 0;

@@ -81,6 +81,24 @@ class StackSpecTest {
         assertThat(revived).isEqualTo(original);
     }
 
+    @Test
+    void fileContentsSurviveByteExactEvenWhenOnlyWhitespace() {
+        // A config file whose meaning IS its whitespace (an indentation-only fragment, a lone newline a parser
+        // requires) is content, never "blank": the snapshot and the record read keep it verbatim.
+        List<StackSpec.FileSpec> files = List.of(
+            new StackSpec.FileSpec("/etc/app/blank-line", "\n", "0644"),
+            new StackSpec.FileSpec("/etc/app/indent", "  \t  ", "0644"),
+            new StackSpec.FileSpec("/etc/app/padded", "  key: value  \n\n", "0644"),
+            new StackSpec.FileSpec("/etc/app/empty", "", "0644"));
+        StackSpec.ServiceSpec withFiles = new StackSpec.ServiceSpec(5, "files", "alpine:latest", List.of(), Map.of(),
+            List.of(), List.of(), List.of(), files, null, 10, 5, 5, 0, "unless-stopped", null, null, List.of());
+        StackSpec original = new StackSpec(43, "filestack", "local", null, null, null, List.of(withFiles));
+
+        assertThat(StackSpec.fromMap(original.toMap()).services().get(0).files())
+            .as("every file's content survives byte-exact, whitespace-only included")
+            .containsExactlyElementsOf(files);
+    }
+
     /**
      * A stored snapshot outlives the record shape it was written from: rollback re-deploys
      * a spec serialized by an older build. Dropping a field must therefore DEGRADE, never

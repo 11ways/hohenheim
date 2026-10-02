@@ -517,6 +517,34 @@ public class InstanceModel extends Model {
     public static final DateTimeField DELETED_AT = SCHEMA.addField(DateTimeField.builder().name("deleted_at").build());
 
     /**
+     * The columns only an operation holding the record's claim writes, through InstanceOperationGuard's fenced
+     * statements: a configuration save of an existing record never carries them.
+     *
+     * AIDEV-NOTE: a loaded row carries these as they were at load time, and a whole-row save writes every present
+     * column predicated on the primary key alone, so a config writer used to put back a status an operation had moved
+     * on from and the claim fence it had replaced, which let the old holder's late writes match again (review 14
+     * D01). A column a new fenced stamp writes belongs here.
+     */
+    public static final List<Field<?, ?>> OPERATION_OWNED = List.of(CLAIM_FENCE, STATUS, STATUS_OBSERVED_AT,
+        WORKLOAD_KILLED_AT, INSTALL_STATE, INSTALL_ERROR, RUNTIME_ROLE, IMAGE_FINGERPRINT, MIGRATE_TARGET_ID,
+        MIGRATE_RESERVED_MB);
+
+    /**
+     * Save a configuration change through the full save pipeline; an existing record's {@link #OPERATION_OWNED}
+     * columns are dropped from the row first and stay as stored.
+     *
+     * @return the saved row
+     */
+    public static @NonNull Row saveConfiguration(@NonNull Row row) {
+        if (row.get(ID) != null) {
+            for (Field<?, ?> owned : OPERATION_OWNED) {
+                row.remove(owned.getName());
+            }
+        }
+        return Models.get(InstanceModel.class).save(row);
+    }
+
+    /**
      * Instances are soft-deleted (destroy trashes the record, the backups and history outlive
      * it): the behaviour adopts {@link #DELETED_AT} and hides trashed rows from every default
      * find, count and updateAll.

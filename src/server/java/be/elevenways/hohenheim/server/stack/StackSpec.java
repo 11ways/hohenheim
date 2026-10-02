@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -213,8 +214,9 @@ public record StackSpec(
             if (path.isBlank()) {
                 return null;
             }
+            // The content is the file's bytes: whitespace-only content is content, never collapsed to empty.
             return new FileSpec(path,
-                Texts.orIfBlank(field.apply(StackFileModel.CONTENT.getName()), ""),
+                Objects.toString(field.apply(StackFileModel.CONTENT.getName()), ""),
                 Texts.orIfBlank(field.apply(StackFileModel.MODE.getName()), "0644"));
         }
 
