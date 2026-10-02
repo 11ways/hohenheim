@@ -3546,6 +3546,10 @@
     "text": "The upstream host must be a plain http(s) address without credentials",
     "scope": "violations"
   },
+  "operator_trusted_target": {
+    "text": "Only the installation operator can change where this record connects",
+    "scope": "violations"
+  },
   "tenant_field_frozen": {
     "text": "Only an administrator can change this setting",
     "scope": "violations"

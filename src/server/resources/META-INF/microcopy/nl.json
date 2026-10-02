@@ -3546,6 +3546,10 @@
     "text": "De upstream-host moet een gewoon http(s)-adres zonder inloggegevens zijn",
     "scope": "violations"
   },
+  "operator_trusted_target": {
+    "text": "Alleen de beheerder van de installatie kan wijzigen waarmee dit record verbinding maakt",
+    "scope": "violations"
+  },
   "tenant_field_frozen": {
     "text": "Alleen een beheerder kan deze instelling wijzigen",
     "scope": "violations"
