@@ -16,12 +16,17 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.lease.Leases;
+import be.elevenways.protoblast.common.util.BlastLog;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.lang.reflect.Method;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -120,6 +125,60 @@ class InstanceConsoleGenerationTest {
 
     private static @Nullable String status(int instanceId) {
         return Models.get(InstanceModel.class).findById(instanceId).get(InstanceModel.STATUS);
+    }
+
+    @Test
+    void aRefusedExitStampCannotReleaseTheOtherControllersObservedPorts() {
+        Db.run(datasource, () -> {
+            int instanceId = instanceRecord("refused-exit", template("refused-exit", null, "stop"));
+            HostLeases observer = HostLeases.production();
+            new InstanceService().deploy(instanceId);
+            Object session = InstanceConsoles.ensureSession(instanceId);
+            observer.release(hostId);
+            Leases independent = Leases.independent(datasource);
+            HostLeases winner = new HostLeases(ignored -> independent, Duration.ofSeconds(30));
+            List<String> logged = new CopyOnWriteArrayList<>();
+            BlastLog.LogSink previous = BlastLog.getLogSink();
+            try {
+                // 1. B owns the stored host lease without touching A's process-local console generation map.
+                winner.requireFence(hostId);
+                PortLedger.recordObservedAll(hostId, "127.0.0.1", List.of(47012), "tcp",
+                    InstanceModel.MODEL_ID, instanceId, null);
+                var ports = PortLedger.claimsOf(InstanceModel.MODEL_ID, instanceId);
+                assertThat(ports).as("step 1: B actually owns an observed port").isNotEmpty();
+                BlastLog.setLogSink(args -> logged.add(Arrays.toString(args)));
+                // 2. A enters a fresh record claim with its already observed exit code; its host stamp is refused.
+                InstanceOperationLock.of(observer).exclusive(instanceId, InstanceOperationLock.Contention.QUEUE, () -> {
+                    try {
+                        Method policy = InstanceConsoles.class.getDeclaredMethod("applyExitPolicy",
+                            session.getClass(), int.class, int.class, Object.class, HostLeases.class,
+                            boolean.class, int.class);
+                        policy.setAccessible(true);
+                        policy.invoke(null, session, instanceId, hostId, "refused-exit", observer, true, 0);
+                    } catch (ReflectiveOperationException failure) {
+                        throw new IllegalStateException(failure);
+                    }
+                });
+                assertThat(status(instanceId)).as("step 3: the refused stamp leaves B's running outcome intact")
+                    .isEqualTo(InstanceModel.STATUS_RUNNING);
+                assertThat(logged).as("step 3: refusal is observed, not merely an unchanged status")
+                    .anyMatch(line -> line.contains("status write refused"));
+                assertThat(PortLedger.claimsOf(InstanceModel.MODEL_ID, instanceId))
+                    .as("step 3: refusal does not delete B's newly observed port claims").hasSize(ports.size());
+                assertThat(winner.isHeld(hostId)).as("step 3: B still holds the host authority").isTrue();
+            } finally {
+                BlastLog.setLogSink(previous);
+                try {
+                    Method close = InstanceConsoles.class.getDeclaredMethod("closeSession", int.class);
+                    close.setAccessible(true);
+                    close.invoke(null, instanceId);
+                } catch (ReflectiveOperationException failure) {
+                    throw new IllegalStateException(failure);
+                } finally {
+                    winner.release(hostId);
+                }
+            }
+        });
     }
 
     private static int template(String name, @Nullable String readinessLine, @Nullable String stopCommand) {

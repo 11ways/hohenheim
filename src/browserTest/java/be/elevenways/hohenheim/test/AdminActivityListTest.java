@@ -12,6 +12,13 @@ import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.ActivityResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
+import be.elevenways.zenit.cms.common.schema.FilterState;
+import be.elevenways.zenit.cms.common.schema.SortSpec;
+import be.elevenways.zenit.auth.test.TestAccounts;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.test.support.TestAccessContexts;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.orm.activity.ActivityActions;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
@@ -24,6 +31,10 @@ import org.junit.jupiter.api.Test;
 import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -36,6 +47,56 @@ import static org.assertj.core.api.Assertions.assertThat;
  * each row have to be chosen, and ActivityLog derives all three from whatever lane calls it.
  */
 class AdminActivityListTest extends HohenheimTestBase {
+
+    @Test
+    void actorFilterReadsDisplayedNamesRatherThanNumericFragments() throws Exception {
+        String first = "hh-actor-name-zelda";
+        String second = "hh-actor-name-alpha";
+        int zeldaId = TestAccounts.create("zelda-" + UUID.randomUUID() + "@example.com", "Zelda Actor", true, false);
+        int alphaId = TestAccounts.create("alpha-" + UUID.randomUUID() + "@example.com", "Alpha Actor", true, true);
+        write(ServerModel.MODEL_ID.toString(), first, first, "updated", Accountability.ORIGIN_WEB,
+            Instant.parse("2998-01-01T00:00:00Z"));
+        write(ServerModel.MODEL_ID.toString(), second, second, "updated", Accountability.ORIGIN_WEB,
+            Instant.parse("2998-01-02T00:00:00Z"));
+        Row zelda = rowFor(first);
+        zelda.set(ActivityModel.ACTOR, Integer.toString(zeldaId));
+        zelda.set(ActivityModel.ACTOR_KIND, ZenitPrincipalKind.ACCOUNT.id().toString());
+        zelda.set(ActivityModel.ACTOR_LABEL, null);
+        new ActivityModel().save(zelda);
+        Row alpha = rowFor(second);
+        alpha.set(ActivityModel.ACTOR, Integer.toString(alphaId));
+        alpha.set(ActivityModel.ACTOR_KIND, ZenitPrincipalKind.ACCOUNT.id().toString());
+        alpha.set(ActivityModel.ACTOR_LABEL, null);
+        new ActivityModel().save(alpha);
+        HttpResponse<String> response = adminGet("/admin/activity?filter.actor="
+            + URLEncoder.encode(PrincipalRef.account(zeldaId).key(), StandardCharsets.UTF_8));
+        assertThat(response.statusCode()).as("step 1: the actor-name filter renders").isEqualTo(200);
+        assertThat(response.body()).as("step 1: the filter matches the displayed name, not every numeric actor")
+            .contains(first).doesNotContain(second);
+        assertThat(response.body()).as("step 2: disabled accounts retain their display names").contains("Zelda Actor");
+
+        HttpResponse<String> searched = adminGet("/admin/activity?text=Alpha");
+        assertThat(searched.body()).as("step 3: relation search reads the account display name")
+            .contains(second).doesNotContain(first);
+
+        var access = TestAccessContexts.allAllowed();
+        var resource = adminActivityResource();
+        var applied = resource.tableView(access).apply(resource.tableSpec())
+            .withFilter(FilterState.of(Map.of("record_id", "hh-actor-name"))).withSort(SortSpec.asc("actor"));
+        assertThat(resource.listRows(applied, access).stream().map(row -> row.get(ActivityModel.RECORD_ID)).toList())
+            .as("step 4: account names sort Alpha before Zelda, not by their ids").containsExactly(second, first);
+
+        Row user = AuthModels.users().findById(zeldaId);
+        user.set(UserModel.DISPLAY_NAME, null);
+        AuthModels.users().save(user);
+        Microcopy email = (Microcopy) resource.cellValue(zelda, column(resource, "actor"));
+        assertThat(email.resolve(LocaleChain.ofTags("en"), new ShippedCatalogs()))
+            .as("step 5: missing display name falls back to the stored email").isEqualTo(user.get(UserModel.EMAIL));
+        AuthModels.users().find().where(UserModel.ID.eq(zeldaId)).delete();
+        Microcopy deleted = (Microcopy) resource.cellValue(zelda, column(resource, "actor"));
+        assertThat(deleted.resolve(LocaleChain.ofTags("en"), new ShippedCatalogs()))
+            .as("step 6: a deleted author is named as unknown, never by its id").isEqualTo("Account no longer known");
+    }
 
     private static final String OPERATOR_TITLE = "hh-activity-operator-subject";
     private static final String BACKGROUND_TITLE = "hh-activity-background-subject";
@@ -51,6 +112,34 @@ class AdminActivityListTest extends HohenheimTestBase {
     private static final String UNLINKABLE_RECORD_ID = "4244";
     private static final String NARROWED_RECORD_ID = "918273";
     private static final String SITE_RECORD_ID = "4246";
+
+    @Test
+    void principalPickerDoesNotMatchNumericFragmentsOrAnotherKind() throws Exception {
+        Map<String, String[]> actors = Map.of(
+            "hh-principal-fragment-one", new String[]{"zenit:account", "1"},
+            "hh-principal-fragment-ten", new String[]{"zenit:account", "10"},
+            "hh-principal-fragment-twenty-one", new String[]{"zenit:account", "21"},
+            "hh-principal-fragment-system", new String[]{"zenit:system", "1"});
+        for (var actor : actors.entrySet()) {
+            write(ServerModel.MODEL_ID.toString(), actor.getKey(), actor.getKey(), "updated", Accountability.ORIGIN_WEB,
+                Instant.parse("2997-01-01T00:00:00Z"));
+            Row row = rowFor(actor.getKey());
+            row.set(ActivityModel.ACTOR_KIND, actor.getValue()[0]);
+            row.set(ActivityModel.ACTOR, actor.getValue()[1]);
+            row.set(ActivityModel.ACTOR_LABEL, null);
+            new ActivityModel().save(row);
+        }
+        var one = adminGet("/admin/activity?filter.record_id=hh-principal-fragment&filter.actor="
+            + URLEncoder.encode("zenit:account#1", StandardCharsets.UTF_8));
+        assertThat(one.body()).as("step 1: account 1 is not account 10, account 21 or system 1")
+            .contains("hh-principal-fragment-one").doesNotContain("hh-principal-fragment-ten",
+                "hh-principal-fragment-twenty-one", "hh-principal-fragment-system");
+        var system = adminGet("/admin/activity?filter.record_id=hh-principal-fragment&filter.actor="
+            + URLEncoder.encode("zenit:system#1", StandardCharsets.UTF_8));
+        assertThat(system.body()).as("step 2: the system's complete reference selects only its rows")
+            .contains("hh-principal-fragment-system").doesNotContain("hh-principal-fragment-one",
+                "hh-principal-fragment-ten", "hh-principal-fragment-twenty-one");
+    }
 
     @Test
     void systemActivityNamesTheSystemRatherThanAccountOne() throws Exception {
@@ -75,6 +164,10 @@ class AdminActivityListTest extends HohenheimTestBase {
         assertThat(response.statusCode()).as("step 2: system activity renders").isEqualTo(200);
         assertThat(response.body()).as("step 2: the system row has its public name")
             .contains(record, "System").doesNotContain("work wait sweep");
+        HttpResponse<String> selected = adminGet("/admin/activity?filter.origin.__cleared=1&filter.actor="
+            + URLEncoder.encode("zenit:system#1", StandardCharsets.UTF_8));
+        assertThat(selected.body()).as("step 3: the principal picker selects the declared system identity")
+            .contains(record).doesNotContain("work wait sweep");
     }
 
     @Test

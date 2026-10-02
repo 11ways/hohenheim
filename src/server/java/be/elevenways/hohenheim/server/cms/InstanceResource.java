@@ -79,12 +79,10 @@ import java.util.Map;
  * projection ({@link ManageInstanceResource}). Create persists the record; deploy,
  * stop and the verified destroy are row actions through {@link InstanceService}.
  *
- * AIDEV-NOTE: every row action (built in {@link InstanceActions}) declares the record
- * capability it needs in its own visibleFor, even though this panel is admin-gated. Two
- * reasons, both structural: zenit-cms re-checks visibleFor on INVOKE (so the declaration
- * is a gate, not a hint), and the /manage subclass offers the same builders -- a
- * capability spelled only for one panel would be a second policy over one action. For an
- * admin the predicate is a no-op: the precedence walk's admin bypass answers first.
+ * AIDEV-NOTE: placed operations built by {@link InstanceActions} declare their capability in the operation gate;
+ * the admitted resource read and that gate run on both offer and invocation for admin and /manage. Remaining legacy
+ * callback actions still declare their record capability in visibleFor, rechecked on invocation, rather than relying
+ * on the admin panel gate; the admin precedence bypass remains the capability checker's answer.
  */
 public class InstanceResource extends RowResource {
 
@@ -320,6 +318,7 @@ public class InstanceResource extends RowResource {
         Integer instanceId = existing.get(InstanceModel.ID);
         Map<String, Object> before = InstanceResize.settingsOf(existing);
         String storedStatus = existing.get(InstanceModel.STATUS);
+        InstanceModel.prepareConfigurationSave(existing);
         super.updateRow(existing, coerced, accessContext);
         if (instanceId != null) {
             InstanceResize.recreateAfterCommit(instanceId, before,

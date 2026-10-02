@@ -71,8 +71,7 @@ public final class AdminActivityResource extends ActivityResource {
         .filter(FilterSpec.forField(ActivityModel.MODEL, FilterSpec.Kind.TEXT).build())
         .filter(FilterSpec.forField(ActivityModel.RECORD_ID, FilterSpec.Kind.TEXT).build())
         .filter(FilterSpec.forField(ActivityModel.ACTION, FilterSpec.Kind.TEXT).build())
-        .filter(FilterSpec.forField(ActivityModel.ACTOR, FilterSpec.Kind.TEXT).build())
-        .filter(FilterSpec.forField(ActivityModel.ACTOR_KIND, FilterSpec.Kind.TEXT).build())
+        .filter(FilterSpec.forPrincipal(ActivityModel.ACTOR_KIND, ActivityModel.ACTOR).build())
         .filter(FilterSpec.forField(ActivityModel.ORIGIN, FilterSpec.Kind.TEXT).build())
         .defaultSort(SortSpec.desc(ActivityModel.CREATED_AT.getName()))
         .build();

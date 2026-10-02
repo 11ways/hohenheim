@@ -550,12 +550,17 @@ public class InstanceModel extends Model {
      * @return the saved row
      */
     public static @NonNull Row saveConfiguration(@NonNull Row row) {
+        return Models.get(InstanceModel.class).save(prepareConfigurationSave(row));
+    }
+
+    /** Removes operation-owned state before another configuration writer enters its normal save pipeline. */
+    public static @NonNull Row prepareConfigurationSave(@NonNull Row row) {
         if (row.get(ID) != null) {
             for (Field<?, ?> owned : OPERATION_OWNED) {
                 row.remove(owned.getName());
             }
         }
-        return Models.get(InstanceModel.class).save(row);
+        return row;
     }
 
     /**
