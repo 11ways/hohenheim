@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.InstanceResource;
-import be.elevenways.hohenheim.server.cms.InstanceTemplateResource;
+import be.elevenways.hohenheim.server.cms.InstanceTemplateParts;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -123,7 +123,7 @@ class InstanceKindOfferTest {
 
         // 4. A template of a generated-only kind is the same lie one level removed: every
         //    create from it lands on the same refusal.
-        assertThat(optionValues(new InstanceTemplateResource().formSpec().findEntry("kind")))
+        assertThat(optionValues(InstanceTemplateParts.admin().form().spec().findEntry("kind")))
             .as("step 4: the template form is narrowed the same way")
             .doesNotContainAnyElementsOf(generatedOnly);
     }

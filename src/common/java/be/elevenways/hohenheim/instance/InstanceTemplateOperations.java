@@ -24,7 +24,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Creating an instance from one approved template: the wizard every panel places on its from-template page.
+ * The template catalog's operations: creating an instance from one template (the wizard every panel places on its
+ * from-template page), and the operator's approval and its withdrawal.
  *
  * AIDEV-NOTE: the subject IS the template (DECIDED D2-B11), loaded through the template catalog's scope, so a template
  * the caller may not select is concealed before any input is read; no template id travels as input. The variables
@@ -76,6 +77,29 @@ public final class InstanceTemplateOperations {
             .result(Integer.class)
             .rateLimit(HohenheimEndpoints.INSTANCE_CREATE_LIMIT)
             .facts(OperationFact.REACHES_OUTSIDE)
+            .register();
+
+    /**
+     * THE operator act that makes a template tenant-selectable: an accountable stamp of who approved it and when.
+     *
+     * AIDEV-NOTE: the id is the former row action's, so an admin surface comparison sees the same action moved to the
+     * invoke route; operator-only through its server authorizer, applicable while the template is unapproved.
+     */
+    public static final Operation<Row, Void, Void> APPROVE_TEMPLATE =
+        Operation.declare(HohenheimIds.id("approve_template"))
+            .label(Microcopy.of("approve").withFilter("scope", "instance_template"))
+            .icon(Icon.of("circle-check"))
+            .one(TEMPLATE)
+            .gate(OperationGate.open())
+            .register();
+
+    /** Withdraws an approval, so tenants can no longer select the template; applicable while it is approved. */
+    public static final Operation<Row, Void, Void> UNAPPROVE_TEMPLATE =
+        Operation.declare(HohenheimIds.id("unapprove_template"))
+            .label(Microcopy.of("unapprove").withFilter("scope", "instance_template"))
+            .icon(Icon.of("circle-xmark"))
+            .one(TEMPLATE)
+            .gate(OperationGate.open())
             .register();
 
     private InstanceTemplateOperations() {}

@@ -10,8 +10,8 @@ import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelNav;
-import be.elevenways.zenit.cms.common.panel.PanelPeer;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -95,13 +95,13 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
 
         for (int i = 0; i < sections.size(); i++) {
             PanelNav.Section section = sections.get(i);
-            List<String> slugs = section.peers().stream().map(PanelPeer::slug).toList();
+            List<String> slugs = section.entries().stream().map(PanelEntry::slug).toList();
             assertThat(slugs)
                 .as("step 1: the entries of the '" + section.group().id() + "' group, in order")
                 .containsExactlyElementsOf(EXPECTED_SIDEBAR.get(i).getValue());
         }
 
-        int visible = sections.stream().mapToInt(section -> section.peers().size()).sum();
+        int visible = sections.stream().mapToInt(section -> section.entries().size()).sum();
         assertThat(visible)
             .as("step 1: the whole sidebar stays scannable (it was 39)")
             .isEqualTo(24);
@@ -111,7 +111,7 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         //    exactly how this panel's ordering drifted before.
         for (PanelNav.Section section : sections) {
             Set<Integer> orders = new HashSet<>();
-            for (PanelPeer peer : section.peers()) {
+            for (PanelEntry peer : section.entries()) {
                 Microcopy description = peer.description();
                 assertThat(description)
                     .as("step 2: '" + peer.slug() + "' declares a description")
@@ -143,7 +143,7 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         assertThat(top.labelled())
             .as("step 3: the ungrouped top block renders without a heading")
             .isFalse();
-        assertThat(sections.get(0).peers())
+        assertThat(sections.get(0).entries())
             .as("step 3: and holds both always-there entries, so it reads as a block")
             .hasSize(2);
 
@@ -237,7 +237,7 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         assertThat(manage).as("step 7: the manage panel is registered").isNotNull();
         for (PanelNav.Section section : PanelNav.sections(manage, operator)) {
             Set<Integer> orders = new HashSet<>();
-            for (PanelPeer peer : section.peers()) {
+            for (PanelEntry peer : section.entries()) {
                 assertThat(peer.description())
                     .as("step 7: manage entry '" + peer.slug() + "' declares a description")
                     .isNotNull();

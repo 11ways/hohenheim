@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RecordSource;
@@ -29,6 +30,8 @@ import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
@@ -49,12 +52,13 @@ import java.util.Objects;
 
 /**
  * Handlers for the template endpoints beside the zenit-cms panel (the checksummed export download, the paste import)
- * and the create-from-template operation's server half.
+ * and the server half of the template operations: create from template, approve and unapprove.
  *
  * AIDEV-NOTE: no authorizer asks create authority: the shared funnel refuses a caller without it by name (as the
- * submit always did), and the placements hide their affordance on the same question. The operation's input scope is resolved per admitted template and caller: the template's own variable
- * form, the host pick only for an operator and the projects the caller may create into; a blank secret falls back
- * to its declared default as a server-only default, so it validates without ever being rendered (O04).
+ * submit always did), and the placements hide their affordance on the same question. The create's input scope is
+ * resolved per admitted template and caller: the template's own variable form, the host pick only for an operator and
+ * the projects the caller may create into; a blank secret falls back to its declared default as a server-only default,
+ * so it validates without ever being rendered (O04).
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -71,6 +75,14 @@ public final class InstanceTemplateHandlers {
                 .scopedBy(TenantScopes.INSTANCE_TEMPLATES).build())
             .inputScope(InstanceTemplateHandlers::inputScope)
             .handle(InstanceTemplateHandlers::createFromTemplate);
+        OperationHandlers.attach(InstanceTemplateOperations.APPROVE_TEMPLATE)
+            .applies(template -> template.get(InstanceTemplateModel.APPROVED_AT) == null)
+            .authorize(InstanceTemplateHandlers::operatorOnly)
+            .handle(InstanceTemplateHandlers::approve);
+        OperationHandlers.attach(InstanceTemplateOperations.UNAPPROVE_TEMPLATE)
+            .applies(template -> template.get(InstanceTemplateModel.APPROVED_AT) != null)
+            .authorize(InstanceTemplateHandlers::operatorOnly)
+            .handle(InstanceTemplateHandlers::unapprove);
     }
 
     private InstanceTemplateHandlers() {
@@ -124,6 +136,44 @@ public final class InstanceTemplateHandlers {
                 return importErrorText(conduit, HandlerSupport.violationMessage(violations));
             }
         });
+    }
+
+    // -- approval: the operator act that makes a template tenant-selectable ------------------------------------
+
+    /** Approval is authority over what the whole installation may run: operators alone, from every surface. */
+    private static @Nullable DomainRefusal operatorOnly(@NonNull Row template, @Nullable Void input,
+                                                        @NonNull AccessContext access) {
+        return HohenheimAccess.isAdmin(access) ? null
+            : new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "template approval is an operator act");
+    }
+
+    /**
+     * Stamps who approved the template and when, after the approval-time lane of the vocabulary gate: a function-library
+     * script calling helpers the shim lacks must not become tenant-selectable, refused BY NAME before the stamp.
+     */
+    private static @Nullable Void approve(@NonNull OperationCall<Row, Void> call) {
+        Row template = call.subject();
+        CommunityScripts.requireVocabularyImplemented(template.get(InstanceTemplateModel.INSTALL_SCRIPT),
+            "install script");
+        CommunityScripts.requireVocabularyImplemented(template.get(InstanceTemplateModel.UPDATE_SCRIPT),
+            "update script");
+        template.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
+        template.set(InstanceTemplateModel.APPROVED_BY_USER_ID,
+            Objects.requireNonNull(call.access(), "an operator approves").principalId());
+        Models.get(InstanceTemplateModel.class).save(template);
+        ActivityLog.record(Models.get(InstanceTemplateModel.class), template.get(InstanceTemplateModel.ID),
+            HohenheimActivityAction.APPROVED, "operator approval");
+        return null;
+    }
+
+    private static @Nullable Void unapprove(@NonNull OperationCall<Row, Void> call) {
+        Row template = call.subject();
+        template.set(InstanceTemplateModel.APPROVED_AT, null);
+        template.set(InstanceTemplateModel.APPROVED_BY_USER_ID, null);
+        Models.get(InstanceTemplateModel.class).save(template);
+        ActivityLog.record(Models.get(InstanceTemplateModel.class), template.get(InstanceTemplateModel.ID),
+            HohenheimActivityAction.UNAPPROVED, "operator withdrawal");
+        return null;
     }
 
     // -- the create-from-template operation ---------------------------------------------------------------------
