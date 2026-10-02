@@ -123,7 +123,8 @@ public final class SpamserviceSettingsBackend implements SettingsBackend {
     private @NonNull Snapshot unavailableSnapshot() {
         BuiltSnapshot cached = this.lastSnapshot;
         if (cached == null) {
-            return new Snapshot(new SettingGroup("spamservice").label(Microcopy.of("settings.spamservice.label")),
+            return new Snapshot(new SettingGroup("spamservice").label(Microcopy.of("settings.spamservice.label"))
+                    .describe(Microcopy.of("settings.spamservice.help")),
                 Map.of(), "", false, null);
         }
         Snapshot snapshot = cached.snapshot();
@@ -135,7 +136,8 @@ public final class SpamserviceSettingsBackend implements SettingsBackend {
     }
 
     private static @NonNull BuiltSnapshot buildData(be.elevenways.spamservice.client.SettingsSnapshot remote) {
-        SettingGroup root = new SettingGroup("spamservice").label(Microcopy.of("settings.spamservice.label"));
+        SettingGroup root = new SettingGroup("spamservice").label(Microcopy.of("settings.spamservice.label"))
+            .describe(Microcopy.of("settings.spamservice.help"));
         Map<String, SettingGroup> groups = new LinkedHashMap<>();
         groups.put("", root);
         Map<String, SettingState> states = new LinkedHashMap<>();
@@ -169,6 +171,15 @@ public final class SpamserviceSettingsBackend implements SettingsBackend {
             if (known == null) {
                 known = current.createGroup(part).label(Microcopy.of("settings.spamservice." + key + ".label")
                     .withFallback(humanize(part)));
+                // The wire carries setting metadata, not group descriptions. This host words its known groups;
+                // a future remote group keeps an absent description instead of rendering an unclaimed key.
+                Microcopy description = switch (key) {
+                    case "scoring" -> Microcopy.of("settings.spamservice.scoring.help");
+                    case "reputation" -> Microcopy.of("settings.spamservice.reputation.help");
+                    case "events" -> Microcopy.of("settings.spamservice.events.help");
+                    default -> null;
+                };
+                if (description != null) known.describe(description);
                 groups.put(key, known);
             }
             current = known;

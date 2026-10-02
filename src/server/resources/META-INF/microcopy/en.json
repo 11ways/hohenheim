@@ -13050,7 +13050,7 @@
   "settings.hohenheim.hosts.label": "Host health",
   "settings.hohenheim.hosts.help": "How long a host may go without answering before the control plane stops treating its stored state as current",
   "settings.hohenheim.incus.label": "Incus hosts",
-  "settings.hohenheim.incus.help": "What this controller may do to the shared objects other Hohenheim controllers left on an Incus daemon it also uses",
+  "settings.hohenheim.incus.help": "What this controller may do to the shared objects OTHER hohenheim controllers left on an Incus daemon it also uses",
   "settings.hohenheim.instances.label": "Instances",
   "settings.hohenheim.instances.help": "Instance-tier runtime policy: the host-port window public/UDP publications pre-allocate from",
   "settings.hohenheim.builds.label": "Builders",
@@ -13066,5 +13066,9 @@
   "settings.spamservice.label": "Spamservice",
   "settings.spamservice.scoring.label": "Scoring",
   "settings.spamservice.reputation.label": "Reputation",
-  "settings.spamservice.events.label": "Events"
+  "settings.spamservice.events.label": "Events",
+  "settings.spamservice.help": "Spam scoring behaviour and reputation data sources",
+  "settings.spamservice.scoring.help": "Spam verdict thresholds",
+  "settings.spamservice.reputation.help": "Downloadable IP intelligence databases; blank URLs disable that source",
+  "settings.spamservice.events.help": "Ingested security-event retention"
 }

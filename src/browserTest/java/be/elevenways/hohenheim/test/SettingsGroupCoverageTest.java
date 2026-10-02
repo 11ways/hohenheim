@@ -94,10 +94,18 @@ class SettingsGroupCoverageTest {
             assertThat(label.fallback()).as("step 1: %s has no literal-label fallback", group.getName()).isNull();
             assertThat(group.isAdvanced()).as("step 1: localized labels do not invent advanced-group metadata")
                 .isFalse();
+            Microcopy description = group.displayDescription();
+            assertThat(description).as("step 1: %s declares description copy", group.getName()).isNotNull();
+            assertThat(description.key()).as("step 1: %s keeps its description identity", group.getName())
+                .isEqualTo("settings.hohenheim." + group.getName() + ".help");
+            assertThat(description.fallback()).as("step 1: descriptions are not literal-code fallbacks").isNull();
             for (String language : new String[] {"en", "nl"}) {
                 String resolved = label.resolve(LocaleChain.ofTags(language), catalogs);
                 assertThat(resolved).as("step 1: %s resolves in %s", group.getName(), language)
                     .isNotBlank().isNotEqualTo(label.key());
+                assertThat(description.resolve(LocaleChain.ofTags(language), catalogs))
+                    .as("step 1: %s description resolves in %s", group.getName(), language)
+                    .isNotBlank().isNotEqualTo(description.key());
             }
         }
 

@@ -40,7 +40,7 @@ public class HohenheimSettings {
     public abstract class Proxy {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("proxy")
             .label(Microcopy.of("settings.hohenheim.proxy.label"))
-            .describe("The reverse-proxy listeners and routing behaviour")
+            .describe(Microcopy.of("settings.hohenheim.proxy.help"))
             .icon("route");
 
         public static final SettingDefinition<Integer> HTTP_PORT = GROUP.buildSetting("http_port", Integer.class)
@@ -199,8 +199,7 @@ public class HohenheimSettings {
     public abstract class Roles {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("roles")
             .label(Microcopy.of("settings.hohenheim.roles.label"))
-            .describe("Which subsystems this installation runs; disabled roles do not start, "
-                + "declare no scheduled tasks and remove their admin surfaces")
+            .describe(Microcopy.of("settings.hohenheim.roles.help"))
             .icon("server");
 
         public static final SettingDefinition<Boolean> PROXY = GROUP.buildSetting("proxy", Boolean.class)
@@ -249,7 +248,7 @@ public class HohenheimSettings {
     public abstract class Ssl {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("ssl")
             .label(Microcopy.of("settings.hohenheim.ssl.label"))
-            .describe("Automatic Let's Encrypt certificate issuance")
+            .describe(Microcopy.of("settings.hohenheim.ssl.help"))
             .icon("lock");
 
         public static final SettingDefinition<Boolean> LETSENCRYPT_ENABLED = GROUP.buildSetting("letsencrypt_enabled", Boolean.class)
@@ -298,7 +297,7 @@ public class HohenheimSettings {
     public abstract class Dns {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("dns")
             .label(Microcopy.of("settings.hohenheim.dns.label"))
-            .describe("Authoritative DNS for the zones Hohenheim hosts")
+            .describe(Microcopy.of("settings.hohenheim.dns.help"))
             .icon("sitemap");
 
         public static final SettingDefinition<Boolean> ENABLED = GROUP.buildSetting("enabled", Boolean.class)
@@ -385,7 +384,7 @@ public class HohenheimSettings {
     public abstract class Logging {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("logging")
             .label(Microcopy.of("settings.hohenheim.logging.label"))
-            .describe("Access logging for proxied requests")
+            .describe(Microcopy.of("settings.hohenheim.logging.help"))
             .icon("align-left");
 
         public static final SettingDefinition<Boolean> ACCESS_TO_FILE = GROUP.buildSetting("access_to_file", Boolean.class)
@@ -404,7 +403,7 @@ public class HohenheimSettings {
     public abstract class Storage {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("storage")
             .label(Microcopy.of("settings.hohenheim.storage.label"))
-            .describe("Filesystem locations for persistent data")
+            .describe(Microcopy.of("settings.hohenheim.storage.help"))
             .icon("folder");
 
         public static final SettingDefinition<String> DATA_PATH = GROUP.buildSetting("data_path", String.class)
@@ -460,7 +459,7 @@ public class HohenheimSettings {
     public abstract class Stacks {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("stacks")
             .label(Microcopy.of("settings.hohenheim.stacks.label"))
-            .describe("Managed Docker stacks and the disk they reclaim")
+            .describe(Microcopy.of("settings.hohenheim.stacks.help"))
             .icon("cubes");
 
         public static final SettingDefinition<Boolean> RECLAIM_IMAGES = GROUP
@@ -531,7 +530,7 @@ public class HohenheimSettings {
     public abstract class Database {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("database")
             .label(Microcopy.of("settings.hohenheim.database.label"))
-            .describe("Hohenheim's own database and managed-database backups")
+            .describe(Microcopy.of("settings.hohenheim.database.help"))
             .icon("database");
 
         // AIDEV-NOTE: path and url are the DEPRECATED app-owned spellings of hohenheim's own
@@ -601,8 +600,7 @@ public class HohenheimSettings {
     public abstract class Security {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("security")
             .label(Microcopy.of("settings.hohenheim.security.label"))
-            .describe("Container isolation, hostname-scan detection, native IP bans, "
-                + "spamservice reputation and the released-hostname quarantine")
+            .describe(Microcopy.of("settings.hohenheim.security.help"))
             .icon("shield");
 
         // AIDEV-NOTE: the pids cap and the two log-rotation caps below are the ONLY
@@ -791,7 +789,7 @@ public class HohenheimSettings {
     public abstract class Process {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("process")
             .label(Microcopy.of("settings.hohenheim.process.label"))
-            .describe("Workload identity for managed child processes")
+            .describe(Microcopy.of("settings.hohenheim.process.help"))
             .icon("terminal");
 
         // AIDEV-NOTE: enforcement is UNCONDITIONAL by default and there is no
@@ -830,7 +828,7 @@ public class HohenheimSettings {
     public abstract class AuthProteus {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("auth_proteus")
             .label(Microcopy.of("settings.hohenheim.auth_proteus.label"))
-            .describe("Offer Proteus single sign-on next to password login")
+            .describe(Microcopy.of("settings.hohenheim.auth_proteus.help"))
             .icon("user");
 
         public static final SettingDefinition<Boolean> ENABLED = GROUP.buildSetting("enabled", Boolean.class)
@@ -866,7 +864,7 @@ public class HohenheimSettings {
     public abstract class ProxyAuth {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("proxy_auth")
             .label(Microcopy.of("settings.hohenheim.proxy_auth.label"))
-            .describe("Sessions for auth-provider-gated proxied sites")
+            .describe(Microcopy.of("settings.hohenheim.proxy_auth.help"))
             .icon("id-badge");
 
         public static final SettingDefinition<Long> SESSION_TTL_SECONDS = GROUP.buildSetting("session_ttl_seconds", Long.class)
@@ -895,8 +893,7 @@ public class HohenheimSettings {
     public abstract class Quota {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("quota")
             .label(Microcopy.of("settings.hohenheim.quota.label"))
-            .describe("Per-owner caps on what tenants may consume; the atomic "
-                + "reservation ledger enforces them at write time")
+            .describe(Microcopy.of("settings.hohenheim.quota.help"))
             .icon("gauge");
 
         public static final SettingDefinition<Integer> MAX_INSTANCES_PER_OWNER = GROUP
@@ -970,9 +967,7 @@ public class HohenheimSettings {
     public abstract class Capacity {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("capacity")
             .label(Microcopy.of("settings.hohenheim.capacity.label"))
-            .describe("How much workload memory each host is allowed to carry; placement "
-                + "skips a host with no headroom or no recent reading, and the reservation "
-                + "ledger enforces the budget at write time")
+            .describe(Microcopy.of("settings.hohenheim.capacity.help"))
             .icon("memory");
 
         public static final SettingDefinition<Integer> HOST_MEMORY_RESERVE_MB = GROUP
@@ -1011,8 +1006,7 @@ public class HohenheimSettings {
     public abstract class Hosts {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("hosts")
             .label(Microcopy.of("settings.hohenheim.hosts.label"))
-            .describe("How long a host may go without answering before the control plane "
-                + "stops treating its stored state as current")
+            .describe(Microcopy.of("settings.hohenheim.hosts.help"))
             .icon("heart-pulse");
 
         public static final SettingDefinition<Integer> CONTACT_MAX_AGE_MINUTES = GROUP
@@ -1035,8 +1029,7 @@ public class HohenheimSettings {
     public abstract class Incus {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("incus")
             .label(Microcopy.of("settings.hohenheim.incus.label"))
-            .describe("What this controller may do to the shared objects OTHER hohenheim "
-                + "controllers left on an Incus daemon it also uses")
+            .describe(Microcopy.of("settings.hohenheim.incus.help"))
             .icon("server");
 
         public static final SettingDefinition<Boolean> REAP_DEPARTED_CONTROLLERS = GROUP
@@ -1066,8 +1059,7 @@ public class HohenheimSettings {
     public abstract class Instances {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("instances")
             .label(Microcopy.of("settings.hohenheim.instances.label"))
-            .describe("Instance-tier runtime policy: the host-port window public/UDP "
-                + "publications pre-allocate from")
+            .describe(Microcopy.of("settings.hohenheim.instances.help"))
             .icon("box");
 
         public static final SettingDefinition<Integer> PUBLIC_PORT_FIRST = GROUP
@@ -1121,8 +1113,7 @@ public class HohenheimSettings {
     public abstract class Builds {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("builds")
             .label(Microcopy.of("settings.hohenheim.builds.label"))
-            .describe("The sandbox every tenant build runs in: builder image, and the "
-                + "CPU/memory/disk/time/PID quota one build may consume")
+            .describe(Microcopy.of("settings.hohenheim.builds.help"))
             .icon("hammer");
 
         // AIDEV-NOTE: a DAEMONLESS builder is the whole point and this setting must never
@@ -1249,8 +1240,7 @@ public class HohenheimSettings {
     public abstract class Releases {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("releases")
             .label(Microcopy.of("settings.hohenheim.releases.label"))
-            .describe("The health gate every Docker-site release passes before it may "
-                + "take traffic, and how long the superseded release drains before its stop")
+            .describe(Microcopy.of("settings.hohenheim.releases.help"))
             .icon("rocket");
 
         public static final SettingDefinition<Integer> PROBE_TIMEOUT_SECONDS = GROUP
@@ -1291,8 +1281,7 @@ public class HohenheimSettings {
     public abstract class Previews {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("previews")
             .label(Microcopy.of("settings.hohenheim.previews.label"))
-            .describe("Bounded-lifetime per-branch preview environments of git-sourced "
-                + "Docker sites, served on generated hostnames under one base domain")
+            .describe(Microcopy.of("settings.hohenheim.previews.help"))
             .icon("flask");
 
         public static final SettingDefinition<String> BASE_DOMAIN = GROUP
@@ -1325,7 +1314,7 @@ public class HohenheimSettings {
     public abstract class Files {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("files")
             .label(Microcopy.of("settings.hohenheim.files.label"))
-            .describe("Bounds on the per-instance file manager (browse, edit, upload, download)")
+            .describe(Microcopy.of("settings.hohenheim.files.help"))
             .icon("folder-tree");
 
         public static final SettingDefinition<Integer> MAX_FILE_KB = GROUP
@@ -1350,7 +1339,7 @@ public class HohenheimSettings {
     public abstract class Backup {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("backup")
             .label(Microcopy.of("settings.hohenheim.backup.label"))
-            .describe("Instance snapshots (host-local) and encrypted off-host backup exports")
+            .describe(Microcopy.of("settings.hohenheim.backup.help"))
             .icon("box-archive");
 
         public static final SettingDefinition<String> SNAPSHOT_PATH = GROUP
