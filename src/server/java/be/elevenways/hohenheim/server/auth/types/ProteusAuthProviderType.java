@@ -17,6 +17,8 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.ui.BadgeColor;
 import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.server.net.OutboundUrlGuard;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.Map;
 
@@ -50,6 +52,18 @@ public class ProteusAuthProviderType implements SiteAuthProviderTypeHandler {
         CONFIG_SCHEMA.addField(StringField.builder().name(AUTHENTICATOR)
             .label(HohenheimFormCopy.label("proteus_authenticator"))
             .help(HohenheimFormCopy.help("proteus_authenticator")).build());
+    }
+
+    /**
+     * The guard a provider's realm calls ride. AIDEV-NOTE: a provider's endpoint is config whoever manages the provider
+     * may edit, never the operator's own declaration (that is {@code hohenheim.auth_proteus}, which rides
+     * {@link OutboundUrlGuard#ANY_ADDRESS}), so it gets the public internet, or the private networks on the operator's
+     * explicit opt-in; this host and link-local stay refused either way.
+     */
+    public static @NonNull OutboundUrlGuard realmGuard() {
+        boolean privateNetworks = Boolean.TRUE.equals(
+            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.ProxyAuth.PROTEUS_ALLOW_PRIVATE_NETWORKS));
+        return privateNetworks ? OutboundUrlGuard.PRIVATE_NETWORKS : OutboundUrlGuard.PUBLIC_INTERNET;
     }
 
     @Override
@@ -90,7 +104,7 @@ public class ProteusAuthProviderType implements SiteAuthProviderTypeHandler {
         }
 
         // Pure construction (validates config, no network I/O); a blank-config throw fails closed.
-        ProteusClient client = new ProteusClient(endpoint, realmClient, accessKey);
+        ProteusClient client = new ProteusClient(endpoint, realmClient, accessKey, realmGuard());
         long ttl = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.ProxyAuth.PERSISTENT_TTL_SECONDS);
         // AIDEV-NOTE: the binding is the realm IDENTITY (endpoint + realm client): re-pointing the
         // provider at another realm ends every session it minted, while rotating the access key

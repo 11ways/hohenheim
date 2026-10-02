@@ -107,7 +107,8 @@ public final class ProteusRealmSuggestions {
         List<KnownPermission> entries = List.of();
         if (accessKey != null) {
             try {
-                entries = new ProteusClient(endpoint, realmClient, accessKey).knownPermissions();
+                entries = new ProteusClient(endpoint, realmClient, accessKey,
+                    ProteusAuthProviderType.realmGuard()).knownPermissions();
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             } catch (Exception error) {

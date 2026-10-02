@@ -50,6 +50,7 @@ import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.cli.HostConsole;
 import be.elevenways.zenit.server.cli.ServerCli;
+import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import be.elevenways.zenit.server.task.TaskRuntime;
 import be.elevenways.zenit.server.task.TaskService;
 
@@ -435,7 +436,9 @@ public class ServerMain {
         String authenticator = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.AuthProteus.AUTHENTICATOR);
         IdentityProviderRegistry.register(
             new ProteusIdentityProvider("proteus", "Proteus",
-                new ProteusClient(endpoint, realmClient, accessKey), authenticator, false),
+                // The operator's own setting: any address (a realm on this host or the LAN), still pinned.
+                new ProteusClient(endpoint, realmClient, accessKey, OutboundUrlGuard.ANY_ADDRESS), authenticator,
+                false),
             AutoProvisioningSink.builder().build());
     }
 
