@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.zenit.common.security.Permissions;
+import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.protoblast.guard.NamedPattern;
 import be.elevenways.protoblast.guard.ScanResult;
@@ -9,8 +11,6 @@ import be.elevenways.protoblast.guard.SourceRuleScanner;
 import be.elevenways.protoblast.guard.Violation;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.zenit.common.security.KnownPermission;
-import be.elevenways.zenit.common.security.KnownPermissions;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -30,13 +30,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * AIDEV-NOTE: this exists because {@code hohenheim.databases.create} shipped enforced but
  * unregistered (2026-08-09). The grants editor's field is an autocomplete over
- * KnownPermissions.all() (zenit-auth AuthGrantsBinding), so an unregistered permission is
+ * Permissions.declared() (zenit-auth AuthGrantsBinding), so an undeclared permission is
  * one an admin cannot find -- it denies by invisibility while every gate keeps working,
  * and the surface test that covered the lane granted the string PROGRAMMATICALLY and so
  * never touched the vocabulary at all. The walk is the shared protoblast-source-guard
  * scanner; the JUDGEMENT is a runtime one on purpose and that is why this is a hohenheim
- * test rather than a source-guard rule: registration happens through indirection
- * ({@code HohenheimPanel.ACCESS.value()}), which only the booted registry can resolve.
+ * test rather than a source-guard rule: a declaring home counts only once it has loaded
+ * at boot, which only the booted table can answer.
  */
 class PermissionVocabularyTest {
 
@@ -47,7 +47,7 @@ class PermissionVocabularyTest {
     @BeforeAll
     static void boot() {
         HohenheimTestRuntime.ensureBooted();
-        // THE registration site: the same call ServerMain makes at boot.
+        // The boot step that installs the auth baselines, as ServerMain runs it.
         ServerMain.installAuthBaselines();
     }
 
@@ -60,7 +60,7 @@ class PermissionVocabularyTest {
             .as("the scan needs the hohenheim project dir as its working directory")
             .isTrue();
 
-        List<String> known = KnownPermissions.all();
+        List<String> known = Permissions.declared().stream().map(Permission::value).toList();
         assertThat(known)
             .as("the vocabulary really was registered (an empty corpus makes this vacuous)")
             .contains("hohenheim.admin.access");
@@ -69,9 +69,8 @@ class PermissionVocabularyTest {
         // permissions this walk FOUND, never about strings merely offered by an endpoint.
         List<String> declared = new ArrayList<>();
         SourceRule rule = SourceRule.builder("permission-vocabulary")
-            .consequence("an enforced permission missing from KnownPermissions.register"
-                + " (ServerMain.installAuthBaselines) cannot be found in the grants editor,"
-                + " whose field is an autocomplete over KnownPermissions.all()")
+            .consequence("an enforced permission whose declaring home is not loaded at boot cannot be"
+                + " found in the grants editor, whose field is an autocomplete over Permissions.declared()")
             .root(ScanRoot.of(server, "server"))
             .root(ScanRoot.of(common, "common"))
             .extensions("java")
@@ -101,19 +100,15 @@ class PermissionVocabularyTest {
         // resolvable copy renders as a raw token in the editor, in one locale or both.
         List<String> undescribed = new ArrayList<>();
         ShippedCatalogs catalogs = new ShippedCatalogs();
-        for (KnownPermission entry : KnownPermissions.entries()) {
-            if (!declared.contains(entry.permission())) {
+        for (Permission entry : Permissions.declared()) {
+            if (!declared.contains(entry.value())) {
                 continue;
             }
             Microcopy description = entry.description();
-            if (description == null) {
-                undescribed.add(entry.permission() + " -> no description at all");
-                continue;
-            }
             for (String tag : List.of("en", "nl")) {
                 String resolved = description.resolve(LocaleChain.ofTags(tag), catalogs);
                 if (resolved.equals(description.key())) {
-                    undescribed.add(tag + " " + entry.permission() + " -> '" + resolved + "'");
+                    undescribed.add(tag + " " + entry.value() + " -> '" + resolved + "'");
                 }
             }
         }

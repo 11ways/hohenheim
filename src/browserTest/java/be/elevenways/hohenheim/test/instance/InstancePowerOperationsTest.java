@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.test.LegacyStepPayloads;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.instance.InstanceOperations;
@@ -153,7 +154,7 @@ class InstancePowerOperationsTest {
                 .where(RecordScheduleStepModel.ID.eq(snapshot)).first();
             assertThat(snapshotStep.get(RecordScheduleStepModel.INPUT)).as("step 1: its note moved into the input")
                 .isEqualTo(Map.of("note", "before nightly"));
-            assertThat(snapshotStep.get(RecordScheduleStepModel.PAYLOAD)).as("step 1: and the payload is cleared")
+            assertThat(LegacyStepPayloads.of(snapshot)).as("step 1: and the payload is cleared")
                 .isNull();
 
             // 2. A stored power operation no operation replaces fails the migration, naming the step.

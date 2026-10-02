@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.database;
 
+import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.Secrets;
@@ -45,8 +46,12 @@ import java.util.Set;
  * policy of its own), the resource CAPS (the kind's declared footprint, which is also the
  * cgroup cap the daemon enforces), and every credential.
  *
+ * Loaded at boot ({@code @BlastAutoLoad}): it is the declaring home of permissions the grants editor lists
+ * ({@code Permissions.declared()}), so they are declared before anybody reads that table.
+ *
  * @author Jelle De Loecker
  */
+@BlastAutoLoad
 public final class TenantDatabases {
 
     /**

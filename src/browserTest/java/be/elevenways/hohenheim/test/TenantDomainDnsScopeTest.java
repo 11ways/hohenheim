@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import java.util.Objects;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DnsDyndnsCredentialModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
@@ -23,7 +24,6 @@ import be.elevenways.zenit.common.data.RecordSourceQuery;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
@@ -1047,7 +1047,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
     private static List<Row> manageSearch(String term) {
         ManageDnsRecordResource resource = new ManageDnsRecordResource();
         TableView.Applied<Row> applied = TableView
-            .forPrincipal(adminPrincipal.id(), resource.id()).build()
+            .forPrincipal(Objects.requireNonNull(adminPrincipal.reference()).id(), resource.id()).build()
             .apply(resource.tableSpec())
             .withSearch(term);
         return resource.listRows(applied,

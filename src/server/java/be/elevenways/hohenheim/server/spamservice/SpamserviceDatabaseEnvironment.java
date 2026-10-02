@@ -16,16 +16,14 @@ import java.util.zip.ZipException;
  * AIDEV-NOTE: Hohenheim nests whatever spamservice-server SNAPSHOT its build resolved, so a Hohenheim built against a
  * stale local repository still deploys a Spamservice from before database.url (spamservice d50311a). The two
  * spellings cannot both be written: a settings build REFUSES boot while ZENIT_DB_URL is set. So the build names its
- * own contract in the {@link #MANIFEST_ATTRIBUTE} manifest attribute (spamservice build.gradle), a build without it
- * predates the contract, and an attribute value this enum does not know refuses the launch.
+ * own contract in the {@link #MANIFEST_ATTRIBUTE} manifest attribute (spamservice build.gradle), and a jar without it
+ * or with a value this enum does not know refuses: Hohenheim's serverJar runs {@link #of} on the distribution it nests
+ * (build.gradle), so no Hohenheim built from this code can carry one, and the launch asks the same question again.
  *
  * @author Jelle De Loecker
  * @since 0.1.0
  */
 enum SpamserviceDatabaseEnvironment {
-
-    /** A build from before the contract: Spamservice read ZENIT_DB_URL itself. */
-    LEGACY(null, "ZENIT_DB_URL"),
 
     /** database.url through the framework settings chain; the retired ZENIT_DB_* names refuse boot. */
     SETTINGS("settings", "ZENIT__DATABASE__URL");
@@ -33,10 +31,10 @@ enum SpamserviceDatabaseEnvironment {
     /** The serverJar manifest attribute a Spamservice build declares its database environment in. */
     static final String MANIFEST_ATTRIBUTE = "Spamservice-Database-Environment";
 
-    private final @Nullable String declaration;
+    private final @NonNull String declaration;
     private final String urlVariable;
 
-    SpamserviceDatabaseEnvironment(@Nullable String declaration, @NonNull String urlVariable) {
+    SpamserviceDatabaseEnvironment(@NonNull String declaration, @NonNull String urlVariable) {
         this.declaration = declaration;
         this.urlVariable = urlVariable;
     }
@@ -47,8 +45,9 @@ enum SpamserviceDatabaseEnvironment {
     }
 
     /**
-     * @return the environment the jar declares, LEGACY for a jar that declares none (or is no jar at all)
-     * @throws IllegalStateException for a declaration this Hohenheim does not know: never guess a database
+     * @return the environment the jar declares
+     * @throws IllegalStateException for a jar that declares none (or is no jar at all) and for a declaration this
+     *         Hohenheim does not know: never guess a database
      */
     static @NonNull SpamserviceDatabaseEnvironment of(@NonNull Path jar) throws IOException {
         String declared;
@@ -62,11 +61,15 @@ enum SpamserviceDatabaseEnvironment {
     }
 
     /**
-     * @throws IllegalStateException for a declaration this Hohenheim does not know
+     * @throws IllegalStateException for no declaration and for one this Hohenheim does not know
      */
     static @NonNull SpamserviceDatabaseEnvironment ofDeclaration(@Nullable String declared) {
+        if (declared == null) {
+            throw new IllegalStateException("The nested Spamservice declares no " + MANIFEST_ATTRIBUTE
+                + "; it predates the settings contract, so build Hohenheim against a current spamservice-server");
+        }
         for (SpamserviceDatabaseEnvironment environment : values()) {
-            if (declared == null ? environment.declaration == null : declared.equals(environment.declaration)) {
+            if (declared.equals(environment.declaration)) {
                 return environment;
             }
         }
