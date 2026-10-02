@@ -61,9 +61,7 @@ public class ProteusAuthProviderType implements SiteAuthProviderTypeHandler {
      * explicit opt-in; this host and link-local stay refused either way.
      */
     public static @NonNull OutboundUrlGuard realmGuard() {
-        boolean privateNetworks = Boolean.TRUE.equals(
-            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.ProxyAuth.PROTEUS_ALLOW_PRIVATE_NETWORKS));
-        return privateNetworks ? OutboundUrlGuard.PRIVATE_NETWORKS : OutboundUrlGuard.PUBLIC_INTERNET;
+        return OutboundUrlGuard.optingIn(HohenheimSettings.ProxyAuth.PROTEUS_ALLOW_PRIVATE_NETWORKS);
     }
 
     @Override
