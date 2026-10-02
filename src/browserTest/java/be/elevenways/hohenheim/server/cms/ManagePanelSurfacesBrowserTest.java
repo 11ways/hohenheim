@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.ReadinessKind;
+import be.elevenways.hohenheim.model.InstanceDeviceModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -29,6 +31,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -50,11 +53,17 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
     private static final String SITES = HohenheimSlugs.SITES;
     private static final String DOMAINS = "domains";
     private static final String TEMPLATES = HohenheimSlugs.INSTANCE_TEMPLATES;
+    private static final String DEVICES = "instance-devices";
 
     private static String siteId;
     private static String domainId;
     private static String approvedTemplateId;
     private static String unapprovedTemplateId;
+    private static String diskId;
+    private static String cdromId;
+    private static String unknownDeviceId;
+    private static AccessContext tenantView;
+    private static AccessContext tenantConfig;
     private static AccessContext operator;
     private static AccessContext tenantOne;
     private static AccessContext tenantEmpty;
@@ -69,6 +78,18 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
         approvedTemplateId = String.valueOf(template(PREFIX + "approved", true));
         unapprovedTemplateId = String.valueOf(template(PREFIX + "unapproved", false));
         RecordGrants.grant(GrantSubjectType.USER, oneId, SiteModel.MODEL_ID, site, HohenheimAccess.MANAGE, true);
+        int viewId = ApiSupport.user(PREFIX + "view@hohenheim.local", "Surfaces Instance Viewer");
+        int configId = ApiSupport.user(PREFIX + "config@hohenheim.local", "Surfaces Instance Configurer");
+        int instance = instance(PREFIX + "instance");
+        diskId = String.valueOf(device(instance, InstanceDeviceModel.TYPE_DISK, "data"));
+        cdromId = String.valueOf(device(instance, InstanceDeviceModel.TYPE_CDROM, "install"));
+        unknownDeviceId = String.valueOf(unknownDevice(instance));
+        RecordGrants.grant(GrantSubjectType.USER, viewId, InstanceModel.MODEL_ID, instance, HohenheimAccess.VIEW,
+            true);
+        RecordGrants.grant(GrantSubjectType.USER, configId, InstanceModel.MODEL_ID, instance,
+            HohenheimAccess.CONFIG, true);
+        tenantView = access(new UserPrincipal(viewId, "Surfaces Instance Viewer"));
+        tenantConfig = access(new UserPrincipal(configId, "Surfaces Instance Configurer"));
         operator = access(operatorPrincipal());
         tenantOne = access(new UserPrincipal(oneId, "Surfaces Tenant One"));
         tenantEmpty = access(new UserPrincipal(emptyId, "Surfaces Tenant Empty"));
@@ -135,6 +156,65 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
     /** A capture whose domain listen_on Select lists the host's own addresses, which no stored set can pin. */
     private static PanelSurfaces capture(SurfaceCase fixture) {
         return PanelSurfaces.capture(fixture).withHostOptions("listen_on");
+    }
+
+    @Test
+    void theInstanceDeviceTwinsOfferWhatTheyOfferedBeforeTheMove() {
+        SurfaceBaselines stored = SurfaceBaselines.load(ManagePanelSurfacesBrowserTest.class,
+            "/panel-surfaces/manage-instance-devices.txt");
+        Map<String, String> devices = Map.of("disk", diskId, "cdrom", cdromId, "unknown", unknownDeviceId);
+
+        // 1. The admin device entry and its tenant twin, for a VIEW-only and a CONFIG delegate of the instance, on a
+        //    known, an operator-only and an unknown device type.
+        stored.check(capture(SurfaceCase.of(ADMIN, DEVICES, "operator", operator)));
+        stored.check(capture(SurfaceCase.of(MANAGE, DEVICES, "tenant-view", tenantView)));
+        stored.check(capture(SurfaceCase.of(MANAGE, DEVICES, "tenant-config", tenantConfig)));
+        for (String type : List.of("disk", "cdrom", "unknown")) {
+            stored.check(capture(SurfaceCase.of(ADMIN, DEVICES, "operator", operator)
+                .onRecord(devices.get(type), type)));
+            stored.check(capture(SurfaceCase.of(MANAGE, DEVICES, "tenant-view", tenantView)
+                .onRecord(devices.get(type), type)));
+            stored.check(capture(SurfaceCase.of(MANAGE, DEVICES, "tenant-config", tenantConfig)
+                .onRecord(devices.get(type), type)));
+        }
+
+        // 2. The CONFIG delegate's twin against the admin's, per device type, through the one difference table.
+        List<AssertionError> twins = new ArrayList<>();
+        for (String type : List.of("disk", "cdrom", "unknown")) {
+            twin(twins, stored, MANAGE + "." + DEVICES + ".tenant-config." + type,
+                ADMIN + "." + DEVICES + ".operator." + type, devicesTable(type));
+        }
+
+        // 3. Every stored case matched exactly, and every twin difference is listed.
+        List<String> failures = new ArrayList<>();
+        try {
+            stored.finish();
+        } catch (AssertionError mismatch) {
+            failures.add(mismatch.getMessage());
+        }
+        twins.forEach(twin -> failures.add(twin.getMessage()));
+        if (!failures.isEmpty()) {
+            throw new AssertionError(String.join("\n\n", failures));
+        }
+    }
+
+    /**
+     * The /manage device twin's deliberate differences from the admin device resource on one device's record.
+     *
+     * AIDEV-NOTE: install media is operator-only, so the tenant's type Select never offers cdrom, except as the
+     * stored value of a device already carrying it; an unknown stored type stays offered as itself on both sides.
+     */
+    private static TwinCorrespondence devicesTable(String type) {
+        TwinCorrespondence table = TwinCorrespondence.between(MANAGE + "/" + DEVICES, ADMIN + "/" + DEVICES)
+            .own("control CREATE%20type kind=zenitforms:form/select required=false readonly=false options=disk,nic");
+        return switch (type) {
+            case "disk" -> table
+                .own("control EDIT%20type kind=zenitforms:form/select required=false readonly=false options=disk,nic");
+            case "unknown" -> table.own("control EDIT%20type kind=zenitforms:form/select required=false"
+                + " readonly=false options=disk,nic,floppy");
+            case "cdrom" -> table;
+            default -> throw new IllegalArgumentException("No device fixture " + type);
+        };
     }
 
     private static void twin(List<AssertionError> twins, SurfaceBaselines stored, String tenantCase,
@@ -211,6 +291,41 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
         row.set(SiteDomainModel.FORCE_SSL, false);
         domains.save(row);
         return row.get(SiteDomainModel.ID);
+    }
+
+    private static int instance(String name) {
+        Model instances = Models.get(InstanceModel.class);
+        Row row = instances.createEmptyRow();
+        row.set(InstanceModel.NAME, name);
+        row.set(InstanceModel.KIND, "hohenheim:docker_container");
+        row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(
+            Map.of("image", "alpine", "tag", "latest", "command", "sleep 300")));
+        row.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
+        instances.save(row);
+        return row.get(InstanceModel.ID);
+    }
+
+    private static int device(int instance, String type, String name) {
+        Model devices = Models.get(InstanceDeviceModel.class);
+        Row row = devices.createEmptyRow();
+        row.set(InstanceDeviceModel.INSTANCE_ID, instance);
+        row.set(InstanceDeviceModel.TYPE, type);
+        row.set(InstanceDeviceModel.NAME, name);
+        if (InstanceDeviceModel.TYPE_CDROM.equals(type)) {
+            row.set(InstanceDeviceModel.SOURCE_MEDIA, "install-media.iso");
+        } else {
+            row.set(InstanceDeviceModel.SIZE_GB, 1);
+        }
+        devices.save(row);
+        return row.get(InstanceDeviceModel.ID);
+    }
+
+    /** A device row whose stored type no DeviceType declares: the write path refuses one, so it is stored raw. */
+    private static int unknownDevice(int instance) {
+        int id = device(instance, InstanceDeviceModel.TYPE_NIC, "legacy");
+        Models.get(InstanceDeviceModel.class).find().where(InstanceDeviceModel.ID.eq(id))
+            .assign(InstanceDeviceModel.TYPE, "floppy").updateAll();
+        return id;
     }
 
     private static int template(String name, boolean approved) {
