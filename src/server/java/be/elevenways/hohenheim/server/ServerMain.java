@@ -400,6 +400,9 @@ public class ServerMain {
             // permissions that genuinely need it.
             KnownPermission.of(HohenheimPanel.ACCESS.value(), HohenheimPanel.ACCESS.description()),
             KnownPermission.of(ManagePanel.ACCESS.value(), ManagePanel.ACCESS.description()),
+            // The settings editor: NOT delegable (HohenheimSources.ADMIN_SYSTEM says why), the one exception to the
+            // leaf rule above, because the settings feed fetches Hohenheim makes with operator trust.
+            KnownPermission.of(HohenheimSources.ADMIN_SYSTEM.value(), HohenheimSources.ADMIN_SYSTEM.description()),
             // Every-site authority WITHOUT the admin permission (the walk's type-level row on
             // SiteModel). Delegable for the reason above, and it could not be otherwise once
             // admin.access is: guarding the lesser authority while the greater one flows
