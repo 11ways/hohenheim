@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.SiteDomainResource;
 import be.elevenways.hohenheim.server.cms.SiteEnableInvariant;
+import be.elevenways.hohenheim.server.auth.OperatorTrustedWrites;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviderGuards;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.dns.DnsPeerCascades;
@@ -59,6 +60,9 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // then refused had already written that row (and would have written the DNS release
         // and game-domain teardown after it). Authority is asked before any consequence.
         TenantWrites.install();
+        // A delegated admin passes TenantWrites as the operator, yet where an operator-owned site or provider connects
+        // (an any-address fetch) is the non-delegable hohenheim.admin.system's alone.
+        OperatorTrustedWrites.install();
         // No domain row can take a route an enabled site already owns, and every row
         // stamps the live-route claim its unique index arbitrates (form, clone, seeder,
         // API writeback, direct model save).

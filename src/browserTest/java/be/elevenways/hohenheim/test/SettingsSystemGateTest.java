@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.zenit.auth.AuthEndpoints;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.common.Zenit;
@@ -28,6 +29,8 @@ class SettingsSystemGateTest extends HohenheimTestBase {
     @BeforeAll
     static void seedDelegatedAdmin() {
         Integer userId = ApiSupport.user("delegated-admin@hohenheim.local", "Delegated Admin");
+        // zenit-auth's own /admin prefix baseline demands auth.admin.access on top of the panel grant.
+        GrantService.createDirectGrant(GrantSubjectType.USER, userId, AuthEndpoints.PERM_ADMIN_ACCESS.value(), true);
         GrantService.createDirectGrant(GrantSubjectType.USER, userId, HohenheimSources.ADMIN_ACCESS.value(), true);
         delegatedAdmin = sessionFor(userId);
     }
@@ -43,8 +46,14 @@ class SettingsSystemGateTest extends HohenheimTestBase {
             .as("step 1: unlike the panel grant the delegated admin holds").isTrue();
 
         // 2. The delegated admin enters the panel.
-        assertThat(httpGet("/admin", delegatedAdmin.token()).statusCode())
-            .as("step 2: the delegable panel grant opens the panel").isEqualTo(200);
+        // The panel root redirects to its landing page; admission is a page or a redirect that stays in the panel.
+        HttpResponse<String> panel = httpGet("/admin", delegatedAdmin.token());
+        assertThat(panel.statusCode()).as("step 2: the delegable panel grant opens the panel").isIn(200, 302, 303);
+        if (panel.statusCode() != 200) {
+            assertThat(panel.headers().firstValue("Location"))
+                .as("step 2: into the panel, never to sign-in")
+                .hasValueSatisfying(location -> assertThat(location).startsWith("/admin").doesNotContain("login"));
+        }
 
         // 3. The settings page, read or written, refuses them, and the operator-trusted endpoint does not move.
         String endpointBefore = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.AuthProteus.ENDPOINT);
