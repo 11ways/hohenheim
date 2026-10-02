@@ -4529,10 +4529,6 @@
     "text": "Spamservice restart requested",
     "scope": "spamservice"
   },
-  "search": {
-    "text": "Search",
-    "scope": "spamservice"
-  },
   "trusted": {
     "text": "Trusted reporter",
     "scope": "spamservice_client"
@@ -4673,14 +4669,6 @@
       "scope": "server_overview"
     }
   ],
-  "from": {
-    "text": "From",
-    "scope": "spamservice_event"
-  },
-  "to": {
-    "text": "To",
-    "scope": "spamservice_event"
-  },
   "word": {
     "text": "Word or phrase",
     "scope": "spamservice_word"

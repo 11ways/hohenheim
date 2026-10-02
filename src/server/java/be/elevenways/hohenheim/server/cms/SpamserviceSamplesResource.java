@@ -1,31 +1,35 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.spamservice.client.PageResult;
 import be.elevenways.spamservice.client.SampleSummary;
 import be.elevenways.spamservice.client.SpamserviceClient;
+import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
-import be.elevenways.zenit.cms.common.action.RowAction;
-import be.elevenways.zenit.cms.common.panel.NavGroup;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.zenit.cms.common.resource.ListChrome;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.ResourceForm;
+import be.elevenways.zenit.cms.common.resource.ResourceList;
+import be.elevenways.zenit.cms.common.resource.ResourceReads;
+import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
-import be.elevenways.zenit.cms.common.schema.TableView;
-import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationGate;
+import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.UuidField;
-import be.elevenways.zenit.common.orm.model.Schema;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.server.operation.OperationHandlers;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -34,57 +38,84 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
 
-/** Read-only remote samples with strict verdict and rescore actions. */
-public final class SpamserviceSamplesResource extends SpamserviceRemoteResource<SampleSummary> {
+/**
+ * Read-only remote samples, a store entry over the management API whose rows open their Analysis tab, with the
+ * verdict and rescore calls as row operations.
+ *
+ * @author Jelle De Loecker
+ * @since  0.1.0
+ */
+public final class SpamserviceSamplesResource {
 
     public static final String SLUG = "spamservice-samples";
-    private static final Schema SCHEMA = new Schema();
-    private static final UuidField CLIENT_ID = SCHEMA.addField(UuidField.builder("client_id")
-        .label(Microcopy.of("client").withFilter("scope", "spamservice_sample")).build());
-    private static final StringField IP = SCHEMA.addField(StringField.builder("ip")
-        .label(Microcopy.of("ip").withFilter("scope", "spamservice_sample")).build());
-    private static final BooleanField SPAM = SCHEMA.addField(BooleanField.builder("spam")
-        .label(Microcopy.of("spam").withFilter("scope", "spamservice_sample")).build());
-    private static final IntegerField SCORE = SCHEMA.addField(IntegerField.builder("score")
-        .label(Microcopy.of("score").withFilter("scope", "spamservice_sample")).build());
-    private static final BooleanField CONFIRMED = SCHEMA.addField(BooleanField.builder("confirmed")
-        .label(Microcopy.of("confirmed").withFilter("scope", "spamservice_sample")).build());
-    private static final StringField FLAGS = SCHEMA.addField(StringField.builder("flags")
-        .label(Microcopy.of("flags").withFilter("scope", "spamservice_sample")).build());
-    private static final StringField LANGUAGES = SCHEMA.addField(StringField.builder("languages")
-        .label(Microcopy.of("languages").withFilter("scope", "spamservice_sample")).build());
-    private static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder("created_at")
-        .label(Microcopy.of("created_at").withFilter("scope", "spamservice_sample")).build());
-    private final FormSpec formSpec = FormSpec.builder()
-        .add(CLIENT_ID).add(IP).add(SPAM).add(SCORE).add(CONFIRMED).add(FLAGS).add(LANGUAGES).add(CREATED_AT).build();
+    static final Identifier ID = HohenheimIds.id("spamservice_sample");
+    static final SubjectType<SampleSummary> SAMPLE = SubjectType.of(ID, SampleSummary.class, SampleSummary::id);
 
-    public SpamserviceSamplesResource() {}
+    private static final UuidField CLIENT_ID = UuidField.builder("client_id").label(words("client")).build();
+    private static final StringField IP = StringField.builder("ip").label(words("ip")).build();
+    private static final BooleanField SPAM = BooleanField.builder("spam").label(words("spam")).build();
+    private static final IntegerField SCORE = IntegerField.builder("score").label(words("score")).build();
+    private static final BooleanField CONFIRMED = BooleanField.builder("confirmed").label(words("confirmed")).build();
+    private static final StringField FLAGS = StringField.builder("flags").label(words("flags")).build();
+    private static final StringField LANGUAGES = StringField.builder("languages").label(words("languages")).build();
+    private static final DateTimeField CREATED_AT = DateTimeField.builder("created_at").label(words("created_at"))
+        .build();
 
-    SpamserviceSamplesResource(Supplier<SpamserviceClient> clientSupplier) { super(clientSupplier); }
+    /** The fields the management API answers for one sample summary. */
+    private static final List<Field<?, ?>> FIELDS = List.of(CLIENT_ID, IP, SPAM, SCORE, CONFIRMED, FLAGS,
+        LANGUAGES, CREATED_AT);
 
-    @Override public @NonNull Identifier id() { return HohenheimIds.id("spamservice_sample"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "spamservice_sample"); }
-    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "spamservice_sample"); }
+    public static final Operation<SampleSummary, Void, Void> MARK_SPAM = Operation.declare(
+            HohenheimIds.id("spamservice_mark_spam"))
+        .label(words("mark_spam"))
+        .icon(Icon.of("triangle-exclamation"))
+        .one(SAMPLE)
+        .gate(OperationGate.permission(HohenheimPanel.ACCESS))
+        .register();
 
-    /** Without this the analysis page is headed by the sample's UUID. */
-    @Override public @Nullable String recordTitle(@NonNull SampleSummary row) { return row.ip(); }
+    public static final Operation<SampleSummary, Void, Void> MARK_HAM = Operation.declare(
+            HohenheimIds.id("spamservice_mark_ham"))
+        .label(words("mark_ham"))
+        .icon(Icon.of("check"))
+        .one(SAMPLE)
+        .gate(OperationGate.permission(HohenheimPanel.ACCESS))
+        .register();
 
-    @Override public @NonNull String slug() { return SLUG; }
-    @Override public @NonNull Schema schema() { return SCHEMA; }
-    @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
-    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.SECURITY_GROUP; }
-    @Override public int navOrder() { return 20; }
+    /** Answers the new score as its text. */
+    public static final Operation<SampleSummary, Void, String> RESCORE = Operation.declare(
+            HohenheimIds.id("spamservice_rescore"))
+        .label(words("rescore"))
+        .icon(Icon.of("rotate"))
+        .one(SAMPLE)
+        .gate(OperationGate.permission(HohenheimPanel.ACCESS))
+        .result(String.class)
+        .register();
 
-    @Override public boolean showInNav() { return false; }
-    @Override public @NonNull Icon icon() { return Icon.of("file-lines"); }
-    @Override public boolean creatable() { return false; }
-    @Override public boolean updatable() { return false; }
-    @Override public boolean deletable() { return false; }
+    static {
+        OperationHandlers.loader(SAMPLE, key -> load(SpamserviceRemoteStore.MANAGED, key));
+        OperationHandlers.attach(MARK_SPAM).handle(call -> markSpam(SpamserviceRemoteStore.MANAGED, call.subject()));
+        OperationHandlers.attach(MARK_HAM).handle(call -> {
+            SpamserviceRemoteStore.require(SpamserviceRemoteStore.MANAGED).markHam(call.subject().id());
+            return null;
+        });
+        OperationHandlers.attach(RESCORE).handle(call -> String.valueOf(
+            SpamserviceRemoteStore.require(SpamserviceRemoteStore.MANAGED).rescore(call.subject().id())
+                .summary().score()));
+    }
 
-    @Override
-    public @NonNull TableSpec<SampleSummary> tableSpec() {
-        return TableSpec.<SampleSummary>builder()
-            .column(ColumnSpec.fromField(CREATED_AT).build()).column(ColumnSpec.fromField(CLIENT_ID).filterable().build())
+    private SpamserviceSamplesResource() {
+    }
+
+    /** @return the entry over the managed runtime's client */
+    public static @NonNull PanelResource<SampleSummary> create() {
+        return create(SpamserviceRemoteStore.MANAGED);
+    }
+
+    static @NonNull PanelResource<SampleSummary> create(@NonNull Supplier<SpamserviceClient> clients) {
+        SpamserviceRemoteStore.requireNonNull(clients);
+        TableSpec<SampleSummary> table = TableSpec.<SampleSummary>builder()
+            .column(ColumnSpec.fromField(CREATED_AT).build())
+            .column(ColumnSpec.fromField(CLIENT_ID).filterable().build())
             .column(ColumnSpec.fromField(SPAM).filterable().build()).column(ColumnSpec.fromField(SCORE).build())
             .column(ColumnSpec.fromField(IP).filterable().copyable().build())
             .column(ColumnSpec.fromField(CONFIRMED).filterable().build())
@@ -93,43 +124,75 @@ public final class SpamserviceSamplesResource extends SpamserviceRemoteResource<
             .filter(FilterSpec.forField(CONFIRMED, FilterSpec.Kind.BOOLEAN).build())
             .filter(FilterSpec.forField(IP, FilterSpec.Kind.TEXT).build())
             .defaultSort(SortSpec.desc("created_at")).build();
+        return PanelResource.builder(ID, SLUG, SAMPLE)
+            .label(words("plural"))
+            .recordLabel(words("singular"))
+            .navGroup(HohenheimPanel.SECURITY_GROUP)
+            .navOrder(20)
+            .showInNav(false)
+            .icon(Icon.of("file-lines"))
+            .reads(ResourceReads.<SampleSummary>typed(SampleSummary::id)
+                .load((key, access) -> load(clients, key))
+                .values(SpamserviceSamplesResource::values)
+                .cells(SpamserviceSamplesResource::cell)
+                .build()
+                // Without this the analysis tab is headed by the sample's UUID.
+                .title(SampleSummary::ip))
+            .list(ResourceList.store(table, SpamserviceRemoteStore.pages(ID, clients, FIELDS, List.of(),
+                    (client, applied, access) -> client.samples(applied.page(), applied.schema().pageSize(),
+                        SpamserviceRemoteStore.textFilter(applied, "client_id"),
+                        SpamserviceRemoteStore.booleanFilter(applied, "spam"),
+                        SpamserviceRemoteStore.booleanFilter(applied, "confirmed"),
+                        SpamserviceRemoteStore.textFilter(applied, "ip"))))
+                .chrome(ListChrome.MINIMAL)
+                .notice(SpamserviceRemoteStore.notice(ID, clients))
+                .rowLinkToTab(SpamserviceSampleAnalysisPage.SLUG)
+                .build())
+            .form(ResourceForm.<SampleSummary>of(FormSpec.builder()
+                .add(CLIENT_ID).add(IP).add(SPAM).add(SCORE).add(CONFIRMED).add(FLAGS).add(LANGUAGES).add(CREATED_AT)
+                .build()).build())
+            .tabs(ResourceTabs.of(List.of(new SpamserviceSampleAnalysisPage(clients))))
+            .actions(List.of(
+                PanelAction.<SampleSummary, Void>places(MARK_SPAM, ActionPlacement.ROW,
+                        (request, result) -> CmsActionResult.refreshWithToast(words("marked_spam")))
+                    .label(words("mark_spam"))
+                    .icon(Icon.of("triangle-exclamation"))
+                    .build(),
+                PanelAction.<SampleSummary, Void>places(MARK_HAM, ActionPlacement.ROW,
+                        (request, result) -> CmsActionResult.refreshWithToast(words("marked_ham")))
+                    .label(words("mark_ham"))
+                    .icon(Icon.of("check"))
+                    .build(),
+                PanelAction.<SampleSummary, String>places(RESCORE, ActionPlacement.ROW,
+                        (request, result) -> CmsActionResult.refreshWithToast(words("rescored")
+                            .withArg("score", result.value())))
+                    .label(words("rescore"))
+                    .icon(Icon.of("rotate"))
+                    .hiddenWhen(SampleSummary::confirmed)
+                    .build()))
+            .build();
     }
 
-    @Override
-    protected @NonNull PageResult<SampleSummary> fetchPage(@NonNull SpamserviceClient client,
-                                                            TableView.@NonNull Applied<SampleSummary> applied,
-                                                            @NonNull AccessContext accessContext) {
-        return client.samples(applied.page(), applied.schema().pageSize(), textFilter(applied, "client_id"),
-            booleanFilter(applied, "spam"), booleanFilter(applied, "confirmed"), textFilter(applied, "ip"));
+    /** The mark-spam operation's remote call: the management API's strict verdict endpoint. */
+    static @Nullable Void markSpam(@NonNull Supplier<SpamserviceClient> clients, @NonNull SampleSummary sample) {
+        SpamserviceRemoteStore.require(clients).markSpam(sample.id());
+        return null;
     }
 
-    @Override public @NonNull String rowKey(@NonNull SampleSummary row) { return row.id(); }
-    @Override public @Nullable Object parsePrimaryKey(@NonNull String raw) {
-        try {
-            return UUID.fromString(raw);
-        } catch (IllegalArgumentException invalid) {
-            return null;
-        }
-    }
-    @Override public @Nullable SampleSummary loadRow(@NonNull Object key, @NonNull AccessContext context) {
-        return this.requireClient().sample(String.valueOf(key)).summary();
-    }
-    @Override public @NonNull Map<String, Object> valuesFromRow(@NonNull SampleSummary row) {
-        return Map.of("client_id", uuidValue(row.clientId()), "ip", value(row.ip()), "spam", row.spam(),
-            "score", row.score(), "confirmed", row.confirmed(), "flags", value(row.flags()),
-            "languages", value(row.languages()), "created_at", value(row.createdAt()));
-    }
-    @Override public @NonNull Object persistRow(@NonNull Map<String, Object> values, @NonNull AccessContext context) {
-        throw new UnsupportedOperationException();
-    }
-    @Override public void updateRow(@NonNull SampleSummary row, @NonNull Map<String, Object> values,
-                                    @NonNull AccessContext context) { throw new UnsupportedOperationException(); }
-    @Override public void deleteRow(@NonNull SampleSummary row, @NonNull AccessContext context) {
-        throw new UnsupportedOperationException();
+    private static @Nullable SampleSummary load(@NonNull Supplier<SpamserviceClient> clients, @NonNull String key) {
+        UUID id = SpamserviceRemoteStore.uuidOrNull(key);
+        return id == null ? null : SpamserviceRemoteStore.require(clients).sample(id.toString()).summary();
     }
 
-    @Override
-    public @Nullable Object cellValue(@NonNull SampleSummary row, @NonNull ColumnSpec column) {
+    private static @NonNull Map<String, Object> values(@NonNull SampleSummary row) {
+        return Map.of("client_id", SpamserviceRemoteStore.uuidOrBlank(row.clientId()),
+            "ip", SpamserviceRemoteStore.orBlank(row.ip()), "spam", row.spam(), "score", row.score(),
+            "confirmed", row.confirmed(), "flags", SpamserviceRemoteStore.orBlank(row.flags()),
+            "languages", SpamserviceRemoteStore.orBlank(row.languages()),
+            "created_at", SpamserviceRemoteStore.orBlank(row.createdAt()));
+    }
+
+    private static @Nullable Object cell(@NonNull SampleSummary row, @NonNull ColumnSpec column) {
         return switch (column.name()) {
             case "client_id" -> row.clientId();
             case "ip" -> row.ip();
@@ -143,47 +206,7 @@ public final class SpamserviceSamplesResource extends SpamserviceRemoteResource<
         };
     }
 
-    @Override
-    public @NonNull String rowUrl(@NonNull SampleSummary row) {
-        // Resource.rowUrl is a String contract; toUrl() is the boundary.
-        return CmsRoutes.subpage(HohenheimSlugs.ADMIN, SLUG, row.id(), SpamserviceSampleAnalysisPage.SLUG).toUrl();
-    }
-
-    @Override public @NonNull List<RecordScopedPage<SampleSummary>> subpages() {
-        return List.of(new SpamserviceSampleAnalysisPage(this));
-    }
-
-    @Override
-    public @NonNull List<RowAction<SampleSummary>> rowActions() {
-        return List.of(
-            RowAction.Invoke.<SampleSummary>builder(HohenheimIds.id("spamservice_mark_spam"))
-                .label(Microcopy.of("mark_spam").withFilter("scope", "spamservice_sample"))
-                .icon(Icon.of("triangle-exclamation")).handler((row, context) -> {
-                    this.requireClient().markSpam(row.id());
-                    return CmsActionResult.refreshWithToast(
-                        Microcopy.of("marked_spam").withFilter("scope", "spamservice_sample"));
-                }).build(),
-            RowAction.Invoke.<SampleSummary>builder(HohenheimIds.id("spamservice_mark_ham"))
-                .label(Microcopy.of("mark_ham").withFilter("scope", "spamservice_sample"))
-                .icon(Icon.of("check")).handler((row, context) -> {
-                    this.requireClient().markHam(row.id());
-                    return CmsActionResult.refreshWithToast(
-                        Microcopy.of("marked_ham").withFilter("scope", "spamservice_sample"));
-                }).build(),
-            RowAction.Invoke.<SampleSummary>builder(HohenheimIds.id("spamservice_rescore"))
-                .label(Microcopy.of("rescore").withFilter("scope", "spamservice_sample"))
-                .icon(Icon.of("rotate")).visibleFor((row, context) -> !row.confirmed())
-                .handler((row, context) -> {
-                    var detail = this.requireClient().rescore(row.id());
-                    return CmsActionResult.refreshWithToast(Microcopy.of("rescored")
-                        .withFilter("scope", "spamservice_sample")
-                        .withArg("score", String.valueOf(detail.summary().score())));
-                }).build());
-    }
-
-    private static Object value(@Nullable Object value) { return value != null ? value : ""; }
-
-    private static Object uuidValue(@Nullable String value) {
-        return value == null || value.isBlank() ? "" : UUID.fromString(value);
+    private static @NonNull Microcopy words(@NonNull String key) {
+        return Microcopy.of(key).withFilter("scope", "spamservice_sample");
     }
 }

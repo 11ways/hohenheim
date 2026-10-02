@@ -3,103 +3,111 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.spamservice.client.PageResult;
 import be.elevenways.spamservice.client.SpamWordEntry;
 import be.elevenways.spamservice.client.SpamWordInput;
 import be.elevenways.spamservice.client.SpamserviceClient;
-import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.ListChrome;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.ResourceForm;
+import be.elevenways.zenit.cms.common.resource.ResourceList;
+import be.elevenways.zenit.cms.common.resource.ResourceMutations;
+import be.elevenways.zenit.cms.common.resource.ResourceReads;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
-import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
-import be.elevenways.zenit.cms.common.schema.TableView;
 import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.field.BooleanField;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
-import be.elevenways.zenit.common.orm.model.Schema;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
 
-/** Remote Spamservice spam-word dictionary CRUD. */
-public final class SpamserviceWordsResource extends SpamserviceRemoteResource<SpamWordEntry> {
+/**
+ * Remote Spamservice spam-word dictionary CRUD, a store entry over the management API.
+ *
+ * The list search is forwarded to the management API's own {@code q} search (its word match), never evaluated here.
+ *
+ * @author Jelle De Loecker
+ * @since  0.1.0
+ */
+public final class SpamserviceWordsResource {
 
     public static final String SLUG = "spamservice-words";
-    private static final Schema SCHEMA = new Schema();
-    private static final StringField WORD = SCHEMA.addField(StringField.builder("word").required()
-        .label(Microcopy.of("word").withFilter("scope", "spamservice_word")).build());
-    private static final IntegerField SCORE = SCHEMA.addField(IntegerField.builder("score").required()
-        .label(Microcopy.of("score").withFilter("scope", "spamservice_word")).build());
-    private static final StringField LANGUAGE = SCHEMA.addField(StringField.builder("language")
-        .label(Microcopy.of("language").withFilter("scope", "spamservice_word")).build());
-    private static final BooleanField LEET = SCHEMA.addField(BooleanField.builder("leet").defaultValue(false)
-        .label(Microcopy.of("leet").withFilter("scope", "spamservice_word")).build());
-    private final FormSpec formSpec = FormSpec.builder().add(WORD).add(SCORE).add(LANGUAGE).add(LEET).build();
+    static final Identifier ID = HohenheimIds.id("spamservice_word");
+    static final SubjectType<SpamWordEntry> WORD_ENTRY = SubjectType.of(ID, SpamWordEntry.class, SpamWordEntry::id);
 
-    public SpamserviceWordsResource() {}
+    private static final StringField WORD = StringField.builder("word").required()
+        .label(Microcopy.of("word").withFilter("scope", "spamservice_word")).build();
+    private static final IntegerField SCORE = IntegerField.builder("score").required()
+        .label(Microcopy.of("score").withFilter("scope", "spamservice_word")).build();
+    private static final StringField LANGUAGE = StringField.builder("language")
+        .label(Microcopy.of("language").withFilter("scope", "spamservice_word")).build();
+    private static final BooleanField LEET = BooleanField.builder("leet").defaultValue(false)
+        .label(Microcopy.of("leet").withFilter("scope", "spamservice_word")).build();
 
-    SpamserviceWordsResource(Supplier<SpamserviceClient> clientSupplier) { super(clientSupplier); }
+    /** The fields the management API answers for one spam word. */
+    private static final List<Field<?, ?>> FIELDS = List.of(WORD, SCORE, LANGUAGE, LEET);
 
-    @Override public @NonNull Identifier id() { return HohenheimIds.id("spamservice_word"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "spamservice_word"); }
-    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "spamservice_word"); }
-    @Override public @NonNull String slug() { return SLUG; }
-    @Override public @NonNull Schema schema() { return SCHEMA; }
-    @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
-    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.SECURITY_GROUP; }
-    @Override public int navOrder() { return 60; }
+    private SpamserviceWordsResource() {
+    }
 
-    @Override public boolean showInNav() { return false; }
-    @Override public @NonNull Icon icon() { return Icon.of("book"); }
+    /** @return the entry over the managed runtime's client */
+    public static @NonNull PanelResource<SpamWordEntry> create() {
+        return create(SpamserviceRemoteStore.MANAGED);
+    }
 
-    @Override
-    public @NonNull TableSpec<SpamWordEntry> tableSpec() {
-        return TableSpec.<SpamWordEntry>builder()
+    static @NonNull PanelResource<SpamWordEntry> create(@NonNull Supplier<SpamserviceClient> clients) {
+        SpamserviceRemoteStore.requireNonNull(clients);
+        TableSpec<SpamWordEntry> table = TableSpec.<SpamWordEntry>builder()
             .column(ColumnSpec.fromField(WORD).build()).column(ColumnSpec.fromField(SCORE).build())
-            .column(ColumnSpec.fromField(LANGUAGE).build()).column(ColumnSpec.fromField(LEET).build())
-            .filter(FilterSpec.global("q", Microcopy.of("search").withFilter("scope", "spamservice"),
-                FilterSpec.Kind.TEXT).build()).build();
+            .column(ColumnSpec.fromField(LANGUAGE).build()).column(ColumnSpec.fromField(LEET).build()).build();
+        return PanelResource.builder(ID, SLUG, WORD_ENTRY)
+            .label(Microcopy.of("plural").withFilter("scope", "spamservice_word"))
+            .recordLabel(Microcopy.of("singular").withFilter("scope", "spamservice_word"))
+            .navGroup(HohenheimPanel.SECURITY_GROUP)
+            .navOrder(60)
+            .showInNav(false)
+            .icon(Icon.of("book"))
+            .reads(ResourceReads.<SpamWordEntry>typed(SpamWordEntry::id)
+                .load((key, access) -> {
+                    UUID id = SpamserviceRemoteStore.uuidOrNull(key);
+                    return id == null ? null : SpamserviceRemoteStore.require(clients).spamWord(id.toString());
+                })
+                .values(SpamserviceWordsResource::values)
+                .cells(SpamserviceWordsResource::cell)
+                .build()
+                .title(SpamWordEntry::word))
+            .list(ResourceList.store(table, SpamserviceRemoteStore.pages(ID, clients, FIELDS, List.of("word"),
+                    (client, applied, access) -> client.spamWords(applied.page(), applied.schema().pageSize(),
+                        applied.searchTerm())))
+                .search("word")
+                .chrome(ListChrome.MINIMAL)
+                .notice(SpamserviceRemoteStore.notice(ID, clients))
+                .build())
+            .form(ResourceForm.<SpamWordEntry>of(FormSpec.builder().add(WORD).add(SCORE).add(LANGUAGE).add(LEET)
+                .build()).build())
+            .writes(ResourceMutations.<SpamWordEntry>store()
+                .create((values, access) -> SpamserviceRemoteStore.require(clients).createSpamWord(input(values, null)))
+                .update((word, values, access) -> SpamserviceRemoteStore.require(clients)
+                    .updateSpamWord(word.id(), input(values, word)))
+                .delete((word, access) -> SpamserviceRemoteStore.require(clients).deleteSpamWord(word.id()))
+                .build())
+            .build();
     }
 
-    @Override
-    protected @NonNull PageResult<SpamWordEntry> fetchPage(@NonNull SpamserviceClient client,
-                                                            TableView.@NonNull Applied<SpamWordEntry> applied,
-                                                            @NonNull AccessContext accessContext) {
-        return client.spamWords(applied.page(), applied.schema().pageSize(), textFilter(applied, "q"));
+    private static @NonNull Map<String, Object> values(@NonNull SpamWordEntry row) {
+        return Map.of("word", row.word(), "score", row.score(), "language",
+            SpamserviceRemoteStore.orBlank(row.language()), "leet", row.leet());
     }
 
-    @Override public @NonNull String rowKey(@NonNull SpamWordEntry row) { return row.id(); }
-    @Override public @Nullable Object parsePrimaryKey(@NonNull String raw) {
-        try {
-            return UUID.fromString(raw);
-        } catch (IllegalArgumentException invalid) {
-            return null;
-        }
-    }
-    @Override public @Nullable SpamWordEntry loadRow(@NonNull Object key, @NonNull AccessContext context) {
-        return this.requireClient().spamWord(String.valueOf(key));
-    }
-    @Override public @NonNull Map<String, Object> valuesFromRow(@NonNull SpamWordEntry row) {
-        return Map.of("word", row.word(), "score", row.score(), "language", value(row.language()), "leet", row.leet());
-    }
-    @Override public @NonNull Object persistRow(@NonNull Map<String, Object> values, @NonNull AccessContext context) {
-        return this.requireClient().createSpamWord(input(values, null));
-    }
-    @Override public void updateRow(@NonNull SpamWordEntry row, @NonNull Map<String, Object> values,
-                                    @NonNull AccessContext context) {
-        this.requireClient().updateSpamWord(row.id(), input(values, row));
-    }
-    @Override public void deleteRow(@NonNull SpamWordEntry row, @NonNull AccessContext context) {
-        this.requireClient().deleteSpamWord(row.id());
-    }
-
-    @Override
-    public @Nullable Object cellValue(@NonNull SpamWordEntry row, @NonNull ColumnSpec column) {
+    private static @Nullable Object cell(@NonNull SpamWordEntry row, @NonNull ColumnSpec column) {
         return switch (column.name()) {
             case "word" -> row.word();
             case "score" -> row.score();
@@ -109,30 +117,24 @@ public final class SpamserviceWordsResource extends SpamserviceRemoteResource<Sp
         };
     }
 
-    @Override public @Nullable String recordTitle(@NonNull SpamWordEntry row) { return row.word(); }
-
     /**
-     * The whole remote word, filled from the STORED entry wherever this write carries no
-     * value for a field.
+     * The whole remote word, filled from the STORED entry wherever this write carries no value for a field.
      *
-     * AIDEV-NOTE: the remote update is a full-DTO PUT, and the inline cell lane hands
-     * updateRow a map holding EXACTLY ONE entry. Building the DTO off that map alone
-     * pushed a blank word, a zero score and leet=false to the LIVE filter on any single
-     * edit. The stored record is the fallback here rather than a remote merge semantic,
-     * which the service's own API does not promise.
+     * AIDEV-NOTE: the remote update is a full-DTO PUT, and the inline cell lane hands the update a map holding EXACTLY
+     * ONE entry. Building the DTO off that map alone pushed a blank word, a zero score and leet=false to the LIVE
+     * filter on any single edit. The stored record is the fallback here rather than a remote merge semantic, which the
+     * service's own API does not promise.
      *
      * @param stored the entry being edited, or null on a create
      */
     private static SpamWordInput input(Map<String, Object> values, @Nullable SpamWordEntry stored) {
-        String word = requiredText(values, "word", stored == null ? "" : stored.word());
+        String word = SpamserviceRemoteStore.requiredText(values, "word", stored == null ? "" : stored.word());
         Object score = values.getOrDefault("score", stored == null ? null : stored.score());
-        Object rawLanguage = values.getOrDefault("language",
-            stored == null ? null : stored.language());
+        Object rawLanguage = values.getOrDefault("language", stored == null ? null : stored.language());
         Object leet = values.getOrDefault("leet", stored == null ? null : stored.leet());
         String language = rawLanguage != null ? String.valueOf(rawLanguage).trim() : "";
         return new SpamWordInput(word,
             score instanceof Number number ? number.intValue() : 0,
             language.isEmpty() ? null : language, Boolean.TRUE.equals(leet));
     }
-    private static String value(@Nullable String value) { return value != null ? value : ""; }
 }

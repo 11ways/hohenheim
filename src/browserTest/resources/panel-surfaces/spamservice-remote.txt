@@ -1,0 +1,85 @@
+case admin.spamservice-clients.operator admin spamservice-clients operator
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column enabled at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column trusted at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column provisioner at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column manager at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column external_id at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column spam_threshold at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+filter q at=0 kind=TEXT facet=false param=filter.q
+filter enabled at=1 kind=BOOLEAN facet=false param=filter.enabled
+tab keys at=0 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20enabled at=1 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20trusted at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20provisioner at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20manager at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20external_id at=5 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control CREATE%20provisioned_by_client_id at=6 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control CREATE%20allowed_languages at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20spam_threshold at=8 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20notes at=9 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+
+case admin.spamservice-keys.operator admin spamservice-keys operator
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column active at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column last_used at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+control CREATE%20client_id at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20name at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20key at=2 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control CREATE%20active at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20last_used at=4 kind=zenitforms:control/datetime input=datetime required=false readonly=true options= binding=
+control CREATE%20created_at at=5 kind=zenitforms:control/datetime input=datetime required=false readonly=true options= binding=
+
+case admin.spamservice-samples.operator admin spamservice-samples operator
+admission - verdict=admitted
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column created_at at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column client_id at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column spam at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column score at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column ip at=4 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
+column confirmed at=5 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+filter client_id at=0 kind=TEXT facet=false param=filter.client_id
+filter spam at=1 kind=BOOLEAN facet=false param=filter.spam
+filter confirmed at=2 kind=BOOLEAN facet=false param=filter.confirmed
+filter ip at=3 kind=TEXT facet=false param=filter.ip
+tab analysis at=0 landing=false view=false
+
+case admin.spamservice-security-events.operator admin spamservice-security-events operator
+admission - verdict=admitted
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column type at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=last_detail relation=false
+column last_detail at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column ip at=2 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
+column day at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column count at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column client_id at=5 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column last_at at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+filter type at=0 kind=TEXT facet=false param=filter.type
+filter ip at=1 kind=TEXT facet=false param=filter.ip
+filter client_id at=2 kind=TEXT facet=false param=filter.client_id
+filter since at=3 kind=DATE facet=false param=filter.since
+filter until at=4 kind=DATE facet=false param=filter.until
+
+case admin.spamservice-words.operator admin spamservice-words operator
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column word at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column score at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column language at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column leet at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+filter q at=0 kind=TEXT facet=false param=filter.q
+control CREATE%20word at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20score at=1 kind=zenitforms:control/number input=number required=true readonly=false options= binding=
+control CREATE%20language at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20leet at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+

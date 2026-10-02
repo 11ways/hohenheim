@@ -4529,10 +4529,6 @@
     "text": "Herstart van Spamservice aangevraagd",
     "scope": "spamservice"
   },
-  "search": {
-    "text": "Zoeken",
-    "scope": "spamservice"
-  },
   "trusted": {
     "text": "Vertrouwde rapporteur",
     "scope": "spamservice_client"
@@ -4673,14 +4669,6 @@
       "scope": "server_overview"
     }
   ],
-  "from": {
-    "text": "Vanaf",
-    "scope": "spamservice_event"
-  },
-  "to": {
-    "text": "Tot",
-    "scope": "spamservice_event"
-  },
   "word": {
     "text": "Woord of zin",
     "scope": "spamservice_word"
