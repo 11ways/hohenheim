@@ -8,8 +8,9 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelPeer;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
@@ -76,27 +77,34 @@ class AdminListPresentationTest extends HohenheimTestBase {
 
     @Test
     void everyResourceDeclarationSurvivesRegistration() throws Exception {
-        List<Resource<?>> resources = new ArrayList<>();
+        List<Declared> resources = new ArrayList<>();
         for (String slug : List.of("admin", ManagePanel.SLUG)) {
             Panel panel = PanelRegistry.getBySlug(slug);
             assertThat(panel).as("the '" + slug + "' panel is registered").isNotNull();
-            for (PanelPeer peer : panel.peers()) {
-                if (peer instanceof Resource<?> resource) {
-                    resources.add(resource);
+            for (PanelEntry entry : panel.entries()) {
+                if (entry instanceof Resource<?> resource) {
+                    resources.add(new Declared(resource.id() + " (" + resource.slug() + ")", resource.slug(),
+                        resource::validateDeclarations, resource.tableSpec(), resource.searchFields(),
+                        !resource.searchColumns().isEmpty(), resource.searchOffered()));
+                } else if (entry instanceof PanelResource<?> parts && parts.list() != null) {
+                    // A parts-built entry declares its list as a part; its search box is offered from that part.
+                    List<Field<?, ?>> search = parts.list().search();
+                    resources.add(new Declared(parts.id() + " (" + parts.slug() + ")", parts.slug(),
+                        () -> parts.validateIn(panel), parts.list().table(), search, false, !search.isEmpty()));
                 }
             }
         }
         assertThat(resources).as("step 1: both panels expose their resources").hasSizeGreaterThan(30);
 
         Set<String> offering = new TreeSet<>();
-        for (Resource<?> resource : resources) {
-            String who = resource.id() + " (" + resource.slug() + ")";
+        for (Declared resource : resources) {
+            String who = resource.who();
 
             // 1. The framework's own registration check: search fields that are neither
             //    secret nor localized, plus the record-page and quick-add declarations.
-            resource.validateDeclarations();
+            resource.validate().run();
 
-            TableSpec<?> spec = resource.tableSpec();
+            TableSpec<?> spec = resource.spec();
 
             // 2. Every subtext names a column of the SAME spec. TableSpec.build already
             //    refuses otherwise, so reaching every spec through the registered peer is
@@ -135,7 +143,7 @@ class AdminListPresentationTest extends HohenheimTestBase {
                     .isInstanceOf(TextSearchable.class);
             }
 
-            if (!resource.searchFields().isEmpty() || !resource.searchColumns().isEmpty()) {
+            if (!resource.searchFields().isEmpty() || resource.searchColumns()) {
                 assertThat(resource.searchOffered())
                     .as("step 3: " + who + " renders the box it declared fields for")
                     .isTrue();
@@ -386,4 +394,8 @@ class AdminListPresentationTest extends HohenheimTestBase {
             rules.save(rule);
         }
     }
+
+    /** One entry's list declarations, read from a legacy resource or from a parts-built entry's list part. */
+    private record Declared(String who, String slug, Runnable validate, TableSpec<?> spec,
+                            List<Field<?, ?>> searchFields, boolean searchColumns, boolean searchOffered) {}
 }

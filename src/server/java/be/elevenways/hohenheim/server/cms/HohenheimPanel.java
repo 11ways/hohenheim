@@ -151,7 +151,7 @@ public final class HohenheimPanel extends Panel {
             peers.add(new InstanceDatabaseResource());
         }
         addIf(peers, new InstanceResource(), Role.INSTANCES);
-        addIf(peers, new InstanceTemplateResource(), Role.INSTANCES);
+        addIf(peers, InstanceTemplateParts.admin(), Role.INSTANCES);
         addIf(peers, new InstanceTemplateVariableResource(), Role.INSTANCES);
         addIf(peers, new InstanceTemplateFileResource(), Role.INSTANCES);
         addIf(peers, new InstanceTemplateVolumeResource(), Role.INSTANCES);

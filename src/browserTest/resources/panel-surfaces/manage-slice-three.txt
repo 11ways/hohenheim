@@ -28,13 +28,13 @@ tab access at=5 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20upstream_kind at=2 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:address,hohenheim:dev_namespace,hohenheim:instance,hohenheim:redirect,hohenheim:static,hohenheim:tls_passthrough binding=searchable:false,clearable:false,presentation:CARDS
-control CREATE%20instance_id at=3 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.instance,rules:,siblings:upstream_kind,resolver:true,clearable:true,creatable:false
+control CREATE%20instance_id at=3 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.instance,rules:,siblings:upstream_kind,resolver:be.elevenways.hohenheim.HohenheimPickRules$UpstreamInstanceRules,clearable:true,creatable:false
 control CREATE%20settings at=4 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:upstream_kind,sibling:upstream_kind,variants:hohenheim:address%252Chohenheim:dev_namespace%252Chohenheim:instance%252Chohenheim:redirect%252Chohenheim:static%252Chohenheim:tls_passthrough
 control CREATE%20trusted_upstream at=5 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20enabled at=6 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20description at=7 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
-control CREATE%20auth_provider_id at=8 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site_auth_provider,rules:,siblings:,resolver:false,clearable:true,creatable:false
-control CREATE%20access_list_id at=9 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control CREATE%20auth_provider_id at=8 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site_auth_provider,rules:,siblings:,resolver:,clearable:true,creatable:false
+control CREATE%20access_list_id at=9 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20settings[hohenheim:address]/settings.forward_scheme at=0 kind=zenitforms:form/select input=select required=false readonly=false options=http,https binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:address]/settings.forward_host at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:address]/settings.forward_port at=2 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
@@ -81,14 +81,14 @@ filter hostname at=0 kind=TEXT facet=false param=filter.hostname
 filter match_type at=1 kind=SELECT facet=true param=filter.match_type
 filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl
 tab history at=0 landing=false view=false
-control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20match_type at=2 kind=zenitforms:form/select input=select required=false readonly=false options=exact,wildcard,regex binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20listen_on at=3 kind=zenitforms:form/select input=text required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20path at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20strip_path at=5 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20force_ssl at=6 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
-control CREATE%20certificate_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control CREATE%20certificate_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hsts_enabled at=8 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20hsts_subdomains at=9 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20exclude_from_letsencrypt at=10 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
@@ -152,8 +152,8 @@ control CREATE%20settings[hohenheim:release]/settings.memory_limit_mb at=12 kind
 control CREATE%20settings[hohenheim:release]/settings.cpu_limit at=13 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:application]/settings.repository_url at=0 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:application]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20settings[hohenheim:application]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id,resolver:true,clearable:true,free:true
-control CREATE%20settings[hohenheim:application]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id%252Crepository,resolver:true,clearable:true,free:true
+control CREATE%20settings[hohenheim:application]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver,clearable:true,free:true
+control CREATE%20settings[hohenheim:application]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id%252Crepository,resolver:be.elevenways.hohenheim.source.GitBranchResolver,clearable:true,free:true
 control CREATE%20settings[hohenheim:application]/settings.build_command at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:application]/settings.build_directory at=5 kind=zenitforms:form/plain input=path required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:application]/settings.build_timeout at=6 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
@@ -210,8 +210,8 @@ control CREATE%20settings[hohenheim:vm]/settings.secure_boot at=7 kind=zenitform
 control CREATE%20settings[hohenheim:vm]/settings.guest_agent at=8 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.repository_url at=0 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20settings[hohenheim:workspace]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id,resolver:true,clearable:true,free:true
-control CREATE%20settings[hohenheim:workspace]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id%252Crepository,resolver:true,clearable:true,free:true
+control CREATE%20settings[hohenheim:workspace]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver,clearable:true,free:true
+control CREATE%20settings[hohenheim:workspace]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id%252Crepository,resolver:be.elevenways.hohenheim.source.GitBranchResolver,clearable:true,free:true
 control CREATE%20settings[hohenheim:workspace]/settings.build_command at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.build_directory at=5 kind=zenitforms:form/plain input=path required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.build_timeout at=6 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
@@ -287,13 +287,13 @@ tab access at=4 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20upstream_kind at=2 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:address,hohenheim:dev_namespace,hohenheim:instance,hohenheim:redirect,hohenheim:static,hohenheim:tls_passthrough binding=searchable:false,clearable:false,presentation:CARDS
-control CREATE%20instance_id at=3 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.instance,rules:,siblings:upstream_kind,resolver:true,clearable:true,creatable:false
+control CREATE%20instance_id at=3 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.instance,rules:,siblings:upstream_kind,resolver:be.elevenways.hohenheim.HohenheimPickRules$UpstreamInstanceRules,clearable:true,creatable:false
 control CREATE%20settings at=4 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:upstream_kind,sibling:upstream_kind,variants:hohenheim:address%252Chohenheim:dev_namespace%252Chohenheim:instance%252Chohenheim:redirect%252Chohenheim:static%252Chohenheim:tls_passthrough
 control CREATE%20trusted_upstream at=5 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20enabled at=6 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20description at=7 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
-control CREATE%20auth_provider_id at=8 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site_auth_provider,rules:,siblings:,resolver:false,clearable:true,creatable:false
-control CREATE%20access_list_id at=9 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control CREATE%20auth_provider_id at=8 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site_auth_provider,rules:,siblings:,resolver:,clearable:true,creatable:false
+control CREATE%20access_list_id at=9 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20settings[hohenheim:address]/settings.forward_scheme at=0 kind=zenitforms:form/select input=select required=false readonly=false options=http,https binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:address]/settings.forward_host at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:address]/settings.forward_port at=2 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
@@ -325,13 +325,13 @@ control CREATE%20settings[hohenheim:tls_passthrough]/settings.proxy_protocol_v2 
 control CREATE%20settings[hohenheim:tls_passthrough]/settings.connect_timeout at=3 kind=zenitforms:form/plain input=number required=true readonly=false options= binding=
 control EDIT%20name at=0 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control EDIT%20upstream_kind at=1 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:address,hohenheim:dev_namespace,hohenheim:instance,hohenheim:redirect,hohenheim:static,hohenheim:tls_passthrough binding=searchable:false,clearable:false,presentation:CARDS
-control EDIT%20instance_id at=2 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.instance,rules:MatchNone[],siblings:upstream_kind,resolver:true,clearable:true,creatable:false
+control EDIT%20instance_id at=2 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.instance,rules:MatchNone[],siblings:upstream_kind,resolver:be.elevenways.hohenheim.HohenheimPickRules$UpstreamInstanceRules,clearable:true,creatable:false
 control EDIT%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:upstream_kind,sibling:upstream_kind,variants:hohenheim:address%252Chohenheim:dev_namespace%252Chohenheim:instance%252Chohenheim:redirect%252Chohenheim:static%252Chohenheim:tls_passthrough
 control EDIT%20trusted_upstream at=4 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control EDIT%20enabled at=5 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control EDIT%20description at=6 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
-control EDIT%20auth_provider_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site_auth_provider,rules:,siblings:,resolver:false,clearable:true,creatable:false
-control EDIT%20access_list_id at=8 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control EDIT%20auth_provider_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site_auth_provider,rules:,siblings:,resolver:,clearable:true,creatable:false
+control EDIT%20access_list_id at=8 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:,clearable:true,creatable:false
 control EDIT%20settings[hohenheim:address]/settings.forward_scheme at=0 kind=zenitforms:form/select input=select required=false readonly=false options=http,https binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20settings[hohenheim:address]/settings.forward_host at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:address]/settings.forward_port at=2 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
@@ -381,27 +381,27 @@ row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= targe
 row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
 inline force_ssl
 tab history at=0 landing=false view=false
-control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20match_type at=2 kind=zenitforms:form/select input=select required=false readonly=false options=exact,wildcard,regex binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20listen_on at=3 kind=zenitforms:form/select input=text required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20path at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20strip_path at=5 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20force_ssl at=6 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
-control CREATE%20certificate_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control CREATE%20certificate_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hsts_enabled at=8 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20hsts_subdomains at=9 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20exclude_from_letsencrypt at=10 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20custom_headers at=11 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
 control CREATE%20response_headers at=12 kind=zenitforms:form/key-value input=text required=false readonly=false options= binding=
-control EDIT%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control EDIT%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control EDIT%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control EDIT%20match_type at=2 kind=zenitforms:form/select input=select required=false readonly=false options=exact,wildcard,regex binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20listen_on at=3 kind=zenitforms:form/select input=text required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20path at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control EDIT%20strip_path at=5 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control EDIT%20force_ssl at=6 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
-control EDIT%20certificate_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control EDIT%20certificate_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:,clearable:true,creatable:false
 control EDIT%20hsts_enabled at=8 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control EDIT%20hsts_subdomains at=9 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control EDIT%20exclude_from_letsencrypt at=10 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
@@ -470,8 +470,8 @@ control CREATE%20settings[hohenheim:release]/settings.memory_limit_mb at=12 kind
 control CREATE%20settings[hohenheim:release]/settings.cpu_limit at=13 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:application]/settings.repository_url at=0 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:application]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20settings[hohenheim:application]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id,resolver:true,clearable:true,free:true
-control CREATE%20settings[hohenheim:application]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id%252Crepository,resolver:true,clearable:true,free:true
+control CREATE%20settings[hohenheim:application]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver,clearable:true,free:true
+control CREATE%20settings[hohenheim:application]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id%252Crepository,resolver:be.elevenways.hohenheim.source.GitBranchResolver,clearable:true,free:true
 control CREATE%20settings[hohenheim:application]/settings.build_command at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:application]/settings.build_directory at=5 kind=zenitforms:form/plain input=path required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:application]/settings.build_timeout at=6 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
@@ -528,8 +528,8 @@ control CREATE%20settings[hohenheim:vm]/settings.secure_boot at=7 kind=zenitform
 control CREATE%20settings[hohenheim:vm]/settings.guest_agent at=8 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.repository_url at=0 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20settings[hohenheim:workspace]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id,resolver:true,clearable:true,free:true
-control CREATE%20settings[hohenheim:workspace]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id%252Crepository,resolver:true,clearable:true,free:true
+control CREATE%20settings[hohenheim:workspace]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver,clearable:true,free:true
+control CREATE%20settings[hohenheim:workspace]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id%252Crepository,resolver:be.elevenways.hohenheim.source.GitBranchResolver,clearable:true,free:true
 control CREATE%20settings[hohenheim:workspace]/settings.build_command at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.build_directory at=5 kind=zenitforms:form/plain input=path required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.build_timeout at=6 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
@@ -603,8 +603,8 @@ control EDIT%20settings[hohenheim:release]/settings.memory_limit_mb at=12 kind=z
 control EDIT%20settings[hohenheim:release]/settings.cpu_limit at=13 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:application]/settings.repository_url at=0 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:application]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
-control EDIT%20settings[hohenheim:application]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id,resolver:true,clearable:true,free:true
-control EDIT%20settings[hohenheim:application]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id%252Crepository,resolver:true,clearable:true,free:true
+control EDIT%20settings[hohenheim:application]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver,clearable:true,free:true
+control EDIT%20settings[hohenheim:application]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id%252Crepository,resolver:be.elevenways.hohenheim.source.GitBranchResolver,clearable:true,free:true
 control EDIT%20settings[hohenheim:application]/settings.build_command at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:application]/settings.build_directory at=5 kind=zenitforms:form/plain input=path required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:application]/settings.build_timeout at=6 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
@@ -661,8 +661,8 @@ control EDIT%20settings[hohenheim:vm]/settings.secure_boot at=7 kind=zenitforms:
 control EDIT%20settings[hohenheim:vm]/settings.guest_agent at=8 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:workspace]/settings.repository_url at=0 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:workspace]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
-control EDIT%20settings[hohenheim:workspace]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id,resolver:true,clearable:true,free:true
-control EDIT%20settings[hohenheim:workspace]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id%252Crepository,resolver:true,clearable:true,free:true
+control EDIT%20settings[hohenheim:workspace]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver,clearable:true,free:true
+control EDIT%20settings[hohenheim:workspace]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id%252Crepository,resolver:be.elevenways.hohenheim.source.GitBranchResolver,clearable:true,free:true
 control EDIT%20settings[hohenheim:workspace]/settings.build_command at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:workspace]/settings.build_directory at=5 kind=zenitforms:form/plain input=path required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:workspace]/settings.build_timeout at=6 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
@@ -761,8 +761,8 @@ control CREATE%20settings[hohenheim:release]/settings.memory_limit_mb at=12 kind
 control CREATE%20settings[hohenheim:release]/settings.cpu_limit at=13 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:application]/settings.repository_url at=0 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:application]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20settings[hohenheim:application]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id,resolver:true,clearable:true,free:true
-control CREATE%20settings[hohenheim:application]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id%252Crepository,resolver:true,clearable:true,free:true
+control CREATE%20settings[hohenheim:application]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver,clearable:true,free:true
+control CREATE%20settings[hohenheim:application]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id%252Crepository,resolver:be.elevenways.hohenheim.source.GitBranchResolver,clearable:true,free:true
 control CREATE%20settings[hohenheim:application]/settings.build_command at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:application]/settings.build_directory at=5 kind=zenitforms:form/plain input=path required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:application]/settings.build_timeout at=6 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
@@ -819,8 +819,8 @@ control CREATE%20settings[hohenheim:vm]/settings.secure_boot at=7 kind=zenitform
 control CREATE%20settings[hohenheim:vm]/settings.guest_agent at=8 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.repository_url at=0 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20settings[hohenheim:workspace]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id,resolver:true,clearable:true,free:true
-control CREATE%20settings[hohenheim:workspace]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id%252Crepository,resolver:true,clearable:true,free:true
+control CREATE%20settings[hohenheim:workspace]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver,clearable:true,free:true
+control CREATE%20settings[hohenheim:workspace]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id%252Crepository,resolver:be.elevenways.hohenheim.source.GitBranchResolver,clearable:true,free:true
 control CREATE%20settings[hohenheim:workspace]/settings.build_command at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.build_directory at=5 kind=zenitforms:form/plain input=path required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.build_timeout at=6 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
@@ -894,8 +894,8 @@ control EDIT%20settings[hohenheim:release]/settings.memory_limit_mb at=12 kind=z
 control EDIT%20settings[hohenheim:release]/settings.cpu_limit at=13 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:application]/settings.repository_url at=0 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:application]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
-control EDIT%20settings[hohenheim:application]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id,resolver:true,clearable:true,free:true
-control EDIT%20settings[hohenheim:application]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id%252Crepository,resolver:true,clearable:true,free:true
+control EDIT%20settings[hohenheim:application]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver,clearable:true,free:true
+control EDIT%20settings[hohenheim:application]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id%252Crepository,resolver:be.elevenways.hohenheim.source.GitBranchResolver,clearable:true,free:true
 control EDIT%20settings[hohenheim:application]/settings.build_command at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:application]/settings.build_directory at=5 kind=zenitforms:form/plain input=path required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:application]/settings.build_timeout at=6 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
@@ -952,8 +952,8 @@ control EDIT%20settings[hohenheim:vm]/settings.secure_boot at=7 kind=zenitforms:
 control EDIT%20settings[hohenheim:vm]/settings.guest_agent at=8 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:workspace]/settings.repository_url at=0 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:workspace]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
-control EDIT%20settings[hohenheim:workspace]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id,resolver:true,clearable:true,free:true
-control EDIT%20settings[hohenheim:workspace]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id%252Crepository,resolver:true,clearable:true,free:true
+control EDIT%20settings[hohenheim:workspace]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver,clearable:true,free:true
+control EDIT%20settings[hohenheim:workspace]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id%252Crepository,resolver:be.elevenways.hohenheim.source.GitBranchResolver,clearable:true,free:true
 control EDIT%20settings[hohenheim:workspace]/settings.build_command at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:workspace]/settings.build_directory at=5 kind=zenitforms:form/plain input=path required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:workspace]/settings.build_timeout at=6 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
@@ -1026,13 +1026,13 @@ tab access at=4 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20upstream_kind at=2 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:address,hohenheim:dev_namespace,hohenheim:instance,hohenheim:redirect,hohenheim:static,hohenheim:tls_passthrough binding=searchable:false,clearable:false,presentation:CARDS
-control CREATE%20instance_id at=3 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.instance,rules:,siblings:upstream_kind,resolver:true,clearable:true,creatable:false
+control CREATE%20instance_id at=3 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.instance,rules:,siblings:upstream_kind,resolver:be.elevenways.hohenheim.HohenheimPickRules$UpstreamInstanceRules,clearable:true,creatable:false
 control CREATE%20settings at=4 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:upstream_kind,sibling:upstream_kind,variants:hohenheim:address%252Chohenheim:dev_namespace%252Chohenheim:instance%252Chohenheim:redirect%252Chohenheim:static%252Chohenheim:tls_passthrough
 control CREATE%20trusted_upstream at=5 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20enabled at=6 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20description at=7 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
-control CREATE%20auth_provider_id at=8 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site_auth_provider,rules:,siblings:,resolver:false,clearable:true,creatable:false
-control CREATE%20access_list_id at=9 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control CREATE%20auth_provider_id at=8 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site_auth_provider,rules:,siblings:,resolver:,clearable:true,creatable:false
+control CREATE%20access_list_id at=9 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20settings[hohenheim:address]/settings.forward_scheme at=0 kind=zenitforms:form/select input=select required=false readonly=false options=http,https binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:address]/settings.forward_host at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:address]/settings.forward_port at=2 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
@@ -1064,13 +1064,13 @@ control CREATE%20settings[hohenheim:tls_passthrough]/settings.proxy_protocol_v2 
 control CREATE%20settings[hohenheim:tls_passthrough]/settings.connect_timeout at=3 kind=zenitforms:form/plain input=number required=true readonly=false options= binding=
 control EDIT%20name at=0 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control EDIT%20upstream_kind at=1 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:address,hohenheim:dev_namespace,hohenheim:instance,hohenheim:redirect,hohenheim:static,hohenheim:tls_passthrough binding=searchable:false,clearable:false,presentation:CARDS
-control EDIT%20instance_id at=2 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.instance,rules:MatchNone[],siblings:upstream_kind,resolver:true,clearable:true,creatable:false
+control EDIT%20instance_id at=2 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.instance,rules:MatchNone[],siblings:upstream_kind,resolver:be.elevenways.hohenheim.HohenheimPickRules$UpstreamInstanceRules,clearable:true,creatable:false
 control EDIT%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:upstream_kind,sibling:upstream_kind,variants:hohenheim:address%252Chohenheim:dev_namespace%252Chohenheim:instance%252Chohenheim:redirect%252Chohenheim:static%252Chohenheim:tls_passthrough
 control EDIT%20trusted_upstream at=4 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control EDIT%20enabled at=5 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control EDIT%20description at=6 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
-control EDIT%20auth_provider_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site_auth_provider,rules:,siblings:,resolver:false,clearable:true,creatable:false
-control EDIT%20access_list_id at=8 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control EDIT%20auth_provider_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site_auth_provider,rules:,siblings:,resolver:,clearable:true,creatable:false
+control EDIT%20access_list_id at=8 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:,clearable:true,creatable:false
 control EDIT%20settings[hohenheim:address]/settings.forward_scheme at=0 kind=zenitforms:form/select input=select required=false readonly=false options=http,https binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20settings[hohenheim:address]/settings.forward_host at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:address]/settings.forward_port at=2 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
@@ -1133,13 +1133,13 @@ tab access at=5 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20upstream_kind at=2 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:address,hohenheim:dev_namespace,hohenheim:instance,hohenheim:redirect,hohenheim:static,hohenheim:tls_passthrough binding=searchable:false,clearable:false,presentation:CARDS
-control CREATE%20instance_id at=3 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.instance,rules:,siblings:upstream_kind,resolver:true,clearable:true,creatable:false
+control CREATE%20instance_id at=3 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.instance,rules:,siblings:upstream_kind,resolver:be.elevenways.hohenheim.HohenheimPickRules$UpstreamInstanceRules,clearable:true,creatable:false
 control CREATE%20settings at=4 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:upstream_kind,sibling:upstream_kind,variants:hohenheim:address%252Chohenheim:dev_namespace%252Chohenheim:instance%252Chohenheim:redirect%252Chohenheim:static%252Chohenheim:tls_passthrough
 control CREATE%20trusted_upstream at=5 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20enabled at=6 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20description at=7 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
-control CREATE%20auth_provider_id at=8 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site_auth_provider,rules:,siblings:,resolver:false,clearable:true,creatable:false
-control CREATE%20access_list_id at=9 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control CREATE%20auth_provider_id at=8 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site_auth_provider,rules:,siblings:,resolver:,clearable:true,creatable:false
+control CREATE%20access_list_id at=9 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20settings[hohenheim:address]/settings.forward_scheme at=0 kind=zenitforms:form/select input=select required=false readonly=false options=http,https binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:address]/settings.forward_host at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:address]/settings.forward_port at=2 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
@@ -1206,13 +1206,13 @@ tab access at=4 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20upstream_kind at=2 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:address,hohenheim:dev_namespace,hohenheim:instance,hohenheim:redirect,hohenheim:static,hohenheim:tls_passthrough binding=searchable:false,clearable:false,presentation:CARDS
-control CREATE%20instance_id at=3 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.instance,rules:,siblings:upstream_kind,resolver:true,clearable:true,creatable:false
+control CREATE%20instance_id at=3 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.instance,rules:,siblings:upstream_kind,resolver:be.elevenways.hohenheim.HohenheimPickRules$UpstreamInstanceRules,clearable:true,creatable:false
 control CREATE%20settings at=4 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:upstream_kind,sibling:upstream_kind,variants:hohenheim:address%252Chohenheim:dev_namespace%252Chohenheim:instance%252Chohenheim:redirect%252Chohenheim:static%252Chohenheim:tls_passthrough
 control CREATE%20trusted_upstream at=5 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20enabled at=6 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20description at=7 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
-control CREATE%20auth_provider_id at=8 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site_auth_provider,rules:,siblings:,resolver:false,clearable:true,creatable:false
-control CREATE%20access_list_id at=9 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control CREATE%20auth_provider_id at=8 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site_auth_provider,rules:,siblings:,resolver:,clearable:true,creatable:false
+control CREATE%20access_list_id at=9 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20settings[hohenheim:address]/settings.forward_scheme at=0 kind=zenitforms:form/select input=select required=false readonly=false options=http,https binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:address]/settings.forward_host at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:address]/settings.forward_port at=2 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
@@ -1244,13 +1244,13 @@ control CREATE%20settings[hohenheim:tls_passthrough]/settings.proxy_protocol_v2 
 control CREATE%20settings[hohenheim:tls_passthrough]/settings.connect_timeout at=3 kind=zenitforms:form/plain input=number required=true readonly=false options= binding=
 control EDIT%20name at=0 kind=zenitforms:form/plain input=text required=false readonly=true options= binding=
 control EDIT%20upstream_kind at=1 kind=zenitforms:form/select input=select required=false readonly=true options=hohenheim:address,hohenheim:dev_namespace,hohenheim:instance,hohenheim:redirect,hohenheim:static,hohenheim:tls_passthrough binding=searchable:false,clearable:false,presentation:CARDS
-control EDIT%20instance_id at=2 kind=zenitforms:form/relation-pick input=number required=false readonly=true options= binding=source:hohenheim.instance,rules:MatchNone[],siblings:upstream_kind,resolver:true,clearable:true,creatable:false
+control EDIT%20instance_id at=2 kind=zenitforms:form/relation-pick input=number required=false readonly=true options= binding=source:hohenheim.instance,rules:MatchNone[],siblings:upstream_kind,resolver:be.elevenways.hohenheim.HohenheimPickRules$UpstreamInstanceRules,clearable:true,creatable:false
 control EDIT%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=true options= binding=schema:upstream_kind,sibling:upstream_kind,variants:hohenheim:address%252Chohenheim:dev_namespace%252Chohenheim:instance%252Chohenheim:redirect%252Chohenheim:static%252Chohenheim:tls_passthrough
 control EDIT%20trusted_upstream at=4 kind=zenitforms:form/plain input=checkbox required=false readonly=true options= binding=
 control EDIT%20enabled at=5 kind=zenitforms:form/plain input=checkbox required=false readonly=true options= binding=
 control EDIT%20description at=6 kind=zenitforms:form/plain input=text required=false readonly=true options= binding=
-control EDIT%20auth_provider_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=true options= binding=source:hohenheim.site_auth_provider,rules:,siblings:,resolver:false,clearable:true,creatable:false
-control EDIT%20access_list_id at=8 kind=zenitforms:form/relation-pick input=number required=false readonly=true options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control EDIT%20auth_provider_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=true options= binding=source:hohenheim.site_auth_provider,rules:,siblings:,resolver:,clearable:true,creatable:false
+control EDIT%20access_list_id at=8 kind=zenitforms:form/relation-pick input=number required=false readonly=true options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:,clearable:true,creatable:false
 control EDIT%20settings[hohenheim:address]/settings.forward_scheme at=0 kind=zenitforms:form/select input=select required=false readonly=true options=http,https binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20settings[hohenheim:address]/settings.forward_host at=1 kind=zenitforms:form/plain input=text required=false readonly=true options= binding=
 control EDIT%20settings[hohenheim:address]/settings.forward_port at=2 kind=zenitforms:form/plain input=number required=false readonly=true options= binding=
@@ -1311,13 +1311,13 @@ tab access at=5 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20upstream_kind at=2 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:address,hohenheim:dev_namespace,hohenheim:instance,hohenheim:redirect,hohenheim:static,hohenheim:tls_passthrough binding=searchable:false,clearable:false,presentation:CARDS
-control CREATE%20instance_id at=3 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.instance,rules:,siblings:upstream_kind,resolver:true,clearable:true,creatable:false
+control CREATE%20instance_id at=3 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.instance,rules:,siblings:upstream_kind,resolver:be.elevenways.hohenheim.HohenheimPickRules$UpstreamInstanceRules,clearable:true,creatable:false
 control CREATE%20settings at=4 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:upstream_kind,sibling:upstream_kind,variants:hohenheim:address%252Chohenheim:dev_namespace%252Chohenheim:instance%252Chohenheim:redirect%252Chohenheim:static%252Chohenheim:tls_passthrough
 control CREATE%20trusted_upstream at=5 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20enabled at=6 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20description at=7 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
-control CREATE%20auth_provider_id at=8 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site_auth_provider,rules:,siblings:,resolver:false,clearable:true,creatable:false
-control CREATE%20access_list_id at=9 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control CREATE%20auth_provider_id at=8 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site_auth_provider,rules:,siblings:,resolver:,clearable:true,creatable:false
+control CREATE%20access_list_id at=9 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20settings[hohenheim:address]/settings.forward_scheme at=0 kind=zenitforms:form/select input=select required=false readonly=false options=http,https binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20settings[hohenheim:address]/settings.forward_host at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:address]/settings.forward_port at=2 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
@@ -1362,14 +1362,14 @@ filter hostname at=0 kind=TEXT facet=false param=filter.hostname
 filter match_type at=1 kind=SELECT facet=true param=filter.match_type
 filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl
 tab history at=0 landing=false view=false
-control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20match_type at=2 kind=zenitforms:form/select input=select required=false readonly=false options=exact,wildcard,regex binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20listen_on at=3 kind=zenitforms:form/select input=text required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20path at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20strip_path at=5 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20force_ssl at=6 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
-control CREATE%20certificate_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control CREATE%20certificate_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hsts_enabled at=8 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20hsts_subdomains at=9 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20exclude_from_letsencrypt at=10 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
@@ -1389,14 +1389,14 @@ filter hostname at=0 kind=TEXT facet=false param=filter.hostname
 filter match_type at=1 kind=SELECT facet=true param=filter.match_type
 filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl
 tab history at=0 landing=false view=false
-control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20match_type at=2 kind=zenitforms:form/select input=select required=false readonly=false options=exact,wildcard,regex binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20listen_on at=3 kind=zenitforms:form/select input=text required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20path at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20strip_path at=5 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20force_ssl at=6 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
-control CREATE%20certificate_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control CREATE%20certificate_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hsts_enabled at=8 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20hsts_subdomains at=9 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20exclude_from_letsencrypt at=10 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
@@ -1416,14 +1416,14 @@ filter hostname at=0 kind=TEXT facet=false param=filter.hostname
 filter match_type at=1 kind=SELECT facet=true param=filter.match_type
 filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl
 tab history at=0 landing=false view=false
-control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20match_type at=2 kind=zenitforms:form/select input=select required=false readonly=false options=exact,wildcard,regex binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20listen_on at=3 kind=zenitforms:form/select input=text required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20path at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20strip_path at=5 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20force_ssl at=6 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
-control CREATE%20certificate_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control CREATE%20certificate_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hsts_enabled at=8 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20hsts_subdomains at=9 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20exclude_from_letsencrypt at=10 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
@@ -1484,8 +1484,8 @@ control CREATE%20settings[hohenheim:release]/settings.memory_limit_mb at=12 kind
 control CREATE%20settings[hohenheim:release]/settings.cpu_limit at=13 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:application]/settings.repository_url at=0 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:application]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20settings[hohenheim:application]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id,resolver:true,clearable:true,free:true
-control CREATE%20settings[hohenheim:application]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id%252Crepository,resolver:true,clearable:true,free:true
+control CREATE%20settings[hohenheim:application]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver,clearable:true,free:true
+control CREATE%20settings[hohenheim:application]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id%252Crepository,resolver:be.elevenways.hohenheim.source.GitBranchResolver,clearable:true,free:true
 control CREATE%20settings[hohenheim:application]/settings.build_command at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:application]/settings.build_directory at=5 kind=zenitforms:form/plain input=path required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:application]/settings.build_timeout at=6 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
@@ -1542,8 +1542,8 @@ control CREATE%20settings[hohenheim:vm]/settings.secure_boot at=7 kind=zenitform
 control CREATE%20settings[hohenheim:vm]/settings.guest_agent at=8 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.repository_url at=0 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.provider_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options= binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20settings[hohenheim:workspace]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id,resolver:true,clearable:true,free:true
-control CREATE%20settings[hohenheim:workspace]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:false,siblings:provider_id%252Crepository,resolver:true,clearable:true,free:true
+control CREATE%20settings[hohenheim:workspace]/settings.repository at=2 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id,resolver:be.elevenways.hohenheim.source.GitRepositoryResolver,clearable:true,free:true
+control CREATE%20settings[hohenheim:workspace]/settings.branch at=3 kind=zenitforms:form/provider-pick input=text required=false readonly=false options= binding=provider:,siblings:provider_id%252Crepository,resolver:be.elevenways.hohenheim.source.GitBranchResolver,clearable:true,free:true
 control CREATE%20settings[hohenheim:workspace]/settings.build_command at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.build_directory at=5 kind=zenitforms:form/plain input=path required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:workspace]/settings.build_timeout at=6 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
@@ -1604,7 +1604,7 @@ column site_id at=4 shown=true hidden=false sortable=false filterable=false copy
 filter hostname at=0 kind=TEXT facet=false param=filter.hostname
 filter match_type at=1 kind=SELECT facet=true param=filter.match_type
 filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl
-control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20force_ssl at=2 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20hsts_enabled at=3 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
@@ -1658,13 +1658,13 @@ filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
 inline force_ssl
-control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20force_ssl at=2 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20hsts_enabled at=3 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20hsts_subdomains at=4 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20exclude_from_letsencrypt at=5 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
-control EDIT%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control EDIT%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control EDIT%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control EDIT%20force_ssl at=2 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control EDIT%20hsts_enabled at=3 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
@@ -1737,7 +1737,7 @@ column site_id at=4 shown=true hidden=false sortable=false filterable=false copy
 filter hostname at=0 kind=TEXT facet=false param=filter.hostname
 filter match_type at=1 kind=SELECT facet=true param=filter.match_type
 filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl
-control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20force_ssl at=2 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20hsts_enabled at=3 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
@@ -1756,7 +1756,7 @@ column site_id at=4 shown=true hidden=false sortable=false filterable=false copy
 filter hostname at=0 kind=TEXT facet=false param=filter.hostname
 filter match_type at=1 kind=SELECT facet=true param=filter.match_type
 filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl
-control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:false,clearable:true,creatable:false
+control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20force_ssl at=2 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20hsts_enabled at=3 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=

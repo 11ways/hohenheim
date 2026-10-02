@@ -135,7 +135,7 @@ public final class ManagePanel extends Panel {
         HohenheimPanel.addIf(peers, InstanceVariableParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, new ManageInstanceSnapshotResource(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, new ManageInstanceBackupResource(), Role.INSTANCES);
-        HohenheimPanel.addIf(peers, new ManageInstanceTemplateResource(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, InstanceTemplateParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, new InstanceFromTemplatePage(), Role.INSTANCES);
         // The managed-database tier's tenant projection: allocate, read credentials
         // (its own capability, its own tab), back up and destroy your OWN databases.
@@ -308,8 +308,8 @@ public final class ManagePanel extends Panel {
             .scopedBy(TenantScopes.INSTANCES)
             .build());
 
-        // Templates: exposed by TWO RowResources (admin InstanceTemplateResource and
-        // ManageInstanceTemplateResource), so the derived default is boot-order-decided --
+        // Templates: exposed by TWO entries (InstanceTemplateParts.admin and .manage),
+        // so a derived default would be boot-order-decided --
         // the same shadowing hazard as instances above. The scope is THE catalog policy:
         // operators browse everything, everyone else only APPROVED templates. The
         // instance form's dependent template pick narrows on the projected kind.

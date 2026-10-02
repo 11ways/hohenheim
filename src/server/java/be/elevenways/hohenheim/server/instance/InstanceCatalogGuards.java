@@ -36,9 +36,9 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * destroyed workload ever used could never go. Its pointer is history and is cleared
  * (InstanceModel.detachTrashed) once the refusal passed, the same shape ServerModel uses.
  *
- * AIDEV-NOTE: {@code InstanceTemplateResource.deleteRow} used to carry the template
- * refusal alone, reachable from that one button; it now declares the same fact as a dead
- * delete WITH the reason, and this hook is the enforcement for every other writer.
+ * AIDEV-NOTE: the template catalog's delete button used to carry the template refusal alone;
+ * this hook is the enforcement for every writer. Offering that delete dead WITH the count
+ * returns with the O2 delete family's per-record unavailable reason (InstanceTemplateParts).
  */
 public final class InstanceCatalogGuards {
 

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.ReadinessKind;
@@ -21,6 +22,7 @@ import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.test.support.PanelSurfaceComparer;
 import be.elevenways.zenit.cms.test.support.PanelSurfaces;
+import be.elevenways.zenit.cms.test.support.PlacedOperationMoves;
 import be.elevenways.zenit.cms.test.support.SurfaceBaselines;
 import be.elevenways.zenit.cms.test.support.SurfaceCase;
 import be.elevenways.zenit.cms.common.resource.ListLane;
@@ -118,8 +120,10 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
 
     @Test
     void theSliceThreeEntriesOfferWhatTheyOfferedBeforeTheMove() {
+        // Approve and unapprove moved from legacy row actions to placed operations: only their route moves.
         SurfaceBaselines stored = SurfaceBaselines.load(ManagePanelSurfacesBrowserTest.class,
-            "/panel-surfaces/manage-slice-three.txt");
+            "/panel-surfaces/manage-slice-three.txt").placedOperations(PlacedOperationMoves.of(
+                HohenheimIds.id("approve_template"), HohenheimIds.id("unapprove_template")));
 
         // 1. The admin entries for the operator, record-less and on each record; a tenant is refused the panel.
         for (String entry : List.of(SITES, DOMAINS, TEMPLATES)) {
@@ -331,11 +335,11 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
             .own("column version shown=true hidden=false sortable=false filterable=false copyable=false subtext="
                 + " relation=false")
             // A tenant reads an approved template's form; it never edits it.
-            .own("control EDIT%20name kind=zenitforms:form/plain input=text required=true readonly=true options="
+            .own("control EDIT%20name kind=zenitforms:control/string input=text required=true readonly=true options="
                 + " binding=")
-            .own("control EDIT%20description kind=zenitforms:form/plain input=multiline required=false readonly=true"
-                + " options= binding=")
-            .own("control EDIT%20version kind=zenitforms:form/plain input=number required=false readonly=true"
+            .own("control EDIT%20description kind=zenitforms:control/text input=multiline required=false"
+                + " readonly=true options= binding=")
+            .own("control EDIT%20version kind=zenitforms:control/number input=number required=false readonly=true"
                 + " options= binding=");
     }
 
