@@ -5,16 +5,20 @@ import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.source.GiteaProviderKind;
+import be.elevenways.hohenheim.server.upstream.TenantUpstreams;
 import be.elevenways.zenit.auth.AuthEndpoints;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.GrantService;
+import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
@@ -131,6 +135,57 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
         }
     }
 
+    @Test
+    void aSiteUpstreamNobodyTrustedNeverGainsAnyAddressReachJourney() {
+        int adminId = ApiSupport.user("provenance-admin@hohenheim.local", "Provenance Delegate");
+        GrantService.createDirectGrant(GrantSubjectType.USER, adminId, HohenheimSources.ADMIN_ACCESS.value(), true);
+        UserPrincipal delegated = new UserPrincipal(adminId, "Provenance Delegate");
+        int tenantId = ApiSupport.user("provenance-tenant@hohenheim.local", "Provenance Tenant");
+        Model sites = Models.get(SiteModel.class);
+        int siteId = site("provenance-site");
+        try {
+            // 1. The operator's upstream is marked as the operator's.
+            assertThat(trusted(siteId)).as("step 1: an operator-set upstream is marked").isTrue();
+
+            // 2. While a tenant owns the site, a delegate aims it at loopback (a tenant site never dials it), which
+            //    clears the mark; a delegate carrying the mark itself is not believed.
+            RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId, HohenheimAccess.MANAGE,
+                true);
+            assertThat(write(delegated, sites, siteId, SiteModel.SETTINGS, forward("127.0.0.1")))
+                .as("step 2: a tenant-owned site's upstream is the delegate's to edit").isNull();
+            assertThat(trusted(siteId)).as("step 2: the delegate's upstream is unmarked").isFalse();
+            assertThat(write(delegated, sites, siteId, SiteModel.TARGET_TRUSTED, true))
+                .as("step 2: a hand-carried mark is no refusal").isNull();
+            assertThat(trusted(siteId)).as("step 2: and is never taken").isFalse();
+
+            // 3. The tenant's grant goes: the site is operator-owned, yet its unmarked upstream is dialled at the
+            //    public tier only, and loopback is refused.
+            RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId, HohenheimAccess.MANAGE);
+            Row site = sites.findById(siteId);
+            assertThat(TenantUpstreams.isTenantOwned(site)).as("step 3: the site is operator-owned now").isFalse();
+            assertThat(TenantUpstreams.publicOnly(site)).as("step 3: but its upstream stays public-only").isTrue();
+            assertThat(TenantUpstreams.vet("http", "127.0.0.1", TenantUpstreams.publicOnly(site)))
+                .as("step 3: so the dial to loopback is refused").isInstanceOf(OutboundUrlGuard.Refused.class);
+
+            // 4. The operator re-saves the site (as a request caller; the test body is system work, which vouches only
+            //    for a target it changes): the upstream is the operator's now, and loopback is reached.
+            assertThat(write(operator(), sites, siteId, SiteModel.DESCRIPTION, "reviewed by the operator"))
+                .as("step 4: the operator re-saves").isNull();
+            assertThat(trusted(siteId)).as("step 4: the re-save marks the upstream").isTrue();
+            site = sites.findById(siteId);
+            assertThat(TenantUpstreams.publicOnly(site)).as("step 4: any-address reach").isFalse();
+            assertThat(TenantUpstreams.vet("http", "127.0.0.1", TenantUpstreams.publicOnly(site)))
+                .as("step 4: loopback is dialled").isInstanceOf(OutboundUrlGuard.Allowed.class);
+        } finally {
+            RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId, HohenheimAccess.MANAGE);
+            HardDeletes.byId(sites, siteId);
+        }
+    }
+
+    private static boolean trusted(int siteId) {
+        return Boolean.TRUE.equals(Models.get(SiteModel.class).findById(siteId).get(SiteModel.TARGET_TRUSTED));
+    }
+
     /** One column written by a direct save, as {@code principal} (null: the test body's operator). */
     private static Throwable write(UserPrincipal principal, Model model, int id, Field<?, ?> field, Object value) {
         Runnable save = () -> {
@@ -178,5 +233,12 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
         row.set(GitProviderModel.ACCESS_TOKEN, "token-" + name);
         providers.save(row);
         return row.get(GitProviderModel.ID);
+    }
+
+    /** The seeded operator account (it holds "*"), as a request caller rather than the test body's system work. */
+    private static UserPrincipal operator() {
+        int id = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first()
+            .get(UserModel.ID);
+        return new UserPrincipal(id, "Test Admin");
     }
 }
