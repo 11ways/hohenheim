@@ -154,10 +154,10 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(add.statusCode()).isIn(302, 303);
 
         // The Access tab IS the generic page: only it renders the
-        // pl-capability-matrix, with the new grant as a subject row.
+        // za-capability-matrix, with the new grant as a subject row.
         HttpResponse<String> pageView = adminGet("/admin/sites/" + siteAId + "/page/access");
         assertThat(pageView.statusCode()).isEqualTo(200);
-        assertThat(pageView.body()).contains("<pl-capability-matrix");
+        assertThat(pageView.body()).contains("<za-capability-matrix");
         assertThat(pageView.body()).contains("data-subject=\"user:" + operatorId + "\"");
         assertThat(pageView.body()).contains("Site Operator");
 
@@ -193,7 +193,7 @@ class ManagePanelTest extends HohenheimTestBase {
         HttpResponse<String> manageAccess = operatorGet(
             "/manage/sites/" + siteAId + "/page/access");
         assertThat(manageAccess.statusCode()).isEqualTo(200);
-        assertThat(manageAccess.body()).contains("<pl-capability-matrix");
+        assertThat(manageAccess.body()).contains("<za-capability-matrix");
 
         // The tenant's subject picker is an EXACT lookup, never the directory: the
         // administrator's address (a fact of the installation, not of site A) is in the
