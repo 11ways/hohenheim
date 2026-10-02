@@ -151,7 +151,7 @@ public final class ApiConduits {
                 }
                 case BAD_REQUEST, METHOD_NOT_ALLOWED, LOGIN_REQUIRED, INTERACTIVE_LOGIN_REQUIRED, RATE_LIMITED,
                      CSRF_ORIGIN, CSRF_TOKEN_MISSING, CSRF_TOKEN_INVALID, STALE, IN_PROGRESS, RETRY_MISMATCH, INVALID,
-                     ARCHIVED, CYCLE, IN_USE, OPERATION_UNAVAILABLE -> false;
+                     ARCHIVED, CYCLE, IN_USE, OPERATION_UNAVAILABLE, STORE_BUSY -> false;
             };
             if (answered) {
                 return null;
