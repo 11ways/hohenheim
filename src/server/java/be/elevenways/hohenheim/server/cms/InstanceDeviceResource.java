@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceDevices;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -130,12 +129,29 @@ public class InstanceDeviceResource extends RowResource {
      */
     @Override
     public boolean writableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
-        // reachesRecord, never hasInstanceCapability: this runs once per RENDERED ROW.
-        // The InstanceDevices mutator funnel it mirrors keeps the FRESH walk -- that one
-        // is a write gate, and the memo deliberately does not see a grant written earlier
-        // in the same request.
-        return HohenheimAccess.reachesRecord(accessContext, InstanceModel.MODEL_ID,
-            instanceIdOf(record), HohenheimAccess.CONFIG);
+        return InstanceDevices.mayChangeDevicesOf(accessContext, instanceIdOf(record));
+    }
+
+    /**
+     * Attaching demands the same capability on the TARGET instance, so the create affordance follows it: the
+     * instance the request names (the Devices tab's {@code ?instance_id=} prefill, else the instance whose tab is
+     * rendering), else whether ANY instance would accept an attach from this principal.
+     *
+     * AIDEV-NOTE: a view-only delegate used to be offered create on the device list and every device, and every
+     * submit could only answer {@code instance_not_permitted} from the mutator gate. Both faces now come from
+     * {@link InstanceDevices}' one capability; the submit still asks it on the posted instance.
+     */
+    @Override
+    public boolean creatableBy(@NonNull AccessContext accessContext) {
+        if (!super.creatableBy(accessContext)) {
+            return false;
+        }
+        Conduit conduit = accessContext.conduit();
+        Integer instanceId = conduit == null ? null : CmsSupport.scopedParentId(conduit,
+            HohenheimParams.INSTANCE_ID_PREFILL.getName(), HohenheimSlugs.INSTANCES);
+        return instanceId != null
+            ? InstanceDevices.mayChangeDevicesOf(accessContext, instanceId)
+            : InstanceDevices.mayChangeAnyDevices(accessContext);
     }
 
     /**
