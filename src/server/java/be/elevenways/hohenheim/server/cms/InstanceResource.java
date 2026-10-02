@@ -698,7 +698,7 @@ public class InstanceResource extends RowResource {
             // delegable tenant verb bounded to a workload that runs as a non-root uid.
             new InstanceShellPage(),
             new InstanceSnapshotsPage(new InstanceSnapshotResource()),
-            new InstanceBackupsPage(new InstanceBackupResource()),
+            new InstanceBackupsPage(),
             new InstanceSchedulesPage(), new InstanceDevicesPage(),
             new InstanceVolumesPage(), new InstanceDatabasesPage(),
             // Operator-only: the page hides AND 404s itself for a delegate, and the
@@ -723,7 +723,7 @@ public class InstanceResource extends RowResource {
     public @NonNull List<RelatedPage> relatedPages() {
         return List.of(
             RelatedPage.toPeer(BackupTargetResource.SLUG),
-            RelatedPage.toPeer(InstanceQuotaResource.SLUG),
+            RelatedPage.toPeer(InstanceQuotaParts.SLUG),
             RelatedPage.toPeer(GameDomainResource.SLUG),
             RelatedPage.toPeer(BuildOperationResource.SLUG),
             RelatedPage.toPeer(ReleaseOperationResource.SLUG));

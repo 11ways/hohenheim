@@ -1,0 +1,61 @@
+case admin.instance-quotas.operator admin instance-quotas operator v2
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column subjects at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
+column max_instances at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column max_memory_mb at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column max_disk_gb at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column max_nics at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column max_sites at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column max_databases at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+tab history at=0 landing=false view=false
+control CREATE%20subjects at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20max_instances at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20max_memory_mb at=2 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20max_disk_gb at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20max_nics at=4 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20max_sites at=5 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20max_databases at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+
+case admin.instance-quotas.tenant-backups admin instance-quotas tenant-backups v2
+admission - verdict=zenit:forbidden
+
+case admin.instance-quotas.operator.quota admin instance-quotas operator v2
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column subjects at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
+column max_instances at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column max_memory_mb at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column max_disk_gb at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column max_nics at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column max_sites at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column max_databases at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+inline max_instances
+inline max_memory_mb
+inline max_disk_gb
+inline max_nics
+inline max_sites
+inline max_databases
+tab history at=0 landing=false view=false
+control CREATE%20subjects at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20max_instances at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20max_memory_mb at=2 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20max_disk_gb at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20max_nics at=4 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20max_sites at=5 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20max_databases at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20subjects at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20max_instances at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20max_memory_mb at=2 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20max_disk_gb at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20max_nics at=4 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20max_sites at=5 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20max_databases at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+

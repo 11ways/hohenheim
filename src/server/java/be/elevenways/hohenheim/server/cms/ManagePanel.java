@@ -134,7 +134,7 @@ public final class ManagePanel extends Panel {
         HohenheimPanel.addIf(peers, new ManageInstanceDeviceResource(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, InstanceVariableParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, new ManageInstanceSnapshotResource(), Role.INSTANCES);
-        HohenheimPanel.addIf(peers, new ManageInstanceBackupResource(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, InstanceBackupParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, InstanceTemplateParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, new InstanceFromTemplatePage(), Role.INSTANCES);
         // The managed-database tier's tenant projection: allocate, read credentials

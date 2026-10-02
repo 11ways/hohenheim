@@ -3,7 +3,8 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.schedule.ScheduleRunView;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.InstanceScheduleRunResource;
+import be.elevenways.hohenheim.server.cms.InstanceBackupParts;
+import be.elevenways.hohenheim.server.cms.InstanceScheduleRunParts;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleStepsPage;
 import be.elevenways.hohenheim.server.cms.ManageInstanceScheduleResource;
 import be.elevenways.hohenheim.server.cms.ManageInstanceScheduleStepResource;
@@ -25,7 +26,9 @@ import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -304,7 +307,7 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
             String expected = "1:" + UNKNOWN_ACTION + "=" + status + " (" + error + ")";
 
             // 2. The runs list shows the step's verdict in its steps column.
-            InstanceScheduleRunResource runResource = new InstanceScheduleRunResource();
+            RowResource runResource = (RowResource) PanelResourceViews.forCaller(InstanceScheduleRunParts.admin());
             ColumnSpec stepsColumn = runResource.tableSpec().column("steps");
             assertThat(stepsColumn).as("step 2: the runs list declares a steps column").isNotNull();
             assertThat(runResource.cellValue(run, stepsColumn)).as("step 2: the runs list shows the step's verdict")
@@ -342,10 +345,10 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
         // Every refactored resource must survive an ALL answer AND keep scoping a
         // grant-holding tenant. accessFunction() throwing here is exactly the 500 the
         // hand-rolled idiom would produce once a type-level row exists.
-        for (var resource : new be.elevenways.zenit.cms.common.resource.RowResource[] {
+        for (var resource : new RowResource[] {
                 new ManageInstanceScheduleResource(),
                 new be.elevenways.hohenheim.server.cms.ManageInstanceSnapshotResource(),
-                new be.elevenways.hohenheim.server.cms.ManageInstanceBackupResource(),
+                (RowResource) PanelResourceViews.forCaller(InstanceBackupParts.manage()),
                 new be.elevenways.hohenheim.server.cms.ManageInstanceDeviceResource(),
                 new be.elevenways.hohenheim.server.cms.ManageInstanceDatabaseResource(),
                 new ManageInstanceScheduleStepResource()}) {

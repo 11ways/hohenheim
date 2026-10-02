@@ -164,15 +164,15 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, InstanceVariableParts.admin(), Role.INSTANCES);
         addIf(peers, new InstanceFromTemplatePage(), Role.INSTANCES);
         addIf(peers, new InstanceTemplateImportPage(), Role.INSTANCES);
-        addIf(peers, new InstanceQuotaResource(), Role.INSTANCES);
+        addIf(peers, InstanceQuotaParts.admin(), Role.INSTANCES);
         addIf(peers, new InstanceSnapshotResource(), Role.INSTANCES);
-        addIf(peers, new InstanceBackupResource(), Role.INSTANCES);
+        addIf(peers, InstanceBackupParts.admin(), Role.INSTANCES);
         addIf(peers, new InstanceScheduleResource(), Role.INSTANCES);
         addIf(peers, new InstanceScheduleStepResource(), Role.INSTANCES);
         addIf(peers, new InstanceDeviceResource(), Role.INSTANCES);
         addIf(peers, new InstanceVolumeResource(), Role.INSTANCES);
         addIf(peers, new RuntimeImageResource(), Role.INSTANCES);
-        addIf(peers, new InstanceScheduleRunResource(), Role.INSTANCES);
+        addIf(peers, InstanceScheduleRunParts.admin(), Role.INSTANCES);
         addIf(peers, GameDomainResource.admin(), Role.INSTANCES);
         addIf(peers, new BackupTargetResource(), Role.INSTANCES);
         // Build history serves the two tiers that produce images today (Docker sites
