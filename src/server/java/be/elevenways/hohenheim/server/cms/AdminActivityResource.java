@@ -2,8 +2,6 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.activity.ActivityRecordCell;
-import be.elevenways.hohenheim.server.auth.GrantSubjects;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.common.routing.BoundEndpoint;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.render.activity.ActivityPresentation;
@@ -14,7 +12,6 @@ import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.FilterState;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
-import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
 import be.elevenways.zenit.common.orm.activity.ActivityActions;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ActivityText;
@@ -65,7 +62,7 @@ public final class AdminActivityResource extends ActivityResource {
      */
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
         .column(ColumnSpec.fromField(ActivityModel.CREATED_AT).build())
-        .column(ColumnSpec.fromField(ActivityModel.ACTOR_LABEL).build())
+        .column(ColumnSpec.fromField(ActivityModel.ACTOR).sortable().build())
         .column(ColumnSpec.fromField(ActivityModel.ACTION).filterable().build())
         .column(ColumnSpec.fromField(ActivityModel.MODEL).filterable().build())
         .column(ColumnSpec.fromField(ActivityModel.RECORD_ID)
@@ -74,7 +71,8 @@ public final class AdminActivityResource extends ActivityResource {
         .filter(FilterSpec.forField(ActivityModel.MODEL, FilterSpec.Kind.TEXT).build())
         .filter(FilterSpec.forField(ActivityModel.RECORD_ID, FilterSpec.Kind.TEXT).build())
         .filter(FilterSpec.forField(ActivityModel.ACTION, FilterSpec.Kind.TEXT).build())
-        .filter(FilterSpec.forField(ActivityModel.ACTOR_LABEL, FilterSpec.Kind.TEXT).build())
+        .filter(FilterSpec.forField(ActivityModel.ACTOR, FilterSpec.Kind.TEXT).build())
+        .filter(FilterSpec.forField(ActivityModel.ACTOR_KIND, FilterSpec.Kind.TEXT).build())
         .filter(FilterSpec.forField(ActivityModel.ORIGIN, FilterSpec.Kind.TEXT).build())
         .defaultSort(SortSpec.desc(ActivityModel.CREATED_AT.getName()))
         .build();
@@ -108,12 +106,9 @@ public final class AdminActivityResource extends ActivityResource {
      * becomes a link to the record it names.
      *
      * AIDEV-NOTE: an entry carries the display name AS IT WAS at the time of acting, and
-     * that stays authoritative whenever it is there -- an audit trail must not rewrite who
-     * a row said acted. Only the blank case is resolved, and it is resolved by
-     * {@link HohenheimAccess#subjectLabel} rather than a lookup spelled here, because the
-     * stored actor is a bare principal id and every other surface in this panel renders
-     * that id through the packed {@code user:5} vocabulary. Unresolvable renders the raw
-     * token, which is the shared home's deliberate answer for a deleted user.
+     * that stays authoritative for accounts whenever it is there. Core owns the complete
+     * display projection and distinguishes system id 1 from account id 1; this host never
+     * interprets a stored actor as an account independently of its kind.
      */
     @Override
     public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
@@ -138,22 +133,7 @@ public final class AdminActivityResource extends ActivityResource {
             return recordCellOf(row);
         }
 
-        Object value = super.cellValue(row, column);
-        if (!ActivityModel.ACTOR_LABEL.getName().equals(name)
-                || (value instanceof String label && !label.isBlank())) {
-            return value;
-        }
-        String actor = row.get(ActivityModel.ACTOR);
-        if (actor == null || actor.isBlank()) {
-            return value;
-        }
-        // The actor column is a free-form principal id: a numeric one is a user, spelled
-        // through the one subject-token home; anything else renders as itself.
-        PrimitiveCoercion.Result<Long> userId = PrimitiveCoercion.toLong(actor,
-            PrimitiveCoercion.NumberRule.EXACT_VALUE, PrimitiveCoercion.TextRule.TRIMMED_BLANK_IS_NULL);
-        return userId.ok() && userId.value() != null
-            ? HohenheimAccess.subjectLabel(GrantSubjects.userToken(userId.value()))
-            : actor;
+        return super.cellValue(row, column);
     }
 
     /**
