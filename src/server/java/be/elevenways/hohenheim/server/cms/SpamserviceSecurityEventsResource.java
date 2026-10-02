@@ -94,11 +94,9 @@ public final class SpamserviceSecurityEventsResource extends SpamserviceRemoteRe
             .filter(FilterSpec.forField(TYPE, FilterSpec.Kind.TEXT).build())
             .filter(FilterSpec.forField(IP, FilterSpec.Kind.TEXT).build())
             .filter(FilterSpec.forField(CLIENT_ID, FilterSpec.Kind.TEXT).build())
-            // AIDEV-NOTE: the bounds are "since"/"until", not "from"/"to": a list state key ending in .from or .to
-            // is a range bound the URL codec reserves, so those names failed every render of this list.
-            .filter(FilterSpec.global("since", Microcopy.of("from").withFilter("scope", "spamservice_event"),
+            .filter(FilterSpec.global("from", Microcopy.of("from").withFilter("scope", "spamservice_event"),
                 FilterSpec.Kind.DATE).build())
-            .filter(FilterSpec.global("until", Microcopy.of("to").withFilter("scope", "spamservice_event"),
+            .filter(FilterSpec.global("to", Microcopy.of("to").withFilter("scope", "spamservice_event"),
                 FilterSpec.Kind.DATE).build())
             .defaultSort(SortSpec.desc("last_at")).build();
     }
@@ -109,7 +107,7 @@ public final class SpamserviceSecurityEventsResource extends SpamserviceRemoteRe
                                                                  @NonNull AccessContext accessContext) {
         return client.securityEvents(applied.page(), applied.schema().pageSize(),
             textFilter(applied, "client_id"), textFilter(applied, "type"), textFilter(applied, "ip"),
-            textFilter(applied, "since"), textFilter(applied, "until"));
+            textFilter(applied, "from"), textFilter(applied, "to"));
     }
 
     @Override public @NonNull String rowKey(@NonNull SecurityEventEntry row) { return row.id(); }

@@ -167,15 +167,23 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
             assertThat(TenantUpstreams.vet("http", "127.0.0.1", TenantUpstreams.publicOnly(site)))
                 .as("step 3: so the dial to loopback is refused").isInstanceOf(OutboundUrlGuard.Refused.class);
 
-            // 4. The operator re-saves the site (as a request caller; the test body is system work, which vouches only
-            //    for a target it changes): the upstream is the operator's now, and loopback is reached.
+            // 4. The operator edits another column only (as a request caller; a cell edit of the description): the
+            //    loaded row holds the upstream, but this write never set it, so it vouches for nothing.
             assertThat(write(operator(), sites, siteId, SiteModel.DESCRIPTION, "reviewed by the operator"))
-                .as("step 4: the operator re-saves").isNull();
-            assertThat(trusted(siteId)).as("step 4: the re-save marks the upstream").isTrue();
+                .as("step 4: the operator edits the description").isNull();
+            assertThat(trusted(siteId)).as("step 4: a write that never set the upstream does not mark it").isFalse();
+            assertThat(TenantUpstreams.publicOnly(sites.findById(siteId))).as("step 4: still public-only").isTrue();
+
+            // 5. The operator re-saves the upstream as the form shows it (the test body is system work, which vouches
+            //    only for a target it changes): the upstream is the operator's now, and loopback is reached.
+            Object shown = sites.findById(siteId).get(SiteModel.SETTINGS);
+            assertThat(write(operator(), sites, siteId, SiteModel.SETTINGS, shown))
+                .as("step 5: the operator re-saves the upstream unchanged").isNull();
+            assertThat(trusted(siteId)).as("step 5: the re-save marks the upstream").isTrue();
             site = sites.findById(siteId);
-            assertThat(TenantUpstreams.publicOnly(site)).as("step 4: any-address reach").isFalse();
+            assertThat(TenantUpstreams.publicOnly(site)).as("step 5: any-address reach").isFalse();
             assertThat(TenantUpstreams.vet("http", "127.0.0.1", TenantUpstreams.publicOnly(site)))
-                .as("step 4: loopback is dialled").isInstanceOf(OutboundUrlGuard.Allowed.class);
+                .as("step 5: loopback is dialled").isInstanceOf(OutboundUrlGuard.Allowed.class);
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId, HohenheimAccess.MANAGE);
             HardDeletes.byId(sites, siteId);
