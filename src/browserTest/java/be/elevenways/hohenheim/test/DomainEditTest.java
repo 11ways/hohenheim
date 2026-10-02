@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
@@ -194,7 +195,10 @@ class DomainEditTest extends HohenheimTestBase {
         assertThat(crumbs.textContent()).as("and the domain itself").contains(f.hostname());
         assertThat(page.locator(".cms-breadcrumbs a[href='/admin/sites/" + f.siteId()
             + "/page/domains']").count()).as("linking back to the site's Domains tab").isEqualTo(1);
-        assertThat(page.locator(".cms-breadcrumbs zn-microcopy[key='" + f.siteName() + "']").count())
+        assertThat(page.locator(Microcopy.WRAPPER_TAG).count())
+            .as("the microcopy wrapper selector matches the page before checking that record titles are literal")
+            .isGreaterThan(0);
+        assertThat(page.locator(".cms-breadcrumbs " + Microcopy.WRAPPER_TAG + "[key='" + f.siteName() + "']").count())
             .as("the site name is literal text, never a microcopy key").isEqualTo(0);
     }
 
