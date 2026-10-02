@@ -49,7 +49,10 @@ public final class TlsPassthroughRoutes {
     }
 
     private record RouteGroup(String kind, String hostname, List<Route> declarations) {}
-    /** A regex or wildcard SNI route: its text is the deterministic tie-break of equal specificity. */
+    /**
+     * A regex or wildcard SNI route: its text is the tie-break of equal specificity, a wildcard's
+     * the same HostnamePatterns.tieKey the HTTP tier sorts by.
+     */
     private record PatternRoute(String text, Predicate<String> host, int specificity, List<Route> routes) {}
     static record Snapshot(Map<String, List<Route>> exact, List<PatternRoute> wildcard,
                            List<PatternRoute> regex, int passthroughCount) {}
@@ -129,7 +132,7 @@ public final class TlsPassthroughRoutes {
                         Blast.log("TLS routing: wildcard", group.hostname(), "is not a host pattern");
                         continue;
                     }
-                    wildcard.add(new PatternRoute(pattern.text(), pattern::matches,
+                    wildcard.add(new PatternRoute(HostnamePatterns.tieKey(pattern), pattern::matches,
                         HostnamePatterns.specificity(pattern), routes));
                     passthroughCount += countPassthrough(routes);
                 }

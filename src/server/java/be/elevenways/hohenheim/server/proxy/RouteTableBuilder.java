@@ -164,11 +164,9 @@ final class RouteTableBuilder {
         // Most-specific glob first (the SAME measure the TLS/SNI table sorts by): selection
         // keeps the FIRST entry on a path-length tie, so an unsorted list -- built in
         // site-name order -- let a broader pattern (*.com) shadow a narrower one
-        // (*.example.com) and made renaming a site change production routing. Pattern-text
-        // tie-break keeps equal-specificity ordering deterministic.
-        this.wildcard.sort(Comparator
-            .comparingInt((WildcardRoute route) -> HostnamePatterns.specificity(route.pattern())).reversed()
-            .thenComparing(route -> route.pattern().text()));
+        // (*.example.com) and made renaming a site change production routing. The tie-break is
+        // the old matcher's own (HostnamePatterns.tieKey), so equal-specificity order never moved.
+        this.wildcard.sort(Comparator.comparing(WildcardRoute::pattern, HostnamePatterns.WILDCARD_ORDER));
 
         TlsPassthroughRoutes.Snapshot tlsSnapshot =
             this.tlsPassthroughRoutes.buildSnapshot(inputs.sites(), inputs.domainsBySite());

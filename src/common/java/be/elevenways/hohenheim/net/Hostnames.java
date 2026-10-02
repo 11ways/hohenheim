@@ -45,8 +45,23 @@ public final class Hostnames {
         /** @return why a canonical value is no exact or wildcard host pattern naming no port, null when it is one */
         @Nullable String refusal(@NonNull String value);
 
-        /** @return the value with a leading one-or-more wildcard label respelled to the grammar's own */
-        @NonNull String respellOneOrMoreLeading(@NonNull String value);
+        /**
+         * @return the pattern naming the hosts a glob of the pre-HostPattern grammar named
+         * @throws IllegalArgumentException with the reason when no pattern of the grammar names them
+         */
+        @NonNull String fromLegacyGlob(@NonNull String glob);
+
+        /** @return the routing specificity of a pattern; equal values tie */
+        int specificity(@NonNull String pattern);
+
+        /** @return whether some host matches both patterns */
+        boolean overlaps(@NonNull String first, @NonNull String second);
+
+        /** @return the tie key live routing orders an equally specific pattern by */
+        @NonNull String tieKey(@NonNull String pattern);
+
+        /** @return the tie key the pre-HostPattern matcher ordered a legacy glob by */
+        @NonNull String legacyTieKey(@NonNull String legacyGlob);
     }
 
     private Hostnames() {

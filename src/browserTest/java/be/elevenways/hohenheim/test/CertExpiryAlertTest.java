@@ -17,6 +17,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 
 import java.util.Map;
 import com.sun.net.httpserver.HttpServer;
+import be.elevenways.zenit.test.support.OutboundFixture;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -58,7 +59,10 @@ class CertExpiryAlertTest {
             exchange.close();
         });
         receiver.start();
-        try {
+        // Webhooks refuse loopback destinations under every policy: the fixture resolves a public-looking host to the
+        // stub, as a real destination would be reached.
+        int port = receiver.getAddress().getPort();
+        try (OutboundFixture destination = OutboundFixture.route("expiry-watch.example.test", port)) {
             // Inline delivery so the receiver's hit count is settled when the sweep returns.
             Comms.install(new CommsDispatcher(Map.of(
                 CommsChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
@@ -68,8 +72,7 @@ class CertExpiryAlertTest {
             channel.set(NotificationChannelModel.NAME, "expiry-watch");
             channel.set(NotificationChannelModel.KIND, NotificationChannelModel.KIND_WEBHOOK);
             channel.set(NotificationChannelModel.FORMAT, NotificationChannelModel.FORMAT_GENERIC);
-            channel.set(NotificationChannelModel.URL,
-                "http://127.0.0.1:" + receiver.getAddress().getPort() + "/hook");
+            channel.set(NotificationChannelModel.URL, "http://" + destination.host() + ":" + port + "/hook");
             channel.set(NotificationChannelModel.EVENTS, List.of(NotificationEvents.CERT_EXPIRING.token()));
             channels.save(channel);
 

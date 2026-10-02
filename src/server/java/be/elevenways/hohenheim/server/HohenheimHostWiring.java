@@ -70,10 +70,10 @@ public final class HohenheimHostWiring implements ZenitModule {
         // can be spelled too; explicit-beats-derived is boot-order independent.
         AdminSources.register();
         // The /manage wiring a request depends on, installed HERE, never as a
-        // Panel-constructor side effect: the eligibility checker (grant-holding
+        // Panel-constructor side effect: the eligibility computation (grant-holding
         // tenants pass the panel's ACCESS permission) and the scoped SiteModel
         // record source must both exist before STARTHTTP binds.
-        ManagePanel.installEligibilityPolicy();
+        ManagePanel.installEligibility();
         ManagePanel.registerSiteSource();
         // GET /: operators land on /admin (landingWeight 50), manage-only
         // tenants on /manage (default 100), nobody-with-a-panel gets a refusal.

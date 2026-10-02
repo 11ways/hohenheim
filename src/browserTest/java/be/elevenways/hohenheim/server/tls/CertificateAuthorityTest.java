@@ -9,7 +9,9 @@ import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
+import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -266,6 +268,46 @@ class CertificateAuthorityTest extends HohenheimTestBase {
         assertThat(CertificateAuthority.authorize(tenant, List.of("owned." + ZONE)))
             .describedAs("step 3: the restored grant authorizes the owned hostname again")
             .containsKey("owned." + ZONE);
+    }
+
+    /**
+     * A renewal acts for the stored requester as the account is TODAY: once it is disabled or deleted, the grants it
+     * still holds authorize nothing, and re-enabling it restores the renewal.
+     */
+    @Test
+    void aDisabledOrDeletedRequesterRenewsNothing() {
+        // 1. An account holding manage on the owned site renews its name.
+        int requesterId = ApiSupport.user("certauth-renewer@hohenheim.local", "Certauth Renewer");
+        RecordGrants.grant(GrantSubjectType.USER, requesterId, SiteModel.MODEL_ID, ownedSiteId,
+            HohenheimAccess.MANAGE, true);
+        PrincipalRef stored = PrincipalRef.account(requesterId);
+        assertThat(CertificateAuthority.authorize(CertificateAuthority.Requester.ofSubject(stored),
+                List.of("owned." + ZONE)))
+            .describedAs("step 1: the enabled requester renews its name").containsKey("owned." + ZONE);
+
+        // 2. Disabled, it keeps every grant and renews nothing.
+        setEnabled(requesterId, false);
+        assertThatThrownBy(() -> CertificateAuthority.authorize(CertificateAuthority.Requester.ofSubject(stored),
+                List.of("owned." + ZONE)))
+            .describedAs("step 2: a disabled requester's renewal is refused")
+            .isInstanceOf(CertificateAuthority.Refused.class);
+
+        // 3. Enabled again, it renews again: the refusal was the account's state, not a poisoned certificate.
+        setEnabled(requesterId, true);
+        assertThat(CertificateAuthority.authorize(CertificateAuthority.Requester.ofSubject(stored),
+                List.of("owned." + ZONE)))
+            .describedAs("step 3: re-enabled, it renews").containsKey("owned." + ZONE);
+
+        // 4. An id that names no account at all (deleted) renews nothing either.
+        assertThatThrownBy(() -> CertificateAuthority.authorize(
+                CertificateAuthority.Requester.ofSubject(PrincipalRef.account(987_654_321L)),
+                List.of("owned." + ZONE)))
+            .describedAs("step 4: a deleted requester's renewal is refused")
+            .isInstanceOf(CertificateAuthority.Refused.class);
+    }
+
+    private static void setEnabled(int userId, boolean enabled) {
+        AuthModels.users().find().where(UserModel.ID.eq(userId)).assign(UserModel.ENABLED, enabled).updateAll();
     }
 
     /**

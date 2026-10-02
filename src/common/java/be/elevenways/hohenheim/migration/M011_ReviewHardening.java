@@ -22,6 +22,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -55,11 +56,12 @@ import java.util.TreeSet;
  * is the reading of production build 91191333; a value it also refused matched nothing before and is
  * left untouched.
  *
- * AIDEV-NOTE: Hohenheim's leading {@code *.} spanned one or more labels; in HostPattern, which the dispatcher
- * now matches with, it spans exactly one and {@code **.} spans one or more. The respelling keeps every stored
- * route's hosts, and rewrites the claim key beside it, which opens with the hostname (RouteClaims.keyOf). A regex
- * row is not a host pattern and is left alone. {@link Hostnames#PATTERNS} spells the rewrite: the host-wildcards
- * guard refuses the literal outside HostPattern.
+ * AIDEV-NOTE: Hohenheim's glob grammar read a leading {@code *.} as one or more labels and any other star run as
+ * any characters inside a label; HostPattern, which the dispatcher now matches with, spells those {@code **.} and
+ * one {@code *}. The translation keeps every stored route's hosts and its tie order, and rewrites the claim key
+ * beside it, which opens with the hostname (RouteClaims.keyOf); what it cannot carry exactly fails the migration by
+ * name. A regex row is not a host pattern and is left alone. {@link Hostnames#PATTERNS} spells the rewrite: the
+ * host-wildcards guard refuses the literal outside HostPattern.
  *
  * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.1.0
@@ -172,7 +174,7 @@ public class M011_ReviewHardening extends HohenheimMigration {
         schema.data("store every certificate requester with its kind", "1", PrincipalColumns.stampAccountKinds(
             "certificates", () -> IntegerField.builder().name("id").build(),
             () -> IntegerField.builder().name("requested_by_user_id").build(), "requested_by_kind", true));
-        schema.data("respell every stored one-or-more host wildcard into the HostPattern grammar", "1",
+        schema.data("translate every stored legacy host wildcard into the HostPattern grammar", "1",
             M011_ReviewHardening::respellHostWildcards);
     }
 
@@ -250,11 +252,14 @@ public class M011_ReviewHardening extends HohenheimMigration {
     }
 
     /**
-     * The data step respelling the leading wildcard of every routed and every released hostname.
+     * The data step translating every routed and every released hostname of the legacy glob grammar into the
+     * HostPattern spelling of the same hosts, claim keys included.
      *
-     * AIDEV-NOTE: every wildcard-tier row is checked against the grammar BEFORE anything is written, and one the
-     * grammar refuses fails the migration naming every such row: the dispatcher drops a pattern it cannot parse,
-     * so letting it through would silently take a live site offline on upgrade. The operator corrects or deletes
+     * AIDEV-NOTE: nothing is written until every row is known to translate exactly, and one that cannot fails the
+     * migration naming every such row: a pattern the grammar refuses (the dispatcher would drop it and take the site
+     * offline), and both rows of an equally specific, overlapping pair of routes whose old tie order the translation
+     * would flip (a collapsed star run changes the tie key, review 5 D02/D03), since live routing consults the first
+     * match. Silently dropping, widening or reordering a route is never an outcome. The operator corrects or deletes
      * the rows and migrates again; the runtime log in RouteTableBuilder stays the second line of defence.
      *
      * @throws IllegalStateException listing table, id, site, pattern and reason of every refused row
@@ -262,20 +267,60 @@ public class M011_ReviewHardening extends HohenheimMigration {
     public static void respellHostWildcards(@NonNull Datasource datasource) {
         Db.run(datasource, () -> {
             Hostnames.PatternGrammar grammar = Hostnames.PATTERNS.require();
-            List<PatternTable> tables = List.of(new PatternTable("site_domains", "live_route_key", "site_id"),
-                new PatternTable("released_route_claims", "claim_key", "former_site_id"));
+            PatternTable domains = new PatternTable("site_domains", "live_route_key", "site_id");
+            PatternTable released = new PatternTable("released_route_claims", "claim_key", "former_site_id");
             List<String> refused = new ArrayList<>();
-            Map<PatternTable, List<Row>> respelled = new LinkedHashMap<>();
-            for (PatternTable table : tables) {
-                respelled.put(table, table.respell(grammar, refused));
-            }
+            List<Translation> routed = domains.translate(grammar, refused);
+            List<Translation> ledger = released.translate(grammar, refused);
+            refuseFlippedTies(grammar, routed, refused);
             if (!refused.isEmpty()) {
                 throw new IllegalStateException("M011 cannot carry " + refused.size() + " stored host pattern(s)"
                     + " into the HostPattern grammar; correct or delete them, then migrate again:\n  "
                     + String.join("\n  ", refused));
             }
-            respelled.forEach((table, rows) -> rows.forEach(table::save));
+            domains.write(routed);
+            released.write(ledger);
         });
+    }
+
+    /** One stored wildcard and the pattern naming the same hosts. */
+    private record Translation(@NonNull PatternTable table, @NonNull Row row, @NonNull String legacy,
+                               @NonNull String translated) {
+
+        @NonNull String describe() {
+            return this.table.describe(this.row, this.legacy);
+        }
+    }
+
+    /**
+     * Refuse both rows of every pair of routes that are equally specific and share a host, when their old tie keys and
+     * their translated ones order them differently.
+     */
+    private static void refuseFlippedTies(Hostnames.@NonNull PatternGrammar grammar,
+                                          @NonNull List<Translation> routed, @NonNull List<String> refused) {
+        Set<Translation> flipped = new LinkedHashSet<>();
+        for (int i = 0; i < routed.size(); i++) {
+            for (int j = i + 1; j < routed.size(); j++) {
+                Translation first = routed.get(i);
+                Translation second = routed.get(j);
+                if (grammar.specificity(first.translated()) != grammar.specificity(second.translated())
+                        || !grammar.overlaps(first.translated(), second.translated())) {
+                    continue;
+                }
+                int before = Integer.signum(grammar.legacyTieKey(first.legacy())
+                    .compareTo(grammar.legacyTieKey(second.legacy())));
+                int after = Integer.signum(grammar.tieKey(first.translated())
+                    .compareTo(grammar.tieKey(second.translated())));
+                if (before != after) {
+                    flipped.add(first);
+                    flipped.add(second);
+                }
+            }
+        }
+        for (Translation translation : flipped) {
+            refused.add(translation.describe() + " -- its route order against an equally specific wildcard that"
+                + " matches the same hosts would change; respell one of them");
+        }
     }
 
     /** One table of stored host patterns: its claim key and the site column naming who holds the row. */
@@ -297,42 +342,48 @@ public class M011_ReviewHardening extends HohenheimMigration {
             this.model = new FrozenModel(name, this.id, this.hostname, this.matchType, this.key, this.site);
         }
 
-        void save(@NonNull Row row) {
-            this.model.save(row);
+        @NonNull String describe(@NonNull Row row, @NonNull String legacy) {
+            return this.name + " #" + row.get(this.id) + " (site " + row.get(this.site) + "): '" + legacy + "'";
         }
 
         /**
-         * @param refused collects one line per wildcard-tier row the grammar refuses after respelling
-         * @return the rows whose hostname the respelling changed, not yet saved
+         * @param refused collects one line per wildcard-tier row the grammar cannot carry
+         * @return every wildcard-tier row with its translation, not yet written
          */
-        @NonNull List<Row> respell(Hostnames.@NonNull PatternGrammar grammar, @NonNull List<String> refused) {
-            List<Row> changed = new ArrayList<>();
+        @NonNull List<Translation> translate(Hostnames.@NonNull PatternGrammar grammar,
+                                             @NonNull List<String> refused) {
+            List<Translation> translations = new ArrayList<>();
             for (Row row : this.model.find().all()) {
                 String stored = row.get(this.hostname);
                 String matchType = row.get(this.matchType);
-                if (stored == null || REGEX_MATCH.equals(matchType)) {
+                // A regex is no glob, and an exact host spells no wildcard to translate.
+                if (stored == null || REGEX_MATCH.equals(matchType)
+                        || !(WILDCARD_MATCH.equals(matchType) || Hostnames.hasGlobCharacters(stored))) {
                     continue;
                 }
-                String hostname = grammar.respellOneOrMoreLeading(stored);
-                if (WILDCARD_MATCH.equals(matchType) || Hostnames.hasGlobCharacters(hostname)) {
-                    String refusal = grammar.refusal(hostname);
-                    if (refusal != null) {
-                        refused.add(this.name + " #" + row.get(this.id) + " (site " + row.get(this.site) + "): '"
-                            + stored + "' -- " + refusal);
-                        continue;
-                    }
+                try {
+                    translations.add(new Translation(this, row, stored, grammar.fromLegacyGlob(stored)));
+                } catch (IllegalArgumentException outsideTheGrammar) {
+                    refused.add(this.describe(row, stored) + " -- " + outsideTheGrammar.getMessage());
                 }
-                if (hostname.equals(stored)) {
-                    continue;
-                }
-                row.set(this.hostname, hostname);
-                String claim = row.get(this.key);
-                if (claim != null) {
-                    row.set(this.key, grammar.respellOneOrMoreLeading(claim));
-                }
-                changed.add(row);
             }
-            return changed;
+            return translations;
+        }
+
+        /** Writes every changed translation, its claim key's hostname head with it. */
+        void write(@NonNull List<Translation> translations) {
+            for (Translation translation : translations) {
+                if (translation.translated().equals(translation.legacy())) {
+                    continue;
+                }
+                Row row = translation.row();
+                row.set(this.hostname, translation.translated());
+                String claim = row.get(this.key);
+                if (claim != null && claim.startsWith(translation.legacy())) {
+                    row.set(this.key, translation.translated() + claim.substring(translation.legacy().length()));
+                }
+                this.model.save(row);
+            }
         }
     }
 
