@@ -299,7 +299,7 @@ public final class ReleaseEngine {
                 (Map<String, Object>) adopting.get(InstanceModel.SETTINGS));
             persisted.put("source_fingerprint", ownerFingerprint);
             adopting.set(InstanceModel.SETTINGS, persisted);
-            Models.get(InstanceModel.class).save(adopting);
+            InstanceModel.saveConfiguration(adopting);
             finish(op, ReleaseOperationModel.STATUS_SUCCEEDED, null,
                 "spec unchanged; fingerprint adopted without a deploy");
             return new ApplicationReleases.Release(servingId, oldLive);
@@ -935,7 +935,9 @@ public final class ReleaseEngine {
      * claim_fence would erase a rival controller's authority over the record. Unlike the
      * role flip, a SETTINGS write cannot become a hook-free {@code updateAll}: the
      * image-change hook that clears the fingerprint pin ({@code InstanceImagePin}) lives
-     * in the save pipeline, so the fix here is a reload, not a targeted assign.
+     * in the save pipeline, so the fix here is a reload, not a targeted assign. The reload
+     * narrows the window and InstanceModel.saveConfiguration closes it: the operation-owned
+     * columns never ride the save at all.
      *
      * @throws Violations when the release's own row vanished mid-operation
      */

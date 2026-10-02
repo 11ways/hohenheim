@@ -616,7 +616,7 @@ public final class PreviewDeployments {
         Map<String, Object> persisted = new LinkedHashMap<>(desired);
         Map<String, String> environment = InstanceVariables.detachEnvironment(persisted);
         instance.set(InstanceModel.SETTINGS, persisted);
-        Models.get(InstanceModel.class).save(instance);
+        InstanceModel.saveConfiguration(instance);
         int instanceId = instance.get(InstanceModel.ID);
         new InstanceVariables().storeSecretEnvironment(instanceId, environment);
         return instanceId;

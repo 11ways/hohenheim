@@ -72,11 +72,11 @@ public final class PlaintextEnvironments {
                         environment.putAll(variables.valuesFor(instanceId));
                     }
                     variables.storeSecretEnvironment(instanceId, environment);
-                    // Re-read right before the whole-row save: a save writes every column.
+                    // A configuration save: the operation-owned columns stay as stored.
                     Row fresh = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
                     if (fresh != null) {
                         fresh.set(InstanceModel.SETTINGS, settings);
-                        Models.get(InstanceModel.class).save(fresh);
+                        InstanceModel.saveConfiguration(fresh);
                     }
                     return null;
                 });

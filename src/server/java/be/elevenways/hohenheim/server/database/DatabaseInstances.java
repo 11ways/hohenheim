@@ -231,7 +231,7 @@ public final class DatabaseInstances {
             // story where keeping a crashed engine down is the wanted outcome.
             instance.set(InstanceModel.CRASH_POLICY, InstanceModel.CRASH_RESTART);
             instance.set(InstanceModel.SETTINGS, desiredSettings(host));
-            Models.get(InstanceModel.class).save(instance);
+            InstanceModel.saveConfiguration(instance);
             return (int) (Integer) instance.get(InstanceModel.ID);
         });
     }
