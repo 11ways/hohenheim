@@ -172,8 +172,9 @@ public final class InstanceDeclarations {
         // granted to a tenant later must lose the reach then, not at its next edit.
         if (!GitRepository.isRemoteCloneUrl(url)) {
             Integer id = row.get(InstanceModel.ID);
+            // Ownership only: the mark this write leaves is OperatorTrustedWrites' to stamp, before this hook runs.
             boolean operatorOwned = !TenantWrites.isTenantOriginated()
-                && (id == null || SourceOwnership.localSourcesAllowed(InstanceModel.MODEL_ID, id));
+                && (id == null || SourceOwnership.isOperatorOwned(InstanceModel.MODEL_ID, id));
             if (!operatorOwned) {
                 throw Violations.ofField(GitSourceSchema.REPOSITORY_URL, url,
                     HohenheimViolations.text("repository_url_local_refused"));

@@ -35,7 +35,8 @@ import java.util.TreeSet;
  * instance operations: stored power, backup, snapshot, console command and app update schedule steps name the
  * operations that replaced them;
  * and a certificate's requester stored as its principal reference ({@code requested_by_kind} beside the id);
- * and every stored host wildcard respelled into zenit's HostPattern grammar.
+ * and every stored host wildcard respelled into zenit's HostPattern grammar;
+ * and the provenance mark of every operator-trustable target, set on the rows stored before it.
  *
  * AIDEV-NOTE: this is ONE migration on purpose (2026-09-30). It replaced M011, M012, M015, M016 and M017,
  * which no production install (kuifje at 009, robbedoes at 010) had applied; the two test installs that
@@ -181,6 +182,35 @@ public class M011_ReviewHardening extends HohenheimMigration {
         schema.alterTable("port_allocations", table -> table.dropColumn("controller_fence"));
         schema.data("start every instance's claim fence over in its own claim lease's generations", "1",
             M011_ReviewHardening::clearInstanceClaimFences);
+        // Who set each operator-trustable target: false for a row the next build writes without the system tier.
+        for (String table : TARGET_TABLES) {
+            schema.alterTable(table, t -> t.addColumn("target_trusted", ColumnType.BOOLEAN, column -> column
+                .nullable(true)
+                .defaultValue(false)));
+        }
+        schema.data("mark every stored site upstream, provider base URL and instance source as operator-set", "1",
+            M011_ReviewHardening::trustExistingTargets);
+    }
+
+    /** The tables whose rows carry an operator-trustable target, as production names them. */
+    static final List<String> TARGET_TABLES = List.of("sites", "git_providers", "instances");
+
+    /**
+     * The data step marking every stored target as set by the operator: before the rule existed a site's upstream, a
+     * provider's base URL and an instance's source could be authored by the operator alone among those whose
+     * targets are dialled with any-address reach. Trashed rows included, so one restored later keeps its reach.
+     */
+    public static void trustExistingTargets(@NonNull Datasource datasource) {
+        Db.run(datasource, () -> {
+            for (String table : TARGET_TABLES) {
+                IntegerField id = IntegerField.builder().name("id").build();
+                BooleanField trusted = BooleanField.builder("target_trusted").build();
+                new FrozenModel(table, id, trusted).find()
+                    .where(id.isNotNull())
+                    .assign(trusted, true)
+                    .updateAll();
+            }
+        });
     }
 
     /**

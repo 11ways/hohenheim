@@ -517,6 +517,20 @@ public class InstanceModel extends Model {
     public static final DateTimeField DELETED_AT = SCHEMA.addField(DateTimeField.builder().name("deleted_at").build());
 
     /**
+     * Whether the source repository URL was last set by the system tier ({@code hohenheim.admin.system} or declared
+     * system work), the one fact that lets an operator-owned instance clone a local source path; never written by a
+     * form, only by OperatorTrustedWrites' write hook.
+     *
+     * AIDEV-NOTE: reach is decided by WHO SET the target, not only by ownership at fetch time (decided 2026-10-02):
+     * ownership changes where no write hook sees it (a revoked grant, a deleted tenant, a cascade), so a target a
+     * tenant or delegate set stays unmarked and is never dialled with any-address reach after the record becomes
+     * operator-owned. M011 marked every row stored before the rule.
+     */
+    public static final BooleanField TARGET_TRUSTED = SCHEMA.addField(BooleanField.builder("target_trusted")
+        .defaultValue(false)
+        .build());
+
+    /**
      * The columns only an operation holding the record's claim writes, through InstanceOperationGuard's fenced
      * statements: a configuration save of an existing record never carries them.
      *
