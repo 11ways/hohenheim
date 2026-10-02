@@ -254,6 +254,9 @@ public final class HohenheimPanel extends Panel {
                 CommsSettings.ROOT))
             .mount(new SettingsPage.Mount("spamservice", Microcopy.literal("Spamservice"),
                 new SpamserviceSettingsBackend()))
+            // The page edits the operator-trusted endpoints (auth_proteus is fetched with any-address reach) and the
+            // private-network opt-ins, so the delegable panel entry alone never reaches it.
+            .requirePermission(HohenheimSources.ADMIN_SYSTEM)
             .navGroup(NavGroup.SYSTEM)
             .navOrder(95)
             .description(Microcopy.of("nav_hint").withFilter("scope", "settings"))

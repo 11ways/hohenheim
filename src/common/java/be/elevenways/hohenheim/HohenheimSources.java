@@ -37,6 +37,18 @@ public final class HohenheimSources implements ZenitModule {
         Microcopy.of("hohenheim_admin_access").withFilter("scope", "permission"), Permission.Delegation.DELEGABLE);
 
     /**
+     * Editing the installation's settings: every value an operator declares for the whole install, among them the
+     * endpoints Hohenheim itself fetches with operator trust ({@code hohenheim.auth_proteus}, which rides
+     * {@code OutboundUrlGuard.ANY_ADDRESS}) and the private-network opt-ins.
+     *
+     * AIDEV-NOTE: NOT delegable, unlike {@link #ADMIN_ACCESS}: whoever holds a delegated admin grant must never be
+     * able to point a trusted, any-address fetch at this host or the LAN. The bootstrap operator holds the "*" grant
+     * and is therefore unaffected. The same tier as quirkyquarters' qq.admin.system.
+     */
+    public static final Permission ADMIN_SYSTEM = Permission.declare("hohenheim.admin.system",
+        Microcopy.of("hohenheim_admin_system").withFilter("scope", "permission"), Permission.Delegation.NOT_DELEGABLE);
+
+    /**
      * The delegated /manage eligibility gate, kept as a common constant for the same
      * reason as {@link #ADMIN_ACCESS}: common-declared endpoints (the manage-panel POST
      * lanes) must name it without a server import. The server-side ManagePanel.ACCESS

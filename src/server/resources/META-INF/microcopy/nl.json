@@ -4120,6 +4120,10 @@
     "text": "Toegang tot het Hohenheim-beheerpaneel",
     "scope": "permission"
   },
+  "hohenheim_admin_system": {
+    "text": "De installatie-instellingen bewerken",
+    "scope": "permission"
+  },
   "hohenheim_manage_access": {
     "text": "Toegang tot het gedelegeerde sitebeheerpaneel",
     "scope": "permission"

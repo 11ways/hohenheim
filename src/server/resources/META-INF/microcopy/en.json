@@ -4120,6 +4120,10 @@
     "text": "Access the Hohenheim admin panel",
     "scope": "permission"
   },
+  "hohenheim_admin_system": {
+    "text": "Edit the installation settings",
+    "scope": "permission"
+  },
   "hohenheim_manage_access": {
     "text": "Access the delegated site-management panel",
     "scope": "permission"
