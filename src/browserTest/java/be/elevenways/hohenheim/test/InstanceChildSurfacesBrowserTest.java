@@ -113,14 +113,14 @@ class InstanceChildSurfacesBrowserTest extends HohenheimTestBase {
         Map<String, SurfaceBaselines> stored = new LinkedHashMap<>();
         stored.put(BACKUPS, baselines(BACKUPS)
             .placedOperations(PlacedOperationMoves.of(InstanceBackupOperations.RESTORE_BACKUP.id())
-                .synthesized(SynthesizedRowActions.DELETE, InstanceBackupOperations.DELETE_BACKUP.id())));
+                .synthesized(BACKUPS, SynthesizedRowActions.DELETE, InstanceBackupOperations.DELETE_BACKUP.id())));
         stored.put(QUOTAS, baselines(QUOTAS).placedOperations(PlacedOperationMoves.NONE
-            .synthesized(SynthesizedRowActions.DELETE, InstanceChildDeletes.QUOTA.id())));
+            .synthesized(QUOTAS, SynthesizedRowActions.DELETE, InstanceChildDeletes.QUOTA.id())));
         stored.put(FILES, baselines(FILES));
         stored.put(SCHEDULES, baselines(SCHEDULES));
         stored.put(STEPS, baselines(STEPS));
         stored.put(RUNS, baselines(RUNS).placedOperations(PlacedOperationMoves.NONE
-            .synthesized(SynthesizedRowActions.DELETE, InstanceChildDeletes.SCHEDULE_RUN.id())));
+            .synthesized(RUNS, SynthesizedRowActions.DELETE, InstanceChildDeletes.SCHEDULE_RUN.id())));
 
         // 1. Every admin child entry for the operator, record-less; a tenant is refused the admin panel.
         for (String entry : List.of(BACKUPS, QUOTAS, FILES, SCHEDULES, STEPS, RUNS)) {
