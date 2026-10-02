@@ -40,8 +40,9 @@ import java.util.function.Predicate;
  * AIDEV-NOTE: the gate alone cannot decide reach, because ownership changes where no write hook sees it (a revoked
  * grant, a deleted tenant, a cascade): a target a delegate set on a tenant-owned record would be dialled with
  * any-address reach once the record became operator-owned. So the hook also stamps the record's TARGET_TRUSTED mark,
- * and the fetch side asks for it beside ownership. The mark follows WHO SET the target: a system-tier caller writing a
- * row that carries the target sets it (the operator re-saving vouches for what the form showed), declared system work
+ * and the fetch side asks for it beside ownership. The mark follows WHO SET the target: a system-tier caller whose
+ * write sets the target's column sets it (the operator re-saving vouches for what the form showed; a cell edit of
+ * another column carries no target, though its row was loaded whole), declared system work
  * sets it only when it changes the target (a task re-saving a loaded row vouches for nothing), any other writer
  * changing the target clears it, and any other write keeps the stored mark. A mark a writer carries itself is never
  * taken: the hook always writes its own decision.
@@ -55,23 +56,23 @@ public final class OperatorTrustedWrites {
      * One operator-trustable target of a record.
      *
      * @param field     the column the target lives in, which a refusal names
-     * @param carried   whether a written row carries the target at all
+     * @param column    the stored column holding the target, which a write carries when it sets it
      * @param value     the target as a row holds it
      * @param refusable which values a delegate is refused on an operator-owned record
      */
-    private record Target(@NonNull String field, @NonNull Predicate<Row> carried, @NonNull Function<Row, Object> value,
+    private record Target(@NonNull String field, @NonNull Field<?, ?> column, @NonNull Function<Row, Object> value,
                           @Nullable Object createBaseline, @NonNull Predicate<Object> refusable) {
 
         /** A whole column, every value of which is the target. */
         static @NonNull Target column(@NonNull Field<?, ?> field) {
             String name = field.getName();
-            return new Target(name, row -> row.has(name), row -> row.get(name), field.getDefaultValue(),
+            return new Target(name, field, row -> row.get(name), field.getDefaultValue(),
                 value -> true);
         }
 
         /** An instance's source repository URL, a delegate being refused only a local one (a controller path). */
         static @NonNull Target instanceSource() {
-            return new Target(GitSourceSchema.REPOSITORY_URL, row -> row.has(InstanceModel.SETTINGS.getName()),
+            return new Target(GitSourceSchema.REPOSITORY_URL, InstanceModel.SETTINGS,
                 row -> {
                     Object url = InstanceModel.settingsOf(row).get(GitSourceSchema.REPOSITORY_URL);
                     String text = url == null ? "" : url.toString().trim();
@@ -142,7 +143,9 @@ public final class OperatorTrustedWrites {
         boolean carried = false;
         boolean changed = false;
         for (Target target : guarded.targets()) {
-            if (!target.carried().test(row)) {
+            // A create presents every value it holds; an update carries only what this write set, never a column it
+            // merely loaded (an inline cell edit of a name vouches for no target).
+            if (stored == null ? !row.has(target.column()) : !row.isWritten(target.column())) {
                 continue;
             }
             carried = true;
