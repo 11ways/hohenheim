@@ -151,17 +151,17 @@ public class ProtectedPathResource extends RowResource {
             && row.get(ProtectedPathModel.ID) != null
             ? model.findById(row.get(ProtectedPathModel.ID)) : null;
 
-        Object siteIdValue = effective(row, stored, ProtectedPathModel.SITE_ID);
+        Object siteIdValue = row.afterWrite(ProtectedPathModel.SITE_ID, stored);
         if (!(siteIdValue instanceof Integer siteId)) {
             throw Violations.ofField(ProtectedPathModel.SITE_ID.getName(), siteIdValue,
                 CmsSupport.violationText("site_required"));
         }
-        Object listId = effective(row, stored, ProtectedPathModel.ACCESS_LIST_ID);
+        Object listId = row.afterWrite(ProtectedPathModel.ACCESS_LIST_ID, stored);
         if (!(listId instanceof Integer)) {
             throw Violations.ofField(ProtectedPathModel.ACCESS_LIST_ID.getName(), listId,
                 CmsSupport.violationText("access_list_required"));
         }
-        Object path = effective(row, stored, ProtectedPathModel.PATH);
+        Object path = row.afterWrite(ProtectedPathModel.PATH, stored);
         if (path == null || String.valueOf(path).isBlank()) {
             throw Violations.ofField(ProtectedPathModel.PATH.getName(), path,
                 CmsSupport.violationText("protected_path_required"));
@@ -175,14 +175,5 @@ public class ProtectedPathResource extends RowResource {
                     CmsSupport.violationText("protected_path_taken"));
             }
         }
-    }
-
-    /** The value the write will END UP with, reading the stored row on a partial update. */
-    private static @Nullable Object effective(@NonNull Row row, @Nullable Row stored,
-                                              @NonNull Field<?, ?> field) {
-        if (row.has(field.getName())) {
-            return row.get(field.getName());
-        }
-        return stored != null ? stored.get(field.getName()) : field.getDefaultValue();
     }
 }

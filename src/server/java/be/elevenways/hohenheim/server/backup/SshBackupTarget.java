@@ -1,9 +1,10 @@
 package be.elevenways.hohenheim.server.backup;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
 import be.elevenways.protoblast.server.process.Subprocess;
 import be.elevenways.protoblast.server.process.Termination;
@@ -100,8 +101,7 @@ public final class SshBackupTarget implements BackupTarget {
     private @NonNull Row destination() {
         Row server = Models.get(ServerModel.class).findById(this.serverId);
         if (server == null) {
-            throw Violations.ofForm(Microcopy.of("backup_target_host_missing")
-                .withFilter("scope", "violations").withArg("id", this.serverId));
+            throw Violations.ofForm(HohenheimViolations.text("backup_target_host_missing").withArg("id", this.serverId));
         }
         HostAdmission.requireBackupDestination(server);
         return server;
@@ -128,7 +128,7 @@ public final class SshBackupTarget implements BackupTarget {
     public void store(@NonNull String key, @NonNull Path file) throws IOException {
         String committed = remotePath(key);
         String staging = committed + STAGING_SUFFIX;
-        String directory = parentOf(committed);
+        String directory = HostShell.parentOf(committed);
         try (InputStream in = Files.newInputStream(file)) {
             run("mkdir -p " + quoted(directory) + " && cat > " + quoted(staging), in, null);
         } catch (IOException error) {
@@ -318,10 +318,5 @@ public final class SshBackupTarget implements BackupTarget {
     /** Single-quote a remote path for the remote shell ('\'' escape for embedded quotes). */
     private static @NonNull String quoted(@NonNull String path) {
         return "'" + path.replace("'", "'\\''") + "'";
-    }
-
-    private static @NonNull String parentOf(@NonNull String path) {
-        int slash = path.lastIndexOf('/');
-        return slash <= 0 ? "/" : path.substring(0, slash);
     }
 }

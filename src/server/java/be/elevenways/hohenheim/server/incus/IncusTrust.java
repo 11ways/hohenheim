@@ -1,29 +1,21 @@
 package be.elevenways.hohenheim.server.incus;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.host.HostIdentities;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPins;
-import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.server.process.ProcessOutcome;
 import be.elevenways.protoblast.server.process.Subprocess;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import java.time.Duration;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.security.cert.X509Certificate;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -63,7 +55,7 @@ public final class IncusTrust {
     public static HostKeys.@NonNull ScanResult scanAndPin(@NonNull Row server) {
         IncusEndpoint endpoint = IncusEndpoint.of(server);
         if (!endpoint.https()) {
-            throw Violations.ofForm(violation("host_key_scan_failed")
+            throw Violations.ofForm(HohenheimViolations.text("host_key_scan_failed")
                 .withArg("target", endpoint.describe())
                 .withArg("detail", "a unix-socket Incus host has no certificate to pin"));
         }
@@ -73,7 +65,7 @@ public final class IncusTrust {
             offered = IncusTls.scanServerCertificate(endpoint.host(), endpoint.port(), 10_000);
             pem = IncusTls.toPem(offered);
         } catch (IOException e) {
-            throw Violations.ofForm(violation("host_key_scan_failed")
+            throw Violations.ofForm(HohenheimViolations.text("host_key_scan_failed")
                 .withArg("target", endpoint.describe())
                 .withArg("detail", String.valueOf(e.getMessage())));
         }
@@ -107,12 +99,7 @@ public final class IncusTrust {
 
     /** Mint the host's client certificate if it has none; returns true when one was made. */
     public static boolean ensureIdentity(@NonNull Row server) {
-        String existing = server.get(HostTrustSlot.INCUS_TLS.clientPrivate());
-        if (existing != null && !existing.isBlank()) {
-            return false;
-        }
-        rotateIdentity(server);
-        return true;
+        return HostIdentities.ensure(server, HostTrustSlot.INCUS_TLS, () -> rotateIdentity(server));
     }
 
     /**
@@ -121,41 +108,16 @@ public final class IncusTrust {
      * trust entry is removed there -- rotation here is the client half.
      */
     public static void rotateIdentity(@NonNull Row server) {
-        String name = String.valueOf((Object) server.get(ServerModel.NAME));
-        Path directory = null;
-        try {
-            directory = Files.createTempDirectory("hohenheim-incus-identity");
-            Path key = directory.resolve("client.key");
-            Path cert = directory.resolve("client.crt");
-            ProcessOutcome result = Subprocess.of("openssl", "req",
+        HostIdentities.rotate(server, HostTrustSlot.INCUS_TLS, "hohenheim-incus-identity", "client.key", "client.crt",
+            false, (privateHalf, publicHalf, name) -> Subprocess.of("openssl", "req",
                     "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1",
                     "-sha384", "-days", "3650", "-nodes",
                     "-subj", "/CN=" + ControllerScope.scoped(name),
-                    "-keyout", key.toString(), "-out", cert.toString())
+                    "-keyout", privateHalf.toString(), "-out", publicHalf.toString())
                 .collectStdout(OPENSSL_OUTPUT_CAP_CHARS)
                 .stderrLimit(OPENSSL_OUTPUT_CAP_CHARS)
                 .timeout(Duration.ofMillis(OPENSSL_TIMEOUT_MILLIS))
-                .stopGrace(Duration.ZERO)
-                .runChecked();
-            if (!result.succeeded() || !Files.exists(key) || !Files.exists(cert)) {
-                throw Violations.ofForm(violation("identity_generation_failed")
-                    .withArg("detail", result.failureText()));
-            }
-            String privateKey = Files.readString(key, StandardCharsets.UTF_8);
-            String certificate = Files.readString(cert, StandardCharsets.UTF_8);
-            ActivityLog.withAction(ZenitActivityAction.UPDATE, "host_identity_rotated", () -> {
-                server.set(HostTrustSlot.INCUS_TLS.clientPrivate(), privateKey);
-                server.set(HostTrustSlot.INCUS_TLS.clientPublic(), certificate);
-                Models.get(ServerModel.class).save(server);
-            });
-            Blast.slog("hohenheim.host.identity_rotated", Map.of("server", name));
-        } catch (IOException e) {
-            throw Violations.ofForm(violation("identity_generation_failed")
-                .withArg("detail", String.valueOf(e.getMessage())));
-        } finally {
-            // Best effort: a leftover temp directory holds a key we already stored.
-            FileTrees.deleteQuietly(directory);
-        }
+                .stopGrace(Duration.ZERO));
     }
 
     /**
@@ -176,14 +138,11 @@ public final class IncusTrust {
                     + " this client untrusted");
             }
         } catch (IOException e) {
-            throw Violations.ofForm(violation("incus_enroll_failed")
+            throw Violations.ofForm(HohenheimViolations.text("incus_enroll_failed")
                 .withArg("name", name)
                 .withArg("detail", String.valueOf(e.getMessage())));
         }
         Blast.slog("hohenheim.host.incus_enrolled", Map.of("server", name));
     }
 
-    private static Microcopy violation(String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
-    }
 }

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -192,26 +193,26 @@ public final class InstanceMigrations {
         } catch (Violations unaddressable) {
             List<Violation> named = unaddressable.all();
             return named.isEmpty()
-                ? violationText("instance_host_unreachable").withArg("name", name)
+                ? HohenheimViolations.text("instance_host_unreachable").withArg("name", name)
                     .withArg("reason", "client construction failed")
                 : named.get(0).message();
         }
         if (!sourceTransportable || !hasTransport(targetRuntime)) {
-            return violationText("migrate_unsupported")
+            return HohenheimViolations.text("migrate_unsupported")
                 .withArg("name", nameOf(resolved.row()));
         }
         long devices = deviceCountOf(resolved.row().get(InstanceModel.ID));
         if (devices > 0) {
-            return violationText("migrate_devices_present")
+            return HohenheimViolations.text("migrate_devices_present")
                 .withArg("name", nameOf(resolved.row()))
                 .withArg("count", devices);
         }
         if (GameDomains.isPaired(resolved.row().get(InstanceModel.ID))) {
-            return violationText("migrate_game_paired")
+            return HohenheimViolations.text("migrate_game_paired")
                 .withArg("name", nameOf(resolved.row()));
         }
         if (resolved.spec().publication() != null) {
-            return violationText("migrate_publication_present")
+            return HohenheimViolations.text("migrate_publication_present")
                 .withArg("name", nameOf(resolved.row()));
         }
         return HostAdmission.instancePlacementRefusal(serverId, resolved.handler().isolation(),
@@ -252,7 +253,7 @@ public final class InstanceMigrations {
         // Operator-only for the same reason restore-to-new is: this lane bypasses the
         // tenant creation funnel and decides placement -- both operator authorities.
         if (TenantWrites.isTenantOriginated()) {
-            throw Violations.ofForm(violationText("migrate_operator_only"));
+            throw Violations.ofForm(HohenheimViolations.text("migrate_operator_only"));
         }
         this.instances.operations().exclusive(instanceId, InstanceOperationLock.Contention.REFUSE,
             () -> migrateToLocked(instanceId, targetServerId));
@@ -264,12 +265,12 @@ public final class InstanceMigrations {
         InstanceOperationGuard.requireOperable(resolved.row());
         if (InstanceModel.INSTALL_INSTALLING.equals(
                 resolved.row().get(InstanceModel.INSTALL_STATE))) {
-            throw Violations.ofForm(violationText("instance_busy")
+            throw Violations.ofForm(HohenheimViolations.text("instance_busy")
                 .withArg("name", nameOf(resolved.row()))
                 .withArg("status", InstanceModel.INSTALL_INSTALLING));
         }
         if (targetServerId == resolved.serverId()) {
-            throw Violations.ofForm(violationText("migrate_same_host")
+            throw Violations.ofForm(HohenheimViolations.text("migrate_same_host")
                 .withArg("name", nameOf(resolved.row())));
         }
         Row target = Models.get(ServerModel.class).findById(targetServerId);
@@ -286,7 +287,7 @@ public final class InstanceMigrations {
             targetName);
         Transport transport = transportFor(resolved, targetRuntime);
         if (transport == null) {
-            throw Violations.ofForm(violationText("migrate_unsupported")
+            throw Violations.ofForm(HohenheimViolations.text("migrate_unsupported")
                 .withArg("name", nameOf(resolved.row())));
         }
         // Device rows are UNMOVABLE this wave, refused by name: neither transport
@@ -298,7 +299,7 @@ public final class InstanceMigrations {
         // is host-local and an import naming it can fail or dangle.
         long devices = deviceCountOf(instanceId);
         if (devices > 0) {
-            throw Violations.ofForm(violationText("migrate_devices_present")
+            throw Violations.ofForm(HohenheimViolations.text("migrate_devices_present")
                 .withArg("name", nameOf(resolved.row()))
                 .withArg("count", devices));
         }
@@ -309,7 +310,7 @@ public final class InstanceMigrations {
         // severing the mapping first is the operator's explicit decision, never this
         // lane's silent side effect.
         if (GameDomains.isPaired(instanceId)) {
-            throw Violations.ofForm(violationText("migrate_game_paired")
+            throw Violations.ofForm(HohenheimViolations.text("migrate_game_paired")
                 .withArg("name", nameOf(resolved.row())));
         }
         // A port publication is a host-scoped reservation (DNS may point at it); moving
@@ -319,7 +320,7 @@ public final class InstanceMigrations {
         // refused one gate earlier as game-paired when it carries mappings, and lands
         // HERE when it does not -- its public port claim is what cannot move.
         if (resolved.spec().publication() != null) {
-            throw Violations.ofForm(violationText("migrate_publication_present")
+            throw Violations.ofForm(HohenheimViolations.text("migrate_publication_present")
                 .withArg("name", nameOf(resolved.row())));
         }
 
@@ -340,7 +341,7 @@ public final class InstanceMigrations {
             try {
                 WorkloadClaim claim = targetAttribution.claimOf(resolved.spec());
                 if (claim == WorkloadClaim.FOREIGN) {
-                    throw Violations.ofForm(violationText("migrate_destination_occupied")
+                    throw Violations.ofForm(HohenheimViolations.text("migrate_destination_occupied")
                         .withArg("name", nameOf(resolved.row()))
                         .withArg("server", targetName));
                 }
@@ -348,7 +349,7 @@ public final class InstanceMigrations {
                     removeMigrationCopy(targetRuntime, resolved);
                 }
             } catch (IOException unreachable) {
-                throw refusal("instance_migrate_failed", resolved.row(), unreachable);
+                throw HohenheimViolations.instanceRefusal("instance_migrate_failed", resolved.row(), unreachable);
             }
         }
 
@@ -434,7 +435,7 @@ public final class InstanceMigrations {
             if (error instanceof RuntimeException unchecked) {
                 throw unchecked;
             }
-            throw refusal("instance_migrate_failed", resolved.row(), error);
+            throw HohenheimViolations.instanceRefusal("instance_migrate_failed", resolved.row(), error);
         } finally {
             FileTrees.deleteQuietly(staging);
         }
@@ -467,12 +468,12 @@ public final class InstanceMigrations {
      */
     public @NonNull DrainReport drain(int serverId) {
         if (TenantWrites.isTenantOriginated()) {
-            throw Violations.ofForm(violationText("migrate_operator_only"));
+            throw Violations.ofForm(HohenheimViolations.text("migrate_operator_only"));
         }
         Row server = Models.get(ServerModel.class).findById(serverId);
         if (server == null || !ServerModel.ADMISSION_CORDONED
                 .equals(server.get(ServerModel.ADMISSION))) {
-            throw Violations.ofForm(violationText("drain_requires_cordon")
+            throw Violations.ofForm(HohenheimViolations.text("drain_requires_cordon")
                 .withArg("name", server != null
                     ? String.valueOf((Object) server.get(ServerModel.NAME))
                     : String.valueOf(serverId)));
@@ -850,13 +851,5 @@ public final class InstanceMigrations {
         return Path.of(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Backup.STAGING_PATH));
     }
 
-    private static Violations refusal(String key, Row row, Exception cause) {
-        return Violations.ofForm(violationText(key)
-            .withArg("name", nameOf(row))
-            .withArg("reason", InstanceSnapshots.describe(cause)));
-    }
 
-    private static Microcopy violationText(String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
-    }
 }

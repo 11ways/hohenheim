@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.server.source;
 
-import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.protoblast.common.dry.Dry;
 import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.protoblast.common.time.Now;
@@ -17,7 +16,6 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -110,15 +108,7 @@ public class GithubProviderClient extends ApiProviderClient {
     public @NonNull List<String> listBranches(@NonNull String repository) throws IOException {
         Object parsed = getJson(this.apiBase + "/repos/" + repoPath(repository) + "/branches?per_page=100",
             anyToken());
-        List<String> branches = new ArrayList<>();
-        if (parsed instanceof List<?> list) {
-            for (Object entry : list) {
-                if (entry instanceof Map<?, ?> branch && branch.get("name") != null) {
-                    branches.add(String.valueOf(branch.get("name")));
-                }
-            }
-        }
-        return branches;
+        return branchNames(parsed);
     }
 
     @Override
@@ -140,19 +130,12 @@ public class GithubProviderClient extends ApiProviderClient {
                              @NonNull StatusState state, @NonNull String context,
                              @NonNull String description, @Nullable String targetUrl)
             throws IOException {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("state", switch (state) {
+        String stateToken = switch (state) {
             case PENDING -> "pending";
             case SUCCESS -> "success";
             case FAILURE -> "failure";
-        });
-        body.put("context", context);
-        body.put("description", truncate(description, 140));
-        if (targetUrl != null && !targetUrl.isBlank()) {
-            body.put("target_url", targetUrl);
-        }
-        postJson(this.apiBase + "/repos/" + repoPath(repository) + "/statuses/" + commitSha,
-            anyToken(), Json.stringify(body));
+        };
+        postStatus(this.apiBase + "/repos/" + repoPath(repository) + "/statuses/" + commitSha, anyToken(), stateToken, context, description, targetUrl);
     }
 
     // -- installation-token minting -------------------------------------------

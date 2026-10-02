@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
@@ -13,7 +14,6 @@ import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostShell;
-import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.ImageOrigin;
@@ -410,8 +410,7 @@ public final class WorkspaceKind implements InstanceKindHandler {
     private static @NonNull Row requireInstance(int instanceId) {
         Row instance = Models.get(InstanceModel.class).findById(instanceId);
         if (instance == null) {
-            throw Violations.ofForm(Microcopy.of("instance_not_found")
-                .withFilter("scope", "violations").withArg("id", String.valueOf(instanceId)));
+            throw Violations.ofForm(HohenheimViolations.text("instance_not_found").withArg("id", String.valueOf(instanceId)));
         }
         return instance;
     }

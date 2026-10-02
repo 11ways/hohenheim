@@ -12,7 +12,7 @@ import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.TextField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
-import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 
 import java.util.ArrayList;
@@ -217,34 +217,24 @@ public class ReleaseOperationModel extends Model {
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("updated_at").build());
 
+    /** One owning record's operations, newest first. */
+    private QueryBuilder<Row> history(String forModel, int forId) {
+        return OwnedOperations.newestFirst(this, FOR_MODEL, FOR_ID, ID, forModel, forId);
+    }
+
     /** Newest-first release history of one owning record. */
     public List<Row> findForOwner(String forModel, int forId, int limit) {
-        return find()
-            .where(FOR_MODEL.eq(forModel))
-            .where(FOR_ID.eq(forId))
-            .orderBy(ID, SortOrder.DESC)
-            .limit(limit)
-            .all();
+        return this.history(forModel, forId).limit(limit).all();
     }
 
     /** The newest SUCCEEDED operation of one owning record, or null. */
     public Row latestSuccess(String forModel, int forId) {
-        return find()
-            .where(FOR_MODEL.eq(forModel))
-            .where(FOR_ID.eq(forId))
-            .where(STATUS.eq(STATUS_SUCCEEDED))
-            .orderBy(ID, SortOrder.DESC)
-            .first();
+        return this.history(forModel, forId).where(STATUS.eq(STATUS_SUCCEEDED)).first();
     }
 
     /** Every operation of one owning record still claiming to be in flight. */
     public List<Row> findInFlight(String forModel, int forId) {
-        return find()
-            .where(FOR_MODEL.eq(forModel))
-            .where(FOR_ID.eq(forId))
-            .where(STATUS.in(IN_FLIGHT_STATUSES))
-            .orderBy(ID, SortOrder.DESC)
-            .all();
+        return this.history(forModel, forId).where(STATUS.in(IN_FLIGHT_STATUSES)).all();
     }
 
     static {

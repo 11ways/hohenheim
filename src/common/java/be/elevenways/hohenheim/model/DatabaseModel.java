@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -345,7 +346,7 @@ public class DatabaseModel extends Model {
             Object name = row.get(NAME.getName());
             if (name != null && !isValidName(String.valueOf(name))) {
                 throw Violations.ofField(NAME.getName(), name,
-                    Microcopy.of("database_name_invalid").withFilter("scope", "violations"));
+                    HohenheimViolations.text("database_name_invalid"));
             }
         });
         // A managed database always has a concrete host; default the FK at create time

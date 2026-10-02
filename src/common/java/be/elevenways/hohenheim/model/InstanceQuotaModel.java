@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -120,7 +120,7 @@ public class InstanceQuotaModel extends Model {
                 Object value = row.get(cap.getName());
                 if (value instanceof Integer max && max < 0) {
                     throw Violations.ofField(cap.getName(), max,
-                        Microcopy.of("quota_negative").withFilter("scope", "violations"));
+                        HohenheimViolations.text("quota_negative"));
                 }
             }
         });

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.api;
 
 import be.elevenways.hohenheim.HohenheimRefusalReason;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
@@ -203,7 +204,7 @@ public final class ApiConduits {
     }
 
     public static @NonNull Microcopy violationText(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
+        return HohenheimViolations.text(key);
     }
 
     /** One submitted form value as a string, first-of-list folded, empty when absent. */

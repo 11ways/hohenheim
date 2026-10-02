@@ -1,13 +1,13 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.InstallMediaFetchState;
 import be.elevenways.hohenheim.model.InstallMediaFetchModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.async.ProgressSink;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -118,7 +118,7 @@ public final class InstallMediaFetches {
                 }
             }
             if (active.size() >= MAX_ACTIVE) {
-                throw Violations.ofForm(violationText("media_fetch_busy")
+                throw Violations.ofForm(HohenheimViolations.text("media_fetch_busy")
                     .withArg("count", String.valueOf(MAX_ACTIVE)));
             }
             // Another controller running this name holds its lease even when its row is not
@@ -346,7 +346,7 @@ public final class InstallMediaFetches {
     }
 
     private static @NonNull Violations running(@NonNull String name) {
-        return Violations.ofField("name", name, violationText("media_fetch_running").withArg("media", name));
+        return Violations.ofField("name", name, HohenheimViolations.text("media_fetch_running").withArg("media", name));
     }
 
     private static @NonNull List<String> activeTokens() {
@@ -359,7 +359,4 @@ public final class InstallMediaFetches {
         return tokens;
     }
 
-    private static @NonNull Microcopy violationText(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
-    }
 }

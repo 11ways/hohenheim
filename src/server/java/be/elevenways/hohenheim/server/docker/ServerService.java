@@ -127,6 +127,14 @@ public class ServerService extends DatasourceScoped {
         return names;
     }
 
+    /**
+     * A DockerClient for a server id, through the same row and refusals as {@link #clientFor(String)}: the local host
+     * included, so a local row declaring the incus runtime is refused rather than aimed at this machine's daemon.
+     */
+    public DockerClient clientFor(int serverId) {
+        return clientFor(query(() -> ServerModel.nameOf(serverId)));
+    }
+
     /** A DockerClient for the named server (local socket or remote over SSH). */
     public DockerClient clientFor(String name) {
         return new DockerClient(transportFor(name));

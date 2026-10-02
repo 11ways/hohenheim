@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
@@ -42,7 +43,6 @@ import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -151,13 +151,13 @@ public final class InstanceBackups {
             instanceof Map<?, ?> map ? castSettings(map) : Map.of();
         if (SiteSources.hasRepository(sourceSettings)
                 || sourceSettings.containsKey("build_context")) {
-            throw refusal("instance_backup_failed", owner,
+            throw HohenheimViolations.instanceRefusal("instance_backup_failed", owner,
                 new IOException("Git/build-context application backups cannot reproduce source;"
                     + " only immutable uploaded artifacts are supported"));
         }
         Row serving = ApplicationReleases.ownedServing(instanceId);
         if (serving == null) {
-            throw refusal("instance_backup_failed", owner,
+            throw HohenheimViolations.instanceRefusal("instance_backup_failed", owner,
                 new IOException("Application has no serving release to capture"));
         }
         int[] result = new int[1];
@@ -183,8 +183,8 @@ public final class InstanceBackups {
         try {
             target.healthCheck();
         } catch (IOException unhealthy) {
-            throw Violations.ofForm(violationText("backup_target_unhealthy")
-                .withArg("reason", InstanceSnapshots.describe(unhealthy)));
+            throw Violations.ofForm(HohenheimViolations.text("backup_target_unhealthy")
+                .withArg("reason", HohenheimViolations.reasonOf(unhealthy)));
         }
         InstanceStatus live = resolved.runtime().status(resolved.spec().handle());
         InstanceSnapshots.requirePresent(live, resolved);
@@ -207,7 +207,7 @@ public final class InstanceBackups {
             } catch (IOException | RuntimeException error) {
                 FileTrees.deleteQuietly(staging);
                 failedRow(instanceId, targetId, null, "Application source/image capture failed");
-                throw refusal("instance_backup_failed", owner,
+                throw HohenheimViolations.instanceRefusal("instance_backup_failed", owner,
                     new IOException("Application source/image capture failed", error));
             }
         }
@@ -239,11 +239,11 @@ public final class InstanceBackups {
                     });
             } catch (IOException | RuntimeException error) {
                 FileTrees.deleteQuietly(staging);
-                failedRow(instanceId, targetId, null, InstanceSnapshots.describe(error));
+                failedRow(instanceId, targetId, null, HohenheimViolations.reasonOf(error));
                 if (error instanceof Violations refused) {
                     throw refused;
                 }
-                throw refusal("instance_backup_failed", resolved.row(), error);
+                throw HohenheimViolations.instanceRefusal("instance_backup_failed", resolved.row(), error);
             }
         } else {
             // -- capture phase (volume lane: COLD) ------------------------------
@@ -281,7 +281,7 @@ public final class InstanceBackups {
                     });
             } catch (IOException | RuntimeException error) {
                 captureFailure = error;
-                throw refusal("instance_backup_failed", owner,
+                throw HohenheimViolations.instanceRefusal("instance_backup_failed", owner,
                     new IOException("Volume capture failed; no complete backup was stored", error));
             } finally {
                 try {
@@ -300,7 +300,7 @@ public final class InstanceBackups {
                     if (captureFailure != null) {
                         restartFailed.addSuppressed(captureFailure);
                     }
-                    throw refusal("instance_backup_failed", owner,
+                    throw HohenheimViolations.instanceRefusal("instance_backup_failed", owner,
                         new IOException("Prior serving workload could not be restarted"
                             + (captureFailure != null ? "; volume capture also failed" : ""),
                             restartFailed));
@@ -377,16 +377,16 @@ public final class InstanceBackups {
                 target.delete(key);
             } catch (IOException | RuntimeException cleanupFailed) {
                 Blast.log("BACKUP: could not remove partial artifact", key, ":",
-                    InstanceSnapshots.describe(cleanupFailed));
+                    HohenheimViolations.reasonOf(cleanupFailed));
             }
             RecordStamp.on(Models.get(InstanceBackupModel.class), backup)
                 .set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_FAILED)
-                .set(InstanceBackupModel.ERROR, InstanceSnapshots.describe(error))
+                .set(InstanceBackupModel.ERROR, HohenheimViolations.reasonOf(error))
                 .write();
             if (error instanceof Violations refused) {
                 throw refused;
             }
-            throw refusal("instance_backup_failed", resolved.row(), error);
+            throw HohenheimViolations.instanceRefusal("instance_backup_failed", resolved.row(), error);
         } finally {
             FileTrees.deleteQuietly(staging);
         }
@@ -437,7 +437,7 @@ public final class InstanceBackups {
      */
     private static void refuseTenantRestore() {
         if (TenantWrites.isTenantOriginated()) {
-            throw Violations.ofForm(violationText("backup_restore_operator_only"));
+            throw Violations.ofForm(HohenheimViolations.text("backup_restore_operator_only"));
         }
     }
 
@@ -462,7 +462,7 @@ public final class InstanceBackups {
         Row backup = Models.get(InstanceBackupModel.class).findById(backupId);
         if (backup == null || !InstanceBackupModel.STATUS_COMPLETE.equals(
                 backup.get(InstanceBackupModel.STATUS))) {
-            throw Violations.ofForm(violationText("backup_not_restorable")
+            throw Violations.ofForm(HohenheimViolations.text("backup_not_restorable")
                 .withArg("id", backupId));
         }
         BackupTarget target = BackupTargetKinds.targetFor(
@@ -477,7 +477,7 @@ public final class InstanceBackups {
         refuseTenantRestore();
         if (!InstanceBackupModel.STATUS_COMPLETE.equals(
                 backup.get(InstanceBackupModel.STATUS))) {
-            throw Violations.ofForm(violationText("backup_not_restorable")
+            throw Violations.ofForm(HohenheimViolations.text("backup_not_restorable")
                 .withArg("id", backup.get(InstanceBackupModel.ID)));
         }
         String key = backup.get(InstanceBackupModel.REMOTE_KEY);
@@ -501,14 +501,14 @@ public final class InstanceBackups {
                 }
                 opened = BackupArchive.openVerified(archive, staging, keyring());
             } catch (IOException corrupt) {
-                throw Violations.ofForm(violationText("backup_corrupt")
-                    .withArg("reason", InstanceSnapshots.describe(corrupt)));
+                throw Violations.ofForm(HohenheimViolations.text("backup_corrupt")
+                    .withArg("reason", HohenheimViolations.reasonOf(corrupt)));
             }
             BackupManifest manifest = opened.manifest();
             InstanceKindHandler restoredKind = InstanceKinds.getHandler(manifest.kind());
             if (restoredKind == null) {
                 throw Violations.ofField("kind", manifest.kind(),
-                    violationText("instance_kind_unknown").withArg("kind", manifest.kind()));
+                    HohenheimViolations.text("instance_kind_unknown").withArg("kind", manifest.kind()));
             }
             int serverId = serverSpelling != null
                 ? ServerModel.canonicalServerId(serverSpelling)
@@ -576,7 +576,7 @@ public final class InstanceBackups {
                         staging.resolve("application"));
                     ArtifactDeploys.restoreSource(newId,
                         applicationFiles.get(manifest.application().artifact().file()));
-                    DockerClient docker = dockerFor(serverId);
+                    DockerClient docker = new ServerService().clientFor(serverId);
                     this.instances.leases().requireFence(serverId);
                     docker.loadImage(applicationFiles.get(manifest.application().image().file()));
                     if (!manifest.imageId().equals(docker.inspectImage(manifest.imageId()).get("Id"))) {
@@ -596,7 +596,7 @@ public final class InstanceBackups {
                     recordRestore(newId, backup.get(InstanceBackupModel.ID), restored);
                     return restored;
                 } catch (IOException | RuntimeException error) {
-                    throw refusal("instance_restore_failed", record,
+                    throw HohenheimViolations.instanceRefusal("instance_restore_failed", record,
                         new IOException("Application restore failed; the new application is not"
                             + " a verified recovery", error));
                 }
@@ -614,7 +614,7 @@ public final class InstanceBackups {
                         InstanceMaintenanceWindow.Failure.HOLD_ERROR),
                     () -> restorePayload(profile, newId, manifest, resolved, verified, staging));
             } catch (IOException error) {
-                throw refusal("instance_restore_failed", record, error);
+                throw HohenheimViolations.instanceRefusal("instance_restore_failed", record, error);
             }
             Restored restored = new Restored(newId, List.copyOf(notRestored));
             recordRestore(newId, backup.get(InstanceBackupModel.ID), restored);
@@ -654,7 +654,7 @@ public final class InstanceBackups {
             // the deploy after the window CONVERGES onto it (the incus driver never
             // replaces an owned instance from its image).
             if (!(resolved.runtime() instanceof NativeSnapshotSupport nativeSupport)) {
-                throw Violations.ofForm(violationText("backup_payload_mismatch")
+                throw Violations.ofForm(HohenheimViolations.text("backup_payload_mismatch")
                     .withArg("payload", manifest.payload())
                     .withArg("kind", manifest.kind()));
             }
@@ -715,9 +715,9 @@ public final class InstanceBackups {
                     : BackupTargetKinds.targetFor(rowTargetId);
                 target.delete(key);
             } catch (IOException | Violations unreachable) {
-                throw Violations.ofForm(violationText("backup_delete_failed")
+                throw Violations.ofForm(HohenheimViolations.text("backup_delete_failed")
                     .withArg("reason", unreachable instanceof IOException io
-                        ? InstanceSnapshots.describe(io) : "target unavailable"));
+                        ? HohenheimViolations.reasonOf(io) : "target unavailable"));
             }
         }
         Models.get(InstanceBackupModel.class).find()
@@ -765,7 +765,7 @@ public final class InstanceBackups {
                 // The backup this sweep follows already succeeded; see the same guard in
                 // InstanceSnapshots.pruneForRetention.
                 Blast.log("BACKUP: retention hit an unexpected failure on backup", id,
-                    "- kept for a later sweep:", InstanceSnapshots.describe(unexpected));
+                    "- kept for a later sweep:", HohenheimViolations.reasonOf(unexpected));
             }
         }
     }
@@ -805,7 +805,7 @@ public final class InstanceBackups {
                     error += "; the possibly-committed artifact could not be removed"
                         + " and may remain on the target under " + key;
                     Blast.log("BACKUP: could not remove interrupted upload", key, ":",
-                        InstanceSnapshots.describe(unreachable));
+                        HohenheimViolations.reasonOf(unreachable));
                 }
             }
             RecordStamp.on(Models.get(InstanceBackupModel.class), row)
@@ -852,7 +852,7 @@ public final class InstanceBackups {
         String desired = ReleaseEngine.sourceFingerprint(applicationId,
             ApplicationReleases.resolvedSettings(owner, overrides));
         if (artifact == null || !desired.equals(servingSettings.get("source_fingerprint"))) {
-            throw refusal("instance_backup_failed", owner, new IOException(
+            throw HohenheimViolations.instanceRefusal("instance_backup_failed", owner, new IOException(
                 "Application configuration does not match its serving release. Settle"
                     + " unapplied settings, secrets or runtime defaults before taking a backup;"
                     + " refusing to combine a running image with different configuration"));
@@ -893,7 +893,7 @@ public final class InstanceBackups {
             throw new IOException("Serving application has no immutable runtime image identity");
         }
         Path imageTar = applicationDirectory.resolve("runtime-image.tar");
-        dockerFor(serving.serverId()).saveImage(image.id(), imageTar, InstanceSnapshots.maxArchiveBytes());
+        new ServerService().clientFor(serving.serverId()).saveImage(image.id(), imageTar, InstanceSnapshots.maxArchiveBytes());
         files.put(BackupArchive.APPLICATION_PREFIX + "artifact.jar", artifact);
         files.put(BackupArchive.APPLICATION_PREFIX + "runtime-image.tar", imageTar);
         List<BackupManifest.VolumeDeclaration> declarations = new ArrayList<>();
@@ -909,10 +909,6 @@ public final class InstanceBackups {
                 Files.size(imageTar)), List.copyOf(declarations));
     }
 
-    private static DockerClient dockerFor(int serverId) {
-        return serverId == ServerModel.localServerId() ? new DockerClient()
-            : new ServerService().clientFor(ServerModel.nameOf(serverId));
-    }
 
     private static Map<String, Object> runtimeIdentity(Row image) {
         Map<String, Object> identity = new LinkedHashMap<>();
@@ -1288,15 +1284,7 @@ public final class InstanceBackups {
         return (Map<String, Object>) map;
     }
 
-    private static Violations refusal(String key, Row row, Exception cause) {
-        return Violations.ofForm(violationText(key)
-            .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME)))
-            .withArg("reason", InstanceSnapshots.describe(cause)));
-    }
 
-    private static Microcopy violationText(String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
-    }
 
     private static Path stagingRoot() {
         return Path.of(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Backup.STAGING_PATH));

@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.host.HostLeases;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -188,8 +188,7 @@ public final class InstanceOperationLock {
         Row row = Models.get(InstanceModel.class).findById(instanceId);
         String name = row != null ? String.valueOf((Object) row.get(InstanceModel.NAME))
             : String.valueOf(instanceId);
-        return Violations.ofForm(Microcopy.of("instance_operation_in_progress")
-            .withFilter("scope", "violations")
+        return Violations.ofForm(HohenheimViolations.text("instance_operation_in_progress")
             .withArg("name", name));
     }
 }

@@ -21,7 +21,6 @@ import be.elevenways.hohenheim.server.security.WorkloadNetwork;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.stack.StackServiceKind;
-import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -29,7 +28,6 @@ import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -148,24 +146,8 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
     public static @NonNull IsolationFindings report(@NonNull List<HostOutcome> outcomes) {
         IsolationFindings findings = new IsolationFindings(SWEEP);
         for (HostOutcome outcome : outcomes) {
-            if (!outcome.verifiable()) {
-                Blast.log("WORKLOAD ISOLATION:", outcome.server(),
-                    "cannot be kernel-verified; its workloads' isolation is UNCONFIRMED:",
-                    outcome.errors());
-                findings.unconfirmed(outcome.server(), outcome.errors());
-                continue;
-            }
-            if (!outcome.repaired().isEmpty() || !outcome.contained().isEmpty()
-                    || !outcome.errors().isEmpty()) {
-                Blast.log("WORKLOAD ISOLATION:", outcome.server(), "- enforced",
-                    outcome.enforced().size(), ", repaired", outcome.repaired(),
-                    ", CONTAINED", outcome.contained(), ", errors", outcome.errors());
-            }
-            List<String> escalations = new ArrayList<>(outcome.contained());
-            escalations.addAll(outcome.errors());
-            if (!escalations.isEmpty()) {
-                findings.escalated(outcome.server(), escalations);
-            }
+            findings.host("WORKLOAD ISOLATION:", "", outcome.server(), outcome.verifiable(), outcome.enforced(),
+                outcome.repaired(), "CONTAINED", outcome.contained(), outcome.errors());
         }
         return findings;
     }

@@ -47,7 +47,8 @@ public final class Hostnames {
 
         /**
          * @return the pattern naming the hosts a glob of the pre-HostPattern grammar named
-         * @throws IllegalArgumentException with the reason when no pattern of the grammar names them
+         * @throws IllegalArgumentException with the reason when no pattern of the grammar names them, or the pattern
+         *         that does is one {@link #refusal} refuses (a port)
          */
         @NonNull String fromLegacyGlob(@NonNull String glob);
 

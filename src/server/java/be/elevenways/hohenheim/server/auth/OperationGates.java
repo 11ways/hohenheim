@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -116,7 +117,7 @@ final class OperationGates {
      * to a POST, so neither surface is a capability oracle the other is not.
      */
     private static @NonNull Microcopy instanceNotPermitted() {
-        return Microcopy.of("instance_not_permitted").withFilter("scope", "violations");
+        return HohenheimViolations.text("instance_not_permitted");
     }
 
     /**
@@ -166,7 +167,6 @@ final class OperationGates {
 
     /** THE uniform managed-database refusal; visibility, absence and denial are one answer. */
     static @NonNull Violations databaseRefusal() {
-        return Violations.ofForm(Microcopy.of("database_not_permitted")
-            .withFilter("scope", "violations"));
+        return Violations.ofForm(HohenheimViolations.text("database_not_permitted"));
     }
 }

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.project;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ProjectModel;
@@ -432,6 +433,6 @@ public final class Projects {
     }
 
     static Violations refusal(String key) {
-        return Violations.ofForm(Microcopy.of(key).withFilter("scope", "violations"));
+        return Violations.ofForm(HohenheimViolations.text(key));
     }
 }

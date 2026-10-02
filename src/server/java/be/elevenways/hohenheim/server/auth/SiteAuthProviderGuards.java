@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -115,7 +116,7 @@ public final class SiteAuthProviderGuards {
         if (raw instanceof Number number) {
             return number.intValue();
         }
-        String text = AccessRuleModel.text(raw);
+        String text = Texts.trimmedOrNull(raw);
         if (text == null) {
             return null;
         }

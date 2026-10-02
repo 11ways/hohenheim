@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -161,6 +162,14 @@ public class SiteModel extends Model {
         SCHEMA.addBehaviour(RevisionableBehaviour.create(50));
 
     static {
+        // Every site save is ONE write transaction by DECLARATION: the enable scan
+        // (beforeValidate), the route-claim restamp (beforeWrite) and the row write commit
+        // or fail together.
+        //
+        // AIDEV-NOTE: the revisionable behaviour already makes saves atomic, but the route
+        // invariant (see RouteClaims) must not ride that coincidence -- removing REVISIONABLE
+        // would silently reopen the scan-then-claim window.
+        SCHEMA.saveAtomically();
         // AIDEV-NOTE: deleted_at is lifecycle state, declared by SOFT_DELETE (it used to be a
         // hand-rolled soft delete with an explicit addLifecycleField here). Without that
         // declaration the CMS revision-restore endpoint would replay a snapshot taken while
@@ -259,10 +268,10 @@ public class SiteModel extends Model {
         if (info == null) return;
         Object instanceId = effective(row, INSTANCE_ID);
         if (info.requiresInstance() && instanceId == null) {
-            throw violation("instance_id", null, "upstream_instance_required");
+            throw HohenheimViolations.ofField("instance_id", null, "upstream_instance_required");
         }
         if (!info.requiresInstance() && instanceId != null) {
-            throw violation("instance_id", instanceId, "upstream_instance_unexpected");
+            throw HohenheimViolations.ofField("instance_id", instanceId, "upstream_instance_unexpected");
         }
     }
 
@@ -281,11 +290,11 @@ public class SiteModel extends Model {
                 || !UPSTREAM_TLS_PASSTHROUGH.equals(effective(row, UPSTREAM_KIND))) return;
         Object authProvider = effective(row, AUTH_PROVIDER_ID);
         if (authProvider != null) {
-            throw violation("auth_provider_id", authProvider, "tls_passthrough_no_http_auth");
+            throw HohenheimViolations.ofField("auth_provider_id", authProvider, "tls_passthrough_no_http_auth");
         }
         Object accessList = effective(row, ACCESS_LIST_ID);
         if (accessList != null) {
-            throw violation("access_list_id", accessList, "tls_passthrough_no_access_list");
+            throw HohenheimViolations.ofField("access_list_id", accessList, "tls_passthrough_no_access_list");
         }
         Integer id = row.has(ID.getName()) ? row.get(ID) : null;
         if (id != null) {
@@ -302,27 +311,7 @@ public class SiteModel extends Model {
         return stored != null ? stored.get(field.getName()) : null;
     }
 
-    private static Violations violation(String field, Object value, String key) {
-        return Violations.ofField(field, value,
-            Microcopy.of(key).withFilter("scope", "violations"));
-    }
 
-    /**
-     * Every site save is ONE write transaction by DECLARATION: the enable scan
-     * (beforeValidate), the route-claim restamp (beforeWrite) and the row write commit
-     * or fail together.
-     *
-     * AIDEV-NOTE: Model.save already wraps revisionable schemas in a transaction, but
-     * the route invariant (see RouteClaims) must not ride that coincidence -- removing
-     * REVISIONABLE would silently reopen the scan-then-claim window. The nested
-     * transaction joins the outer one, so this costs nothing today.
-     */
-    @Override
-    public Row save(@NonNull Row row) {
-        Row[] result = new Row[1];
-        this.requireDatasource().withTransaction(tx -> result[0] = super.save(row));
-        return result[0];
-    }
 
     public List<Row> findEnabled() {
         return find()

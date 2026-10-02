@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.build;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
@@ -434,7 +435,7 @@ public final class BuildSandbox {
             return new Outcome(Ending.EXITED, 0, peakDisk, artifact, size);
         } catch (IOException e) {
             log.line("[hohenheim] the build exited 0 but its artifact could not be read: "
-                + (e.getMessage() != null ? e.getMessage() : e.toString()));
+                + (HohenheimViolations.reasonOf(e)));
             deleteQuietly(artifact);
             return new Outcome(Ending.EXITED, 0, peakDisk, null, 0);
         }

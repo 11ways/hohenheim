@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.dns.DnsPeerKeyResponse;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.server.dns.DnsFederationKeys;
@@ -162,8 +163,7 @@ public final class DnsPeerResource extends RowResource {
         catch (DnsPeerApi.PeerApiException refused) {
             return CmsActionResult.errorToast(
                 Microcopy.of("negotiate_key_failed").withFilter("scope", "dns_peer")
-                    .withArg("reason", refused.getMessage() != null
-                        ? refused.getMessage() : refused.toString()));
+                    .withArg("reason", HohenheimViolations.reasonOf(refused)));
         }
         if (!keyName.equals(confirmation.key_name())) {
             // The peer stored the name IT was told; a different one back means the two

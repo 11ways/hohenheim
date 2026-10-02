@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
@@ -220,7 +221,6 @@ public final class ApplicationKind implements InstanceKindHandler {
     }
 
     private static Violations notWired() {
-        return Violations.ofForm(Microcopy.of("application_owns_no_container")
-            .withFilter("scope", "violations"));
+        return Violations.ofForm(HohenheimViolations.text("application_owns_no_container"));
     }
 }

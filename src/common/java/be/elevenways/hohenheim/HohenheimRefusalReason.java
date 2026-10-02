@@ -42,7 +42,7 @@ public enum HohenheimRefusalReason implements DomainRefusal.Reason {
         this.id = HohenheimIds.id(key);
         this.code = key;
         this.retriable = retriable;
-        this.message = Microcopy.of(key).withFilter("scope", "violations").withFallback(fallback);
+        this.message = HohenheimViolations.text(key).withFallback(fallback);
     }
 
     @Override

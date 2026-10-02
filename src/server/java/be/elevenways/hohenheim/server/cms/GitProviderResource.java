@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.server.source.GitProviders;
 import be.elevenways.protoblast.common.Blast;
@@ -124,8 +125,7 @@ public class GitProviderResource extends RowResource {
         } catch (Exception unhealthy) {
             Blast.slog("hohenheim.git_provider.test_failed", Map.of(
                 "provider", String.valueOf(row.get(GitProviderModel.ID)),
-                "reason", String.valueOf(unhealthy.getMessage() != null
-                    ? unhealthy.getMessage() : unhealthy.toString())));
+                "reason", String.valueOf(HohenheimViolations.reasonOf(unhealthy))));
             return CmsActionResult.errorToast(this.connectionFailure(unhealthy));
         }
     }
@@ -136,7 +136,6 @@ public class GitProviderResource extends RowResource {
      */
     protected @NonNull Microcopy connectionFailure(@NonNull Exception failure) {
         return Microcopy.of("test_failed").withFilter("scope", "git_provider")
-            .withArg("reason", failure.getMessage() != null
-                ? failure.getMessage() : failure.toString());
+            .withArg("reason", HohenheimViolations.reasonOf(failure));
     }
 }

@@ -3,12 +3,8 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
-import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.ImageOrigin;
@@ -176,23 +172,13 @@ public final class SystemContainerKind implements InstanceKindHandler {
 
     @Override
     public @NonNull InstanceSpec specFor(int instanceId, @NonNull Map<String, Object> settings) {
-        String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
-        String image = settings.get("image") != null
-            ? String.valueOf(settings.get("image")).trim() : "";
         boolean privileged = Boolean.TRUE.equals(settings.get("privileged"));
-        ImageOrigin imageOrigin = ImageOrigin.fromKey(
-            settings.get("image_origin") instanceof String origin ? origin : null);
         // No command override (a system container boots its init), no named volumes
         // (the rootfs IS the persistent state) and no port publication yet (proxy
         // devices are a later mechanism) -- each absence is structural, not an omission.
-        return InstanceSpec.builder(handle, image,
-                ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)),
-                privileged ? PRIVILEGED : UNPRIVILEGED,
-                OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
-            .env(EnvVars.toMap(settings.get("environment_variables")))
-            .imageOrigin(imageOrigin)
-            .rootDiskGb(RootDisk.declaredGb(settings))
-            .networkLimitMbit(NetworkBandwidth.declaredMbit(settings))
+        return IncusSpecs.spec(instanceId, settings, defaultFootprintMb(settings),
+                privileged ? PRIVILEGED : UNPRIVILEGED)
+            .env(EnvVars.toMap(settings.get(InstanceVariables.ENVIRONMENT_SETTING)))
             .build();
     }
 

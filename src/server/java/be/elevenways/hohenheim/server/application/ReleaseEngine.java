@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.application;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
@@ -25,7 +26,6 @@ import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
@@ -366,12 +366,10 @@ public final class ReleaseEngine {
             Row serving = ApplicationReleases.ownedServing(applicationId);
             Row target = newestRetired(applicationId);
             if (target == null) {
-                throw Violations.ofForm(Microcopy.of("release_no_rollback_target")
-                    .withFilter("scope", "violations"));
+                throw Violations.ofForm(HohenheimViolations.text("release_no_rollback_target"));
             }
             if (serving == null) {
-                throw Violations.ofForm(Microcopy.of("release_no_serving_release")
-                    .withFilter("scope", "violations"));
+                throw Violations.ofForm(HohenheimViolations.text("release_no_serving_release"));
             }
             Map<String, Object> desired = ApplicationReleases.storedSettings(target);
             int serverId = ServerModel.canonicalServerId(target.get(InstanceModel.SERVER_ID));
@@ -382,8 +380,7 @@ public final class ReleaseEngine {
             InstanceStatus oldLive =
                 new InstanceService().liveStatus(serving.get(InstanceModel.ID));
             if (!oldLive.running() || oldLive.publishedPort() == null) {
-                throw Violations.ofForm(Microcopy.of("release_no_serving_release")
-                    .withFilter("scope", "violations"));
+                throw Violations.ofForm(HohenheimViolations.text("release_no_serving_release"));
             }
             Row op = newOperation(ReleaseOperationModel.KIND_ROLLBACK, applicationId,
                 ownerFingerprint, specFingerprint);
@@ -630,7 +627,7 @@ public final class ReleaseEngine {
             Row serving = ApplicationReleases.ownedServing(applicationId);
             if (serving != null) {
                 int serverId = ServerModel.canonicalServerId(serving.get(InstanceModel.SERVER_ID));
-                BuildArtifacts.pruneSuperseded(ApplicationReleases.dockerFor(serverId),
+                BuildArtifacts.pruneSuperseded(new ServerService().clientFor(serverId),
                     InstanceModel.MODEL_ID.toString(), applicationId, servingImage);
             }
         } catch (RuntimeException e) {
@@ -861,8 +858,7 @@ public final class ReleaseEngine {
     static void requireHealthy(@NonNull InstanceStatus status,
                                @NonNull Map<String, Object> desired, int serverId) {
         if (!status.running() || status.workloadDead() || status.publishedPort() == null) {
-            throw Violations.ofForm(Microcopy.of("release_no_published_port")
-                .withFilter("scope", "violations"));
+            throw Violations.ofForm(HohenheimViolations.text("release_no_published_port"));
         }
         probe(status.publishedPort(), healthPathOf(desired), PublishedPortProbe.forServer(serverId));
     }
@@ -906,8 +902,7 @@ public final class ReleaseEngine {
                 lastFailure = notUp.getMessage() != null ? notUp.getMessage() : "connect failed";
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
-                throw Violations.ofForm(Microcopy.of("release_probe_failed")
-                    .withFilter("scope", "violations").withArg("reason", "interrupted"));
+                throw Violations.ofForm(HohenheimViolations.text("release_probe_failed").withArg("reason", "interrupted"));
             }
             try {
                 Thread.sleep(pause);
@@ -916,8 +911,7 @@ public final class ReleaseEngine {
                 break;
             }
         }
-        throw Violations.ofForm(Microcopy.of("release_probe_failed")
-            .withFilter("scope", "violations").withArg("reason", lastFailure));
+        throw Violations.ofForm(HohenheimViolations.text("release_probe_failed").withArg("reason", lastFailure));
     }
 
     /**
@@ -948,8 +942,7 @@ public final class ReleaseEngine {
     private static @NonNull Row reload(int instanceId) {
         Row fresh = Models.get(InstanceModel.class).findById(instanceId);
         if (fresh == null) {
-            throw Violations.ofForm(Microcopy.of("release_no_serving_release")
-                .withFilter("scope", "violations"));
+            throw Violations.ofForm(HohenheimViolations.text("release_no_serving_release"));
         }
         return fresh;
     }

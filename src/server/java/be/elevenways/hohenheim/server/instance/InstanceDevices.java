@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -8,7 +9,6 @@ import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.DeviceAttachSupport;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -51,32 +51,14 @@ public final class InstanceDevices {
      *         model's name/size invariants
      */
     public void attachDisk(int instanceId, @NonNull String name, int sizeGb) {
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
-        Resolved resolved = this.instances.resolve(instanceId);
-        InstanceOperationGuard.requireOperable(resolved.row());
-        DeviceAttachSupport support = requireSupport(resolved);
-        this.instances.leases().requireFence(resolved.serverId());
+        Target target = this.target(instanceId);
+        Resolved resolved = target.resolved();
+        DeviceAttachSupport support = target.support();
         requireAbsentRow(instanceId, name);
 
-        Row row = Models.get(InstanceDeviceModel.class).createEmptyRow();
-        row.set(InstanceDeviceModel.INSTANCE_ID, instanceId);
-        row.set(InstanceDeviceModel.TYPE, DeviceType.DISK.token());
-        row.set(InstanceDeviceModel.NAME, name);
+        Row row = newDevice(instanceId, DeviceType.DISK, name);
         row.set(InstanceDeviceModel.SIZE_GB, sizeGb);
-        // The reservation fires HERE (beforeWrite, adjacent to the write): a full
-        // bucket refuses before any daemon contact.
-        Models.get(InstanceDeviceModel.class).save(row);
-
-        if (workloadAbsent(resolved)) {
-            return;   // desired state recorded; deploy reconciles it onto the daemon
-        }
-        try {
-            support.ensureDisk(resolved.spec(), name, sizeGb);
-        } catch (IOException e) {
-            // The daemon does not carry it, so the ledger must not count it.
-            Models.get(InstanceDeviceModel.class).delete(row.get(InstanceDeviceModel.ID));
-            throw refusal("device_attach_failed", resolved.row(), name, e);
-        }
+        this.attach(target, row, name, () -> support.ensureDisk(resolved.spec(), name, sizeGb));
     }
 
     /**
@@ -87,32 +69,23 @@ public final class InstanceDevices {
      *         refusal verbatim (notably "In use": block volumes resize stopped only)
      */
     public void resizeDisk(int instanceId, @NonNull String name, int sizeGb) {
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
-        Resolved resolved = this.instances.resolve(instanceId);
-        InstanceOperationGuard.requireOperable(resolved.row());
-        DeviceAttachSupport support = requireSupport(resolved);
-        this.instances.leases().requireFence(resolved.serverId());
+        Target target = this.target(instanceId);
+        Resolved resolved = target.resolved();
+        DeviceAttachSupport support = target.support();
 
         Row row = rowOf(instanceId, name);
         if (row == null || DeviceType.parse(row.get(InstanceDeviceModel.TYPE)) != DeviceType.DISK) {
-            throw Violations.ofField("name", name, violationText("device_not_found")
+            throw Violations.ofField("name", name, HohenheimViolations.text("device_not_found")
                 .withArg("device", name));
         }
         Integer before = row.get(InstanceDeviceModel.SIZE_GB);
         row.set(InstanceDeviceModel.SIZE_GB, sizeGb);
         Models.get(InstanceDeviceModel.class).save(row);   // delta reserved/released here
 
-        Integer daemonSize;
         try {
-            daemonSize = support.diskSizeGb(resolved.spec(), name);
-        } catch (IOException e) {
-            revertSize(row, before);
-            throw refusal("device_resize_failed", resolved.row(), name, e);
-        }
-        if (daemonSize == null) {
-            return;   // volume not materialized yet; deploy's reconcile creates it at size
-        }
-        try {
+            if (support.diskSizeGb(resolved.spec(), name) == null) {
+                return;   // volume not materialized yet; deploy's reconcile creates it at size
+            }
             support.resizeDisk(resolved.spec(), name, sizeGb);
         } catch (IOException e) {
             revertSize(row, before);
@@ -127,28 +100,13 @@ public final class InstanceDevices {
      *         {@code nic_quota_reached}, {@code device_attach_failed}
      */
     public void attachNic(int instanceId, @NonNull String name) {
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
-        Resolved resolved = this.instances.resolve(instanceId);
-        InstanceOperationGuard.requireOperable(resolved.row());
-        DeviceAttachSupport support = requireSupport(resolved);
-        this.instances.leases().requireFence(resolved.serverId());
+        Target target = this.target(instanceId);
+        Resolved resolved = target.resolved();
+        DeviceAttachSupport support = target.support();
         requireAbsentRow(instanceId, name);
 
-        Row row = Models.get(InstanceDeviceModel.class).createEmptyRow();
-        row.set(InstanceDeviceModel.INSTANCE_ID, instanceId);
-        row.set(InstanceDeviceModel.TYPE, DeviceType.NIC.token());
-        row.set(InstanceDeviceModel.NAME, name);
-        Models.get(InstanceDeviceModel.class).save(row);
-
-        if (workloadAbsent(resolved)) {
-            return;
-        }
-        try {
-            support.ensureNic(resolved.spec(), name);
-        } catch (IOException e) {
-            Models.get(InstanceDeviceModel.class).delete(row.get(InstanceDeviceModel.ID));
-            throw refusal("device_attach_failed", resolved.row(), name, e);
-        }
+        Row row = newDevice(instanceId, DeviceType.NIC, name);
+        this.attach(target, row, name, () -> support.ensureNic(resolved.spec(), name));
     }
 
     /**
@@ -163,29 +121,14 @@ public final class InstanceDevices {
      */
     public void attachCdrom(int instanceId, @NonNull String name, @NonNull String mediaVolume) {
         HohenheimAccess.requireOperatorOperation();
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
-        Resolved resolved = this.instances.resolve(instanceId);
-        InstanceOperationGuard.requireOperable(resolved.row());
-        DeviceAttachSupport support = requireSupport(resolved);
-        this.instances.leases().requireFence(resolved.serverId());
+        Target target = this.target(instanceId);
+        Resolved resolved = target.resolved();
+        DeviceAttachSupport support = target.support();
         requireAbsentRow(instanceId, name);
 
-        Row row = Models.get(InstanceDeviceModel.class).createEmptyRow();
-        row.set(InstanceDeviceModel.INSTANCE_ID, instanceId);
-        row.set(InstanceDeviceModel.TYPE, DeviceType.CDROM.token());
-        row.set(InstanceDeviceModel.NAME, name);
+        Row row = newDevice(instanceId, DeviceType.CDROM, name);
         row.set(InstanceDeviceModel.SOURCE_MEDIA, mediaVolume);
-        Models.get(InstanceDeviceModel.class).save(row);
-
-        if (workloadAbsent(resolved)) {
-            return;   // desired state recorded; deploy's reconcile attaches it
-        }
-        try {
-            support.ensureCdrom(resolved.spec(), name, mediaVolume);
-        } catch (IOException e) {
-            Models.get(InstanceDeviceModel.class).delete(row.get(InstanceDeviceModel.ID));
-            throw refusal("device_attach_failed", resolved.row(), name, e);
-        }
+        this.attach(target, row, name, () -> support.ensureCdrom(resolved.spec(), name, mediaVolume));
     }
 
     /**
@@ -196,15 +139,13 @@ public final class InstanceDevices {
      * @throws Violations {@code device_not_found}, {@code device_detach_failed}
      */
     public void detach(int instanceId, @NonNull String name) {
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
-        Resolved resolved = this.instances.resolve(instanceId);
-        InstanceOperationGuard.requireOperable(resolved.row());
-        DeviceAttachSupport support = requireSupport(resolved);
-        this.instances.leases().requireFence(resolved.serverId());
+        Target target = this.target(instanceId);
+        Resolved resolved = target.resolved();
+        DeviceAttachSupport support = target.support();
 
         Row row = rowOf(instanceId, name);
         if (row == null) {
-            throw Violations.ofField("name", name, violationText("device_not_found")
+            throw Violations.ofField("name", name, HohenheimViolations.text("device_not_found")
                 .withArg("device", name));
         }
         // Symmetry with attachCdrom: install media is an OPERATOR device end to
@@ -271,7 +212,7 @@ public final class InstanceDevices {
         }
     }
 
-    /** One daemon call a reconcile step makes; the switch above picks it per member. */
+    /** One daemon call a device operation makes. */
     @FunctionalInterface
     private interface DaemonStep {
         void run() throws IOException;
@@ -320,7 +261,7 @@ public final class InstanceDevices {
 
     private static void requireAbsentRow(int instanceId, @NonNull String name) {
         if (rowOf(instanceId, name) != null) {
-            throw Violations.ofField("name", name, violationText("device_exists")
+            throw Violations.ofField("name", name, HohenheimViolations.text("device_exists")
                 .withArg("device", name));
         }
     }
@@ -329,7 +270,7 @@ public final class InstanceDevices {
         if (resolved.runtime() instanceof DeviceAttachSupport support) {
             return support;
         }
-        throw Violations.ofForm(violationText("devices_unsupported")
+        throw Violations.ofForm(HohenheimViolations.text("devices_unsupported")
             .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME))));
     }
 
@@ -343,16 +284,55 @@ public final class InstanceDevices {
         Models.get(InstanceDeviceModel.class).save(row);
     }
 
-    private static Violations refusal(String key, Row instanceRow, String device,
-                                      IOException cause) {
-        return Violations.ofForm(violationText(key)
-            .withArg("name", String.valueOf((Object) instanceRow.get(InstanceModel.NAME)))
-            .withArg("device", device)
-            .withArg("reason", cause.getMessage() != null ? cause.getMessage()
-                : cause.toString()));
+    /** The resolved instance and its device support, once every check a device operation makes first passed. */
+    private record Target(@NonNull Resolved resolved, @NonNull DeviceAttachSupport support) {}
+
+    /**
+     * The checks every device operation makes first: config on the instance, an operable record, a runtime that
+     * attaches devices, and this controller's fence on its host.
+     */
+    private @NonNull Target target(int instanceId) {
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
+        Resolved resolved = this.instances.resolve(instanceId);
+        InstanceOperationGuard.requireOperable(resolved.row());
+        DeviceAttachSupport support = requireSupport(resolved);
+        this.instances.leases().requireFence(resolved.serverId());
+        return new Target(resolved, support);
     }
 
-    private static Microcopy violationText(String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
+    private static @NonNull Row newDevice(int instanceId, @NonNull DeviceType type, @NonNull String name) {
+        Row row = Models.get(InstanceDeviceModel.class).createEmptyRow();
+        row.set(InstanceDeviceModel.INSTANCE_ID, instanceId);
+        row.set(InstanceDeviceModel.TYPE, type.token());
+        row.set(InstanceDeviceModel.NAME, name);
+        return row;
     }
+
+    /**
+     * Records a new device, then puts it on a running workload.
+     *
+     * AIDEV-NOTE: the quota reservation fires on the row write (beforeWrite, adjacent to the write), so a full bucket
+     * refuses before any daemon contact; a workload that is not there keeps the desired state for deploy's reconcile;
+     * a daemon that does not carry the device takes the row, and with it the reservation, back out of the ledger.
+     */
+    private void attach(@NonNull Target target, @NonNull Row row, @NonNull String name,
+                        @NonNull DaemonStep daemon) {
+        Models.get(InstanceDeviceModel.class).save(row);
+        if (workloadAbsent(target.resolved())) {
+            return;
+        }
+        try {
+            daemon.run();
+        } catch (IOException e) {
+            Models.get(InstanceDeviceModel.class).delete(row.get(InstanceDeviceModel.ID));
+            throw refusal("device_attach_failed", target.resolved().row(), name, e);
+        }
+    }
+
+    private static Violations refusal(String key, Row instanceRow, String device,
+                                      IOException cause) {
+        return Violations.ofForm(HohenheimViolations.instanceRefusalText(key, instanceRow, cause)
+            .withArg("device", device));
+    }
+
 }

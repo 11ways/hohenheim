@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -144,8 +144,7 @@ public final class CommunityScripts {
         }
         Set<String> missing = unimplementedHelpers(script);
         if (!missing.isEmpty()) {
-            throw Violations.ofForm(Microcopy.of("helper_not_implemented")
-                .withFilter("scope", "violations")
+            throw Violations.ofForm(HohenheimViolations.text("helper_not_implemented")
                 .withArg("what", what)
                 .withArg("helpers", String.join(", ", missing)));
         }
@@ -250,7 +249,7 @@ public final class CommunityScripts {
     public static int importApp(@NonNull String appKey) {
         if (!catalogApps().contains(appKey)) {
             throw Violations.ofField("catalog_app", appKey,
-                Microcopy.of("catalog_app_unknown").withFilter("scope", "violations")
+                HohenheimViolations.text("catalog_app_unknown")
                     .withArg("app", appKey));
         }
         Manifest manifest = manifestOf(appKey);

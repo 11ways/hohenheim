@@ -3,13 +3,10 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
-import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
-import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.ImageOrigin;
@@ -219,28 +216,18 @@ public final class VmKind implements InstanceKindHandler {
 
     @Override
     public @NonNull InstanceSpec specFor(int instanceId, @NonNull Map<String, Object> settings) {
-        String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
-        String image = settings.get("image") != null
-            ? String.valueOf(settings.get("image")).trim() : "";
         String cloudInit = settings.get("cloud_init") instanceof String text
             && !text.isBlank() ? text : null;
-        ImageOrigin imageOrigin = ImageOrigin.fromKey(
-            settings.get("image_origin") instanceof String origin ? origin : null);
         boolean secureBoot = Boolean.TRUE.equals(settings.get("secure_boot"));
         boolean guestAgent = !Boolean.FALSE.equals(settings.get("guest_agent"));
         // No command override (a VM boots its own kernel), no env (nothing injects
         // into a guest's init -- cloud-init is the provisioning lane), no named
         // volumes (attached disks are instance_devices rows), no port publication
         // (a VM is an addressable system) -- each absence is structural.
-        return InstanceSpec.builder(handle, image,
-                ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)), VM,
-                OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
+        return IncusSpecs.spec(instanceId, settings, defaultFootprintMb(settings), VM)
             .cloudInitUserData(cloudInit)
-            .imageOrigin(imageOrigin)
             .secureBoot(secureBoot)
             .guestAgent(guestAgent)
-            .rootDiskGb(RootDisk.declaredGb(settings))
-            .networkLimitMbit(NetworkBandwidth.declaredMbit(settings))
             .build();
     }
 
@@ -294,8 +281,7 @@ public final class VmKind implements InstanceKindHandler {
                 Egress.OPEN, type, serverName)
                 .requirePreparedImagePresent(image, origin, false);
         } catch (IOException absent) {
-            throw Violations.ofForm(Microcopy.of("host_prepared_image_missing")
-                .withFilter("scope", "violations")
+            throw Violations.ofForm(HohenheimViolations.text("host_prepared_image_missing")
                 .withArg("name", serverName)
                 .withArg("image", image));
         }

@@ -146,11 +146,7 @@ public final class PaasApi {
         });
 
         HohenheimEndpoints.API_V1_SITE.setHandler(conduit -> {
-            AccessContext ctx = ApiConduits.requireKey(conduit);
-            if (ctx == null) {
-                return null;
-            }
-            Row site = visibleSite(conduit, ctx);
+            Row site = requireVisibleSite(conduit);
             if (site == null) {
                 return null;
             }
@@ -158,11 +154,7 @@ public final class PaasApi {
         });
 
         HohenheimEndpoints.API_V1_SITE_DEPLOY.setHandler(conduit -> {
-            AccessContext ctx = ApiConduits.requireKey(conduit);
-            if (ctx == null) {
-                return null;
-            }
-            Row site = visibleSite(conduit, ctx);
+            Row site = requireVisibleSite(conduit);
             if (site == null) {
                 return null;
             }
@@ -177,12 +169,10 @@ public final class PaasApi {
         });
 
         HohenheimEndpoints.API_V1_SITE_ARTIFACT.setHandler(conduit -> {
-            AccessContext ctx = ApiConduits.requireKey(conduit);
-            if (ctx == null) return null;
-            Row site = visibleSite(conduit, ctx);
-            if (site == null) return null;
-            Integer applicationId = artifactApplication(conduit, ctx, site);
-            if (applicationId == null) return null;
+            ArtifactTarget target = artifactTarget(conduit, ApiConduits.requireKey(conduit));
+            if (target == null) return null;
+            Row site = target.site();
+            int applicationId = target.applicationId();
             if (!(conduit instanceof HttpConduit http)) {
                 return ApiConduits.refusal(conduit, Violations.ofForm(
                     ApiConduits.violationText("artifact_upload_failed")));
@@ -207,11 +197,9 @@ public final class PaasApi {
                         ApiConduits.violationText("artifact_upload_empty")));
                 }
                 // Reauthorize after a long upload too: grants/site target may have changed.
-                Row currentSite = visibleSite(conduit, AccessContext.of(conduit));
-                if (currentSite == null) return null;
-                Integer currentApp = artifactApplication(conduit, AccessContext.of(conduit), currentSite);
-                if (currentApp == null) return null;
-                if (!applicationId.equals(currentApp)) {
+                ArtifactTarget current = artifactTarget(conduit, AccessContext.of(conduit));
+                if (current == null) return null;
+                if (current.applicationId() != applicationId) {
                     conduit.notFound();
                     return null;
                 }
@@ -242,12 +230,10 @@ public final class PaasApi {
         });
 
         HohenheimEndpoints.API_V1_SITE_ARTIFACT_OPERATION.setHandler(conduit -> {
-            AccessContext ctx = ApiConduits.requireKey(conduit);
-            if (ctx == null) return null;
-            Row site = visibleSite(conduit, ctx);
-            if (site == null) return null;
-            Integer applicationId = artifactApplication(conduit, ctx, site);
-            if (applicationId == null) return null;
+            ArtifactTarget target = artifactTarget(conduit, ApiConduits.requireKey(conduit));
+            if (target == null) return null;
+            Row site = target.site();
+            int applicationId = target.applicationId();
             Integer operationId = conduit.getParameter(HohenheimEndpoints.ARTIFACT_OPERATION_ID);
             Map<String, Object> result = operationId == null ? null
                 : ArtifactDeploys.operation(site.get(SiteModel.ID), applicationId, operationId);
@@ -259,20 +245,12 @@ public final class PaasApi {
         });
 
         HohenheimEndpoints.API_V1_SITE_ARTIFACT_CURRENT.setHandler(conduit -> {
-            AccessContext ctx = ApiConduits.requireKey(conduit);
-            if (ctx == null) return null;
-            Row site = visibleSite(conduit, ctx);
-            if (site == null) return null;
-            Integer applicationId = artifactApplication(conduit, ctx, site);
-            return applicationId == null ? null : ApiConduits.json(ArtifactDeploys.current(applicationId));
+            ArtifactTarget target = artifactTarget(conduit, ApiConduits.requireKey(conduit));
+            return target == null ? null : ApiConduits.json(ArtifactDeploys.current(target.applicationId()));
         });
 
         HohenheimEndpoints.API_V1_SITE_ROLLBACK.setHandler(conduit -> {
-            AccessContext ctx = ApiConduits.requireKey(conduit);
-            if (ctx == null) {
-                return null;
-            }
-            Row site = visibleSite(conduit, ctx);
+            Row site = requireVisibleSite(conduit);
             if (site == null) {
                 return null;
             }
@@ -333,14 +311,31 @@ public final class PaasApi {
     }
 
     /** Executable bytes require application CONFIG as well as the site's independent manage grant. */
-    private static @Nullable Integer artifactApplication(Conduit conduit, AccessContext ctx, Row site) {
+    /** The route's site and the application it exposes, both visible to this context with config rights. */
+    private record ArtifactTarget(@NonNull Row site, int applicationId) {
+    }
+
+    /**
+     * Resolve the artifact routes' target, ending the response with the uniform 404 when the key, the site or the
+     * application's config right is missing.
+     *
+     * @return the target, or null when the response has already been ended
+     */
+    private static @Nullable ArtifactTarget artifactTarget(@NonNull Conduit conduit, @Nullable AccessContext ctx) {
+        if (ctx == null) {
+            return null;
+        }
+        Row site = visibleSite(conduit, ctx);
+        if (site == null) {
+            return null;
+        }
         Integer applicationId = applicationIdOf(site);
         if (applicationId == null || !ctx.hasCapability(InstanceModel.MODEL_ID,
                 applicationId, HohenheimAccess.CONFIG)) {
             conduit.notFound();
             return null;
         }
-        return applicationId;
+        return new ArtifactTarget(site, applicationId);
     }
 
     /**

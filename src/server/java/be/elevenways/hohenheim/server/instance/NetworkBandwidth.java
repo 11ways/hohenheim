@@ -61,18 +61,7 @@ public final class NetworkBandwidth {
      * there is nothing a zero could mean except "no cap".
      */
     public static @Nullable Integer declaredMbit(@NonNull Map<String, Object> settings) {
-        Object raw = settings.get(SETTING);
-        Integer value = null;
-        if (raw instanceof Number number) {
-            value = number.intValue();
-        } else if (raw instanceof String text && !text.isBlank()) {
-            try {
-                value = Integer.valueOf(text.trim());
-            } catch (NumberFormatException ignored) {
-                return null;
-            }
-        }
-        return value != null && value > 0 ? value : null;
+        return KindSettingValues.positive(settings.get(SETTING));
     }
 
     /** The daemon's own spelling of a rate: {@code 100Mbit}. */

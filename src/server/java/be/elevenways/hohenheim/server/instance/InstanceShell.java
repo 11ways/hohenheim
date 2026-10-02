@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -9,7 +10,6 @@ import be.elevenways.hohenheim.server.runtime.ConsoleStream;
 import be.elevenways.hohenheim.server.runtime.PtySupport;
 import be.elevenways.hohenheim.server.util.Watchdog;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -202,8 +202,7 @@ public final class InstanceShell {
         if (principal == null || !principal.kind().account()
                 || !HohenheimAccess.hasInstanceCapability(principal, instanceId,
                     HohenheimAccess.SHELL)) {
-            throw Violations.ofForm(Microcopy.of("instance_not_permitted")
-                .withFilter("scope", "violations"));
+            throw Violations.ofForm(HohenheimViolations.text("instance_not_permitted"));
         }
 
         Resolved resolved = this.instances.resolve(instanceId);
@@ -242,8 +241,7 @@ public final class InstanceShell {
         synchronized (sessions) {
             sessions.removeIf(session -> !session.isOpen());
             if (sessions.size() >= MAX_SESSIONS_PER_INSTANCE) {
-                throw Violations.ofForm(Microcopy.of("shell_too_many_sessions")
-                    .withFilter("scope", "violations")
+                throw Violations.ofForm(HohenheimViolations.text("shell_too_many_sessions")
                     .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)))
                     .withArg("max", String.valueOf(MAX_SESSIONS_PER_INSTANCE)));
             }
@@ -337,8 +335,7 @@ public final class InstanceShell {
             try {
                 attempt = pty.openPty(resolved.spec(), List.of(candidate), cols, rows);
             } catch (IOException e) {
-                throw Violations.ofForm(Microcopy.of("shell_failed")
-                    .withFilter("scope", "violations")
+                throw Violations.ofForm(HohenheimViolations.text("shell_failed")
                     .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)))
                     .withArg("reason", String.valueOf(e.getMessage())));
             }
@@ -349,16 +346,14 @@ public final class InstanceShell {
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
                 attempt.close();
-                throw Violations.ofForm(Microcopy.of("shell_failed")
-                    .withFilter("scope", "violations")
+                throw Violations.ofForm(HohenheimViolations.text("shell_failed")
                     .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)))
                     .withArg("reason", "interrupted"));
             } catch (IOException unreachable) {
                 // The daemon could not be asked whether it started. Believing it started
                 // would be the silent-success shape; refuse and say why.
                 attempt.close();
-                throw Violations.ofForm(Microcopy.of("shell_failed")
-                    .withFilter("scope", "violations")
+                throw Violations.ofForm(HohenheimViolations.text("shell_failed")
                     .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)))
                     .withArg("reason", String.valueOf(unreachable.getMessage())));
             }
@@ -367,14 +362,13 @@ public final class InstanceShell {
             }
             attempt.close();
         }
-        throw Violations.ofForm(Microcopy.of("shell_missing_in_image")
-            .withFilter("scope", "violations")
+        throw Violations.ofForm(HohenheimViolations.text("shell_missing_in_image")
             .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)))
             .withArg("shell", String.join(", ", candidates)));
     }
 
     private static @NonNull Violations refusal(@NonNull String key, @NonNull Row instance) {
-        return Violations.ofForm(Microcopy.of(key).withFilter("scope", "violations")
+        return Violations.ofForm(HohenheimViolations.text(key)
             .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME))));
     }
 

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -113,8 +114,7 @@ public final class InstanceKinds {
         // this sentence is translated, so the raw name would render a half-Dutch refusal.
         // A Microcopy ARGUMENT resolves in the reader's locale (protoblast MessageEvaluator).
         throw Violations.ofField(InstanceModel.KIND.getName(), kind,
-            Microcopy.of("instance_kind_owner_managed")
-                .withFilter("scope", "violations")
+            HohenheimViolations.text("instance_kind_owner_managed")
                 .withArg("kind", handler.getLabel()));
     }
 
@@ -134,8 +134,7 @@ public final class InstanceKinds {
         if (supportedRuntimes.contains(hostRuntime)) {
             return null;
         }
-        return Microcopy.of("host_runtime_mismatch")
-            .withFilter("scope", "violations")
+        return HohenheimViolations.text("host_runtime_mismatch")
             .withArg("name", hostName)
             .withArg("runtime", hostRuntime)
             .withArg("required", String.join(", ", new TreeSet<>(supportedRuntimes)));

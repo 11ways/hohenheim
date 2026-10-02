@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.host;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -10,7 +11,6 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -171,8 +171,7 @@ public final class VolumeBackends {
             return;
         }
 
-        throw Violations.ofForm(Microcopy.of("host_no_volume_quota")
-            .withFilter("scope", "violations")
+        throw Violations.ofForm(HohenheimViolations.text("host_no_volume_quota")
             .withArg("name", serverName)
             .withArg("kind", kindLabel)
             .withArg("backend", backend.label()));

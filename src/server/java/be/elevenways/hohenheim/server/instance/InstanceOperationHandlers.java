@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimRefusalReason;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations.ConsoleCommandInput;
 import be.elevenways.hohenheim.instance.InstanceOperations.PowerResult;
@@ -213,7 +214,7 @@ public final class InstanceOperationHandlers {
         if (cause == null) {
             return "";
         }
-        return cause.getMessage() != null ? cause.getMessage() : cause.toString();
+        return HohenheimViolations.reasonOf(cause);
     }
 
     private static int instanceId(@NonNull OperationCall<Row, ?> call) {

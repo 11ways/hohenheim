@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.net.IpRanges;
@@ -209,7 +211,7 @@ public class AccessRuleModel extends Model {
                 String type = row.get(TYPE);
                 if (type == null || !TYPE.isValidValue(type)) {
                     throw Violations.ofField(TYPE.getName(), type,
-                        Microcopy.of("access_rule_type_invalid").withFilter("scope", "violations"));
+                        HohenheimViolations.text("access_rule_type_invalid"));
                 }
             }
             validateData(row.get(TYPE), row.get(DATA), Boolean.TRUE.equals(row.get(ENABLED)));
@@ -235,45 +237,45 @@ public class AccessRuleModel extends Model {
         Map<?, ?> map = data instanceof Map<?, ?> values ? values : Map.of();
         switch (type == null ? "" : type) {
             case TYPE_GROUP -> {
-                String satisfy = text(map.get(GROUP_SATISFY.getName()));
+                String satisfy = Texts.trimmedOrNull(map.get(GROUP_SATISFY.getName()));
                 if (satisfy != null && !GROUP_SATISFY.isValidValue(satisfy)) {
                     throw Violations.ofField("data." + GROUP_SATISFY.getName(), satisfy,
-                        Microcopy.of("access_rule_satisfy_invalid").withFilter("scope", "violations"));
+                        HohenheimViolations.text("access_rule_satisfy_invalid"));
                 }
             }
             case TYPE_IP_ALLOW, TYPE_IP_DENY -> {
-                String network = text(map.get(NETWORK.getName()));
+                String network = Texts.trimmedOrNull(map.get(NETWORK.getName()));
                 if (network == null ? enabled : parseNetwork(network) == null) {
                     throw Violations.ofField("data." + NETWORK.getName(),
                         map.get(NETWORK.getName()),
-                        Microcopy.of("access_rule_network_invalid").withFilter("scope", "violations"));
+                        HohenheimViolations.text("access_rule_network_invalid"));
                 }
             }
             case TYPE_BASIC_AUTH -> {
-                String username = text(map.get(BASIC_AUTH_USERNAME.getName()));
+                String username = Texts.trimmedOrNull(map.get(BASIC_AUTH_USERNAME.getName()));
                 // A colon ENDS the userid in the credential a browser sends (RFC 7617),
                 // so a username carrying one can never be presented back to this rule.
                 if (username != null && username.indexOf(':') >= 0) {
                     throw Violations.ofField("data." + BASIC_AUTH_USERNAME.getName(), username,
-                        Microcopy.of("access_rule_username_invalid").withFilter("scope", "violations"));
+                        HohenheimViolations.text("access_rule_username_invalid"));
                 }
                 if (enabled && (username == null
-                        || text(map.get(BASIC_AUTH_PASSWORD.getName())) == null)) {
+                        || Texts.trimmedOrNull(map.get(BASIC_AUTH_PASSWORD.getName())) == null)) {
                     throw Violations.ofField("data." + BASIC_AUTH_USERNAME.getName(),
                         map.get(BASIC_AUTH_USERNAME.getName()),
-                        Microcopy.of("access_rule_credential_incomplete").withFilter("scope", "violations"));
+                        HohenheimViolations.text("access_rule_credential_incomplete"));
                 }
             }
             case TYPE_AUTH_PROVIDER -> {
                 Object raw = map.get(PROVIDER_ID.getName());
                 Integer providerId = providerId(raw);
-                if (providerId == null && text(raw) != null) {
+                if (providerId == null && Texts.trimmedOrNull(raw) != null) {
                     throw Violations.ofField("data." + PROVIDER_ID.getName(), raw,
-                        Microcopy.of("access_rule_provider_invalid").withFilter("scope", "violations"));
+                        HohenheimViolations.text("access_rule_provider_invalid"));
                 }
                 if (enabled && providerId == null) {
                     throw Violations.ofField("data." + PROVIDER_ID.getName(), null,
-                        Microcopy.of("access_rule_provider_missing").withFilter("scope", "violations"));
+                        HohenheimViolations.text("access_rule_provider_missing"));
                 }
             }
             default -> {
@@ -287,7 +289,7 @@ public class AccessRuleModel extends Model {
         if (value instanceof Number number) {
             return number.intValue() > 0 ? number.intValue() : null;
         }
-        String text = text(value);
+        String text = Texts.trimmedOrNull(value);
         if (text == null) {
             return null;
         }
@@ -305,7 +307,7 @@ public class AccessRuleModel extends Model {
         StringBuilder text = new StringBuilder(type == null ? "" : type);
         for (String key : List.of(NETWORK.getName(), BASIC_AUTH_USERNAME.getName(),
                 PROVIDER_ID.getName(), PROVIDER_REQUIRED_PERMISSION.getName())) {
-            String value = text(map.get(key));
+            String value = Texts.trimmedOrNull(map.get(key));
             if (value != null) {
                 text.append(' ').append(value);
             }
@@ -340,15 +342,6 @@ public class AccessRuleModel extends Model {
         } catch (IllegalArgumentException malformed) {
             return null;
         }
-    }
-
-    /** @return the trimmed text, or null when the value is absent or blank */
-    public static @Nullable String text(@Nullable Object value) {
-        if (value == null) {
-            return null;
-        }
-        String string = String.valueOf(value).trim();
-        return string.isEmpty() ? null : string;
     }
 
     /** The rule's type-specific data as a map (never null). */

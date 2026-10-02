@@ -1,13 +1,13 @@
 package be.elevenways.hohenheim.server.files;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceFileSupport;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -459,7 +459,7 @@ public final class InstanceFiles {
     }
 
     private static @NonNull Violations tooLarge(long cap) {
-        return Violations.ofForm(violationText("files_too_large").withArg("bytes", cap));
+        return Violations.ofForm(HohenheimViolations.text("files_too_large").withArg("bytes", cap));
     }
 
     /**
@@ -471,17 +471,14 @@ public final class InstanceFiles {
         if (error instanceof DockerInstanceRuntime.WorkloadNotBrowsableException) {
             return refusal("files_workload_not_browsable");
         }
-        return Violations.ofForm(violationText("files_failed")
-            .withArg("reason", error.getMessage() != null ? error.getMessage() : error.toString()));
+        return Violations.ofForm(HohenheimViolations.text("files_failed")
+            .withArg("reason", HohenheimViolations.reasonOf(error)));
     }
 
     private static @NonNull Violations refusal(@NonNull String key) {
-        return Violations.ofForm(violationText(key));
+        return Violations.ofForm(HohenheimViolations.text(key));
     }
 
-    private static @NonNull Microcopy violationText(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
-    }
 
     /** The instance's display name, for page titles. */
     public static @NonNull String nameOf(@NonNull Row instance) {

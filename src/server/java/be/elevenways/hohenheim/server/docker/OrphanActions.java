@@ -1,10 +1,10 @@
 package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -143,8 +143,7 @@ public final class OrphanActions {
     }
 
     private static Violations refusal(String key, String detail) {
-        return Violations.ofForm(Microcopy.of(key)
-            .withFilter("scope", "violations")
+        return Violations.ofForm(HohenheimViolations.text(key)
             .withArg("name", detail));
     }
 }

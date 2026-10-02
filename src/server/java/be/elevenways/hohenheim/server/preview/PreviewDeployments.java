@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.preview;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -9,7 +10,6 @@ import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.preview.PreviewOperations;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.ServerMain;
@@ -23,6 +23,7 @@ import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ConvergenceLocks;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.game.GameDomains;
+import be.elevenways.hohenheim.server.instance.PlaintextEnvironments;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
@@ -33,11 +34,8 @@ import be.elevenways.hohenheim.server.source.DeployStatuses;
 import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.server.source.GitProviderClient;
 import be.elevenways.hohenheim.server.source.GitCheckout;
-import be.elevenways.hohenheim.server.source.GitProviders;
-import be.elevenways.hohenheim.server.source.GitRepository;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
@@ -194,12 +192,12 @@ public final class PreviewDeployments {
         Row application = ApplicationReleases.requireApplication(applicationId);
         if (!SiteSources.hasRepository(ApplicationReleases.storedSettings(application))) {
             throw Violations.ofField("application_id", applicationId,
-                violation("preview_unsupported_type"));
+                HohenheimViolations.text("preview_unsupported_type"));
         }
         String baseDomain = str(Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Previews.BASE_DOMAIN));
         if (baseDomain.isEmpty()) {
-            throw Violations.ofForm(violation("preview_no_base_domain"));
+            throw Violations.ofForm(HohenheimViolations.text("preview_no_base_domain"));
         }
         // A preview is built from the APPLICATION but must be REACHABLE, and a hostname
         // only routes when it sits in some site's domain table. Refusing here beats
@@ -207,7 +205,7 @@ public final class PreviewDeployments {
         Row site = exposingSite(applicationId);
         if (site == null) {
             throw Violations.ofField("application_id", applicationId,
-                violation("preview_no_exposing_site"));
+                HohenheimViolations.text("preview_no_exposing_site"));
         }
         PreviewDeploymentModel model = Models.get(PreviewDeploymentModel.class);
         Row preview = model.find()
@@ -278,7 +276,7 @@ public final class PreviewDeployments {
                     EnvVars.toMap(siteSettings.get("build_arguments")),
                     commitSha, null, BuildQuota.fromSettings()));
             if (!build.succeeded() || build.imageId() == null) {
-                throw Violations.ofForm(violation("preview_build_failed")
+                throw Violations.ofForm(HohenheimViolations.text("preview_build_failed")
                     .withArg("reason", build.failureReason() != null
                         ? build.failureReason() : build.status()));
             }
@@ -289,7 +287,7 @@ public final class PreviewDeployments {
             InstanceStatus status = converge(preview, site, desired, hostname, trigger);
             Integer port = status.publishedPort();
             if (port == null) {
-                throw Violations.ofForm(violation("preview_no_published_port"));
+                throw Violations.ofForm(HohenheimViolations.text("preview_no_published_port"));
             }
             ReleaseEngine.probe(port, ReleaseEngine.healthPathOf(siteSettings));
 
@@ -498,42 +496,9 @@ public final class PreviewDeployments {
      * @return how many preview instances were sealed in this pass
      */
     public static int sealPlaintextEnvironments() {
-        int sealed = 0;
-        for (Row instance : Models.get(InstanceModel.class).find().withTrashed()
-                .where(InstanceModel.GENERATED_FOR_MODEL.eq(
-                    PreviewDeploymentModel.MODEL_ID.toString()))
-                .all()) {
-            Map<String, Object> settings = new LinkedHashMap<>(
-                castMap(instance.get(InstanceModel.SETTINGS)));
-            Integer instanceId = instance.get(InstanceModel.ID);
-            Integer previewId = instance.get(InstanceModel.GENERATED_FOR_ID);
-            if (!settings.containsKey("environment_variables") || instanceId == null
-                    || previewId == null) {
-                continue;
-            }
-            try {
-                inScope(previewId, () -> {
-                    Map<String, String> environment = InstanceVariables.detachEnvironment(settings);
-                    new InstanceVariables().storeSecretEnvironment(instanceId, environment);
-                    // Re-read right before the whole-row save: a save writes every column.
-                    Row fresh = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
-                    if (fresh != null) {
-                        fresh.set(InstanceModel.SETTINGS, settings);
-                        Models.get(InstanceModel.class).save(fresh);
-                    }
-                });
-                sealed++;
-            } catch (Exception failed) {
-                Blast.log("PREVIEW: could not move the plaintext environment of instance",
-                    instanceId, "into secret variables; retried at the next boot -",
-                    reasonOf(failed));
-            }
-        }
-        if (sealed > 0) {
-            Blast.log("PREVIEW: moved the plaintext environment of", sealed,
-                "preview instance(s) into encrypted secret variables");
-        }
-        return sealed;
+        return PlaintextEnvironments.seal("PREVIEW", "preview instance(s)",
+            InstanceModel.GENERATED_FOR_MODEL.eq(PreviewDeploymentModel.MODEL_ID.toString()), PreviewDomains.SOURCE,
+            PreviewDeploymentModel.MODEL_ID, false);
     }
 
     // -- routing support -------------------------------------------------------
@@ -842,9 +807,6 @@ public final class PreviewDeployments {
         return ConvergenceLocks.forPreview(applicationId, ref);
     }
 
-    private static @NonNull Microcopy violation(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
-    }
 
     @SuppressWarnings("unchecked")
     private static @NonNull Map<String, Object> castMap(@Nullable Object value) {

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -22,7 +23,6 @@ import be.elevenways.hohenheim.server.instance.InstanceImagePolicy;
 import be.elevenways.hohenheim.server.upstream.kinds.AddressUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.StaticUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.TlsPassthroughUpstreamKind;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -331,8 +331,8 @@ public final class TenantWrites {
                 ? Models.get(InstanceDatabaseModel.class).findById(row.get(InstanceDatabaseModel.ID))
                 : null;
             requireInstanceLinkAuthority(
-                effective(row, stored, InstanceDatabaseModel.INSTANCE_ID),
-                effective(row, stored, InstanceDatabaseModel.DATABASE_ID));
+                row.afterWrite(InstanceDatabaseModel.INSTANCE_ID, stored),
+                row.afterWrite(InstanceDatabaseModel.DATABASE_ID, stored));
             if (stored != null) {
                 // Moving a link off a side needs authority over the side being LEFT too,
                 // or "re-point my link at your database" launders into a detach.
@@ -529,7 +529,7 @@ public final class TenantWrites {
         Row stored = row.has(AccessRuleModel.ID.getName())
             && row.get(AccessRuleModel.ID) != null
             ? Models.get(AccessRuleModel.class).findById(row.get(AccessRuleModel.ID)) : null;
-        requireAccessListAuthority(effective(row, stored, AccessRuleModel.ACCESS_LIST_ID));
+        requireAccessListAuthority(row.afterWrite(AccessRuleModel.ACCESS_LIST_ID, stored));
         if (stored != null && row.has(AccessRuleModel.ACCESS_LIST_ID.getName())
                 && !Objects.equals(row.get(AccessRuleModel.ACCESS_LIST_ID),
                     stored.get(AccessRuleModel.ACCESS_LIST_ID))) {
@@ -549,14 +549,14 @@ public final class TenantWrites {
         Row stored = row.has(ProtectedPathModel.ID.getName())
             && row.get(ProtectedPathModel.ID) != null
             ? Models.get(ProtectedPathModel.class).findById(row.get(ProtectedPathModel.ID)) : null;
-        requireManagedSite(effective(row, stored, ProtectedPathModel.SITE_ID));
+        requireManagedSite(row.afterWrite(ProtectedPathModel.SITE_ID, stored));
         if (stored != null && row.has(ProtectedPathModel.SITE_ID.getName())
                 && !Objects.equals(row.get(ProtectedPathModel.SITE_ID),
                     stored.get(ProtectedPathModel.SITE_ID))) {
             requireManagedSite(stored.get(ProtectedPathModel.SITE_ID));
         }
         AccessContext ctx = acting();
-        Object listId = effective(row, stored, ProtectedPathModel.ACCESS_LIST_ID);
+        Object listId = row.afterWrite(ProtectedPathModel.ACCESS_LIST_ID, stored);
         if (ctx == null || !HohenheimAccess.canUseAccessList(ctx, listId)) {
             throw Violations.ofField(ProtectedPathModel.ACCESS_LIST_ID.getName(), listId,
                 CmsSupport.violationText("tenant_access_list_not_usable"));
@@ -599,7 +599,7 @@ public final class TenantWrites {
         // The site the row will belong to must be one the tenant actually manages. The
         // resource's AccessFunction scopes what a tenant may READ; it says nothing about
         // the site_id a CREATE submits, and a MOVE to another site is the same question.
-        Object siteIdValue = effective(row, stored, SiteDomainModel.SITE_ID);
+        Object siteIdValue = row.afterWrite(SiteDomainModel.SITE_ID, stored);
         AccessContext ctx = acting();
         if (!(siteIdValue instanceof Integer siteId) || ctx == null
                 || !HohenheimAccess.canManageSite(ctx, siteId)) {
@@ -626,8 +626,8 @@ public final class TenantWrites {
         // permission to write DNS inside the victim's zone. Neither the conflict scan nor
         // the quarantine caught it, because a leading wildcard never matches the apex and so
         // does not intersect the apex the victim actually holds.
-        Object matchType = effective(row, stored, SiteDomainModel.MATCH_TYPE);
-        Object hostnameValue = effective(row, stored, SiteDomainModel.HOSTNAME);
+        Object matchType = row.afterWrite(SiteDomainModel.MATCH_TYPE, stored);
+        Object hostnameValue = row.afterWrite(SiteDomainModel.HOSTNAME, stored);
         String tier = SiteDomainModel.effectiveMatchType(
             hostnameValue != null ? String.valueOf(hostnameValue) : null,
             matchType != null ? String.valueOf(matchType) : null);
@@ -639,9 +639,9 @@ public final class TenantWrites {
         // A listener restriction makes the row DISJOINT from every other row's listener set,
         // and refuseRouteConflicts exempts disjoint sets by design -- so a tenant listener
         // walks straight past the hostname-overlap refusal.
-        if (isPresent(effective(row, stored, SiteDomainModel.LISTEN_ON))) {
+        if (isPresent(row.afterWrite(SiteDomainModel.LISTEN_ON, stored))) {
             throw Violations.ofField(SiteDomainModel.LISTEN_ON.getName(),
-                effective(row, stored, SiteDomainModel.LISTEN_ON),
+                row.afterWrite(SiteDomainModel.LISTEN_ON, stored),
                 CmsSupport.violationText("tenant_listen_on_frozen"));
         }
 
@@ -651,9 +651,9 @@ public final class TenantWrites {
         // accepted. Freezing PATH empty for tenants is what keeps every tenant-vs-tenant
         // pair comparable. Admin-authored path carve-outs are unaffected (and are the
         // legitimate case the exemption exists for).
-        if (isPresent(effective(row, stored, SiteDomainModel.PATH))) {
+        if (isPresent(row.afterWrite(SiteDomainModel.PATH, stored))) {
             throw Violations.ofField(SiteDomainModel.PATH.getName(),
-                effective(row, stored, SiteDomainModel.PATH),
+                row.afterWrite(SiteDomainModel.PATH, stored),
                 CmsSupport.violationText("tenant_path_frozen"));
         }
 
@@ -762,8 +762,8 @@ public final class TenantWrites {
         // frozen column), never a create that skips the frozen-column rule.
         Row stored = StoredRows.byId(model, idValue);
 
-        Object kind = effective(row, stored, SiteModel.UPSTREAM_KIND);
-        Object settings = effective(row, stored, SiteModel.SETTINGS);
+        Object kind = row.afterWrite(SiteModel.UPSTREAM_KIND, stored);
+        Object settings = row.afterWrite(SiteModel.SETTINGS, stored);
         boolean upstreamMoves = stored == null
             || !Objects.equals(kind, stored.get(SiteModel.UPSTREAM_KIND))
             || !Objects.equals(settings, stored.get(SiteModel.SETTINGS));
@@ -1000,8 +1000,7 @@ public final class TenantWrites {
         AccessContext ctx = acting();
         if (ctx == null || !ctx.isAccount()
                 || !ctx.hasCapability(InstanceModel.MODEL_ID, idValue, HohenheimAccess.CONFIG)) {
-            throw Violations.ofForm(Microcopy.of("instance_not_permitted")
-                .withFilter("scope", "violations"));
+            throw Violations.ofForm(HohenheimViolations.text("instance_not_permitted"));
         }
 
         refuseFrozenColumns(model, row, stored, INSTANCE_TENANT_WRITABLE, INSTANCE_DERIVED);
@@ -1217,8 +1216,7 @@ public final class TenantWrites {
         if (ctx == null || !ctx.isAccount()
                 || !ctx.hasCapability(InstanceModel.MODEL_ID, instanceId,
                     HohenheimAccess.CONFIG)) {
-            throw Violations.ofForm(Microcopy.of("instance_not_permitted")
-                .withFilter("scope", "violations"));
+            throw Violations.ofForm(HohenheimViolations.text("instance_not_permitted"));
         }
     }
 
@@ -1236,7 +1234,7 @@ public final class TenantWrites {
             ? model.findById(row.get(DnsRecordModel.ID)) : null;
 
         requireRecordAuthority(row, stored);
-        refuseForeignRecordType(effective(row, stored, DnsRecordModel.TYPE));
+        refuseForeignRecordType(row.afterWrite(DnsRecordModel.TYPE, stored));
         // A record being EDITED must have been allow-listed before the edit too, otherwise
         // "change the type of the NS row to A" launders it in.
         if (stored != null) {
@@ -1292,7 +1290,7 @@ public final class TenantWrites {
         if (!ctx.isAccount()) {
             if (stored == null
                     || DynamicDnsService.credentialFor(stored.get(DnsRecordModel.ID)) == null) {
-                throw refusal(DnsRecordModel.NAME.getName(), effective(row, stored, DnsRecordModel.NAME));
+                throw refusal(DnsRecordModel.NAME.getName(), row.afterWrite(DnsRecordModel.NAME, stored));
             }
             refuseChangesOutside(row, stored, Set.of(DnsRecordModel.VALUE.getName()));
             return;
@@ -1310,7 +1308,7 @@ public final class TenantWrites {
         // alone. (A dyndns grant is authority over the CREDENTIAL table only -- see
         // checkCredentialWrite -- never over any column of the record itself.)
         if (stored != null && !holdsEdit && !ownsStoredName) {
-            throw refusal(DnsRecordModel.NAME.getName(), effective(row, stored, DnsRecordModel.NAME));
+            throw refusal(DnsRecordModel.NAME.getName(), row.afterWrite(DnsRecordModel.NAME, stored));
         }
 
         String claimed = fqdnOf(row, stored);
@@ -1323,8 +1321,8 @@ public final class TenantWrites {
 
     /** @return the fully qualified name the write ends up with, or "" when its zone is gone */
     private static @NonNull String fqdnOf(@NonNull Row row, @Nullable Row stored) {
-        Object zoneId = effective(row, stored, DnsRecordModel.ZONE_ID);
-        Object name = effective(row, stored, DnsRecordModel.NAME);
+        Object zoneId = row.afterWrite(DnsRecordModel.ZONE_ID, stored);
+        Object name = row.afterWrite(DnsRecordModel.NAME, stored);
         if (zoneId == null || name == null) {
             return "";
         }
@@ -1406,15 +1404,6 @@ public final class TenantWrites {
             throw Violations.ofField(DnsRecordModel.TYPE.getName(), text,
                 CmsSupport.violationText("tenant_record_type"));
         }
-    }
-
-    /** The value the write will END UP with, reading the already-loaded stored row. */
-    private static @Nullable Object effective(@NonNull Row row, @Nullable Row stored,
-                                              @NonNull Field<?, ?> field) {
-        if (row.has(field.getName())) {
-            return row.get(field.getName());
-        }
-        return stored != null ? stored.get(field.getName()) : field.getDefaultValue();
     }
 
     private static boolean isPresent(@Nullable Object value) {

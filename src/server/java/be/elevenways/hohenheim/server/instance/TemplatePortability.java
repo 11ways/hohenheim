@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateDatabaseModel;
@@ -11,7 +12,6 @@ import be.elevenways.hohenheim.model.InstanceTemplateVolumeModel;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates.VolumeDeclaration;
 import be.elevenways.hohenheim.server.instance.variable.VariableTypes;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
@@ -199,22 +199,22 @@ public final class TemplatePortability {
         try {
             parsed = Zenit.DRY.parse(json);
         } catch (RuntimeException unparseable) {
-            throw Violations.ofForm(violationText("template_import_unparseable"));
+            throw Violations.ofForm(HohenheimViolations.text("template_import_unparseable"));
         }
         if (!(parsed instanceof Map<?, ?> document)) {
-            throw Violations.ofForm(violationText("template_import_unparseable"));
+            throw Violations.ofForm(HohenheimViolations.text("template_import_unparseable"));
         }
         if (!FORMAT.equals(document.get("format"))) {
-            throw Violations.ofForm(violationText("template_import_format"));
+            throw Violations.ofForm(HohenheimViolations.text("template_import_format"));
         }
         Object version = document.get("format_version");
         if (!(version instanceof Number number) || number.intValue() != FORMAT_VERSION) {
-            throw Violations.ofForm(violationText("template_import_version")
+            throw Violations.ofForm(HohenheimViolations.text("template_import_version")
                 .withArg("version", String.valueOf(version))
                 .withArg("supported", FORMAT_VERSION));
         }
         if (!(document.get("template") instanceof Map<?, ?> rawBody)) {
-            throw Violations.ofForm(violationText("template_import_unparseable"));
+            throw Violations.ofForm(HohenheimViolations.text("template_import_unparseable"));
         }
         Map<String, Object> body = castMap(rawBody);
 
@@ -225,18 +225,18 @@ public final class TemplatePortability {
             && checksum.get("value") instanceof String value ? value : null;
         String computed = checksumOf(body);
         if (declared == null || !SecureTokens.constantTimeEquals(declared, computed)) {
-            throw Violations.ofForm(violationText("template_import_checksum"));
+            throw Violations.ofForm(HohenheimViolations.text("template_import_checksum"));
         }
 
         String name = str(body.get("name"));
         if (name.isEmpty()) {
-            throw Violations.ofField("name", name, violationText("name_required"));
+            throw Violations.ofField("name", name, HohenheimViolations.text("name_required"));
         }
         String kind = str(body.get("kind"));
         Identifier kindId = Identifier.tryParse(kind);
         if (kindId == null || InstanceKindRegistry.REGISTRY.get(kindId) == null) {
             throw Violations.ofField("kind", kind,
-                violationText("instance_kind_unknown").withArg("kind", kind));
+                HohenheimViolations.text("instance_kind_unknown").withArg("kind", kind));
         }
 
         // Registered is not the same question as authorable: an imported document must not
@@ -247,12 +247,12 @@ public final class TemplatePortability {
         for (Map<String, Object> variable : variables) {
             String key = str(variable.get("key"));
             if (!key.matches("^[A-Z][A-Z0-9_]*$")) {
-                throw Violations.ofField("key", key, violationText("variable_key_format"));
+                throw Violations.ofField("key", key, HohenheimViolations.text("variable_key_format"));
             }
             String type = str(variable.get("type"));
             if (VariableTypes.getHandler(type) == null) {
                 throw Violations.ofField("type", type,
-                    violationText("variable_type_unknown").withArg("type", type));
+                    HohenheimViolations.text("variable_type_unknown").withArg("type", type));
             }
         }
         List<Map<String, Object>> files = entryList(body.get("files"));
@@ -260,7 +260,7 @@ public final class TemplatePortability {
             String path = str(file.get("container_path"));
             if (!path.startsWith("/") || path.contains("..")) {
                 throw Violations.ofField("container_path", path,
-                    violationText("file_path_absolute"));
+                    HohenheimViolations.text("file_path_absolute"));
             }
         }
         // A declared database is judged by the SAME vocabulary the record column stores:
@@ -270,11 +270,11 @@ public final class TemplatePortability {
             String engine = str(database.get("engine"));
             if (ManagedDatabase.Engine.forToken(engine) == null) {
                 throw Violations.ofField("engine", engine,
-                    violationText("unknown_engine").withArg("engine", engine));
+                    HohenheimViolations.text("unknown_engine").withArg("engine", engine));
             }
             String prefix = str(database.get("env_prefix"));
             if (!prefix.matches(InstanceDatabaseModel.PREFIX_PATTERN)) {
-                throw Violations.ofField("env_prefix", prefix, violationText("prefix_format"));
+                throw Violations.ofField("env_prefix", prefix, HohenheimViolations.text("prefix_format"));
             }
         }
         // A declared volume is judged by the SAME rules the create-from-template copy
@@ -386,7 +386,7 @@ public final class TemplatePortability {
             Object quota = entry.get("quota_bytes");
             if (quota != null && !(quota instanceof Number)) {
                 throw Violations.ofField("quota_bytes", quota,
-                    violationText("volume_quota_invalid"));
+                    HohenheimViolations.text("volume_quota_invalid"));
             }
             declared.add(new VolumeDeclaration(str(entry.get("name")),
                 str(entry.get("container_path")),
@@ -417,7 +417,4 @@ public final class TemplatePortability {
         return value == null ? "" : String.valueOf(value).trim();
     }
 
-    private static Microcopy violationText(String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
-    }
 }

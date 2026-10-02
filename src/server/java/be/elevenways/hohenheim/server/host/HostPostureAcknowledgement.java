@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
@@ -51,17 +51,17 @@ public final class HostPostureAcknowledgement {
      */
     public static void record(@NonNull Row server) {
         if (!ServerModel.postureNeedsAcknowledgement(server)) {
-            throw Violations.ofForm(violation("posture_not_acknowledgeable")
+            throw Violations.ofForm(HohenheimViolations.text("posture_not_acknowledgeable")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
         if (ServerModel.postureAcknowledged(server)) {
-            throw Violations.ofForm(violation("posture_already_acknowledged")
+            throw Violations.ofForm(HohenheimViolations.text("posture_already_acknowledged")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
         Accountability who = Accountability.current();
         String actor = who.actor();
         if (actor == null || actor.isBlank()) {
-            throw Violations.ofForm(violation("posture_acknowledgement_needs_actor")
+            throw Violations.ofForm(HohenheimViolations.text("posture_acknowledgement_needs_actor")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
         String label = who.actorLabel() != null ? who.actorLabel() : actor;
@@ -82,7 +82,4 @@ public final class HostPostureAcknowledgement {
             "actor", actor));
     }
 
-    private static Microcopy violation(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
-    }
 }

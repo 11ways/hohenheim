@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.project;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.DoomedRows;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -76,7 +77,7 @@ public final class ProjectGuards {
                 // would silently swap every member and every owned record.
                 throw Violations.ofField(ProjectModel.GROUP_ID.getName(),
                     row.get(ProjectModel.GROUP_ID),
-                    violation("project_group_immutable"));
+                    HohenheimViolations.text("project_group_immutable"));
             }
             if (row.has(ProjectModel.NAME.getName()) && storedGroup != null) {
                 Projects.syncGroupTitle(storedGroup,
@@ -173,20 +174,20 @@ public final class ProjectGuards {
             Row environment = Models.get(EnvironmentModel.class).findById(environmentId);
             if (environment == null) {
                 throw Violations.ofField(InstanceModel.ENVIRONMENT_ID.getName(), environmentId,
-                    violation("environment_unknown"));
+                    HohenheimViolations.text("environment_unknown"));
             }
             Row project = Models.get(ProjectModel.class)
                 .findById(environment.get(EnvironmentModel.PROJECT_ID));
             if (project == null) {
                 throw Violations.ofField(InstanceModel.ENVIRONMENT_ID.getName(), environmentId,
-                    violation("environment_unknown"));
+                    HohenheimViolations.text("environment_unknown"));
             }
             Set<String> owner = ownerOf(row);
             if (owner == null || !owner.equals(Projects.ownerSubjectsOf(project))) {
                 // Fails CLOSED on unreadable grants: grouping without a proven owner
                 // match is exactly the drift this hook exists to refuse.
                 throw Violations.ofField(InstanceModel.ENVIRONMENT_ID.getName(), environmentId,
-                    violation("environment_project_mismatch"));
+                    HohenheimViolations.text("environment_project_mismatch"));
             }
         });
     }
@@ -250,7 +251,7 @@ public final class ProjectGuards {
         public @NonNull Microcopy refusal() {
             String holders = this.instances.isEmpty() ? "variables"
                 : this.variables.isEmpty() ? "instances" : "both";
-            return violation("environment_in_use")
+            return HohenheimViolations.text("environment_in_use")
                 .withFilter("holders", holders)
                 .withArg("instances", String.join(", ", this.instances))
                 .withArg("variables", String.join(", ", this.variables));
@@ -271,7 +272,7 @@ public final class ProjectGuards {
             }
             Row project = Projects.projectForGroup(groupId);
             if (project != null) {
-                throw Violations.ofForm(violation("role_owned_by_project")
+                throw Violations.ofForm(HohenheimViolations.text("role_owned_by_project")
                     .withArg("name", String.valueOf((Object) project.get(ProjectModel.NAME))));
             }
         }
@@ -287,10 +288,10 @@ public final class ProjectGuards {
             Integer id = project.get(ProjectModel.ID);
             Integer groupId = project.get(ProjectModel.GROUP_ID);
             if (groupId != null && Projects.ownedRecordCount(groupId) > 0) {
-                throw Violations.ofForm(violation("project_not_empty"));
+                throw Violations.ofForm(HohenheimViolations.text("project_not_empty"));
             }
             if (id != null && Projects.environmentCount(id) > 0) {
-                throw Violations.ofForm(violation("project_not_empty"));
+                throw Violations.ofForm(HohenheimViolations.text("project_not_empty"));
             }
             if (groupId != null) {
                 doomedGroups.add(groupId);
@@ -311,7 +312,4 @@ public final class ProjectGuards {
         return id == null ? null : Models.get(ProjectModel.class).findById(id);
     }
 
-    private static Microcopy violation(String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
-    }
 }

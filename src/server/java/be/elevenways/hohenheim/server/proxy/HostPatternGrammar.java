@@ -36,9 +36,19 @@ public final class HostPatternGrammar implements Hostnames.PatternGrammar {
         }
     }
 
+    /**
+     * AIDEV-NOTE: the translation is held to {@link #refusal}, not only to core's grammar: core's HostPattern carries a
+     * port, a route hostname never does, and a stored row with one must fail M011 by name rather than be respelled
+     * into a pattern no request host can match (review 8 D02).
+     */
     @Override
     public @NonNull String fromLegacyGlob(@NonNull String glob) {
-        return HostPattern.fromLegacyGlob(glob);
+        String translated = HostPattern.fromLegacyGlob(glob);
+        String refused = this.refusal(translated);
+        if (refused != null) {
+            throw new IllegalArgumentException(refused);
+        }
+        return translated;
     }
 
     @Override

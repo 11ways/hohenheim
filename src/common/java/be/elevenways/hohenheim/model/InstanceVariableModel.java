@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -94,7 +95,7 @@ public class InstanceVariableModel extends Model {
             Object stray = row.has(wrongCarrier) ? row.get(wrongCarrier) : null;
             if (stray != null && !String.valueOf(stray).isEmpty()) {
                 throw Violations.ofField(wrongCarrier, null,
-                    Microcopy.of("variable_wrong_carrier").withFilter("scope", "violations")
+                    HohenheimViolations.text("variable_wrong_carrier")
                         .withArg("kind", secret ? KIND_SECRET : KIND_PLAIN));
             }
         });
@@ -117,7 +118,7 @@ public class InstanceVariableModel extends Model {
             Object environment = effective(row, ENVIRONMENT_ID.getName());
             if ((instance == null) == (environment == null)) {
                 throw Violations.ofField(ENVIRONMENT_ID.getName(), environment,
-                    Microcopy.of("variable_one_owner").withFilter("scope", "violations"));
+                    HohenheimViolations.text("variable_one_owner"));
             }
         });
     }

@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.dns.DnsRecordDto;
 import be.elevenways.hohenheim.dns.DnsRecordFormView;
 import be.elevenways.hohenheim.dns.DnsRecordView;
@@ -421,7 +422,7 @@ public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row
             // A validation refusal round-trips by microcopy key (same catalogs on both instances); a transport
             // failure shows the raw message.
             return CmsActionResult.errorToast(e.getViolationKey() != null
-                ? Microcopy.of(e.getViolationKey()).withFilter("scope", "violations")
+                ? HohenheimViolations.text(e.getViolationKey())
                 : Microcopy.of("peer_call_failed").withFilter("scope", "dns_remote")
                     .withArg("reason", String.valueOf(e.getMessage())));
         }

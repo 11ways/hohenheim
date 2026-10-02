@@ -2,10 +2,12 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceConsoleHandler;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.Poll;
@@ -160,6 +162,39 @@ class InteractiveConsoleTest {
                 .as("step 4: the command form remains the plain console's input")
                 .containsExactly("status\n");
             handler.onClose(1000, "bye");
+        });
+    }
+
+    /**
+     * A product-generated instance's console is its product's on every surface: the generic socket is one, so it
+     * refuses the viewer the console operation refuses, even while the product holds a live TTY session.
+     */
+    @Test
+    void aGeneratedInstancesConsoleSocketIsRefused() {
+        Db.run(datasource, () -> {
+            // 1. A product tier lowers a TTY workload and holds its console session (GameDomains' lane).
+            int[] id = new int[1];
+            OwnedInstances.inScopeUnchecked("site", SiteModel.MODEL_ID, 424242, () -> {
+                id[0] = instanceRecord("console-generated", ConsoleKind.TTY.token());
+                new InstanceService().deploy(id[0]);
+            });
+            int instanceId = id[0];
+            InstanceConsoles.Viewer product = InstanceConsoles.attach(instanceId);
+            FakeNativeDaemons.ScriptedStream stream =
+                FakeNativeDaemons.CONSOLE_STREAMS.get(FakeNativeDaemons.handleOf(instanceId));
+            assertThat(stream).as("step 1: the product's session is live").isNotNull();
+
+            // 2. A viewer holding manage on the row opens the generic socket: refused by policy, like the operation.
+            FakeSession session = new FakeSession(grantedViewer("generated-viewer", instanceId));
+            InstanceConsoleHandler handler = new InstanceConsoleHandler(session, instanceId);
+            handler.onOpen();
+            assertThat(session.closeCode).as("step 2: the socket is closed by policy").isEqualTo(1008);
+            assertThat(handler.revalidate()).as("step 2: and never revalidates either").isFalse();
+
+            // 3. Nothing it types reaches the product's TTY.
+            handler.onTextMessage("rm -rf /\r");
+            assertThat(stream.stdinWrites()).as("step 3: no raw input reached the generated workload").isEmpty();
+            product.close();
         });
     }
 

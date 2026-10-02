@@ -5,7 +5,6 @@ import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.common.setting.SettingGroup;
 import be.elevenways.zenit.common.setting.SettingsRule;
 import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.validation.PathKind;
 import be.elevenways.zenit.common.validation.PrivateNetworkOptIn;
 import be.elevenways.hohenheim.net.IpLiterals;
@@ -508,7 +507,7 @@ public class HohenheimSettings {
                     return hours == null || hours >= 1 ? null
                         : "stacks.reclaim_min_age_hours is " + hours + "; it must be at least 1";
                 })
-                .says(Microcopy.of("setting_reclaim_min_age").withFilter("scope", "violations"))
+                .says(HohenheimViolations.text("setting_reclaim_min_age"))
                 .addTo(Zenit.SETTINGS_VALUES);
 
         /** A whole number from a number or a numeric string; anything else is not one. */
@@ -1109,7 +1108,7 @@ public class HohenheimSettings {
                     }
                     return null;
                 })
-                .says(Microcopy.of("setting_public_port_window").withFilter("scope", "violations")
+                .says(HohenheimViolations.text("setting_public_port_window")
                     .withArg("max", MAX_PORT))
                 .addTo(Zenit.SETTINGS_VALUES);
     }

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
@@ -67,7 +68,7 @@ public final class HostProbe {
 
     /** Classify a probe failure by its message evidence. */
     public static @NonNull Outcome classify(@NonNull Exception error) {
-        String message = error.getMessage() != null ? error.getMessage() : error.toString();
+        String message = HohenheimViolations.reasonOf(error);
         // A refusal we RAISED carries its own class; never re-derive it from prose.
         if (error instanceof HostKeys.HostTrustException refusal) {
             return Outcome.failure(refusal.kind, message);
