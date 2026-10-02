@@ -82,7 +82,7 @@ class ReconcileFindingTriageTest extends HohenheimTestBase {
             assertThat(tile("Colliding under these filters")).as("step 3: the collision is a container").isEqualTo("1");
 
             // 4. A typed search narrows the ROWS, never the tiles: they count under the filters, as worded.
-            navigateToApp("/admin/reconcile-findings" + QUERY + "&search=triage-colliding");
+            navigateToApp("/admin/reconcile-findings" + QUERY + "&text=triage-colliding");
             waitForHydration();
             waitForCount("pl-table-body pl-table-row[data-row-key]", 1);
             assertThat(page.locator("pl-table-body pl-table-row[data-row-key]").count())

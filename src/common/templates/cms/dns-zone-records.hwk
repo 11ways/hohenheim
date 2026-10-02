@@ -14,6 +14,7 @@
 {% declare searchEnabled: Boolean = false %}
 {% declare searchActive: Boolean = false %}
 {% declare searchValue: String = "" %}
+{% declare searchParam: String %}
 {% declare pager: Pager = null %}
 {% declare quickAddEnabled: Boolean = false %}
 {% declare quickAddForm: InlineCreateFormState = null %}
@@ -33,7 +34,7 @@
         {#- A search takes over the tab's history entry: typing re-submits on every pause. -#}
         <form method="get" action={% listUrl %} id="dns-records-filter-form" class="cms-list-search"
               data-hawkeye-navigation="replace">
-            <cms-list-search formId="dns-records-filter-form" value={% searchValue %}></cms-list-search>
+            <cms-list-search formId="dns-records-filter-form" paramName={% searchParam %} value={% searchValue %}></cms-list-search>
         </form>
         {% /if %}
         {% if addRecordTarget %}

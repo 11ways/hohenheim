@@ -183,7 +183,7 @@ class DnsListEditingTest extends HohenheimTestBase {
         }
 
         // 3. The search box narrows the listing over the resource's declared search fields.
-        String matching = adminGet(path + "?search=mail").body();
+        String matching = adminGet(path + "?text=mail").body();
         assertThat(matching).as("step 3: the match is listed").contains("mail");
         assertThat(matching).as("step 3: and the rest is not")
             .doesNotContain("data-row-key=\"" + recordId + "\"");
@@ -193,7 +193,7 @@ class DnsListEditingTest extends HohenheimTestBase {
 
         // 4. A term nothing matches reaches the filtered-empty state with its clear link,
         //    never the whole listing.
-        String empty = adminGet(path + "?search=nothing-matches-this").body();
+        String empty = adminGet(path + "?text=nothing-matches-this").body();
         assertThat(empty).as("step 4: the filtered empty state")
             .contains("data-cms-empty-state=\"filtered\"")
             .contains("data-cms-clear-filters");
@@ -218,13 +218,13 @@ class DnsListEditingTest extends HohenheimTestBase {
 
         // 2. A search narrows the list without adding an entry.
         page.locator(search).fill("mail");
-        page.waitForURL("**/page/records?search=mail");
+        page.waitForURL("**/page/records?text=mail");
         waitForCount("pl-table-row[data-row-key='" + wwwId + "']", 0);
         assertThat(historyLength()).as("step 2: the search took over the tab's entry").isEqualTo(entries);
 
         // 3. A second term takes over the same entry again.
         page.locator(search).fill("www");
-        page.waitForURL("**/page/records?search=www");
+        page.waitForURL("**/page/records?text=www");
         waitForCount("pl-table-row[data-row-key='" + mailId + "']", 0);
         assertThat(historyLength()).as("step 3: still no entry per term").isEqualTo(entries);
 

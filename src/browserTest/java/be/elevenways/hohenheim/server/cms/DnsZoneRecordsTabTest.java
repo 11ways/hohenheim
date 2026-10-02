@@ -21,6 +21,7 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -85,7 +86,7 @@ class DnsZoneRecordsTabTest extends HohenheimTestBase {
 
         // 4. The search is the resource's own, still inside the zone: the other zone's
         //    rec-000 matches the term too, and is still not listed.
-        Map<String, Object> searched = render(operator, Map.of("search", "rec-00"));
+        Map<String, Object> searched = render(operator, Map.of("text", "rec-00"));
         TableState searchedTable = (TableState) searched.get("table");
         assertThat(searchedTable.rows())
             .as("step 4: the search narrows within the zone (rec-000 .. rec-009)")
@@ -114,6 +115,10 @@ class DnsZoneRecordsTabTest extends HohenheimTestBase {
         InvocationHandler handler = (proxy, method, args) -> {
             if ("getQueryParam".equals(method.getName()) && args != null && args.length == 1) {
                 return query.get(String.valueOf(args[0]));
+            }
+            if ("getQueryParams".equals(method.getName()) && args != null && args.length == 1) {
+                String value = query.get(String.valueOf(args[0]));
+                return value == null ? List.of() : List.of(value);
             }
             if ("getConduit".equals(method.getName())) {
                 return proxy;

@@ -167,7 +167,7 @@ class AdminListPresentationTest extends HohenheimTestBase {
         seed();
 
         // 1. The plainest case: the name column.
-        String byName = adminGet("/admin/sites?search=wavea-alpha").body();
+        String byName = adminGet("/admin/sites?text=wavea-alpha").body();
         assertThat(byName).as("step 1: the site whose NAME matches is listed")
             .contains("wavea-alpha-site");
         assertThat(byName).as("step 1: and the one that does not is gone")
@@ -175,7 +175,7 @@ class AdminListPresentationTest extends HohenheimTestBase {
 
         // 2. A field that is searchable but is NOT a visible column of its own: the slug
         //    rides as the name's subtext, and searching it still works.
-        String bySlug = adminGet("/admin/sites?search=wavea-beta-slug").body();
+        String bySlug = adminGet("/admin/sites?text=wavea-beta-slug").body();
         assertThat(bySlug).as("step 2: the site is found by the slug under its name")
             .contains("wavea-beta-site");
         assertThat(bySlug).as("step 2: and the other site is not")
@@ -183,7 +183,7 @@ class AdminListPresentationTest extends HohenheimTestBase {
 
         // 3. Fail CLOSED. A term no declared field can match must return NOTHING; returning
         //    the un-narrowed list would read as "everything matches".
-        String noMatch = adminGet("/admin/sites?search=wavea-no-such-site-anywhere").body();
+        String noMatch = adminGet("/admin/sites?text=wavea-no-such-site-anywhere").body();
         assertThat(noMatch).as("step 3: a term nothing matches lists no seeded site")
             .doesNotContain("wavea-alpha-site")
             .doesNotContain("wavea-beta-site");
@@ -192,7 +192,7 @@ class AdminListPresentationTest extends HohenheimTestBase {
         //    previously only answerable by opening every record. The rules are their own
         //    records now, so the question is asked of them -- and each answer names the
         //    list it belongs to.
-        String byRule = adminGet("/admin/access-rules?search=10.77.0.5").body();
+        String byRule = adminGet("/admin/access-rules?text=10.77.0.5").body();
         assertThat(byRule).as("step 4: the rule holding the address names its list")
             .contains("wavea-allow-list");
         assertThat(byRule).as("step 4: and not the list that does not hold it")
@@ -200,7 +200,7 @@ class AdminListPresentationTest extends HohenheimTestBase {
 
         // 5. A host is found by an address that was stored and, before this wave, rendered
         //    nowhere at all.
-        String byIp = adminGet("/admin/servers?search=198.51.100.44").body();
+        String byIp = adminGet("/admin/servers?text=198.51.100.44").body();
         assertThat(byIp).as("step 5: the host is found by its public address")
             .contains("wavea-host");
 
@@ -220,7 +220,7 @@ class AdminListPresentationTest extends HohenheimTestBase {
     void copyChipCarriesTheRawValueOfItsOwnColumn() throws Exception {
         seed();
 
-        String body = adminGet("/admin/bans?search=203.0.113.201").body();
+        String body = adminGet("/admin/bans?text=203.0.113.201").body();
 
         // 1. The cell IS a composite: the address with the reason under it.
         assertThat(body).as("step 1: the address cell renders both halves")
