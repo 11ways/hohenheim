@@ -13,6 +13,8 @@ import be.elevenways.hohenheim.server.database.DatabaseApi;
 import be.elevenways.hohenheim.server.files.InstanceFileEndpoints;
 import be.elevenways.hohenheim.server.game.GameDomainOperationHandlers;
 import be.elevenways.hohenheim.server.instance.InstanceApi;
+import be.elevenways.hohenheim.server.instance.InstanceBackupOperationHandlers;
+import be.elevenways.hohenheim.server.instance.InstanceChildDeletes;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.server.instance.InstanceStatsHandler;
 import be.elevenways.hohenheim.server.instance.InstanceTemplateHandlers;
@@ -73,6 +75,8 @@ public final class HohenheimHandlers {
         SiteOperationHandlers.init();
         GitProviderOperationHandlers.init();
         GameDomainOperationHandlers.init();
+        InstanceBackupOperationHandlers.init();
+        InstanceChildDeletes.init();
         InstanceApi.init();
         PaasApi.init();
         DatabaseApi.init();

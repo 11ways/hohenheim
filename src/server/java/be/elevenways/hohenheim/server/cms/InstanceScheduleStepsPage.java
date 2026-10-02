@@ -74,7 +74,7 @@ public final class InstanceScheduleStepsPage implements RecordScopedPage<Row> {
                 run.get(RecordScheduleRunModel.ID),
                 ScheduleRunStatuses.badgeFor(run.get(RecordScheduleRunModel.STATUS)),
                 String.valueOf(run.get(RecordScheduleRunModel.STARTED_AT)),
-                InstanceScheduleRunResource.describeSteps(run),
+                InstanceScheduleRunParts.describeSteps(run),
                 error != null ? error : ""));
         }
 

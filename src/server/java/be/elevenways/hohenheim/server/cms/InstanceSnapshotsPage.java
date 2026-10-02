@@ -18,7 +18,7 @@ public final class InstanceSnapshotsPage extends InstanceArtifactsPage {
     public static final String SLUG = "snapshots";
 
     InstanceSnapshotsPage(@NonNull InstanceSnapshotResource resource) {
-        super(resource);
+        super(resource.slug());
     }
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_snapshots"); }

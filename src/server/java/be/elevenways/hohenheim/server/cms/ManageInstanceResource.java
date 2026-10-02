@@ -126,10 +126,10 @@ public final class ManageInstanceResource extends InstanceResource {
             // runs as its own non-root uid -- a tenant who cannot reach it here has "your
             // own box" and no way into it. It hides AND 404s itself without the capability.
             new InstanceShellPage(),
-            // The DELEGATED artifact resources: ManageInstanceBackupResource declares no
-            // row actions, which is how restore-to-new stays operator-only here too.
+            // The artifact tabs read THIS panel's entries: the backup twin places no
+            // restore-to-new, which is how it stays operator-only here too.
             new InstanceSnapshotsPage(new ManageInstanceSnapshotResource()),
-            new InstanceBackupsPage(new ManageInstanceBackupResource()),
+            new InstanceBackupsPage(),
             new InstanceSchedulesPage(), new InstanceDevicesPage(),
             new InstanceVolumesPage(), new InstanceDatabasesPage()));
         pages.addAll(RecordSubpageRegistry.INSTANCE.contributionsFor(this.model().getModelId()));

@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.InstanceQuotaResource;
+import be.elevenways.hohenheim.server.cms.InstanceQuotaParts;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -27,6 +27,7 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import be.elevenways.zenit.test.support.RateLimitExemption;
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import com.microsoft.playwright.Locator;
 import org.junit.jupiter.api.*;
 
@@ -972,7 +973,7 @@ class AdminPagesTest extends HohenheimTestBase {
 
             // 4. The record's own TITLE is the same name, so the delete confirmation asks
             //    about a person rather than about a storage key.
-            assertThat(new InstanceQuotaResource().recordTitle(quota))
+            assertThat(PanelResourceViews.forCaller(InstanceQuotaParts.admin()).recordTitle(quota))
                 .as("step 4: the record title names the owner too")
                 .isEqualTo("Quota Label Owner");
         } finally {
