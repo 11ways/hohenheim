@@ -24,20 +24,16 @@ import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelPeer;
-import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.cms.server.page.CmsRecordSources;
 import be.elevenways.zenit.common.data.RecordCreateProvider;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Permission;
-import be.elevenways.zenit.common.security.PermissionChecker;
-import be.elevenways.zenit.common.security.Principal;
+import be.elevenways.zenit.common.security.PermissionComputation;
+import be.elevenways.zenit.common.security.Permissions;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
-import be.elevenways.zenit.server.data.RecordSourceGate;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -65,91 +61,39 @@ public final class ManagePanel extends Panel {
             Microcopy.of("title").withFilter("scope", "manage"), ACCESS);
     }
 
+    /** The one eligibility computation, held so a JVM that boots twice installs the same instance. */
+    private static final PermissionComputation ELIGIBILITY = ManagePanel::eligible;
+
     /**
-     * Derives panel eligibility from walk-confirmed record grants while preserving
-     * explicit global grants. Installed by {@code HohenheimHostWiring} at the
-     * MODULES stage (never a Panel-constructor side effect): the checker and the
-     * site source must exist the moment the server accepts requests, and boot-seam
-     * installation makes that ordering structural.
+     * Installs the panel's eligibility as the computation of the computed {@link HohenheimSources#MANAGE_ACCESS}:
+     * an explicit decision of the checker wins either way, and an abstain asks {@link #eligible}, on every lane
+     * (request, detached, websocket) alike. Installed by {@code HohenheimHostWiring} at the MODULES stage.
+     *
+     * AIDEV-NOTE: this replaced a private PermissionChecker wrapper that widened only the request face, so a
+     * detached context (a hop, a channel) answered false for a tenant the request lane admitted (review 4, D14). The
+     * computation never runs inside decide(), so an operator's explicit global DENY stays visible to the capability
+     * walk's gate row (CapabilityWalkTest step 3).
      */
-    public static synchronized void installEligibilityPolicy() {
-        PermissionChecker current = Zenit.getPermissionChecker();
-        if (current instanceof ManageEligibilityChecker) {
-            return;
-        }
-        Zenit.setPermissionChecker(new ManageEligibilityChecker(current));
+    public static void installEligibility() {
+        Permissions.compute(HohenheimSources.MANAGE_ACCESS, ELIGIBILITY);
     }
 
     /**
-     * Widens ONLY the boolean face of the panel's ACCESS permission: an explicit
-     * resolver decision (either way) wins, and an abstain falls back to "holds a
-     * walk-confirmed manage grant on at least one site". zenit-cms checks a
-     * panel's access as a plain permission, so this layer is what makes a
-     * grant-holding tenant eligible for /manage without a second global grant.
+     * Whether a principal with no explicit decision is eligible for /manage: it holds a walk-confirmed grant on at
+     * least one record of a model this panel projects. It asks no conduit.
      *
-     * AIDEV-NOTE: decide() MUST pass through to the delegate untouched. The
-     * predecessor (EffectiveManagePermissionChecker) overrode only
-     * hasPermission, so it inherited the interface default decide() -- which
-     * maps false to abstain -- and thereby made an operator's explicit global
-     * DENY invisible to RecordCapabilities row 2 (GATE_DENIED) in every
-     * hohenheim install. Pinned by CapabilityWalkTest step 3.
+     * AIDEV-NOTE: every model this panel projects belongs in this disjunction: keying it on sites alone locked a pure
+     * instance tenant out of the panel built for them, and databases, git providers and projects joined for the same
+     * reason. Each record-capability term asks reachesAny, never "ids.isEmpty()": an id set cannot express
+     * every-record authority, which 403'd a hohenheim.sites.manage_all holder. The walk consults the checker's
+     * decide() only, never this computation, so there is no recursion.
      */
-    private record ManageEligibilityChecker(PermissionChecker delegate) implements PermissionChecker {
-        @Override
-        public boolean hasPermission(Conduit conduit, Permission permission) {
-            if (!ACCESS.equals(permission) || conduit == null) {
-                return this.delegate.hasPermission(conduit, permission);
-            }
-            Boolean decision = this.delegate.decide(conduit, permission);
-            if (decision != null) {
-                return decision;
-            }
-            // Abstain: eligibility follows the record grants. Each candidate is
-            // confirmed through the precedence walk (no recursion: the walk
-            // consults this checker only for OTHER permissions -- the admin
-            // bypass -- and for decide(), which passes through above).
-            //
-            // AIDEV-NOTE: instances count too, and they had to the moment the panel
-            // grew an instance projection. Keying eligibility on SITES alone locked a
-            // pure instance tenant (a game-server renter who owns no website) out of
-            // the very panel built for them: 403 at /manage with a live manage grant
-            // in hand. Every model this panel projects belongs in this disjunction.
-            //
-            // AIDEV-NOTE: each record-capability term asks reachesAny, never
-            // "ids.isEmpty()". An id set cannot express every-record authority, so the
-            // set spelling answered "reaches nothing" for a hohenheim.sites.manage_all
-            // holder and 403'd them out of the panel their permission exists for.
-            AccessContext ctx = RecordSourceGate.accessContextOf(conduit);
-            return HohenheimAccess.managesAnySite(ctx)
-                || HohenheimAccess.reachesAny(ctx, InstanceModel.MODEL_ID, HohenheimAccess.VIEW)
-                // DATABASES join the disjunction for the same reason instances did: a
-                // tenant who rents only a database holds no site or instance grant and
-                // would be 403'd out of the panel that now projects their database.
-                || HohenheimAccess.reachesAny(ctx, DatabaseModel.MODEL_ID, HohenheimAccess.VIEW)
-                // GIT PROVIDERS join for the same reason: a tenant may hold nothing but a
-                // provider it registered (a forge installation waiting for its first
-                // site), and would be 403'd out of the panel that projects it.
-                || HohenheimAccess.reachesAny(ctx, GitProviderModel.MODEL_ID,
-                    HohenheimAccess.MANAGE)
-                // PROJECTS join the disjunction for the reason stated above: a member of
-                // a project that owns nothing yet holds no site or instance grant, and
-                // would be 403'd out of the panel that now projects their project.
-                || !Projects.visibleTo(ctx).isEmpty();
-        }
-
-        @Override
-        public @Nullable Boolean decide(Conduit conduit, @NonNull Permission permission) {
-            return this.delegate.decide(conduit, permission);
-        }
-
-        /**
-         * AIDEV-NOTE: the principal face passes through too. A detached context (a hop, a channel) asks only this
-         * face; inheriting the interface default abstained, which denied every detached check in hohenheim.
-         */
-        @Override
-        public @Nullable Boolean decide(@NonNull Principal principal, @NonNull Permission permission) {
-            return this.delegate.decide(principal, permission);
-        }
+    static boolean eligible(@NonNull AccessContext ctx) {
+        return HohenheimAccess.managesAnySite(ctx)
+            || HohenheimAccess.reachesAny(ctx, InstanceModel.MODEL_ID, HohenheimAccess.VIEW)
+            || HohenheimAccess.reachesAny(ctx, DatabaseModel.MODEL_ID, HohenheimAccess.VIEW)
+            || HohenheimAccess.reachesAny(ctx, GitProviderModel.MODEL_ID, HohenheimAccess.MANAGE)
+            || !Projects.visibleTo(ctx).isEmpty();
     }
 
     /**

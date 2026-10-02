@@ -7,6 +7,7 @@ import be.elevenways.zenit.server.http.HostPattern;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.Comparator;
 import java.util.regex.Pattern;
 
 /**
@@ -103,8 +104,74 @@ public final class HostnamePatterns {
      * the two tiers order candidates identically: the characters a matching host must spell
      * literally, the dots between spelled labels included.
      */
-    static int specificity(@NonNull HostPattern pattern) {
+    public static int specificity(@NonNull HostPattern pattern) {
         return pattern.literalCharacters() + pattern.labelsSpelled() - 1;
+    }
+
+    /**
+     * THE order in which both tiers consult wildcards: the most specific first, an equal
+     * specificity broken by {@link #tieKey}.
+     */
+    public static final Comparator<HostPattern> WILDCARD_ORDER = Comparator
+        .comparingInt(HostnamePatterns::specificity).reversed()
+        .thenComparing(HostnamePatterns::tieKey);
+
+    /** What the pre-HostPattern matcher compiled a leading one-or-more wildcard label to. */
+    private static final String MANY_LABELS_SOURCE = "(?:[^.]+\\.)+";
+
+    /** The characters the pre-HostPattern matcher escaped in a glob's literal part. */
+    private static final String ESCAPED = "\\.[]{}()<>+-=!^$|";
+
+    /**
+     * The tie-break among equally specific wildcards: the regex source the pre-HostPattern
+     * matcher compiled the same hosts' pattern to.
+     *
+     * AIDEV-NOTE: live routing consults the first matching wildcard, so a tie key is a
+     * routing decision. The old matcher broke ties on its compiled regex source; ordering by
+     * HostPattern's text instead flipped which of two equal-specificity wildcards served a host
+     * both match (a-*.x vs a?b.x for a-b.x, review 5 D02). This reproduces that source from the
+     * HostPattern spelling: identical for every pattern M011 translated, because M011 refuses
+     * the one translation (a collapsed star run) whose source would differ wherever that
+     * difference could flip an order ({@link #legacyTieKey}).
+     */
+    public static @NonNull String tieKey(@NonNull HostPattern pattern) {
+        String text = pattern.text();
+        return pattern.spansManyLabels()
+            ? MANY_LABELS_SOURCE + globSource(text.substring(text.indexOf('.') + 1))
+            : globSource(text);
+    }
+
+    /**
+     * The tie key the pre-HostPattern matcher gave a stored legacy glob, for M011's check that
+     * its translation keeps every order.
+     *
+     * @param translated the legacy glob's translation, which spans many labels exactly when the
+     *                   legacy glob opened with the one-or-more prefix
+     */
+    public static @NonNull String legacyTieKey(@NonNull String legacyGlob, @NonNull HostPattern translated) {
+        // The legacy one-or-more prefix is two characters: a star and a dot.
+        return translated.spansManyLabels()
+            ? MANY_LABELS_SOURCE + globSource(legacyGlob.substring(2))
+            : globSource(legacyGlob);
+    }
+
+    /** A glob as the pre-HostPattern matcher compiled it, without its leading-run prefix. */
+    private static @NonNull String globSource(@NonNull String glob) {
+        StringBuilder source = new StringBuilder();
+        for (int i = 0; i < glob.length(); i++) {
+            char character = glob.charAt(i);
+            switch (character) {
+                case '*' -> source.append("[^.]*");
+                case '?' -> source.append("[^.]");
+                default -> {
+                    if (ESCAPED.indexOf(character) >= 0) {
+                        source.append('\\');
+                    }
+                    source.append(character);
+                }
+            }
+        }
+        return source.toString();
     }
 
     /**

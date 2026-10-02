@@ -6,11 +6,12 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.HostnameAuthority;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.protoblast.common.util.BlastString;
-import be.elevenways.zenit.auth.model.UserPrincipal;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.security.PrincipalRef;
+import be.elevenways.zenit.common.security.StoredPrincipalResolver;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -132,12 +133,19 @@ public final class CertificateAuthority {
          * is not -- but it does mean a renewal can succeed on authority a scope-narrowed
          * key could no longer request fresh.
          *
-         * @param subject the stored requester; null or a non-account subject is refused every name
+         * AIDEV-NOTE: the account is resolved through the installed {@link StoredPrincipalResolver}, as every stored
+         * intent is: a deleted or disabled account resolves to nothing and is refused every name, since disabling an
+         * account revokes its sessions but not its grants. The resolved principal is stored intent, never an
+         * interactive session.
+         *
+         * @param subject the stored requester; null, a non-account subject or an account that is gone or disabled is
+         *                refused every name
          */
         public static @NonNull Requester ofSubject(@Nullable PrincipalRef subject) {
             // A stored subject that is no account holds nothing here: it never falls back to SYSTEM.
-            Principal principal = subject != null && subject.kind().account()
-                ? new UserPrincipal(Math.toIntExact(subject.id()), "") : null;
+            StoredPrincipalResolver resolver = Zenit.getStoredPrincipalResolver();
+            Principal principal = subject != null && subject.kind().account() && resolver != null
+                ? resolver.resolveStoredPrincipal(subject.id()) : null;
             return new Requester(null, principal, false);
         }
 

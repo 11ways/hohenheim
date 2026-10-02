@@ -37,7 +37,27 @@ public final class HostPatternGrammar implements Hostnames.PatternGrammar {
     }
 
     @Override
-    public @NonNull String respellOneOrMoreLeading(@NonNull String value) {
-        return HostPattern.respellOneOrMoreLeading(value);
+    public @NonNull String fromLegacyGlob(@NonNull String glob) {
+        return HostPattern.fromLegacyGlob(glob);
+    }
+
+    @Override
+    public int specificity(@NonNull String pattern) {
+        return HostnamePatterns.specificity(HostPattern.parse(pattern));
+    }
+
+    @Override
+    public boolean overlaps(@NonNull String first, @NonNull String second) {
+        return HostPattern.parse(first).overlap(HostPattern.parse(second)) == HostPattern.Overlap.OVERLAPS;
+    }
+
+    @Override
+    public @NonNull String tieKey(@NonNull String pattern) {
+        return HostnamePatterns.tieKey(HostPattern.parse(pattern));
+    }
+
+    @Override
+    public @NonNull String legacyTieKey(@NonNull String legacyGlob) {
+        return HostnamePatterns.legacyTieKey(legacyGlob, HostPattern.parse(HostPattern.fromLegacyGlob(legacyGlob)));
     }
 }

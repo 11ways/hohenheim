@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.auth.CapabilityScopes;
@@ -175,6 +176,42 @@ class CapabilityWalkTest extends HohenheimTestBase {
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, walkOperatorId, SiteModel.MODEL_ID, walkSiteId,
                 HohenheimAccess.MANAGE);
+        }
+    }
+
+    /**
+     * /manage eligibility is ONE answer on every lane (S2: hohenheim.manage.access is core's computed permission): a
+     * request-backed context and a detached one agree for an ungranted account, for a record-grant holder with no
+     * global grant, and under an explicit global deny.
+     */
+    @Test
+    void manageEligibilityIsOneAnswerOnTheRequestAndTheDetachedLane() {
+        int tenantId = ApiSupport.user("walk-eligible@hohenheim.local", "Walk Eligible");
+        UserPrincipal tenant = new UserPrincipal(tenantId, "Walk Eligible");
+
+        try {
+            // 1. No grant at all: neither lane admits the account.
+            assertThat(List.of(contextFor(tenant).hasPermission(HohenheimSources.MANAGE_ACCESS),
+                    AccessContext.detached(tenant).hasPermission(HohenheimSources.MANAGE_ACCESS)))
+                .as("step 1: an ungranted account is eligible on neither lane").containsExactly(false, false);
+
+            // 2. A manage grant on one site and no global grant: the computation admits it on BOTH lanes.
+            RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, walkSiteId,
+                HohenheimAccess.MANAGE, true);
+            assertThat(List.of(contextFor(tenant).hasPermission(HohenheimSources.MANAGE_ACCESS),
+                    AccessContext.detached(tenant).hasPermission(HohenheimSources.MANAGE_ACCESS)))
+                .as("step 2: a record-grant holder is eligible on the request and the detached lane alike")
+                .containsExactly(true, true);
+
+            // 3. An explicit global deny wins over the computation on both lanes.
+            GrantService.createDirectGrant(GrantSubjectType.USER, tenantId, "hohenheim.manage.access", false);
+            assertThat(List.of(contextFor(tenant).hasPermission(HohenheimSources.MANAGE_ACCESS),
+                    AccessContext.detached(tenant).hasPermission(HohenheimSources.MANAGE_ACCESS)))
+                .as("step 3: an explicit deny refuses on both lanes").containsExactly(false, false);
+        } finally {
+            RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, walkSiteId,
+                HohenheimAccess.MANAGE);
+            deleteManageAccessGrants(tenantId);
         }
     }
 

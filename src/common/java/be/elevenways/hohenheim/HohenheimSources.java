@@ -42,7 +42,7 @@ public final class HohenheimSources implements ZenitModule {
      * lanes) must name it without a server import. The server-side ManagePanel.ACCESS
      * aliases this so the two faces can never spell it differently.
      */
-    public static final Permission MANAGE_ACCESS = Permission.declare("hohenheim.manage.access",
+    public static final Permission MANAGE_ACCESS = Permission.declareComputed("hohenheim.manage.access",
         Microcopy.of("hohenheim_manage_access").withFilter("scope", "permission"), Permission.Delegation.DELEGABLE);
 
     /**

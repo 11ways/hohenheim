@@ -5,6 +5,8 @@ import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
 import be.elevenways.zenit.server.http.HostPattern;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -62,9 +64,39 @@ class WildcardMatchTest {
         assertThat(routes("plainxexample.com", "plain.example.com")).isFalse();
     }
 
-    /** Whether a pattern stored before M011 routes the host once M011 respelled it. */
+    /**
+     * Both tiers consult equally specific wildcards in the old matcher's order, over the shapes M011 stores: the tie
+     * key is the regex source the old matcher compiled, never the pattern text.
+     */
+    @Test
+    void equallySpecificWildcardsKeepTheOldMatchersOrder() {
+        // 1. a?b before a-* ('[' sorts before the escaped '-'), although the text would put a-* first.
+        assertThat(ordered("a-*.x.test", "a?b.x.test")).as("step 1: the old winner leads")
+            .containsExactly("a?b.x.test", "a-*.x.test");
+        // 2. A translated one-or-more run before a one-label glob of the same specificity, as before.
+        assertThat(ordered(HostPattern.fromLegacyGlob("*.x.test"), "?.x.test")).as("step 2: the run leads")
+            .containsExactly("**.x.test", "?.x.test");
+        // 3. Every translated shape keeps the old matcher's key exactly.
+        for (String legacy : List.of("*.x.test", "**.x.test", "a.**.x.test", "eu*.x.test", "node-?.x.test")) {
+            HostPattern translated = HostPattern.parse(HostPattern.fromLegacyGlob(legacy));
+            if (!legacy.contains("**")) {
+                assertThat(HostnamePatterns.tieKey(translated)).as("step 3: %s", legacy)
+                    .isEqualTo(HostnamePatterns.legacyTieKey(legacy, translated));
+            }
+        }
+        // 4. Specificity still leads: a narrower pattern before a broader one whatever their keys.
+        assertThat(ordered("**.com", "*.example.com")).as("step 4: narrower first")
+            .containsExactly("*.example.com", "**.com");
+    }
+
+    private static List<String> ordered(String... patterns) {
+        return java.util.Arrays.stream(patterns).map(HostPattern::parse)
+            .sorted(HostnamePatterns.WILDCARD_ORDER).map(HostPattern::text).toList();
+    }
+
+    /** Whether a pattern stored before M011 routes the host once M011 translated it. */
     private static boolean routes(String host, String storedBeforeM011) {
-        return HostPattern.parse(HostPattern.respellOneOrMoreLeading(storedBeforeM011)).matches(host);
+        return HostPattern.parse(HostPattern.fromLegacyGlob(storedBeforeM011)).matches(host);
     }
 
     /**
@@ -101,10 +133,10 @@ class WildcardMatchTest {
         assertThat(intersect("FOO.Example.com", "*.example.COM")).isTrue();
     }
 
-    /** Whether two patterns stored before M011 overlap once M011 respelled them. */
+    /** Whether two patterns stored before M011 overlap once M011 translated them. */
     private static boolean intersect(String first, String second) {
-        return HostnamePatterns.intersect(HostPattern.respellOneOrMoreLeading(first), SiteDomainModel.MATCH_WILDCARD,
-            HostPattern.respellOneOrMoreLeading(second), SiteDomainModel.MATCH_WILDCARD);
+        return HostnamePatterns.intersect(HostPattern.fromLegacyGlob(first), SiteDomainModel.MATCH_WILDCARD,
+            HostPattern.fromLegacyGlob(second), SiteDomainModel.MATCH_WILDCARD);
     }
 
     /** The new grammar's one-label wildcard overlaps one depth only, and a run of any depth overlaps it. */

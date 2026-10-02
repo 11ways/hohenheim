@@ -10,6 +10,7 @@ import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.migration.FrozenModel;
+import be.elevenways.zenit.server.http.HostPattern;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -19,9 +20,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * M011's host wildcard respelling against the rows a previous build stored: a leading {@code *.} becomes
- * {@code **.} with its claim key, and a pattern the HostPattern grammar refuses fails the migration naming every
- * such row before anything is written, so an upgrade never silently takes a site offline.
+ * M011's host wildcard translation against the rows a previous build stored: every spelling of the legacy glob grammar
+ * becomes the HostPattern spelling of the same hosts, its claim key with it, and a row it cannot carry exactly (a
+ * pattern the grammar refuses, a pair whose route order would change) fails the migration by name before anything is
+ * written, so an upgrade never silently drops, widens or reorders a route.
  *
  * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.1.0
@@ -29,53 +31,82 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class HostWildcardRespellMigrationTest {
 
     @Test
-    void aRefusedPatternFailsTheUpgradeByNameAndACorrectedInstallRespells() throws Exception {
+    void everyLegacySpellingCarriesItsHostsAndWhatCannotBeCarriedFailsByName() throws Exception {
         HohenheimTestRuntime.ensureBooted();
         assertThat(HostPatternGrammar.LOADED).as("the server half of the seam is installed").isTrue();
         SqlDatasource datasource = TestDatabases.freshDatasource();
 
-        // 1. The rows as the previous build stored them: a one-or-more wildcard, a wildcard with '**' in the
-        //    middle (one label there, which HostPattern refuses), an exact host, a regex the step leaves alone, and
-        //    a released wildcard claim of the same refused shape.
+        // 1. The rows as the previous build stored them, in every shape its glob grammar admitted: a leading '*.'
+        //    (one or more labels), a star run inside a label, an all-star first label that was NOT the special
+        //    prefix (exactly one label), an all-star middle label, an exact host, a regex, a released one-or-more
+        //    claim; a row stored before hostnames were validated; and two equally specific wildcards that both match
+        //    a-bc.pair.respell.test, whose old tie order the new spelling would flip.
         int site = site(datasource, "m011-wildcards");
         int legacy = domain(datasource, site, "*.ok.respell.test", "wildcard");
-        int midRun = domain(datasource, site, "a.**.bad.respell.test", "wildcard");
+        int starRun = domain(datasource, site, "a**.run.respell.test", "wildcard");
+        int oneLabel = domain(datasource, site, "**.one.respell.test", "wildcard");
+        int middle = domain(datasource, site, "a.**.mid.respell.test", "wildcard");
         int exact = domain(datasource, site, "exact.respell.test", "exact");
         int regex = domain(datasource, site, "^(.+)\\.rx\\.respell\\.test$", "regex");
-        int released = released(datasource, site, "x.**.gone.respell.test");
+        int released = released(datasource, site, "*.gone.respell.test");
+        int unvalidated = domain(datasource, site, "bad_label.*.respell.test", "wildcard");
+        int pairFirst = domain(datasource, site, "a**bc.pair.respell.test", "wildcard");
+        int pairSecond = domain(datasource, site, "a*-*c.pair.respell.test", "wildcard");
 
-        // 2. The step refuses, naming every offending row with its table, id, site, pattern and the grammar's reason.
+        // 2. The step refuses what it cannot carry exactly, naming table, id, site, pattern and reason: the row the
+        //    grammar refuses, and both rows of the pair whose route order would change. Nothing else is listed.
         Throwable refusal = catchThrowable(() -> M011_ReviewHardening.respellHostWildcards(datasource));
         assertThat(refusal).as("step 2: the upgrade fails").isInstanceOf(IllegalStateException.class);
         assertThat(refusal.getMessage())
-            .as("step 2: both refused rows are listed")
-            .contains("2 stored host pattern(s)")
-            .contains("site_domains #" + midRun + " (site " + site + "): 'a.**.bad.respell.test'")
-            .contains("released_route_claims #" + released + " (site " + site + "): 'x.**.gone.respell.test'")
-            .contains("is only ever the first label")
-            .doesNotContain("ok.respell.test").doesNotContain("exact.respell.test");
+            .as("step 2: exactly the three rows it cannot carry are listed")
+            .contains("3 stored host pattern(s)")
+            .contains("site_domains #" + unvalidated + " (site " + site + "): 'bad_label.*.respell.test'")
+            .contains("is not a label")
+            .contains("site_domains #" + pairFirst + " (site " + site + "): 'a**bc.pair.respell.test'")
+            .contains("site_domains #" + pairSecond + " (site " + site + "): 'a*-*c.pair.respell.test'")
+            .contains("route order")
+            .doesNotContain("ok.respell.test").doesNotContain("run.respell.test").doesNotContain("one.respell.test")
+            .doesNotContain("mid.respell.test").doesNotContain("gone.respell.test");
 
-        // 3. And it wrote nothing: the valid wildcard still has its old spelling and key.
+        // 3. And it wrote nothing.
         assertThat(hostname(datasource, legacy)).as("step 3: nothing respelled before the refusal")
             .isEqualTo("*.ok.respell.test");
 
-        // 4. The operator deletes the refused rows; the step now respells the wildcard and its key and leaves the
-        //    exact host and the regex alone.
-        delete(datasource, "site_domains", midRun);
-        delete(datasource, "released_route_claims", released);
+        // 4. The operator deletes the refused rows; every other legacy spelling becomes the HostPattern spelling of
+        //    the very same hosts, its claim key with it; the exact host and the regex are untouched.
+        delete(datasource, "site_domains", unvalidated);
+        delete(datasource, "site_domains", pairFirst);
+        delete(datasource, "site_domains", pairSecond);
         M011_ReviewHardening.respellHostWildcards(datasource);
-        assertThat(hostname(datasource, legacy)).as("step 4: the leading wildcard is respelled")
+        assertThat(hostname(datasource, legacy)).as("step 4: one or more labels is '**.'")
             .isEqualTo("**.ok.respell.test");
         assertThat(routeKey(datasource, legacy)).as("step 4: with its claim key")
             .isEqualTo("**.ok.respell.test\n\n");
+        assertThat(hostname(datasource, starRun)).as("step 4: a star run inside a label is one star")
+            .isEqualTo("a*.run.respell.test");
+        assertThat(routeKey(datasource, starRun)).as("step 4: with its claim key")
+            .isEqualTo("a*.run.respell.test\n\n");
+        assertThat(hostname(datasource, oneLabel)).as("step 4: an all-star first label is exactly one label")
+            .isEqualTo("*.one.respell.test");
+        assertThat(hostname(datasource, middle)).as("step 4: an all-star middle label is one label")
+            .isEqualTo("a.*.mid.respell.test");
         assertThat(hostname(datasource, exact)).as("step 4: the exact host is untouched")
             .isEqualTo("exact.respell.test");
         assertThat(hostname(datasource, regex)).as("step 4: the regex is untouched")
             .isEqualTo("^(.+)\\.rx\\.respell\\.test$");
 
-        // 5. Running it again changes nothing.
-        M011_ReviewHardening.respellHostWildcards(datasource);
-        assertThat(hostname(datasource, legacy)).as("step 5: idempotent").isEqualTo("**.ok.respell.test");
+        // 5. The translations route exactly the hosts the legacy spellings did: nothing dropped, nothing widened.
+        HostPattern run = HostPattern.parse(hostname(datasource, starRun));
+        assertThat(List.of(run.matches("a.run.respell.test"), run.matches("ab.run.respell.test"),
+                run.matches("x.a.run.respell.test")))
+            .as("step 5: a**. matched a and ab, one label, as before").containsExactly(true, true, false);
+        HostPattern one = HostPattern.parse(hostname(datasource, oneLabel));
+        assertThat(List.of(one.matches("a.one.respell.test"), one.matches("a.b.one.respell.test")))
+            .as("step 5: legacy **. matched exactly one label, as before").containsExactly(true, false);
+        HostPattern many = HostPattern.parse(hostname(datasource, legacy));
+        assertThat(List.of(many.matches("a.ok.respell.test"), many.matches("a.b.ok.respell.test"),
+                many.matches("ok.respell.test")))
+            .as("step 5: legacy *. matched one or more labels and never the apex").containsExactly(true, true, false);
     }
 
     private static int site(SqlDatasource datasource, String slug) {
