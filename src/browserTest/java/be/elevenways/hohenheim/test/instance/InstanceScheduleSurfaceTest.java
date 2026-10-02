@@ -7,6 +7,14 @@ import be.elevenways.hohenheim.server.cms.InstanceScheduleRunResource;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleStepsPage;
 import be.elevenways.hohenheim.server.cms.ManageInstanceScheduleResource;
 import be.elevenways.hohenheim.server.cms.ManageInstanceScheduleStepResource;
+import be.elevenways.hohenheim.server.cms.InstanceScheduleStepResource;
+import be.elevenways.zenit.common.edit.Discriminated;
+import be.elevenways.zenit.common.edit.Select;
+import be.elevenways.zenit.common.edit.EditContext;
+import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.PlacementSurfaces;
+import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
+import be.elevenways.zenit.common.orm.field.RegistryMemberField;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -55,6 +63,28 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code requireManage} -- the InstanceDeviceResource affordance lesson, unapplied.
  */
 class InstanceScheduleSurfaceTest extends HohenheimTestBase {
+    @Test
+    void adminAndTenantStepEditorsDeclareTheSamePlacedOperationInput() {
+        // 1. Both existing resources retain their registration and authority, sharing the reusable input entry.
+        for (InstanceScheduleStepResource resource : List.of(new InstanceScheduleStepResource(), new ManageInstanceScheduleStepResource())) {
+            Discriminated input = (Discriminated) resource.formSpec().findEntry("input");
+            assertThat(input).as("step 1: the existing step surface declares operation input").isNotNull();
+            assertThat(input.field()).as("step 1: input uses the existing encrypted stored-input field")
+                .isSameAs(RecordScheduleStepModel.INPUT);
+            assertThat(input.discriminator()).as("step 1: the action selects its declared operation form")
+                .isEqualTo(RecordScheduleStepModel.ACTION.getName());
+            assertThat(resource.formSpec().findEntry("payload")).as("step 1: this editor no longer draws legacy payload").isNull();
+
+            // 2. Every offered action is an operation placed on the scheduler's existing surface.
+            Select<?> actions = (Select<?>) resource.formSpec().findEntry("action");
+            for (var option : actions.options().resolve(EditContext.of(AccessContext.anonymous()))) {
+                var member = ((RegistryMemberField) RecordScheduleStepModel.ACTION).memberFor(String.valueOf(option.value()));
+                assertThat(member).as("step 2: no legacy action is offered by the operation input editor").isInstanceOf(Operation.class);
+                assertThat(PlacementSurfaces.isPlaced(ZenitPlacementSurface.SCHEDULE_STEP, ((Operation<?, ?, ?>) member).id()))
+                    .as("step 2: option belongs to the schedule placement").isTrue();
+            }
+        }
+    }
 
     private static final String PREFIX = "schedsurf-";
 

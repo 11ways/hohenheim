@@ -18,6 +18,7 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.edit.ScheduleStepForms;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.RegistryMemberField;
@@ -52,8 +53,8 @@ public class InstanceScheduleStepResource extends RowResource {
     private final FormSpec formSpec = FormSpec.builder()
         .add(RecordScheduleStepModel.SCHEDULE_ID)
         .add(RecordScheduleStepModel.POSITION)
-        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(RecordScheduleStepModel.ACTION))
-        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(RecordScheduleStepModel.PAYLOAD))
+        .add(ScheduleStepForms.action())
+        .add(ScheduleStepForms.input())
         .add(RecordScheduleStepModel.OFFSET_SECONDS)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(RecordScheduleStepModel.FAILURE_POLICY))
         .add(RecordScheduleStepModel.RETRY_LIMIT)
