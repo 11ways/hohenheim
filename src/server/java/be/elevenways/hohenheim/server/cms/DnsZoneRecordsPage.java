@@ -34,6 +34,8 @@ import be.elevenways.zenit.cms.common.schema.TableView;
 import be.elevenways.zenit.cms.server.page.InlineEditStates;
 import be.elevenways.zenit.cms.server.page.QuickAddState;
 import be.elevenways.zenit.cms.server.render.table.TableStateTranslator;
+import be.elevenways.zenit.common.data.FacetUrlState;
+import be.elevenways.zenit.common.data.ListState;
 import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RecordPage;
@@ -45,7 +47,6 @@ import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.routing.BoundEndpoint;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.http.ReturnTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -150,8 +151,9 @@ public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row
         // resolves the record's parent against (a record under a trashed zone is read-only).
         Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(PANEL), "the admin panel is registered");
 
-        String search = Texts.trimmedOrNull(conduit.getQueryParam(CmsEndpoints.LIST_SEARCH_PARAM.getName()));
-        Integer requestedPage = CmsSupport.parsedInt(conduit.getQueryParam(CmsEndpoints.LIST_PAGE_PARAM.getName()));
+        // The tab's search and page are core's one list state, read by its one codec.
+        ListState state = FacetUrlState.readState(ListState.Shape.PLAIN, conduit::getQueryParams);
+        String search = state.text().isEmpty() ? null : state.text();
         TableView.Applied<Row> applied = TableView
             .forPrincipal(accessContext.principal().id(), resource.id())
             .visibleColumns(COLUMNS)
@@ -160,7 +162,7 @@ public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row
             .build()
             .apply(resource.tableSpec())
             .withSearch(search)
-            .withPage(requestedPage != null && requestedPage > 0 ? requestedPage : 1);
+            .withPage(state.page());
         // The resource's OWN list read: its access predicate, its search semantics, its
         // page window and its total -- this tab only adds the zone scope.
         RecordPage<Row> page = resource.listPage(applied, accessContext);
@@ -226,6 +228,7 @@ public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row
         vars.put("resourceSlug", resource.slug());
         vars.put("listUrl", listUrl);
         vars.put("searchValue", search != null ? search : "");
+        vars.put("searchParam", FacetUrlState.TEXT_PARAM);
         vars.put("searchEnabled", resource.searchOffered());
         vars.put("searchActive", search != null);
         vars.put("pager", Pager.of(page.window(), page.total(), number -> pageUrl(listTarget, search, number)));

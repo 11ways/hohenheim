@@ -25,13 +25,13 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.protoblast.common.typed.rule.Condition;
 import be.elevenways.protoblast.common.typed.rule.Operand;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.rules.RuleText;
-import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.task.TaskCatalog;
 import be.elevenways.zenit.common.task.TaskDescriptor;
@@ -168,18 +168,6 @@ public final class AttentionCollector {
         ReconcileFindingModel.BUCKET_FOREIGN_KNOWN, ReconcileFindingModel.BUCKET_FOREIGN_UNRELATED);
 
     /**
-     * The list page's TEXTUAL filter parameter (zenit-cms's {@code q} tier).
-     *
-     * AIDEV-NOTE: the tier is chosen for what it can EXPRESS. A chip param carries one
-     * value per select filter, so two buckets are inexpressible there; {@code adv} carries
-     * a whole tree but as opaque base64 the operator cannot read or edit. {@code q} carries
-     * the tree as the query builder's own text, which the list page then shows in its query
-     * box -- which is why the resource offers that box (see its listChrome).
-     */
-    private static final ParameterDefinition<String> LIST_QUERY = ParameterDefinition
-        .builder(String.class).name("q").stringResolver(value -> value).build();
-
-    /**
      * The findings list narrowed to exactly the rows the item counted.
      *
      * AIDEV-NOTE: the link used to be the bare list, which shows EVERY bucket of EVERY
@@ -187,13 +175,15 @@ public final class AttentionCollector {
      * orphaned ones carrying a DESTRUCTIVE remove action -- so the number on the dashboard
      * was never the number the operator landed on. The tree is built TYPED and printed by
      * RuleText, so the expression is the framework's own grammar rather than a
-     * hand-spelled string, and nothing here concatenates a URL.
+     * hand-spelled string, and nothing here concatenates a URL. It rides the list state's
+     * TYPED rule text (zenit-cms's query box): two buckets are one {@code IN} test there,
+     * readable and editable by the operator.
      */
     private static @NonNull RouteTarget foreignFindingsOf(String server) {
         Condition tree = Condition.all(
             Condition.test(ReconcileFindingModel.SERVER_NAME.getName(), CoreTypes.EQUALS, Operand.of(server)),
             Condition.test(ReconcileFindingModel.BUCKET.getName(), CoreTypes.IN, Operand.of(FOREIGN_BUCKETS)));
-        return CmsRoutes.list(ADMIN, "reconcile-findings").with(LIST_QUERY, RuleText.print(tree));
+        return CmsRoutes.list(ADMIN, "reconcile-findings").with(CmsEndpoints.LIST_QUERY_PARAM, RuleText.print(tree));
     }
 
     /**

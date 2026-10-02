@@ -148,7 +148,7 @@ class RecordTitleDeclarationTest extends HohenheimTestBase {
 
         // 4. The same words head the LIST's name cell, which rendered the raw stored
         //    search text before -- type token included.
-        String ruleList = adminGet("/admin/access-rules?search=203.0.113.0").body();
+        String ruleList = adminGet("/admin/access-rules?text=203.0.113.0").body();
         assertThat(ruleList).as("step 4: the list cell reads as the rule, not as its index")
             .contains("Allowed network");
         assertThat(ruleList).as("step 4: the raw type token is gone from the cell")
