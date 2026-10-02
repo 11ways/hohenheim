@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.server.cli.OfflineBoot;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
-import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.hohenheim.server.database.TenantDatabases;
 import be.elevenways.hohenheim.server.dns.DnsNotifier;
 import be.elevenways.hohenheim.server.dns.DnsServer;
@@ -19,7 +18,6 @@ import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.auth.types.ProteusRealmOptInWarnings;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.ProteusRealmSuggestions;
-import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
 import be.elevenways.hohenheim.server.application.ArtifactDeploys;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
@@ -36,10 +34,7 @@ import be.elevenways.hohenheim.server.security.SshAuthWatcher;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
-import be.elevenways.zenit.common.security.KnownPermission;
-import be.elevenways.zenit.common.security.KnownPermissions;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.server.AuthRegistry;
 import be.elevenways.zenit.auth.server.AuthRequirement;
@@ -389,41 +384,11 @@ public class ServerMain {
     public static void installAuthBaselines() {
         AuthRegistry.baseline("/", AuthRequirement.requiresLogin());
         // declareGrantableModels() already ran, before the migrations -- see main().
-        KnownPermissions.register("hohenheim",
-            // AIDEV-NOTE: DELEGABLE, deliberately (owner's call, 2026-08-15). Both of these
-            // used to be declared nonDelegable so that a holder could not grant their own
-            // authority onward. That is not the model this product wants: a permission is a
-            // leaf, and holding it means holding it -- including the ability to grant it,
-            // which is what an admin being an admin means. Whoever may administer grants may
-            // therefore mint a peer admin. Do not reintroduce the asymmetry without the
-            // owner saying so; the mechanism still exists upstream (auth.grants.manage) for
-            // permissions that genuinely need it.
-            KnownPermission.of(HohenheimPanel.ACCESS.value(), HohenheimPanel.ACCESS.description()),
-            KnownPermission.of(ManagePanel.ACCESS.value(), ManagePanel.ACCESS.description()),
-            // The settings editor: NOT delegable (HohenheimSources.ADMIN_SYSTEM says why), the one exception to the
-            // leaf rule above, because the settings feed fetches Hohenheim makes with operator trust.
-            KnownPermission.of(HohenheimSources.ADMIN_SYSTEM.value(), HohenheimSources.ADMIN_SYSTEM.description()),
-            // Every-site authority WITHOUT the admin permission (the walk's type-level row on
-            // SiteModel). Delegable for the reason above, and it could not be otherwise once
-            // admin.access is: guarding the lesser authority while the greater one flows
-            // freely protects nothing.
-            KnownPermission.of(HohenheimAccess.SITES_MANAGE_ALL.value(),
-                HohenheimAccess.SITES_MANAGE_ALL.description()),
-            // Install media on a host: publishing ISOs onto its storage and removing them.
-            // Its own permission on purpose (HohenheimSources.MEDIA_MANAGE says why), which
-            // is exactly why it must appear HERE -- an enforced permission missing from this
-            // corpus is a permission no admin can find to grant.
-            KnownPermission.of(HohenheimSources.MEDIA_MANAGE.value(), HohenheimSources.MEDIA_MANAGE.description()),
-            // Tenant self-service creation: eligibility only. It provisions a workload on
-            // an operator's iron, and the per-owner quota is what bounds how many.
-            KnownPermission.of(HohenheimAccess.INSTANCES_CREATE.value(),
-                HohenheimAccess.INSTANCES_CREATE.description()),
-            // The managed-database sibling of INSTANCES_CREATE, and registered for the
-            // same reason: this block IS the grants editor's autocomplete corpus
-            // (KnownPermissions.all()), so an enforced permission missing from it is a
-            // permission no admin can find. PermissionVocabularyTest is the guard.
-            KnownPermission.of(TenantDatabases.DATABASES_CREATE.value(),
-                TenantDatabases.DATABASES_CREATE.description()));
+        // AIDEV-NOTE: Hohenheim's permissions are declared at their homes (Permission.declare: HohenheimSources,
+        // HohenheimAccess, TenantDatabases), each loaded at boot, and the grants editor lists Permissions.declared().
+        // Every one of them is DELEGABLE except hohenheim.admin.system (HohenheimSources says why); the owner's call
+        // of 2026-08-15 stands: holding a permission includes granting it, so an admin may mint a peer admin. Do not
+        // reintroduce the asymmetry without the owner saying so. PermissionVocabularyTest is the guard.
         ProteusRealmSuggestions.register();
     }
 

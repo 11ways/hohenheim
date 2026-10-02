@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.migration;
 
+import be.elevenways.hohenheim.test.LegacyStepPayloads;
+import be.elevenways.zenit.common.security.ZenitPrincipalKind;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.instance.InstanceOperations;
@@ -18,7 +20,6 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.ApiKeyModel;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
-import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -269,7 +270,8 @@ class HohenheimUpgradeJourneyTest {
             .isEqualTo(List.of("cap:hohenheim:instance#power", "cap:zenit:user#read", "hohenheim.admin.access"));
         ApiKeyPrincipal keyPrincipal = ApiKeyService.authenticate(facts.getProperty("api_key.plaintext"));
         assertThat(keyPrincipal).as("step 5: the old key still authenticates").isNotNull();
-        assertThat(keyPrincipal.id()).as("step 5: as its owner").isEqualTo(operatorId);
+        assertThat(keyPrincipal.reference()).as("step 5: as its owner")
+            .isEqualTo(new PrincipalRef(ZenitPrincipalKind.ACCOUNT, operatorId));
         assertThat(keyPrincipal.scopes()).as("step 5: with the same scopes")
             .containsExactly("cap:hohenheim:instance#power", "cap:zenit:user#read", "hohenheim.admin.access");
 
@@ -326,7 +328,7 @@ class HohenheimUpgradeJourneyTest {
             assertThat(SchedulePlacements.find(action))
                 .as("step 9: step %s runs an operation placed as a schedule step", step.get(RecordScheduleStepModel.ID))
                 .isNotNull();
-            assertThat(step.get(RecordScheduleStepModel.PAYLOAD))
+            assertThat(LegacyStepPayloads.of(step.get(RecordScheduleStepModel.ID)))
                 .as("step 9: step %s keeps no legacy payload", step.get(RecordScheduleStepModel.ID)).isNull();
         }
         assertThat(steps).extracting(step -> step.get(RecordScheduleStepModel.INPUT))
@@ -352,7 +354,7 @@ class HohenheimUpgradeJourneyTest {
         for (Row step : consoleChain) {
             assertThat(SchedulePlacements.find(Identifier.tryParse(step.get(RecordScheduleStepModel.ACTION))))
                 .as("step 9: step %s runs a placed operation", step.get(RecordScheduleStepModel.ID)).isNotNull();
-            assertThat(step.get(RecordScheduleStepModel.PAYLOAD))
+            assertThat(LegacyStepPayloads.of(step.get(RecordScheduleStepModel.ID)))
                 .as("step 9: step %s keeps no legacy payload", step.get(RecordScheduleStepModel.ID)).isNull();
         }
 

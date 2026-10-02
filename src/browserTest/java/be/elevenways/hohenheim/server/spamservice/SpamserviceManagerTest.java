@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -102,16 +103,32 @@ class SpamserviceManagerTest {
             .as("step 1: the settings name only")
             .containsEntry("ZENIT__DATABASE__URL", url).doesNotContainKey("ZENIT_DB_URL");
 
-        // 2. A build from before the contract declares nothing and still reads ZENIT_DB_URL.
-        SpamserviceDatabaseEnvironment legacy = SpamserviceDatabaseEnvironment.of(jar(null));
-        assertThat(legacy).as("step 2: no declaration").isEqualTo(SpamserviceDatabaseEnvironment.LEGACY);
-        assertThat(SpamserviceManager.environment(config(true, "k"), paths, legacy, null, false))
-            .as("step 2: the legacy name only")
-            .containsEntry("ZENIT_DB_URL", url).doesNotContainKey("ZENIT__DATABASE__URL");
+        // 2. A jar without the declaration (a build from before the contract) is refused, never launched with a guessed
+        //    name: the check Hohenheim's serverJar runs on the distribution it nests, and the launch runs again.
+        assertThatThrownBy(() -> SpamserviceDatabaseEnvironment.of(jar(null)))
+            .as("step 2: an undeclared jar is refused").isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining(SpamserviceDatabaseEnvironment.MANIFEST_ATTRIBUTE);
 
         // 3. A declaration this Hohenheim does not know refuses rather than guessing a database.
         assertThatThrownBy(() -> SpamserviceDatabaseEnvironment.of(jar("other")))
             .as("step 3: unknown contract").isInstanceOf(IllegalStateException.class);
+    }
+
+    /** A distribution as every current Spamservice build ships it: a jar declaring the settings environment. */
+    private static final byte[] DECLARING_ARTIFACT = declaringArtifact();
+
+    private static byte[] declaringArtifact() {
+        Manifest manifest = new Manifest();
+        manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
+        manifest.getMainAttributes().putValue(SpamserviceDatabaseEnvironment.MANIFEST_ATTRIBUTE, "settings");
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (JarOutputStream out = new JarOutputStream(bytes, manifest)) {
+            out.putNextEntry(new JarEntry("be/elevenways/spamservice/server/ServerMain.class"));
+            out.closeEntry();
+        } catch (IOException impossible) {
+            throw new IllegalStateException(impossible);
+        }
+        return bytes.toByteArray();
     }
 
     private Path jar(String declaration) throws IOException {
@@ -325,7 +342,7 @@ class SpamserviceManagerTest {
             return ManagedServiceProcess.start(actual, redactor, stdinLine);
         };
         SpamserviceManager manager = new SpamserviceManager(new FakeStore(config(true, "key")),
-            () -> new ByteArrayInputStream("artifact".getBytes(StandardCharsets.UTF_8)), launcher,
+            () -> new ByteArrayInputStream(DECLARING_ARTIFACT), launcher,
             (base, process, nonce, timeout, cancelled) -> false, (path, runAs) -> {},
             new RecordingSink(), () -> this.temp.resolve("blocked-cleanup"), () -> {},
             port -> {}, lifecycle);
@@ -455,7 +472,7 @@ class SpamserviceManagerTest {
                                        SpamserviceManager.ReadinessProbe readiness,
                                        RecordingSink sink) {
         return new SpamserviceManager(store,
-            () -> new ByteArrayInputStream("artifact".getBytes(StandardCharsets.UTF_8)),
+            () -> new ByteArrayInputStream(DECLARING_ARTIFACT),
             launcher, readiness, (path, runAs) -> {}, sink,
             () -> this.temp.resolve("runtime-root"), () -> {}, port -> {}, scheduler());
     }

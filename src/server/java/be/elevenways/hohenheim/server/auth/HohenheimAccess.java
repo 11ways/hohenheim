@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -51,9 +52,13 @@ import java.util.function.Function;
  * service-side gates, CapabilityScopes for the set-wise walk and its request memo). Callers
  * keep asking HohenheimAccess; a collaborator made public would be a second entry point.
  *
+ * Loaded at boot ({@code @BlastAutoLoad}): it is the declaring home of permissions the grants editor lists
+ * ({@code Permissions.declared()}), so they are declared before anybody reads that table.
+ *
  * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.2.0
  */
+@BlastAutoLoad
 public final class HohenheimAccess {
 
     /** The single v1 capability on a site record. */

@@ -114,6 +114,7 @@ tasks.named('serverJar') {
 
     // Captured at configuration time: Task.project read while the task runs is refused from Gradle 10.
     def spamserviceDistribution = project.configurations.spamserviceDistribution
+    def serverClassDirs = project.sourceSets.server.output.classesDirs
     from({ spamserviceDistribution.singleFile }) {
         into 'managed-services'
         rename { 'spamservice-server.jar' }
@@ -146,6 +147,24 @@ tasks.named('serverJar') {
             def nested = jar.getJarEntry('managed-services/spamservice-server.jar')
             if (nested == null) {
                 throw new GradleException("${jarFile.name} is missing the nested Spamservice distribution")
+            }
+            // The nested distribution declares the database environment Hohenheim launches it with, judged by the
+            // SAME method the launch asks (SpamserviceDatabaseEnvironment.of, loaded from the compiled server
+            // classes), so a Hohenheim built from this code can never carry a Spamservice from before the contract.
+            def loader = new URLClassLoader(serverClassDirs.files.collect { it.toURI().toURL() } as URL[],
+                ClassLoader.platformClassLoader)
+            try {
+                def environments = loader.loadClass('be.elevenways.hohenheim.server.spamservice.SpamserviceDatabaseEnvironment')
+                def of = environments.getDeclaredMethod('of', java.nio.file.Path)
+                of.accessible = true
+                try {
+                    of.invoke(null, spamserviceDistribution.singleFile.toPath())
+                } catch (java.lang.reflect.InvocationTargetException refused) {
+                    throw new GradleException("${jarFile.name} nests a Spamservice Hohenheim cannot launch: "
+                        + refused.cause.message, refused.cause)
+                }
+            } finally {
+                loader.close()
             }
             if (jar.getEntry('be/elevenways/spamservice/server/ServerMain.class') != null) {
                 throw new GradleException("${jarFile.name} exploded Spamservice server classes onto Hohenheim's classpath")

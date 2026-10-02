@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.zenit.common.edit.PermissionSuggestion;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.server.auth.types.ProteusAuthProviderType;
@@ -11,7 +12,6 @@ import be.elevenways.zenit.common.edit.FormSecrets;
 import be.elevenways.zenit.common.edit.PermissionSuggestionSources;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.KnownPermission;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -36,14 +36,14 @@ public final class ProteusRealmSuggestions {
 
     private static final Map<String, Cached> CACHE = new ConcurrentHashMap<>();
 
-    private record Cached(List<KnownPermission> entries, long at) {}
+    private record Cached(List<PermissionSuggestion> entries, long at) {}
 
     private ProteusRealmSuggestions() {}
 
     public static void register() {
-        PermissionSuggestionSources.register(
+        PermissionSuggestionSources.registerSuggester(
             SiteAuthProviderModel.PROTEUS_SUGGESTION_SOURCE, ProteusRealmSuggestions::resolve);
-        PermissionSuggestionSources.register(
+        PermissionSuggestionSources.registerSuggester(
             AccessRuleModel.RULE_PROVIDER_SUGGESTION_SOURCE, ProteusRealmSuggestions::resolveForRule);
     }
 
@@ -51,9 +51,9 @@ public final class ProteusRealmSuggestions {
      * The same lane for an access-rule {@code auth_provider} leaf, whose realm is the one
      * belonging to the provider the rule POINTS AT rather than one on the form itself.
      * A rule that has not chosen a provider yet contributes nothing, and the caller falls
-     * back to the KnownPermissions vocabulary.
+     * back to the locally declared vocabulary.
      */
-    static @NonNull List<KnownPermission> resolveForRule(@NonNull Map<String, Object> rootValues,
+    static @NonNull List<PermissionSuggestion> resolveForRule(@NonNull Map<String, Object> rootValues,
                                                          @NonNull EditContext context) {
         if (!(rootValues.get(AccessRuleModel.DATA.getName()) instanceof Map<?, ?> data)) {
             return List.of();
@@ -82,7 +82,7 @@ public final class ProteusRealmSuggestions {
         }
     }
 
-    static @NonNull List<KnownPermission> resolve(@NonNull Map<String, Object> rootValues,
+    static @NonNull List<PermissionSuggestion> resolve(@NonNull Map<String, Object> rootValues,
                                                   @NonNull EditContext context) {
         if (!(rootValues.get(SiteAuthProviderModel.CONFIG.getName()) instanceof Map<?, ?> config)) {
             return List.of();
@@ -104,11 +104,11 @@ public final class ProteusRealmSuggestions {
             accessKey = storedAccessKey(endpoint, realmClient);
         }
 
-        List<KnownPermission> entries = List.of();
+        List<PermissionSuggestion> entries = List.of();
         if (accessKey != null) {
             try {
                 entries = new ProteusClient(endpoint, realmClient, accessKey,
-                    ProteusAuthProviderType.realmGuard()).knownPermissions();
+                    ProteusAuthProviderType.realmGuard()).permissionSuggestions();
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             } catch (Exception error) {
