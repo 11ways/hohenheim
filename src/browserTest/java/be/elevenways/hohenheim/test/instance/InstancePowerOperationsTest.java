@@ -113,6 +113,48 @@ class InstancePowerOperationsTest {
     }
 
     @Test
+    void scheduledSystemSubjectsHaveAnExplicitAudience() {
+        Db.run(datasource, () -> {
+            int instanceId = BackupLaneFixture.instanceRecord("system-source-target", fixture.hostId);
+            int scheduleId = schedule(instanceId, "declared system stop", null);
+            // 1. Every instance operation placed on schedules binds the same explicit system source.
+            for (Operation<Row, ?, ?> operation : List.of(InstanceOperations.START, InstanceOperations.STOP,
+                    InstanceOperations.RESTART, InstanceOperations.BACKUP, InstanceOperations.SNAPSHOT,
+                    InstanceOperations.CONSOLE_COMMAND, InstanceOperations.APP_UPDATE)) {
+                Row subject = OperationRequest.of(operation, ZenitPlacementSurface.SCHEDULE_STEP)
+                    .asSystem(RecordSchedules.systemIdentity(scheduleId).reason(), null)
+                    .subjectKeys(List.of(String.valueOf(instanceId)))
+                    .loadSubjects().getFirst();
+                assertThat(subject.get(InstanceModel.ID)).as("1: system loads the subject of %s", operation.id())
+                    .isEqualTo(instanceId);
+                assertThatThrownBy(() -> OperationRequest.of(operation, ZenitPlacementSurface.SCHEDULE_STEP)
+                    .caller(AccessContext.anonymous()).subjectKeys(List.of(String.valueOf(instanceId))).loadSubjects())
+                    .as("1: anonymous gets no subject of %s", operation.id())
+                    .isInstanceOfSatisfying(DomainRefusal.class,
+                        refusal -> assertThat(refusal.reason()).isSameAs(ZenitRefusalReason.NOT_FOUND));
+                assertThatThrownBy(() -> OperationRequest.of(operation, ZenitPlacementSurface.SCHEDULE_STEP)
+                    .asSystem("unrelated system work", null).subjectKeys(List.of(String.valueOf(instanceId))).loadSubjects())
+                    .as("1: another system purpose gets no subject of %s", operation.id())
+                    .isInstanceOfSatisfying(DomainRefusal.class,
+                        refusal -> assertThat(refusal.reason()).isSameAs(ZenitRefusalReason.NOT_FOUND));
+            }
+
+            // 2. A schedule with no run_as executes, not just its subject-loading probe.
+            new InstanceService().deploy(instanceId);
+            assertThat(Models.get(InstanceModel.class).findById(instanceId).get(InstanceModel.STATUS))
+                .as("2: the fixture has a deployed workload and its host fence").isEqualTo(InstanceModel.STATUS_RUNNING);
+            step(scheduleId, InstanceOperations.STOP, null, StepFailurePolicy.ABORT);
+            Row run = new RecordSchedules(datasource).runNow(scheduleId);
+            Row stopped = stepRuns(run).getFirst();
+            assertThat(stopped.get(RecordScheduleStepRunModel.STATUS))
+                .as("2: the system stop loaded and executed its subject; error: %s",
+                    stopped.get(RecordScheduleStepRunModel.ERROR)).isEqualTo(StepStatus.OK.storageKey());
+            assertThat(Models.get(InstanceModel.class).findById(instanceId).get(InstanceModel.STATUS))
+                .as("2: the system operation stopped the deployed workload").isEqualTo(InstanceModel.STATUS_STOPPED);
+        });
+    }
+
+    @Test
     void theInstanceOperationsRunFromEverySurfaceJourney() {
         Db.run(datasource, () -> {
             int instanceId = BackupLaneFixture.instanceRecord("ops-target", fixture.hostId);

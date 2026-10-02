@@ -1,12 +1,15 @@
 package be.elevenways.hohenheim.server.preview;
 
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.preview.PreviewOperations;
 import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
+import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.server.operation.OperationCall;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import be.elevenways.zenit.server.task.record.SchedulePlacements;
+import be.elevenways.zenit.server.task.record.RecordSchedules;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
@@ -26,8 +29,13 @@ public final class PreviewOperationHandlers {
     /** The reason the reclaim records for a person's click, as the admin row action recorded it. */
     static final String OPERATOR = "operator";
 
+    private static final RecordSource<PreviewDeploymentModel> SUBJECTS = RecordSource.of(PreviewDeploymentModel.class)
+        .id(HohenheimIds.id("preview_expiry_subjects")).project(PreviewDeploymentModel.ID).openToAllLoggedIn()
+        .systemAccess(identity -> RecordSchedules.isScheduleWork(identity)
+            ? PreviewDeploymentModel.ID.isNotNull() : null).build();
+
     static {
-        OperationHandlers.attach(PreviewOperations.EXPIRE).handle(PreviewOperationHandlers::expire);
+        OperationHandlers.attach(PreviewOperations.EXPIRE).source(SUBJECTS).handle(PreviewOperationHandlers::expire);
         SchedulePlacements.place(PreviewOperations.EXPIRE);
     }
 

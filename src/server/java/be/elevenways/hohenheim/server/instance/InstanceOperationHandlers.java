@@ -1,10 +1,12 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
@@ -27,6 +29,7 @@ import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.server.operation.OperationCall;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import be.elevenways.zenit.server.task.record.SchedulePlacements;
+import be.elevenways.zenit.server.task.record.RecordSchedules;
 import be.elevenways.zenit.server.task.record.StepFailure;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -63,21 +66,27 @@ public final class InstanceOperationHandlers {
     /** The note a scheduled snapshot carries when its step stores none. */
     static final String SCHEDULED_NOTE = "scheduled";
 
+    private static final RecordSource<InstanceModel> SUBJECTS = RecordSource.of(InstanceModel.class)
+        .id(HohenheimIds.id("instance_operation_subjects")).project(InstanceModel.ID).openToAllLoggedIn()
+        .systemAccess(identity -> RecordSchedules.isScheduleWork(identity)
+            ? InstanceModel.GENERATED_BY.isNull() : null).build();
+
     static {
-        OperationHandlers.attach(InstanceOperations.START).applies(InstanceOperationHandlers::authored)
+        OperationHandlers.attach(InstanceOperations.START).source(SUBJECTS).applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::start);
-        OperationHandlers.attach(InstanceOperations.STOP).applies(InstanceOperationHandlers::authored)
+        OperationHandlers.attach(InstanceOperations.STOP).source(SUBJECTS).applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::stop);
-        OperationHandlers.attach(InstanceOperations.RESTART).applies(InstanceOperationHandlers::authored)
+        OperationHandlers.attach(InstanceOperations.RESTART).source(SUBJECTS).applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::restart);
-        OperationHandlers.attach(InstanceOperations.BACKUP).applies(InstanceOperationHandlers::authored)
+        OperationHandlers.attach(InstanceOperations.BACKUP).source(SUBJECTS).applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::backup);
-        OperationHandlers.attach(InstanceOperations.SNAPSHOT).applies(InstanceOperationHandlers::authored)
+        OperationHandlers.attach(InstanceOperations.SNAPSHOT).source(SUBJECTS).applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::snapshot);
         // A generated instance's console is its product's (GameDomains sends through InstanceConsoles directly).
-        OperationHandlers.attach(InstanceOperations.CONSOLE_COMMAND).applies(InstanceOperationHandlers::authored)
+        OperationHandlers.attach(InstanceOperations.CONSOLE_COMMAND).source(SUBJECTS)
+            .applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::consoleCommand);
-        OperationHandlers.attach(InstanceOperations.APP_UPDATE).applies(InstanceOperationHandlers::authored)
+        OperationHandlers.attach(InstanceOperations.APP_UPDATE).source(SUBJECTS).applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::appUpdate);
         // Sessions, offered and never invoked: their sockets ask offered() (see InstanceOperations.OPEN_SHELL).
         OperationHandlers.attach(InstanceOperations.OPEN_SHELL).applies(InstanceOperationHandlers::authored)
