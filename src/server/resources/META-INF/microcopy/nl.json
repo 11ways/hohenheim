@@ -6871,6 +6871,10 @@
     {
       "text": "Aanmaken",
       "scope": "instance_files"
+    },
+    {
+      "text": "Aanmaken",
+      "scope": "game_domain"
     }
   ],
   "approval_note": {
@@ -7363,12 +7367,22 @@
     {
       "text": "Verwijderen",
       "scope": "access_rule"
+    },
+    {
+      "text": "Verwijderen",
+      "scope": "game_domain"
     }
   ],
-  "save": {
-    "text": "Opslaan",
-    "scope": "instance_files"
-  },
+  "save": [
+    {
+      "text": "Opslaan",
+      "scope": "instance_files"
+    },
+    {
+      "text": "Opslaan",
+      "scope": "game_domain"
+    }
+  ],
   "upload": [
     {
       "text": "Uploaden",

@@ -173,7 +173,7 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, new InstanceVolumeResource(), Role.INSTANCES);
         addIf(peers, new RuntimeImageResource(), Role.INSTANCES);
         addIf(peers, new InstanceScheduleRunResource(), Role.INSTANCES);
-        addIf(peers, new GameDomainResource(), Role.INSTANCES);
+        addIf(peers, GameDomainResource.admin(), Role.INSTANCES);
         addIf(peers, new BackupTargetResource(), Role.INSTANCES);
         // Build history serves the two tiers that produce images today (Docker sites
         // through the proxy role, container instances through the instances role).
@@ -181,7 +181,7 @@ public final class HohenheimPanel extends Panel {
         // Release history: applications (the instance tier) release through the
         // health gate since the phase-0 re-keying; the proxy role merely exposes them.
         addIf(peers, new ReleaseOperationResource(), Role.PROXY, Role.INSTANCES);
-        addIf(peers, new GitProviderResource(), Role.PROXY);
+        addIf(peers, GitProviderParts.admin(), Role.PROXY);
         addIf(peers, new PreviewDeploymentResource(), Role.PROXY);
         addIf(peers, new StackResource(), Role.STACKS);
         addIf(peers, new StackServiceResource(), Role.STACKS);
@@ -197,7 +197,7 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, new DnsZoneResource(), Role.DNS);
         addIf(peers, new DnsRecordResource(), Role.DNS);
         addIf(peers, new DnsPeerResource(), Role.DNS);
-        addIf(peers, new DnsZonePeerResource(), Role.DNS);
+        addIf(peers, DnsZonePeerParts.admin(), Role.DNS);
         peers.add(new NotificationChannelResource());
         addIf(peers, new BanResource(), Role.FIREWALL);
         // zenit-auth's generated admin resources, wired into THIS panel (the

@@ -5,13 +5,15 @@ import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.hohenheim.server.cms.DnsRecordResource;
-import be.elevenways.hohenheim.server.cms.DnsZonePeerResource;
+import be.elevenways.hohenheim.server.cms.DnsZonePeerParts;
 import be.elevenways.hohenheim.server.cms.DnsZoneResource;
 import be.elevenways.hohenheim.server.dns.DelegationCheck;
 import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.zenit.common.edit.FormEntry;
 import be.elevenways.zenit.common.edit.InputType;
 import be.elevenways.zenit.common.edit.RelationPick;
@@ -196,7 +198,7 @@ class DnsSurfaceHonestyTest extends HohenheimTestBase {
 
     @Test
     void aZonePeerLinkIsNamedByBothHalvesAndPickedNotTyped() {
-        DnsZonePeerResource links = new DnsZonePeerResource();
+        Resource<Row> links = PanelResourceViews.forCaller(DnsZonePeerParts.admin());
 
         // 1. The list carries the zone, so a peer secondarying four zones is four
         //    distinguishable rows instead of four rows called "robbedoes".
@@ -219,7 +221,7 @@ class DnsSurfaceHonestyTest extends HohenheimTestBase {
     }
 
     /** @return the named column of a resource's declared table spec */
-    private static ColumnSpec column(be.elevenways.zenit.cms.common.resource.Resource<Row> resource,
+    private static ColumnSpec column(Resource<Row> resource,
                                      String name) {
         for (ColumnSpec column : resource.tableSpec().columns()) {
             if (name.equals(column.name())) {

@@ -1,8 +1,11 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.source.GitProviderOperationHandlers;
 import be.elevenways.hohenheim.server.source.GiteaProviderKind;
+import be.elevenways.hohenheim.source.GitProviderOperations.ConnectionTest;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
@@ -11,6 +14,11 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.Resource;
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -22,12 +30,13 @@ import org.junit.jupiter.api.Test;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * The tenant's git-provider surface: a failed connection test is ONE generic sentence (no
+ * The tenant's git-provider twin: a failed connection test is ONE generic sentence (no
  * port-scan oracle), SHARED cannot be moved through it, and a create hands the tenant its
  * creator grant.
  */
@@ -43,16 +52,23 @@ class GitProviderTenantSurfaceTest extends HohenheimTestBase {
     }
 
     /**
-     * The same unreachable provider tested on both surfaces: the operator reads the client's
-     * own reason, the tenant one generic sentence that carries nothing about the network.
+     * The same unreachable provider tested through the one connection-test operation, worded by each twin: the
+     * operator reads the client's own reason, the tenant one generic sentence that carries nothing about the network.
      */
     @Test
     void aFailedTestTellsATenantNothingAboutTheNetwork() {
-        // 1. A provider whose endpoint refuses every connection (port 1 on loopback).
+        // 1. A provider whose endpoint refuses every connection (port 1 on loopback), probed once.
         Row provider = provider(PREFIX + "unreachable", "http://127.0.0.1:1", false);
+        ConnectionTest probe = GitProviderOperationHandlers.probe(provider);
+        assertThat(probe.failure())
+            .as("step 1: the probe records the client's own reason")
+            .isNotBlank();
+        assertThat(probe.repositories())
+            .as("step 1: and no repository count")
+            .isNull();
 
-        // 2. The operator surface keeps the detailed reason.
-        CmsActionResult operator = new GitProviderResource().testConnection(provider);
+        // 2. The operator twin keeps the detailed reason.
+        CmsActionResult operator = GitProviderParts.operatorWords(probe);
         assertThat(operator)
             .as("step 2: a failed operator test is an error toast")
             .isInstanceOf(CmsActionResult.Toast.class);
@@ -61,9 +77,9 @@ class GitProviderTenantSurfaceTest extends HohenheimTestBase {
             .as("step 2: the operator reads the detailed failure sentence")
             .isEqualTo("test_failed");
 
-        // 3. The tenant surface answers ONE generic sentence with no argument at all, so
-        //    no connection error, timeout or TLS text can reach the toast.
-        CmsActionResult tenant = new ManageGitProviderResource().testConnection(provider);
+        // 3. The tenant twin answers ONE generic sentence with no argument at all, so no connection error, timeout or
+        //    TLS text can reach the toast.
+        CmsActionResult tenant = GitProviderParts.tenantWords(probe);
         assertThat(tenant)
             .as("step 3: a failed tenant test is an error toast too")
             .isInstanceOf(CmsActionResult.Toast.class);
@@ -72,12 +88,19 @@ class GitProviderTenantSurfaceTest extends HohenheimTestBase {
             .isEqualTo(Microcopy.of("test_failed_generic").withFilter("scope", "git_provider"));
     }
 
-    /** SHARED is the operator's declaration: the tenant resource refuses to move it. */
+    /**
+     * SHARED is the operator's declaration: the tenant twin never moves it. A create refuses through the twin's early
+     * refusal, an update applies the twin's form only, and any write that does carry it meets the model-level freeze
+     * with the same field and the same words.
+     */
     @Test
     void theTenantSurfaceRefusesToPublishACredential() {
-        ManageGitProviderResource resource = new ManageGitProviderResource();
-        AccessContext tenant = AccessContext.of(TenantConduits.stubFor(
-            new UserPrincipal(tenantId, "Git Provider Tenant")));
+        Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.MANAGE));
+        @SuppressWarnings("unchecked")
+        Resource<Row> resource = PanelResourceViews.forCaller(
+            (PanelResource<Row>) Objects.requireNonNull(manage.entryBySlug(HohenheimSlugs.GIT_PROVIDERS)), manage);
+        UserPrincipal principal = new UserPrincipal(tenantId, "Git Provider Tenant");
+        AccessContext tenant = AccessContext.of(TenantConduits.stubFor(principal));
         Model providers = Models.get(GitProviderModel.class);
         long before = providers.find().count();
 
@@ -102,21 +125,39 @@ class GitProviderTenantSurfaceTest extends HohenheimTestBase {
             .as("step 2: the creator holds manage on what it registered")
             .isTrue();
 
-        // 3. An update flipping shared on that very row is refused, and the row keeps its value.
+        // 3. An update through the twin cannot move shared: its writer applies the twin's form entries only, and the
+        //    form has no shared, so the flag never reaches the row (the same as a tenant's HTTP post, which is coerced
+        //    to the form before and after the move) and the row stays private.
         Row stored = providers.findById(providerId);
         Map<String, Object> flip = new HashMap<>();
         flip.put(GitProviderModel.SHARED.getName(), true);
-        Throwable updateRefused = catchThrowable(() -> resource.updateRow(stored, flip, tenant));
+        TenantConduits.as(principal, () -> resource.updateRow(stored, flip, tenant));
+        assertThat((Boolean) providers.findById(providerId).get(GitProviderModel.SHARED))
+            .as("step 3: an update through the twin leaves the row private").isNotEqualTo(Boolean.TRUE);
+
+        //    And a write by the same tenant that does carry shared (a revision restore, a peer write, a direct save)
+        //    is refused by the model-level freeze on the create's own field and in the create's own words.
+        Throwable updateRefused = catchThrowable(() -> TenantConduits.as(principal, () -> {
+            Row row = providers.findById(providerId);
+            row.set(GitProviderModel.SHARED, true);
+            providers.save(row);
+        }));
         assertThat(updateRefused)
-            .as("step 3: an update publishing the credential is refused")
+            .as("step 3: a write publishing the credential is refused")
             .isInstanceOf(Violations.class);
+        assertThat(((Violations) updateRefused).all().get(0).fieldName())
+            .as("step 3: on the shared field, as the create was")
+            .isEqualTo(GitProviderModel.SHARED.getName());
+        assertThat(((Violations) updateRefused).all().get(0).message())
+            .as("step 3: in the create's own words")
+            .isEqualTo(((Violations) createRefused).all().get(0).message());
         assertThat((Boolean) providers.findById(providerId).get(GitProviderModel.SHARED))
             .as("step 3: the stored row stays private").isNotEqualTo(Boolean.TRUE);
 
         // 4. A write that does not touch shared is unaffected by the refusal.
         Map<String, Object> rename = new HashMap<>();
         rename.put(GitProviderModel.NAME.getName(), PREFIX + "renamed");
-        resource.updateRow(providers.findById(providerId), rename, tenant);
+        TenantConduits.as(principal, () -> resource.updateRow(providers.findById(providerId), rename, tenant));
         assertThat((String) providers.findById(providerId).get(GitProviderModel.NAME))
             .as("step 4: an ordinary edit still saves").isEqualTo(PREFIX + "renamed");
     }

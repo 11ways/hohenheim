@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -42,14 +41,8 @@ public final class DatabaseRestorePage implements RecordScopedPage<Row> {
                                            @NonNull AccessContext accessContext,
                                            @NonNull Row record) {
         String name = record.get(DatabaseModel.NAME);
-        Map<String, Object> vars = new HashMap<>();
+        Map<String, Object> vars = new HashMap<>(DatabaseConnectionCard.facts(record));
         vars.put("title", CmsSupport.pageTitle(conduit, "database_restore", name));
-        vars.put("name", name);
-        vars.put("dbUser", record.get(DatabaseModel.DB_USER));
-        vars.put("dbPassword", record.get(DatabaseModel.DB_PASSWORD));
-        vars.put("dbName", record.get(DatabaseModel.DB_NAME));
-        vars.put("engine", record.get(DatabaseModel.ENGINE));
-        vars.put("status", record.get(DatabaseModel.STATUS));
         vars.put("restoreUrl", HohenheimEndpoints.DATABASES_RESTORE
             .with(HohenheimEndpoints.DATABASE_NAME, name).toUrl());
         vars.put("recordId", record.get(DatabaseModel.ID));

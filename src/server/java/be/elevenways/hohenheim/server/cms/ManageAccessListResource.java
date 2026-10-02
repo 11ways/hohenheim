@@ -59,7 +59,7 @@ public final class ManageAccessListResource extends AccessListResource {
 
     /**
      * Create, then hand the creator {@code manage} on what it just authored -- the grant
-     * IS the ownership, the ManageGitProviderResource shape verbatim. An operator create
+     * IS the ownership, the GitProviderParts.manage() shape verbatim. An operator create
      * plants nothing: an empty subject set IS operator ownership.
      */
     @Override

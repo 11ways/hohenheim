@@ -53,13 +53,7 @@ public final class ManageDatabaseCredentialsPage implements RecordScopedPage<Row
         int id = record.get(DatabaseModel.ID);
         ManagedDatabase.LiveStatus live = DatabaseInstances.liveStatus(id);
         String handle = DatabaseInstances.handleOf(id);
-        Map<String, Object> vars = new HashMap<>();
-        vars.put("name", String.valueOf((Object) record.get(DatabaseModel.NAME)));
-        vars.put("engine", String.valueOf((Object) record.get(DatabaseModel.ENGINE)));
-        vars.put("status", String.valueOf((Object) record.get(DatabaseModel.STATUS)));
-        vars.put("dbName", String.valueOf((Object) record.get(DatabaseModel.DB_NAME)));
-        vars.put("dbUser", String.valueOf((Object) record.get(DatabaseModel.DB_USER)));
-        vars.put("dbPassword", String.valueOf((Object) record.get(DatabaseModel.DB_PASSWORD)));
+        Map<String, Object> vars = new HashMap<>(DatabaseConnectionCard.facts(record));
         // The container hostname is what an attached workload dials over the shared link
         // network; the loopback port is what a host process dials. Both are resolved live,
         // never stored, so a redeployed engine never hands out a stale address.

@@ -6871,6 +6871,10 @@
     {
       "text": "Create",
       "scope": "instance_files"
+    },
+    {
+      "text": "Create",
+      "scope": "game_domain"
     }
   ],
   "approval_note": {
@@ -7363,12 +7367,22 @@
     {
       "text": "Delete",
       "scope": "access_rule"
+    },
+    {
+      "text": "Delete",
+      "scope": "game_domain"
     }
   ],
-  "save": {
-    "text": "Save",
-    "scope": "instance_files"
-  },
+  "save": [
+    {
+      "text": "Save",
+      "scope": "instance_files"
+    },
+    {
+      "text": "Save",
+      "scope": "game_domain"
+    }
+  ],
   "upload": [
     {
       "text": "Upload",

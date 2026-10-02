@@ -155,8 +155,8 @@ public final class ManagePanel extends Panel {
         HohenheimPanel.addIf(peers, new ManagePreviewDeploymentResource(), Role.PROXY);
         // The tenant's OWN forge installations: register one, test it, use it on the
         // tenant's own sites. Shared operator providers are usable but never listed
-        // here -- see ManageGitProviderResource.
-        HohenheimPanel.addIf(peers, new ManageGitProviderResource(), Role.PROXY);
+        // here -- see GitProviderParts.manage().
+        HohenheimPanel.addIf(peers, GitProviderParts.manage(), Role.PROXY);
         HohenheimPanel.addIf(peers, new ManageAccessListResource(), Role.PROXY);
         HohenheimPanel.addIf(peers, new ManageAccessRuleResource(), Role.PROXY);
         HohenheimPanel.addIf(peers, new ManageProtectedPathResource(), Role.PROXY);
@@ -366,7 +366,7 @@ public final class ManagePanel extends Panel {
             .build());
 
         // Git providers: the SAME two-derived-defaults hazard (the admin
-        // GitProviderResource and the delegated ManageGitProviderResource both derive one
+        // GitProviderParts.admin() and the delegated GitProviderParts.manage() both derive one
         // from the model's display field), and the widest of the two would name every
         // tenant's forge installation -- host included -- to whoever a picker rendered
         // for. The scope IS the visibility policy (shared rows plus the ones the
