@@ -1,20 +1,17 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.spamservice.client.SampleDetail;
 import be.elevenways.spamservice.client.SampleSummary;
-import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelRegistry;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
-import be.elevenways.zenit.cms.server.page.RecordTabs;
+import be.elevenways.spamservice.client.SpamserviceClient;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -23,15 +20,16 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /** Analysis tab for a remotely stored Spamservice sample. */
-public final class SpamserviceSampleAnalysisPage implements RecordScopedPage<SampleSummary> {
+public final class SpamserviceSampleAnalysisPage implements RecordTab.Rendered<SampleSummary> {
 
     public static final String SLUG = "analysis";
-    private final SpamserviceSamplesResource resource;
+    private final Supplier<SpamserviceClient> clients;
 
-    public SpamserviceSampleAnalysisPage(@NonNull SpamserviceSamplesResource resource) {
-        this.resource = Objects.requireNonNull(resource, "resource cannot be null");
+    SpamserviceSampleAnalysisPage(@NonNull Supplier<SpamserviceClient> clients) {
+        this.clients = Objects.requireNonNull(clients, "clients cannot be null");
     }
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("spamservice_sample_analysis"); }
@@ -40,9 +38,9 @@ public final class SpamserviceSampleAnalysisPage implements RecordScopedPage<Sam
     @Override public @NonNull Icon icon() { return Icon.of("magnifying-glass-chart"); }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext context,
-                                           @NonNull SampleSummary record) {
-        SampleDetail detail = this.resource.requireClient().sample(record.id());
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull SampleSummary record) {
+        Conduit conduit = request.conduit();
+        SampleDetail detail = SpamserviceRemoteStore.require(this.clients).sample(record.id());
         Map<String, Object> vars = new LinkedHashMap<>();
         vars.put("title", CmsSupport.pageTitle(conduit, "spamservice_sample",
             value(record.ip(), record.id())));
@@ -54,8 +52,7 @@ public final class SpamserviceSampleAnalysisPage implements RecordScopedPage<Sam
             "language", value(property.language(), ""))).toList());
         vars.put("breakdown", detail.breakdown().stream().map(line -> Map.<String, Object>of(
             "flag", line.flag(), "points", line.points(), "detail", value(line.detail(), ""))).toList());
-        Panel panel = PanelRegistry.getBySlug(HohenheimSlugs.ADMIN);
-        vars.put("recordTabs", RecordTabs.build(panel, this.resource, record.id(), record, context, SLUG));
+        vars.put("recordTabs", this.recordTabs(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.SPAMSERVICE_SAMPLE_ANALYSIS, vars);
     }
 

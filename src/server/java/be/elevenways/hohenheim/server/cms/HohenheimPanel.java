@@ -211,11 +211,11 @@ public final class HohenheimPanel extends Panel {
             Microcopy.of("nav_hint").withFilter("scope", "role")));
         addIf(peers, new SpamserviceOverviewPage(), Role.FIREWALL);
         addIf(peers, new SpamserviceInstallationResource(), Role.FIREWALL);
-        addIf(peers, new SpamserviceSamplesResource(), Role.FIREWALL);
-        addIf(peers, new SpamserviceClientsResource(), Role.FIREWALL);
-        addIf(peers, new SpamserviceClientKeysResource(), Role.FIREWALL);
-        addIf(peers, new SpamserviceSecurityEventsResource(), Role.FIREWALL);
-        addIf(peers, new SpamserviceWordsResource(), Role.FIREWALL);
+        addIf(peers, SpamserviceSamplesResource.create(), Role.FIREWALL);
+        addIf(peers, SpamserviceClientsResource.create(), Role.FIREWALL);
+        addIf(peers, SpamserviceClientKeysResource.create(), Role.FIREWALL);
+        addIf(peers, SpamserviceSecurityEventsResource.create(), Role.FIREWALL);
+        addIf(peers, SpamserviceWordsResource.create(), Role.FIREWALL);
         addIf(peers, new SpamserviceReputationPage(), Role.FIREWALL);
         peers.add(new AdminActivityResource());
         // Where a platform alert lands with nothing configured: every administrator's

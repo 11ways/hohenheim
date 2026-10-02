@@ -14,12 +14,15 @@ import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import be.elevenways.zenit.cms.common.action.ActionContext;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.HeaderAction;
-import be.elevenways.zenit.cms.common.action.RowAction;
-import be.elevenways.zenit.cms.common.resource.Resource;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.schema.FilterState;
+import be.elevenways.zenit.cms.common.schema.RangeFilterValue;
 import be.elevenways.zenit.cms.common.schema.TableView;
 import be.elevenways.zenit.cms.server.page.SettingsBackend;
+import be.elevenways.zenit.common.data.RecordPage;
 import be.elevenways.zenit.common.orm.field.DateField;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.UuidField;
 import be.elevenways.zenit.common.security.AccessContext;
 import com.sun.net.httpserver.HttpExchange;
@@ -53,56 +56,57 @@ class SpamserviceCmsContractTest {
 
     @Test
     void resourcesAreRemoteOnlyAndDisconnectedListsStayUsable() {
-        List<Resource<?>> resources = List.of(
-            new SpamserviceClientsResource(() -> null),
-            new SpamserviceClientKeysResource(() -> null),
-            new SpamserviceSamplesResource(() -> null),
-            new SpamserviceSecurityEventsResource(() -> null),
-            new SpamserviceWordsResource(() -> null));
+        List<PanelResource<?>> resources = List.of(
+            SpamserviceClientsResource.create(() -> null),
+            SpamserviceClientKeysResource.create(() -> null),
+            SpamserviceSamplesResource.create(() -> null),
+            SpamserviceSecurityEventsResource.create(() -> null),
+            SpamserviceWordsResource.create(() -> null));
 
-        for (Resource<?> resource : resources) {
-            assertThat(resource.model()).as(resource.slug()).isNull();
+        for (PanelResource<?> resource : resources) {
+            assertThat(resource.reads().isRows()).as(resource.slug()).isFalse();
+            assertThat(resource.list().isStore()).as(resource.slug()).isTrue();
         }
 
-        SpamserviceClientsResource clients = (SpamserviceClientsResource) resources.get(0);
-        TableView.Applied<be.elevenways.spamservice.client.ManagedClient> applied =
-            TableView.forPrincipal(0, clients.id()).build().apply(clients.tableSpec());
-        assertThat(clients.listRows(applied, AccessContext.anonymous())).isEmpty();
-        assertThat(clients.countRows(applied, AccessContext.anonymous()))
+        @SuppressWarnings("unchecked")
+        PanelResource<ManagedClient> clients = (PanelResource<ManagedClient>) resources.get(0);
+        TableView.Applied<ManagedClient> applied =
+            TableView.forPrincipal(0, clients.id()).build().apply(clients.list().table());
+        RecordPage<ManagedClient> page = clients.list().storePages().page(applied, AccessContext.anonymous());
+        assertThat(page.rows()).isEmpty();
+        assertThat(page.total())
             .as("a disconnected list totals the nothing it listed, never a negative total")
             .isZero();
-        assertThat(clients.listNotice(AccessContext.anonymous())).isNotNull();
-        assertThatThrownBy(() -> clients.loadRow(UUID.randomUUID(), AccessContext.anonymous()))
-            .isInstanceOf(SpamserviceApiException.class);
+        assertThat(clients.list().notice(AccessContext.anonymous())).isNotNull();
+        assertThatThrownBy(() -> clients.reads().load().apply(UUID.randomUUID().toString(),
+            AccessContext.anonymous())).isInstanceOf(SpamserviceApiException.class);
 
         String clientId = UUID.randomUUID().toString();
         ManagedClient client = new ManagedClient(clientId, "Primary", true, false, false, false,
             null, null, null, 50, null, null, null, "r1");
-        RowAction.Url<ManagedClient> keysAction = (RowAction.Url<ManagedClient>) clients.rowActions().get(0);
-        assertThat(keysAction.urlFor(client).toString())
+        assertThat(SpamserviceClientsResource.keysTarget(client).toUrl())
             .isEqualTo("/admin/spamservice-clients/" + clientId + "/page/keys");
-        assertThat(((SpamserviceClientKeysResource) resources.get(1)).parent().subpageSlug())
-            .isEqualTo(SpamserviceClientKeysPage.SLUG);
+        assertThat(resources.get(1).parent().subpageSlug()).isEqualTo(SpamserviceClientKeysResource.TAB);
     }
 
     @Test
     void remoteSchemasUseUuidTemporalAndSecretFields() {
-        SpamserviceClientsResource clients = new SpamserviceClientsResource(() -> null);
-        SpamserviceClientKeysResource keys = new SpamserviceClientKeysResource(() -> null);
-        SpamserviceSecurityEventsResource events = new SpamserviceSecurityEventsResource(() -> null);
-        SpamserviceSamplesResource samples = new SpamserviceSamplesResource(() -> null);
+        PanelResource<?> clients = SpamserviceClientsResource.create(() -> null);
+        PanelResource<?> keys = SpamserviceClientKeysResource.create(() -> null);
+        PanelResource<?> events = SpamserviceSecurityEventsResource.create(() -> null);
+        PanelResource<?> samples = SpamserviceSamplesResource.create(() -> null);
 
-        assertThat(clients.schema().getField("provisioned_by_client_id")).isInstanceOf(UuidField.class);
-        assertThat(keys.schema().getField("client_id")).isInstanceOf(UuidField.class);
-        assertThat(keys.schema().getField("last_used")).isInstanceOf(DateTimeField.class);
-        assertThat(keys.schema().getField("created_at")).isInstanceOf(DateTimeField.class);
-        assertThat(keys.schema().getField("key").isSecret()).isTrue();
-        assertThat(events.schema().getField("client_id")).isInstanceOf(UuidField.class);
-        assertThat(events.schema().getField("day")).isInstanceOf(DateField.class);
-        assertThat(events.schema().getField("first_at")).isInstanceOf(DateTimeField.class);
-        assertThat(events.schema().getField("last_at")).isInstanceOf(DateTimeField.class);
-        assertThat(samples.schema().getField("client_id")).isInstanceOf(UuidField.class);
-        assertThat(samples.schema().getField("created_at")).isInstanceOf(DateTimeField.class);
+        assertThat(field(clients, "provisioned_by_client_id")).isInstanceOf(UuidField.class);
+        assertThat(field(keys, "client_id")).isInstanceOf(UuidField.class);
+        assertThat(field(keys, "last_used")).isInstanceOf(DateTimeField.class);
+        assertThat(field(keys, "created_at")).isInstanceOf(DateTimeField.class);
+        assertThat(field(keys, "key").isSecret()).isTrue();
+        assertThat(field(events, "client_id")).isInstanceOf(UuidField.class);
+        assertThat(field(events, "day")).isInstanceOf(DateField.class);
+        assertThat(field(events, "first_at")).isInstanceOf(DateTimeField.class);
+        assertThat(field(events, "last_at")).isInstanceOf(DateTimeField.class);
+        assertThat(field(samples, "client_id")).isInstanceOf(UuidField.class);
+        assertThat(field(samples, "created_at")).isInstanceOf(DateTimeField.class);
     }
 
     @Test
@@ -191,9 +195,9 @@ class SpamserviceCmsContractTest {
         });
         ManagedClient existing = new ManagedClient(clientId, "Original", true, true, false, false,
             "owned", null, "eng", 50, null, null, null, "r1");
-        SpamserviceClientsResource resource = new SpamserviceClientsResource(() -> client);
+        PanelResource<ManagedClient> resource = SpamserviceClientsResource.create(() -> client);
 
-        resource.updateRow(existing, Map.of(
+        resource.writes().storeUpdate().update(existing, Map.of(
             "name", "Renamed", "enabled", true, "trusted", true, "provisioner", false,
             "manager", false, "allowed_languages", "eng", "spam_threshold", 55, "notes", "note"),
             AccessContext.anonymous());
@@ -234,7 +238,7 @@ class SpamserviceCmsContractTest {
         //    threshold -- every one of them a setting a blank PUT would silently drop.
         ManagedClient existing = new ManagedClient(clientId, "Original", true, true, true, false,
             "owned", null, "eng,nld", 80, "keep this note", null, null, "r1");
-        new SpamserviceClientsResource(() -> client).updateRow(existing,
+        SpamserviceClientsResource.create(() -> client).writes().storeUpdate().update(existing,
             Map.of("name", "Renamed"), AccessContext.anonymous());
 
         assertThat(body.get()).as("step 1: the rename is the only field that moved")
@@ -244,7 +248,7 @@ class SpamserviceCmsContractTest {
 
         // 2. Same for a spam word: score, language and leet survive a correction of the
         //    word itself.
-        new SpamserviceWordsResource(() -> client).updateRow(
+        SpamserviceWordsResource.create(() -> client).writes().storeUpdate().update(
             new SpamWordEntry(wordId, "viagraa", 70, "eng", true, null, null),
             Map.of("word", "viagra"), AccessContext.anonymous());
 
@@ -253,7 +257,7 @@ class SpamserviceCmsContractTest {
             .contains("eng").contains("\"leet\":true");
 
         // 3. And a key write that carries no name must not rename the key to "null".
-        new SpamserviceClientKeysResource(() -> client).updateRow(
+        SpamserviceClientKeysResource.create(() -> client).writes().storeUpdate().update(
             new ManagedClientKey(keyId, clientId, "primary", true, null, null),
             Map.of("active", false), AccessContext.anonymous());
 
@@ -264,7 +268,7 @@ class SpamserviceCmsContractTest {
         //    stored name is null, edited by a write that carries no name. The fallback is the
         //    null itself, and String.valueOf over it is the four characters "null" -- PUT to
         //    the live filter as the client's new name.
-        new SpamserviceClientsResource(() -> client).updateRow(
+        SpamserviceClientsResource.create(() -> client).writes().storeUpdate().update(
             new ManagedClient(clientId, null, true, false, false, false, "owned", null, "eng",
                 50, null, null, null, "r1"),
             Map.of("enabled", true), AccessContext.anonymous());
@@ -277,7 +281,7 @@ class SpamserviceCmsContractTest {
         //    submitted entry coerces to -- getOrDefault answers null for a present key.
         Map<String, Object> blankName = new java.util.HashMap<>();
         blankName.put("name", null);
-        new SpamserviceClientsResource(() -> client).updateRow(existing, blankName,
+        SpamserviceClientsResource.create(() -> client).writes().storeUpdate().update(existing, blankName,
             AccessContext.anonymous());
 
         assertThat(body.get())
@@ -297,14 +301,72 @@ class SpamserviceCmsContractTest {
                 + "\"count\":2,\"first_at\":\"2026-07-23T00:00:00Z\","
                 + "\"last_at\":\"2026-07-23T01:00:00Z\",\"last_detail\":null}";
         });
-        SpamserviceSecurityEventsResource resource = new SpamserviceSecurityEventsResource(() -> client);
+        PanelResource<SecurityEventEntry> resource = SpamserviceSecurityEventsResource.create(() -> client);
 
-        SecurityEventEntry event = resource.loadRow(UUID.fromString(eventId), AccessContext.anonymous());
+        SecurityEventEntry event = resource.reads().load().apply(eventId, AccessContext.anonymous());
 
         assertThat(event).isNotNull();
         assertThat(event.day()).isEqualTo(LocalDate.parse("2026-07-23"));
         assertThat(event.lastAt()).isEqualTo(Instant.parse("2026-07-23T01:00:00Z"));
         assertThat(path.get()).isEqualTo("/v1/manage/security-events/" + eventId);
+    }
+
+    /**
+     * BEHAVIOUR journey: the list search and the day leaf reach the management API as its own q and from/to
+     * parameters, and every store declares the fields its filters name.
+     */
+    @Test
+    void listSearchAndDayLeafRideTheManagementApisOwnParameters() throws Exception {
+        AtomicReference<String> query = new AtomicReference<>();
+        SpamserviceClient client = client(exchange -> {
+            query.set(exchange.getRequestURI().getRawQuery());
+            return "{\"items\":[],\"page\":1,\"page_size\":25,\"total\":0}";
+        });
+
+        // 1. A clients search is forwarded as the API's q, beside the enabled filter it always sent.
+        PanelResource<ManagedClient> clients = SpamserviceClientsResource.create(() -> client);
+        assertThat(clients.list().searchColumns()).as("step 1: the API searches client names").containsExactly("name");
+        TableView.Applied<ManagedClient> clientView = TableView.forPrincipal(0, clients.id()).build()
+            .apply(clients.list().table()).withSearch("  prim ")
+            .withFilter(FilterState.of(Map.of("enabled", "true")));
+        clients.list().storePages().page(clientView, AccessContext.anonymous());
+        assertThat(parameters(query.get())).as("step 1: q carries the trimmed search")
+            .containsEntry("q", "prim").containsEntry("enabled", "true");
+
+        // 2. A words search is forwarded as the API's q.
+        PanelResource<SpamWordEntry> words = SpamserviceWordsResource.create(() -> client);
+        assertThat(words.list().searchColumns()).as("step 2: the API searches words").containsExactly("word");
+        words.list().storePages().page(TableView.forPrincipal(0, words.id()).build().apply(words.list().table())
+            .withSearch("viagra"), AccessContext.anonymous());
+        assertThat(parameters(query.get())).as("step 2: q carries the search").containsEntry("q", "viagra");
+
+        // 3. The day leaf's bounds become the API's from/to; a lone lower bound sends only from.
+        PanelResource<SecurityEventEntry> events = SpamserviceSecurityEventsResource.create(() -> client);
+        TableView.Applied<SecurityEventEntry> eventView = TableView.forPrincipal(0, events.id()).build()
+            .apply(events.list().table());
+        events.list().storePages().page(eventView.withFilter(FilterState.of(Map.of(
+            "day", new RangeFilterValue("2026-07-01", "2026-07-31")))), AccessContext.anonymous());
+        assertThat(parameters(query.get())).as("step 3: both bounds")
+            .containsEntry("from", "2026-07-01").containsEntry("to", "2026-07-31");
+        events.list().storePages().page(eventView.withFilter(FilterState.of(Map.of(
+            "day", new RangeFilterValue("2026-07-01", null)))), AccessContext.anonymous());
+        assertThat(parameters(query.get())).as("step 3: a lone lower bound")
+            .containsEntry("from", "2026-07-01").doesNotContainKey("to");
+
+        // 4. No search and no bound sends neither parameter, as the unfiltered list always asked.
+        events.list().storePages().page(eventView, AccessContext.anonymous());
+        assertThat(parameters(query.get())).as("step 4: an unfiltered list")
+            .doesNotContainKeys("q", "from", "to").containsKey("page_size");
+    }
+
+    private static Map<String, String> parameters(String rawQuery) {
+        Map<String, String> result = new java.util.HashMap<>();
+        for (String pair : rawQuery.split("&")) {
+            int equals = pair.indexOf('=');
+            result.put(pair.substring(0, equals), java.net.URLDecoder.decode(pair.substring(equals + 1),
+                StandardCharsets.UTF_8));
+        }
+        return result;
     }
 
     @Test
@@ -326,19 +388,17 @@ class SpamserviceCmsContractTest {
                 + "\"confirmed_origin\":\"manual\",\"location\":{},\"asn\":{},\"properties\":[],\"breakdown\":[]}";
         });
 
-        SpamserviceClientKeysResource keys = new SpamserviceClientKeysResource(() -> client);
-        Object createdKey = keys.persistRow(Map.of("client_id", UUID.fromString(clientId), "name", "primary", "key", ""),
-            AccessContext.anonymous());
+        PanelResource<ManagedClientKey> keys = SpamserviceClientKeysResource.create(() -> client);
+        Object createdKey = keys.writes().storeCreateUnder().create(clientId,
+            Map.of("client_id", UUID.fromString(clientId), "name", "primary", "key", ""), AccessContext.anonymous());
         assertThat(createdKey).isEqualTo(clientId + "~" + keyId);
-        assertThat(keys.valuesFromRow(new ManagedClientKey(keyId, clientId, "primary", true, null,
+        assertThat(keys.reads().values().apply(new ManagedClientKey(keyId, clientId, "primary", true, null,
             Instant.parse("2026-07-23T00:00:00Z"))))
             .containsEntry("key", "").doesNotContainValue("spam_once");
 
-        SpamserviceSamplesResource samples = new SpamserviceSamplesResource(() -> client);
         SampleSummary sample = new SampleSummary(sampleId, clientId, "203.0.113.9", false,
             10, false, "", "eng", null, null);
-        ((RowAction.Invoke<SampleSummary>) samples.rowActions().get(0))
-            .invoke(sample, ActionContext.of(AccessContext.anonymous()));
+        SpamserviceSamplesResource.markSpam(() -> client, sample);
         assertThat(lastPath.get()).isEqualTo("/v1/manage/samples/" + sampleId + "/mark-spam");
     }
 
@@ -376,6 +436,12 @@ class SpamserviceCmsContractTest {
         assertThat(result).isInstanceOf(CmsActionResult.Toast.class);
         CmsActionResult.Toast toast = (CmsActionResult.Toast) result;
         assertThat(toast.message().key()).isEqualTo("not_configured");
+    }
+
+    private static Field<?, ?> field(PanelResource<?> resource, String name) {
+        return resource.form().spec().entries().stream().map(entry -> entry.field())
+            .filter(field -> field.getName().equals(name)).findFirst()
+            .orElseThrow(() -> new AssertionError(resource.slug() + " has no form field " + name));
     }
 
     private SpamserviceClient client(Function<HttpExchange, String> responder) throws IOException {
