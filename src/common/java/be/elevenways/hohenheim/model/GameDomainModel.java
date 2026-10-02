@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.model;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.orm.behaviour.OptimisticLockingBehaviour;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -60,6 +61,10 @@ public class GameDomainModel extends Model {
         DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("updated_at").build());
+
+    /** The lock an admin edit is reviewed against: a concurrent change refuses as stale instead of being lost. */
+    public static final OptimisticLockingBehaviour LOCKING = SCHEMA.addBehaviour(OptimisticLockingBehaviour.create());
+    public static final IntegerField VERSION = LOCKING.versionField();
 
     public static final BelongsTo<SiteDomainModel> DOMAIN = SCHEMA.addRelation(
         BelongsTo.to(SiteDomainModel.class).name("domain")

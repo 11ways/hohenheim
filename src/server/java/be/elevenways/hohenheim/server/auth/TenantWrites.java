@@ -459,8 +459,9 @@ public final class TenantWrites {
      * like {@code AccessListModel.SHARED}: publishing a credential installation-wide is the
      * operator's declaration.
      *
-     * AIDEV-NOTE: this is THE gate; ManageGitProviderResource.refuseSharedChange and its
-     * managed-rows scope are the surface's own early answers, and neither stops a revision
+     * AIDEV-NOTE: this is THE gate; the twin's form-only writer, its create-only
+     * GitProviderParts.refuseSharedChange and the managed-rows scope are the surface's
+     * own early answers, and none of them stops a revision
      * restore, a peer write or a direct model save. A shared provider a tenant may USE
      * (the picker scope) is still not one it may edit: use is not manage.
      *

@@ -40,7 +40,7 @@ public class AccessListResource extends RowResource {
         // This IS the root group's mode; everything else lives in the Rules tab.
         .add(AccessListModel.SATISFY)
         // The operator's switch alone: ManageAccessListResource narrows it away, and
-        // TenantWrites freezes it on every writer -- the GitProviderResource shape.
+        // TenantWrites freezes it on every writer -- the GitProviderParts shape.
         .add(AccessListModel.SHARED)
         .build();
 

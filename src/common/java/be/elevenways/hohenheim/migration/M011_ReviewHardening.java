@@ -36,7 +36,8 @@ import java.util.TreeSet;
  * operations that replaced them;
  * and a certificate's requester stored as its principal reference ({@code requested_by_kind} beside the id);
  * and every stored host wildcard respelled into zenit's HostPattern grammar;
- * and the provenance mark of every operator-trustable target, set on the rows stored before it.
+ * and the provenance mark of every operator-trustable target, set on the rows stored before it;
+ * and the lock version of every game-domain mapping, whose writes became operations.
  *
  * AIDEV-NOTE: this is ONE migration on purpose (2026-09-30). It replaced M011, M012, M015, M016 and M017,
  * which no production install (kuifje at 009, robbedoes at 010) had applied; the two test installs that
@@ -190,6 +191,25 @@ public class M011_ReviewHardening extends HohenheimMigration {
         }
         schema.data("mark every stored site upstream, provider base URL and instance source as operator-set", "1",
             M011_ReviewHardening::trustExistingTargets);
+        // A game-domain mapping is written through operations now, and an update is reviewed against its version.
+        schema.alterTable("game_domains", table -> table.version());
+        schema.data("start every stored game-domain mapping's lock version at 0", "1",
+            M011_ReviewHardening::startGameDomainVersions);
+    }
+
+    /**
+     * The data step starting every stored game-domain mapping's lock version at 0: a null version saves unguarded, so
+     * an edit reviewed on a pre-migration row would never refuse as stale.
+     */
+    public static void startGameDomainVersions(@NonNull Datasource datasource) {
+        Db.run(datasource, () -> {
+            IntegerField id = IntegerField.builder().name("id").build();
+            IntegerField version = IntegerField.builder().name("version").build();
+            new FrozenModel("game_domains", id, version).find()
+                .where(version.isNull())
+                .assign(version, 0)
+                .updateAll();
+        });
     }
 
     /** The tables whose rows carry an operator-trustable target, as production names them. */

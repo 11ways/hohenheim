@@ -61,7 +61,7 @@ public final class DnsZoneSecondariesPage implements RecordScopedPage<Row> {
             Map<String, Object> entry = new HashMap<>();
             entry.put("peerName", peer != null ? peer.get(DnsPeerModel.NAME) : "(deleted peer)");
             entry.put("transferHost", peer != null ? peer.get(DnsPeerModel.TRANSFER_HOST) : "");
-            entry.put("editTarget", CmsRoutes.detail(HohenheimSlugs.ADMIN, DnsZonePeerResource.SLUG,
+            entry.put("editTarget", CmsRoutes.detail(HohenheimSlugs.ADMIN, DnsZonePeerParts.SLUG,
                 link.get(DnsZonePeerModel.ID)));
             // Freshness as probed from this primary: what the peer served, when, and
             // whether that lag has outlived the stale window.
@@ -96,7 +96,7 @@ public final class DnsZoneSecondariesPage implements RecordScopedPage<Row> {
         // CmsRoutes.create returns the RouteTarget interface (no with(...)).
         vars.put("attachPeerTarget", CmsEndpoints.CREATE_FORM
             .with(CmsEndpoints.PANEL_PARAM, HohenheimSlugs.ADMIN)
-            .with(CmsEndpoints.RESOURCE_PARAM, "dns-zone-peers")
+            .with(CmsEndpoints.RESOURCE_PARAM, DnsZonePeerParts.SLUG)
             .with(HohenheimParams.ZONE_ID_PREFILL, zoneId));
         vars.put("recordTabs", recordTabs(conduit));
         vars.put("timeWording", RelativeTimeWording.resolve(
