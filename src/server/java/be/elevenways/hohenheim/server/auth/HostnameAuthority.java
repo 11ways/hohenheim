@@ -306,7 +306,7 @@ public final class HostnameAuthority {
      *
      * AIDEV-NOTE: this is the ONE spelling of the tier order, shared by {@link
      * Snapshot#deciding} (which decides who answers for a name) and by the write-time
-     * overlap scan in {@code SiteDomainResource} (which decides whether a foreign row may
+     * overlap scan in {@code SiteDomainRouteInvariant} (which decides whether a foreign row may
      * refuse a claim). A regex pattern's reach is undecidable here, so it ranks with an
      * exact row and is therefore never LESS specific than anything -- the fail-closed
      * answer. Regex rows never cover a name ({@code HostnamePatterns.covers}), so they

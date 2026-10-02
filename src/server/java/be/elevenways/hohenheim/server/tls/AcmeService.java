@@ -210,7 +210,7 @@ public class AcmeService {
         // certificate row exists, so a refused request leaves no trace of an order that was
         // never placed. It lives here rather than in the HTTP handler on purpose: several
         // entry points reach the CA (this one, the manual DNS lane, the renewal sweep), and
-        // a handler-layer check is the exact bypass shape SiteDomainResource's route
+        // a handler-layer check is the exact bypass shape SiteDomainRouteInvariant's route
         // invariant documents. Do NOT move it up into HohenheimHandlers.
         Map<String, Integer> declaring = CertificateAuthority.authorize(requester, hostnames);
 

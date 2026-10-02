@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.cms.SiteDomainResource;
+import be.elevenways.hohenheim.server.cms.SiteDomainRouteInvariant;
 import be.elevenways.hohenheim.server.cms.SiteEnableInvariant;
 import be.elevenways.hohenheim.server.auth.OperatorTrustedWrites;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviderGuards;
@@ -66,7 +66,7 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // No domain row can take a route an enabled site already owns, and every row
         // stamps the live-route claim its unique index arbitrates (form, clone, seeder,
         // API writeback, direct model save).
-        SiteDomainResource.installRouteInvariant();
+        SiteDomainRouteInvariant.installRouteInvariant();
         // A protected path stores the canonical prefix the dispatcher guards, names a
         // list, and claims its (site, path) pair once (form, delegated form, restore).
         be.elevenways.hohenheim.server.cms.ProtectedPathResource.installProtectionInvariant();

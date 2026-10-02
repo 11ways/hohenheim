@@ -115,7 +115,7 @@ public class SiteDomainModel extends Model {
      * AIDEV-NOTE: judged on the EFFECTIVE tier, so a glob-shaped hostname is held to the
      * glob grammar even when its column says exact -- refusing it as an invalid exact name
      * would be the column-versus-content split all over again. Absence is deliberately not
-     * a syntax question: an empty hostname is answered by SiteDomainResource's
+     * a syntax question: an empty hostname is answered by SiteDomainRouteInvariant's
      * {@code hostname_required}, which is the refusal an operator can act on.
      *
      * @throws Violations anchored on the hostname field
@@ -228,7 +228,7 @@ public class SiteDomainModel extends Model {
      * AIDEV-NOTE: derived, never operator-editable, and backed by a UNIQUE index
      * (M045_SiteDomainRouteClaims). Concurrency is handled by the serialized write
      * transaction that this model's save() declares (see RouteClaims): the conflict scan
-     * in SiteDomainResource runs inside the same transaction as the claim write, so it
+     * in SiteDomainRouteInvariant runs inside the same transaction as the claim write, so it
      * cannot go stale, and it is what refuses OVERLAPPING listener sets whose keys
      * differ; the index refuses identical keys even for writers that dodge the
      * transaction. NULL means "no claim", so staged duplicates on disabled sites stay

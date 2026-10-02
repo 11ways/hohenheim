@@ -121,7 +121,7 @@ public final class ManagePanel extends Panel {
         // attention, then the principal's instances), never a contentless card grid.
         peers.add(new ManageDashboard());
         HohenheimPanel.addIf(peers, new ManageSiteResource(), Role.PROXY);
-        HohenheimPanel.addIf(peers, new ManageDomainResource(), Role.PROXY);
+        HohenheimPanel.addIf(peers, DomainParts.manage(), Role.PROXY);
         HohenheimPanel.addIf(peers, new ManageDnsRecordResource(), Role.DNS);
         HohenheimPanel.addIf(peers, new ManageCertificateResource(), Role.PROXY);
         // The instance tier's tenant projection. Every one of these is scoped by a
@@ -221,8 +221,8 @@ public final class ManagePanel extends Panel {
             .build());
 
         // The domain source, for the SAME reason and by the same verb -- plus one that is
-        // specific to this model: site_domain is exposed by TWO RowResources (the admin
-        // SiteDomainResource and the delegated ManageDomainResource), so zenit-cms derives
+        // specific to this model: site_domain is exposed by TWO resources (the admin
+        // DomainParts.admin() and the delegated DomainParts.manage()), so zenit-cms derives
         // a default source from BOTH panels and which one wins is decided by panel walk
         // ORDER. That is a shadowing hazard exactly like the deleted "hohenheim.manage_site"
         // one: it decides whether the token is admin-gated-unscoped or manage-gated-scoped

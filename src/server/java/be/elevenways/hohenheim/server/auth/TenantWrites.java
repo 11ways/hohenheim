@@ -51,7 +51,7 @@ import java.util.Set;
  * ACME publisher, CLI tools -- runs with no ambient conduit and is system work.
  *
  * AIDEV-NOTE: the resource layer is NOT an option for any of this, for the reason
- * SiteDomainResource.installRouteInvariant spells out at length: the framework's generic
+ * SiteDomainRouteInvariant.installRouteInvariant spells out at length: the framework's generic
  * revision-restore endpoint, the peer API, the zone-file import and any direct model.save
  * all reach the datasource without passing a single resource method. A form that omits a
  * field is a UX affordance, never a gate -- a direct POST carries whatever it likes.

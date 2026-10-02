@@ -801,7 +801,7 @@ public class HohenheimEndpoints {
     //
     // The programmatic front door of the proxy tier: a site row and its domain rows,
     // created and deleted through the SAME resource pipeline the admin form runs
-    // (zenit-cms ResourceWrites over SiteResource / SiteDomainResource), so the route
+    // (zenit-cms ResourceWrites over the admin site and domain resources), so the route
     // claim, hostname canonicalization, tenant column freeze and proxy reload hooks all
     // fire exactly as they do for a form save. Mutations are POST like every other
     // write here (delete is a POST to `.../delete`, the DNS record lane's spelling).

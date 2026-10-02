@@ -12,7 +12,7 @@ import java.util.List;
 
 /**
  * The /manage view over protected paths: scoped by the parent SITE's {@code manage}
- * grant, the ManageDomainResource shape. The base resource's write predicate already
+ * grant, the /manage domain twin's shape. The base resource's write predicate already
  * asks the same question, so nothing narrows further here.
  */
 public final class ManageProtectedPathResource extends ProtectedPathResource {

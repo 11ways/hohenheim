@@ -5,9 +5,11 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.SiteDomainResource;
+import be.elevenways.hohenheim.server.cms.DomainParts;
 import be.elevenways.hohenheim.server.cms.SiteResource;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
@@ -31,9 +33,9 @@ import java.util.Objects;
  * its hostnames, through the very resource pipeline the admin form posts to.
  *
  * AIDEV-NOTE: there is no model write in this class, on purpose. Every mutation goes
- * through zenit-cms {@code ResourceWrites} over {@link SiteResource} and
- * {@link SiteDomainResource}: the CREATE-view spec, coercion, validation, FieldAccess and
- * the scope-verified transaction are the framework's, and the route claim, hostname
+ * through zenit-cms {@code ResourceWrites} over {@link SiteResource} and the admin domain
+ * resource ({@link DomainParts#admin()}, the admin panel's entry): the CREATE-view spec,
+ * coercion, validation, FieldAccess and the scope-verified transaction are the framework's, and the route claim, hostname
  * canonicalization, tenant column freeze and proxy reload are the model write hooks'.
  * A raw {@code Model.save} here would skip none of the hooks but all of the form
  * discipline, and a hand-rolled coercion would be a second policy. Authorization is
@@ -46,7 +48,6 @@ import java.util.Objects;
 public final class SiteApi {
 
     private static final SiteResource SITES = new SiteResource();
-    private static final SiteDomainResource DOMAINS = new SiteDomainResource();
 
     private SiteApi() {
     }
@@ -130,8 +131,9 @@ public final class SiteApi {
                     ApiConduits.violationText("domain_site_mismatch")));
             }
             raw.put(siteKey, String.valueOf(siteId));
+            Panel panel = ApiConduits.adminPanel();
             try {
-                int domainId = (Integer) ResourceWrites.create(ApiConduits.adminPanel(), DOMAINS, raw, ctx);
+                int domainId = (Integer) ResourceWrites.create(panel, domainsIn(panel), raw, ctx);
                 Row added = Objects.requireNonNull(
                     Models.get(SiteDomainModel.class).findById(domainId));
                 ActivityLog.record(Models.get(SiteModel.class), siteId, HohenheimActivityAction.DOMAIN_ADDED,
@@ -165,8 +167,9 @@ public final class SiteApi {
                 conduit.notFound();
                 return null;
             }
+            Panel panel = ApiConduits.adminPanel();
             try {
-                ResourceWrites.delete(ApiConduits.adminPanel(), DOMAINS, domain, ctx);
+                ResourceWrites.delete(panel, domainsIn(panel), domain, ctx);
                 ActivityLog.record(Models.get(SiteModel.class), siteId, HohenheimActivityAction.DOMAIN_REMOVED,
                     domain.get(SiteDomainModel.HOSTNAME));
                 return ApiConduits.json(Map.of("id", domainId, "site_id", siteId,
@@ -178,6 +181,19 @@ public final class SiteApi {
                 return null;
             }
         });
+    }
+
+    /**
+     * The admin panel's own domain entry, whose registered record source its programmatic writes read.
+     *
+     * @throws IllegalStateException when that panel declares no domain entry (its proxy role is off)
+     */
+    @SuppressWarnings("unchecked")
+    private static @NonNull PanelResource<Row> domainsIn(@NonNull Panel panel) {
+        if (panel.entryBySlug(DomainParts.SLUG) instanceof PanelResource<?> domains) {
+            return (PanelResource<Row>) domains;
+        }
+        throw new IllegalStateException("panel '" + panel.slug() + "' declares no domain entry");
     }
 
     /** Every domain row of a site, oldest first, as the enumerated projection. */

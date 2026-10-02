@@ -114,7 +114,7 @@ public class ProtectedPathResource extends RowResource {
      * Install THE protected-path invariant on the model write pipeline: the path stored
      * canonically (the dispatcher's own spelling), a usable prefix, a list, and one row
      * per (site, path) -- for every writer, not just the CMS form, for the reason
-     * {@link SiteDomainResource#installRouteInvariant} spells out.
+     * {@link SiteDomainRouteInvariant#installRouteInvariant} spells out.
      */
     public static synchronized void installProtectionInvariant() {
         if (protectionInvariantInstalled) {
