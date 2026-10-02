@@ -2075,6 +2075,15 @@
   },
   "plural": [
     {
+      "text": "Variabelen",
+      "scope": "instance_variable"
+    },
+    {
+      "text": "variabelen",
+      "scope": "instance_variable",
+      "case": "sentence"
+    },
+    {
       "text": "Gamedomeinen",
       "scope": "game_domain"
     },
@@ -6860,6 +6869,10 @@
     "text": "Instantie aanmaken van",
     "scope": "instance_from_template"
   },
+  "step_details": {
+    "text": "Gegevens",
+    "scope": "instance_from_template"
+  },
   "instance_name": {
     "text": "Instantienaam",
     "scope": "instance_from_template"
@@ -8646,6 +8659,15 @@
     "scope": "server"
   },
   "singular": [
+    {
+      "text": "Variabele",
+      "scope": "instance_variable"
+    },
+    {
+      "text": "variabele",
+      "scope": "instance_variable",
+      "case": "sentence"
+    },
     {
       "text": "Planning",
       "scope": "instance_schedule"

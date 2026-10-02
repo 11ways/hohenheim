@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.zenit.cms.common.panel.PanelPeer;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.resource.ActivityHistoryPage;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.Resource;
@@ -38,7 +38,7 @@ class ManageHistoryHiddenTest extends HohenheimTestBase {
 
         // 2. Every resource the /manage panel declares offers none.
         List<String> checked = new ArrayList<>();
-        for (PanelPeer peer : ManagePanel.declarePeers()) {
+        for (PanelEntry peer : ManagePanel.declareEntries()) {
             if (!(peer instanceof Resource<?> resource)) {
                 continue;
             }

@@ -11,7 +11,7 @@ import be.elevenways.zenit.auth.server.cms.AuthRolesResource;
 import be.elevenways.zenit.auth.server.cms.AuthUsersResource;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelPeer;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.server.page.BuildInfoPage;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.zenit.comms.CommsSettings;
@@ -126,8 +126,8 @@ public final class HohenheimPanel extends Panel {
      * the boot-captured HohenheimRoles snapshot these gates read.
      */
     @Override
-    public List<PanelPeer> buildPeers() {
-        List<PanelPeer> peers = new ArrayList<>();
+    public @NonNull List<PanelEntry> buildEntries() {
+        List<PanelEntry> peers = new ArrayList<>();
         // The dashboard comes first: the panel landing soft-redirects to the
         // first accessible DashboardPanelPeer.
         peers.add(new AdminDashboard());
@@ -161,6 +161,7 @@ public final class HohenheimPanel extends Panel {
             peers.add(new InstanceTemplateDatabaseResource());
         }
         addIf(peers, new InstanceFileResource(), Role.INSTANCES);
+        addIf(peers, InstanceVariableParts.admin(), Role.INSTANCES);
         addIf(peers, new InstanceFromTemplatePage(), Role.INSTANCES);
         addIf(peers, new InstanceTemplateImportPage(), Role.INSTANCES);
         addIf(peers, new InstanceQuotaResource(), Role.INSTANCES);
@@ -235,7 +236,7 @@ public final class HohenheimPanel extends Panel {
      * for a panel peer, shared with {@link ManagePanel} so the delegated projection of a
      * tier can never outlive the tier's own admin surface.
      */
-    static void addIf(List<PanelPeer> peers, PanelPeer peer, Role... roles) {
+    static void addIf(List<PanelEntry> peers, PanelEntry peer, Role... roles) {
         if (HohenheimRoles.anyEnabled(roles)) {
             peers.add(peer);
         }

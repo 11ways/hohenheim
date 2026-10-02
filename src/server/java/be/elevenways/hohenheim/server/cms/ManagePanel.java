@@ -23,7 +23,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelPeer;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.server.page.CmsRecordSources;
 import be.elevenways.zenit.common.data.RecordCreateProvider;
 import be.elevenways.zenit.common.data.RecordSource;
@@ -105,17 +105,17 @@ public final class ManagePanel extends Panel {
      * no ROUTE either (peersBySlug), exactly like the admin panel.
      */
     @Override
-    public @NonNull List<PanelPeer> buildPeers() {
-        return declarePeers();
+    public @NonNull List<PanelEntry> buildEntries() {
+        return declareEntries();
     }
 
     /**
-     * The peer declaration behind {@link #buildPeers}, callable without a panel instance:
+     * The entry declaration behind {@link #buildEntries}, callable without a panel instance:
      * a Panel self-registers in its constructor, so a test that wants to see what THIS role
      * set declares asks here rather than constructing a second /manage panel.
      */
-    public static @NonNull List<PanelPeer> declarePeers() {
-        List<PanelPeer> peers = new ArrayList<>();
+    public static @NonNull List<PanelEntry> declareEntries() {
+        List<PanelEntry> peers = new ArrayList<>();
         // The dashboard FIRST: the panel-index rule redirects /manage to the first
         // accessible DashboardPanelPeer, so the landing is a real page (what needs
         // attention, then the principal's instances), never a contentless card grid.
@@ -132,6 +132,7 @@ public final class ManagePanel extends Panel {
         HohenheimPanel.addIf(peers, new ManageInstanceScheduleResource(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, new ManageInstanceScheduleStepResource(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, new ManageInstanceDeviceResource(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, InstanceVariableParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, new ManageInstanceSnapshotResource(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, new ManageInstanceBackupResource(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, new ManageInstanceTemplateResource(), Role.INSTANCES);

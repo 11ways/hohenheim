@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -139,6 +140,14 @@ public final class TenantScopes {
     public static final RowScope INSTANCE_DEVICES = InstanceDeviceResource.ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(InstanceDeviceModel.class),
             InstanceModel.MODEL_ID, HohenheimAccess.VIEW, InstanceDeviceModel.INSTANCE_ID::in));
+
+    /**
+     * Instance-owned variables; tenants only those of viewable instances. VIEW, never MANAGE or CONFIG: the list is
+     * the read-only face the Provisioning tab always showed to anyone who may open the instance.
+     */
+    public static final RowScope INSTANCE_VARIABLES = InstanceVariableParts.ROWS.andPerPrincipal(
+        ctx -> HohenheimAccess.grantScope(ctx, Models.get(InstanceVariableModel.class),
+            InstanceModel.MODEL_ID, HohenheimAccess.VIEW, InstanceVariableModel.INSTANCE_ID::in));
 
     /** Instance-database attachments; tenants only those of viewable instances. */
     public static final RowScope INSTANCE_DATABASES = InstanceDatabaseResource.ROWS.andPerPrincipal(
