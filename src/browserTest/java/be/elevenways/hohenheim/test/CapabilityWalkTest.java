@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.auth.CapabilityScopes;
@@ -21,6 +22,7 @@ import be.elevenways.zenit.common.security.RecordCapabilityDecision;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -203,15 +205,72 @@ class CapabilityWalkTest extends HohenheimTestBase {
                 .as("step 2: a record-grant holder is eligible on the request and the detached lane alike")
                 .containsExactly(true, true);
 
-            // 3. An explicit global deny wins over the computation on both lanes.
+            // 3. The account's key scoped only to that record capability is not admitted: the computation answers
+            //    for the account, and the key's scopes do not cover the permission (review 10 D02).
+            ApiKeyPrincipal narrowKey = new ApiKeyPrincipal(tenantId, "Walk Eligible", 7, "walk-narrow",
+                List.of(CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimAccess.MANAGE)));
+            assertThat(List.of(contextFor(narrowKey).hasPermission(HohenheimSources.MANAGE_ACCESS),
+                    AccessContext.detached(narrowKey).hasPermission(HohenheimSources.MANAGE_ACCESS)))
+                .as("step 3: a key scoped below the permission is eligible on neither lane")
+                .containsExactly(false, false);
+            ApiKeyPrincipal manageKey = new ApiKeyPrincipal(tenantId, "Walk Eligible", 8, "walk-manage",
+                List.of("hohenheim.manage.access",
+                    CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimAccess.MANAGE)));
+            assertThat(List.of(contextFor(manageKey).hasPermission(HohenheimSources.MANAGE_ACCESS),
+                    AccessContext.detached(manageKey).hasPermission(HohenheimSources.MANAGE_ACCESS)))
+                .as("step 3: a key declaring the permission (and the record capability) is eligible as its account is")
+                .containsExactly(true, true);
+
+            // 4. An explicit global deny wins over the computation on both lanes.
             GrantService.createDirectGrant(GrantSubjectType.USER, tenantId, "hohenheim.manage.access", false);
             assertThat(List.of(contextFor(tenant).hasPermission(HohenheimSources.MANAGE_ACCESS),
                     AccessContext.detached(tenant).hasPermission(HohenheimSources.MANAGE_ACCESS)))
-                .as("step 3: an explicit deny refuses on both lanes").containsExactly(false, false);
+                .as("step 4: an explicit deny refuses on both lanes").containsExactly(false, false);
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, walkSiteId,
                 HohenheimAccess.MANAGE);
             deleteManageAccessGrants(tenantId);
+        }
+    }
+
+    /**
+     * Review 10 D02, the live shape: a non-admin account holding instance VIEW through a record grant is eligible for
+     * /manage, and its key scoped only to that instance capability is not, on either lane.
+     */
+    @Test
+    void anInstanceViewerIsEligibleButItsViewScopedKeyIsNot() {
+        Row instance = Models.get(InstanceModel.class).createEmptyRow();
+        instance.set(InstanceModel.NAME, "walk-viewed-instance");
+        instance.set(InstanceModel.KIND, "hohenheim:docker_container");
+        instance.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine", "tag", "latest")));
+        instance.set(InstanceModel.STATUS, "stopped");
+        Models.get(InstanceModel.class).save(instance);
+        int instanceId = instance.get(InstanceModel.ID);
+        int viewerId = ApiSupport.user("walk-instance-viewer@hohenheim.local", "Walk Instance Viewer");
+        UserPrincipal viewer = new UserPrincipal(viewerId, "Walk Instance Viewer");
+
+        try {
+            // 1. Instance VIEW through a record grant, no global grant: the account keeps the intended widening.
+            RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceId,
+                HohenheimAccess.VIEW, true);
+            assertThat(List.of(contextFor(viewer).hasPermission(HohenheimSources.MANAGE_ACCESS),
+                    AccessContext.detached(viewer).hasPermission(HohenheimSources.MANAGE_ACCESS)))
+                .as("step 1: an instance viewer is eligible on the request and the detached lane")
+                .containsExactly(true, true);
+
+            // 2. Its key scoped only to instance view is refused the computed permission on both lanes.
+            ApiKeyPrincipal viewKey = new ApiKeyPrincipal(viewerId, "Walk Instance Viewer", 9, "walk-view",
+                List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, "view")));
+            assertThat(viewKey.coversCapability(InstanceModel.MODEL_ID, HohenheimAccess.VIEW))
+                .as("step 2: the key does cover the instance view it was minted for").isTrue();
+            assertThat(List.of(contextFor(viewKey).hasPermission(HohenheimSources.MANAGE_ACCESS),
+                    AccessContext.detached(viewKey).hasPermission(HohenheimSources.MANAGE_ACCESS)))
+                .as("step 2: a key scoped only to instance view is not eligible for /manage")
+                .containsExactly(false, false);
+        } finally {
+            RecordGrants.revoke(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceId,
+                HohenheimAccess.VIEW);
+            Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId)).delete();
         }
     }
 
