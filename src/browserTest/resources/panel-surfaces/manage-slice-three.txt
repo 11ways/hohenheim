@@ -1,0 +1,415 @@
+case admin.sites.operator admin sites operator
+admission - verdict=admitted
+verb CREATE
+chrome - views=true advanced=true search=true columns=true rail=false selection=false export=false trash=true tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=slug relation=false
+column slug at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column hostnames at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column upstream at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column tls at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column enabled at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column access_list_id at=6 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=true
+column upstream_kind at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column created_at at=8 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+filter name at=0 kind=TEXT facet=false param=filter.name
+filter upstream_kind at=1 kind=SELECT facet=true param=filter.upstream_kind
+filter enabled at=2 kind=BOOLEAN facet=false param=filter.enabled
+filter created_at at=3 kind=DATETIME_RANGE facet=false param=filter.created_at
+filter archived at=4 kind=BOOLEAN facet=false param=filter.archived
+link hohenheim:site_domain at=0 lead=false
+link hohenheim:auth_provider at=1 lead=false
+link hohenheim:preview_deployment at=2 lead=false
+tab domains at=0 landing=false view=false
+tab protected-paths at=1 landing=false view=false
+tab dev-sessions at=2 landing=false view=false
+tab revisions at=3 landing=false view=false
+tab history at=4 landing=false view=false
+tab access at=5 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20hostname at=1 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20upstream_kind at=2 kind=zenitforms:form/select required=false readonly=false options=hohenheim:address,hohenheim:dev_namespace,hohenheim:instance,hohenheim:redirect,hohenheim:static,hohenheim:tls_passthrough
+control CREATE%20instance_id at=3 kind=zenitforms:form/relation-pick required=false readonly=false options=
+control CREATE%20settings at=4 kind=zenitforms:form/schema-nested required=false readonly=false options=
+control CREATE%20trusted_upstream at=5 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20enabled at=6 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20description at=7 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20auth_provider_id at=8 kind=zenitforms:form/relation-pick required=false readonly=false options=
+control CREATE%20access_list_id at=9 kind=zenitforms:form/relation-pick required=false readonly=false options=
+
+case admin.sites.tenant-one admin sites tenant-one
+admission - verdict=zenit:forbidden
+
+case admin.domains.operator admin domains operator
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
+column match_type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext=path relation=false
+column path at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column force_ssl at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column site_id at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+filter hostname at=0 kind=TEXT facet=false param=filter.hostname
+filter match_type at=1 kind=SELECT facet=true param=filter.match_type
+filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl
+tab history at=0 landing=false view=false
+control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick required=false readonly=false options=
+control CREATE%20hostname at=1 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20match_type at=2 kind=zenitforms:form/select required=false readonly=false options=exact,wildcard,regex
+control CREATE%20listen_on at=3 kind=zenitforms:form/select required=false readonly=false options=<host>
+control CREATE%20path at=4 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20strip_path at=5 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20force_ssl at=6 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20certificate_id at=7 kind=zenitforms:form/relation-pick required=false readonly=false options=
+control CREATE%20hsts_enabled at=8 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20hsts_subdomains at=9 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20exclude_from_letsencrypt at=10 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20custom_headers at=11 kind=zenitforms:form/key-value required=false readonly=false options=
+control CREATE%20response_headers at=12 kind=zenitforms:form/key-value required=false readonly=false options=
+
+case admin.domains.tenant-one admin domains tenant-one
+admission - verdict=zenit:forbidden
+
+case admin.instance-templates.operator admin instance-templates operator
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=version relation=false
+column version at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column kind at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column install_image at=3 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column reinstall_policy at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column approved_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column source at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+filter name at=0 kind=TEXT facet=false param=filter.name
+filter kind at=1 kind=SELECT facet=true param=filter.kind
+link hohenheim:instance_templates_import at=0 lead=false
+tab contents at=0 landing=false view=false
+tab history at=1 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:form/plain required=true readonly=false options=
+control CREATE%20description at=1 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20kind at=2 kind=zenitforms:form/select required=false readonly=false options=hohenheim:application,hohenheim:docker_container,hohenheim:system_container,hohenheim:vm,hohenheim:workspace
+control CREATE%20settings at=3 kind=zenitforms:form/schema-nested required=false readonly=false options=
+control CREATE%20version at=4 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20install_image at=5 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20install_script at=6 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20update_script at=7 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20reinstall_policy at=8 kind=zenitforms:form/select required=false readonly=false options=preserve,clear
+control CREATE%20readiness_kind at=9 kind=zenitforms:form/select required=false readonly=false options=port,http,console_line
+control CREATE%20readiness_line at=10 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20readiness_target at=11 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20stop_command at=12 kind=zenitforms:form/plain required=false readonly=false options=
+
+case admin.instance-templates.tenant-one admin instance-templates tenant-one
+admission - verdict=zenit:forbidden
+
+case admin.sites.operator.site admin sites operator
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=true advanced=true search=true columns=true rail=false selection=false export=false trash=true tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=slug relation=false
+column slug at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column hostnames at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column upstream at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column tls at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column enabled at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column access_list_id at=6 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=true
+column upstream_kind at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column created_at at=8 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+filter name at=0 kind=TEXT facet=false param=filter.name
+filter upstream_kind at=1 kind=SELECT facet=true param=filter.upstream_kind
+filter enabled at=2 kind=BOOLEAN facet=false param=filter.enabled
+filter created_at at=3 kind=DATETIME_RANGE facet=false param=filter.created_at
+filter archived at=4 kind=BOOLEAN facet=false param=filter.archived
+link hohenheim:site_domain at=0 lead=false
+link hohenheim:auth_provider at=1 lead=false
+link hohenheim:preview_deployment at=2 lead=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled=
+row hohenheim:clone_site at=1 verb=invoke band=overflow style=DEFAULT disabled=
+row hohenheim:toggle_site at=2 verb=invoke band=destructive style=DEFAULT disabled=
+row zenit:delete at=3 verb=invoke band=destructive style=DESTRUCTIVE disabled=
+tab domains at=0 landing=false view=false
+tab protected-paths at=1 landing=false view=false
+tab revisions at=2 landing=false view=false
+tab history at=3 landing=false view=false
+tab access at=4 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20hostname at=1 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20upstream_kind at=2 kind=zenitforms:form/select required=false readonly=false options=hohenheim:address,hohenheim:dev_namespace,hohenheim:instance,hohenheim:redirect,hohenheim:static,hohenheim:tls_passthrough
+control CREATE%20instance_id at=3 kind=zenitforms:form/relation-pick required=false readonly=false options=
+control CREATE%20settings at=4 kind=zenitforms:form/schema-nested required=false readonly=false options=
+control CREATE%20trusted_upstream at=5 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20enabled at=6 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20description at=7 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20auth_provider_id at=8 kind=zenitforms:form/relation-pick required=false readonly=false options=
+control CREATE%20access_list_id at=9 kind=zenitforms:form/relation-pick required=false readonly=false options=
+control EDIT%20name at=0 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20upstream_kind at=1 kind=zenitforms:form/select required=false readonly=false options=hohenheim:address,hohenheim:dev_namespace,hohenheim:instance,hohenheim:redirect,hohenheim:static,hohenheim:tls_passthrough
+control EDIT%20instance_id at=2 kind=zenitforms:form/relation-pick required=false readonly=false options=
+control EDIT%20settings at=3 kind=zenitforms:form/schema-nested required=false readonly=false options=
+control EDIT%20trusted_upstream at=4 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20enabled at=5 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20description at=6 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20auth_provider_id at=7 kind=zenitforms:form/relation-pick required=false readonly=false options=
+control EDIT%20access_list_id at=8 kind=zenitforms:form/relation-pick required=false readonly=false options=
+
+case admin.domains.operator.domain admin domains operator
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
+column match_type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext=path relation=false
+column path at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column force_ssl at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column site_id at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+filter hostname at=0 kind=TEXT facet=false param=filter.hostname
+filter match_type at=1 kind=SELECT facet=true param=filter.match_type
+filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled=
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled=
+inline force_ssl
+tab history at=0 landing=false view=false
+control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick required=false readonly=false options=
+control CREATE%20hostname at=1 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20match_type at=2 kind=zenitforms:form/select required=false readonly=false options=exact,wildcard,regex
+control CREATE%20listen_on at=3 kind=zenitforms:form/select required=false readonly=false options=<host>
+control CREATE%20path at=4 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20strip_path at=5 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20force_ssl at=6 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20certificate_id at=7 kind=zenitforms:form/relation-pick required=false readonly=false options=
+control CREATE%20hsts_enabled at=8 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20hsts_subdomains at=9 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20exclude_from_letsencrypt at=10 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20custom_headers at=11 kind=zenitforms:form/key-value required=false readonly=false options=
+control CREATE%20response_headers at=12 kind=zenitforms:form/key-value required=false readonly=false options=
+control EDIT%20site_id at=0 kind=zenitforms:form/relation-pick required=false readonly=false options=
+control EDIT%20hostname at=1 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20match_type at=2 kind=zenitforms:form/select required=false readonly=false options=exact,wildcard,regex
+control EDIT%20listen_on at=3 kind=zenitforms:form/select required=false readonly=false options=<host>
+control EDIT%20path at=4 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20strip_path at=5 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20force_ssl at=6 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20certificate_id at=7 kind=zenitforms:form/relation-pick required=false readonly=false options=
+control EDIT%20hsts_enabled at=8 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20hsts_subdomains at=9 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20exclude_from_letsencrypt at=10 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20custom_headers at=11 kind=zenitforms:form/key-value required=false readonly=false options=
+control EDIT%20response_headers at=12 kind=zenitforms:form/key-value required=false readonly=false options=
+
+case admin.instance-templates.operator.approved admin instance-templates operator
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=version relation=false
+column version at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column kind at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column install_image at=3 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column reinstall_policy at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column approved_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column source at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+filter name at=0 kind=TEXT facet=false param=filter.name
+filter kind at=1 kind=SELECT facet=true param=filter.kind
+link hohenheim:instance_templates_import at=0 lead=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled=
+row hohenheim:template_create_instance at=1 verb=link band=inline style=DEFAULT disabled=
+row hohenheim:export_template at=2 verb=link band=overflow style=DEFAULT disabled=
+row hohenheim:unapprove_template at=3 verb=invoke band=overflow style=DEFAULT disabled=
+row zenit:delete at=4 verb=invoke band=destructive style=DESTRUCTIVE disabled=
+tab contents at=0 landing=false view=false
+tab history at=1 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:form/plain required=true readonly=false options=
+control CREATE%20description at=1 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20kind at=2 kind=zenitforms:form/select required=false readonly=false options=hohenheim:application,hohenheim:docker_container,hohenheim:system_container,hohenheim:vm,hohenheim:workspace
+control CREATE%20settings at=3 kind=zenitforms:form/schema-nested required=false readonly=false options=
+control CREATE%20version at=4 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20install_image at=5 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20install_script at=6 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20update_script at=7 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20reinstall_policy at=8 kind=zenitforms:form/select required=false readonly=false options=preserve,clear
+control CREATE%20readiness_kind at=9 kind=zenitforms:form/select required=false readonly=false options=port,http,console_line
+control CREATE%20readiness_line at=10 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20readiness_target at=11 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20stop_command at=12 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20name at=0 kind=zenitforms:form/plain required=true readonly=false options=
+control EDIT%20description at=1 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20kind at=2 kind=zenitforms:form/select required=false readonly=false options=hohenheim:application,hohenheim:docker_container,hohenheim:system_container,hohenheim:vm,hohenheim:workspace
+control EDIT%20settings at=3 kind=zenitforms:form/schema-nested required=false readonly=false options=
+control EDIT%20version at=4 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20install_image at=5 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20install_script at=6 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20update_script at=7 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20reinstall_policy at=8 kind=zenitforms:form/select required=false readonly=false options=preserve,clear
+control EDIT%20readiness_kind at=9 kind=zenitforms:form/select required=false readonly=false options=port,http,console_line
+control EDIT%20readiness_line at=10 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20readiness_target at=11 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20stop_command at=12 kind=zenitforms:form/plain required=false readonly=false options=
+
+case admin.instance-templates.operator.unapproved admin instance-templates operator
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=version relation=false
+column version at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column kind at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column install_image at=3 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column reinstall_policy at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column approved_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column source at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+filter name at=0 kind=TEXT facet=false param=filter.name
+filter kind at=1 kind=SELECT facet=true param=filter.kind
+link hohenheim:instance_templates_import at=0 lead=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled=
+row hohenheim:template_create_instance at=1 verb=link band=inline style=DEFAULT disabled=
+row hohenheim:export_template at=2 verb=link band=overflow style=DEFAULT disabled=
+row hohenheim:approve_template at=3 verb=invoke band=overflow style=DEFAULT disabled=
+row zenit:delete at=4 verb=invoke band=destructive style=DESTRUCTIVE disabled=
+tab contents at=0 landing=false view=false
+tab history at=1 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:form/plain required=true readonly=false options=
+control CREATE%20description at=1 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20kind at=2 kind=zenitforms:form/select required=false readonly=false options=hohenheim:application,hohenheim:docker_container,hohenheim:system_container,hohenheim:vm,hohenheim:workspace
+control CREATE%20settings at=3 kind=zenitforms:form/schema-nested required=false readonly=false options=
+control CREATE%20version at=4 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20install_image at=5 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20install_script at=6 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20update_script at=7 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20reinstall_policy at=8 kind=zenitforms:form/select required=false readonly=false options=preserve,clear
+control CREATE%20readiness_kind at=9 kind=zenitforms:form/select required=false readonly=false options=port,http,console_line
+control CREATE%20readiness_line at=10 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20readiness_target at=11 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20stop_command at=12 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20name at=0 kind=zenitforms:form/plain required=true readonly=false options=
+control EDIT%20description at=1 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20kind at=2 kind=zenitforms:form/select required=false readonly=false options=hohenheim:application,hohenheim:docker_container,hohenheim:system_container,hohenheim:vm,hohenheim:workspace
+control EDIT%20settings at=3 kind=zenitforms:form/schema-nested required=false readonly=false options=
+control EDIT%20version at=4 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20install_image at=5 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20install_script at=6 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20update_script at=7 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20reinstall_policy at=8 kind=zenitforms:form/select required=false readonly=false options=preserve,clear
+control EDIT%20readiness_kind at=9 kind=zenitforms:form/select required=false readonly=false options=port,http,console_line
+control EDIT%20readiness_line at=10 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20readiness_target at=11 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20stop_command at=12 kind=zenitforms:form/plain required=false readonly=false options=
+
+case manage.sites.tenant-one manage sites tenant-one
+admission - verdict=admitted
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column enabled at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+tab domains at=0 landing=false view=false
+tab protected-paths at=1 landing=false view=false
+tab access at=2 landing=false view=false
+
+case manage.sites.tenant-empty manage sites tenant-empty
+admission - verdict=zenit:forbidden
+
+case manage.domains.tenant-one manage domains tenant-one
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
+column match_type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext=path relation=false
+column path at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column force_ssl at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column site_id at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+filter hostname at=0 kind=TEXT facet=false param=filter.hostname
+filter match_type at=1 kind=SELECT facet=true param=filter.match_type
+filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl
+control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick required=false readonly=false options=
+control CREATE%20hostname at=1 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20force_ssl at=2 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20hsts_enabled at=3 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20hsts_subdomains at=4 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20exclude_from_letsencrypt at=5 kind=zenitforms:form/plain required=false readonly=false options=
+
+case manage.domains.tenant-empty manage domains tenant-empty
+admission - verdict=zenit:forbidden
+
+case manage.instance-templates.tenant-one manage instance-templates tenant-one
+admission - verdict=admitted
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext=description relation=false
+column description at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column version at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+
+case manage.instance-templates.tenant-empty manage instance-templates tenant-empty
+admission - verdict=zenit:forbidden
+
+case manage.sites.tenant-one.site manage sites tenant-one
+admission - verdict=admitted
+record - found=true
+verb UPDATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column enabled at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled=
+row hohenheim:toggle_site at=1 verb=invoke band=destructive style=DEFAULT disabled=
+tab domains at=0 landing=false view=false
+tab protected-paths at=1 landing=false view=false
+tab access at=2 landing=false view=false
+control EDIT%20name at=0 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20enabled at=1 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20description at=2 kind=zenitforms:form/plain required=false readonly=false options=
+
+case manage.domains.tenant-one.domain manage domains tenant-one
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
+column match_type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext=path relation=false
+column path at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column force_ssl at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column site_id at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+filter hostname at=0 kind=TEXT facet=false param=filter.hostname
+filter match_type at=1 kind=SELECT facet=true param=filter.match_type
+filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled=
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled=
+inline force_ssl
+control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick required=false readonly=false options=
+control CREATE%20hostname at=1 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20force_ssl at=2 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20hsts_enabled at=3 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20hsts_subdomains at=4 kind=zenitforms:form/plain required=false readonly=false options=
+control CREATE%20exclude_from_letsencrypt at=5 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20site_id at=0 kind=zenitforms:form/relation-pick required=false readonly=false options=
+control EDIT%20hostname at=1 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20force_ssl at=2 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20hsts_enabled at=3 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20hsts_subdomains at=4 kind=zenitforms:form/plain required=false readonly=false options=
+control EDIT%20exclude_from_letsencrypt at=5 kind=zenitforms:form/plain required=false readonly=false options=
+
+case manage.instance-templates.tenant-one.approved manage instance-templates tenant-one
+admission - verdict=admitted
+record - found=true
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext=description relation=false
+column description at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column version at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+control EDIT%20name at=0 kind=zenitforms:form/plain required=true readonly=true options=
+control EDIT%20description at=1 kind=zenitforms:form/plain required=false readonly=true options=
+control EDIT%20version at=2 kind=zenitforms:form/plain required=false readonly=true options=
+
+case manage.instance-templates.tenant-one.unapproved manage instance-templates tenant-one
+admission - verdict=admitted
+record - found=false
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext=description relation=false
+column description at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column version at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+
