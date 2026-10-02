@@ -13,6 +13,8 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -130,20 +132,31 @@ class DomainEditTest extends HohenheimTestBase {
 
         assertThat(page.locator("body").textContent()).as("the tab lists the hostname")
             .contains(f.hostname());
-        // The hostname itself opens the form; the actions cell offers the same edit
-        // explicitly plus the remove this tab used to have no way to reach.
-        assertThat(page.locator("a[href^='/admin/domains/" + domainId + "?']").count())
-            .isGreaterThanOrEqualTo(1);
-        var actions = page.locator(".hh-domain-row-actions");
-        assertThat(actions.count()).as("the row carries an actions cell").isEqualTo(1);
-        assertThat(actions.locator("a.hh-domain-edit[href^='/admin/domains/" + domainId + "?']").count())
-            .as("with an explicit edit link, bound back to this tab").isEqualTo(1);
-        assertThat(actions.locator("a.hh-domain-edit").first().getAttribute("href"))
+        // The hostname's row is the domain child list's own: its edit opens the form and its remove detaches it,
+        // each bound back to this tab.
+        var section = page.locator("[data-cms-child-list='domains']");
+        assertThat(section.count()).as("the tab embeds the domains section").isEqualTo(1);
+        var edit = section.locator("[data-action-id='zenit:edit'][href^='/admin/domains/" + domainId + "?']");
+        assertThat(edit.count()).as("the row carries an edit link to the domain's form").isGreaterThanOrEqualTo(1);
+        assertThat(edit.first().getAttribute("href"))
             .as("the edit link carries the tab as its return target").contains("_return=");
-        assertThat(actions.locator("form[action*='/admin/domains/" + domainId + "/delete']").count())
-            .as("and a remove form posting to the delete route").isEqualTo(1);
-        assertThat(actions.locator("form pl-button[type='submit']").count())
-            .as("removal is a real submit, never a bare link").isEqualTo(1);
+        // The remove sits in the row's menu, whose content the client portals out of the section: read it off the
+        // served page.
+        assertThat(removeTarget(siteId, domainId))
+            .as("and a remove that is a real submit to the delete route, never a bare link")
+            .contains("/admin/domains/" + domainId + "/delete");
+    }
+
+    /**
+     * @return the formaction of the Domains tab's remove submit for the domain, as the server rendered it
+     * @throws AssertionError when the tab renders none
+     */
+    private String removeTarget(int siteId, int domainId) throws Exception {
+        String html = adminGet("/admin/sites/" + siteId + "/page/domains").body();
+        Matcher remove = Pattern.compile("formaction=\"([^\"]*/admin/domains/" + domainId + "/delete[^\"]*)\"[^>]*"
+            + "data-action-id=\"zenit:delete\"").matcher(html);
+        assertThat(remove.find()).as("the tab renders the domain's remove submit").isTrue();
+        return remove.group(1).replace("&amp;", "&");
     }
 
     /**
@@ -506,12 +519,9 @@ class DomainEditTest extends HohenheimTestBase {
     void theDomainsTabRemoveControlDetachesTheHostname() throws Exception {
         Fixture f = fixture("remove", "");
 
-        navigateToApp("/admin/sites/" + f.siteId() + "/page/domains");
-        waitForHydration();
         // The POST goes to the target the page RENDERED, so the assertion covers the
         // affordance and the route it points at, not a hand-written URL.
-        String action = page.locator("form[action*='/admin/domains/" + f.domainId() + "/delete']")
-            .first().getAttribute("action");
+        String action = removeTarget(f.siteId(), f.domainId());
         assertThat(action).as("the remove form returns to this tab")
             .contains("_return");
 

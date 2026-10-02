@@ -36,7 +36,7 @@ class SiteCloneNameTest extends HohenheimTestBase {
     }
 
     private HttpResponse<String> clone(Integer siteId, String body) throws Exception {
-        return adminPostForm("/admin/sites/" + siteId + "/action/clone_site", body);
+        return adminPostForm("/admin/sites/invoke/hohenheim.clone_site?ids=" + siteId, body);
     }
 
     @Test
@@ -65,7 +65,7 @@ class SiteCloneNameTest extends HohenheimTestBase {
         //    own conflict is the check, so the answer is the field's refusal, never the generic
         //    failure a check that could not see the trashed row used to hand out.
         HttpResponse<String> refused = clone(origin, confirmed("name=Retired+Name"));
-        assertThat(refused.statusCode()).as("step 3: the form comes back instead of a redirect").isEqualTo(200);
+        assertThat(refused.statusCode()).as("step 3: the form comes back instead of a redirect").isEqualTo(422);
         assertThat(refused.body()).as("step 3: carrying the name's refusal").contains(DUPLICATE);
         assertThat(Models.get(SiteModel.class).find().withTrashed().where(SiteModel.NAME.eq("Retired Name")).count())
             .as("step 3: and nothing was created").isEqualTo(1);

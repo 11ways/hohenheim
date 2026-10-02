@@ -322,11 +322,11 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
             .isEqualTo(applicationId);
     }
 
-    /** The sites list keeps its verbs: toggle inline, edit and delete synthesized. */
+    /** The sites list keeps its verbs: the placed switch, edit and delete synthesized. */
     @Test
     void sitesListOffersItsRowActions() throws Exception {
         String list = adminGet("/admin/sites").body();
-        assertThat(list).as("the toggle verb renders").contains("toggle_site");
+        assertThat(list).as("the site switch renders").containsAnyOf("hohenheim:enable_site", "hohenheim:disable_site");
         assertThat(list).as("the synthesized delete renders").contains("data-action-id=\"zenit:delete\"");
     }
 

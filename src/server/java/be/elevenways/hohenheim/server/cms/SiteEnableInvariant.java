@@ -45,7 +45,7 @@ public final class SiteEnableInvariant {
      * formerly-enabled revision after another site took the hostname and silently
      * seize the route (SiteDispatcher resolves first-wins). A before-write hook is
      * the one seam every save funnels through. Do NOT move this back into updateRow
-     * / toggleAction as a per-path check -- that is the very bypass this closes.
+     * / the enable operation as a per-path check -- that is the very bypass this closes.
      */
     public static synchronized void install() {
         if (installed) {

@@ -668,11 +668,11 @@ class AdminPagesTest extends HohenheimTestBase {
             Object toggleId = toggleSite.get(SiteModel.ID);
             navigateToApp("/admin/sites/" + toggleId);
             waitForHydration();
-            var toggleAction = page.locator("[data-action-id='hohenheim:toggle_site']");
+            var toggleAction = page.locator("[data-action-id='hohenheim:disable_site']");
             assertThat(toggleAction.count()).isEqualTo(1);
             assertThat(toggleAction.first().locator("[data-cms-action-label]").textContent().trim())
                 .isEqualTo("Disable");
-            assertThat(page.locator(".cms-record-toolbar pl-button[data-action-id='hohenheim:toggle_site']").count())
+            assertThat(page.locator(".cms-record-toolbar pl-button[data-action-id='hohenheim:disable_site']").count())
                 .as("a destructive-confirmed action is never an inline record button").isZero();
 
             toggleSite.set(SiteModel.ENABLED, false);
@@ -681,7 +681,7 @@ class AdminPagesTest extends HohenheimTestBase {
             navigateToApp("/admin/sites/" + toggleId);
             waitForHydration();
             assertThat(page.locator(
-                ".cms-record-toolbar pl-button[data-action-id='hohenheim:toggle_site']").innerText().trim())
+                ".cms-record-toolbar pl-button[data-action-id='hohenheim:enable_site']").innerText().trim())
                 .isEqualTo("Enable");
         } finally {
             HardDeletes.row(siteModel, suffixSite);
@@ -708,7 +708,7 @@ class AdminPagesTest extends HohenheimTestBase {
         // page that way. The POPULATED tab below stays a hydrated load -- that is where the
         // client render actually has something to get wrong.
         assertThat(adminGet("/admin/sites/" + siteId + "/page/domains").body())
-            .contains("No domains configured");
+            .contains("Add a hostname so traffic routes to this site");
 
         var domainModel = Models.get(SiteDomainModel.class);
         Row covered = domainModel.createEmptyRow();
@@ -738,11 +738,11 @@ class AdminPagesTest extends HohenheimTestBase {
                 + cert.get(CertificateModel.ID) + "']").count()).isEqualTo(1);
             assertThat(page.locator("[data-cert-status='none']").count()).isEqualTo(1);
 
-            // The add-domain link preselects this site on the CREATE form.
-            assertThat(page.locator("#add-domain-link").getAttribute("href"))
-                .startsWith("/admin/domains/new?site_id=" + siteId)
+            // The section's add link creates under this site, which the CREATE form preselects.
+            assertThat(page.locator("[data-cms-child-create='domains']").getAttribute("href"))
+                .startsWith("/admin/domains/new?parent=" + siteId)
                 .contains("_return=");
-            navigateToApp("/admin/domains/new?site_id=" + siteId);
+            navigateToApp("/admin/domains/new?parent=" + siteId);
             waitForHydration();
             // The pick's value is a Java-side property; the SSR-resolved display
             // title in the field is the observable prefill.

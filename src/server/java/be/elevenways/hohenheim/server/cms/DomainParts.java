@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -10,6 +9,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.server.upstream.kinds.TlsPassthroughUpstreamKind;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -20,6 +20,7 @@ import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
+import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
@@ -36,7 +37,6 @@ import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
@@ -129,6 +129,9 @@ public final class DomainParts {
         return ResourceAuthority.<Row>builder()
             .write(null, (record, access) -> HohenheimAccess.reachesRecord(access, SiteModel.MODEL_ID,
                 record.get(SiteDomainModel.SITE_ID), HohenheimAccess.MANAGE))
+            // A create under a site (its Domains tab's add, the create form, the submit) asks the same of that site.
+            .createUnder((site, access) -> site instanceof Integer id
+                && HohenheimAccess.reachesRecord(access, SiteModel.MODEL_ID, id, HohenheimAccess.MANAGE))
             .build();
     }
 
@@ -178,15 +181,23 @@ public final class DomainParts {
             .build();
     }
 
-    /** The site's Domains tab links here with {@code ?site_id=} so the pick is preselected. */
+    /**
+     * A create under a TLS passthrough site (its Domains tab's add link names the site as the create's parent) opens
+     * with HTTPS forcing and ACME off: that site terminates no TLS here. The parent field itself is the framework's
+     * child create preset.
+     *
+     * AIDEV-NOTE: the site is read through the panel's own site entry, the caller's scope: a site the caller cannot
+     * reach opens the create exactly as no site does, so the form is no probe of another tenant's configuration
+     * (GPT review 25 D03).
+     */
     private static @NonNull Map<String, Object> createDefaults(@NonNull FormSpec spec, @NonNull PanelRequest request) {
         Map<String, Object> values = new LinkedHashMap<>(spec.defaultValues());
-        Integer siteId = CmsSupport.prefill(request.conduit(), HohenheimParams.SITE_ID_PREFILL);
-        if (siteId != null) {
-            values.put(SiteDomainModel.SITE_ID.getName(), siteId);
-            Row site = Models.get(SiteModel.class).findById(siteId);
-            if (site != null && TlsPassthroughUpstreamKind.ID.toString()
-                    .equals(site.get(SiteModel.UPSTREAM_KIND))) {
+        Integer siteId = CmsSupport.scopedParentId(request.conduit(), CmsEndpoints.PARENT_PARAM.getName(),
+            HohenheimSlugs.SITES);
+        if (siteId != null && request.panel().entryBySlug(HohenheimSlugs.SITES) instanceof Resource<?> sites) {
+            Object site = sites.loadRow(siteId, request.access());
+            if (site instanceof Row row && TlsPassthroughUpstreamKind.ID.toString()
+                    .equals(row.get(SiteModel.UPSTREAM_KIND))) {
                 values.put(SiteDomainModel.FORCE_SSL.getName(), false);
                 values.put(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName(), true);
             }

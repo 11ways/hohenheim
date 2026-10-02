@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
@@ -12,7 +11,6 @@ import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
@@ -23,17 +21,13 @@ import be.elevenways.hohenheim.site.SiteHostnamesCell;
 import be.elevenways.hohenheim.site.SiteTlsCell;
 import be.elevenways.hohenheim.site.SiteUpstreamCell;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
-import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.access.QueryPredicate;
-import be.elevenways.zenit.cms.common.action.ActionInput;
-import be.elevenways.zenit.cms.common.action.ActionStyle;
-import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
-import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
@@ -45,7 +39,6 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
-import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldFormEntryDefaults;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
@@ -55,8 +48,6 @@ import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.edit.Select;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.datasource.DuplicateKeyException;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.StringField;
@@ -82,7 +73,7 @@ import java.util.UUID;
 
 /**
  * The proxied sites: type-discriminated settings, git provisioning, relation
- * picks to auth providers and access lists, clone/toggle row actions, and a
+ * picks to auth providers and access lists, the placed site operations, and a
  * soft delete that also removes a git-provisioned checkout.
  */
 public class SiteResource extends RowResource {
@@ -586,27 +577,16 @@ public class SiteResource extends RowResource {
     }
 
     /**
-     * Why this site's enable/disable is offered but dead: switching OFF the site that
-     * proxies this panel removes the only route back to the surface that could switch it
-     * on again.
+     * The named refusal when this site serves the hostname this request arrived on: switching it off or deleting it
+     * from inside the panel removes the only route back to the surface that could put it back.
      *
-     * The ENABLE direction is never refused -- a site that is off cannot be the one
-     * carrying this request -- and neither is a request that reached the backend directly
-     * (an ssh forward to its port arrives at a hostname no site domain covers), which is
-     * exactly the recovery path this refusal must not close.
+     * AIDEV-NOTE: a request that reached the backend directly (an ssh forward to its port arrives at a hostname no
+     * site domain covers) is refused nothing, which is exactly the recovery path this refusal must not close.
+     *
+     * @param key the refusal's microcopy key, one per verb
      */
-    private static @Nullable Microcopy panelLockoutReason(@NonNull Row site,
-                                                          @NonNull AccessContext accessContext) {
-        if (!Boolean.TRUE.equals(site.get(SiteModel.ENABLED))) {
-            return null;
-        }
-        return panelLockoutReason("toggle_self_lockout", site, accessContext);
-    }
-
-    /** @return the named refusal when this site serves the hostname this request arrived on */
-    private static @Nullable Microcopy panelLockoutReason(@NonNull String key,
-                                                          @NonNull Row site,
-                                                          @NonNull AccessContext accessContext) {
+    static @Nullable Microcopy panelLockoutReason(@NonNull String key, @NonNull Row site,
+                                                  @NonNull AccessContext accessContext) {
         String host = DeleteImpact.adminHostnameOfSite(
             site.get(SiteModel.ID), accessContext.conduit());
         if (host == null) {
@@ -615,235 +595,10 @@ public class SiteResource extends RowResource {
         return Microcopy.of(key).withFilter("scope", "site").withArg("host", host);
     }
 
-    /**
-     * The toggle dialog NAMES the hostnames whose answering state changes, which is the
-     * whole consequence of the action and only exists per record.
-     */
-    private static @NonNull ConfirmationSpec toggleConfirmationFor(@NonNull Row site) {
-        boolean enabled = Boolean.TRUE.equals(site.get(SiteModel.ENABLED));
-        String hostnames = DeleteImpact.join(
-            DeleteImpact.hostnamesOfSite(site.get(SiteModel.ID)));
-        // The four bodies are a deliberate 2x2 (direction x hostnames yes/no): microcopy
-        // args echo verbatim, so an empty hostname list would render a dangling colon.
-        String key = (enabled ? "disable_confirm" : "enable_confirm")
-            + (hostnames.isEmpty() ? "_no_hostnames" : "");
-        Microcopy body = Microcopy.of(key).withFilter("scope", "site")
-            .withArg("name", String.valueOf((Object) site.get(SiteModel.NAME)));
-        if (!hostnames.isEmpty()) {
-            body = body.withArg("hostnames", hostnames);
-        }
-        Microcopy verb = Microcopy.of(enabled ? "disable" : "enable").withFilter("scope", "site");
-        return ConfirmationSpec.builder()
-            .title(verb)
-            .body(body)
-            .confirmLabel(verb)
-            .style(enabled ? ActionStyle.DESTRUCTIVE : ActionStyle.DEFAULT)
-            .build();
-    }
-
-    /**
-     * The application a site exposes.
-     *
-     * @throws Violations when it exposes none -- the row action is hidden in that case, so
-     *         reaching this is a stale form, not a normal path
-     */
-    private static int requireApplicationOf(@NonNull Row site) {
-        Integer instanceId = site.get(SiteModel.INSTANCE_ID);
-        if (instanceId == null) {
-            throw Violations.ofForm(CmsSupport.violationText("site_exposes_no_instance"));
-        }
-        return instanceId;
-    }
-
+    /** The placed site operations: the switches, clone and rollback ({@link SiteActions}). */
     @Override
-    public @NonNull List<RowAction<Row>> rowActions() {
-        List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
-        actions.add(this.toggleAction());
-        actions.add(this.cloneAction());
-        actions.add(this.rollbackAction());
-        return actions;
-    }
-
-    /**
-     * Roll a Docker site back to its retained release: one durable operation over the
-     * digest-pinned prior spec, through the same health gate as a forward release. The
-     * engine refuses with a toast when no rollback target exists.
-     */
-    private @NonNull RowAction<Row> rollbackAction() {
-        return RowAction.Invoke.<Row>builder(HohenheimIds.id("rollback_release"))
-            .label(Microcopy.of("rollback").withFilter("scope", "site"))
-            .icon(Icon.of("clock-rotate-left"))
-            .inlineInRow(false)
-            .description(Microcopy.of("rollback_hint").withFilter("scope", "site"))
-            .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("rollback").withFilter("scope", "site"))
-                .body(Microcopy.of("rollback_confirm").withFilter("scope", "site"))
-                .style(ActionStyle.DESTRUCTIVE)
-                .build())
-            .visibleFor((row, ctx) -> InstanceUpstreamKind.ID.toString()
-                .equals(row.get(SiteModel.UPSTREAM_KIND)))
-            .handler((row, ctx) -> {
-                ReleaseEngine.rollback(requireApplicationOf(row));
-                return CmsActionResult.refreshWithToast(
-                    Microcopy.of("rollback_done").withFilter("scope", "site"));
-            })
-            .build();
-    }
-
-    /** The enable/disable operate action, shared with the delegated manage panel. */
-    /**
-     * Enable/disable rides the OVERFLOW: rows keep exactly Edit and Delete inline, the
-     * calm strip the admin-UI wave promises, and the Enabled column already answers
-     * the question the inline button used to.
-     *
-     * AIDEV-NOTE: this action is CONFIRMED and, for the site serving this very panel,
-     * REFUSED. Disabling takes every hostname of a site out of the route table with no
-     * undo but a second click, and one click on the row menu of the site that proxies
-     * the panel is a self-inflicted outage of the only surface that can put it back
-     * (measured 2026-08-27: four minutes of "404 - No site configured" on a live host).
-     * The dialog therefore NAMES the hostnames that change state, and the disable is
-     * offered-but-dead on the panel's own site with the reason on screen -- the
-     * unavailableWhen shape, because "point the panel somewhere else first" is a fact
-     * of THIS record the operator can act on, not a permission.
-     */
-    protected final @NonNull RowAction<Row> toggleAction() {
-        return RowAction.Invoke.<Row>builder(HohenheimIds.id("toggle_site"))
-            .label(Microcopy.of("toggle").withFilter("scope", "site"))
-            .dynamicLabel(row -> Microcopy.of(Boolean.TRUE.equals(row.get(SiteModel.ENABLED))
-                ? "disable" : "enable").withFilter("scope", "site"))
-            .icon(Icon.of("power-off"))
-            .inlineInRow(false)
-            // The record-less fallback: a surface translated without a row still confirms.
-            .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("toggle").withFilter("scope", "site"))
-                .body(Microcopy.of("toggle_confirm").withFilter("scope", "site"))
-                .style(ActionStyle.DESTRUCTIVE)
-                .build())
-            .dynamicConfirmation(SiteResource::toggleConfirmationFor)
-            .unavailableWhen(SiteResource::panelLockoutReason)
-            .handler((row, ctx) -> {
-                boolean current = Boolean.TRUE.equals(row.get(SiteModel.ENABLED));
-                // No pre-check: the write-pipeline enable invariant (SiteEnableInvariant)
-                // runs inside model.save below and throws the enable_route_conflict Violations,
-                // which the row-action handler surfaces as a refusal toast.
-                row.set(SiteModel.ENABLED, !current);
-                ActivityLog.withAction(current ? HohenheimActivityAction.DISABLED : HohenheimActivityAction.ENABLED, null,
-                    () -> this.model().save(row));
-                return CmsActionResult.refreshWithToast(Microcopy.of(
-                    current ? "disabled_toast" : "enabled_toast").withFilter("scope", "site"));
-            })
-            .build();
-    }
-
-    /** The copy's name, the one thing a clone asks: the form opens on {@link #freeCloneName}. */
-    private static final StringField CLONE_NAME = StringField.builder().name("name")
-        .label(Microcopy.of("clone_name").withFilter("scope", "site"))
-        .required()
-        .build();
-
-    private static final ActionInput<String> CLONE_INPUT = ActionInput.of(
-        FormSpec.builder().add(CLONE_NAME).build(), values -> Texts.trimmedOrNull(values.get(CLONE_NAME)));
-
-    /** The record-creating clone action; deliberately admin-panel-only. */
-    protected final @NonNull RowAction<Row> cloneAction() {
-        return RowAction.Invoke.<Row>builder(HohenheimIds.id("clone_site"))
-            .label(Microcopy.of("clone").withFilter("scope", "site"))
-            .icon(Icon.of("copy"))
-            .inlineOnRecord(false)
-            .inlineInRow(false)
-            .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("clone").withFilter("scope", "site"))
-                .body(Microcopy.of("clone_confirm").withFilter("scope", "site"))
-                .build())
-            .input(CLONE_INPUT, (row, name, ctx) -> cloneSite(row, name, ctx.access()))
-            .inputValues(row -> Map.of(CLONE_NAME.getName(), this.freeCloneName(row)))
-            .build();
-    }
-
-    /**
-     * The name the clone form opens on: the site's own name followed by the first number from 2
-     * whose slug no site holds, trashed ones included, so the ordinary path never meets the
-     * taken-name refusal.
-     *
-     * AIDEV-NOTE: a NUMBER on purpose, never an English "(copy)": the value is saved as the
-     * site's NAME, and a number reads the same in every language, while the action's opening
-     * values are computed from the row alone with no reader locale to word a suffix in. The
-     * suggestion is only a convenience; the insert in {@link #cloneSite} decides a taken name.
-     */
-    private @NonNull String freeCloneName(@NonNull Row site) {
-        String name = String.valueOf((Object) site.get(SiteModel.NAME));
-        for (int number = 2; ; number++) {
-            String candidate = name + " " + number;
-            String slug = Slugs.slugify(candidate);
-            if (this.model().find().withTrashed().where(SiteModel.SLUG.eq(slug)).first() == null) {
-                return candidate;
-            }
-        }
-    }
-
-    /**
-     * Clone a site + its domains under the name the operator gave; the copy starts disabled and
-     * carries NO bearer credentials of its own: a fresh webhook secret and no api keys at all.
-     *
-     * @throws Violations on the name when its slug is already a site's: the form shows it inline
-     */
-    private @NonNull CmsActionResult cloneSite(@NonNull Row site, @NonNull String name, @NonNull AccessContext access) {
-        SiteModel siteModel = (SiteModel) this.model();
-        SiteDomainModel domainModel = Models.get(SiteDomainModel.class);
-
-        Row clone = siteModel.createEmptyRow();
-        clone.set(SiteModel.NAME, name);
-        clone.set(SiteModel.SLUG, Slugs.slugify(name));
-        clone.set(SiteModel.UPSTREAM_KIND, site.get(SiteModel.UPSTREAM_KIND));
-        @SuppressWarnings("unchecked")
-        Map<String, Object> clonedSettings = site.get(SiteModel.SETTINGS) != null
-            ? new LinkedHashMap<>((Map<String, Object>) site.get(SiteModel.SETTINGS))
-            : null;
-        clone.set(SiteModel.SETTINGS, clonedSettings);
-        // AIDEV-NOTE: the clone deliberately does NOT copy instance_id. The source and
-        // the workload now live on the instance (phase-0 design section 3), and two sites
-        // pointing at one instance is a second front door to the same workload, not a
-        // copy of it -- the operator picks or creates the instance for the clone.
-        clone.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
-        clone.set(SiteModel.ENABLED, false);
-        clone.set(SiteModel.AUTH_PROVIDER_ID, site.get(SiteModel.AUTH_PROVIDER_ID));
-        clone.set(SiteModel.ACCESS_LIST_ID, site.get(SiteModel.ACCESS_LIST_ID));
-        // AIDEV-NOTE: the slug's UNIQUE constraint is the whole check, and it covers every row,
-        // soft-deleted ones included. A read-then-insert both missed a trashed site's slug (a
-        // plain find hides it) and lost the race to a concurrent clone; either way the insert
-        // conflict reached the operator as the generic failure instead of a refusal on the name.
-        try {
-            ActivityLog.withAction(HohenheimActivityAction.CLONED, "of site #" + site.get(SiteModel.ID),
-                () -> siteModel.save(clone));
-        } catch (DuplicateKeyException conflict) {
-            if (!SiteModel.SLUG.getName().equals(conflict.getColumnName())) {
-                throw conflict;
-            }
-            throw Violations.ofField(CLONE_NAME.getName(), name, ResourcePageEndpoints.DUPLICATE_VALUE);
-        }
-
-        int newSiteId = clone.get(SiteModel.ID);
-        for (Row domain : domainModel.findBySiteId(site.get(SiteModel.ID))) {
-            Row domainClone = domainModel.createEmptyRow();
-            domainClone.set(SiteDomainModel.SITE_ID, newSiteId);
-            domainClone.set(SiteDomainModel.HOSTNAME, domain.get(SiteDomainModel.HOSTNAME) + ".clone");
-            domainClone.set(SiteDomainModel.MATCH_TYPE, domain.get(SiteDomainModel.MATCH_TYPE));
-            domainClone.set(SiteDomainModel.FORCE_SSL, domain.get(SiteDomainModel.FORCE_SSL));
-            domainClone.set(SiteDomainModel.HSTS_ENABLED, domain.get(SiteDomainModel.HSTS_ENABLED));
-            domainClone.set(SiteDomainModel.HSTS_SUBDOMAINS, domain.get(SiteDomainModel.HSTS_SUBDOMAINS));
-            domainClone.set(SiteDomainModel.PATH, domain.get(SiteDomainModel.PATH));
-            domainClone.set(SiteDomainModel.STRIP_PATH, domain.get(SiteDomainModel.STRIP_PATH));
-            domainClone.set(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT,
-                domain.get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT));
-            domainClone.set(SiteDomainModel.LISTEN_ON, domain.get(SiteDomainModel.LISTEN_ON));
-            domainClone.set(SiteDomainModel.CUSTOM_HEADERS, domain.get(SiteDomainModel.CUSTOM_HEADERS));
-            domainClone.set(SiteDomainModel.RESPONSE_HEADERS, domain.get(SiteDomainModel.RESPONSE_HEADERS));
-            domainModel.save(domainClone);
-        }
-
-        // CmsActionResult.redirect is Uri-typed, so the typed target renders here.
-        return CmsActionResult.redirect(new Uri(
-            CmsRoutes.detail(HohenheimPanel.SLUG, this.slug(), newSiteId).toUrl()));
+    public @NonNull List<PanelAction<Row>> actions() {
+        return SiteActions.operator();
     }
 
     @Override

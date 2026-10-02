@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
-import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.BeforeAll;
@@ -19,12 +19,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * The links a converted template actually SERVES.
  *
- * AIDEV-NOTE: templates that used to concatenate {@code basePath + "/domains/new?site_id="}
- * now carry {@code use:Zenit.route} over a handler-provided RouteTarget. That change is
- * invisible to a compiler and to a smoke test: a wrong resource slug or a dropped query
- * parameter still RENDERS, and only 404s when somebody clicks. So this walks the Domains
- * tab and pins the SSR'd href of every converted link to its exact literal -- and then
- * MUTATES the route arguments to prove the assertion is not vacuous.
+ * AIDEV-NOTE: the Domains tab's links are route targets (the child list's create under the
+ * site, the declared certificate request link, the row's edit). That is invisible to a
+ * compiler and to a smoke test: a wrong resource slug or a dropped query parameter still
+ * RENDERS, and only 404s when somebody clicks. So this walks the Domains tab and pins the
+ * SSR'd href of every link to its exact literal -- and then MUTATES the route arguments to
+ * prove the assertion is not vacuous.
  *
  * The literals are written out on purpose. A test that rebuilt its expectation from
  * CmsRoutes would assert that CmsRoutes equals itself and would pin no URL at all.
@@ -38,20 +38,19 @@ class RoutedLinkTargetsTest extends HohenheimTestBase {
         UpdateSystemIpAddresses.discover();
     }
 
-    /** The href of the element carrying {@code id}, as the server actually rendered it. */
-    private static String hrefOf(String html, String id) {
+    /** The href of the first element carrying the attribute, as the server actually rendered it. */
+    private static String hrefOf(String html, String attribute) {
         Matcher matcher = Pattern
-            .compile("<[^>]*\\bid=\"" + Pattern.quote(id) + "\"[^>]*>")
+            .compile("<[^>]*\\s" + Pattern.quote(attribute) + "[^>]*>")
             .matcher(html);
         assertThat(matcher.find())
-            .withFailMessage("no element with id=\"%s\" in the rendered page", id)
+            .withFailMessage("no element with %s in the rendered page", attribute)
             .isTrue();
-        Matcher href = Pattern.compile("href=\"([^\"]*)\"").matcher(matcher.group());
+        Matcher href = Pattern.compile("\\shref=\"([^\"]*)\"").matcher(matcher.group());
         assertThat(href.find())
-            .withFailMessage("element id=\"%s\" rendered without an href: %s -- the"
-                + " use:Zenit.route directive did not set one", id, matcher.group())
+            .withFailMessage("element with %s rendered without an href: %s", attribute, matcher.group())
             .isTrue();
-        return href.group(1);
+        return href.group(1).replace("&amp;", "&");
     }
 
     /**
@@ -88,20 +87,20 @@ class RoutedLinkTargetsTest extends HohenheimTestBase {
         assertThat(tab.statusCode()).as("step 2: the Domains tab renders").isEqualTo(200);
         String html = tab.body();
 
-        // 3. THE CONVERSION. Every one of these was a string concatenation before; the
-        //    produced URL must be byte-identical to what it produced then.
-        assertThat(hrefOf(html, "add-domain-link"))
-            .as("step 3: the create link keeps its panel, resource and site_id prefill")
-            .startsWith("/admin/domains/new?site_id=" + siteId);
-        assertThat(hrefOf(html, "add-domain-link"))
+        // 3. THE LINKS. The add and the certificate request are the domain section's own: the child list's create
+        //    under this site, and the tab's declared header link.
+        String add = hrefOf(html, "data-cms-child-create=\"domains\"");
+        assertThat(add)
+            .as("step 3: the create link names its panel, resource and this site as the parent")
+            .startsWith("/admin/domains/new?parent=" + siteId);
+        assertThat(add)
             .as("step 3: and is bound back to the tab it was offered on")
             .contains("_return=");
-        assertThat(hrefOf(html, "request-cert-link"))
+        assertThat(hrefOf(html, "data-action-id=\"hohenheim:request_certificate\""))
             .as("step 3: the certificate request link keeps its ?site= parameter")
-            .isEqualTo("/admin/certificates-request?site=" + siteId);
+            .matches("/admin/certificates-request\\?site=" + siteId + "(&.*)?");
 
-        // 4. And the per-row edit anchor, which came from a map entry rather than a
-        //    declared variable -- the shape most likely to render blank if mis-wired.
+        // 4. And the per-row edit anchor, bound back to this tab.
         assertThat(html)
             .as("step 4: the row links at the domain's own record page, bound back to this tab")
             .contains("href=\"/admin/domains/" + domainId + "?_return=");
@@ -112,49 +111,36 @@ class RoutedLinkTargetsTest extends HohenheimTestBase {
 
     /**
      * THE COUNTERFACTUAL. The assertions above are only worth something if a wrong route
-     * argument would break them, so this builds the same targets with each argument in
+     * argument would break them, so this builds the same target with each argument in
      * turn replaced by a plausible mistake and proves each one produces a URL the test
      * would have rejected.
      */
     private static void aWrongRouteArgumentProducesAUrlThePageAssertionRejects(int siteId) {
-        String expected = "/admin/domains/new?site_id=" + siteId;
+        String expected = "/admin/domains/new?parent=" + siteId;
 
         // 5.1. The correct composition is what the page emitted -- the baseline.
-        assertThat(CmsEndpoints.CREATE_FORM
-                .with(CmsEndpoints.PANEL_PARAM, "admin")
-                .with(CmsEndpoints.RESOURCE_PARAM, "domains")
-                .with(HohenheimParams.SITE_ID_PREFILL, siteId).toUrl())
+        assertThat(CmsRoutes.createUnder("admin", "domains", siteId).toUrl())
             .as("step 5.1: the composition under test reproduces the asserted URL")
             .isEqualTo(expected);
 
         // 5.2. Wrong PANEL: the /manage variant is a real, reachable, WRONG destination.
-        assertThat(CmsEndpoints.CREATE_FORM
-                .with(CmsEndpoints.PANEL_PARAM, "manage")
-                .with(CmsEndpoints.RESOURCE_PARAM, "domains")
-                .with(HohenheimParams.SITE_ID_PREFILL, siteId).toUrl())
+        assertThat(CmsRoutes.createUnder("manage", "domains", siteId).toUrl())
             .as("step 5.2: a wrong panel slug fails the step-3 assertion above")
             .isNotEqualTo(expected);
 
         // 5.3. Wrong RESOURCE: a singular slug is the classic typo, and 404s on click.
-        assertThat(CmsEndpoints.CREATE_FORM
-                .with(CmsEndpoints.PANEL_PARAM, "admin")
-                .with(CmsEndpoints.RESOURCE_PARAM, "domain")
-                .with(HohenheimParams.SITE_ID_PREFILL, siteId).toUrl())
+        assertThat(CmsRoutes.createUnder("admin", "domain", siteId).toUrl())
             .as("step 5.3: a wrong resource slug fails the step-3 assertion above")
             .isNotEqualTo(expected);
 
-        // 5.4. DROPPED prefill: renders fine, opens an unbound create form.
-        assertThat(CmsEndpoints.CREATE_FORM
-                .with(CmsEndpoints.PANEL_PARAM, "admin")
-                .with(CmsEndpoints.RESOURCE_PARAM, "domains").toUrl())
-            .as("step 5.4: dropping the prefill parameter fails the step-3 assertion above")
+        // 5.4. DROPPED parent: renders fine, opens an unbound create form.
+        assertThat(CmsRoutes.create("admin", "domains").toUrl())
+            .as("step 5.4: dropping the parent fails the step-3 assertion above")
             .isNotEqualTo(expected);
 
         // 5.5. Wrong PARAMETER: binding the certificate page's ?site= instead of the create
-        //    form's site_id= is the exact confusion these two neighbouring links invite.
-        assertThat(CmsEndpoints.CREATE_FORM
-                .with(CmsEndpoints.PANEL_PARAM, "admin")
-                .with(CmsEndpoints.RESOURCE_PARAM, "domains")
+        //    form's parent= is the exact confusion these two neighbouring links invite.
+        assertThat(CmsRoutes.create("admin", "domains")
                 .with(HohenheimParams.CERTIFICATE_REQUEST_SITE, siteId).toUrl())
             .as("step 5.5: binding the wrong parameter definition fails the step-3 assertion above")
             .isNotEqualTo(expected);

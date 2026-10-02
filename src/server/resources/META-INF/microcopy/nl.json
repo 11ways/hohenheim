@@ -962,10 +962,6 @@
       "scope": "site_status"
     }
   ],
-  "add_domain": {
-    "text": "Domein toevoegen",
-    "scope": "site_domains"
-  },
   "attach": [
     {
       "text": "Database koppelen",
@@ -1174,10 +1170,6 @@
       "scope": "site_databases"
     },
     {
-      "text": "Geen domeinen geconfigureerd",
-      "scope": "site_domains"
-    },
-    {
       "text": "Nog geen deployments",
       "scope": "deployments"
     },
@@ -1372,19 +1364,11 @@
   ],
   "forced": [
     {
-      "text": "Verplicht",
-      "scope": "site_domains"
-    },
-    {
       "text": "HTTPS",
       "scope": "site_tls"
     }
   ],
   "hostname": [
-    {
-      "text": "Hostnaam",
-      "scope": "site_domains"
-    },
     {
       "text": "Hostnaam",
       "scope": "field"
@@ -1407,10 +1391,6 @@
     "scope": "instance_console"
   },
   "match_type": [
-    {
-      "text": "Overeenkomsttype",
-      "scope": "site_domains"
-    },
     {
       "text": "Overeenkomsttype",
       "scope": "field"
@@ -1457,10 +1437,6 @@
     }
   ],
   "off": [
-    {
-      "text": "Uit",
-      "scope": "site_domains"
-    },
     {
       "text": "Alleen HTTP",
       "scope": "site_tls"
@@ -1621,10 +1597,6 @@
   "site": {
     "text": "Site {$name}",
     "scope": "attention_title"
-  },
-  "ssl": {
-    "text": "SSL",
-    "scope": "site_domains"
   },
   "start": [
     {
@@ -2775,10 +2747,6 @@
     "scope": "site"
   },
   "toggle": [
-    {
-      "text": "In-/uitschakelen",
-      "scope": "site"
-    },
     {
       "text": "Aan- of uitzetten",
       "scope": "access_rule"
@@ -4169,10 +4137,6 @@
     {
       "text": "Bewerken",
       "scope": "access_rule"
-    },
-    {
-      "text": "Bewerken",
-      "scope": "site_domains"
     },
     {
       "text": "Bewerken",
@@ -11529,18 +11493,10 @@
   "remove": [
     {
       "text": "Verwijderen",
-      "scope": "site_domains"
-    },
-    {
-      "text": "Verwijderen",
       "scope": "site_protected_paths"
     }
   ],
   "remove_confirm": [
-    {
-      "text": "{$hostname} van deze site verwijderen? Het verkeer stopt hier meteen.",
-      "scope": "site_domains"
-    },
     {
       "text": "Bescherming van {$path} verwijderen? De map wordt bereikbaar voor iedereen die de site kan bereiken.",
       "scope": "site_protected_paths"

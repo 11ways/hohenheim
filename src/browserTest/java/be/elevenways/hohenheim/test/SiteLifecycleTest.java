@@ -105,22 +105,22 @@ class SiteLifecycleTest extends HohenheimTestBase {
 
         // Switching a site off is a confirmed action (it takes its hostnames out of the
         // route table), so the POST carries the confirmation proof like every other one.
-        adminPostForm("/admin/sites/" + redirectId + "/action/toggle_site", confirmed(""));
+        adminPostForm("/admin/sites/invoke/hohenheim.disable_site?ids=" + redirectId, confirmed(""));
         assertThat((Boolean) Models.get(SiteModel.class).findById(redirectId).get(SiteModel.ENABLED))
             .isEqualTo(false);
 
-        adminPostForm("/admin/sites/" + redirectId + "/action/toggle_site", confirmed(""));
+        adminPostForm("/admin/sites/invoke/hohenheim.enable_site?ids=" + redirectId, confirmed(""));
         assertThat((Boolean) Models.get(SiteModel.class).findById(redirectId).get(SiteModel.ENABLED))
             .isEqualTo(true);
 
-        // Cloning ASKS the copy's name (an action input): a confirmed POST without one is not a
+        // Cloning ASKS the copy's name (an operation input): a confirmed POST without one is not a
         // clone but the form again, re-rendered with the field's refusal, and nothing is created.
-        response = adminPostForm("/admin/sites/" + redirectId + "/action/clone_site", confirmed(""));
-        assertThat(response.statusCode()).isEqualTo(200);
+        response = adminPostForm("/admin/sites/invoke/hohenheim.clone_site?ids=" + redirectId, confirmed(""));
+        assertThat(response.statusCode()).isEqualTo(422);
         assertThat(response.body()).as("the refused clone re-renders its form").contains("data-path=\"name\"");
         assertThat(site("Old Domain 2")).as("no name, no clone").isNull();
 
-        response = adminPostForm("/admin/sites/" + redirectId + "/action/clone_site",
+        response = adminPostForm("/admin/sites/invoke/hohenheim.clone_site?ids=" + redirectId,
             confirmed("name=Old+Domain+Staging"));
         assertThat(response.statusCode()).isIn(302, 303);
 

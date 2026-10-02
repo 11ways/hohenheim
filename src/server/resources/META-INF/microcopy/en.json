@@ -962,10 +962,6 @@
       "scope": "site_status"
     }
   ],
-  "add_domain": {
-    "text": "Add domain",
-    "scope": "site_domains"
-  },
   "attach": [
     {
       "text": "Attach database",
@@ -1174,10 +1170,6 @@
       "scope": "site_databases"
     },
     {
-      "text": "No domains configured",
-      "scope": "site_domains"
-    },
-    {
       "text": "No deployments yet",
       "scope": "deployments"
     },
@@ -1372,19 +1364,11 @@
   ],
   "forced": [
     {
-      "text": "Forced",
-      "scope": "site_domains"
-    },
-    {
       "text": "HTTPS",
       "scope": "site_tls"
     }
   ],
   "hostname": [
-    {
-      "text": "Hostname",
-      "scope": "site_domains"
-    },
     {
       "text": "Hostname",
       "scope": "field"
@@ -1407,10 +1391,6 @@
     "scope": "instance_console"
   },
   "match_type": [
-    {
-      "text": "Match type",
-      "scope": "site_domains"
-    },
     {
       "text": "Match type",
       "scope": "field"
@@ -1457,10 +1437,6 @@
     }
   ],
   "off": [
-    {
-      "text": "Off",
-      "scope": "site_domains"
-    },
     {
       "text": "HTTP only",
       "scope": "site_tls"
@@ -1621,10 +1597,6 @@
   "site": {
     "text": "Site {$name}",
     "scope": "attention_title"
-  },
-  "ssl": {
-    "text": "SSL",
-    "scope": "site_domains"
   },
   "start": [
     {
@@ -2775,10 +2747,6 @@
     "scope": "site"
   },
   "toggle": [
-    {
-      "text": "Enable/disable",
-      "scope": "site"
-    },
     {
       "text": "Switch on or off",
       "scope": "access_rule"
@@ -4169,10 +4137,6 @@
     {
       "text": "Edit",
       "scope": "access_rule"
-    },
-    {
-      "text": "Edit",
-      "scope": "site_domains"
     },
     {
       "text": "Edit",
@@ -11529,18 +11493,10 @@
   "remove": [
     {
       "text": "Remove",
-      "scope": "site_domains"
-    },
-    {
-      "text": "Remove",
       "scope": "site_protected_paths"
     }
   ],
   "remove_confirm": [
-    {
-      "text": "Remove {$hostname} from this site? It stops routing here immediately.",
-      "scope": "site_domains"
-    },
     {
       "text": "Remove protection from {$path}? The folder becomes reachable by anyone who can reach the site.",
       "scope": "site_protected_paths"

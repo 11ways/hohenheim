@@ -352,7 +352,7 @@ public final class ReleaseEngine {
         // address off the generation gatedSwap just bumped. Rebuilding every site's handler
         // to move one upstream was the site-keyed shape.
         // AIDEV-NOTE: recorded HERE, in the engine, not on the surfaces. The admin row
-        // action (SiteResource#rollbackAction) recorded nothing while the automation API
+        // action (now the rollback_release operation) recorded nothing while the automation API
         // recorded "rollback_triggered" -- the same one-surface-audited asymmetry the
         // instance power path had. The engine writes its state through role saves and
         // ReleaseOperation rows, neither of which is an activity row about the SITE.

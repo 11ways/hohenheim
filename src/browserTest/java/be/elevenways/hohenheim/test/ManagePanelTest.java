@@ -191,8 +191,8 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(list.body()).contains("Manage Site A");
         assertThat(list.body()).doesNotContain("Manage Site B");
         assertThat(list.body()).doesNotContain("data-column=\"upstream_kind\"");
-        // Safe row actions only.
-        assertThat(list.body()).contains("toggle_site");
+        // Safe row actions only: the switch (enable or disable, whichever the site's state offers), never a clone.
+        assertThat(list.body()).containsAnyOf("hohenheim:enable_site", "hohenheim:disable_site");
         assertThat(list.body()).doesNotContain("clone_site");
 
         // The delegated surface offers the SAME generic access tab (a manage
@@ -314,7 +314,7 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(subpage.statusCode()).isEqualTo(200);
         // Binding a hostname to a managed site is delegated; REQUESTING a certificate for it
         // stays installation administration (an issued certificate is authority over a name).
-        assertThat(subpage.body()).contains(managedHost).contains("add-domain-link")
+        assertThat(subpage.body()).contains(managedHost).contains("data-cms-child-create=\"domains\"")
             .doesNotContain("certificates-request");
 
         // The delegated record form is WRITABLE now, but offers only the delegated columns.
@@ -735,11 +735,11 @@ class ManagePanelTest extends HohenheimTestBase {
             HohenheimAccess.MANAGE, true);
 
         try {
-            // 1. The toggle action refuses to seize the victim's hostname. Toggling is a
+            // 1. The enable operation refuses to seize the victim's hostname. Switching is a
             //    CONFIRMED action, so every POST here carries the proof the client dialog
             //    would stamp -- without it the server answers the confirmation
             //    interstitial (200) and the refusal under test never runs.
-            assertThat(operatorPost("/manage/sites/" + stagedId + "/action/toggle_site",
+            assertThat(operatorPost("/manage/sites/invoke/hohenheim.enable_site?ids=" + stagedId,
                 confirmed("")).statusCode()).isIn(302, 303);
             assertThat(siteModel.findById(stagedId).get(SiteModel.ENABLED))
                 .as("toggle must not enable a route-conflicting site").isEqualTo(false);
@@ -753,14 +753,14 @@ class ManagePanelTest extends HohenheimTestBase {
                 .isEqualTo(false);
 
             // 3. A site with no conflict still toggles live.
-            assertThat(operatorPost("/manage/sites/" + innocentId + "/action/toggle_site",
+            assertThat(operatorPost("/manage/sites/invoke/hohenheim.enable_site?ids=" + innocentId,
                 confirmed("")).statusCode()).isIn(302, 303);
             assertThat(siteModel.findById(innocentId).get(SiteModel.ENABLED))
                 .as("a non-conflicting site still enables").isEqualTo(true);
 
             // 4. Disabling is never blocked -- not even for the site that now owns a
             //    hostname somebody else also staged.
-            assertThat(operatorPost("/manage/sites/" + innocentId + "/action/toggle_site",
+            assertThat(operatorPost("/manage/sites/invoke/hohenheim.disable_site?ids=" + innocentId,
                 confirmed("")).statusCode()).isIn(302, 303);
             assertThat(siteModel.findById(innocentId).get(SiteModel.ENABLED))
                 .as("disabling is never refused").isEqualTo(false);

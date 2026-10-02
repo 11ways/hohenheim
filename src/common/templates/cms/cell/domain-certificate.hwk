@@ -1,0 +1,13 @@
+{#- Domain certificate cell: the coverage badge, the covering certificate linked for a reader who may open it,
+    and its expiry. Blank for a hostname no certificate applies to (TLS passthrough, a non-exact match). -#}
+{% declare value: DomainCertCell %}
+{% if value != null %}
+<span class="hh-cert-coverage" attr:data-cert-status={% value.status %}>
+    {% if value.url != null %}<a href={% value.url %}><pl-badge variant={% value.variant %}>{{ value.name }}</pl-badge></a>{% else %}<pl-badge variant={% value.variant %}>{{ value.label }}</pl-badge>{% /if %}
+    {#- The badge and the expiry are two sentences in one cell: the newline between them is markup whitespace and
+        does not survive, so the separator is explicit. -#}
+    {% if value.expiresIso != null %}
+    &nbsp;<span class="hh-cert-expiry">{{ t("expires", scope: "site_domains") }} <pl-relative-time datetime={% value.expiresIso %} title={% value.expiresIso %}></pl-relative-time></span>
+    {% /if %}
+</span>
+{% /if %}

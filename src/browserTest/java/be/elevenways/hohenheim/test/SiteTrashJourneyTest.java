@@ -117,17 +117,19 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
         String domainDelete = "/admin/domains/" + hostname + "/delete";
         String pathDelete = "/admin/protected-paths/" + guard + "/delete";
         assertThat(adminGet(domainsTab(cedar)).body()).as("step 5: a live site's Domains tab offers an add")
-            .contains("add-domain-link").as("step 5: and a remove per hostname").contains(domainDelete);
+            .contains(DOMAIN_ADD).as("step 5: and a remove per hostname").contains(domainDelete);
         assertThat(adminGet(pathsTab(cedar)).body()).as("step 5: its Protected paths tab offers an add")
             .contains("add-protected-path-link").as("step 5: and a remove per path").contains(pathDelete);
 
-        // 6. Trashed, everything under the site is read-only: both tabs still render from the Trash with their rows,
-        //    offer no add and no remove, and the writes those affordances led to are refused.
+        // 6. Trashed, everything under the site is read-only: both tabs still render from the Trash, offer no add and
+        //    no remove, and the writes those affordances led to are refused. The Domains tab is the domain entry's
+        //    own child list, whose scope hides the hostnames of a trashed site as it does everywhere (DomainParts.ROWS:
+        //    a restore brings them back); the Protected paths tab still lists its row.
         delete(cedar);
         HttpResponse<String> trashedDomains = adminGet(domainsTab(cedar));
         assertThat(trashedDomains.statusCode()).as("step 6: the Domains tab of a trashed site renders").isEqualTo(200);
-        assertThat(trashedDomains.body()).as("step 6: with its hostname").contains(PREFIX + "cedar.test")
-            .as("step 6: and no add").doesNotContain("add-domain-link")
+        assertThat(trashedDomains.body()).as("step 6: without its hidden hostname").doesNotContain(PREFIX + "cedar.test")
+            .as("step 6: and no add").doesNotContain(DOMAIN_ADD)
             .as("step 6: and no remove").doesNotContain(domainDelete);
         HttpResponse<String> trashedPaths = adminGet(pathsTab(cedar));
         assertThat(trashedPaths.statusCode()).as("step 6: the Protected paths tab renders").isEqualTo(200);
@@ -151,7 +153,7 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
         // 7. Restored, the tabs offer their writes again.
         adminPostForm("/admin/sites/" + cedar + "/action/trash_restore", "");
         assertThat(adminGet(domainsTab(cedar)).body()).as("step 7: the Domains tab offers its add again")
-            .contains("add-domain-link").contains(domainDelete);
+            .contains(DOMAIN_ADD).contains(PREFIX + "cedar.test").contains(domainDelete);
         assertThat(adminGet(pathsTab(cedar)).body()).as("step 7: the Protected paths tab too")
             .contains("add-protected-path-link").contains(pathDelete);
 
@@ -198,6 +200,9 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
     private static String rowOf(int siteId) {
         return "data-row-key=\"" + siteId + "\"";
     }
+
+    /** The Domains tab's add: its domain section's create link. */
+    private static final String DOMAIN_ADD = "data-cms-child-create=\"domains\"";
 
     private static String domainsTab(int siteId) {
         return "/admin/sites/" + siteId + "/page/domains";
