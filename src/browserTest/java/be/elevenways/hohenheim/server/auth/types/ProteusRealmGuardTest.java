@@ -10,14 +10,19 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.net.OutboundUrlGuard;
+import be.elevenways.zenit.test.support.OutboundFixture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -82,15 +87,17 @@ class ProteusRealmGuardTest {
             logged.clear();
             saveProvider("Public realm", "http://93.184.216.34/");
             saveProvider("Loopback realm", "http://127.0.0.1:3000/");
-            assertThat(logged).as("step 2: no warning").noneMatch(line -> line.startsWith("WARNING: site auth"));
+            assertThat(logged).as("step 2: no warning").noneMatch(line -> line.contains("'Public realm'")
+                || line.contains("'Loopback realm'"));
 
             // 3. The startup scan names the LAN provider again, and only it.
-            assertThat(ProteusRealmOptInWarnings.scan()).as("step 3: the scan")
-                .singleElement().asString().contains("'Intranet realm'");
+            assertThat(ProteusRealmOptInWarnings.scan().stream().filter(line -> !line.contains("Hanging")))
+                .as("step 3: the scan").singleElement().asString().contains("'Intranet realm'");
 
             // 4. With the opt-in on, nothing waits and nothing is logged.
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.ProxyAuth.PROTEUS_ALLOW_PRIVATE_NETWORKS, true);
-            assertThat(ProteusRealmOptInWarnings.scan()).as("step 4: the scan with the opt-in on").isEmpty();
+            assertThat(ProteusRealmOptInWarnings.scan()).as("step 4: the scan with the opt-in on")
+                .noneMatch(line -> line.contains("points at"));
         } finally {
             BlastLog.setLogSink(previous);
         }
@@ -107,5 +114,36 @@ class ProteusRealmGuardTest {
         provider.set(SiteAuthProviderModel.CONFIG, config);
         provider.set(SiteAuthProviderModel.CREATED_AT, Now.instant());
         Models.get(SiteAuthProviderModel.class).save(provider);
+    }
+
+    /**
+     * The proxy boot never waits on DNS: the startup scan is a background job that finishes once a hanging resolver
+     * answers, and a save under that resolver returns after the bounded check, logging "could not check".
+     */
+    @Test
+    void theStartupScanAndASaveNeverWaitOnAHangingResolver() throws Exception {
+        ProteusRealmOptInWarnings.install();
+        saveProvider("Hanging realm", "http://realm.hanging.example:3000/");
+        InetAddress lan = InetAddress.getByAddress("realm.hanging.example", new byte[] {10, 0, 0, 9});
+        List<String> logged = new CopyOnWriteArrayList<>();
+        BlastLog.LogSink previous = BlastLog.getLogSink();
+        BlastLog.setLogSink(args -> logged.add(String.valueOf(args[0])));
+        try (OutboundFixture hanging = OutboundFixture.pendingResolution("realm.hanging.example", lan)) {
+            // 1. Starting the scan returns at once; the scan itself is still waiting on DNS.
+            CompletableFuture<List<String>> scan = ProteusRealmOptInWarnings.startScan();
+            assertThat(scan).as("step 1: the scan has not finished").isNotDone();
+
+            // 2. A save returns after the bounded check, naming the provider it could not check.
+            saveProvider("Hanging realm 2", "http://realm.hanging.example:4000/");
+            assertThat(logged).as("step 2: could not check").anySatisfy(line -> assertThat(line)
+                .startsWith("WARNING: could not check whether site auth provider 'Hanging realm 2'"));
+
+            // 3. Once DNS answers, the background scan finishes and names the LAN realm.
+            hanging.release();
+            assertThat(scan.get(30, TimeUnit.SECONDS)).as("step 3: the scan names the LAN realm")
+                .anySatisfy(line -> assertThat(line).contains("'Hanging realm'"));
+        } finally {
+            BlastLog.setLogSink(previous);
+        }
     }
 }
