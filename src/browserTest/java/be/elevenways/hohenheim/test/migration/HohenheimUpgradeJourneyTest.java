@@ -53,6 +53,7 @@ import be.elevenways.zenit.comms.CommsChannel;
 import be.elevenways.zenit.comms.server.CommsDeliveryModel;
 import be.elevenways.zenit.comms.server.CommsInboxModel;
 import be.elevenways.zenit.comms.server.hub.HubIdempotency;
+import be.elevenways.zenit.common.time.ClockOffset;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.data.SavedViews;
 import be.elevenways.zenit.server.http.HostPattern;
@@ -121,12 +122,12 @@ class HohenheimUpgradeJourneyTest {
     private static final String LEGACY_WILDCARD = "*.wild.upgrade.test";
     private static final String RELEASED_WILDCARD = "*.gone.upgrade.test";
 
-    private static Duration previousOffset;
+    private static ClockOffset.Pin seedClock;
 
     @AfterAll
     static void restore() {
-        if (previousOffset != null) {
-            Now.setOffset(previousOffset);
+        if (seedClock != null) {
+            seedClock.close();
         }
         FieldEncryption.installKeyring(null);
     }
@@ -143,11 +144,10 @@ class HohenheimUpgradeJourneyTest {
         try (Reader reader = new InputStreamReader(resource("upgrade/m010.properties"), StandardCharsets.UTF_8)) {
             facts.load(reader);
         }
-        previousOffset = Now.offset();
-        Now.setOffset(Duration.ZERO);
+        // Pinned, so step 2's boot keeps it over the configured clock.offset.
         Instant seededAt = Instant.parse(facts.getProperty("seeded_at"));
-        Duration seedClock = Duration.between(Now.instant(), seededAt.plus(Duration.ofHours(1)));
-        Now.setOffset(seedClock);
+        Instant realNow = Now.instant().minus(Now.offset());
+        seedClock = ClockOffset.pin(Duration.between(realNow, seededAt.plus(Duration.ofHours(1))));
 
         int adminId = Integer.parseInt(facts.getProperty("admin.id"));
         int operatorId = Integer.parseInt(facts.getProperty("operator.id"));
@@ -218,9 +218,6 @@ class HohenheimUpgradeJourneyTest {
         // 2. Today's code boots over the upgraded file, its datasource-bound services on it whatever ran before.
         HohenheimDatabase.init();
         HohenheimTestRuntime.ensureBooted();
-        // Boot installs the configured clock.offset (ServerZenitRuntime, ClockOffset.install), which replaced the
-        // seed-relative pin: put it back, or every 24h window here ages out one day after the fixture was seeded.
-        Now.setOffset(seedClock);
         TestDatabases.adoptCurrentDatabase();
 
         // 3. The role grant and both record grants decide as before, and each certificate keeps its owner.
