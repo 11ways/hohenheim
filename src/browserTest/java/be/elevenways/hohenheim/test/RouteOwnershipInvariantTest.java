@@ -48,7 +48,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * The three route-ownership invariants that the CMS read-then-write checks cannot hold on
  * their own: a simultaneous enable must leave exactly one owner and TELL the loser, a
  * deleted site must own nothing, and the domain refusal must fire for writers that never
- * touch SiteDomainResource.
+ * touch a domain resource.
  */
 class RouteOwnershipInvariantTest extends HohenheimTestBase {
 
@@ -323,7 +323,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         // 2. A second live site tries to take it with a DIRECT model save -- no CMS
         //    resource, no form, no coerced value map. That is the write shape a seeder, an
         //    import, an API writeback or a revision restore uses, and it is exactly what a
-        //    refusal living in SiteDomainResource.persistRow could never see.
+        //    refusal living in a resource's row write could never see.
         Row challenger = site("Direct Challenger", "direct-challenger", true);
         Row stolen = domainModel.createEmptyRow();
         stolen.set(SiteDomainModel.SITE_ID, challenger.get(SiteModel.ID));

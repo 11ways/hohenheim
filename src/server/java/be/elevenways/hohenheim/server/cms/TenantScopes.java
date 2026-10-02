@@ -53,7 +53,7 @@ import java.util.Set;
  * narrowed by and the per-principal ACCESS half -- read through zenit-cms's
  * {@code AccessFunction.scopedBy} and the source's {@code scopedBy}, so a surface can only
  * differ from its picker by naming a DIFFERENT scope, which is then visible here. A base the
- * admin resource shares is ITS declaration ({@code SiteDomainResource.ROWS} and siblings),
+ * admin resource shares is ITS declaration ({@code DomainParts.ROWS} and siblings),
  * narrowed here per principal.
  *
  * AIDEV-NOTE: two models deliberately carry TWO scopes, both declared here so the difference
@@ -77,7 +77,7 @@ public final class TenantScopes {
     public static final RowScope SITES = RowScope.perPrincipal(TenantScopes::siteAccess);
 
     /** Domains of live sites; tenants only those of the sites they manage. */
-    public static final RowScope DOMAINS = SiteDomainResource.ROWS.andPerPrincipal(
+    public static final RowScope DOMAINS = DomainParts.ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.managedSiteScope(ctx, Models.get(SiteDomainModel.class),
             SiteDomainModel.SITE_ID::in));
 

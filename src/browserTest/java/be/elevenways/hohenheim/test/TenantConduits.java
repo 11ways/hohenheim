@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.conduit.ConduitAttributes;
@@ -34,7 +35,7 @@ public final class TenantConduits {
 
     /** Run {@code body} inside a request scope whose principal is {@code principal}. */
     public static void as(@Nullable Principal principal, Runnable body) {
-        RouteScope.run(stub(principal, null), body);
+        RouteScope.run(stub(principal, null, null), body);
     }
 
     /**
@@ -42,7 +43,7 @@ public final class TenantConduits {
      * that reads the hostname the surface is being reached at.
      */
     public static void arrivingAt(String origin, Runnable body) {
-        RouteScope.run(stub(null, origin), body);
+        RouteScope.run(stub(null, origin, null), body);
     }
 
     /**
@@ -50,15 +51,20 @@ public final class TenantConduits {
      * takes an AccessContext rather than a scope ({@code AccessContext.of(conduit)}).
      */
     public static Conduit stubFor(@Nullable Principal principal) {
-        return stub(principal, null);
+        return stub(principal, null, null);
+    }
+
+    /** The same carrier, rendering under one panel: it answers that panel's slug as the routed panel parameter. */
+    public static Conduit stubIn(@Nullable Principal principal, String panelSlug) {
+        return stub(principal, null, panelSlug);
     }
 
     /** The same carrier, answering as a request that ARRIVED at {@code origin}. */
     public static Conduit stubFor(@Nullable Principal principal, @Nullable String origin) {
-        return stub(principal, origin);
+        return stub(principal, origin, null);
     }
 
-    private static Conduit stub(@Nullable Principal principal, @Nullable String origin) {
+    private static Conduit stub(@Nullable Principal principal, @Nullable String origin, @Nullable String panelSlug) {
         Map<IdentifierKey<?>, Object> attributes = new HashMap<>();
         if (principal != null) {
             attributes.put(ConduitAttributes.PRINCIPAL, principal);
@@ -75,6 +81,8 @@ public final class TenantConduits {
                 yield null;
             }
             case "getRequestOrigin" -> origin;
+            case "getParameter" -> args.length == 1 && args[0] == CmsEndpoints.PANEL_PARAM ? panelSlug
+                : defaultValue(method);
             case "getConduit" -> self[0];
             case "equals" -> proxy == args[0];
             case "hashCode" -> System.identityHashCode(proxy);

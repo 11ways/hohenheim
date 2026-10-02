@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.zenit.cms.common.access.AccessFunction;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -84,7 +86,7 @@ class AccessRuleCascadeTest extends HohenheimTestBase {
         domains.save(domain);
         int domainId = domain.get(SiteDomainModel.ID);
 
-        SiteDomainResource resource = new SiteDomainResource();
+        PanelResource<Row> resource = DomainParts.admin();
         AccessContext operator = operator();
 
         // 1. While the site lives, its hostname is in the catalog.
@@ -107,10 +109,11 @@ class AccessRuleCascadeTest extends HohenheimTestBase {
     }
 
     /** The domain ids the resource's own access scope lets an operator see. */
-    private static java.util.List<Integer> listedDomainIds(SiteDomainResource resource,
+    private static java.util.List<Integer> listedDomainIds(PanelResource<Row> resource,
                                                            AccessContext accessContext) {
         return Models.get(SiteDomainModel.class).find()
-            .where(resource.accessFunction().decide(accessContext).predicate().criteria())
+            .where(AccessFunction.scopedBy(java.util.Objects.requireNonNull(resource.rowScope()))
+                .decide(accessContext).predicate().criteria())
             .all().stream()
             .map(row -> (Integer) row.get(SiteDomainModel.ID))
             .toList();

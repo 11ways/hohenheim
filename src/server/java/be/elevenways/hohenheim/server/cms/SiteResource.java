@@ -104,7 +104,7 @@ public class SiteResource extends RowResource {
      * REMOVES it from the coerced map before the row is staged, because the sites table has
      * no such column. And it is NAMED "hostname" because the write pipeline's refusals are
      * pathed on that name ({@code Violations.ofField("hostname", ...)} in
-     * SiteDomainResource's route invariant), so a claimed name lands on this very input.
+     * SiteDomainRouteInvariant's route invariant), so a claimed name lands on this very input.
      */
     public static final StringField CREATE_HOSTNAME = StringField.builder()
         .name(SiteDomainModel.HOSTNAME.getName())
@@ -421,7 +421,7 @@ public class SiteResource extends RowResource {
      * one it has not got. The domain row then goes through the ordinary
      * {@code SiteDomainModel.save}, which is the whole point: the claim checks (hostname
      * required, route overlap, route taken, quarantine) live in that model's write pipeline
-     * (SiteDomainResource.installRouteInvariant), so this create is refused by exactly the
+     * (SiteDomainRouteInvariant.installRouteInvariant), so this create is refused by exactly the
      * refusal a hand-made domain gets, pathed on "hostname" -- and because
      * {@code Resource.inMutationTransaction} wraps the whole mutation, the thrown Violations
      * rolls the site back too. Do NOT copy any part of that check up here.
@@ -452,7 +452,7 @@ public class SiteResource extends RowResource {
 
     /**
      * The minimal hostname row an operator creates by hand on the Domains tab
-     * ({@code SiteDomainResource.QUICK_CREATE}: the hostname, the site, and the force-SSL
+     * ({@code DomainParts.QUICK_CREATE}: the hostname, the site, and the force-SSL
      * default); the match type is derived by the model's own canonicalization hook.
      */
     private static void createFirstDomain(int siteId, @NonNull String hostname) {

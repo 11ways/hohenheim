@@ -1,5 +1,11 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.Resource;
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -7,7 +13,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.ManageDomainResource;
+import be.elevenways.hohenheim.server.cms.DomainParts;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
@@ -28,6 +34,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
+import java.util.Objects;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -363,7 +370,10 @@ class ManagePanelTest extends HohenheimTestBase {
         Integer foreignId = foreign.get(SiteDomainModel.ID);
         AccessContext tenant = AccessContext.of(
             TenantConduits.stubFor(new UserPrincipal(operatorId, "Site Operator")));
-        ManageDomainResource domains = new ManageDomainResource();
+        Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.MANAGE));
+        @SuppressWarnings("unchecked")
+        Resource<Row> domains = PanelResourceViews.forCaller(
+            (PanelResource<Row>) Objects.requireNonNull(manage.entryBySlug(DomainParts.SLUG)), manage);
 
         // 1. The list shows site A's domain and never site B's.
         HttpResponse<String> list = operatorGet("/manage/domains");

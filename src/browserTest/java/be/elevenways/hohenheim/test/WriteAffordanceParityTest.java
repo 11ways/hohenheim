@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.DatabaseResource;
 import be.elevenways.hohenheim.server.cms.DnsRecordResource;
@@ -14,7 +15,10 @@ import be.elevenways.hohenheim.server.cms.InstanceDatabaseResource;
 import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleResource;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleStepResource;
-import be.elevenways.hohenheim.server.cms.SiteDomainResource;
+import be.elevenways.hohenheim.server.cms.DomainParts;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.ResourceVerb;
+import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
 import be.elevenways.hohenheim.server.cms.SiteDomainsPage;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
@@ -320,14 +324,14 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     void theSiteDomainsTabFollowsTheDomainResource() {
         Row domain = Models.get(SiteDomainModel.class).findById(domainId);
         Row site = Models.get(SiteModel.class).findById(siteId);
-        SiteDomainResource resource = new SiteDomainResource();
+        PanelResource<Row> resource = DomainParts.admin();
 
         // 1. The resource's own answer: manage on the OWNING SITE, nothing else.
-        assertThat(resource.updatableBy(domain, viewer()))
+        assertThat(ResourceVerbs.permits(resource, ResourceVerb.UPDATE, domain, viewer()))
             .as("a delegate without manage on the site is offered no domain editor").isFalse();
-        assertThat(resource.updatableBy(domain, holder()))
+        assertThat(ResourceVerbs.permits(resource, ResourceVerb.UPDATE, domain, holder()))
             .as("a manage holder keeps its editor").isTrue();
-        assertThat(resource.deletableBy(domain, holder()))
+        assertThat(ResourceVerbs.permits(resource, ResourceVerb.DELETE, domain, holder()))
             .as("and its detach button").isTrue();
 
         // 2. The TAB answers exactly the same, row by row.
@@ -345,8 +349,11 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     /** The Domains tab's rendered (edit link, remove form) pair for its one domain row. */
     @SuppressWarnings("unchecked")
     private static List<Boolean> rowAffordances(Row site, AccessContext ctx) {
+        // The tab renders under the panel the principal reaches: a delegate's is /manage, the operator's /admin.
+        String panel = HohenheimAccess.isAdmin(ctx) ? HohenheimSlugs.ADMIN : HohenheimSlugs.MANAGE;
+        AccessContext under = AccessContext.of(TenantConduits.stubIn(ctx.principal(), panel));
         Map<String, Object> vars = (Map<String, Object>) new SiteDomainsPage()
-            .render(ctx.conduit(), ctx, site).get();
+            .render(under.conduit(), under, site).get();
         List<Map<String, Object>> rows = (List<Map<String, Object>>) vars.get("domains");
         assertThat(rows).as("the tab lists its one domain").hasSize(1);
         return List.of(Boolean.TRUE.equals(rows.get(0).get("canEdit")),

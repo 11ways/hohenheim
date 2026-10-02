@@ -16,6 +16,10 @@ import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.ResourceVerb;
+import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -64,11 +68,12 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
         // AIDEV-NOTE: per-row write authority is the DOMAIN RESOURCE's answer, never a
         // second hand-rolled one. This page used to ask canManageSite while the resource's
         // writableBy asks reachesRecord -- two mechanisms deciding one question, so a
-        // narrowed override on ManageDomainResource would have moved the endpoint without
+        // narrowed /manage twin would have moved the endpoint without
         // moving the affordance. DnsZoneRecordsPage converges on this same seam.
         Panel host = PanelRegistry.getBySlug(panel);
-        SiteDomainResource resource = domainResource(host);
-        boolean canAddDomain = !readOnly && resource != null && resource.creatable()
+        PanelResource<Row> resource = domainResource(host);
+        PanelRequest request = host == null ? null : new PanelRequest(host, conduit, accessContext, null);
+        boolean canAddDomain = !readOnly && resource != null && resource.offers(ResourceVerb.CREATE)
             && HohenheimAccess.reachesRecord(accessContext, SiteModel.MODEL_ID, siteId,
                 HohenheimAccess.MANAGE);
         boolean anyRowActions = false;
@@ -79,7 +84,7 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
             entry.put("hostname", domain.get(SiteDomainModel.HOSTNAME));
             entry.put("matchType", domain.get(SiteDomainModel.MATCH_TYPE));
             entry.put("forceSsl", Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL)));
-            boolean canEditRow = resource != null && resource.editableBy(host, domain, accessContext);
+            boolean canEditRow = resource != null && ResourceVerbs.editableBy(resource, request, domain);
             entry.put("canEdit", canEditRow);
             if (canEditRow) {
                 // Bound back to THIS tab, like the remove below: the record page's Cancel and
@@ -92,7 +97,7 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
             // /delete URL, so the tab that owns the hostnames could add one and never take
             // one away. The endpoint re-decides through the resource's removableBy; asking
             // the resource here is what keeps the affordance and the endpoint one answer.
-            boolean canRemoveRow = resource != null && resource.removableBy(host, domain, accessContext);
+            boolean canRemoveRow = resource != null && ResourceVerbs.removableBy(resource, request, domain);
             entry.put("canRemove", canRemoveRow);
             if (canRemoveRow) {
                 entry.put("deleteTarget", ReturnTarget.bind(
@@ -141,9 +146,10 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
      *
      * @return null when the panel carries no domain peer, which offers no write affordance
      */
-    private static @Nullable SiteDomainResource domainResource(@Nullable Panel panel) {
-        return panel != null && panel.peerBySlug("domains") instanceof SiteDomainResource peer
-            ? peer : null;
+    @SuppressWarnings("unchecked")
+    private static @Nullable PanelResource<Row> domainResource(@Nullable Panel panel) {
+        return panel != null && panel.entryBySlug(DomainParts.SLUG) instanceof PanelResource<?> entry
+            && SiteDomainModel.MODEL_ID.equals(entry.subject().modelId()) ? (PanelResource<Row>) entry : null;
     }
 
     /**
