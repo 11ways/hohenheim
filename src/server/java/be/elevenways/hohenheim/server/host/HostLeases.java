@@ -1,11 +1,13 @@
 package be.elevenways.hohenheim.server.host;
 
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.lease.Lease;
 import be.elevenways.zenit.common.orm.lease.Leases;
+import be.elevenways.zenit.common.orm.lease.LeaseKeys;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -31,7 +33,8 @@ import java.util.function.Function;
  */
 public final class HostLeases {
 
-    static final String KEY_PREFIX = "hohenheim_host_";
+    private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("host"), "hohenheim_host_");
+    static final String KEY_PREFIX = KEYS.prefix();
 
     /** Mirrors zenit Leases' default TTL (the field is package-private there). */
     static final Duration DEFAULT_TTL = Duration.ofSeconds(30);
@@ -71,7 +74,7 @@ public final class HostLeases {
 
     /** The lease key of one host. */
     public static @NonNull String keyFor(int serverId) {
-        return KEY_PREFIX + serverId;
+        return KEYS.key(serverId);
     }
 
     /**

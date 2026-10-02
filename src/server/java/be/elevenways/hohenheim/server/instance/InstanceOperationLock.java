@@ -1,10 +1,12 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.lease.ClaimedRows;
+import be.elevenways.zenit.common.orm.lease.LeaseKeys;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.validation.Violations;
@@ -80,7 +82,8 @@ public final class InstanceOperationLock {
     }
 
     /** The lease-key prefix of an instance record's claim. */
-    public static final String KEY_PREFIX = "hohenheim_instance_";
+    private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("instance"), "hohenheim_instance_");
+    public static final String KEY_PREFIX = KEYS.prefix();
 
     private static final Map<HostLeases, InstanceOperationLock> BY_CONTROLLER = new ConcurrentHashMap<>();
 
@@ -91,7 +94,7 @@ public final class InstanceOperationLock {
 
     private InstanceOperationLock(@NonNull HostLeases controller) {
         this.rows = ClaimedRows.of(Models.get(InstanceModel.class), InstanceModel.ID, InstanceModel.CLAIM_FENCE,
-                KEY_PREFIX)
+                KEYS)
             .coordinatedBy(controller.coordinators())
             .withTtl(controller.ttl());
     }
@@ -169,7 +172,7 @@ public final class InstanceOperationLock {
             throw new IllegalStateException("Instance " + instanceId + " is written outside an operation holding it;"
                 + " every outcome write runs inside InstanceOperationLock.exclusive or runIfIdle");
         }
-        return this.rows.owned(hold.claim());
+        return this.rows.owned(hold.rowClaim());
     }
 
     /** Whether {@code thread} is waiting for the record's claim (a test seam for the ordering proofs). */
