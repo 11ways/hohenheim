@@ -5,14 +5,16 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
-import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.hohenheim.site.SiteOperations;
+import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.server.operation.OperationPipeline;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -35,8 +37,6 @@ class SitePanelLockoutTest extends HohenheimTestBase {
 
     private static final String OTHER_HOST = "other.lockout.test";
 
-    private static final Identifier TOGGLE = Identifier.of("hohenheim", "toggle_site");
-
     private static int panelSiteId;
     private static int otherSiteId;
 
@@ -51,13 +51,12 @@ class SitePanelLockoutTest extends HohenheimTestBase {
      */
     @Test
     void thePanelsOwnSiteCannotBeSwitchedOffFromInsideThePanel() {
-        RowAction.Invoke<Row> toggle = toggleAction();
         AccessContext atPanel = arrivingAt("https://" + PANEL_HOST);
         Row panelSite = siteRow(panelSiteId);
 
         // 1. Reached through its own hostname, the panel's site offers the disable DEAD,
         //    naming the address it would take offline.
-        Microcopy refusal = toggle.unavailableReasonFor(panelSite, atPanel);
+        Microcopy refusal = unavailable(SiteOperations.DISABLE, panelSite, atPanel);
         assertThat(refusal)
             .as("step 1: the panel's own site refuses its disable")
             .isNotNull();
@@ -70,23 +69,31 @@ class SitePanelLockoutTest extends HohenheimTestBase {
 
         // 2. In the very same request, every OTHER site's toggle is live: the verdict is
         //    per row, never once for the table.
-        assertThat(toggle.unavailableReasonFor(siteRow(otherSiteId), atPanel))
+        assertThat(unavailable(SiteOperations.DISABLE, siteRow(otherSiteId), atPanel))
             .as("step 2: a site that does not serve this panel is switchable")
             .isNull();
 
         // 3. The refusal is about the arrival address, not about the site: reached at the
         //    backend directly -- the ssh-forward recovery path -- nothing is refused.
-        assertThat(toggle.unavailableReasonFor(panelSite, arrivingAt("http://127.0.0.1:3000")))
+        assertThat(unavailable(SiteOperations.DISABLE, panelSite, arrivingAt("http://127.0.0.1:3000")))
             .as("step 3: the recovery path can still switch the panel's site back on")
             .isNull();
 
         // 4. And it is about the DISABLE direction only: an already-off site cannot be
-        //    carrying this request, so enabling is never refused.
-        Row disabled = siteRow(panelSiteId);
-        disabled.set(SiteModel.ENABLED, false);
-        assertThat(toggle.unavailableReasonFor(disabled, atPanel))
-            .as("step 4: enabling is never a lockout")
-            .isNull();
+        //    carrying this request, so enabling is never refused, and an off site is offered
+        //    only the enable.
+        setEnabled(panelSiteId, false);
+        try {
+            Row disabled = siteRow(panelSiteId);
+            assertThat(OperationPipeline.offer(SiteOperations.ENABLE, atPanel, disabled))
+                .as("step 4: enabling is never a lockout")
+                .isInstanceOf(OperationPipeline.Offer.Available.class);
+            assertThat(OperationPipeline.offer(SiteOperations.DISABLE, atPanel, disabled))
+                .as("step 4: and an off site has no disable to offer")
+                .isInstanceOf(OperationPipeline.Offer.Hidden.class);
+        } finally {
+            setEnabled(panelSiteId, true);
+        }
 
         // 5. The same fact refuses the DELETE, which is the outage without the second
         //    click that would undo it.
@@ -105,16 +112,20 @@ class SitePanelLockoutTest extends HohenheimTestBase {
      */
     @Test
     void theToggleAlwaysConfirmsAndNamesTheHostnames() {
-        RowAction.Invoke<Row> toggle = toggleAction();
+        PanelAction<Row> disableAction = placed(SiteOperations.DISABLE);
+        PanelAction<Row> enableAction = placed(SiteOperations.ENABLE);
 
-        // 1. There is a record-less fallback, so no surface can render this unconfirmed.
-        assertThat(toggle.confirmation())
-            .as("step 1: the toggle declares a static confirmation")
+        // 1. There is a record-less fallback, so no surface can render either switch unconfirmed.
+        assertThat(disableAction.confirmation())
+            .as("step 1: the disable declares a static confirmation")
+            .isNotNull();
+        assertThat(enableAction.confirmation())
+            .as("step 1: and so does the enable")
             .isNotNull();
 
         // 2. Switching a live site OFF names it and its hostnames.
         Row live = siteRow(otherSiteId);
-        var disable = toggle.confirmationFor(live);
+        var disable = disableAction.confirmationFor(live);
         assertThat(disable).as("step 2: a per-record confirmation is resolved").isNotNull();
         assertThat(disable.body().key())
             .as("step 2: the disable body, not the enable one")
@@ -126,13 +137,13 @@ class SitePanelLockoutTest extends HohenheimTestBase {
         // 3. The other direction is a different sentence, not the same one reworded by the
         //    reader: the same row switched off confirms an ENABLE.
         live.set(SiteModel.ENABLED, false);
-        assertThat(toggle.confirmationFor(live).body().key())
+        assertThat(enableAction.confirmationFor(live).body().key())
             .as("step 3: the enable direction has its own body")
             .isEqualTo("enable_confirm");
 
         // 4. A site with no hostname at all says so instead of rendering a dangling list.
         Row hostless = siteRow(site("Lockout Hostless", null));
-        assertThat(toggle.confirmationFor(hostless).body().key())
+        assertThat(disableAction.confirmationFor(hostless).body().key())
             .as("step 4: no hostnames, no hostname list")
             .isEqualTo("disable_confirm_no_hostnames");
     }
@@ -145,7 +156,7 @@ class SitePanelLockoutTest extends HohenheimTestBase {
     @Test
     void anUnconfirmedPostDoesNotSwitchASiteOff() throws Exception {
         int siteId = site("Lockout Proof", "proof.lockout.test");
-        String path = "/admin/sites/" + siteId + "/action/toggle_site";
+        String path = "/admin/sites/invoke/hohenheim.disable_site?ids=" + siteId;
 
         // 1. Posted with no confirmation proof, the site stays exactly as it was.
         httpPostForm(path, "", sessionToken, csrfToken);
@@ -161,13 +172,19 @@ class SitePanelLockoutTest extends HohenheimTestBase {
             .isFalse();
     }
 
-    /** The action under test, read off the resource rather than rebuilt here. */
-    @SuppressWarnings("unchecked")
-    private static RowAction.Invoke<Row> toggleAction() {
-        return (RowAction.Invoke<Row>) new SiteResource().rowActions().stream()
-            .filter(action -> TOGGLE.equals(action.id()))
+    /** The placed switch under test, read off the resource rather than rebuilt here. */
+    private static PanelAction<Row> placed(Operation<Row, ?, ?> operation) {
+        return new SiteResource().actions().stream()
+            .filter(action -> operation.id().equals(action.id()))
             .findFirst()
-            .orElseThrow(() -> new AssertionError("the sites resource offers no toggle action"));
+            .orElseThrow(() -> new AssertionError("the sites resource places no " + operation.id()));
+    }
+
+    /** @return the words a dead switch shows for the site to this caller, null when it is live */
+    private static Microcopy unavailable(Operation<Row, ?, ?> operation, Row site, AccessContext access) {
+        OperationPipeline.Offer offer = OperationPipeline.offer(operation, access, site);
+        assertThat(offer).as("the switch is offered at all").isNotInstanceOf(OperationPipeline.Offer.Hidden.class);
+        return offer instanceof OperationPipeline.Offer.Unavailable dead ? dead.reason() : null;
     }
 
     private static AccessContext arrivingAt(String origin) {
@@ -175,6 +192,12 @@ class SitePanelLockoutTest extends HohenheimTestBase {
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         return AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(admin.get(UserModel.ID), "Test Admin"), origin));
+    }
+
+    private static void setEnabled(int id, boolean enabled) {
+        Row site = siteRow(id);
+        site.set(SiteModel.ENABLED, enabled);
+        Models.get(SiteModel.class).save(site);
     }
 
     private static Row siteRow(int id) {

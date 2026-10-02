@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.api.DnsZoneApi;
 import be.elevenways.hohenheim.server.api.HostApi;
 import be.elevenways.hohenheim.server.api.PaasApi;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
+import be.elevenways.hohenheim.server.cms.SiteOperationHandlers;
 import be.elevenways.hohenheim.server.database.DatabaseApi;
 import be.elevenways.hohenheim.server.files.InstanceFileEndpoints;
 import be.elevenways.hohenheim.server.instance.InstanceApi;
@@ -67,6 +68,7 @@ public final class HohenheimHandlers {
         initApi();
         InstanceOperationHandlers.init();
         PreviewOperationHandlers.init();
+        SiteOperationHandlers.init();
         InstanceApi.init();
         PaasApi.init();
         DatabaseApi.init();

@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
-import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RecordSubpageRegistry;
@@ -113,10 +113,10 @@ public final class ManageSiteResource extends SiteResource {
         this.model().save(existing);
     }
 
-    /** Operate stays (toggle); the record-creating clone action does not. */
+    /** Operate stays (enable and disable); the record-creating clone and the rollback do not. */
     @Override
-    public @NonNull List<RowAction<Row>> rowActions() {
-        return List.of(this.toggleAction());
+    public @NonNull List<PanelAction<Row>> actions() {
+        return SiteActions.delegated();
     }
 
     /** NAV-ONLY (zero granted sites hide the empty list); the route itself stays scoped by accessFunction. */

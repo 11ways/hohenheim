@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -7,32 +8,38 @@ import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.DatabaseResource;
 import be.elevenways.hohenheim.server.cms.DnsRecordResource;
+import be.elevenways.hohenheim.server.cms.DomainParts;
 import be.elevenways.hohenheim.server.cms.InstanceDatabaseResource;
 import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleResource;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleStepResource;
-import be.elevenways.hohenheim.server.cms.DomainParts;
-import be.elevenways.zenit.cms.common.resource.PanelResource;
-import be.elevenways.zenit.cms.common.resource.ResourceVerb;
-import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
 import be.elevenways.hohenheim.server.cms.SiteDomainsPage;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
-import be.elevenways.zenit.cms.common.action.RowAction;
-import be.elevenways.zenit.common.task.record.RecordScheduleModel;
-import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.render.panel.ChildListSectionState;
+import be.elevenways.zenit.cms.common.render.table.TableState;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.ResourceVerb;
+import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
+import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.task.record.RecordScheduleModel;
+import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
+import be.elevenways.zenit.test.support.EndpointConduit;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -43,6 +50,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiPredicate;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -346,18 +354,96 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             .containsExactly(true, true);
     }
 
-    /** The Domains tab's rendered (edit link, remove form) pair for its one domain row. */
+    /**
+     * A domain create under a site opens with that site's TLS defaults only where the caller may read the site: a
+     * TLS passthrough site the caller cannot reach opens the create exactly as no site does, so the form is no probe
+     * of another tenant's configuration (GPT review 25 D03).
+     */
+    @Test
+    void aDomainCreateUnderAnUnreachableSiteOpensAsUnderNone() {
+        int own = passthroughSite("own");
+        int foreign = passthroughSite("foreign");
+        RecordGrants.grant(GrantSubjectType.USER, holderId, SiteModel.MODEL_ID, own, HohenheimAccess.MANAGE, true);
+        try {
+            Map<String, Object> none = createDefaults(holder(), HohenheimSlugs.MANAGE, null);
+
+            // 1. Under the holder's own passthrough site, the create opens with HTTPS forcing and ACME off.
+            assertThat(createDefaults(holder(), HohenheimSlugs.MANAGE, own))
+                .as("step 1: the holder's own passthrough site sets its TLS defaults")
+                .containsEntry(SiteDomainModel.FORCE_SSL.getName(), false)
+                .containsEntry(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName(), true);
+
+            // 2. Under a passthrough site outside the holder's scope, the create opens exactly as under none.
+            assertThat(createDefaults(holder(), HohenheimSlugs.MANAGE, foreign))
+                .as("step 2: an unreachable site's configuration is never read into the form")
+                .isEqualTo(none);
+
+            // 3. The operator reaches every site, so the same site sets its defaults on /admin.
+            assertThat(createDefaults(operator(), HohenheimSlugs.ADMIN, foreign))
+                .as("step 3: the operator's create under that site reads it")
+                .containsEntry(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName(), true);
+        } finally {
+            RecordGrants.revoke(GrantSubjectType.USER, holderId, SiteModel.MODEL_ID, own, HohenheimAccess.MANAGE);
+            HardDeletes.byId(Models.get(SiteModel.class), own);
+            HardDeletes.byId(Models.get(SiteModel.class), foreign);
+        }
+    }
+
+    /** The defaults a domain create form opens with on {@code panel}, under {@code parent} when given. */
+    private static Map<String, Object> createDefaults(AccessContext ctx, String panel, Integer parent) {
+        EndpointConduit conduit = new EndpointConduit()
+            .withAttribute(ConduitAttributes.PRINCIPAL, ctx.principal())
+            .setParameter(CmsEndpoints.PANEL_PARAM, panel)
+            .setParameter(CmsEndpoints.RESOURCE_PARAM, DomainParts.SLUG);
+        if (parent != null) {
+            conduit.setQueryParam(CmsEndpoints.PARENT_PARAM.getName(), String.valueOf(parent));
+        }
+        AccessContext access = AccessContext.of(conduit);
+        PanelRequest request = new PanelRequest(PanelRegistry.getBySlug(panel), conduit, access, null);
+        PanelResource<Row> resource = HohenheimSlugs.ADMIN.equals(panel) ? DomainParts.admin() : DomainParts.manage();
+        return resource.form().createDefaults(request);
+    }
+
+    private static int passthroughSite(String name) {
+        Row site = Models.get(SiteModel.class).createEmptyRow();
+        site.set(SiteModel.NAME, PREFIX + "passthrough-" + name);
+        site.set(SiteModel.SLUG, PREFIX + "passthrough-" + name);
+        site.set(SiteModel.UPSTREAM_KIND, SiteModel.UPSTREAM_TLS_PASSTHROUGH);
+        site.set(SiteModel.SETTINGS, Map.of("forward_host", "127.0.0.1", "forward_port", 8443));
+        site.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
+        site.set(SiteModel.ENABLED, false);
+        Models.get(SiteModel.class).save(site);
+        return site.get(SiteModel.ID);
+    }
+
+    /** The Domains tab's rendered (edit, remove) pair for its one domain row. */
     @SuppressWarnings("unchecked")
     private static List<Boolean> rowAffordances(Row site, AccessContext ctx) {
         // The tab renders under the panel the principal reaches: a delegate's is /manage, the operator's /admin.
         String panel = HohenheimAccess.isAdmin(ctx) ? HohenheimSlugs.ADMIN : HohenheimSlugs.MANAGE;
-        AccessContext under = AccessContext.of(TenantConduits.stubIn(ctx.principal(), panel));
-        Map<String, Object> vars = (Map<String, Object>) new SiteDomainsPage()
-            .render(under.conduit(), under, site).get();
-        List<Map<String, Object>> rows = (List<Map<String, Object>>) vars.get("domains");
+        EndpointConduit conduit = new EndpointConduit()
+            .withAttribute(ConduitAttributes.PRINCIPAL, ctx.principal())
+            .setParameter(CmsEndpoints.PANEL_PARAM, panel)
+            .setParameter(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.SITES);
+        AccessContext under = AccessContext.of(conduit);
+        PanelRequest request = new PanelRequest(PanelRegistry.getBySlug(panel), conduit, under, null);
+        Map<String, Object> vars = (Map<String, Object>) new SiteDomainsPage().render(request, site).get();
+        List<ChildListSectionState> sections = (List<ChildListSectionState>) vars.get("sections");
+        assertThat(sections).as("the tab embeds the one domains section").hasSize(1);
+        List<TableState.RowState> rows = sections.get(0).table().rows();
+        if (rows.isEmpty()) {
+            // The /manage domain scope lists only the domains of sites the caller manages: a delegate without manage
+            // on the site is not even shown the row, so it is offered nothing on it.
+            return List.of(false, false);
+        }
         assertThat(rows).as("the tab lists its one domain").hasSize(1);
-        return List.of(Boolean.TRUE.equals(rows.get(0).get("canEdit")),
-            Boolean.TRUE.equals(rows.get(0).get("canRemove")));
+        TableState.RowState row = rows.get(0);
+        List<String> offered = new ArrayList<>();
+        Stream.of(row.actions(), row.overflowActions(), row.destructiveActions())
+            .flatMap(List::stream).forEach(action -> offered.add(String.valueOf(action.id())));
+        Stream.of(row.invokeActions(), row.overflowInvokeActions(), row.destructiveInvokeActions())
+            .flatMap(List::stream).forEach(action -> offered.add(String.valueOf(action.id())));
+        return List.of(offered.contains("zenit:edit"), offered.contains("zenit:delete"));
     }
 
     // --- Query budgets: per-row predicates answer off the request memo ---------------

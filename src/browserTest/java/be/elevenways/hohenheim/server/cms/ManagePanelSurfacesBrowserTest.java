@@ -11,9 +11,11 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
+import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -41,6 +43,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 /**
  * The slice-three entries' surfaces, admin and tenant twins, stored before the move and compared exactly after it;
  * each tenant twin against its admin twin through its explicit difference table (stage 4 contract 4.9, journey "the
@@ -63,6 +67,8 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
     private static final String DEVICES = "instance-devices";
     /** The plain Select binding the device type control carries on both twins. */
     private static final String SELECT_BINDING = " binding=searchable:false,clearable:true,presentation:DEFAULT";
+    /** The legacy state-dependent site switch the stored set carries, split into enable_site and disable_site. */
+    private static final Identifier TOGGLE_SITE = Identifier.of("hohenheim", "toggle_site");
 
     private static String siteId;
     private static String disabledSiteId;
@@ -120,10 +126,22 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
 
     @Test
     void theSliceThreeEntriesOfferWhatTheyOfferedBeforeTheMove() {
-        // Approve and unapprove moved from legacy row actions to placed operations: only their route moves.
+        // 0. Legacy row actions that became placed operations compare on the shared invoke route, every other fact of
+        //    theirs exactly: the template approve and unapprove and the site clone keep their identities, and the one
+        //    state-dependent site toggle became enable_site on the disabled fixture and disable_site on the enabled
+        //    one (D5-B04). The site rollback applies to no fixture (a static site), so no stored case carries it.
+        assertThat((Boolean) Models.get(SiteModel.class).findById(Integer.parseInt(siteId)).get(SiteModel.ENABLED))
+            .as("step 0: the site fixture is enabled").isTrue();
+        assertThat((Boolean) Models.get(SiteModel.class).findById(Integer.parseInt(disabledSiteId))
+            .get(SiteModel.ENABLED)).as("step 0: the disabled fixture is not").isFalse();
         SurfaceBaselines stored = SurfaceBaselines.load(ManagePanelSurfacesBrowserTest.class,
             "/panel-surfaces/manage-slice-three.txt").placedOperations(PlacedOperationMoves.of(
-                HohenheimIds.id("approve_template"), HohenheimIds.id("unapprove_template")));
+                HohenheimIds.id("approve_template"), HohenheimIds.id("unapprove_template"),
+                SiteOperations.CLONE.id()).split(TOGGLE_SITE, Map.of(
+                    ADMIN + "." + SITES + ".operator.site", SiteOperations.DISABLE.id(),
+                    ADMIN + "." + SITES + ".operator.disabled", SiteOperations.ENABLE.id(),
+                    MANAGE + "." + SITES + ".tenant-one.site", SiteOperations.DISABLE.id(),
+                    MANAGE + "." + SITES + ".tenant-one.disabled", SiteOperations.ENABLE.id())));
 
         // 1. The admin entries for the operator, record-less and on each record; a tenant is refused the panel.
         for (String entry : List.of(SITES, DOMAINS, TEMPLATES)) {
