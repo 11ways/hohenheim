@@ -22,7 +22,6 @@
     @mount
     function connect() {
         InstanceStats.connect(this, instanceId, (sample) => { apply(sample) })
-        Cleanup.on(this, () => InstanceStats.disconnect(this))
     }
 
     function apply(sample: Map) {

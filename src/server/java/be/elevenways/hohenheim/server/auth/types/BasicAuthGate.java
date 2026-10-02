@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.server.auth.types;
 
 import be.elevenways.hohenheim.auth.SiteAuthDecision;
-import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -48,7 +47,7 @@ public class BasicAuthGate implements SiteAuthGate, CredentialOwner, SessionAuth
         this.siteId = context.siteId();
         this.providerSlug = context.providerSlug();
         this.providerId = context.providerId();
-        this.credentials = BasicAuthProviderType.credentials(configMap(context));
+        this.credentials = BasicAuthProviderType.credentials(context.providerSettings());
         this.challenge = "Basic realm=\"" + realmName(this.siteId) + "\"";
     }
 
@@ -60,12 +59,6 @@ public class BasicAuthGate implements SiteAuthGate, CredentialOwner, SessionAuth
             return "Restricted";
         }
         return name.replace("\"", "");
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> configMap(SiteAuthContext context) {
-        Object raw = context.config().get(SiteAuthProviderModel.CONFIG);
-        return raw instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
     }
 
     @Override

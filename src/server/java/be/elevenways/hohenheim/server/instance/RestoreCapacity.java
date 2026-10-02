@@ -1,12 +1,12 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.HostMode;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.incus.IncusClient;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
 import be.elevenways.protoblast.server.process.Subprocess;
 import be.elevenways.protoblast.server.process.Termination;
@@ -74,10 +74,9 @@ public final class RestoreCapacity {
                 : availableBytes(serverId,
                     new ServerService().clientFor(ServerModel.nameOf(serverId)));
         } catch (IOException | RuntimeException error) {
-            throw Violations.ofForm(violation("restore_capacity_unknown")
-                .withArg("server", hostLabel(serverId))
-                .withArg("reason", error.getMessage() != null
-                    ? error.getMessage() : error.toString()));
+            throw Violations.ofForm(HohenheimViolations.text("restore_capacity_unknown")
+                .withArg("server", ServerModel.labelOf(serverId))
+                .withArg("reason", HohenheimViolations.reasonOf(error)));
         }
     }
 
@@ -91,25 +90,11 @@ public final class RestoreCapacity {
     public static void judge(int serverId, long availableBytes, long requiredBytes) {
         long needed = (long) (requiredBytes * HEADROOM_FACTOR);
         if (availableBytes < needed) {
-            throw Violations.ofForm(violation("restore_capacity")
-                .withArg("server", hostLabel(serverId))
+            throw Violations.ofForm(HohenheimViolations.text("restore_capacity")
+                .withArg("server", ServerModel.labelOf(serverId))
                 .withArg("needed", needed)
                 .withArg("available", availableBytes));
         }
-    }
-
-    /**
-     * The host's name, or a bare id spelling when the row is gone.
-     *
-     * AIDEV-NOTE: never {@code ServerModel.nameOf} here -- that THROWS on an unknown id,
-     * and it used to be called while BUILDING the refusal, so a host row that vanished
-     * mid-restore turned a named 422 refusal into a raw IllegalArgumentException 500.
-     * The refusal path must be the one path that cannot itself fail.
-     */
-    private static @NonNull String hostLabel(int serverId) {
-        Row server = Models.get(ServerModel.class).findById(serverId);
-        String name = server != null ? server.get(ServerModel.NAME) : null;
-        return name != null ? name : "#" + serverId;
     }
 
     /** Free space of the pool the default profile's root device names (or the first pool). */
@@ -184,7 +169,4 @@ public final class RestoreCapacity {
         }
     }
 
-    private static Microcopy violation(String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
-    }
 }

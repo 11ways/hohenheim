@@ -66,10 +66,8 @@ public final class InstanceShellHandler implements WebSocketHandler {
      */
     @Override
     public boolean revalidate() {
-        Principal principal = this.session.getPrincipal();
-        boolean permitted = principal != null && this.instanceId != null
-            && HohenheimAccess.hasInstanceCapability(
-                principal, this.instanceId, HohenheimAccess.SHELL);
+        boolean permitted = HohenheimAccess.sessionHoldsInstanceCapability(this.session, this.instanceId,
+            HohenheimAccess.SHELL);
         if (!permitted) {
             InstanceShell.Session live = this.shell;
             if (live != null) {

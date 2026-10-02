@@ -4,8 +4,6 @@ import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.instance.ConsoleKind;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
@@ -193,10 +191,6 @@ public final class ReleaseKind implements InstanceKindHandler {
 
     @Override
     public @NonNull InstanceSpec specFor(int instanceId, @NonNull Map<String, Object> settings) {
-        String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
-        String imageRef = ContainerSettings.imageReference(settings);
-        List<String> cmd = ContainerSettings.commandLine(settings);
-
         // AIDEV-NOTE: the keys are HOST PATHS under the volume root, minted from the
         // APPLICATION's id, and this method may never re-derive them from the release's own
         // handle -- that is the defect the site-keyed volumes were introduced to fix and
@@ -215,15 +209,10 @@ public final class ReleaseKind implements InstanceKindHandler {
             ? new PortPublication(number.intValue(), PortPublication.TCP, false, null, null)
             : null;
 
-        return InstanceSpec.builder(handle, imageRef,
-                ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)),
-                HARDENING, OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
-            .command(cmd)
+        return ContainerSettings.spec(instanceId, settings, defaultFootprintMb(settings), HARDENING)
             .workdir(str(settings.get("workdir")))
-            .env(EnvVars.toMap(settings.get("environment_variables")))
             .binds(binds)
             .publication(publication)
-            .tty(ConsoleKind.requireDeclared(settings).interactive())
             .build();
     }
 

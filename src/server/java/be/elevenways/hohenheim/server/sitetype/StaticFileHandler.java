@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype;
 
+import be.elevenways.zenit.common.text.ByteText;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.UpstreamForwarder;
 import be.elevenways.protoblast.common.text.HtmlEscape;
@@ -181,7 +182,7 @@ public class StaticFileHandler implements SiteRequestHandler {
                     String href = isDir ? name + "/" : name;
                     String size = "";
                     try {
-                        if (!isDir) size = formatSize(Files.size(entry));
+                        if (!isDir) size = ByteText.human(Files.size(entry));
                     } catch (IOException ignored) {}
 
                     html.append("<tr><td><a href=\"").append(HtmlEscape.attribute(href)).append("\">")
@@ -213,12 +214,5 @@ public class StaticFileHandler implements SiteRequestHandler {
         } catch (IOException e) {
             return false;
         }
-    }
-
-    static String formatSize(long bytes) {
-        if (bytes < 1024) return bytes + " B";
-        if (bytes < 1024 * 1024) return (bytes / 1024) + " KB";
-        if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)) + " MB";
-        return (bytes / (1024 * 1024 * 1024)) + " GB";
     }
 }

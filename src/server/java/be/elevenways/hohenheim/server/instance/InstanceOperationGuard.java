@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
@@ -8,6 +9,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -44,8 +46,7 @@ final class InstanceOperationGuard {
     static void requireOperable(@NonNull Row row) {
         String status = row.get(InstanceModel.STATUS);
         if (!InstanceModel.isOperable(row)) {
-            throw Violations.ofForm(Microcopy.of("instance_busy")
-                .withFilter("scope", "violations")
+            throw Violations.ofForm(HohenheimViolations.text("instance_busy")
                 .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME)))
                 .withArg("status", status));
         }
@@ -64,8 +65,7 @@ final class InstanceOperationGuard {
                 || InstanceModel.INSTALL_INSTALLED.equals(state)) {
             return;
         }
-        throw Violations.ofForm(Microcopy.of("install_incomplete")
-            .withFilter("scope", "violations")
+        throw Violations.ofForm(HohenheimViolations.text("install_incomplete")
             .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME)))
             .withArg("state", state));
     }
@@ -99,23 +99,12 @@ final class InstanceOperationGuard {
     static void stampInstall(@NonNull HostLeases leases, int instanceId, int serverId, long fence,
                              @NonNull String installState, @Nullable String installError,
                              @NonNull Object instanceName) {
-        int matched = Models.get(InstanceModel.class).find()
-            .where(InstanceModel.ID.eq(instanceId))
-            .where(hostScope(serverId))
-            .where(Criteria.or(
-                InstanceModel.CLAIM_FENCE.isNull(),
-                InstanceModel.CLAIM_FENCE.lte(fence)))
+        int matched = fenced(instanceId, serverId, fence)
             .assign(InstanceModel.INSTALL_STATE, installState)
             .assign(InstanceModel.INSTALL_ERROR, installError)
             .assign(InstanceModel.CLAIM_FENCE, fence)
             .updateAll();
-        if (matched == 0) {
-            leases.fencedOut(serverId);
-            throw Violations.ofForm(Microcopy.of("instance_fenced_out")
-                .withFilter("scope", "violations")
-                .withArg("name", String.valueOf(instanceName))
-                .withArg("server", ServerModel.nameOf(serverId)));
-        }
+        requireMatched(matched, leases, serverId, instanceName);
     }
 
     /**
@@ -135,22 +124,11 @@ final class InstanceOperationGuard {
      */
     static void stampRole(@NonNull HostLeases leases, int instanceId, int serverId, long fence,
                           @NonNull String role, @NonNull Object instanceName) {
-        int matched = Models.get(InstanceModel.class).find()
-            .where(InstanceModel.ID.eq(instanceId))
-            .where(hostScope(serverId))
-            .where(Criteria.or(
-                InstanceModel.CLAIM_FENCE.isNull(),
-                InstanceModel.CLAIM_FENCE.lte(fence)))
+        int matched = fenced(instanceId, serverId, fence)
             .assign(InstanceModel.RUNTIME_ROLE, role)
             .assign(InstanceModel.CLAIM_FENCE, fence)
             .updateAll();
-        if (matched == 0) {
-            leases.fencedOut(serverId);
-            throw Violations.ofForm(Microcopy.of("instance_fenced_out")
-                .withFilter("scope", "violations")
-                .withArg("name", String.valueOf(instanceName))
-                .withArg("server", ServerModel.nameOf(serverId)));
-        }
+        requireMatched(matched, leases, serverId, instanceName);
     }
 
     /**
@@ -162,22 +140,11 @@ final class InstanceOperationGuard {
     static void stampFingerprint(@NonNull HostLeases leases, int instanceId, int serverId,
                                  long fence, @NonNull String fingerprint,
                                  @NonNull Object instanceName) {
-        int matched = Models.get(InstanceModel.class).find()
-            .where(InstanceModel.ID.eq(instanceId))
-            .where(hostScope(serverId))
-            .where(Criteria.or(
-                InstanceModel.CLAIM_FENCE.isNull(),
-                InstanceModel.CLAIM_FENCE.lte(fence)))
+        int matched = fenced(instanceId, serverId, fence)
             .assign(InstanceModel.IMAGE_FINGERPRINT, fingerprint)
             .assign(InstanceModel.CLAIM_FENCE, fence)
             .updateAll();
-        if (matched == 0) {
-            leases.fencedOut(serverId);
-            throw Violations.ofForm(Microcopy.of("instance_fenced_out")
-                .withFilter("scope", "violations")
-                .withArg("name", String.valueOf(instanceName))
-                .withArg("server", ServerModel.nameOf(serverId)));
-        }
+        requireMatched(matched, leases, serverId, instanceName);
     }
 
     /**
@@ -204,24 +171,13 @@ final class InstanceOperationGuard {
         // AIDEV-NOTE: an operation also CLEARS the observed kill (see
         // InstanceModel.WORKLOAD_KILLED_AT): a deploy, stop or restart replaces the container
         // that carried it, and a kill that survives the operation is re-observed next sweep.
-        int matched = Models.get(InstanceModel.class).find()
-            .where(InstanceModel.ID.eq(instanceId))
-            .where(hostScope(serverId))
-            .where(Criteria.or(
-                InstanceModel.CLAIM_FENCE.isNull(),
-                InstanceModel.CLAIM_FENCE.lte(fence)))
+        int matched = fenced(instanceId, serverId, fence)
             .assign(InstanceModel.STATUS, status)
             .assign(InstanceModel.UPDATED_AT, Now.instant())
             .assign(InstanceModel.WORKLOAD_KILLED_AT, null)
             .assign(InstanceModel.CLAIM_FENCE, fence)
             .updateAll();
-        if (matched == 0) {
-            leases.fencedOut(serverId);
-            throw Violations.ofForm(Microcopy.of("instance_fenced_out")
-                .withFilter("scope", "violations")
-                .withArg("name", String.valueOf(instanceName))
-                .withArg("server", ServerModel.nameOf(serverId)));
-        }
+        requireMatched(matched, leases, serverId, instanceName);
     }
 
     /**
@@ -244,12 +200,7 @@ final class InstanceOperationGuard {
     static void stampObserved(@NonNull HostLeases leases, int instanceId, int serverId,
                               long fence, @NonNull String status, boolean changed,
                               @Nullable Instant workloadKilledAt, @NonNull Object instanceName) {
-        var statement = Models.get(InstanceModel.class).find()
-            .where(InstanceModel.ID.eq(instanceId))
-            .where(hostScope(serverId))
-            .where(Criteria.or(
-                InstanceModel.CLAIM_FENCE.isNull(),
-                InstanceModel.CLAIM_FENCE.lte(fence)))
+        var statement = fenced(instanceId, serverId, fence)
             .assign(InstanceModel.STATUS, status)
             .assign(InstanceModel.STATUS_OBSERVED_AT, Now.instant())
             .assign(InstanceModel.WORKLOAD_KILLED_AT, workloadKilledAt)
@@ -257,13 +208,7 @@ final class InstanceOperationGuard {
         if (changed) {
             statement = statement.assign(InstanceModel.UPDATED_AT, Now.instant());
         }
-        if (statement.updateAll() == 0) {
-            leases.fencedOut(serverId);
-            throw Violations.ofForm(Microcopy.of("instance_fenced_out")
-                .withFilter("scope", "violations")
-                .withArg("name", String.valueOf(instanceName))
-                .withArg("server", ServerModel.nameOf(serverId)));
-        }
+        requireMatched(statement.updateAll(), leases, serverId, instanceName);
     }
 
     /**
@@ -279,24 +224,13 @@ final class InstanceOperationGuard {
     static void stampMigrating(@NonNull HostLeases leases, int instanceId, int serverId,
                                long fence, int targetServerId, long reservedMb,
                                @NonNull Object instanceName) {
-        int matched = Models.get(InstanceModel.class).find()
-            .where(InstanceModel.ID.eq(instanceId))
-            .where(hostScope(serverId))
-            .where(Criteria.or(
-                InstanceModel.CLAIM_FENCE.isNull(),
-                InstanceModel.CLAIM_FENCE.lte(fence)))
+        int matched = fenced(instanceId, serverId, fence)
             .assign(InstanceModel.STATUS, InstanceModel.STATUS_MIGRATING)
             .assign(InstanceModel.MIGRATE_TARGET_ID, targetServerId)
             .assign(InstanceModel.MIGRATE_RESERVED_MB, (int) reservedMb)
             .assign(InstanceModel.CLAIM_FENCE, fence)
             .updateAll();
-        if (matched == 0) {
-            leases.fencedOut(serverId);
-            throw Violations.ofForm(Microcopy.of("instance_fenced_out")
-                .withFilter("scope", "violations")
-                .withArg("name", String.valueOf(instanceName))
-                .withArg("server", ServerModel.nameOf(serverId)));
-        }
+        requireMatched(matched, leases, serverId, instanceName);
     }
 
     /**
@@ -320,24 +254,13 @@ final class InstanceOperationGuard {
         // the destination is the over-release that clamps its bucket to zero.
         long booked = reservedTargetServerId == null ? 0 : InstanceCapacity.windowReservedOf(
             Models.get(InstanceModel.class).findById(instanceId));
-        int matched = Models.get(InstanceModel.class).find()
-            .where(InstanceModel.ID.eq(instanceId))
-            .where(hostScope(serverId))
-            .where(Criteria.or(
-                InstanceModel.CLAIM_FENCE.isNull(),
-                InstanceModel.CLAIM_FENCE.lte(fence)))
+        int matched = fenced(instanceId, serverId, fence)
             .assign(InstanceModel.STATUS, status)
             .assign(InstanceModel.MIGRATE_TARGET_ID, (Object) null)
             .assign(InstanceModel.MIGRATE_RESERVED_MB, (Object) null)
             .assign(InstanceModel.CLAIM_FENCE, fence)
             .updateAll();
-        if (matched == 0) {
-            leases.fencedOut(serverId);
-            throw Violations.ofForm(Microcopy.of("instance_fenced_out")
-                .withFilter("scope", "violations")
-                .withArg("name", String.valueOf(instanceName))
-                .withArg("server", ServerModel.nameOf(serverId)));
-        }
+        requireMatched(matched, leases, serverId, instanceName);
         if (reservedTargetServerId != null) {
             InstanceCapacity.release(reservedTargetServerId, booked);
         }
@@ -377,12 +300,7 @@ final class InstanceOperationGuard {
         Row stored = Models.get(InstanceModel.class).findById(instanceId);
         long booked = InstanceCapacity.sourceBookedOf(stored);
         long reserved = InstanceCapacity.windowReservedOf(stored);
-        int matched = Models.get(InstanceModel.class).find()
-            .where(InstanceModel.ID.eq(instanceId))
-            .where(hostScope(sourceServerId))
-            .where(Criteria.or(
-                InstanceModel.CLAIM_FENCE.isNull(),
-                InstanceModel.CLAIM_FENCE.lte(sourceFence)))
+        int matched = fenced(instanceId, sourceServerId, sourceFence)
             .assign(InstanceModel.SERVER_ID, targetServerId)
             .assign(InstanceModel.MIGRATE_TARGET_ID, (Object) null)
             .assign(InstanceModel.MIGRATE_RESERVED_MB, (Object) null)
@@ -390,13 +308,7 @@ final class InstanceOperationGuard {
             .assign(InstanceModel.STATUS, status)
             .assign(InstanceModel.CLAIM_FENCE, targetFence)
             .updateAll();
-        if (matched == 0) {
-            leases.fencedOut(sourceServerId);
-            throw Violations.ofForm(Microcopy.of("instance_fenced_out")
-                .withFilter("scope", "violations")
-                .withArg("name", String.valueOf(instanceName))
-                .withArg("server", ServerModel.nameOf(sourceServerId)));
-        }
+        requireMatched(matched, leases, sourceServerId, instanceName);
         InstanceCapacity.release(sourceServerId, booked);
     }
 
@@ -407,6 +319,33 @@ final class InstanceOperationGuard {
      * post-handoff write from the OLD host's lease domain match zero rows even
      * though fences from different domains are numerically incomparable.
      */
+    /**
+     * THE fenced write every stamp makes: this record, still on this host, under no newer fence than {@code fence}.
+     */
+    private static @NonNull QueryBuilder<Row> fenced(int instanceId, int serverId, long fence) {
+        return Models.get(InstanceModel.class).find()
+            .where(InstanceModel.ID.eq(instanceId))
+            .where(hostScope(serverId))
+            .where(Criteria.or(
+                InstanceModel.CLAIM_FENCE.isNull(),
+                InstanceModel.CLAIM_FENCE.lte(fence)));
+    }
+
+    /**
+     * A fenced write that matched no row lost the record to another controller: that is the hard fenced-out failure.
+     *
+     * @throws Violations {@code instance_fenced_out}
+     */
+    private static void requireMatched(int matched, @NonNull HostLeases leases, int serverId,
+                                       @NonNull Object instanceName) {
+        if (matched == 0) {
+            leases.fencedOut(serverId);
+            throw Violations.ofForm(HohenheimViolations.text("instance_fenced_out")
+                .withArg("name", String.valueOf(instanceName))
+                .withArg("server", ServerModel.nameOf(serverId)));
+        }
+    }
+
     private static @NonNull Criteria hostScope(int serverId) {
         if (serverId == ServerModel.localServerId()) {
             return Criteria.or(

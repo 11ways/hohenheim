@@ -52,17 +52,6 @@ public final class RootDisk {
      * once, at the surface the operator submitted, instead of once per driver.
      */
     public static @Nullable Integer declaredGb(@NonNull Map<String, Object> settings) {
-        Object raw = settings.get(SETTING);
-        Integer value = null;
-        if (raw instanceof Number number) {
-            value = number.intValue();
-        } else if (raw instanceof String text && !text.isBlank()) {
-            try {
-                value = Integer.valueOf(text.trim());
-            } catch (NumberFormatException ignored) {
-                return null;
-            }
-        }
-        return value != null && value > 0 ? value : null;
+        return KindSettingValues.positive(settings.get(SETTING));
     }
 }

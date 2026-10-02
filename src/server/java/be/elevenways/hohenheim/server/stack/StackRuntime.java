@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.stack;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackModel;
@@ -590,7 +591,7 @@ public class StackRuntime {
         } catch (Throwable e) {
             // Throwable, not Exception: an Error thrown on the worker would otherwise
             // vanish into the executor's unread future and leave the status stuck.
-            String failure = e.getMessage() != null ? e.getMessage() : e.toString();
+            String failure = HohenheimViolations.reasonOf(e);
             log.append("FAILED: ").append(failure).append('\n');
             scoped(() -> {
                 StackDeploymentRecords.finished(recordId, false, failure, log.toString(), null);
@@ -926,7 +927,7 @@ public class StackRuntime {
             try {
                 body.run();
             } catch (Throwable e) {
-                String failure = e.getMessage() != null ? e.getMessage() : e.toString();
+                String failure = HohenheimViolations.reasonOf(e);
                 Blast.log("STACK: queued work failed for stack", stackId, "-", failure);
                 if (recordId != null) {
                     scoped(() -> {

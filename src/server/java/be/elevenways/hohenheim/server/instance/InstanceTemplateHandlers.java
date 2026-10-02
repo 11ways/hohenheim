@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -148,7 +149,7 @@ public final class InstanceTemplateHandlers {
 
     private static ActionResult<Object> importError(Conduit conduit, String key) {
         return importErrorText(conduit,
-            Microcopy.of(key).withFilter("scope", "violations"));
+            HohenheimViolations.text(key));
     }
 
     private static ActionResult<Object> importErrorText(Conduit conduit, Microcopy message) {

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -11,7 +12,6 @@ import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
 import be.elevenways.hohenheim.server.runtime.ConsoleStreamSupport;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
@@ -115,8 +115,7 @@ public final class InstanceConsoles {
             return null;
         }
         if (!(resolved.runtime() instanceof ConsoleStreamSupport support)) {
-            throw Violations.ofForm(Microcopy.of("console_unsupported")
-                .withFilter("scope", "violations")
+            throw Violations.ofForm(HohenheimViolations.text("console_unsupported")
                 .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME))));
         }
         closeSession(instanceId);
@@ -227,13 +226,11 @@ public final class InstanceConsoles {
         InstanceService service = new InstanceService();
         InstanceService.Resolved resolved = service.resolve(instanceId);
         if (!(resolved.runtime() instanceof ConsoleStreamSupport support)) {
-            throw Violations.ofForm(Microcopy.of("console_unsupported")
-                .withFilter("scope", "violations")
+            throw Violations.ofForm(HohenheimViolations.text("console_unsupported")
                 .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME))));
         }
         if (!resolved.runtime().status(resolved.spec().handle()).running()) {
-            throw Violations.ofForm(Microcopy.of("console_not_running")
-                .withFilter("scope", "violations")
+            throw Violations.ofForm(HohenheimViolations.text("console_not_running")
                 .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME))));
         }
         String stopCommand = trimmedOrNull(
@@ -263,8 +260,7 @@ public final class InstanceConsoles {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONSOLE);
         InstanceService.Resolved resolved = new InstanceService().resolve(instanceId);
         if (!(resolved.runtime() instanceof ConsoleStreamSupport support)) {
-            throw Violations.ofForm(Microcopy.of("console_unsupported")
-                .withFilter("scope", "violations")
+            throw Violations.ofForm(HohenheimViolations.text("console_unsupported")
                 .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME))));
         }
         try {
@@ -273,8 +269,7 @@ public final class InstanceConsoles {
             return ConsoleRedaction.redactWhole(
                 support.consoleTail(resolved.spec().handle(), lines), instanceId);
         } catch (IOException e) {
-            throw Violations.ofForm(Microcopy.of("logs_unavailable")
-                .withFilter("scope", "violations")
+            throw Violations.ofForm(HohenheimViolations.text("logs_unavailable")
                 .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME))));
         }
     }
@@ -397,9 +392,8 @@ public final class InstanceConsoles {
         try {
             session.sendCommand(command);
         } catch (IOException e) {
-            throw Violations.ofForm(Microcopy.of("console_send_failed")
-                .withFilter("scope", "violations")
-                .withArg("reason", e.getMessage() != null ? e.getMessage() : e.toString()));
+            throw Violations.ofForm(HohenheimViolations.text("console_send_failed")
+                .withArg("reason", HohenheimViolations.reasonOf(e)));
         }
     }
 
@@ -481,10 +475,9 @@ public final class InstanceConsoles {
         try {
             console = support.openConsole(resolved.spec().handle());
         } catch (IOException e) {
-            throw Violations.ofForm(Microcopy.of("console_open_failed")
-                .withFilter("scope", "violations")
+            throw Violations.ofForm(HohenheimViolations.text("console_open_failed")
                 .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME)))
-                .withArg("reason", e.getMessage() != null ? e.getMessage() : e.toString()));
+                .withArg("reason", HohenheimViolations.reasonOf(e)));
         }
         int serverId = resolved.serverId();
         Object name = resolved.row().get(InstanceModel.NAME);

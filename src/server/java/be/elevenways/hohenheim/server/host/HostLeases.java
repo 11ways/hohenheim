@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.lease.Lease;
@@ -73,8 +73,7 @@ public final class HostLeases {
     public long requireFence(int serverId) {
         Lease lease = this.currentLease(serverId, true);
         if (lease == null) {
-            throw Violations.ofForm(Microcopy.of("host_lease_unavailable")
-                .withFilter("scope", "violations")
+            throw Violations.ofForm(HohenheimViolations.text("host_lease_unavailable")
                 .withArg("server", serverId));
         }
         return lease.fence();

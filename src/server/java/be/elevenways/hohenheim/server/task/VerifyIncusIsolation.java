@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.instance.InstanceService;
-import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -105,24 +104,9 @@ public class VerifyIncusIsolation extends ScheduledTask {
     public static @NonNull IsolationFindings report(@NonNull List<HostOutcome> outcomes) {
         IsolationFindings findings = new IsolationFindings(SWEEP);
         for (HostOutcome outcome : outcomes) {
-            if (!outcome.verifiable()) {
-                Blast.log("INCUS ISOLATION:", outcome.server(),
-                    "cannot be kernel-verified (no nft lane to the daemon's host);"
-                        + " its workloads' isolation is UNCONFIRMED");
-                findings.unconfirmed(outcome.server(), outcome.errors());
-                continue;
-            }
-            if (!outcome.repaired().isEmpty() || !outcome.stopped().isEmpty()
-                    || !outcome.errors().isEmpty()) {
-                Blast.log("INCUS ISOLATION:", outcome.server(), "- enforced",
-                    outcome.enforced().size(), ", repaired", outcome.repaired(),
-                    ", STOPPED", outcome.stopped(), ", errors", outcome.errors());
-            }
-            List<String> escalations = new ArrayList<>(outcome.stopped());
-            escalations.addAll(outcome.errors());
-            if (!escalations.isEmpty()) {
-                findings.escalated(outcome.server(), escalations);
-            }
+            findings.host("INCUS ISOLATION:", " (no nft lane to the daemon's host)", outcome.server(),
+                outcome.verifiable(), outcome.enforced(), outcome.repaired(), "STOPPED", outcome.stopped(),
+                outcome.errors());
         }
         return findings;
     }

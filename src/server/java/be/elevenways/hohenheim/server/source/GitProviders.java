@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.source;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.GitProviderModel;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -55,7 +55,7 @@ public final class GitProviders {
         Row provider = Models.get(GitProviderModel.class).findById(providerId);
         if (provider == null) {
             throw Violations.ofField("provider_id", providerId,
-                Microcopy.of("git_provider_unknown").withFilter("scope", "violations"));
+                HohenheimViolations.text("git_provider_unknown"));
         }
         return clientFor(provider);
     }
@@ -89,8 +89,7 @@ public final class GitProviders {
         GitProviderKind kind = GitProviderKinds.getHandler(kindToken);
         if (kind == null) {
             throw Violations.ofField(GitProviderModel.KIND.getName(), kindToken,
-                Microcopy.of("git_provider_kind_unavailable")
-                    .withFilter("scope", "violations")
+                HohenheimViolations.text("git_provider_kind_unavailable")
                     .withArg("kind", String.valueOf(kindToken)));
         }
         return kind;
@@ -106,16 +105,14 @@ public final class GitProviders {
         if (trimmed.isEmpty()) {
             if (kind.requiresBaseUrl()) {
                 throw Violations.ofField(GitProviderModel.BASE_URL.getName(), baseUrl,
-                    Microcopy.of("git_provider_base_url_required")
-                        .withFilter("scope", "violations"));
+                    HohenheimViolations.text("git_provider_base_url_required"));
             }
             return null;
         }
         String problem = BASE_URL_POLICY.problemOf(trimmed);
         if (problem != null) {
             throw Violations.ofField(GitProviderModel.BASE_URL.getName(), baseUrl,
-                Microcopy.of("git_provider_bad_base_url")
-                    .withFilter("scope", "violations").withArg("reason", problem));
+                HohenheimViolations.text("git_provider_bad_base_url").withArg("reason", problem));
         }
         return trimmed;
     }

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.net.IpLiterals;
@@ -453,13 +454,13 @@ public class ServerModel extends Model {
             String v4 = normalizeAddress(row, PUBLIC_IPV4);
             if (v4 != null && !IpLiterals.isIpv4(v4)) {
                 throw Violations.ofField(PUBLIC_IPV4.getName(), v4,
-                    Microcopy.of("server_address_invalid").withFilter("scope", "violations")
+                    HohenheimViolations.text("server_address_invalid")
                         .withArg("address", v4));
             }
             String v6 = normalizeAddress(row, PUBLIC_IPV6);
             if (v6 != null && !IpLiterals.isIpv6(v6)) {
                 throw Violations.ofField(PUBLIC_IPV6.getName(), v6,
-                    Microcopy.of("server_address_invalid").withFilter("scope", "violations")
+                    HohenheimViolations.text("server_address_invalid")
                         .withArg("address", v6));
             }
         });
@@ -562,15 +563,13 @@ public class ServerModel extends Model {
             }
             Row migrating = migratingOnto(serverId).first();
             if (migrating != null) {
-                throw Violations.ofForm(Microcopy.of("server_migration_target")
-                    .withFilter("scope", "violations")
+                throw Violations.ofForm(HohenheimViolations.text("server_migration_target")
                     .withArg("name", String.valueOf((Object) doomed.get(NAME)))
                     .withArg("instance", String.valueOf((Object) migrating.get(InstanceModel.NAME))));
             }
             References references = referencesOf(serverId);
             if (references.any()) {
-                throw Violations.ofForm(references.describe(Microcopy.of("server_in_use")
-                    .withFilter("scope", "violations")
+                throw Violations.ofForm(references.describe(HohenheimViolations.text("server_in_use")
                     .withArg("name", String.valueOf((Object) doomed.get(NAME)))));
             }
             InstanceModel.detachTrashed(InstanceModel.SERVER_ID,
@@ -866,6 +865,13 @@ public class ServerModel extends Model {
             throw new IllegalArgumentException("No server with id " + serverId);
         }
         return String.valueOf(row.get(NAME));
+    }
+
+    /** The name a message shows for a server id: its name, or {@code #<id>} for a row that is gone. */
+    public static @NonNull String labelOf(int serverId) {
+        Row row = Models.get(ServerModel.class).findById(serverId);
+        Object name = row != null ? row.get(NAME) : null;
+        return name != null ? String.valueOf(name) : "#" + serverId;
     }
 
     /** The registry key a type-settings map stores for a server ({@code hohenheim:<id>}). */

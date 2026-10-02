@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -80,10 +81,8 @@ public final class InstanceService {
     /** Publications bind loopback (DockerInstanceRuntime.HOST_BIND_ADDRESS's ledger spelling). */
     private static final String BIND_ADDRESS = "127.0.0.1";
 
-
     /** The trigger a deploy records when its caller names none. */
     public static final String DEFAULT_DEPLOY_REASON = "deploy";
-
 
     /** The activity detail a verified destroy renames its soft-delete row with. */
     public static final String ACTIVITY_DESTROY_DETAIL = "destroy";
@@ -388,7 +387,7 @@ public final class InstanceService {
             // for a still-fenced controller: park, never delete.
             stampGuarded(resolved, fence, InstanceModel.STATUS_ERROR);
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
-            throw refusal("instance_deploy_failed", resolved.row(), e);
+            throw HohenheimViolations.instanceRefusal("instance_deploy_failed", resolved.row(), e);
         } catch (Violations refused) {
             // stampGuarded (fenced out) or the console's own named refusal: never
             // leave a console session attached to a deploy this controller lost.
@@ -446,7 +445,7 @@ public final class InstanceService {
         } catch (IOException e) {
             stampGuarded(resolved, fence, InstanceModel.STATUS_ERROR);
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
-            throw refusal("instance_stop_failed", resolved.row(), e);
+            throw HohenheimViolations.instanceRefusal("instance_stop_failed", resolved.row(), e);
         }
     }
 
@@ -509,7 +508,7 @@ public final class InstanceService {
         } catch (IOException e) {
             stampGuarded(resolved, fence, InstanceModel.STATUS_ERROR);
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
-            throw refusal("instance_destroy_failed", resolved.row(), e);
+            throw HohenheimViolations.instanceRefusal("instance_destroy_failed", resolved.row(), e);
         }
         this.beforeOutcomeWrite.run();
         stampGuarded(resolved, fence, InstanceModel.STATUS_STOPPED);
@@ -593,7 +592,7 @@ public final class InstanceService {
     public void assignRuntimeRole(int instanceId, @NonNull String role) {
         Row row = Models.get(InstanceModel.class).findById(instanceId);
         if (row == null) {
-            throw Violations.ofForm(violationText("instance_not_found")
+            throw Violations.ofForm(HohenheimViolations.text("instance_not_found")
                 .withArg("id", instanceId));
         }
         int serverId = ServerModel.canonicalServerId(row.get(InstanceModel.SERVER_ID));
@@ -718,7 +717,7 @@ public final class InstanceService {
             return;
         }
         if (!(resolved.runtime() instanceof FileStagingSupport staging)) {
-            throw Violations.ofForm(violationText("files_unsupported")
+            throw Violations.ofForm(HohenheimViolations.text("files_unsupported")
                 .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME))));
         }
         List<FileStagingSupport.StagedFile> staged = new ArrayList<>();
@@ -766,7 +765,6 @@ public final class InstanceService {
                            @NonNull Map<String, Object> settings) {}
 
     // -- interrupted capture/restore recovery ---------------------------------------
-
 
     /**
      * Boot recovery: settle every instance a killed controller left {@code capturing} or
@@ -895,7 +893,7 @@ public final class InstanceService {
         // Trashed included: removing a destroyed record's data is this verb's whole point.
         Row row = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
         if (row == null) {
-            throw Violations.ofForm(violationText("instance_not_found")
+            throw Violations.ofForm(HohenheimViolations.text("instance_not_found")
                 .withArg("id", instanceId));
         }
         String serverName = ServerModel.nameOf(
@@ -944,13 +942,12 @@ public final class InstanceService {
             return List.of();
         }
         int instanceId = row.get(InstanceModel.ID);
-        Map<String, Object> settings = row.get(InstanceModel.SETTINGS) instanceof Map<?, ?> map
-            ? castSettings(map) : Map.of();
+        Map<String, Object> settings = InstanceModel.settingsOf(row);
         InstanceSpec spec = handler.specFor(instanceId, settings);
         try {
             volumes.removeVolumesForRestore(spec, logical, logical.keySet());
         } catch (IOException e) {
-            throw refusal("instance_data_destroy_failed", row, e);
+            throw HohenheimViolations.instanceRefusal("instance_data_destroy_failed", row, e);
         }
         return new ArrayList<>(spec.volumes().keySet());
     }
@@ -1013,17 +1010,16 @@ public final class InstanceService {
     public Resolved resolve(int instanceId) {
         Row row = Models.get(InstanceModel.class).findById(instanceId);
         if (row == null) {
-            throw Violations.ofForm(violationText("instance_not_found")
+            throw Violations.ofForm(HohenheimViolations.text("instance_not_found")
                 .withArg("id", instanceId));
         }
         InstanceKindHandler handler = InstanceKinds.getHandler(row.get(InstanceModel.KIND));
         if (handler == null) {
             throw Violations.ofField("kind", row.get(InstanceModel.KIND),
-                violationText("instance_kind_unknown")
+                HohenheimViolations.text("instance_kind_unknown")
                     .withArg("kind", String.valueOf((Object) row.get(InstanceModel.KIND))));
         }
-        Map<String, Object> settings = row.get(InstanceModel.SETTINGS) instanceof Map<?, ?> map
-            ? castSettings(map) : Map.of();
+        Map<String, Object> settings = InstanceModel.settingsOf(row);
         InstanceVariables instanceVariables = new InstanceVariables();
         Map<String, String> declared = instanceVariables.valuesFor(instanceId);
         // An attached managed database's connection family is DERIVED here, at resolve
@@ -1037,7 +1033,7 @@ public final class InstanceService {
         settings = instanceVariables.applyToSettings(settings, declared, derived);
         InstanceSpec spec = handler.specFor(instanceId, settings);
         if (spec.image().isBlank() && !handler.allowsBlankImage(settings)) {
-            throw Violations.ofField("settings.image", "", violationText("instance_image_required"));
+            throw Violations.ofField("settings.image", "", HohenheimViolations.text("instance_image_required"));
         }
         // The record's pinned resolved image identity rides the spec: a driver that
         // resolves by fingerprint recreates an ABSENT workload from the pin, never by
@@ -1087,25 +1083,9 @@ public final class InstanceService {
         } catch (Violations alreadyNamed) {
             throw alreadyNamed;
         } catch (RuntimeException unaddressable) {
-            throw Violations.ofForm(violationText("instance_host_unreachable")
+            throw Violations.ofForm(HohenheimViolations.text("instance_host_unreachable")
                 .withArg("name", serverName)
-                .withArg("reason", unaddressable.getMessage() != null
-                    ? unaddressable.getMessage() : unaddressable.toString()));
+                .withArg("reason", HohenheimViolations.reasonOf(unaddressable)));
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> castSettings(Map<?, ?> map) {
-        return (Map<String, Object>) map;
-    }
-
-    private static Violations refusal(String key, Row row, IOException cause) {
-        return Violations.ofForm(violationText(key)
-            .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME)))
-            .withArg("reason", cause.getMessage() != null ? cause.getMessage() : cause.toString()));
-    }
-
-    private static Microcopy violationText(String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
     }
 }

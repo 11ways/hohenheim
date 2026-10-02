@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.preview;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.server.quota.ChargedDimension;
@@ -7,7 +8,6 @@ import be.elevenways.hohenheim.server.quota.ChargedModel;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.server.quota.OwnerDimension;
 import be.elevenways.hohenheim.server.quota.OwnerQuota;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -75,12 +75,11 @@ public final class PreviewQuota {
         if (!(applicationId instanceof Number number)) {
             throw Violations.ofField(PreviewDeploymentModel.APPLICATION_ID.getName(),
                 applicationId,
-                Microcopy.of("preview_application_required").withFilter("scope", "violations"));
+                HohenheimViolations.text("preview_application_required"));
         }
         String pack = OwnerQuota.currentOwnerPack(InstanceModel.MODEL_ID, number.intValue());
         if (pack == null) {
-            throw Violations.ofForm(Microcopy.of("preview_owner_unreadable")
-                .withFilter("scope", "violations"));
+            throw Violations.ofForm(HohenheimViolations.text("preview_owner_unreadable"));
         }
         return pack;
     }

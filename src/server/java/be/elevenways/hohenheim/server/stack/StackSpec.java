@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.server.stack;
 
+import be.elevenways.zenit.common.text.Texts;
+import be.elevenways.hohenheim.server.util.EnvVars;
+import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
@@ -74,23 +77,23 @@ public record StackSpec(
                                          @NonNull List<?> dependsOn, @NonNull List<?> files) {
             return new ServiceSpec(
                 serviceId,
-                stringOr(field.apply(StackServiceModel.NAME.getName()), ""),
-                stringOr(field.apply(StackServiceModel.IMAGE.getName()), ""),
-                stringList(field.apply(StackServiceModel.COMMAND.getName())),
-                stringMap(field.apply(StackServiceModel.ENVIRONMENT.getName())),
+                Texts.orIfBlank(field.apply(StackServiceModel.NAME.getName()), ""),
+                Texts.orIfBlank(field.apply(StackServiceModel.IMAGE.getName()), ""),
+                PrimitiveCoercion.toTextList(field.apply(StackServiceModel.COMMAND.getName())),
+                Map.copyOf(EnvVars.toMap(field.apply(StackServiceModel.ENVIRONMENT.getName()))),
                 readAll(mounts, MountSpec::read), readAll(ports, PortSpec::read),
                 readAll(dependsOn, DependsSpec::read), readAll(files, FileSpec::read),
-                blankToNull(field.apply(StackServiceModel.HEALTH_CMD.getName())),
+                Texts.blankAsNull(field.apply(StackServiceModel.HEALTH_CMD.getName())),
                 intOr(field.apply(StackServiceModel.HEALTH_INTERVAL_SECONDS.getName()), 10),
                 intOr(field.apply(StackServiceModel.HEALTH_TIMEOUT_SECONDS.getName()), 5),
                 intOr(field.apply(StackServiceModel.HEALTH_RETRIES.getName()), 5),
                 intOr(field.apply(StackServiceModel.HEALTH_START_PERIOD_SECONDS.getName()), 0),
-                stringOr(field.apply(StackServiceModel.RESTART_POLICY.getName()), "unless-stopped"),
+                Texts.orIfBlank(field.apply(StackServiceModel.RESTART_POLICY.getName()), "unless-stopped"),
                 field.apply(StackServiceModel.MEMORY_LIMIT_MB.getName()) instanceof Number memory
                     ? memory.intValue() : null,
                 field.apply(StackServiceModel.CPU_LIMIT.getName()) instanceof Number cpu
                     ? cpu.doubleValue() : null,
-                stringList(field.apply(StackServiceModel.CAPABILITIES.getName())));
+                PrimitiveCoercion.toTextList(field.apply(StackServiceModel.CAPABILITIES.getName())));
         }
 
         /** The snapshot shape {@link #read} revives. */
@@ -124,14 +127,14 @@ public record StackSpec(
 
         /** @return the mount a stored record or snapshot entry declares; null for an incomplete one */
         static @Nullable MountSpec read(@NonNull Function<String, Object> field) {
-            String name = stringOr(field.apply(StackServiceModel.MOUNT_NAME.getName()), "");
-            String path = stringOr(field.apply(StackServiceModel.MOUNT_PATH.getName()), "");
+            String name = Texts.orIfBlank(field.apply(StackServiceModel.MOUNT_NAME.getName()), "");
+            String path = Texts.orIfBlank(field.apply(StackServiceModel.MOUNT_PATH.getName()), "");
             if (name.isBlank() || path.isBlank()) {
                 return null;
             }
             return new MountSpec(
-                stringOr(field.apply(StackServiceModel.MOUNT_TYPE.getName()), StackServiceModel.MOUNT_VOLUME),
-                name, path, blankToNull(field.apply(StackServiceModel.MOUNT_EXTERNAL.getName())));
+                Texts.orIfBlank(field.apply(StackServiceModel.MOUNT_TYPE.getName()), StackServiceModel.MOUNT_VOLUME),
+                name, path, Texts.blankAsNull(field.apply(StackServiceModel.MOUNT_EXTERNAL.getName())));
         }
 
         /** Whether this mount is a named volume the stack MATERIALIZES (not tmpfs, not adopted). */
@@ -165,8 +168,8 @@ public record StackSpec(
                 return null;
             }
             return new PortSpec(container.intValue(), host.intValue(),
-                stringOr(field.apply(StackServiceModel.PORT_PROTOCOL.getName()), "tcp"),
-                stringOr(field.apply(StackServiceModel.PORT_HOST_IP.getName()), ""));
+                Texts.orIfBlank(field.apply(StackServiceModel.PORT_PROTOCOL.getName()), "tcp"),
+                Texts.orIfBlank(field.apply(StackServiceModel.PORT_HOST_IP.getName()), ""));
         }
 
         @NonNull Map<String, Object> toMap() {
@@ -184,11 +187,11 @@ public record StackSpec(
 
         /** @return the dependency a stored record or snapshot entry declares; null without a target */
         static @Nullable DependsSpec read(@NonNull Function<String, Object> field) {
-            String target = stringOr(field.apply(StackServiceModel.DEPENDS_SERVICE.getName()), "");
+            String target = Texts.orIfBlank(field.apply(StackServiceModel.DEPENDS_SERVICE.getName()), "");
             if (target.isBlank()) {
                 return null;
             }
-            return new DependsSpec(target, stringOr(
+            return new DependsSpec(target, Texts.orIfBlank(
                 field.apply(StackServiceModel.DEPENDS_CONDITION.getName()),
                 StackServiceModel.CONDITION_STARTED));
         }
@@ -206,13 +209,13 @@ public record StackSpec(
 
         /** @return the file a stored record or snapshot entry declares; null without a path */
         static @Nullable FileSpec read(@NonNull Function<String, Object> field) {
-            String path = stringOr(field.apply(StackFileModel.CONTAINER_PATH.getName()), "");
+            String path = Texts.orIfBlank(field.apply(StackFileModel.CONTAINER_PATH.getName()), "");
             if (path.isBlank()) {
                 return null;
             }
             return new FileSpec(path,
-                stringOr(field.apply(StackFileModel.CONTENT.getName()), ""),
-                stringOr(field.apply(StackFileModel.MODE.getName()), "0644"));
+                Texts.orIfBlank(field.apply(StackFileModel.CONTENT.getName()), ""),
+                Texts.orIfBlank(field.apply(StackFileModel.MODE.getName()), "0644"));
         }
 
         @NonNull Map<String, Object> toMap() {
@@ -257,9 +260,9 @@ public record StackSpec(
             stackId,
             stack.get(StackModel.NAME),
             ServerModel.nameOf(stack.get(StackModel.SERVER_ID)),
-            blankToNull(stack.get(StackModel.REGISTRY_SERVER)),
-            blankToNull(stack.get(StackModel.REGISTRY_USER)),
-            blankToNull(stack.get(StackModel.REGISTRY_PASSWORD)),
+            Texts.blankAsNull(stack.get(StackModel.REGISTRY_SERVER)),
+            Texts.blankAsNull(stack.get(StackModel.REGISTRY_USER)),
+            Texts.blankAsNull(stack.get(StackModel.REGISTRY_PASSWORD)),
             ordered ? topologicallySorted(services) : List.copyOf(services));
     }
 
@@ -379,11 +382,11 @@ public record StackSpec(
 
         return new StackSpec(
             intOr(root.get("stack_id"), 0),
-            stringOr(root.get("name"), ""),
-            stringOr(root.get("server_name"), "local"),
-            blankToNull(root.get("registry_server")),
-            blankToNull(root.get("registry_user")),
-            blankToNull(root.get("registry_password")),
+            Texts.orIfBlank(root.get("name"), ""),
+            Texts.orIfBlank(root.get("server_name"), "local"),
+            Texts.blankAsNull(root.get("registry_server")),
+            Texts.blankAsNull(root.get("registry_user")),
+            Texts.blankAsNull(root.get("registry_password")),
             List.copyOf(services));
     }
 
@@ -424,38 +427,6 @@ public record StackSpec(
 
     private static @NonNull List<?> listOf(@Nullable Object value) {
         return value instanceof List<?> list ? list : List.of();
-    }
-
-    private static @NonNull List<String> stringList(@Nullable Object value) {
-        List<String> strings = new ArrayList<>();
-        for (Object entry : listOf(value)) {
-            strings.add(String.valueOf(entry));
-        }
-        return List.copyOf(strings);
-    }
-
-    private static @NonNull Map<String, String> stringMap(@Nullable Object value) {
-        Map<String, String> strings = new LinkedHashMap<>();
-        if (value instanceof Map<?, ?> map) {
-            map.forEach((key, entry) -> strings.put(String.valueOf(key), String.valueOf(entry)));
-        }
-        return Map.copyOf(strings);
-    }
-
-    private static @Nullable String blankToNull(@Nullable Object value) {
-        if (value == null) {
-            return null;
-        }
-        String text = String.valueOf(value);
-        return text.isBlank() ? null : text;
-    }
-
-    private static @NonNull String stringOr(@Nullable Object value, @NonNull String fallback) {
-        if (value == null) {
-            return fallback;
-        }
-        String text = String.valueOf(value);
-        return text.isBlank() ? fallback : text;
     }
 
     private static int intOr(@Nullable Object value, int fallback) {

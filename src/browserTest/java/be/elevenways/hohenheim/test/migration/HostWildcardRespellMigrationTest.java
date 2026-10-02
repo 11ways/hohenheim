@@ -39,8 +39,9 @@ class HostWildcardRespellMigrationTest {
         // 1. The rows as the previous build stored them, in every shape its glob grammar admitted: a leading '*.'
         //    (one or more labels), a star run inside a label, an all-star first label that was NOT the special
         //    prefix (exactly one label), an all-star middle label, an exact host, a regex, a released one-or-more
-        //    claim; a row stored before hostnames were validated; and two equally specific wildcards that both match
-        //    a-bc.pair.respell.test, whose old tie order the new spelling would flip.
+        //    claim; a row stored before hostnames were validated, one naming a port no route hostname may carry; and
+        //    two equally specific wildcards that both match a-bc.pair.respell.test, whose old tie order the new
+        //    spelling would flip.
         int site = site(datasource, "m011-wildcards");
         int legacy = domain(datasource, site, "*.ok.respell.test", "wildcard");
         int starRun = domain(datasource, site, "a**.run.respell.test", "wildcard");
@@ -50,18 +51,22 @@ class HostWildcardRespellMigrationTest {
         int regex = domain(datasource, site, "^(.+)\\.rx\\.respell\\.test$", "regex");
         int released = released(datasource, site, "*.gone.respell.test");
         int unvalidated = domain(datasource, site, "bad_label.*.respell.test", "wildcard");
+        int ported = domain(datasource, site, "*.port.respell.test:443", "wildcard");
         int pairFirst = domain(datasource, site, "a**bc.pair.respell.test", "wildcard");
         int pairSecond = domain(datasource, site, "a*-*c.pair.respell.test", "wildcard");
 
         // 2. The step refuses what it cannot carry exactly, naming table, id, site, pattern and reason: the row the
-        //    grammar refuses, and both rows of the pair whose route order would change. Nothing else is listed.
+        //    grammar refuses, the row naming a port, and both rows of the pair whose route order would change.
+        //    Nothing else is listed.
         Throwable refusal = catchThrowable(() -> M011_ReviewHardening.respellHostWildcards(datasource));
         assertThat(refusal).as("step 2: the upgrade fails").isInstanceOf(IllegalStateException.class);
         assertThat(refusal.getMessage())
-            .as("step 2: exactly the three rows it cannot carry are listed")
-            .contains("3 stored host pattern(s)")
+            .as("step 2: exactly the four rows it cannot carry are listed")
+            .contains("4 stored host pattern(s)")
             .contains("site_domains #" + unvalidated + " (site " + site + "): 'bad_label.*.respell.test'")
             .contains("is not a label")
+            .contains("site_domains #" + ported + " (site " + site + "): '*.port.respell.test:443'")
+            .contains("names no port")
             .contains("site_domains #" + pairFirst + " (site " + site + "): 'a**bc.pair.respell.test'")
             .contains("site_domains #" + pairSecond + " (site " + site + "): 'a*-*c.pair.respell.test'")
             .contains("route order")
@@ -75,6 +80,7 @@ class HostWildcardRespellMigrationTest {
         // 4. The operator deletes the refused rows; every other legacy spelling becomes the HostPattern spelling of
         //    the very same hosts, its claim key with it; the exact host and the regex are untouched.
         delete(datasource, "site_domains", unvalidated);
+        delete(datasource, "site_domains", ported);
         delete(datasource, "site_domains", pairFirst);
         delete(datasource, "site_domains", pairSecond);
         M011_ReviewHardening.respellHostWildcards(datasource);

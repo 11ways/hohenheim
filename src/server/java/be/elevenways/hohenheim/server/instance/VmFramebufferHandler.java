@@ -195,10 +195,7 @@ public final class VmFramebufferHandler implements WebSocketHandler {
     /** Mid-session re-check of CONSOLE; a false return makes core close the socket 1008. */
     @Override
     public boolean revalidate() {
-        Principal principal = this.session.getPrincipal();
-        return principal != null && this.instanceId != null
-            && HohenheimAccess.hasInstanceCapability(
-                principal, this.instanceId, HohenheimAccess.CONSOLE);
+        return HohenheimAccess.sessionHoldsInstanceCapability(this.session, this.instanceId, HohenheimAccess.CONSOLE);
     }
 
     @Override

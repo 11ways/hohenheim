@@ -15,21 +15,8 @@ trap 'rm -rf "$WORK"' EXIT
 JAR="$WORK/hohenheim-server.jar"
 printf 'not really a jar\n' > "$JAR"
 
-PASSED=0
-FAILED=0
-
-ok() { PASSED=$((PASSED + 1)); printf 'ok   %s\n' "$1"; }
-no() { FAILED=$((FAILED + 1)); printf 'FAIL %s\n' "$1"; }
-
-# Asserts the plan contains (or, with -v, does not contain) a fixed string.
-expect() {
-    local label="$1" haystack="$2" needle="$3" mode="${4:-yes}"
-    if printf '%s' "$haystack" | /usr/bin/grep -qF -- "$needle"; then
-        [ "$mode" = "yes" ] && ok "$label" || no "$label (unexpected: $needle)"
-    else
-        [ "$mode" = "yes" ] && no "$label (missing: $needle)" || ok "$label"
-    fi
-}
+# shellcheck source=test-assert.sh
+. "$HERE/test-assert.sh"
 
 plan_of() {
     bash "$SCRIPT" --dry-run --jar "$JAR" "$@" 2>&1
@@ -155,5 +142,4 @@ else
     ok "dry run wrote nothing outside its plan"
 fi
 
-printf '\n%s passed, %s failed\n' "$PASSED" "$FAILED"
-[ "$FAILED" -eq 0 ]
+report

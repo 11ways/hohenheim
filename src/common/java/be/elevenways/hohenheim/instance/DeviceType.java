@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -99,7 +99,7 @@ public enum DeviceType {
         DeviceType type = parse(token);
         if (type == null) {
             throw Violations.ofField("type", token == null ? null : token.toString(),
-                Microcopy.of("device_type_unknown").withFilter("scope", "violations")
+                HohenheimViolations.text("device_type_unknown")
                     .withArg("type", String.valueOf(token)));
         }
         return type;

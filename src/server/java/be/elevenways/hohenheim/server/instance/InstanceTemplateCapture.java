@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -9,7 +10,6 @@ import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.ImageOrigin;
 import be.elevenways.hohenheim.server.runtime.ImagePublishSupport;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
@@ -65,13 +65,13 @@ public final class InstanceTemplateCapture {
         InstanceOperationGuard.requireOperable(resolved.row());
         if (!resolved.handler().supportsTemplateCapture()
                 || !(resolved.runtime() instanceof ImagePublishSupport publisher)) {
-            throw Violations.ofForm(violationText("template_capture_unsupported")
+            throw Violations.ofForm(HohenheimViolations.text("template_capture_unsupported")
                 .withArg("name", nameOf(resolved.row())));
         }
         if (!InstanceModel.STATUS_STOPPED.equals(resolved.row().get(InstanceModel.STATUS))) {
             // The DRIVER also refuses a non-stopped publish on daemon truth; this is the
             // record-status twin so the refusal happens before any status is stamped.
-            throw Violations.ofForm(violationText("template_capture_requires_stopped")
+            throw Violations.ofForm(HohenheimViolations.text("template_capture_requires_stopped")
                 .withArg("name", nameOf(resolved.row())));
         }
 
@@ -85,9 +85,9 @@ public final class InstanceTemplateCapture {
                 + "' (#" + instanceId + ")";
             publisher.publishImage(resolved.spec(), alias, description);
         } catch (IOException e) {
-            throw Violations.ofForm(violationText("template_capture_failed")
+            throw Violations.ofForm(HohenheimViolations.text("template_capture_failed")
                 .withArg("name", nameOf(resolved.row()))
-                .withArg("reason", e.getMessage() != null ? e.getMessage() : e.toString()));
+                .withArg("reason", HohenheimViolations.reasonOf(e)));
         } finally {
             // A publish READS the stopped workload and never changes it; both outcomes
             // settle the record back to the state the capture started from.
@@ -148,7 +148,4 @@ public final class InstanceTemplateCapture {
         return String.valueOf((Object) instance.get(InstanceModel.NAME));
     }
 
-    private static Microcopy violationText(String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
-    }
 }

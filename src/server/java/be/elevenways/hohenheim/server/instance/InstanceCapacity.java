@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.host.HostCapacityView;
@@ -9,7 +10,6 @@ import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.quota.ChargedDimension;
 import be.elevenways.hohenheim.server.quota.ChargedModel;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -232,14 +232,7 @@ public final class InstanceCapacity {
         if (handler == null) {
             return 0;
         }
-        return footprintMbOf(handler, settingsOf(instance));
-    }
-
-    /** The settings map of an instance row; a SchemaField answers Object. */
-    @SuppressWarnings("unchecked")
-    static @NonNull Map<String, Object> settingsOf(@NonNull Row instance) {
-        return instance.get(InstanceModel.SETTINGS) instanceof Map<?, ?> map
-            ? (Map<String, Object>) map : Map.of();
+        return footprintMbOf(handler, InstanceModel.settingsOf(instance));
     }
 
     /** The same derivation from a kind and its settings, before any record exists. */
@@ -281,8 +274,8 @@ public final class InstanceCapacity {
                 budget == null ? Long.MAX_VALUE
                     : bookableMbOn(serverId, budget) + pendingReleaseOn(serverId));
         } catch (QuotaExceeded full) {
-            throw Violations.ofForm(violation("host_capacity_reached")
-                .withArg("name", hostLabel(serverId))
+            throw Violations.ofForm(HohenheimViolations.text("host_capacity_reached")
+                .withArg("name", ServerModel.labelOf(serverId))
                 .withArg("needed", amountMb)
                 .withArg("free", Math.max(0, full.getLimit() - full.getUsed())));
         }
@@ -429,13 +422,6 @@ public final class InstanceCapacity {
         return bookedOf(stored);
     }
 
-    /** The host's name, or a bare id spelling -- the refusal path may never itself fail. */
-    public static @NonNull String hostLabel(int serverId) {
-        Row server = Models.get(ServerModel.class).findById(serverId);
-        String name = server != null ? server.get(ServerModel.NAME) : null;
-        return name != null ? name : "#" + serverId;
-    }
-
     // -- the dimension ----------------------------------------------------------
 
     /**
@@ -534,7 +520,7 @@ public final class InstanceCapacity {
         ChargedDimension.Charge held = HOST_MEMORY.held(stored);
         boolean moves = held == null ? claim != null : !held.sameBooking(claim);
         if (moves && InstanceModel.STATUS_MIGRATING.equals(stored.get(InstanceModel.STATUS))) {
-            throw Violations.ofForm(violation("instance_busy")
+            throw Violations.ofForm(HohenheimViolations.text("instance_busy")
                 .withArg("name", String.valueOf((Object) stored.get(InstanceModel.NAME)))
                 .withArg("status", InstanceModel.STATUS_MIGRATING));
         }
@@ -604,11 +590,7 @@ public final class InstanceCapacity {
         }
         Map<String, Object> settings =
             row.has(InstanceModel.SETTINGS.getName()) || stored == null
-                ? settingsOf(row) : settingsOf(stored);
+                ? InstanceModel.settingsOf(row) : InstanceModel.settingsOf(stored);
         return footprintMbOf(handler, settings);
-    }
-
-    private static Microcopy violation(String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
     }
 }

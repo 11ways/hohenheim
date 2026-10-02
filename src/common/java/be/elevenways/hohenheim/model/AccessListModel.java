@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -80,7 +81,7 @@ public class AccessListModel extends Model {
             // has exactly one declaring home (the SATISFY EnumField above).
             if (!SATISFY.isValidValue(satisfy)) {
                 throw Violations.ofField(SATISFY.getName(), satisfy,
-                    Microcopy.of("access_satisfy_invalid").withFilter("scope", "violations"));
+                    HohenheimViolations.text("access_satisfy_invalid"));
             }
         });
     }

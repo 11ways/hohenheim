@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.database;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
@@ -252,7 +253,7 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
         ManagedDatabase.Engine engine = ManagedDatabase.Engine.forToken(token);
         if (engine == null) {
             throw Violations.ofField("settings.engine", token,
-                Microcopy.of("database_engine_unknown").withFilter("scope", "violations")
+                HohenheimViolations.text("database_engine_unknown")
                     .withArg("engine", token));
         }
         return engine;

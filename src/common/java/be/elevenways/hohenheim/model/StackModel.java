@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -105,6 +104,9 @@ public class StackModel extends Model {
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
     static {
+        // Every stack save is ONE write transaction: the row write and whatever a save hook
+        // derives from it commit or fail together -- the SiteDomainModel/RouteClaims shape.
+        SCHEMA.saveAtomically();
         // A stack always has a concrete host: defaulting the FK at create time keeps
         // the port ledger's claim keys total (a null host would split the claim set).
         SCHEMA.addBeforeValidateHook(context -> {
@@ -121,16 +123,6 @@ public class StackModel extends Model {
         // no container runs on yet.
     }
 
-    /**
-     * Every stack save is ONE write transaction: the row write and whatever a save hook
-     * derives from it commit or fail together -- the SiteDomainModel/RouteClaims shape.
-     */
-    @Override
-    public Row save(Row row) {
-        Row[] result = new Row[1];
-        this.requireDatasource().withTransaction(tx -> result[0] = super.save(row));
-        return result[0];
-    }
 
     /** The stack with this unique name, or null if none. */
     public Row findByName(String name) {

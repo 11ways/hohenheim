@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.instance.StopKind;
@@ -247,8 +248,7 @@ public class InstanceTemplateModel extends Model {
             if (ReadinessKind.forToken(kind == null ? null : kind.toString())
                     != ReadinessKind.CONSOLE_LINE) {
                 throw Violations.ofField(READINESS_KIND.getName(), kind,
-                    Microcopy.of("readiness_line_needs_console_line")
-                        .withFilter("scope", "violations"));
+                    HohenheimViolations.text("readiness_line_needs_console_line"));
             }
         });
     }

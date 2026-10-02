@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.MigrationTargetView;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -101,7 +102,7 @@ public final class InstanceMigratePage implements SubmittableRecordScopedPage<Ro
         Integer parsed = CmsSupport.parsedInt(raw);
         if (parsed == null) {
             throw Violations.ofField(TARGET_FIELD, raw,
-                Microcopy.of("migrate_target_required").withFilter("scope", "violations"));
+                HohenheimViolations.text("migrate_target_required"));
         }
         int target = parsed;
         new InstanceMigrations().migrateTo(instanceId, target);

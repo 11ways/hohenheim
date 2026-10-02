@@ -21,6 +21,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * A single managed runtime unit (the instance tier's record): one container today,
@@ -154,6 +155,13 @@ public class InstanceModel extends Model {
             .schemaFrom("kind")
             .label(HohenheimFormCopy.label("settings"))
             .build());
+
+    /** @return the row's kind settings as they stand on it, empty when it carries none; never mutate the result */
+    @SuppressWarnings("unchecked")
+    public static @NonNull Map<String, Object> settingsOf(@Nullable Row instance) {
+        return instance != null && instance.get(SETTINGS) instanceof Map<?, ?> map
+            ? (Map<String, Object>) map : Map.of();
+    }
 
     // The host FK (servers.id). Every write folds through ServerModel.canonicalServerId
     // (the beforeValidate hook below) -- never a re-spelling; null means the local daemon.

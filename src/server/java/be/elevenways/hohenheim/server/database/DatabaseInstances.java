@@ -5,13 +5,13 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.instance.PlaintextEnvironments;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
@@ -27,7 +27,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -501,53 +500,8 @@ public final class DatabaseInstances {
      * @return how many engine instances were sealed in this pass
      */
     public static int sealPlaintextEnvironments() {
-        int sealed = 0;
-        for (Row instance : Models.get(InstanceModel.class).find().withTrashed()
-                .where(InstanceModel.KIND.eq(DatabaseContainerKind.ID.toString())).all()) {
-            Map<String, Object> settings = new LinkedHashMap<>();
-            if (instance.get(InstanceModel.SETTINGS) instanceof Map<?, ?> stored) {
-                stored.forEach((key, value) -> settings.put(String.valueOf(key), value));
-            }
-            Integer instanceId = instance.get(InstanceModel.ID);
-            if (instanceId == null
-                    || !settings.containsKey(DatabaseContainerKind.ENVIRONMENT_VARIABLES.getName())) {
-                continue;
-            }
-            String ownerToken = instance.get(InstanceModel.GENERATED_FOR_MODEL);
-            Identifier ownerModel = ownerToken == null ? null : Identifier.tryParse(ownerToken);
-            Integer ownerId = instance.get(InstanceModel.GENERATED_FOR_ID);
-            if (ownerModel == null || ownerId == null) {
-                Blast.log("DB-RUNTIME: engine instance", instanceId, "carries a plaintext"
-                    + " environment but names no owning database record; left for an operator");
-                continue;
-            }
-            try {
-                OwnedInstances.inScope(SOURCE, ownerModel, ownerId, () -> {
-                    InstanceVariables variables = new InstanceVariables();
-                    Map<String, String> environment =
-                        new LinkedHashMap<>(InstanceVariables.detachEnvironment(settings));
-                    environment.putAll(variables.valuesFor(instanceId));
-                    variables.storeSecretEnvironment(instanceId, environment);
-                    // Re-read right before the whole-row save: a save writes every column.
-                    Row fresh = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
-                    if (fresh != null) {
-                        fresh.set(InstanceModel.SETTINGS, settings);
-                        Models.get(InstanceModel.class).save(fresh);
-                    }
-                    return null;
-                });
-                sealed++;
-            } catch (Exception failed) {
-                Blast.log("DB-RUNTIME: could not move the plaintext environment of engine instance",
-                    instanceId, "into secret variables; retried at the next boot -",
-                    failed.getMessage());
-            }
-        }
-        if (sealed > 0) {
-            Blast.log("DB-RUNTIME: moved the plaintext environment of", sealed,
-                "database engine instance(s) into encrypted secret variables");
-        }
-        return sealed;
+        return PlaintextEnvironments.seal("DB-RUNTIME", "database engine instance(s)",
+            InstanceModel.KIND.eq(DatabaseContainerKind.ID.toString()), SOURCE, null, true);
     }
 
     /** The owner identity of a host, for callers that name it in a log or a refusal. */

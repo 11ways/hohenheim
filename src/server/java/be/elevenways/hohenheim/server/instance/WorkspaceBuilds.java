@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.build.BuildLog;
@@ -144,7 +145,7 @@ public final class WorkspaceBuilds {
         Map<String, Object> settings = resolved.settings();
 
         if (!SiteSources.hasRepository(settings)) {
-            throw Violations.ofForm(violation("source_no_repository"));
+            throw Violations.ofForm(HohenheimViolations.text("source_no_repository"));
         }
 
         String branch = ref != null && !ref.isBlank() ? ref : declaredBranch(settings);
@@ -252,16 +253,16 @@ public final class WorkspaceBuilds {
         String repository = boundUrl != null ? boundUrl : str(settings.get("repository_url"));
 
         if (repository.isEmpty()) {
-            throw Violations.ofForm(violation("source_no_repository"));
+            throw Violations.ofForm(HohenheimViolations.text("source_no_repository"));
         }
         // Both reach git's argv inside the container: a ref git would read as an option (or
         // that is no ref at all) and a transport helper URL (ext::) are refused before the
         // script exists, stored values from before the write gate included.
         if (!GitRefNames.isValid(ref)) {
-            throw Violations.ofForm(violation("source_ref_invalid"));
+            throw Violations.ofForm(HohenheimViolations.text("source_ref_invalid"));
         }
         if (!GitRepository.isSupportedCloneUrl(repository)) {
-            throw Violations.ofForm(violation("source_repository_url_refused"));
+            throw Violations.ofForm(HohenheimViolations.text("source_repository_url_refused"));
         }
 
         Map<String, String> credentials = Map.of();
@@ -271,7 +272,7 @@ public final class WorkspaceBuilds {
                 Map<String, String> env = GitProviders.credentialEnv(settings);
                 credentials = env == null ? Map.of() : env;
             } catch (IOException unavailable) {
-                throw Violations.ofForm(violation("source_checkout_failed")
+                throw Violations.ofForm(HohenheimViolations.text("source_checkout_failed")
                     .withArg("reason", String.valueOf(unavailable.getMessage())));
             }
         }
@@ -312,14 +313,14 @@ public final class WorkspaceBuilds {
         log.append(run.outputTail());
 
         if (!run.succeeded()) {
-            throw Violations.ofForm(violation("source_checkout_failed")
+            throw Violations.ofForm(HohenheimViolations.text("source_checkout_failed")
                 .withArg("reason", tail(run.outputTail())));
         }
 
         String commit = markedCommit(run.outputTail());
 
         if (commit.isBlank()) {
-            throw Violations.ofForm(violation("source_checkout_failed")
+            throw Violations.ofForm(HohenheimViolations.text("source_checkout_failed")
                 .withArg("reason", "no commit identity"));
         }
 
@@ -355,7 +356,7 @@ public final class WorkspaceBuilds {
         log.append(run.outputTail());
 
         if (!run.succeeded()) {
-            throw Violations.ofForm(violation("workspace_build_failed")
+            throw Violations.ofForm(HohenheimViolations.text("workspace_build_failed")
                 .withArg("reason", tail(run.outputTail())));
         }
 
@@ -375,13 +376,13 @@ public final class WorkspaceBuilds {
                                                   ExecSupport.@NonNull ExecOptions options,
                                                   long timeoutMs) {
         if (!(resolved.runtime() instanceof ExecSupport support)) {
-            throw Violations.ofForm(violation("exec_unsupported"));
+            throw Violations.ofForm(HohenheimViolations.text("exec_unsupported"));
         }
         try {
             return support.runExec(resolved.spec(), List.of("/bin/bash", "-lc", script),
                 options, timeoutMs);
         } catch (IOException failed) {
-            throw Violations.ofForm(violation("workspace_exec_failed")
+            throw Violations.ofForm(HohenheimViolations.text("workspace_exec_failed")
                 .withArg("reason", String.valueOf(failed.getMessage())));
         }
     }
@@ -444,7 +445,7 @@ public final class WorkspaceBuilds {
 
     private static void requireWorkspace(@NonNull Resolved resolved) {
         if (!WorkspaceKind.ID.equals(resolved.handler().typeId())) {
-            throw Violations.ofForm(violation("workspace_kind_required"));
+            throw Violations.ofForm(HohenheimViolations.text("workspace_kind_required"));
         }
     }
 
@@ -488,9 +489,6 @@ public final class WorkspaceBuilds {
             : trimmed.substring(trimmed.length() - 2000);
     }
 
-    private static @NonNull Microcopy violation(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
-    }
 
     private static @NonNull String str(@Nullable Object value) {
         return value == null ? "" : value.toString().trim();

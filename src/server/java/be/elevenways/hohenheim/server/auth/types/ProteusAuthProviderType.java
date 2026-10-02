@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.server.auth.types;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.server.auth.SiteAuthContext;
 import be.elevenways.hohenheim.server.auth.SiteAuthGate;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviderTypeHandler;
@@ -89,7 +88,7 @@ public class ProteusAuthProviderType implements SiteAuthProviderTypeHandler {
 
     @Override
     public SiteAuthGate createGate(SiteAuthContext context) {
-        Map<String, Object> config = configMap(context);
+        Map<String, Object> config = context.providerSettings();
         String endpoint = str(config.get(ENDPOINT));
         String realmClient = str(config.get(REALM_CLIENT));
         String accessKey = str(config.get(ACCESS_KEY));
@@ -111,12 +110,6 @@ public class ProteusAuthProviderType implements SiteAuthProviderTypeHandler {
             String.valueOf(context.providerId()), endpoint, realmClient);
         return new ProteusAuthGate(context, client, authenticator,
             (int) Math.min(ttl, Integer.MAX_VALUE), binding);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> configMap(SiteAuthContext context) {
-        Object raw = context.config().get(SiteAuthProviderModel.CONFIG);
-        return raw instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
     }
 
     private static String str(Object value) {

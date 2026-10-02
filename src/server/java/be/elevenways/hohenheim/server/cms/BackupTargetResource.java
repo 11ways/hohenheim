@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -91,8 +92,7 @@ public final class BackupTargetResource extends RowResource {
                     // escaping refusal would render as a generic failure instead.
                     return CmsActionResult.errorToast(
                         Microcopy.of("test_failed").withFilter("scope", "backup_target")
-                            .withArg("reason", unhealthy.getMessage() != null
-                                ? unhealthy.getMessage() : unhealthy.toString()));
+                            .withArg("reason", HohenheimViolations.reasonOf(unhealthy)));
                 }
                 return CmsActionResult.toast(
                     Microcopy.of("test_ok").withFilter("scope", "backup_target")

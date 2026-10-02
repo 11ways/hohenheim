@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
@@ -10,7 +11,6 @@ import be.elevenways.hohenheim.server.instance.variable.SecretVariableType;
 import be.elevenways.hohenheim.server.instance.variable.VariableTypeHandler;
 import be.elevenways.hohenheim.server.instance.variable.VariableTypes;
 import be.elevenways.hohenheim.server.util.EnvVars;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -93,16 +93,16 @@ public final class InstanceVariables {
         requireVariableAuthority(instanceId);
         if (key.isBlank()) {
             throw Violations.ofField("key", key,
-                Microcopy.of("variable_key_required").withFilter("scope", "violations"));
+                HohenheimViolations.text("variable_key_required"));
         }
         if ((instanceId == null) == (environmentId == null)) {
             throw Violations.ofField("environment_id", environmentId,
-                Microcopy.of("variable_one_owner").withFilter("scope", "violations"));
+                HohenheimViolations.text("variable_one_owner"));
         }
         VariableKind parsed = VariableKind.parse(kind);
         if (parsed == null) {
             throw Violations.ofField("kind", kind,
-                Microcopy.of("variable_kind_unknown").withFilter("scope", "violations")
+                HohenheimViolations.text("variable_kind_unknown")
                     .withArg("kind", kind));
         }
         boolean secret = parsed.isSecret();
@@ -127,6 +127,9 @@ public final class InstanceVariables {
         model.save(row);
     }
 
+    /** The settings key a generated record's environment travels under. */
+    public static final String ENVIRONMENT_SETTING = "environment_variables";
+
     /**
      * Take a generated record's {@code environment_variables} out of its settings map.
      *
@@ -139,7 +142,7 @@ public final class InstanceVariables {
      * @return the removed environment, empty when the settings carried none
      */
     public static @NonNull Map<String, String> detachEnvironment(@NonNull Map<String, Object> settings) {
-        return EnvVars.toMap(settings.remove("environment_variables"));
+        return EnvVars.toMap(settings.remove(ENVIRONMENT_SETTING));
     }
 
     /**
@@ -308,7 +311,7 @@ public final class InstanceVariables {
         Map<String, Object> applied = new LinkedHashMap<>(settings);
 
         Map<String, String> env = new LinkedHashMap<>(derived);
-        if (settings.get("environment_variables") instanceof Map<?, ?> baseline) {
+        if (settings.get(ENVIRONMENT_SETTING) instanceof Map<?, ?> baseline) {
             baseline.forEach((name, value) -> {
                 if (name != null && value != null) {
                     env.put(String.valueOf(name), String.valueOf(value));
@@ -316,7 +319,7 @@ public final class InstanceVariables {
             });
         }
         env.putAll(declared);
-        applied.put("environment_variables", env);
+        applied.put(ENVIRONMENT_SETTING, env);
 
         Map<String, String> substitutions = layered(derived, declared);
         if (settings.get("command") instanceof String command && !command.isEmpty()) {
@@ -370,7 +373,7 @@ public final class InstanceVariables {
         VariableTypeHandler handler = VariableTypes.getHandler(type);
         if (handler == null) {
             throw Violations.ofField("type", type,
-                Microcopy.of("variable_type_unknown").withFilter("scope", "violations")
+                HohenheimViolations.text("variable_type_unknown")
                     .withArg("type", String.valueOf(type)));
         }
         return handler;

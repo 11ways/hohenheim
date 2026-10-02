@@ -5,11 +5,11 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
 import be.elevenways.hohenheim.server.cms.InstanceFilesPage;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -219,7 +219,7 @@ public final class InstanceFileEndpoints {
                 yield HohenheimActivityAction.FILES_DELETE;
             }
             default -> throw Violations.ofForm(
-                Microcopy.of("files_unknown_action").withFilter("scope", "violations"));
+                HohenheimViolations.text("files_unknown_action"));
         };
     }
 
@@ -260,7 +260,7 @@ public final class InstanceFileEndpoints {
         DominoFile uploaded = uploadedFile(form);
         if (uploaded == null) {
             throw Violations.ofForm(
-                Microcopy.of("files_upload_missing").withFilter("scope", "violations"));
+                HohenheimViolations.text("files_upload_missing"));
         }
         return uploaded.getBytes();
     }

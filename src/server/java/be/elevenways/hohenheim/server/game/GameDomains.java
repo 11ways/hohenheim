@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.game;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.GameDomainModel;
@@ -28,7 +29,6 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.LinkNetworkSupport;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -156,8 +156,8 @@ public final class GameDomains {
             Object id = row.get(ServerModel.ID.getName());
             Row stored = id instanceof Integer serverId
                 ? Models.get(ServerModel.class).findById(serverId) : null;
-            boolean changed = addressDiffers(row, stored, ServerModel.PUBLIC_IPV4.getName())
-                || addressDiffers(row, stored, ServerModel.PUBLIC_IPV6.getName());
+            boolean changed = row.changes(ServerModel.PUBLIC_IPV4, stored)
+                || row.changes(ServerModel.PUBLIC_IPV6, stored);
             if (changed) {
                 context.setAttribute(SERVER_ADDRESS_CHANGED, Boolean.TRUE);
             }
@@ -176,14 +176,6 @@ public final class GameDomains {
 
     /** Context key the address-change before/after pairing hands its verdict over. */
     private static final String SERVER_ADDRESS_CHANGED = "hohenheim.game.server-address-changed";
-
-    private static boolean addressDiffers(@NonNull Row row, @Nullable Row stored,
-                                          @NonNull String field) {
-        if (!row.has(field)) {
-            return false;
-        }
-        return !Objects.equals(row.get(field), stored != null ? stored.get(field) : null);
-    }
 
     /**
      * Re-reconcile the generated DNS of every mapping whose PROXY runs on this host --
@@ -216,11 +208,11 @@ public final class GameDomains {
         Integer id = row.get(GameDomainModel.ID);
         Row stored = id != null ? model.findById(id) : null;
 
-        int siteDomainId = requireInt(effective(row, stored, GameDomainModel.SITE_DOMAIN_ID),
+        int siteDomainId = requireInt(row.afterWrite(GameDomainModel.SITE_DOMAIN_ID, stored),
             "site_domain_id");
-        int backendId = requireInt(effective(row, stored, GameDomainModel.BACKEND_INSTANCE_ID),
+        int backendId = requireInt(row.afterWrite(GameDomainModel.BACKEND_INSTANCE_ID, stored),
             "backend_instance_id");
-        int proxyId = requireInt(effective(row, stored, GameDomainModel.PROXY_INSTANCE_ID),
+        int proxyId = requireInt(row.afterWrite(GameDomainModel.PROXY_INSTANCE_ID, stored),
             "proxy_instance_id");
 
         Row domain = requireDomain(siteDomainId);
@@ -481,7 +473,7 @@ public final class GameDomains {
             throw refused;
         } catch (Exception e) {
             throw Violations.ofForm(CmsSupport.violationText("game_materialize_failed")
-                .withArg("reason", e.getMessage() != null ? e.getMessage() : e.toString()));
+                .withArg("reason", HohenheimViolations.reasonOf(e)));
         }
 
         pushFiles(proxyId, tolerateDaemonFailure);
@@ -498,7 +490,7 @@ public final class GameDomains {
         } catch (IOException | RuntimeException e) {
             if (!tolerateDaemonFailure) {
                 throw Violations.ofForm(CmsSupport.violationText("game_push_failed")
-                    .withArg("reason", e.getMessage() != null ? e.getMessage() : e.toString()));
+                    .withArg("reason", HohenheimViolations.reasonOf(e)));
             }
             Blast.log("GAME: could not push config files into instance", instanceId,
                 "-- they will land at the next deploy:", e.getMessage());
@@ -664,7 +656,7 @@ public final class GameDomains {
             throw refused;
         } catch (Exception e) {
             throw Violations.ofForm(CmsSupport.violationText("game_materialize_failed")
-                .withArg("reason", e.getMessage() != null ? e.getMessage() : e.toString()));
+                .withArg("reason", HohenheimViolations.reasonOf(e)));
         }
         bumpZones(touchedZones);
     }
@@ -723,7 +715,7 @@ public final class GameDomains {
             }
         } catch (IOException e) {
             throw Violations.ofForm(CmsSupport.violationText("game_link_failed")
-                .withArg("reason", e.getMessage() != null ? e.getMessage() : e.toString()));
+                .withArg("reason", HohenheimViolations.reasonOf(e)));
         }
         // AIDEV-NOTE: connecting a RUNNING container to another network makes Docker
         // re-allocate its ephemeral published host port (observed live: same PID, new
@@ -969,14 +961,6 @@ public final class GameDomains {
                 CmsSupport.violationText("game_instance_missing"));
         }
         return instance;
-    }
-
-    private static @Nullable Object effective(@NonNull Row row, @Nullable Row stored,
-                                              @NonNull Field<?, ?> field) {
-        if (row.has(field.getName())) {
-            return row.get(field.getName());
-        }
-        return stored != null ? stored.get(field.getName()) : null;
     }
 
     private static int requireInt(@Nullable Object value, @NonNull String fieldName) {

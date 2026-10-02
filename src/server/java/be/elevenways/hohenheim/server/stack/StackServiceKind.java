@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim.server.stack;
 
+import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
@@ -283,8 +285,8 @@ public final class StackServiceKind implements InstanceKindHandler {
         String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
         String name = str(settings.get(SERVICE_NAME.getName()));
 
-        List<String> command = stringList(settings.get(COMMAND.getName()));
-        List<String> capabilities = stringList(settings.get(CAPABILITIES.getName()));
+        List<String> command = PrimitiveCoercion.toTextList(settings.get(COMMAND.getName()));
+        List<String> capabilities = PrimitiveCoercion.toTextList(settings.get(CAPABILITIES.getName()));
 
         Map<String, String> volumes = new LinkedHashMap<>();
         EnvVars.toMap(settings.get(VOLUMES.getName())).forEach((volume, path) -> {
@@ -294,7 +296,7 @@ public final class StackServiceKind implements InstanceKindHandler {
         });
 
         Map<String, Long> tmpfs = new LinkedHashMap<>();
-        for (String path : stringList(settings.get(TMPFS_PATHS.getName()))) {
+        for (String path : PrimitiveCoercion.toTextList(settings.get(TMPFS_PATHS.getName()))) {
             if (!path.isBlank()) {
                 tmpfs.put(path, TMPFS_SIZE_BYTES);
             }
@@ -354,7 +356,7 @@ public final class StackServiceKind implements InstanceKindHandler {
                 publicExposure = false;
             } else {
                 throw Violations.ofField("settings.ports", hostIp,
-                    Microcopy.of("stack_port_bind_unsupported").withFilter("scope", "violations")
+                    HohenheimViolations.text("stack_port_bind_unsupported")
                         .withArg("service", service).withArg("address", hostIp));
             }
             String protocol = str(port.get(PORT_PROTOCOL.getName()));
@@ -363,16 +365,6 @@ public final class StackServiceKind implements InstanceKindHandler {
                 publicExposure, hostPort, null));
         }
         return List.copyOf(publications);
-    }
-
-    private static @NonNull List<String> stringList(@Nullable Object value) {
-        List<String> values = new ArrayList<>();
-        for (Object entry : listOf(value)) {
-            if (entry != null) {
-                values.add(String.valueOf(entry));
-            }
-        }
-        return values;
     }
 
     private static @NonNull List<?> listOf(@Nullable Object value) {

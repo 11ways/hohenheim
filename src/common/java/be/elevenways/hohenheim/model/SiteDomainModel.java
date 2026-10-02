@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.net.Hostnames;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -133,7 +134,7 @@ public class SiteDomainModel extends Model {
             default -> Hostnames.isValidLabelSequence(hostname);
         };
         if (!valid) {
-            throw violation(HOSTNAME.getName(), hostname, "hostname_invalid");
+            throw HohenheimViolations.ofField(HOSTNAME.getName(), hostname, "hostname_invalid");
         }
     }
 
@@ -261,6 +262,14 @@ public class SiteDomainModel extends Model {
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
     static {
+        // Every domain save is ONE write transaction: the route-conflict scan
+        // (beforeValidate), the live-route claim stamp (beforeWrite) and the row write
+        // commit or fail together.
+        //
+        // AIDEV-NOTE: this transaction IS the route invariant for overlapping listener
+        // sets -- see RouteClaims. Without it the scan is a read-then-write with a window,
+        // and this declaration is what makes Model.save open the transaction. Do not remove.
+        SCHEMA.saveAtomically();
         // The hostname is the human title (breadcrumbs, relation pickers) instead of "SiteDomain #id".
         SCHEMA.setDisplayFields(HOSTNAME);
         SCHEMA.addBeforeValidateHook(context -> {
@@ -297,22 +306,22 @@ public class SiteDomainModel extends Model {
     public static void validateTlsPassthroughValues(Row row) {
         String path = (String) effective(row, PATH);
         if (path != null && !path.isBlank() && !"/".equals(path.trim())) {
-            throw violation("path", path, "tls_passthrough_no_path");
+            throw HohenheimViolations.ofField("path", path, "tls_passthrough_no_path");
         }
         if (Boolean.TRUE.equals(effective(row, STRIP_PATH))) {
-            throw violation("strip_path", true, "tls_passthrough_no_http_options");
+            throw HohenheimViolations.ofField("strip_path", true, "tls_passthrough_no_http_options");
         }
         Object certificateId = effective(row, CERTIFICATE_ID);
         if (certificateId != null) {
-            throw violation("certificate_id", certificateId, "tls_passthrough_backend_certificate");
+            throw HohenheimViolations.ofField("certificate_id", certificateId, "tls_passthrough_backend_certificate");
         }
         if (Boolean.TRUE.equals(effective(row, HSTS_ENABLED))
                 || Boolean.TRUE.equals(effective(row, HSTS_SUBDOMAINS))) {
-            throw violation("hsts_enabled", effective(row, HSTS_ENABLED),
+            throw HohenheimViolations.ofField("hsts_enabled", effective(row, HSTS_ENABLED),
                 "tls_passthrough_no_http_options");
         }
         if (hasValues(effective(row, CUSTOM_HEADERS)) || hasValues(effective(row, RESPONSE_HEADERS))) {
-            throw violation("custom_headers", effective(row, CUSTOM_HEADERS),
+            throw HohenheimViolations.ofField("custom_headers", effective(row, CUSTOM_HEADERS),
                 "tls_passthrough_no_http_options");
         }
     }
@@ -333,27 +342,7 @@ public class SiteDomainModel extends Model {
         return value instanceof java.util.Map<?, ?> map && !map.isEmpty();
     }
 
-    private static Violations violation(String field, Object value, String key) {
-        return Violations.ofField(field, value,
-            Microcopy.of(key).withFilter("scope", "violations"));
-    }
 
-    /**
-     * Every domain save is ONE write transaction: the route-conflict scan
-     * (beforeValidate), the live-route claim stamp (beforeWrite) and the row write
-     * commit or fail together.
-     *
-     * AIDEV-NOTE: this transaction IS the route invariant for overlapping listener
-     * sets -- see RouteClaims. Without it the scan is a read-then-write with a window,
-     * and Model.save only wraps a transaction for revisionable schemas, which this
-     * model is not. Do not remove.
-     */
-    @Override
-    public Row save(@NonNull Row row) {
-        Row[] result = new Row[1];
-        this.requireDatasource().withTransaction(tx -> result[0] = super.save(row));
-        return result[0];
-    }
 
     public List<Row> findBySiteId(int siteId) {
         return find()
