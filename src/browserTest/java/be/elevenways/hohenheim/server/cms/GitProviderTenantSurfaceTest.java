@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.source.GitProviderOperationHandlers;
 import be.elevenways.hohenheim.server.source.GiteaProviderKind;
+import be.elevenways.hohenheim.source.GitProviderOperations;
 import be.elevenways.hohenheim.source.GitProviderOperations.ConnectionTest;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -19,6 +20,7 @@ import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.zenit.common.flash.FlashNotice;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -27,6 +29,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.net.http.HttpResponse;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -86,6 +89,56 @@ class GitProviderTenantSurfaceTest extends HohenheimTestBase {
         assertThat(((CmsActionResult.Toast) tenant).message())
             .as("step 3: the tenant toast is the generic sentence and nothing else")
             .isEqualTo(Microcopy.of("test_failed_generic").withFilter("scope", "git_provider"));
+    }
+
+    /**
+     * The connection test as a click posts it: the shared invoke route of each twin, the toast handed to the next page.
+     */
+    @Test
+    void theConnectionTestAnswersThroughEachTwinsInvokeRoute() throws Exception {
+        // 1. The tenant's own provider, whose endpoint refuses every connection, and an outsider holding nothing.
+        Row provider = provider(PREFIX + "invoked", "http://127.0.0.1:1", false);
+        int providerId = provider.get(GitProviderModel.ID);
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, GitProviderModel.MODEL_ID, providerId,
+            HohenheimAccess.MANAGE, true);
+        String route = "/" + HohenheimSlugs.GIT_PROVIDERS + "/invoke/"
+            + GitProviderOperations.TEST_CONNECTION.id().getNamespace() + "."
+            + GitProviderOperations.TEST_CONNECTION.id().getPath() + "?ids=" + providerId;
+        TestSession tenant = sessionFor(tenantId);
+        TestSession outsider = sessionFor(ApiSupport.user(PREFIX + "outsider@hohenheim.local", "Git Outsider"));
+
+        // 2. The operator twin runs the test and its toast names the client's own reason.
+        HttpResponse<String> operator = adminPostForm("/" + HohenheimSlugs.ADMIN + route, "");
+        assertThat(operator.statusCode()).as("step 2: the operator's click lands back on a page").isIn(302, 303);
+        FlashNotice operatorToast = popFlash(operator);
+        assertThat(operatorToast).as("step 2: the operator's click answers a toast").isNotNull();
+        assertThat(operatorToast.message().key())
+            .as("step 2: the detailed failure sentence").isEqualTo("test_failed");
+        assertThat(String.valueOf(operatorToast.message().args().get("reason")))
+            .as("step 2: carrying the client's reason").isNotBlank().isNotEqualTo("null");
+
+        // 3. The tenant twin runs the same operation and its toast is the generic sentence, nothing else.
+        HttpResponse<String> owner = httpPostForm("/" + HohenheimSlugs.MANAGE + route, "", tenant.token(),
+            tenant.csrf());
+        assertThat(owner.statusCode()).as("step 3: the tenant's click lands back on a page").isIn(302, 303);
+        FlashNotice tenantToast = popFlash(owner, tenant.token());
+        assertThat(tenantToast).as("step 3: the tenant's click answers a toast").isNotNull();
+        // The toast crossed the flash handoff, so it is compared by what a reader sees, not by identity.
+        assertThat(tenantToast.message().key())
+            .as("step 3: the generic sentence").isEqualTo("test_failed_generic");
+        assertThat(tenantToast.message().filters().get("scope"))
+            .as("step 3: of the git provider words").isEqualTo("git_provider");
+        assertThat(tenantToast.message().args().asMap())
+            .as("step 3: with no argument at all").isEmpty();
+
+        // 4. An outsider is refused on both panels and is handed no toast.
+        HttpResponse<String> intoAdmin = httpPostForm("/" + HohenheimSlugs.ADMIN + route, "", outsider.token(),
+            outsider.csrf());
+        assertThat(intoAdmin.statusCode()).as("step 4: the admin route refuses an outsider").isEqualTo(403);
+        HttpResponse<String> intoManage = httpPostForm("/" + HohenheimSlugs.MANAGE + route, "", outsider.token(),
+            outsider.csrf());
+        assertThat(intoManage.statusCode()).as("step 4: the /manage route refuses an outsider").isEqualTo(403);
+        assertThat(popFlash(intoManage, outsider.token())).as("step 4: and no toast waits for it").isNull();
     }
 
     /**
