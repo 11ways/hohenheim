@@ -9,6 +9,8 @@ import be.elevenways.spamservice.client.SpamserviceApiException;
 import be.elevenways.spamservice.client.SpamWordEntry;
 import be.elevenways.spamservice.client.SpamserviceClient;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import be.elevenways.zenit.cms.common.action.ActionContext;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.HeaderAction;
@@ -140,6 +142,19 @@ class SpamserviceCmsContractTest {
         assertThat(snapshot.settings().get("network.port").readOnly()).isTrue();
         assertThat(snapshot.settings().get("network.port").provenance()).isEqualTo("env:PORT");
         assertThat(snapshot.rootGroup().getChildGroup("scoring").getDefinition("threshold").isRestartRequired()).isTrue();
+
+        // The host owns group copy only: labels localize without changing remote definitions or snapshot facts.
+        var scoring = snapshot.rootGroup().getChildGroup("scoring");
+        assertThat(snapshot.rootGroup().displayLabel().key()).isEqualTo("settings.spamservice.label");
+        assertThat(scoring.displayLabel().key()).isEqualTo("settings.spamservice.scoring.label");
+        ShippedCatalogs catalogs = new ShippedCatalogs();
+        assertThat(scoring.displayLabel().resolve(LocaleChain.ofTags("en"), catalogs)).isEqualTo("Scoring");
+        assertThat(scoring.displayLabel().resolve(LocaleChain.ofTags("nl"), catalogs)).isEqualTo("Scoring");
+        assertThat(snapshot.rootGroup().getChildGroup("datasets").displayLabel().fallback())
+            .as("an unknown remote group retains its offered fallback title").isEqualTo("Datasets");
+        assertThat(scoring.getDefinition("threshold").getLabel()).isEqualTo("Threshold");
+        assertThat(scoring.getDefinition("threshold").getDescription()).isEqualTo("Cutoff");
+        assertThat(scoring.isAdvanced()).as("translated labels do not change remote grouping facts").isFalse();
 
         assertThat(backend.validate(new SettingsBackend.Patch("r1", List.of(
             SettingsBackend.Change.set("network.port", "9000")))))

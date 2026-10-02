@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim;
 
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.common.setting.SettingGroup;
 import be.elevenways.zenit.common.setting.SettingsRule;
@@ -28,7 +29,7 @@ public class HohenheimSettings {
     // The retired settings/hohenheim.dry is adopted into local.dry and HOHENHEIM__* refused
     // (HohenheimRetiredNames).
     public static final SettingGroup HOHENHEIM = Zenit.SETTINGS.createGroup("hohenheim")
-        .label("Hohenheim");
+        .label(Microcopy.of("settings.hohenheim.label"));
 
     // Nested groups below are force-loaded at compile time via @BlastAutoLoad
     // (loadInnerClasses=true): Protoblast's Gradle plugin emits a reference to
@@ -38,7 +39,7 @@ public class HohenheimSettings {
     // --- Proxy ---
     public abstract class Proxy {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("proxy")
-            .label("Proxy")
+            .label(Microcopy.of("settings.hohenheim.proxy.label"))
             .describe("The reverse-proxy listeners and routing behaviour")
             .icon("route");
 
@@ -197,7 +198,7 @@ public class HohenheimSettings {
     // until the restart the banner asks for.
     public abstract class Roles {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("roles")
-            .label("Install roles")
+            .label(Microcopy.of("settings.hohenheim.roles.label"))
             .describe("Which subsystems this installation runs; disabled roles do not start, "
                 + "declare no scheduled tasks and remove their admin surfaces")
             .icon("server");
@@ -247,7 +248,7 @@ public class HohenheimSettings {
     // --- SSL/TLS ---
     public abstract class Ssl {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("ssl")
-            .label("SSL / TLS")
+            .label(Microcopy.of("settings.hohenheim.ssl.label"))
             .describe("Automatic Let's Encrypt certificate issuance")
             .icon("lock");
 
@@ -296,7 +297,7 @@ public class HohenheimSettings {
     // --- Authoritative DNS ---
     public abstract class Dns {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("dns")
-            .label("DNS server")
+            .label(Microcopy.of("settings.hohenheim.dns.label"))
             .describe("Authoritative DNS for the zones Hohenheim hosts")
             .icon("sitemap");
 
@@ -383,7 +384,7 @@ public class HohenheimSettings {
     // wired to nothing, so it was removed to avoid misleading operators.
     public abstract class Logging {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("logging")
-            .label("Logging")
+            .label(Microcopy.of("settings.hohenheim.logging.label"))
             .describe("Access logging for proxied requests")
             .icon("align-left");
 
@@ -402,7 +403,7 @@ public class HohenheimSettings {
     // --- Storage ---
     public abstract class Storage {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("storage")
-            .label("Storage")
+            .label(Microcopy.of("settings.hohenheim.storage.label"))
             .describe("Filesystem locations for persistent data")
             .icon("folder");
 
@@ -458,7 +459,7 @@ public class HohenheimSettings {
     // --- Stacks ---
     public abstract class Stacks {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("stacks")
-            .label("Stacks")
+            .label(Microcopy.of("settings.hohenheim.stacks.label"))
             .describe("Managed Docker stacks and the disk they reclaim")
             .icon("cubes");
 
@@ -529,7 +530,7 @@ public class HohenheimSettings {
     // --- Database ---
     public abstract class Database {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("database")
-            .label("Database")
+            .label(Microcopy.of("settings.hohenheim.database.label"))
             .describe("Hohenheim's own database and managed-database backups")
             .icon("database");
 
@@ -599,7 +600,7 @@ public class HohenheimSettings {
     // --- Security ---
     public abstract class Security {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("security")
-            .label("Security")
+            .label(Microcopy.of("settings.hohenheim.security.label"))
             .describe("Container isolation, hostname-scan detection, native IP bans, "
                 + "spamservice reputation and the released-hostname quarantine")
             .icon("shield");
@@ -789,7 +790,7 @@ public class HohenheimSettings {
     // --- Managed processes ---
     public abstract class Process {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("process")
-            .label("Processes")
+            .label(Microcopy.of("settings.hohenheim.process.label"))
             .describe("Workload identity for managed child processes")
             .icon("terminal");
 
@@ -828,7 +829,7 @@ public class HohenheimSettings {
     // --- Proteus SSO (optional; password login is always available) ---
     public abstract class AuthProteus {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("auth_proteus")
-            .label("Proteus SSO")
+            .label(Microcopy.of("settings.hohenheim.auth_proteus.label"))
             .describe("Offer Proteus single sign-on next to password login")
             .icon("user");
 
@@ -864,7 +865,7 @@ public class HohenheimSettings {
     // --- Per-site proxy auth (gating proxied upstreams behind a provider) ---
     public abstract class ProxyAuth {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("proxy_auth")
-            .label("Proxy auth")
+            .label(Microcopy.of("settings.hohenheim.proxy_auth.label"))
             .describe("Sessions for auth-provider-gated proxied sites")
             .icon("id-badge");
 
@@ -893,7 +894,7 @@ public class HohenheimSettings {
     // --- Per-owner consumption caps (the reservation ledger's policy side) ---
     public abstract class Quota {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("quota")
-            .label("Quotas")
+            .label(Microcopy.of("settings.hohenheim.quota.label"))
             .describe("Per-owner caps on what tenants may consume; the atomic "
                 + "reservation ledger enforces them at write time")
             .icon("gauge");
@@ -968,7 +969,7 @@ public class HohenheimSettings {
     // --- Per-HOST memory capacity (the placement side of the same ledger) ---
     public abstract class Capacity {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("capacity")
-            .label("Host capacity")
+            .label(Microcopy.of("settings.hohenheim.capacity.label"))
             .describe("How much workload memory each host is allowed to carry; placement "
                 + "skips a host with no headroom or no recent reading, and the reservation "
                 + "ledger enforces the budget at write time")
@@ -1009,7 +1010,7 @@ public class HohenheimSettings {
     // --- Host health: what the stored heartbeat is allowed to be worth ---
     public abstract class Hosts {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("hosts")
-            .label("Host health")
+            .label(Microcopy.of("settings.hohenheim.hosts.label"))
             .describe("How long a host may go without answering before the control plane "
                 + "stops treating its stored state as current")
             .icon("heart-pulse");
@@ -1033,7 +1034,7 @@ public class HohenheimSettings {
     // --- Incus daemons shared with other controllers ---
     public abstract class Incus {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("incus")
-            .label("Incus hosts")
+            .label(Microcopy.of("settings.hohenheim.incus.label"))
             .describe("What this controller may do to the shared objects OTHER hohenheim "
                 + "controllers left on an Incus daemon it also uses")
             .icon("server");
@@ -1064,7 +1065,7 @@ public class HohenheimSettings {
     // --- Instance networking (public game-port pre-allocation) ---
     public abstract class Instances {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("instances")
-            .label("Instances")
+            .label(Microcopy.of("settings.hohenheim.instances.label"))
             .describe("Instance-tier runtime policy: the host-port window public/UDP "
                 + "publications pre-allocate from")
             .icon("box");
@@ -1119,7 +1120,7 @@ public class HohenheimSettings {
     // --- Sandboxed builders ---
     public abstract class Builds {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("builds")
-            .label("Builders")
+            .label(Microcopy.of("settings.hohenheim.builds.label"))
             .describe("The sandbox every tenant build runs in: builder image, and the "
                 + "CPU/memory/disk/time/PID quota one build may consume")
             .icon("hammer");
@@ -1247,7 +1248,7 @@ public class HohenheimSettings {
     // --- Health-gated releases ---
     public abstract class Releases {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("releases")
-            .label("Releases")
+            .label(Microcopy.of("settings.hohenheim.releases.label"))
             .describe("The health gate every Docker-site release passes before it may "
                 + "take traffic, and how long the superseded release drains before its stop")
             .icon("rocket");
@@ -1289,7 +1290,7 @@ public class HohenheimSettings {
     // --- Preview deployments ---
     public abstract class Previews {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("previews")
-            .label("Preview deployments")
+            .label(Microcopy.of("settings.hohenheim.previews.label"))
             .describe("Bounded-lifetime per-branch preview environments of git-sourced "
                 + "Docker sites, served on generated hostnames under one base domain")
             .icon("flask");
@@ -1323,7 +1324,7 @@ public class HohenheimSettings {
     // --- Instance file manager ---
     public abstract class Files {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("files")
-            .label("Instance files")
+            .label(Microcopy.of("settings.hohenheim.files.label"))
             .describe("Bounds on the per-instance file manager (browse, edit, upload, download)")
             .icon("folder-tree");
 
@@ -1348,7 +1349,7 @@ public class HohenheimSettings {
     // --- Instance snapshots and backups ---
     public abstract class Backup {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("backup")
-            .label("Instance backups")
+            .label(Microcopy.of("settings.hohenheim.backup.label"))
             .describe("Instance snapshots (host-local) and encrypted off-host backup exports")
             .icon("box-archive");
 
