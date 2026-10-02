@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.runtime.DeviceAttachSupport;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -33,6 +34,12 @@ import java.util.List;
  */
 public final class InstanceDevices {
 
+    /**
+     * THE capability every device operation demands on the device's instance; the write gate ({@link #target}) and
+     * the render faces below ask this one name.
+     */
+    private static final String DEVICE_CAPABILITY = HohenheimAccess.CONFIG;
+
     private final @NonNull InstanceService instances;
 
     public InstanceDevices() {
@@ -41,6 +48,25 @@ public final class InstanceDevices {
 
     public InstanceDevices(@NonNull InstanceService instances) {
         this.instances = instances;
+    }
+
+    /**
+     * The render face of the device write gate for one instance: whether an attach, resize or detach on it would pass
+     * the capability check every mutator makes first.
+     *
+     * AIDEV-NOTE: rides the request memo ({@code reachesRecord}) because a list asks it per rendered row; the write
+     * gate keeps the fresh walk. Same capability, so the offer and the refusal cannot drift.
+     */
+    public static boolean mayChangeDevicesOf(@NonNull AccessContext access, @Nullable Integer instanceId) {
+        return HohenheimAccess.reachesRecord(access, InstanceModel.MODEL_ID, instanceId, DEVICE_CAPABILITY);
+    }
+
+    /**
+     * The record-less render face of the device write gate: whether the principal could attach a device to ANY
+     * instance, which is what a create offered without a target instance asks.
+     */
+    public static boolean mayChangeAnyDevices(@NonNull AccessContext access) {
+        return HohenheimAccess.reachesAny(access, InstanceModel.MODEL_ID, DEVICE_CAPABILITY);
     }
 
     /**
@@ -292,7 +318,7 @@ public final class InstanceDevices {
      * attaches devices, and this controller's fence on its host.
      */
     private @NonNull Target target(int instanceId) {
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
+        HohenheimAccess.requireOperationCapability(instanceId, DEVICE_CAPABILITY);
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
         DeviceAttachSupport support = requireSupport(resolved);

@@ -576,6 +576,10 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             .as("step 3: a view-only delegate is offered no edit affordance").isFalse();
         assertThat(resource.deletableBy(row, viewer))
             .as("step 3: nor a detach button that could only be refused").isFalse();
+        assertThat(resource.creatableBy(viewer))
+            .as("step 3: nor an attach (create) affordance: every attach it could submit is refused by the"
+                + " mutator gate with instance_not_permitted (pinned by the authorization journey)")
+            .isFalse();
 
         // 4. And they are OFFERED to the config holder, so step 3 measured AUTHORITY and
         //    not a surface that refuses everyone -- the way an untested gate rots.
@@ -585,6 +589,8 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             .as("step 4: a config holder keeps its edit affordance").isTrue();
         assertThat(resource.deletableBy(row, operator))
             .as("step 4: and its detach button").isTrue();
+        assertThat(resource.creatableBy(operator))
+            .as("step 4: and its attach affordance").isTrue();
 
         // 5. Revoking the capability takes the affordances away again, so the answer
         //    tracks the live grant graph rather than anything cached at wiring time.
