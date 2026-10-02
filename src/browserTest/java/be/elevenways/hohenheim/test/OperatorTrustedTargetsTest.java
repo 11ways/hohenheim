@@ -14,6 +14,8 @@ import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.context.SaveToDatasource;
+import be.elevenways.zenit.common.orm.model.GlobalModelHooks;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -23,6 +25,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.List;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -188,6 +192,168 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId, HohenheimAccess.MANAGE);
             HardDeletes.byId(sites, siteId);
         }
+    }
+
+    @Test
+    void mapConstructedTargetUsesActualChangesJourney() {
+        Model providers = Models.get(GitProviderModel.class);
+        int id = provider("map-target-provenance");
+        int admin = ApiSupport.user("map-target-admin@hohenheim.local", "Map Delegate");
+        GrantService.createDirectGrant(GrantSubjectType.USER, admin, HohenheimSources.ADMIN_ACCESS.value(), true);
+        UserPrincipal delegated = new UserPrincipal(admin, "Map Delegate");
+        try {
+            RecordGrants.grant(GrantSubjectType.USER, admin, GitProviderModel.MODEL_ID, id, HohenheimAccess.MANAGE, true);
+            assertThat(write(delegated, providers, id, GitProviderModel.BASE_URL, "https://delegate.example.test")).isNull();
+            assertThat(providers.findById(id).get(GitProviderModel.TARGET_TRUSTED)).isEqualTo(false);
+            RecordGrants.revoke(GrantSubjectType.USER, admin, GitProviderModel.MODEL_ID, id, HohenheimAccess.MANAGE);
+            // 1. An operator changes a target through a map row, with no setter history.
+            Row mapped = new Row(new LinkedHashMap<>(Map.of("id", id, "base_url", "https://map.example.test")), providers);
+            assertThat(mapped.isWritten(GitProviderModel.BASE_URL)).as("step 1: no setter history").isFalse();
+            TenantConduits.as(operator(), () -> providers.save(mapped));
+            assertThat(providers.findById(id).get(GitProviderModel.TARGET_TRUSTED))
+                .as("step 1: the changed target was vouched for by the operator").isEqualTo(true);
+
+            // 2. A delegate cannot exploit the same map-constructor path on an operator-owned target.
+            Row attempted = new Row(new LinkedHashMap<>(Map.of("id", id, "base_url", "http://127.0.0.1")), providers);
+            assertThat(catchThrowable(() -> TenantConduits.as(new UserPrincipal(admin, "Map Delegate"),
+                () -> providers.save(attempted)))).as("step 2: actual change cannot bypass authority")
+                .isInstanceOf(Violations.class);
+            assertThat(providers.findById(id).get(GitProviderModel.BASE_URL))
+                .as("step 2: refused target stayed stored").isEqualTo("https://map.example.test");
+        } finally {
+            RecordGrants.revoke(GrantSubjectType.USER, admin, GitProviderModel.MODEL_ID, id, HohenheimAccess.MANAGE);
+            HardDeletes.byId(providers, id);
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void inPlaceSettingsChangeUsesActualChangesJourney() {
+        Model sites = Models.get(SiteModel.class);
+        int id = site("in-place-target-provenance");
+        int tenant = ApiSupport.user("in-place-owner@hohenheim.local", "In-place Owner");
+        int admin = ApiSupport.user("in-place-admin@hohenheim.local", "In-place Delegate");
+        GrantService.createDirectGrant(GrantSubjectType.USER, admin, HohenheimSources.ADMIN_ACCESS.value(), true);
+        UserPrincipal delegated = new UserPrincipal(admin, "In-place Delegate");
+        try {
+            // 1. The delegate's tenant-owned target clears provenance.
+            RecordGrants.grant(GrantSubjectType.USER, tenant, SiteModel.MODEL_ID, id, HohenheimAccess.MANAGE, true);
+            assertThat(write(delegated, sites, id, SiteModel.SETTINGS, forward("203.0.113.21"))).isNull();
+            assertThat(trusted(id)).as("step 1: initially untrusted").isFalse();
+            RecordGrants.revoke(GrantSubjectType.USER, tenant, SiteModel.MODEL_ID, id, HohenheimAccess.MANAGE);
+
+            // 2. Mutating the loaded map bypasses setters but not the operator's actual-change vouch.
+            Row row = sites.findById(id);
+            ((Map<String, Object>) row.get("settings")).put("forward_host", "127.0.0.8");
+            assertThat(row.isWritten(SiteModel.SETTINGS)).as("step 2: no settings setter").isFalse();
+            TenantConduits.as(operator(), () -> sites.save(row));
+            assertThat(trusted(id)).as("step 2: changed map target is operator-vouched").isTrue();
+
+            // 3. The delegate's in-place change is refused too.
+            Row attempted = sites.findById(id);
+            ((Map<String, Object>) attempted.get("settings")).put("forward_host", "127.0.0.9");
+            assertThat(catchThrowable(() -> TenantConduits.as(delegated, () -> sites.save(attempted))))
+                .as("step 3: mutable map does not bypass the gate").isInstanceOf(Violations.class);
+            assertThat(forwardHost(id)).as("step 3: stored target is unchanged").isEqualTo("127.0.0.8");
+        } finally {
+            RecordGrants.revoke(GrantSubjectType.USER, tenant, SiteModel.MODEL_ID, id, HohenheimAccess.MANAGE);
+            HardDeletes.byId(sites, id);
+        }
+    }
+
+    @Test
+    void batchSaveThenNameOnlyDoesNotVouchJourney() {
+        Model sites = Models.get(SiteModel.class);
+        int id = site("batch-target-provenance");
+        int admin = ApiSupport.user("batch-target-admin@hohenheim.local", "Batch Delegate");
+        GrantService.createDirectGrant(GrantSubjectType.USER, admin, HohenheimSources.ADMIN_ACCESS.value(), true);
+        UserPrincipal delegated = new UserPrincipal(admin, "Batch Delegate");
+        try {
+            // 1. A tenant-owned target written by a delegate is untrusted, including through saveAll.
+            RecordGrants.grant(GrantSubjectType.USER, admin, SiteModel.MODEL_ID, id, HohenheimAccess.MANAGE, true);
+            Row row = sites.findById(id);
+            row.set(SiteModel.SETTINGS, forward("203.0.113.22"));
+            TenantConduits.as(delegated, () -> sites.saveAll(List.of(row)));
+            assertThat(trusted(id)).as("step 1: delegated batch target is untrusted").isFalse();
+            RecordGrants.revoke(GrantSubjectType.USER, admin, SiteModel.MODEL_ID, id, HohenheimAccess.MANAGE);
+
+            // 2. Reusing that row for an operator name-only save must not replay the earlier intent.
+            row.set(SiteModel.NAME, "batch-target-renamed");
+            TenantConduits.as(operator(), () -> sites.save(row));
+            assertThat(trusted(id)).as("step 2: name-only save does not vouch for the batch target").isFalse();
+        } finally {
+            RecordGrants.revoke(GrantSubjectType.USER, admin, SiteModel.MODEL_ID, id, HohenheimAccess.MANAGE);
+            HardDeletes.byId(sites, id);
+        }
+    }
+
+    @Test
+    void rollbackRetainsIntentAndCommitClearsItJourney() {
+        Model users = AuthModels.users();
+        int id = ApiSupport.user("rollback-intent@hohenheim.local", "Before rollback");
+        Row row = users.findById(id);
+        row.set(UserModel.DISPLAY_NAME, "Pending rollback");
+        // 1. An inner successful save cannot clear the outer transaction's intent on rollback.
+        assertThat(catchThrowable(() -> AuthModels.datasource().withTransaction(tx -> {
+            users.save(row);
+            throw new IllegalStateException("deliberate outer rollback");
+        }))).isInstanceOf(IllegalStateException.class);
+        assertThat(row.isWritten(UserModel.DISPLAY_NAME)).as("step 1: rollback retained intent").isTrue();
+        assertThat(users.findById(id).get(UserModel.DISPLAY_NAME)).as("step 1: storage rolled back")
+            .isEqualTo("Before rollback");
+        // 2. A subsequent outer commit clears precisely the persisted intent.
+        AuthModels.datasource().withTransaction(tx -> {
+            users.save(row);
+            assertThat(row.isWritten(UserModel.DISPLAY_NAME)).as("step 2: intent lives until outer commit").isTrue();
+        });
+        assertThat(row.isWritten(UserModel.DISPLAY_NAME)).as("step 2: commit completed intent").isFalse();
+    }
+
+    @Test
+    void upsertAndAfterSaveStagingCompleteOnlyPersistedIntentJourney() {
+        Model users = AuthModels.users();
+        int id = ApiSupport.user("after-save-intent@hohenheim.local", "Original");
+        Row row = users.findById(id);
+        // 1. Successful upsert and upsertAll complete the same lifetime as save.
+        row.set(UserModel.DISPLAY_NAME, "Upserted");
+        users.upsert(row);
+        assertThat(row.isWritten(UserModel.DISPLAY_NAME)).as("step 1: upsert completed intent").isFalse();
+        row.set(UserModel.DISPLAY_NAME, "Batch upserted");
+        users.upsertAll(List.of(row));
+        assertThat(row.isWritten(UserModel.DISPLAY_NAME)).as("step 1: upsertAll completed intent").isFalse();
+        // 1b. Insert-if-absent consumes intent only when a row was actually inserted.
+        Row inserted = users.createEmptyRow();
+        inserted.set(UserModel.ID, id + 1_000_000);
+        inserted.set(UserModel.EMAIL, "insert-intent@hohenheim.local");
+        inserted.set(UserModel.DISPLAY_NAME, "Inserted intent");
+        try {
+            assertThat(users.insertIfAbsent(inserted)).as("step 1b: inserted").isTrue();
+            assertThat(inserted.isWritten(UserModel.DISPLAY_NAME)).as("step 1b: insert completed intent").isFalse();
+            inserted.set(UserModel.DISPLAY_NAME, "Not inserted");
+            assertThat(users.insertIfAbsent(inserted)).as("step 1b: existing key was not overwritten").isFalse();
+            assertThat(inserted.isWritten(UserModel.DISPLAY_NAME)).as("step 1b: unapplied intent is retained").isTrue();
+        } finally {
+            HardDeletes.byId(users, id + 1_000_000);
+        }
+        // 2. An after-save hook's next write, even to the same field, remains staged after commit.
+        Consumer<SaveToDatasource> hook = context -> {
+            if (context.getRow() == row) {
+                row.set(UserModel.DISPLAY_NAME, "Staged after save");
+            }
+        };
+        GlobalModelHooks.addAfterSaveHook(hook);
+        try {
+            row.set(UserModel.DISPLAY_NAME, "Persisted before hook");
+            users.save(row);
+            assertThat(users.findById(id).get(UserModel.DISPLAY_NAME)).as("step 2: hook value was not persisted")
+                .isEqualTo("Persisted before hook");
+            assertThat(row.isWritten(UserModel.DISPLAY_NAME)).as("step 2: after-save staged intent survives").isTrue();
+        } finally {
+            GlobalModelHooks.removeAfterSaveHook(hook);
+        }
+        // 3. Persist that staged field normally, then its intent is complete.
+        users.save(row);
+        assertThat(row.isWritten(UserModel.DISPLAY_NAME)).as("step 3: staged value finally persisted").isFalse();
     }
 
     private static boolean trusted(int siteId) {
