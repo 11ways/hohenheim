@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.AdminActivityResource;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelPeer;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
@@ -16,6 +17,8 @@ import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.ZenitPrincipalKind;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
@@ -48,6 +51,31 @@ class AdminActivityListTest extends HohenheimTestBase {
     private static final String UNLINKABLE_RECORD_ID = "4244";
     private static final String NARROWED_RECORD_ID = "918273";
     private static final String SITE_RECORD_ID = "4246";
+
+    @Test
+    void systemActivityNamesTheSystemRatherThanAccountOne() throws Exception {
+        String record = "hh-system-actor-no-account-one";
+        write(ServerModel.MODEL_ID.toString(), record, record, "updated", Accountability.ORIGIN_SYSTEM,
+            Instant.parse("2999-01-02T00:00:00Z"));
+        Row row = rowFor(record);
+        row.set(ActivityModel.ACTOR, "1");
+        row.set(ActivityModel.ACTOR_KIND, ZenitPrincipalKind.SYSTEM.id().toString());
+        row.set(ActivityModel.ACTOR_LABEL, "work wait sweep");
+        new ActivityModel().save(row);
+
+        // 1. The host preserves the core projection instead of resolving system id 1 as a user.
+        AdminActivityResource resource = adminActivityResource();
+        Object cell = resource.cellValue(row, column(resource, ActivityModel.ACTOR.getName()));
+        assertThat(cell).as("step 1: the localized core actor name is preserved").isInstanceOf(Microcopy.class);
+        assertThat(((Microcopy) cell).resolve(LocaleChain.ofTags("en"), new ShippedCatalogs()))
+            .as("step 1: system work is not account #1").isEqualTo("System");
+
+        // 2. The live admin list carries that name and never the internal reason.
+        HttpResponse<String> response = adminGet("/admin/activity?filter.origin=system&filter.record_id=" + record);
+        assertThat(response.statusCode()).as("step 2: system activity renders").isEqualTo(200);
+        assertThat(response.body()).as("step 2: the system row has its public name")
+            .contains(record, "System").doesNotContain("work wait sweep");
+    }
 
     @Test
     void activityListJourney() throws Exception {
