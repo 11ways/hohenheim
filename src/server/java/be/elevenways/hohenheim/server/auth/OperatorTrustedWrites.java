@@ -143,15 +143,15 @@ public final class OperatorTrustedWrites {
         boolean carried = false;
         boolean changed = false;
         for (Target target : guarded.targets()) {
-            // A create presents every value it holds; an update carries only what this write set, never a column it
-            // merely loaded (an inline cell edit of a name vouches for no target).
-            if (stored == null ? !row.has(target.column()) : !row.isWritten(target.column())) {
+            // AIDEV-NOTE: actual stored-vs-new changes must be judged even without setter history (map rows and
+            // in-place settings edits). Intent additionally lets the operator vouch for an unchanged submitted target.
+            if (!row.has(target.column())) {
                 continue;
             }
-            carried = true;
+            boolean targetChanged = row.changes(target.column(), stored, target.value(), target.createBaseline());
+            carried |= stored == null || row.isWritten(target.column()) || targetChanged;
             Object value = target.value().apply(row);
-            Object baseline = stored != null ? target.value().apply(stored) : target.createBaseline();
-            if (Objects.equals(value, baseline)) {
+            if (!targetChanged) {
                 continue;
             }
             changed = true;
