@@ -9,6 +9,7 @@ import be.elevenways.protoblast.common.util.BlastLog;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.validation.PrivateNetworkOptIn;
 import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import be.elevenways.zenit.test.support.OutboundFixture;
 import org.junit.jupiter.api.AfterEach;
@@ -145,5 +146,22 @@ class ProteusRealmGuardTest {
         } finally {
             BlastLog.setLogSink(previous);
         }
+    }
+
+    /**
+     * The opt-in moved onto core's PrivateNetworkOptIn with its key, default and description unchanged, and still no
+     * label of its own.
+     */
+    @Test
+    void theOptInKeepsItsKeyDefaultAndTextWithNoLabelOfItsOwn() {
+        var optIn = HohenheimSettings.ProxyAuth.PROTEUS_ALLOW_PRIVATE_NETWORKS;
+        assertThat(PrivateNetworkOptIn.isDeclared(optIn)).as("declared through the core helper").isTrue();
+        assertThat(optIn.getPath()).as("the stored key")
+            .isEqualTo("hohenheim.proxy_auth.proteus_allow_private_networks");
+        assertThat(optIn.getDefaultValue()).as("default off").isEqualTo(Boolean.FALSE);
+        assertThat(optIn.getLabel()).as("no label of its own: the page keeps its fallback name").isNull();
+        assertThat(optIn.getDescription()).as("the description").isEqualTo("Allow site auth providers to reach a"
+            + " Proteus realm on a private network (RFC 1918, IPv6 unique-local); this host, link-local and"
+            + " special-purpose addresses stay refused");
     }
 }

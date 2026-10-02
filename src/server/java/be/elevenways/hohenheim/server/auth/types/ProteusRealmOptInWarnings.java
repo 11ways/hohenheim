@@ -28,8 +28,9 @@ import java.util.concurrent.CompletableFuture;
  * AIDEV-NOTE: since provider realms ride the public-internet guard, such a provider fails closed (its gate cannot log
  * anyone in); on a live upgrade that must never be silent. The wording is core's
  * {@link OutboundUrlGuard#warnIfAwaitingOptIn}; a loopback or link-local realm gets no warning because no setting
- * admits it. The proxy boot never waits on DNS: the startup scan is a background {@link JobRunner} job, and the
- * save-time check waits at most {@link OutboundUrlGuard#OPT_IN_CHECK_TIMEOUT} before logging "could not check".
+ * admits it. The proxy boot never waits on DNS: the startup scan is a background {@link JobRunner} job, and the scan
+ * and a save check every realm at once under ONE {@link OutboundUrlGuard#OPT_IN_CHECK_TIMEOUT}, so a hung lookup is
+ * reported "could not check" and never delays the others.
  *
  * @author Jelle De Loecker
  * @since 0.1.0
@@ -75,23 +76,38 @@ public final class ProteusRealmOptInWarnings {
         return scanned;
     }
 
-    /** @return the warning logged for each stored provider whose realm waits on the opt-in; waits on DNS */
+    /**
+     * @return the lines logged for every stored provider: every realm checked at once, under one
+     *     {@link OutboundUrlGuard#OPT_IN_CHECK_TIMEOUT}, so a hung lookup never delays the others
+     */
     public static @NonNull List<String> scan() {
-        List<String> warnings = new ArrayList<>();
+        List<OutboundUrlGuard.OptInTarget> targets = new ArrayList<>();
         for (Row provider : Models.get(SiteAuthProviderModel.class).findAllOrdered()) {
-            String warning = warnFor(provider, null);
-            if (warning != null) {
-                warnings.add(warning);
+            OutboundUrlGuard.OptInTarget target = targetOf(provider);
+            if (target != null) {
+                targets.add(target);
             }
         }
-        return warnings;
+        return OutboundUrlGuard.checkEachAwaitingOptIn(HohenheimSettings.ProxyAuth.PROTEUS_ALLOW_PRIVATE_NETWORKS,
+            targets, OutboundUrlGuard.OPT_IN_CHECK_TIMEOUT).lines();
     }
 
     /**
-     * @param timeout how long to wait for DNS before logging "could not check" instead, or null to wait for it
+     * @param timeout how long to wait for DNS before logging "could not check" instead
      * @return the line logged for this provider, or null when it is no Proteus provider or nothing waits
      */
-    public static @Nullable String warnFor(@Nullable Row provider, @Nullable Duration timeout) {
+    public static @Nullable String warnFor(@Nullable Row provider, @NonNull Duration timeout) {
+        OutboundUrlGuard.OptInTarget target = targetOf(provider);
+        if (target == null) {
+            return null;
+        }
+        List<String> lines = OutboundUrlGuard.checkEachAwaitingOptIn(
+            HohenheimSettings.ProxyAuth.PROTEUS_ALLOW_PRIVATE_NETWORKS, List.of(target), timeout).lines();
+        return lines.isEmpty() ? null : lines.getFirst();
+    }
+
+    /** @return the provider's realm endpoint, named for the operator; null when it is no Proteus provider */
+    private static OutboundUrlGuard.@Nullable OptInTarget targetOf(@Nullable Row provider) {
         if (provider == null
             || !ProteusAuthProviderType.ID.toString().equals(provider.get(SiteAuthProviderModel.PROVIDER_TYPE))
             || !(provider.get(SiteAuthProviderModel.CONFIG) instanceof Map<?, ?> config)) {
@@ -101,11 +117,8 @@ public final class ProteusRealmOptInWarnings {
         if (endpoint == null) {
             return null;
         }
-        String subject = "site auth provider '" + provider.get(SiteAuthProviderModel.NAME) + "' (Proteus realm)";
-        return timeout == null
-            ? OutboundUrlGuard.warnIfAwaitingOptIn(HohenheimSettings.ProxyAuth.PROTEUS_ALLOW_PRIVATE_NETWORKS, subject,
-                String.valueOf(endpoint))
-            : OutboundUrlGuard.warnIfAwaitingOptIn(HohenheimSettings.ProxyAuth.PROTEUS_ALLOW_PRIVATE_NETWORKS, subject,
-                String.valueOf(endpoint), timeout);
+        return new OutboundUrlGuard.OptInTarget(
+            "site auth provider '" + provider.get(SiteAuthProviderModel.NAME) + "' (Proteus realm)",
+            String.valueOf(endpoint));
     }
 }
