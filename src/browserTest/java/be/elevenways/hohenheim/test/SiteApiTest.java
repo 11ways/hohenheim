@@ -354,5 +354,23 @@ class SiteApiTest extends HohenheimTestBase {
             form("hostname", "own.tenant-" + ZONE));
         assertThat(landed.statusCode()).as("step 3: the tenant's own name lands: " + landed.body())
             .isEqualTo(200);
+
+        // 4. The same scoped key removes its own domain without admission to either panel.
+        Row created = domainsOf(tenantSiteId).stream()
+            .filter(row -> ("own.tenant-" + ZONE).equals(row.get(SiteDomainModel.HOSTNAME)))
+            .findFirst().orElseThrow();
+        int domainId = created.get(SiteDomainModel.ID);
+        HttpResponse<String> removed = keyPost(keyTenant,
+            "/api/v1/sites/" + tenantSiteId + "/domains/" + domainId + "/delete", "");
+        assertThat(removed.statusCode()).as("step 4: the tenant removes its own domain: " + removed.body())
+            .isEqualTo(200);
+        assertThat(has(removed.body(), "id", String.valueOf(domainId))).as("step 4: the domain id stays on the wire")
+            .isTrue();
+        assertThat(has(removed.body(), "status", "\"deleted\"")).as("step 4: the original delete answer stays")
+            .isTrue();
+        assertThat(Models.get(SiteDomainModel.class).findById(domainId)).as("step 4: the selected domain is gone")
+            .isNull();
+        assertThat(keyPost(keyTenant, "/api/v1/sites/" + tenantSiteId + "/domains/" + domainId + "/delete", "")
+            .statusCode()).as("step 4: a second removal remains a missing-record 404").isEqualTo(404);
     }
 }
