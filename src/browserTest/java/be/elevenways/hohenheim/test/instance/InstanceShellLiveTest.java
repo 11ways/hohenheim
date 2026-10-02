@@ -507,11 +507,9 @@ class InstanceShellLiveTest {
 
         static final Identifier ID = Identifier.of("hohenheim", "live_shell_workload");
         static final Schema SETTINGS_SCHEMA = new Schema();
-        private static boolean registered;
 
         static void register() {
-            if (!registered) {
-                registered = true;
+            if (InstanceKinds.getHandler(ID.toString()) == null) {
                 InstanceKinds.register(new LiveShellKind());
             }
         }

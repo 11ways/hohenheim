@@ -71,6 +71,7 @@ dependencies {
     browserTestImplementation libs.protoblast.source.guard
     // OutboundFixture: routes a tenant upstream's public-looking name to a loopback stub.
     browserTestImplementation libs.zenit.test.support
+    browserTestImplementation libs.zenit.auth.test.support
     // PanelSurfaces: the stored before/after and twin captures of the /manage entries (stage 4 contract 4.9).
     browserTestImplementation libs.zenit.cms.test.support
     // The permission editor's capture projection, read by the surface captures through its service file.

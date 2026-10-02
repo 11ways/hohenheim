@@ -15,7 +15,9 @@ import be.elevenways.hohenheim.server.dns.SecondaryZoneService;
 import be.elevenways.hohenheim.server.proxy.ProxyReloadHooks;
 import be.elevenways.hohenheim.server.quota.QuotaReconciler;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.hohenheim.server.auth.types.ProteusRealmOptInWarnings;
+import be.elevenways.hohenheim.server.auth.types.ProteusRealmOptInTargets;
+import be.elevenways.hohenheim.model.SiteAuthProviderModel;
+import be.elevenways.zenit.server.net.OptInWatch;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.ProteusRealmSuggestions;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
@@ -218,7 +220,8 @@ public class ServerMain {
             proxyServer.start();
             ProxyReloadHooks.install();
             // Site auth gates live on the proxy: name each Proteus realm a live upgrade left failing closed.
-            ProteusRealmOptInWarnings.install();
+            OptInWatch.install(HohenheimSettings.ProxyAuth.PROTEUS_ALLOW_PRIVATE_NETWORKS,
+                SiteAuthProviderModel.SCHEMA, ProteusRealmOptInTargets::targetsOf);
         } else {
             // ABSENT, not FAILED: getProxyServer() stays null, so status surfaces
             // show "not part of this install" instead of a false-red bind failure.

@@ -98,6 +98,20 @@ class HostPostureAcknowledgementTest {
     }
 
     @Test
+    void systemWorkCannotSignAnOperatorsPostureAcknowledgement() {
+        Db.run(datasource, () -> {
+            Row host = Models.get(ServerModel.class).findById(admittedSharedHost("system-probe"));
+            Throwable refused = catchThrowable(() -> Accountability.runAs(
+                new Accountability("1", "zenit:system", "internal posture sweep", null, null,
+                    Accountability.ORIGIN_SYSTEM), () -> HostPostureAcknowledgement.record(host)));
+            assertThat(refused).as("step 1: an identified system actor is still not an accepting operator")
+                .isInstanceOf(Violations.class);
+            assertThat(ServerModel.postureAcknowledged(Models.get(ServerModel.class).findById(
+                host.get(ServerModel.ID)))).as("step 1: system work leaves no acknowledgement").isFalse();
+        });
+    }
+
+    @Test
     void aSharedContainerHostTakesNoTenantWorkloadUntilANamedOperatorAcceptsTheRisk()
             throws Exception {
         // 1. THE FORGOT-TO-BUMP GUARD, before anything else: the warning an operator is

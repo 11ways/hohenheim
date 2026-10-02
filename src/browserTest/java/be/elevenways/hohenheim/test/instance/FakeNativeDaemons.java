@@ -572,11 +572,9 @@ final class FakeNativeDaemons {
         static final Schema SETTINGS_SCHEMA = new Schema();
         static final StringField IMAGE = SETTINGS_SCHEMA.addField(
             StringField.builder().name("image").build());
-        private static boolean registered;
 
         static void register() {
-            if (!registered) {
-                registered = true;
+            if (InstanceKinds.getHandler(ID.toString()) == null) {
                 InstanceKinds.register(new FakeNativeKind());
                 InstanceKinds.register(new FakeVolumeKind());
                 InstanceKinds.register(new FakeVolumeSnapshotKind());

@@ -5,6 +5,10 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ActivityText;
+import be.elevenways.zenit.common.security.PrincipalRef;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -60,11 +64,14 @@ public final class HostPostureAcknowledgement {
         }
         Accountability who = Accountability.current();
         String actor = who.actor();
-        if (actor == null || actor.isBlank()) {
+        PrincipalRef principal = PrincipalRef.stored(who.actorKind(), actor);
+        if (actor == null || actor.isBlank() || Accountability.ORIGIN_SYSTEM.equals(who.origin())
+                || who.actorKind() != null && (principal == null || !principal.kind().account())) {
             throw Violations.ofForm(HohenheimViolations.text("posture_acknowledgement_needs_actor")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
-        String label = who.actorLabel() != null ? who.actorLabel() : actor;
+        String label = ActivityText.actorName(who.actorKind(), actor, who.actorLabel(), who.origin())
+            .resolve(LocaleChain.empty(), MessageResolvers.getDefault());
         String posture = server.get(ServerModel.POSTURE);
         ActivityLog.withAction(ZenitActivityAction.UPDATE, ACTIVITY_DETAIL, () -> {
             server.set(ServerModel.ACKNOWLEDGED_POSTURE, posture);

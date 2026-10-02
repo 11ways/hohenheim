@@ -11,6 +11,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.PrivateNetworkOptIn;
 import be.elevenways.zenit.server.net.OutboundUrlGuard;
+import be.elevenways.zenit.server.net.OptInWatch;
 import be.elevenways.zenit.test.support.OutboundFixture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -36,6 +37,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @since 0.1.0
  */
 class ProteusRealmGuardTest {
+
+    private static OptInWatch watch() {
+        return OptInWatch.install(HohenheimSettings.ProxyAuth.PROTEUS_ALLOW_PRIVATE_NETWORKS,
+            SiteAuthProviderModel.SCHEMA, ProteusRealmOptInTargets::targetsOf);
+    }
 
     private static boolean initialized = false;
 
@@ -72,7 +78,7 @@ class ProteusRealmGuardTest {
 
     @Test
     void aPrivateNetworkRealmIsNamedInTheLogWhileTheOptInIsOff() {
-        ProteusRealmOptInWarnings.install();
+        watch();
         List<String> logged = new ArrayList<>();
         BlastLog.LogSink previous = BlastLog.getLogSink();
         BlastLog.setLogSink(args -> logged.add(String.valueOf(args[0])));
@@ -92,12 +98,12 @@ class ProteusRealmGuardTest {
                 || line.contains("'Loopback realm'"));
 
             // 3. The startup scan names the LAN provider again, and only it.
-            assertThat(ProteusRealmOptInWarnings.scan().stream().filter(line -> !line.contains("Hanging")))
+            assertThat(watch().scan().stream().filter(line -> !line.contains("Hanging")))
                 .as("step 3: the scan").singleElement().asString().contains("'Intranet realm'");
 
             // 4. With the opt-in on, nothing waits and nothing is logged.
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.ProxyAuth.PROTEUS_ALLOW_PRIVATE_NETWORKS, true);
-            assertThat(ProteusRealmOptInWarnings.scan()).as("step 4: the scan with the opt-in on")
+            assertThat(watch().scan()).as("step 4: the scan with the opt-in on")
                 .noneMatch(line -> line.contains("points at"));
         } finally {
             BlastLog.setLogSink(previous);
@@ -123,7 +129,7 @@ class ProteusRealmGuardTest {
      */
     @Test
     void theStartupScanAndASaveNeverWaitOnAHangingResolver() throws Exception {
-        ProteusRealmOptInWarnings.install();
+        watch();
         saveProvider("Hanging realm", "http://realm.hanging.example:3000/");
         InetAddress lan = InetAddress.getByAddress("realm.hanging.example", new byte[] {10, 0, 0, 9});
         List<String> logged = new CopyOnWriteArrayList<>();
@@ -131,7 +137,7 @@ class ProteusRealmGuardTest {
         BlastLog.setLogSink(args -> logged.add(String.valueOf(args[0])));
         try (OutboundFixture hanging = OutboundFixture.pendingResolution("realm.hanging.example", lan)) {
             // 1. Starting the scan returns at once; the scan itself is still waiting on DNS.
-            CompletableFuture<List<String>> scan = ProteusRealmOptInWarnings.startScan();
+            CompletableFuture<List<String>> scan = watch().startScan();
             assertThat(scan).as("step 1: the scan has not finished").isNotDone();
 
             // 2. A save returns after the bounded check, naming the provider it could not check.

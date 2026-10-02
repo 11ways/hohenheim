@@ -596,26 +596,26 @@ public final class InstanceConsoles {
             return;
         }
         if (stopObserved) {
-            stampIfAnyRunning(leases, serverId, name, instanceId,
-                InstanceModel.STATUS_STOPPED, "observed stop, exit " + exitCode);
+            if (!stampIfAnyRunning(leases, serverId, name, instanceId,
+                InstanceModel.STATUS_STOPPED, "observed stop, exit " + exitCode)) return;
             PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
             return;
         }
         boolean restart = InstanceModel.CRASH_RESTART
             .equals(row.get(InstanceModel.CRASH_POLICY));
         if (!restart) {
-            stampIfAnyRunning(leases, serverId, name, instanceId,
+            if (!stampIfAnyRunning(leases, serverId, name, instanceId,
                 exitCode == 0 ? InstanceModel.STATUS_STOPPED : InstanceModel.STATUS_ERROR,
-                "unexpected exit " + exitCode + ", crash policy none");
+                "unexpected exit " + exitCode + ", crash policy none")) return;
             PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
             return;
         }
         // Clean-exit-as-crash: with the restart policy ANY unobserved exit is a
         // crash, exit code 0 included (game servers "finish" cleanly when they die).
         if (flapExceeded(instanceId)) {
-            stampIfAnyRunning(leases, serverId, name, instanceId,
+            if (!stampIfAnyRunning(leases, serverId, name, instanceId,
                 InstanceModel.STATUS_ERROR,
-                "crash loop: " + FLAP_THRESHOLD + " crashes inside " + flapWindowMs + "ms");
+                "crash loop: " + FLAP_THRESHOLD + " crashes inside " + flapWindowMs + "ms")) return;
             PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
             alertCrashLoop(instanceId, name);
             return;
@@ -631,13 +631,12 @@ public final class InstanceConsoles {
     }
 
     /** Stamp from starting OR running (whichever the exit interrupted). */
-    private static void stampIfAnyRunning(@NonNull HostLeases leases, int serverId,
+    private static boolean stampIfAnyRunning(@NonNull HostLeases leases, int serverId,
                                           @NonNull Object name, int instanceId,
                                           @NonNull String status, @NonNull String why) {
         // Called under the claim, after the generation check: the re-entrant stamps need no second one.
-        stampIfStatus(leases, serverId, name, instanceId, () -> true,
-            InstanceModel.STATUS_RUNNING, status, why);
-        stampIfStatus(leases, serverId, name, instanceId, () -> true,
+        return stampIfStatus(leases, serverId, name, instanceId, () -> true,
+            InstanceModel.STATUS_RUNNING, status, why) || stampIfStatus(leases, serverId, name, instanceId, () -> true,
             InstanceModel.STATUS_STARTING, status, why);
     }
 
