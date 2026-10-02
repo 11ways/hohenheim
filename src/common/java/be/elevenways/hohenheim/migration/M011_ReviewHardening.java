@@ -11,6 +11,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.IntegerField;
+import be.elevenways.zenit.common.orm.field.LongField;
 import be.elevenways.zenit.common.orm.field.SchemaField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.migration.ForeignKeyAction;
@@ -176,6 +177,28 @@ public class M011_ReviewHardening extends HohenheimMigration {
             () -> IntegerField.builder().name("requested_by_user_id").build(), "requested_by_kind", true));
         schema.data("translate every stored legacy host wildcard into the HostPattern grammar", "1",
             M011_ReviewHardening::respellHostWildcards);
+        // A port claim's controller fence was written null by every caller and read by none.
+        schema.alterTable("port_allocations", table -> table.dropColumn("controller_fence"));
+        schema.data("start every instance's claim fence over in its own claim lease's generations", "1",
+            M011_ReviewHardening::clearInstanceClaimFences);
+    }
+
+    /**
+     * The data step clearing {@code instances.claim_fence}: the fences stored so far are HOST lease generations, and
+     * the record's claim (InstanceOperationLock over core ClaimedRows) now stamps its own lease's, which share no
+     * sequence with them. A stale host-domain value above the record's first claim would refuse that claim forever;
+     * cleared, the first claim stamps the record's own generation. Trashed rows included, so one restored later
+     * starts clean.
+     */
+    public static void clearInstanceClaimFences(@NonNull Datasource datasource) {
+        Db.run(datasource, () -> {
+            IntegerField id = IntegerField.builder().name("id").build();
+            LongField claimFence = LongField.builder().name("claim_fence").build();
+            new FrozenModel("instances", id, claimFence).find()
+                .where(claimFence.isNotNull())
+                .assign(claimFence, (Object) null)
+                .updateAll();
+        });
     }
 
     /** Never run: the migration is declared irreversible, and the executor refuses the DOWN first. */

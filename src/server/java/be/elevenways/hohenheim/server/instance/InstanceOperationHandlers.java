@@ -1,5 +1,9 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.Principal;
+import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.HohenheimViolations;
@@ -75,6 +79,13 @@ public final class InstanceOperationHandlers {
             .handle(InstanceOperationHandlers::consoleCommand);
         OperationHandlers.attach(InstanceOperations.APP_UPDATE).applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::appUpdate);
+        // Sessions, offered and never invoked: their sockets ask offered() (see InstanceOperations.OPEN_SHELL).
+        OperationHandlers.attach(InstanceOperations.OPEN_SHELL).applies(InstanceOperationHandlers::authored)
+            .handle(InstanceOperationHandlers::session);
+        OperationHandlers.attach(InstanceOperations.OPEN_FRAMEBUFFER)
+            .applies(instance -> authored(instance)
+                && VmKind.ID.toString().equals(instance.get(InstanceModel.KIND)))
+            .handle(InstanceOperationHandlers::session);
         SchedulePlacements.place(InstanceOperations.START);
         SchedulePlacements.place(InstanceOperations.STOP);
         SchedulePlacements.place(InstanceOperations.RESTART);
@@ -103,6 +114,34 @@ public final class InstanceOperationHandlers {
                 + "; it decides whether a stopped workload may start, so it is never guessed");
         }
         return trigger;
+    }
+
+    /**
+     * Whether {@code operation} is offered to the caller on the instance: its gate, its applicability and the caller's
+     * authorization, the checks the operation's own invocation makes. A tab and the socket behind it both ask here, so
+     * the tab shows exactly to whom the socket admits.
+     */
+    public static boolean offered(@NonNull Operation<Row, ?, ?> operation, @NonNull AccessContext access,
+                                  @Nullable Row instance) {
+        return instance != null
+            && !(OperationPipeline.offer(operation, access, instance) instanceof OperationPipeline.Offer.Hidden);
+    }
+
+    /** {@link #offered(Operation, AccessContext, Row)} for a socket: its principal on the instance its route names. */
+    public static boolean offered(@NonNull Operation<Row, ?, ?> operation, @Nullable Principal principal,
+                                  @Nullable Integer instanceId) {
+        return principal != null && instanceId != null && offered(operation, AccessContext.detached(principal),
+            Models.get(InstanceModel.class).findById(instanceId));
+    }
+
+    /**
+     * The handler of a session operation.
+     *
+     * @throws IllegalStateException always: a session opens through its socket, and no surface places it
+     */
+    private static <R> R session(@NonNull OperationCall<Row, Void> call) {
+        throw new IllegalStateException("A session operation was invoked from " + call.surface().id()
+            + ": its socket admits through offered(), and no surface places it");
     }
 
     /**

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimEndpoints;
@@ -10,7 +11,6 @@ import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
@@ -49,9 +49,10 @@ public final class InstanceConsolePage implements RecordScopedPage<Row> {
     @Override public @NonNull Icon icon() { return Icon.of("terminal"); }
 
     /**
-     * The tab exists only for a principal that may actually attach to THIS record's
-     * console -- the per-record half of the hide-and-enforce pair (zenit-cms 404s an
-     * unoffered slug, so this is a gate on the route as well as on the nav).
+     * The tab exists only where the console operation is offered on THIS record -- the offer
+     * its socket admits through, so a generated instance's console is never offered here --
+     * the per-record half of the hide-and-enforce pair (zenit-cms 404s an unoffered slug, so
+     * this is a gate on the route as well as on the nav).
      *
      * AIDEV-NOTE: this shipped ungated, which made the page a wider door than the socket
      * it fronts: the live terminal's handshake demands CONSOLE (InstanceConsoleHandler)
@@ -61,8 +62,7 @@ public final class InstanceConsolePage implements RecordScopedPage<Row> {
      */
     @Override
     public boolean visibleFor(@NonNull Row record, @NonNull AccessContext accessContext) {
-        return HohenheimAccess.hasInstanceCapability(
-            accessContext, record.get(InstanceModel.ID), HohenheimAccess.CONSOLE);
+        return InstanceOperationHandlers.offered(InstanceOperations.CONSOLE_COMMAND, accessContext, record);
     }
 
     @Override

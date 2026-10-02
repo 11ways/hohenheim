@@ -77,19 +77,25 @@ public final class InstanceInstalls {
      */
     public void install(int instanceId) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
+        // Under the record's claim, like every other verb on it (re-entered from a funnel that already holds it).
+        this.instances.operations().exclusive(instanceId, InstanceOperationLock.Contention.REFUSE,
+            () -> this.installHeld(instanceId));
+    }
+
+    private void installHeld(int instanceId) {
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
         Row template = requireTemplate(resolved.row());
 
         String script = template.get(InstanceTemplateModel.INSTALL_SCRIPT);
-        long fence = this.instances.leases().requireFence(resolved.serverId());
+        this.instances.leases().requireFence(resolved.serverId());
         if (script == null || script.isBlank()) {
             InstanceOperationGuard.stampInstall(this.instances.leases(), instanceId,
-                resolved.serverId(), fence, InstanceModel.INSTALL_NONE, null,
+                resolved.serverId(), InstanceModel.INSTALL_NONE, null,
                 resolved.row().get(InstanceModel.NAME));
             return;
         }
-        runInstallStep(resolved, template, fence);
+        runInstallStep(resolved, template);
     }
 
     /**
@@ -101,6 +107,11 @@ public final class InstanceInstalls {
      */
     public void reinstall(int instanceId) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
+        this.instances.operations().exclusive(instanceId, InstanceOperationLock.Contention.REFUSE,
+            () -> this.reinstallHeld(instanceId));
+    }
+
+    private void reinstallHeld(int instanceId) {
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
         Row template = requireTemplate(resolved.row());
@@ -115,7 +126,7 @@ public final class InstanceInstalls {
         if (!(resolved.runtime() instanceof InstallSupport)) {
             throw HohenheimViolations.instanceRefusal("install_unsupported", resolved.row(), null);
         }
-        long fence = this.instances.leases().requireFence(resolved.serverId());
+        this.instances.leases().requireFence(resolved.serverId());
 
         if (InstanceTemplateModel.REINSTALL_CLEAR
                 .equals(template.get(InstanceTemplateModel.REINSTALL_POLICY))) {
@@ -143,17 +154,17 @@ public final class InstanceInstalls {
                 }
             } catch (IOException error) {
                 InstanceOperationGuard.stampInstall(this.instances.leases(), instanceId,
-                    resolved.serverId(), fence, InstanceModel.INSTALL_FAILED, describe(error),
+                    resolved.serverId(), InstanceModel.INSTALL_FAILED, describe(error),
                     resolved.row().get(InstanceModel.NAME));
                 throw HohenheimViolations.instanceRefusal("reinstall_clear_failed", resolved.row(), error);
             }
         }
-        runInstallStep(resolved, template, fence);
+        runInstallStep(resolved, template);
     }
 
     // -- the one install runner -----------------------------------------------
 
-    private void runInstallStep(@NonNull Resolved resolved, @NonNull Row template, long fence) {
+    private void runInstallStep(@NonNull Resolved resolved, @NonNull Row template) {
         int instanceId = resolved.row().get(InstanceModel.ID);
         // The vocabulary gate's install-time lane, BEFORE any daemon contact: a script
         // that sources the community function library and calls a helper the library
@@ -178,7 +189,7 @@ public final class InstanceInstalls {
         // The durable "in flight" mark lands BEFORE any daemon work (fenced): a crash
         // anywhere after leaves visible evidence, never a clean-looking record.
         InstanceOperationGuard.stampInstall(this.instances.leases(), instanceId,
-            resolved.serverId(), fence, InstanceModel.INSTALL_INSTALLING, null,
+            resolved.serverId(), InstanceModel.INSTALL_INSTALLING, null,
             resolved.row().get(InstanceModel.NAME));
         this.beforeInstallRun.run();
 
@@ -196,19 +207,19 @@ public final class InstanceInstalls {
                 installImage.trim(), script, env, INSTALL_TIMEOUT_MS);
             if (outcome.succeeded()) {
                 InstanceOperationGuard.stampInstall(this.instances.leases(), instanceId,
-                    resolved.serverId(), fence, InstanceModel.INSTALL_INSTALLED, null,
+                    resolved.serverId(), InstanceModel.INSTALL_INSTALLED, null,
                     resolved.row().get(InstanceModel.NAME));
                 Blast.log("INSTANCE: install completed for", resolved.spec().handle());
                 return;
             }
             InstanceOperationGuard.stampInstall(this.instances.leases(), instanceId,
-                resolved.serverId(), fence, InstanceModel.INSTALL_FAILED,
+                resolved.serverId(), InstanceModel.INSTALL_FAILED,
                 "exit " + outcome.exitCode() + "\n" + outcome.outputTail(),
                 resolved.row().get(InstanceModel.NAME));
             throw HohenheimViolations.instanceRefusal("install_failed", resolved.row(), null);
         } catch (IOException error) {
             InstanceOperationGuard.stampInstall(this.instances.leases(), instanceId,
-                resolved.serverId(), fence, InstanceModel.INSTALL_FAILED, describe(error),
+                resolved.serverId(), InstanceModel.INSTALL_FAILED, describe(error),
                 resolved.row().get(InstanceModel.NAME));
             throw HohenheimViolations.instanceRefusal("install_failed", resolved.row(), error);
         }

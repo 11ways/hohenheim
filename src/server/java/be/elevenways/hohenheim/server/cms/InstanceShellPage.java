@@ -1,10 +1,11 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceShell;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -25,10 +26,10 @@ import java.util.Map;
  * own non-root uid. The admin CSP (zenit's STRICT_ADMIN) carries ghostty's wasm concessions
  * panel-wide, so this tab is reached by soft navigation like every other.
  *
- * The page makes NO authorization decision beyond hiding itself: {@code InstanceShell}
- * asks the {@code shell} capability again on its own funnel, which is what the WebSocket
- * handshake reaches. Hide AND enforce -- zenit-cms 404s an unoffered slug, so
- * {@link #visibleFor} gates the route as well as the nav.
+ * The page makes NO authorization decision of its own: it shows exactly where the open-shell
+ * operation is offered, the offer the WebSocket handshake admits through, and {@code InstanceShell}
+ * asks the {@code shell} capability again on its own funnel. Hide AND enforce -- zenit-cms 404s an
+ * unoffered slug, so {@link #visibleFor} gates the route as well as the nav.
  */
 public final class InstanceShellPage implements RecordScopedPage<Row> {
 
@@ -50,8 +51,7 @@ public final class InstanceShellPage implements RecordScopedPage<Row> {
      */
     @Override
     public boolean visibleFor(@NonNull Row record, @NonNull AccessContext accessContext) {
-        return HohenheimAccess.hasInstanceCapability(
-            accessContext, record.get(InstanceModel.ID), HohenheimAccess.SHELL);
+        return InstanceOperationHandlers.offered(InstanceOperations.OPEN_SHELL, accessContext, record);
     }
 
     @Override

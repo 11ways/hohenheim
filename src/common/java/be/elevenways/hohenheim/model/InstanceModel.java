@@ -475,10 +475,11 @@ public class InstanceModel extends Model {
         .build());
 
     /**
-     * The controller fence of the last recorded runtime outcome. Every runtime-outcome
-     * write is conditional on it ({@code claim_fence IS NULL OR claim_fence <= :myFence})
-     * and stamps it; a stale controller's write matches ZERO rows, and zero rows is a
-     * hard failure, never a shrug (InstanceService.stampGuarded).
+     * The fence of the operation claim that holds the record (InstanceOperationLock over
+     * core ClaimedRows): stamped when an operation takes the record, and every runtime-
+     * outcome write is conditional on it ({@code claim_fence = :claimFence}); a stale
+     * holder's write matches ZERO rows, and zero rows is a hard failure, never a shrug
+     * (InstanceOperationGuard).
      */
     public static final LongField CLAIM_FENCE = SCHEMA.addField(
         LongField.builder("claim_fence").filterable(false).build());

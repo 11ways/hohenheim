@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.server.instance.OwnedInstances;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.VmFramebufferHandler;
@@ -72,11 +74,40 @@ class VmFramebufferHandlerTest extends HohenheimTestBase {
             FakeSession session = new FakeSession(new UserPrincipal(userId, "Granted"), instanceId);
             new VmFramebufferHandler(session, instanceId).onOpen();
 
-            // A container has no framebuffer; the tab hides, and the socket refuses 1008.
+            // A container has no framebuffer, so the framebuffer operation does not apply: the tab
+            // hides, and the socket refuses 1008 exactly like a missing grant, naming nothing.
             assertThat(session.closeCode).isEqualTo(1008);
-            assertThat(String.join("", session.texts)).contains("not a VM");
+            assertThat(session.texts).as("no kind oracle in the refusal").isEmpty();
         } finally {
             cleanup(userId, instanceId);
+        }
+    }
+
+    /**
+     * A product-generated VM's screen is its product's: the framebuffer operation does not apply to it, so a viewer
+     * holding the grant is refused 1008 where the same viewer on an authored VM is admitted.
+     */
+    @Test
+    void refusesAGeneratedVmWith1008EvenWhenGranted() throws Exception {
+        int userId = user("fb-generated");
+        int[] id = new int[1];
+        OwnedInstances.inScopeUnchecked("site", SiteModel.MODEL_ID, 424242,
+            () -> id[0] = vmInstance("fb-generated-vm", InstanceModel.STATUS_STOPPED));
+        int instanceId = id[0];
+        RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
+            HohenheimAccess.MANAGE, true);
+        try {
+            FakeSession session = new FakeSession(new UserPrincipal(userId, "Granted"), instanceId);
+            VmFramebufferHandler handler = new VmFramebufferHandler(session, instanceId);
+            handler.onOpen();
+
+            // An authored VM in this state closes 1000 "not running" (the test below): admitted. This one never is.
+            assertThat(session.closeCode).as("a generated VM's framebuffer is refused by policy").isEqualTo(1008);
+            assertThat(session.texts).as("and the refusal names nothing").isEmpty();
+            assertThat(handler.revalidate()).as("nor does it ever revalidate").isFalse();
+        } finally {
+            // A generated record is its product's to delete: the cleanup runs in that product's scope.
+            OwnedInstances.inScopeUnchecked("site", SiteModel.MODEL_ID, 424242, () -> cleanup(userId, instanceId));
         }
     }
 

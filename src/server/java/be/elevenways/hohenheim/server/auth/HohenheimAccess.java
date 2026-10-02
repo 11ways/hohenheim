@@ -17,7 +17,6 @@ import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.security.RecordCapabilityScope;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.common.websocket.WebSocketSession;
 import be.elevenways.zenit.server.data.RecordSourceGate;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -130,7 +129,7 @@ public final class HohenheimAccess {
      * the file, snapshot and backup verbs out of that umbrella; an operator grants this one
      * deliberately, on the record, or it is not held.
      */
-    public static final String SHELL = "shell";
+    public static final String SHELL = HohenheimCapabilities.SHELL;
 
     /**
      * Read a managed database's CREDENTIALS -- the plaintext {@code db_password} the
@@ -272,18 +271,6 @@ public final class HohenheimAccess {
     public static boolean hasInstanceCapability(@NonNull Principal principal, int instanceId,
                                                 @NonNull String capability) {
         return AccessContext.detached(principal).hasCapability(InstanceModel.MODEL_ID, instanceId, capability);
-    }
-
-    /**
-     * Whether a live socket's principal still holds {@code capability} on its instance: what every instance socket
-     * (console, shell, framebuffer) answers its mid-session revalidation with.
-     *
-     * @return false for a session without a principal or a socket without an instance
-     */
-    public static boolean sessionHoldsInstanceCapability(@NonNull WebSocketSession session,
-                                                         @Nullable Integer instanceId, @NonNull String capability) {
-        Principal principal = session.getPrincipal();
-        return principal != null && instanceId != null && hasInstanceCapability(principal, instanceId, capability);
     }
 
     /**

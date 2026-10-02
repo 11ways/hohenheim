@@ -1,16 +1,10 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.instance.InstanceOperations;
-import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.websocket.WebSocketHandler;
 import be.elevenways.zenit.common.websocket.WebSocketSession;
-import be.elevenways.zenit.server.operation.OperationPipeline;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
@@ -89,13 +83,8 @@ public final class InstanceConsoleHandler implements WebSocketHandler {
      * D01). Never check the capability here again beside the operation: ask the operation.
      */
     private boolean admitted() {
-        Principal principal = this.session.getPrincipal();
-        if (principal == null || this.instanceId == null) {
-            return false;
-        }
-        Row instance = Models.get(InstanceModel.class).findById(this.instanceId);
-        return instance != null && !(OperationPipeline.offer(InstanceOperations.CONSOLE_COMMAND,
-            AccessContext.detached(principal), instance) instanceof OperationPipeline.Offer.Hidden);
+        return InstanceOperationHandlers.offered(InstanceOperations.CONSOLE_COMMAND, this.session.getPrincipal(),
+            this.instanceId);
     }
 
     /**
