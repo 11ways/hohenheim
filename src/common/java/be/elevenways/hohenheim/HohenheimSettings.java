@@ -7,6 +7,7 @@ import be.elevenways.zenit.common.setting.SettingsRule;
 import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.validation.PathKind;
+import be.elevenways.zenit.common.validation.PrivateNetworkOptIn;
 import be.elevenways.hohenheim.net.IpLiterals;
 import be.elevenways.hohenheim.net.LegacyIpSpellings;
 import be.elevenways.protoblast.common.util.BlastString;
@@ -881,12 +882,10 @@ public class HohenheimSettings {
             .build();
 
         /** Explicit operator opt-in for site auth providers whose Proteus realm is on a private network. */
-        public static final SettingDefinition<Boolean> PROTEUS_ALLOW_PRIVATE_NETWORKS = GROUP
-            .buildSetting("proteus_allow_private_networks", Boolean.class)
-            .defaultValue(false)
-            .description("Allow site auth providers to reach a Proteus realm on a private network (RFC 1918, IPv6"
-                + " unique-local); this host, link-local and special-purpose addresses stay refused")
-            .build();
+        public static final SettingDefinition<Boolean> PROTEUS_ALLOW_PRIVATE_NETWORKS = PrivateNetworkOptIn.declare(
+            GROUP, "proteus_allow_private_networks", "Allow private-network Proteus realms",
+            "Allow site auth providers to reach a Proteus realm on a private network (RFC 1918, IPv6"
+                + " unique-local); this host, link-local and special-purpose addresses stay refused");
     }
 
     // --- Per-owner consumption caps (the reservation ledger's policy side) ---
