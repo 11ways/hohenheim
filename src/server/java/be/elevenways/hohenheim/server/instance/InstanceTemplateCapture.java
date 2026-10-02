@@ -61,6 +61,13 @@ public final class InstanceTemplateCapture {
      */
     public int capture(int instanceId) {
         HohenheimAccess.requireOperatorOperation();
+        // Under the record's claim, like every other verb on it: a capture beside a deploy would publish a workload
+        // the deploy is replacing.
+        return this.instances.operations().exclusive(instanceId, InstanceOperationLock.Contention.REFUSE,
+            () -> this.captureHeld(instanceId));
+    }
+
+    private int captureHeld(int instanceId) {
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
         if (!resolved.handler().supportsTemplateCapture()
@@ -76,9 +83,9 @@ public final class InstanceTemplateCapture {
         }
 
         String alias = aliasFor(resolved.row());
-        long fence = this.instances.leases().requireFence(resolved.serverId());
+        this.instances.leases().requireFence(resolved.serverId());
         InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
-            resolved.serverId(), fence, InstanceModel.STATUS_CAPTURING,
+            resolved.serverId(), InstanceModel.STATUS_CAPTURING,
             nameOf(resolved.row()));
         try {
             String description = "Captured from instance '" + nameOf(resolved.row())
@@ -92,7 +99,7 @@ public final class InstanceTemplateCapture {
             // A publish READS the stopped workload and never changes it; both outcomes
             // settle the record back to the state the capture started from.
             InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
-                resolved.serverId(), fence, InstanceModel.STATUS_STOPPED,
+                resolved.serverId(), InstanceModel.STATUS_STOPPED,
                 nameOf(resolved.row()));
         }
 

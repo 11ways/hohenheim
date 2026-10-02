@@ -198,13 +198,17 @@ public final class InstanceConsoles {
                                       @NonNull String expected, @NonNull String status,
                                       @NonNull String why) {
         try {
-            Row current = Models.get(InstanceModel.class).findById(instanceId);
-            if (current == null || !expected.equals(current.get(InstanceModel.STATUS))) {
-                return;
-            }
-            long fence = leases.requireFence(serverId);
-            InstanceOperationGuard.stamp(leases, instanceId, serverId, fence, status, name);
-            Blast.log("CONSOLE: instance", instanceId, "->", status, "(" + why + ")");
+            // Under the record's claim, queued behind whatever operation holds it; the status is re-read inside it,
+            // so an operation that moved the record meanwhile wins and this observation is dropped.
+            InstanceOperationLock.of(leases).exclusive(instanceId, InstanceOperationLock.Contention.QUEUE, () -> {
+                Row current = Models.get(InstanceModel.class).findById(instanceId);
+                if (current == null || !expected.equals(current.get(InstanceModel.STATUS))) {
+                    return;
+                }
+                leases.requireFence(serverId);
+                InstanceOperationGuard.stamp(leases, instanceId, serverId, status, name);
+                Blast.log("CONSOLE: instance", instanceId, "->", status, "(" + why + ")");
+            });
         } catch (Violations refused) {
             Blast.log("CONSOLE: instance", instanceId, "status write refused:",
                 refused.getMessage());

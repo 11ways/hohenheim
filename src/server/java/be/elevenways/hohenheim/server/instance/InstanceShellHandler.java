@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
@@ -42,7 +42,10 @@ public final class InstanceShellHandler implements WebSocketHandler {
     @Override
     public void onOpen() {
         Principal principal = this.session.getPrincipal();
-        if (this.instanceId == null || principal == null) {
+        // The shell operation's offer: its gate (SHELL), its applicability (an authored instance) and the caller's
+        // authorization; a generated instance's shell is its product's, never this socket's.
+        if (this.instanceId == null || principal == null
+                || !InstanceOperationHandlers.offered(InstanceOperations.OPEN_SHELL, principal, this.instanceId)) {
             this.session.close(1008, "forbidden");
             return;
         }
@@ -61,13 +64,13 @@ public final class InstanceShellHandler implements WebSocketHandler {
     }
 
     /**
-     * Mid-session re-check of the shell capability (revoked = 1008 by the core), and the
+     * Mid-session re-check of the shell admission (revoked = 1008 by the core), and the
      * session is torn down with it rather than left attached to a dead socket.
      */
     @Override
     public boolean revalidate() {
-        boolean permitted = HohenheimAccess.sessionHoldsInstanceCapability(this.session, this.instanceId,
-            HohenheimAccess.SHELL);
+        boolean permitted = InstanceOperationHandlers.offered(InstanceOperations.OPEN_SHELL,
+            this.session.getPrincipal(), this.instanceId);
         if (!permitted) {
             InstanceShell.Session live = this.shell;
             if (live != null) {

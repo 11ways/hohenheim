@@ -3,22 +3,23 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.host.HostLeases;
-import be.elevenways.zenit.common.orm.datasource.Datasource;
-import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.lease.ClaimedRows;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 
 /**
- * THE per-instance operation serialization: one reentrant lock per instance record that
- * every runtime operation on that record holds for its whole duration.
+ * THE per-instance operation serialization: one claim per instance record that every runtime operation on that
+ * record holds for its whole duration, across every controller over the control-plane database.
  *
  * AIDEV-NOTE: this replaced two mechanisms that each looked like a lock and were not. The
  * in-flight SET on InstanceService marked a record but excluded nobody (a second deploy ran
@@ -29,20 +30,21 @@ import java.util.function.Supplier;
  * and migration windows, the application's checkout + converge, rollback and drain, and the
  * status reconciler (which only ever takes an IDLE record and skips a busy one).
  *
- * AIDEV-NOTE: why neither zenit Commands nor a core Leases lease is the mechanism, decided
- * 2026-09-23. Commands runs its body inside ONE database transaction; an instance operation
- * is minutes of daemon work (image pulls, sandbox builds, probe windows), and holding a
- * write transaction that long on SQLite would stall every other write in the controller. A
- * per-record core lease adds nothing the host lease does not already guarantee: HostLeases
- * gives one controller authority over a whole HOST and fences every outcome write, so a
- * rival controller can never make an operation stick, and what was actually missing was
- * exclusion INSIDE one controller. A lease would also refuse outright inside a caller's
- * SQLite transaction (Leases.canAcquireHere), which a zenit-cms mutation can be.
+ * AIDEV-NOTE: the claim is core's {@link ClaimedRows#hold} on {@code instances.claim_fence}, decided 2026-10-02
+ * (module-fit item 35), replacing the 2026-09-23 pair of an in-process ReentrantLock and the HOST lease's fence on the
+ * row. Why it is not zenit Commands still holds: Commands runs its body inside ONE transaction, and an instance
+ * operation is minutes of daemon work. Why it is now a lease: the hold is taken OUTSIDE any transaction and
+ * heartbeats for as long as the operation runs, so it excludes this controller's other threads AND every rival
+ * controller per record, which the in-process lock never could; a crashed holder stops heartbeating and the next
+ * operation takes the record over after the controller's TTL with a strictly greater fence, so every late write of
+ * the crashed holder matches nothing (InstanceOperationGuard writes through {@link #owned} only). The host lease
+ * stays the authority to drive a host's daemon; it no longer fences instance rows. Inside a caller's SQLite
+ * transaction no lease can be taken: the hold is unleased there and refuses a record a live holder has, so it can
+ * never stamp over an operation running outside that transaction.
  *
- * AIDEV-NOTE: the lock is scoped per (controller identity, datasource). The controller half
- * keeps the rival-controller simulation honest (a test's second InstanceService over its
- * own HostLeases IS another controller and must reach the host fence, not this lock); the
- * datasource half keeps two databases in one JVM from sharing instance #1's lock.
+ * AIDEV-NOTE: the claims are scoped per controller identity ({@link HostLeases#coordinators} and its TTL): a test's
+ * second InstanceService over its own HostLeases IS another controller, arbitrated by the stored lease row alone. Two
+ * databases in one JVM never share a record's claim: every lease and every hold is per datasource.
  *
  * Lock ORDER, where two are held: an application's key before any of its releases' keys,
  * and a preview's ConvergenceLocks monitor before its preview instance's key. Nothing takes
@@ -58,7 +60,7 @@ public final class InstanceOperationLock {
      * longer than any sandbox build a converge may be running, short enough that a wedged
      * operation cannot pile up waiting threads forever.
      */
-    static final long QUEUE_SECONDS = 3600;
+    static final int QUEUE_SECONDS = 3600;
 
     /** How a caller meets an operation that is already running on the same record. */
     public enum Contention {
@@ -77,44 +79,50 @@ public final class InstanceOperationLock {
         QUEUE
     }
 
-    private record Scope(@NonNull Object controller, @NonNull Datasource datasource) {}
+    /** The lease-key prefix of an instance record's claim. */
+    public static final String KEY_PREFIX = "hohenheim_instance_";
 
-    private static final Map<Scope, Map<Integer, ReentrantLock>> LOCKS = new ConcurrentHashMap<>();
+    private static final Map<HostLeases, InstanceOperationLock> BY_CONTROLLER = new ConcurrentHashMap<>();
 
-    private static final Map<Object, InstanceOperationLock> BY_CONTROLLER = new ConcurrentHashMap<>();
+    private final @NonNull ClaimedRows<Integer> rows;
 
-    private final @NonNull Object controller;
+    /** The threads waiting for a record's claim, for {@link #isQueued}. */
+    private final Map<Integer, Set<Thread>> waiting = new ConcurrentHashMap<>();
 
-    private InstanceOperationLock(@NonNull Object controller) {
-        this.controller = controller;
+    private InstanceOperationLock(@NonNull HostLeases controller) {
+        this.rows = ClaimedRows.of(Models.get(InstanceModel.class), InstanceModel.ID, InstanceModel.CLAIM_FENCE,
+                KEY_PREFIX)
+            .coordinatedBy(controller.coordinators())
+            .withTtl(controller.ttl());
     }
 
-    /** The lock set of one controller identity. */
+    /** The claims of one controller identity. */
     public static @NonNull InstanceOperationLock of(@NonNull HostLeases controller) {
         return BY_CONTROLLER.computeIfAbsent(controller, InstanceOperationLock::new);
     }
 
-    /** The lock set of this process's production controller identity. */
+    /** The claims of this process's production controller identity. */
     public static @NonNull InstanceOperationLock production() {
         return of(HostLeases.production());
     }
 
     /**
-     * Run {@code body} holding the record's lock; re-entrant on the same thread.
+     * Run {@code body} holding the record's claim; re-entrant on the same thread.
      *
      * @throws Violations {@code instance_operation_in_progress} when another operation
-     *         holds the record and the contention policy gives up
+     *         holds the record and the contention policy gives up; {@code instance_not_found}
+     *         when there is no live record to hold
      */
     public <T> T exclusive(int instanceId, @NonNull Contention contention,
                            @NonNull Supplier<T> body) {
-        ReentrantLock lock = lockOf(instanceId);
-        if (!acquire(lock, contention)) {
-            throw inProgress(instanceId);
+        ClaimedRows<Integer>.Held hold = this.hold(instanceId, contention);
+        if (hold == null) {
+            throw refusalFor(instanceId);
         }
         try {
             return body.get();
         } finally {
-            lock.unlock();
+            hold.close();
         }
     }
 
@@ -133,62 +141,66 @@ public final class InstanceOperationLock {
      * @return false when the record was busy and nothing ran
      */
     public boolean runIfIdle(int instanceId, @NonNull Runnable body) {
-        ReentrantLock lock = lockOf(instanceId);
-        if (lock.isLocked() || !lock.tryLock()) {
+        if (this.rows.heldHere(instanceId) != null) {
+            return false;
+        }
+        ClaimedRows<Integer>.Held hold = this.hold(instanceId, Contention.REFUSE);
+        if (hold == null) {
             return false;
         }
         try {
             body.run();
             return true;
         } finally {
-            lock.unlock();
+            hold.close();
         }
     }
 
-    /** Whether any thread of this controller holds the record's lock right now. */
-    public boolean isBusy(int instanceId) {
-        ReentrantLock lock = scopeLocks().get(instanceId);
-        return lock != null && lock.isLocked();
-    }
-
-    /** Whether {@code thread} is queued behind the record's lock (a test seam for the ordering proofs). */
-    public boolean isQueued(int instanceId, @NonNull Thread thread) {
-        ReentrantLock lock = scopeLocks().get(instanceId);
-        return lock != null && lock.hasQueuedThread(thread);
-    }
-
-    private static boolean acquire(@NonNull ReentrantLock lock, @NonNull Contention contention) {
-        return switch (contention) {
-            case REFUSE -> lock.tryLock();
-            case QUEUE -> {
-                try {
-                    yield lock.tryLock(QUEUE_SECONDS, TimeUnit.SECONDS);
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                    yield false;
-                }
-            }
-        };
-    }
-
     /**
-     * The record's lock in this scope; entries are never evicted, because the key space is
-     * bounded by the record count and a lock collected while a thread waits is not a lock.
+     * Narrows a write to the record this thread's operation still owns: zero rows means the claim was lost (a rival
+     * took the record over), and the caller records nothing.
+     *
+     * @throws IllegalStateException when this thread holds no claim on the record: an outcome write outside its
+     *         operation is a wiring defect, never a write without a fence
      */
-    private @NonNull ReentrantLock lockOf(int instanceId) {
-        return scopeLocks().computeIfAbsent(instanceId, ignored -> new ReentrantLock());
+    @NonNull QueryBuilder<Row> owned(int instanceId) {
+        ClaimedRows<Integer>.Held hold = this.rows.heldHere(instanceId);
+        if (hold == null) {
+            throw new IllegalStateException("Instance " + instanceId + " is written outside an operation holding it;"
+                + " every outcome write runs inside InstanceOperationLock.exclusive or runIfIdle");
+        }
+        return this.rows.owned(hold.claim());
     }
 
-    private @NonNull Map<Integer, ReentrantLock> scopeLocks() {
-        return LOCKS.computeIfAbsent(new Scope(this.controller, Db.currentOrDefault()),
-            ignored -> new ConcurrentHashMap<>());
+    /** Whether {@code thread} is waiting for the record's claim (a test seam for the ordering proofs). */
+    public boolean isQueued(int instanceId, @NonNull Thread thread) {
+        Set<Thread> threads = this.waiting.get(instanceId);
+        return threads != null && threads.contains(thread);
     }
 
-    private static @NonNull Violations inProgress(int instanceId) {
+    private ClaimedRows<Integer>.@Nullable Held hold(int instanceId, @NonNull Contention contention) {
+        int wait = switch (contention) {
+            case REFUSE -> 0;
+            case QUEUE -> QUEUE_SECONDS;
+        };
+        Set<Thread> threads = this.waiting.computeIfAbsent(instanceId, ignored -> ConcurrentHashMap.newKeySet());
+        Thread current = Thread.currentThread();
+        if (wait > 0 && this.rows.heldHere(instanceId) == null) {
+            threads.add(current);
+        }
+        try {
+            return this.rows.hold(instanceId, wait, InstanceModel.ID.isNotNull(), UnaryOperator.identity());
+        } finally {
+            threads.remove(current);
+        }
+    }
+
+    private static @NonNull Violations refusalFor(int instanceId) {
         Row row = Models.get(InstanceModel.class).findById(instanceId);
-        String name = row != null ? String.valueOf((Object) row.get(InstanceModel.NAME))
-            : String.valueOf(instanceId);
+        if (row == null) {
+            return Violations.ofForm(HohenheimViolations.text("instance_not_found").withArg("id", instanceId));
+        }
         return Violations.ofForm(HohenheimViolations.text("instance_operation_in_progress")
-            .withArg("name", name));
+            .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME))));
     }
 }

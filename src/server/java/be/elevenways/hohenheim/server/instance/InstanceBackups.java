@@ -254,7 +254,7 @@ public final class InstanceBackups {
             payload = BackupManifest.PAYLOAD_VOLUME_TARS;
             boolean stopped = false;
             Exception captureFailure = null;
-            long fence = this.instances.leases().requireFence(resolved.serverId());
+            this.instances.leases().requireFence(resolved.serverId());
             ImageIdentity knownImage = applicationImage;
             try {
                 if (wasRunning) {
@@ -292,7 +292,7 @@ public final class InstanceBackups {
                     FileTrees.deleteQuietly(staging);
                     if (application) {
                         InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
-                            resolved.serverId(), fence, InstanceModel.STATUS_ERROR,
+                            resolved.serverId(), InstanceModel.STATUS_ERROR,
                             owner.get(InstanceModel.NAME));
                     }
                     failedRow(instanceId, targetId, null,
@@ -893,7 +893,8 @@ public final class InstanceBackups {
             throw new IOException("Serving application has no immutable runtime image identity");
         }
         Path imageTar = applicationDirectory.resolve("runtime-image.tar");
-        new ServerService().clientFor(serving.serverId()).saveImage(image.id(), imageTar, InstanceSnapshots.maxArchiveBytes());
+        new ServerService().clientFor(serving.serverId())
+            .saveImage(image.id(), imageTar, InstanceSnapshots.maxArchiveBytes());
         files.put(BackupArchive.APPLICATION_PREFIX + "artifact.jar", artifact);
         files.put(BackupArchive.APPLICATION_PREFIX + "runtime-image.tar", imageTar);
         List<BackupManifest.VolumeDeclaration> declarations = new ArrayList<>();

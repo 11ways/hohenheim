@@ -326,8 +326,8 @@ public final class InstanceMigrations {
 
         String handle = resolved.spec().handle();
         boolean wasRunning = resolved.runtime().status(handle).running();
-        long sourceFence = this.instances.leases().requireFence(resolved.serverId());
-        long targetFence = this.instances.leases().requireFence(targetServerId);
+        this.instances.leases().requireFence(resolved.serverId());
+        this.instances.leases().requireFence(targetServerId);
 
         // The destination pre-flight: a FOREIGN same-named workload is the handle-
         // collision hazard and refuses the whole migration; an OURS leftover is a
@@ -361,7 +361,7 @@ public final class InstanceMigrations {
         long reservedMb = InstanceCapacity.openMigrationWindow(instanceId, targetServerId);
         try {
             InstanceOperationGuard.stampMigrating(this.instances.leases(), instanceId,
-                resolved.serverId(), sourceFence, targetServerId, reservedMb,
+                resolved.serverId(), targetServerId, reservedMb,
                 nameOf(resolved.row()));
         } catch (RuntimeException notOurs) {
             // The window never opened, so no settle will ever close it. The EXACT
@@ -408,7 +408,7 @@ public final class InstanceMigrations {
             this.checkpoint.accept("source_removed");
 
             InstanceOperationGuard.handoff(this.instances.leases(), instanceId,
-                resolved.serverId(), sourceFence, targetServerId, targetFence,
+                resolved.serverId(), targetServerId,
                 InstanceModel.STATUS_STOPPED, nameOf(resolved.row()));
             this.checkpoint.accept("flipped");
         } catch (IOException | RuntimeException error) {
@@ -555,13 +555,19 @@ public final class InstanceMigrations {
             Integer serverId = row.get(InstanceModel.SERVER_ID);
             try {
                 // The same borrowed-lease discipline InstanceService.recoverInterrupted
-                // documents: settle() takes the SOURCE host's fence, so an unguarded sweep
+                // documents: settle() drives the SOURCE host, so an unguarded sweep
                 // would seize (and keep) the lease of every host a stuck record sits on --
                 // including hosts a rival controller is actively driving.
+                // And only a record nobody holds: a live migration's claim makes the window its own.
                 Runnable settle = () -> {
-                    if (!migrations.settle(id)) {
-                        Blast.log("MIGRATE: could not settle interrupted migration of",
-                            id, "- a daemon did not answer; retried at the next boot");
+                    boolean idle = migrations.instances.operations().runIfIdle(id, () -> {
+                        if (!migrations.settle(id)) {
+                            Blast.log("MIGRATE: could not settle interrupted migration of",
+                                id, "- a daemon did not answer; retried at the next boot");
+                        }
+                    });
+                    if (!idle) {
+                        Blast.log("MIGRATE: migration of", id, "is held by a live operation; left to it");
                     }
                 };
                 if (serverId == null) {
@@ -613,7 +619,7 @@ public final class InstanceMigrations {
             return false;   // refusing to answer is not evidence; defer
         }
 
-        long sourceFence = this.instances.leases().requireFence(resolved.serverId());
+        this.instances.leases().requireFence(resolved.serverId());
         String handle = resolved.spec().handle();
         if (sourceClaim == WorkloadClaim.OURS) {
             // Roll back: the record's host is the data authority and still holds it.
@@ -627,7 +633,7 @@ public final class InstanceMigrations {
                 }
             }
             InstanceOperationGuard.clearMigration(this.instances.leases(), instanceId,
-                resolved.serverId(), sourceFence, targetId,
+                resolved.serverId(), targetId,
                 InstanceModel.STATUS_STOPPED, nameOf(row));
             Blast.log("MIGRATE: rolled back interrupted migration of", handle,
                 "- source host keeps it");
@@ -635,10 +641,10 @@ public final class InstanceMigrations {
         }
         if (targetClaim == WorkloadClaim.OURS) {
             // Forward: the only copy lives on the destination; complete the handoff.
-            long targetFence = this.instances.leases().requireFence(targetId);
+            this.instances.leases().requireFence(targetId);
             PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, instanceId);
             InstanceOperationGuard.handoff(this.instances.leases(), instanceId,
-                resolved.serverId(), sourceFence, targetId, targetFence,
+                resolved.serverId(), targetId,
                 InstanceModel.STATUS_STOPPED, nameOf(row));
             Blast.log("MIGRATE: completed interrupted migration of", handle,
                 "onto", targetName);
@@ -647,7 +653,7 @@ public final class InstanceMigrations {
         // Neither daemon holds an attributable copy: loud, never silent. The record stays
         // where it is, so the window's destination booking goes back like a rollback's.
         InstanceOperationGuard.clearMigration(this.instances.leases(), instanceId,
-            resolved.serverId(), sourceFence, targetId,
+            resolved.serverId(), targetId,
             InstanceModel.STATUS_ERROR, nameOf(row));
         Blast.log("MIGRATE: interrupted migration of", handle, "found NO copy on either"
             + " host; the record is stamped error for the operator");

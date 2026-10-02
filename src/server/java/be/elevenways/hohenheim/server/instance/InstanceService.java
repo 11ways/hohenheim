@@ -94,17 +94,16 @@ public final class InstanceService {
      * AIDEV-NOTE: this was an in-flight SET, and a set is not a lock: a second deploy ran
      * beside the first (two create() calls replacing each other's container), and the
      * first one's finally cleared the mark while the second still ran. The reconciler
-     * question the set used to answer ("is this controller mid-operation on the record?")
-     * is now {@link InstanceOperationLock#isBusy}, asked through the same lock.
+     * question the set used to answer ("is anybody mid-operation on the record?") is now
+     * {@link InstanceOperationLock#runIfIdle}, asked through the same claim.
      *
      * AIDEV-NOTE: the reconciler still needs that question, for the transitional story: a
      * deploy is not marked by any status -- the record keeps its PREVIOUS status until the
      * fenced stamp at the very end -- so between {@code create} and that stamp the daemon
      * legitimately disagrees with a record that says {@code running}. The host LEASE cannot
      * answer it: {@code HostLeases.requireFence} acquires on miss and then holds for the
-     * process lifetime, so "we hold host X" means "no RIVAL is working on X", never "we
-     * are idle on X". The two guards are complementary and both are needed -- the lease
-     * excludes other controllers, this lock excludes ourselves.
+     * process lifetime, so "we hold host X" means "no RIVAL drives X", never "we are idle on
+     * X". The record's claim answers it for every controller at once.
      *
      * AIDEV-NOTE: the upstream invalidation lives HERE, at the one funnel deploy, stop and
      * destroy all pass through, rather than in each kind's lane. Only the release engine
@@ -285,7 +284,7 @@ public final class InstanceService {
         // Asked again on the workload half, for the same reason the power gate is: an
         // in-package caller (restart, a source build's bring-up) must not be a wider door.
         InstanceOperationGuard.requireDatabasesReady(instanceId);
-        long fence = this.leases.requireFence(resolved.serverId());
+        this.leases.requireFence(resolved.serverId());
         // The predicate (and the reasoning behind it) lives on OwnedInstances.isPlacementGated,
         // so the instance overview can explain this refusal by asking the SAME question.
         if (OwnedInstances.isPlacementGated(resolved.handler(), resolved.row())) {
@@ -314,7 +313,7 @@ public final class InstanceService {
             // Pin honesty, recorded from DAEMON truth right after create: the resolved
             // image identity behind the mutable alias is what the record answers with,
             // and what an absent-workload recreate resolves from.
-            pinResolvedImage(resolved, spec, fence);
+            pinResolvedImage(resolved, spec);
             // Desired devices reconcile BEFORE start: a recreated workload comes back
             // with its disks and NICs, never silently without them.
             new InstanceDevices(this).reconcile(resolved, instanceId);
@@ -347,7 +346,7 @@ public final class InstanceService {
             // reached the ledger first would delete the winner's fresh port claim.
             // With a readiness matcher the stamp is STARTING; the matcher's own
             // fenced write flips it to RUNNING when the line is observed.
-            stampGuarded(resolved, fence, watch != null
+            stampGuarded(resolved, watch != null
                 ? watch.initialStatus() : InstanceModel.STATUS_RUNNING);
             // Every record-after publication's observed port is recorded in ONE call: the
             // ledger supersedes whatever observed claims the owner held that are not in
@@ -385,7 +384,7 @@ public final class InstanceService {
             // Fence first, ledger second: a fenced-out loser must not park the
             // winner's claims. Whatever the previous deploy held is unverifiable
             // for a still-fenced controller: park, never delete.
-            stampGuarded(resolved, fence, InstanceModel.STATUS_ERROR);
+            stampGuarded(resolved, InstanceModel.STATUS_ERROR);
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
             throw HohenheimViolations.instanceRefusal("instance_deploy_failed", resolved.row(), e);
         } catch (Violations refused) {
@@ -423,7 +422,7 @@ public final class InstanceService {
         // An operator stop mid-capture/mid-restore would stamp STOPPED over the
         // protected status and un-protect the operation; destroy stays ungated.
         InstanceOperationGuard.requireOperable(resolved.row());
-        long fence = this.leases.requireFence(resolved.serverId());
+        this.leases.requireFence(resolved.serverId());
         try {
             // The console half of a stop: mark the coming exit OBSERVED (crash
             // detection must not fire on an operator stop), then try the template's
@@ -439,11 +438,11 @@ public final class InstanceService {
             }
             resolved.runtime().stop(resolved.spec().handle(), 10);
             this.beforeOutcomeWrite.run();
-            stampGuarded(resolved, fence, InstanceModel.STATUS_STOPPED);
+            stampGuarded(resolved, InstanceModel.STATUS_STOPPED);
             PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
             recordPower(instanceId, HohenheimActivityAction.STOPPED, resolved);
         } catch (IOException e) {
-            stampGuarded(resolved, fence, InstanceModel.STATUS_ERROR);
+            stampGuarded(resolved, InstanceModel.STATUS_ERROR);
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
             throw HohenheimViolations.instanceRefusal("instance_stop_failed", resolved.row(), e);
         }
@@ -489,7 +488,7 @@ public final class InstanceService {
             return;
         }
         Resolved resolved = resolve(instanceId);
-        long fence = this.leases.requireFence(resolved.serverId());
+        this.leases.requireFence(resolved.serverId());
         try {
             // Destroy is an intended end: never a crash, and no session survives it.
             InstanceConsoles.markStopExpected(instanceId);
@@ -506,12 +505,12 @@ public final class InstanceService {
             // still attributes it to this record, and ONLY then.
             destroyAbandonedMigrationCopy(resolved);
         } catch (IOException e) {
-            stampGuarded(resolved, fence, InstanceModel.STATUS_ERROR);
+            stampGuarded(resolved, InstanceModel.STATUS_ERROR);
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
             throw HohenheimViolations.instanceRefusal("instance_destroy_failed", resolved.row(), e);
         }
         this.beforeOutcomeWrite.run();
-        stampGuarded(resolved, fence, InstanceModel.STATUS_STOPPED);
+        stampGuarded(resolved, InstanceModel.STATUS_STOPPED);
         // End of life: pre-allocated reservations die WITH the instance -- unlike stop,
         // which keeps them (the stable number is what DNS points at across restarts).
         PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, instanceId);
@@ -582,9 +581,9 @@ public final class InstanceService {
      * control-plane bookkeeping that must not acquire preconditions it does not need --
      * resolve() refuses a blank image and an unknown kind, and the switch half of a
      * gated release cannot afford to fail on a spec question after the candidate is
-     * already taking traffic. It reads the host off the row and stamps under the host
-     * fence, so a stale controller's flip matches zero rows exactly like every other
-     * outcome write. No capability gate: the role is not a request-reachable verb, and
+     * already taking traffic. It reads the host off the row and stamps through the
+     * release record's own claim, so a stale holder's flip matches zero rows exactly like
+     * every other outcome write. No capability gate: the role is not a request-reachable verb, and
      * the operation that owns it (a site release) gated itself at the site tier.
      *
      * @throws Violations {@code instance_not_found} or {@code instance_fenced_out}
@@ -596,9 +595,12 @@ public final class InstanceService {
                 .withArg("id", instanceId));
         }
         int serverId = ServerModel.canonicalServerId(row.get(InstanceModel.SERVER_ID));
-        long fence = this.leases.requireFence(serverId);
-        InstanceOperationGuard.stampRole(this.leases, instanceId, serverId, fence, role,
-            String.valueOf((Object) row.get(InstanceModel.NAME)));
+        this.leases.requireFence(serverId);
+        // The release's own claim, queued: the caller holds the application's (the documented lock order), and a
+        // reconciler glance at the release must delay the switch, never fail it.
+        this.operations.exclusive(instanceId, InstanceOperationLock.Contention.QUEUE, () ->
+            InstanceOperationGuard.stampRole(this.leases, instanceId, serverId, role,
+                String.valueOf((Object) row.get(InstanceModel.NAME))));
     }
 
     /** Typed live status straight off the daemon; never throws. */
@@ -659,17 +661,16 @@ public final class InstanceService {
     // -- the fence discipline -------------------------------------------------
 
     /**
-     * THE fenced outcome write: one guarded statement that both records the status and
-     * stamps the fence -- {@code WHERE id = ? AND deleted_at IS NULL AND (claim_fence
-     * IS NULL OR claim_fence <= :myFence)}. Zero matched rows is a HARD FAILURE, never
-     * a shrug: it means a rival controller with a higher fence owns this record now,
-     * so this controller drops its hold and aborts. Cleanup is the winner's job.
+     * THE fenced outcome write ({@link InstanceOperationGuard#stamp}): the status, on the
+     * record this operation's claim still owns. Zero matched rows is a HARD FAILURE, never
+     * a shrug: a rival operation took the record over with a later fence, so this one
+     * aborts. Cleanup is the winner's job.
      *
      * @throws Violations {@code instance_fenced_out}
      */
-    private void stampGuarded(@NonNull Resolved resolved, long fence, @NonNull String status) {
+    private void stampGuarded(@NonNull Resolved resolved, @NonNull String status) {
         InstanceOperationGuard.stamp(this.leases, resolved.row().get(InstanceModel.ID),
-            resolved.serverId(), fence, status,
+            resolved.serverId(), status,
             String.valueOf((Object) resolved.row().get(InstanceModel.NAME)));
     }
 
@@ -688,8 +689,8 @@ public final class InstanceService {
      * right after create so "what is actually running" is answerable from the row.
      * Drivers without an identity-reporting capability leave the column untouched.
      */
-    private void pinResolvedImage(@NonNull Resolved resolved, @NonNull InstanceSpec spec,
-                                  long fence) throws IOException {
+    private void pinResolvedImage(@NonNull Resolved resolved, @NonNull InstanceSpec spec)
+            throws IOException {
         String observed = null;
         if (resolved.runtime() instanceof NativeSnapshotSupport support) {
             observed = support.imageIdentity(spec).id();
@@ -701,7 +702,7 @@ public final class InstanceService {
             return;
         }
         InstanceOperationGuard.stampFingerprint(this.leases,
-            resolved.row().get(InstanceModel.ID), resolved.serverId(), fence, observed,
+            resolved.row().get(InstanceModel.ID), resolved.serverId(), observed,
             String.valueOf((Object) resolved.row().get(InstanceModel.NAME)));
     }
 
@@ -808,11 +809,19 @@ public final class InstanceService {
             int id = row.get(InstanceModel.ID);
             Integer serverId = row.get(InstanceModel.SERVER_ID);
             try {
+                // Only a record nobody holds: a live operation's claim (this controller's or a rival's)
+                // means the status is that operation's to finish, whatever the clock says.
                 Runnable settle = () -> {
-                    if (!service.settleInterrupted(id)) {
-                        Blast.log("INSTANCE: could not settle interrupted",
-                            row.get(InstanceModel.STATUS), "state of", id,
-                            "- the daemon did not answer; retried at the next boot");
+                    boolean idle = service.operations.runIfIdle(id, () -> {
+                        if (!service.settleInterrupted(id)) {
+                            Blast.log("INSTANCE: could not settle interrupted",
+                                row.get(InstanceModel.STATUS), "state of", id,
+                                "- the daemon did not answer; retried at the next boot");
+                        }
+                    });
+                    if (!idle) {
+                        Blast.log("INSTANCE: interrupted", row.get(InstanceModel.STATUS), "state of", id,
+                            "is held by a live operation; left to it");
                     }
                 };
                 if (serverId == null) {
@@ -859,8 +868,8 @@ public final class InstanceService {
         } else {
             settled = InstanceModel.STATUS_ERROR;
         }
-        long fence = this.leases.requireFence(resolved.serverId());
-        InstanceOperationGuard.stamp(this.leases, instanceId, resolved.serverId(), fence,
+        this.leases.requireFence(resolved.serverId());
+        InstanceOperationGuard.stamp(this.leases, instanceId, resolved.serverId(),
             settled, row.get(InstanceModel.NAME));
         ActivityLog.record(Models.get(InstanceModel.class), instanceId,
             HohenheimActivityAction.SETTLED_INTERRUPTED, status + " -> " + settled

@@ -228,10 +228,9 @@ public final class InstanceStatusReconciler {
         }
         Instant storedKill = fresh.get(InstanceModel.WORKLOAD_KILLED_AT);
         Instant killedAt = workloadKilledAt(live, storedKill);
-        long fence = this.instances.leases().requireFence(serverId);
+        this.instances.leases().requireFence(serverId);
         InstanceOperationGuard.stampObserved(this.instances.leases(), instanceId, serverId,
-            fence, settled, changed, killedAt,
-            String.valueOf((Object) fresh.get(InstanceModel.NAME)));
+            settled, changed, killedAt, String.valueOf((Object) fresh.get(InstanceModel.NAME)));
         if (storedKill == null && killedAt != null) {
             Blast.log("INSTANCE RECONCILE:", fresh.get(InstanceModel.NAME),
                 "runs, but the daemon reports its workload killed for out-of-memory");

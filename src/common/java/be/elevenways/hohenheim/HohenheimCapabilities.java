@@ -23,6 +23,9 @@ public final class HohenheimCapabilities {
     /** Send console commands to the workload's primary process. */
     public static final String CONSOLE = "console";
 
+    /** Open an interactive shell inside the workload: arbitrary programs, as the workload's user. */
+    public static final String SHELL = "shell";
+
     /** Change what the workload runs: its configuration and the installed app. */
     public static final String CONFIG = "config";
 

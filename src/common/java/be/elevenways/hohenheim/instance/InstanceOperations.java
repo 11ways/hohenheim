@@ -20,7 +20,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * The instance operations every surface places: start, stop, restart, backup, snapshot, a console command and the
- * in-place app update of one instance.
+ * in-place app update of one instance; and the two sessions its tabs open, a shell and a framebuffer.
  *
  * AIDEV-NOTE: no applies and no availability (stage 2 contract 6.10, S1). A stopped instance's stop is idempotent
  * and answers success, and a database that is not ready is the start handler's retriable refusal, so the API and a
@@ -120,6 +120,31 @@ public final class InstanceOperations {
     /** The console command's input. */
     public record ConsoleCommandInput(@Nullable String command) {
     }
+
+    /**
+     * Open an interactive shell inside one instance: what the shell tab offers and the shell socket admits.
+     *
+     * AIDEV-NOTE: a SESSION, not an invocation. Its effect is the socket the shell tab opens, so no surface invokes it;
+     * the socket asks {@code OperationPipeline.offer} and admits exactly whom the operation is offered to, which carries
+     * the gate, the generated-instance applicability and the authorization of every other instance operation.
+     */
+    public static final Operation<Row, Void, Void> OPEN_SHELL = Operation.declare(HohenheimIds.id("open_shell"))
+        .label(label("shell", "instance", "Shell"))
+        .icon(Icon.of("terminal"))
+        .one(INSTANCE)
+        .gate(gate(HohenheimCapabilities.SHELL))
+        .facts(OperationFact.REACHES_OUTSIDE)
+        .register();
+
+    /** Watch and drive a virtual machine's screen: the framebuffer tab and socket, the {@link #OPEN_SHELL} shape. */
+    public static final Operation<Row, Void, Void> OPEN_FRAMEBUFFER =
+        Operation.declare(HohenheimIds.id("open_framebuffer"))
+            .label(label("framebuffer", "instance", "Framebuffer"))
+            .icon(Icon.of("display"))
+            .one(INSTANCE)
+            .gate(gate(HohenheimCapabilities.CONSOLE))
+            .facts(OperationFact.REACHES_OUTSIDE)
+            .register();
 
     /** The template's in-place update script, run inside the running workload; it changes what runs: config. */
     public static final Operation<Row, Void, String> APP_UPDATE =

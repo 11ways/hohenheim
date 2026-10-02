@@ -59,6 +59,16 @@ public final class HostLeases {
         this.ttl = ttl;
     }
 
+    /** @return the lease coordinator of this controller identity over one datasource */
+    public @NonNull Function<Datasource, Leases> coordinators() {
+        return this.coordinators;
+    }
+
+    /** @return how long a stalled holder of this identity keeps what it holds */
+    public @NonNull Duration ttl() {
+        return this.ttl;
+    }
+
     /** The lease key of one host. */
     public static @NonNull String keyFor(int serverId) {
         return KEY_PREFIX + serverId;
