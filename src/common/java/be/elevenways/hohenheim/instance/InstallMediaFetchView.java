@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.instance;
 
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -19,7 +20,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public record InstallMediaFetchView(
     @NonNull String name,
     @NonNull Microcopy state,
-    @NonNull String variant,
+    @NonNull BadgeVariant variant,
     boolean active,
     @Nullable Integer percent,
     @Nullable String reason

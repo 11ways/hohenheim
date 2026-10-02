@@ -3,7 +3,7 @@
 {% declare title: String %}
 {% declare siteId: Integer %}
 {% declare siteName: String %}
-{% declare domains: List %}
+{% declare domains: List<SiteDomainView> %}
 {% declare addDomainTarget: RouteTarget = null %}
 {% declare requestCertTarget: RouteTarget = null %}
 {#- Row affordances are per ROW (domain.canEdit / domain.deleteTarget): the domain
@@ -39,11 +39,11 @@
         <pl-table-body>
             {% each domains as index, domain %}
             <pl-table-row>
-                <pl-table-cell>{% if domain.get("canEdit") == true %}<a use:Zenit.route={% domain.get("editTarget") %}>{{ domain.get("hostname") }}</a>{% else %}{{ domain.get("hostname") }}{% /if %}</pl-table-cell>
-                <pl-table-cell><pl-badge variant={% "secondary" %}>{{ domain.get("matchType") }}</pl-badge></pl-table-cell>
+                <pl-table-cell>{% if domain.canEdit %}<a use:Zenit.route={% domain.editTarget %}>{{ domain.hostname }}</a>{% else %}{{ domain.hostname }}{% /if %}</pl-table-cell>
+                <pl-table-cell><pl-badge variant={% "secondary" %}>{{ domain.matchType }}</pl-badge></pl-table-cell>
                 <pl-table-cell>
-                    {% if domain.get("forceSsl") == true %}
-                    <pl-badge variant={% "default" %}>{{ t("forced", scope: "site_domains") }}</pl-badge>
+                    {% if domain.forceSsl %}
+                    <pl-badge variant={% "primary" %}>{{ t("forced", scope: "site_domains") }}</pl-badge>
                     {% else %}
                     <pl-badge variant={% "secondary" %}>{{ t("off", scope: "site_domains") }}</pl-badge>
                     {% /if %}
@@ -52,18 +52,18 @@
                     OPEN it (domain.canOpenCert, the walk's view answer); everyone else
                     reads the coverage state and the expiry, never the operator's
                     certificate name. -#}
-                <pl-table-cell data-cert-status={% domain.get("certStatus") %}>
+                <pl-table-cell data-cert-status={% domain.certStatus %}>
                     {#- Variant and wording are facts on CertCoverage (SiteDomainsPage puts them);
                         an empty status is a row no certificate applies to (TLS passthrough, a
                         non-exact match) and renders nothing. -#}
-                    {% if domain.get("certStatus") != "" %}
-                    {% if domain.get("canOpenCert") == true %}<a use:Zenit.route={% domain.get("certTarget") %}><pl-badge variant={% domain.get("certBadge") %}>{{ domain.get("certName") }}</pl-badge></a>{% else %}<pl-badge variant={% domain.get("certBadge") %}>{{ domain.get("certLabel") }}</pl-badge>{% /if %}
+                    {% if domain.certStatus != "" %}
+                    {% if domain.canOpenCert %}<a use:Zenit.route={% domain.certTarget %}><pl-badge variant={% domain.certBadge %}>{{ domain.certName }}</pl-badge></a>{% else %}<pl-badge variant={% domain.certBadge %}>{{ domain.certLabel }}</pl-badge>{% /if %}
                     {% /if %}
                     {#- The coverage badge and the expiry are two sentences in one cell:
                         the newline between them is markup whitespace and does not survive,
                         so the separator is explicit. -#}
-                    {% if domain.get("certHasExpiry") == true %}
-                    &nbsp;<span class="hh-cert-expiry">{{ t("expires", scope: "site_domains") }} <pl-relative-time datetime={% domain.get("certExpiresIso") %} title={% domain.get("certExpiresIso") %}></pl-relative-time></span>
+                    {% if domain.certHasExpiry %}
+                    &nbsp;<span class="hh-cert-expiry">{{ t("expires", scope: "site_domains") }} <pl-relative-time datetime={% domain.certExpiresIso %} title={% domain.certExpiresIso %}></pl-relative-time></span>
                     {% /if %}
                 </pl-table-cell>
                 {#- Row actions: the hostname link opens the form, but a row an operator
@@ -73,15 +73,15 @@
                     cell can hold one, both or neither. -#}
                 {% if hasRowActions %}
                 <pl-table-cell class="hh-domain-row-actions">
-                    {% if domain.get("canEdit") == true %}
-                    <a class="hh-domain-edit" use:Zenit.route={% domain.get("editTarget") %}>
+                    {% if domain.canEdit %}
+                    <a class="hh-domain-edit" use:Zenit.route={% domain.editTarget %}>
                         <pl-icon name="pen" size="sm"></pl-icon>
                         {{ t("edit", scope: "site_domains") }}
                     </a>
                     {% /if %}
-                    {% if domain.get("canRemove") == true %}
-                    <form use:Zenit.form={% domain.get("deleteTarget") %}
-                          use:CmsConfirm.destructive={% t("remove_confirm", scope: "site_domains", hostname: domain.get("hostname")) %}>
+                    {% if domain.canRemove %}
+                    <form use:Zenit.form={% domain.deleteTarget %}
+                          use:CmsConfirm.destructive={% t("remove_confirm", scope: "site_domains", hostname: domain.hostname) %}>
                         <pl-button variant={% "ghost" %} type={% "submit" %} size="sm" class="hh-domain-remove">
                             <pl-icon name="trash-can" size="sm"></pl-icon>
                             {{ t("remove", scope: "site_domains") }}

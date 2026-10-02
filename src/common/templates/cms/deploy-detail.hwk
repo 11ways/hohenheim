@@ -7,18 +7,20 @@
     delegated panel gets a tenant-safe reason, never the daemon's own text); this only
     draws it. The trigger is the collapsible's own ghost register, never a pl-button
     nested inside it -- that was a button inside a button. -#}
-{% declare deploy: Map<String, Object> %}
+{% declare error: String %}
+{% declare hasLog: Boolean %}
+{% declare log: String %}
 {% declare colspan: Integer %}
 {% declare logLabel: Microcopy %}
 <pl-table-row data-detail>
     <pl-table-cell colspan={% colspan %} class="hh-deploy-detail">
-        {% if deploy.get("error") != "" %}
+        {% if error != "" %}
         <div class="hh-deploy-error">
             <pl-icon name="triangle-exclamation"></pl-icon>
-            <span>{{ deploy.get("error") }}</span>
+            <span>{{ error }}</span>
         </div>
         {% /if %}
-        {% if deploy.get("hasLog") == true %}
+        {% if hasLog %}
         <pl-collapsible>
             <pl-collapsible-trigger variant={% "ghost" %} caret={% true %}>{{ logLabel }}</pl-collapsible-trigger>
             <pl-collapsible-content>
@@ -26,7 +28,7 @@
                     names its own scroll region for assistive technology, and it bounds its
                     own height. -#}
                 <pl-log-view class="hh-deploy-log"
-                             text={% deploy.get("log") %}
+                             text={% log %}
                              label={% logLabel %}></pl-log-view>
             </pl-collapsible-content>
         </pl-collapsible>

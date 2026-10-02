@@ -117,7 +117,7 @@ class AdminPagesTest extends HohenheimTestBase {
         // 1. The never-ban label and help come from Hohenheim's own catalog: a key no catalog declares
         //    renders marked data-unresolved, showing only the code fallback.
         for (String part : new String[] {"label", "help"}) {
-            String copy = "zn-microcopy[key='settings.hohenheim.security.never_ban." + part + "']";
+            String copy = Microcopy.WRAPPER_TAG + "[key='settings.hohenheim.security.never_ban." + part + "']";
             assertThat(page.locator(copy).count())
                 .as("step 1: the never-ban " + part + " renders its catalog key").isGreaterThan(0);
             assertThat(page.locator(copy + "[data-unresolved]").count())

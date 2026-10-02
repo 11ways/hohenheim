@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
+import be.elevenways.hohenheim.dns.DnsSecondaryLinkView;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
@@ -22,6 +23,7 @@ import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.time.Instant;
@@ -54,36 +56,28 @@ public final class DnsZoneSecondariesPage implements RecordScopedPage<Row> {
         Integer zoneId = zone.get(DnsZoneModel.ID);
         DnsPeerModel peerModel = Models.get(DnsPeerModel.class);
 
-        List<Map<String, Object>> links = new ArrayList<>();
+        List<DnsSecondaryLinkView> links = new ArrayList<>();
         for (Row link : Models.get(DnsZonePeerModel.class).findByZoneId(zoneId)) {
             Integer peerId = link.get(DnsZonePeerModel.PEER_ID);
             Row peer = peerId != null ? peerModel.findById(peerId) : null;
-            Map<String, Object> entry = new HashMap<>();
-            entry.put("peerName", peer != null ? peer.get(DnsPeerModel.NAME) : "(deleted peer)");
-            entry.put("transferHost", peer != null ? peer.get(DnsPeerModel.TRANSFER_HOST) : "");
-            entry.put("editTarget", CmsRoutes.detail(HohenheimSlugs.ADMIN, DnsZonePeerResource.SLUG,
-                link.get(DnsZonePeerModel.ID)));
             // Freshness as probed from this primary: what the peer served, when, and
             // whether that lag has outlived the stale window.
             Integer served = link.get(DnsZonePeerModel.SERVED_SERIAL);
             String probeError = link.get(DnsZonePeerModel.PROBE_ERROR);
-            entry.put("servedSerial", served != null ? String.valueOf(served) : "");
-            entry.put("probeError", probeError != null ? probeError : "");
             Instant probedAt = link.get(DnsZonePeerModel.PROBED_AT);
-            entry.put("probedAtIso", probedAt != null ? probedAt.toString() : "");
             // And what THIS primary last did for the peer.
             Integer axfrSerial = link.get(DnsZonePeerModel.LAST_AXFR_SERIAL);
             Instant axfrAt = link.get(DnsZonePeerModel.LAST_AXFR_AT);
             Instant notifyAt = link.get(DnsZonePeerModel.LAST_NOTIFY_AT);
             String notifyOutcome = link.get(DnsZonePeerModel.LAST_NOTIFY_OUTCOME);
-            entry.put("axfrSerial", axfrSerial != null ? String.valueOf(axfrSerial) : "");
-            entry.put("axfrAtIso", axfrAt != null ? axfrAt.toString() : "");
-            entry.put("notifyAtIso", notifyAt != null ? notifyAt.toString() : "");
-            entry.put("notifyOutcome", notifyOutcome != null ? notifyOutcome : "");
             Freshness freshness = freshnessOf(link);
-            entry.put("freshnessLabel", freshness.label());
-            entry.put("freshnessVariant", freshness.variant());
-            links.add(entry);
+            links.add(new DnsSecondaryLinkView(peer != null ? peer.get(DnsPeerModel.NAME) : "(deleted peer)",
+                peer != null ? peer.get(DnsPeerModel.TRANSFER_HOST) : "",
+                CmsRoutes.detail(HohenheimSlugs.ADMIN, DnsZonePeerResource.SLUG, link.get(DnsZonePeerModel.ID)),
+                served != null ? String.valueOf(served) : "", probeError != null ? probeError : "",
+                probedAt != null ? probedAt.toString() : "", axfrSerial != null ? String.valueOf(axfrSerial) : "",
+                axfrAt != null ? axfrAt.toString() : "", notifyAt != null ? notifyAt.toString() : "",
+                notifyOutcome != null ? notifyOutcome : "", freshness.label(), freshness.variant()));
         }
 
         Map<String, Object> vars = new HashMap<>();
@@ -107,15 +101,15 @@ public final class DnsZoneSecondariesPage implements RecordScopedPage<Row> {
 
     /** The freshness pill a link row projects, as probed from this primary. */
     enum Freshness {
-        UNPROBED("unprobed", "secondary"),
-        CURRENT("current", "green"),
-        BEHIND("behind", "orange"),
-        STALE("stale", "red");
+        UNPROBED("unprobed", BadgeVariant.SECONDARY),
+        CURRENT("current", BadgeVariant.SUCCESS),
+        BEHIND("behind", BadgeVariant.WARNING),
+        STALE("stale", BadgeVariant.DESTRUCTIVE);
 
         private final String token;
-        private final String variant;
+        private final BadgeVariant variant;
 
-        Freshness(String token, String variant) {
+        Freshness(String token, BadgeVariant variant) {
             this.token = token;
             this.variant = variant;
         }
@@ -124,7 +118,7 @@ public final class DnsZoneSecondariesPage implements RecordScopedPage<Row> {
             return Microcopy.of(this.token).withFilter("scope", "dns_freshness");
         }
 
-        @NonNull String variant() {
+        @NonNull BadgeVariant variant() {
             return this.variant;
         }
     }

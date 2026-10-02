@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.CertCoverage;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
+import be.elevenways.hohenheim.common.cms.SiteDomainView;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -25,6 +26,7 @@ import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.server.http.ReturnTarget;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -72,20 +74,15 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
             && HohenheimAccess.reachesRecord(accessContext, SiteModel.MODEL_ID, siteId,
                 HohenheimAccess.MANAGE);
         boolean anyRowActions = false;
-        List<Map<String, Object>> domains = new ArrayList<>();
+        List<SiteDomainView> domains = new ArrayList<>();
         for (Row domain : Models.get(SiteDomainModel.class).findBySiteId(siteId)) {
-            Map<String, Object> entry = new HashMap<>();
-            entry.put("id", domain.get(SiteDomainModel.ID));
-            entry.put("hostname", domain.get(SiteDomainModel.HOSTNAME));
-            entry.put("matchType", domain.get(SiteDomainModel.MATCH_TYPE));
-            entry.put("forceSsl", Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL)));
             boolean canEditRow = resource != null && resource.editableBy(host, domain, accessContext);
-            entry.put("canEdit", canEditRow);
+            RouteTarget editTarget = null;
             if (canEditRow) {
                 // Bound back to THIS tab, like the remove below: the record page's Cancel and
                 // Delete then land on the site's hostnames, not on the nav-hidden domains list.
-                entry.put("editTarget", ReturnTarget.bind(CmsRoutes.detail(panel, "domains",
-                    domain.get(SiteDomainModel.ID)), conduit));
+                editTarget = ReturnTarget.bind(CmsRoutes.detail(panel, "domains",
+                    domain.get(SiteDomainModel.ID)), conduit);
             }
             // AIDEV-NOTE: the row's own remove, bound back to THIS tab. Detaching a hostname
             // used to be reachable only from the nav-hidden domains list or a hand-typed
@@ -93,15 +90,17 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
             // one away. The endpoint re-decides through the resource's removableBy; asking
             // the resource here is what keeps the affordance and the endpoint one answer.
             boolean canRemoveRow = resource != null && resource.removableBy(host, domain, accessContext);
-            entry.put("canRemove", canRemoveRow);
+            RouteTarget deleteTarget = null;
             if (canRemoveRow) {
-                entry.put("deleteTarget", ReturnTarget.bind(
-                    CmsRoutes.delete(panel, "domains", domain.get(SiteDomainModel.ID)), conduit));
+                deleteTarget = ReturnTarget.bind(
+                    CmsRoutes.delete(panel, "domains", domain.get(SiteDomainModel.ID)), conduit);
             }
             anyRowActions |= canEditRow || canRemoveRow;
-            if (tlsPassthrough) entry.put("certStatus", "");
-            else putCertCoverage(entry, domain, panel, accessContext);
-            domains.add(entry);
+            CertificateFacts cert = certificateFacts(domain, panel, accessContext, tlsPassthrough);
+            domains.add(new SiteDomainView(domain.get(SiteDomainModel.ID), domain.get(SiteDomainModel.HOSTNAME),
+                domain.get(SiteDomainModel.MATCH_TYPE), Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL)),
+                canEditRow, editTarget, canRemoveRow, deleteTarget, cert.status(), cert.badge(), cert.label(),
+                cert.hasExpiry(), cert.expiresIso(), cert.canOpen(), cert.name(), cert.target()));
         }
 
         Map<String, Object> vars = new HashMap<>();
@@ -158,33 +157,30 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
      * and this column used to print that name to a tenant for whom /manage/certificates
      * is empty and the certificate's own page a 404.
      */
-    private static void putCertCoverage(Map<String, Object> entry, Row domain,
-                                        String panel, AccessContext accessContext) {
-        if (!SiteDomainModel.MATCH_EXACT.equals(domain.get(SiteDomainModel.MATCH_TYPE))) {
-            entry.put("certStatus", "");
-            return;
+    private static CertificateFacts certificateFacts(Row domain, String panel, AccessContext accessContext,
+                                                     boolean tlsPassthrough) {
+        if (tlsPassthrough || !SiteDomainModel.MATCH_EXACT.equals(domain.get(SiteDomainModel.MATCH_TYPE))) {
+            return new CertificateFacts("", null, null, false, "", false, null, null);
         }
         Row cert = CertificateCoverage.coveringCertificate(domain.get(SiteDomainModel.HOSTNAME));
         CertCoverage coverage = CertCoverage.ofCertificateStatus(
             cert == null ? null : cert.get(CertificateModel.STATUS));
-        entry.put("certStatus", coverage.key());
-        entry.put("certBadge", coverage.badgeVariant());
-        entry.put("certLabel", coverage.label());
         if (cert == null) {
-            return;
+            return new CertificateFacts(coverage.key(), coverage.badgeVariant(), coverage.label(), false, "",
+                false, null, null);
         }
         Instant expiresOn = cert.get(CertificateModel.EXPIRES_ON);
-        entry.put("certHasExpiry", expiresOn != null);
-        entry.put("certExpiresIso", expiresOn != null ? expiresOn.toString() : "");
         Integer certId = cert.get(CertificateModel.ID);
         boolean canOpen = HohenheimAccess.reachesRecord(accessContext, CertificateModel.MODEL_ID,
             certId, HohenheimAccess.VIEW);
-        entry.put("canOpenCert", canOpen);
-        if (canOpen) {
-            entry.put("certName", String.valueOf(cert.get(CertificateModel.NICE_NAME)));
-            // The panel this tab renders under carries a certificates peer on both faces
-            // (CertificateResource and its /manage projection share the slug).
-            entry.put("certTarget", CmsRoutes.detail(panel, HohenheimSlugs.CERTIFICATES, certId));
-        }
+        // The panel carries a certificates peer on both faces; denied identity and targets never enter the payload.
+        return new CertificateFacts(coverage.key(), coverage.badgeVariant(), coverage.label(), expiresOn != null,
+            expiresOn != null ? expiresOn.toString() : "", canOpen,
+            canOpen ? String.valueOf(cert.get(CertificateModel.NICE_NAME)) : null,
+            canOpen ? CmsRoutes.detail(panel, HohenheimSlugs.CERTIFICATES, certId) : null);
     }
+
+    private record CertificateFacts(String status, @Nullable BadgeVariant badge, @Nullable Microcopy label,
+                                     boolean hasExpiry, String expiresIso, boolean canOpen, @Nullable String name,
+                                     @Nullable RouteTarget target) {}
 }
