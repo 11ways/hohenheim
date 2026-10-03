@@ -62,7 +62,7 @@ class ReconcileFindingTriageTest extends HohenheimTestBase {
             page.setViewportSize(1400, 900);
             navigateToApp("/admin/reconcile-findings" + QUERY);
             waitForHydration();
-            assertCount("[data-cms-facet-rail] pl-facet", 2);
+            assertCount("[data-cms-facet-rail] pl-facet", 2, "step 2: the rail offers both axes");
             assertThat(page.locator("[data-cms-facet-rail] pl-facet[data-filter-name='bucket']"
                     + " [data-facet-value='orphaned'] .pl-facet-option-count [aria-hidden='true']")
                 .textContent().trim()).as("step 2: the rail counts this host's orphans").isEqualTo("2");
@@ -84,7 +84,7 @@ class ReconcileFindingTriageTest extends HohenheimTestBase {
             // 4. A typed search narrows the ROWS, never the tiles: they count under the filters, as worded.
             navigateToApp("/admin/reconcile-findings" + QUERY + "&text=triage-colliding");
             waitForHydration();
-            waitForCount("pl-table-body pl-table-row[data-row-key]", 1);
+            assertCount("pl-table-body pl-table-row[data-row-key]", 1, "step 4: the search narrows to one row");
             assertThat(page.locator("pl-table-body pl-table-row[data-row-key]").count())
                 .as("step 4: the search narrows the rows to the one match").isEqualTo(1);
             assertThat(tile("Orphaned under these filters")).as("step 4: the search leaves the tile's count")
