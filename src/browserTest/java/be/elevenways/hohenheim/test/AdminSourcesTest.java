@@ -5,8 +5,11 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
+import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.RuntimeImageParts;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.server.page.CmsRecordSources;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
@@ -56,7 +59,9 @@ class AdminSourcesTest extends HohenheimTestBase {
 
         // 3. Inline create follows the resource exactly as the derived default would have:
         //    offered when the framework can derive a provider for it, absent otherwise.
-        boolean imageCreatable = CmsRecordSources.createProviderFor(RuntimeImageParts.admin()) != null;
+        Panel adminPanel = PanelRegistry.getBySlug(HohenheimPanel.SLUG);
+        assertThat(adminPanel).as("step 3: the inline-create provider names its registered panel").isNotNull();
+        boolean imageCreatable = CmsRecordSources.createProviderFor(adminPanel, RuntimeImageParts.admin()) != null;
         assertThat(images.isCreatable())
             .as("step 3: runtime images offer inline create iff the framework derives a provider")
             .isEqualTo(imageCreatable);

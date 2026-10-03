@@ -10,9 +10,9 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
-import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.zenit.cms.common.resource.ResourceVerb;
 import be.elevenways.zenit.cms.server.page.CmsRecordSources;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
 import be.elevenways.zenit.common.data.RecordCreateProvider;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
@@ -21,6 +21,8 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Permission;
 import org.checkerframework.checker.nullness.qual.NonNull;
+
+import java.util.Objects;
 
 /**
  * The admin-gated record sources that need MORE than the zenit-cms-derived default
@@ -68,11 +70,12 @@ public final class AdminSources {
         // Backup targets, for the instance form's target pick: BackupTargetParts is a panel resource, whose one
         // source is panel-qualified, so the model's own source is this one, creatable through the admin entry's
         // own create form exactly as the derived default was. Absent with the instance role.
-        Panel adminPanel = PanelRegistry.getBySlug(HohenheimSlugs.ADMIN);
-        if (adminPanel != null && adminPanel.entryBySlug(BackupTargetParts.SLUG) instanceof PanelResource<?> targets) {
+        Panel adminPanel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN),
+            "the admin panel is registered before its sources");
+        if (adminPanel.entryBySlug(BackupTargetParts.SLUG) instanceof PanelResource<?> targets) {
             RecordSourceRegistry.INSTANCE.register(complete(RecordSource.of(BackupTargetModel.class)
                 .search(BackupTargetModel.NAME), BackupTargetModel.class,
-                (RowResource) PanelResourceViews.forCaller(targets, adminPanel)));
+                adminPanel, targets));
         }
 
         // Hosts, for the instance form's DEPENDENT host pick: the projection is the rule
@@ -80,7 +83,7 @@ public final class AdminSources {
         // (HohenheimPickRules.KindHostRules) narrows on exactly those two.
         RecordSourceRegistry.INSTANCE.register(complete(RecordSource.of(ServerModel.class)
             .project(ServerModel.NAME, ServerModel.RUNTIME, ServerModel.VOLUME_BACKEND)
-            .search(ServerModel.NAME), ServerModel.class, (RowResource) PanelResourceViews.forCaller(ServerParts.admin())));
+            .search(ServerModel.NAME), ServerModel.class, adminPanel, ServerParts.admin()));
 
         // Runtime images ("yolks"), for the instance form's dependent image pick: enabled
         // and incus_image are the resolver's rule vocabulary (HohenheimPickRules.RuntimeImageRules).
@@ -91,7 +94,7 @@ public final class AdminSources {
             .subtitle(row -> {
                 Object description = row.get(RuntimeImageModel.DESCRIPTION);
                 return description != null ? String.valueOf(description) : "";
-            }), RuntimeImageModel.class, (RowResource) PanelResourceViews.forCaller(RuntimeImageParts.admin())));
+            }), RuntimeImageModel.class, adminPanel, RuntimeImageParts.admin()));
 
     }
 
@@ -102,11 +105,12 @@ public final class AdminSources {
      */
     private static <M extends Model> @NonNull RecordSource<M> complete(RecordSource.@NonNull Builder<M> builder,
                                                                       @NonNull Class<M> modelClass,
-                                                                      @NonNull RowResource resource) {
+                                                                      @NonNull Panel panel,
+                                                                      @NonNull PanelResource<?> resource) {
         admin(builder, modelClass);
-        RecordCreateProvider create = CmsRecordSources.createProviderFor(resource);
+        RecordCreateProvider create = CmsRecordSources.createProviderFor(panel, resource);
         if (create != null) {
-            Permission createPermission = resource.createPermission();
+            Permission createPermission = ResourceVerbs.permission(resource, ResourceVerb.CREATE);
             if (createPermission != null) {
                 builder.creatable(create, createPermission);
             } else {
