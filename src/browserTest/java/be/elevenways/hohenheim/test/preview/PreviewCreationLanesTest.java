@@ -10,6 +10,8 @@ import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.PreviewParts;
+import be.elevenways.zenit.cms.common.access.AccessRefusedException;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.cms.common.resource.ResourceVerb;
 import be.elevenways.zenit.cms.common.resource.RowWriteCall;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
@@ -180,7 +182,7 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
      * The /manage authority gate: MANAGE on the APPLICATION is the verb (a preview is a
      * projection of the application it is built from; no new capability exists for it),
      * and the COUNTERFACTUAL proves the gate is load-bearing -- the existing operator queue
-     * claims the same application before the /manage authorizer is applied.
+     * writer claims the same application before the /manage authorizer is applied.
      */
     @Test
     void manualCreationFromManageRequiresManageOnTheChosenApplication() throws Exception {
@@ -194,13 +196,16 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
         coerced.put(PreviewDeploymentModel.APPLICATION_ID.getName(), applicationId);
         coerced.put(PreviewDeploymentModel.REF.getName(), "gate-ref");
 
-        // 1. COUNTERFACTUAL: the existing queue under the harness's operator identity accepts this application.
-        //    The /manage writer must ask its own caller's authority before reaching that same queue.
-        Object ungated = PreviewDeployments.queue(applicationId, "gate-ref", null, null,
-            DeployTrigger.MANUAL).get(PreviewDeploymentModel.ID);
+        // 1. COUNTERFACTUAL: the admin's domain writer, bypassing its operator permission, accepts the SAME stranger
+        //    and submission. The delegated writer must add the application gate before reaching that domain write.
+        Object ungated = PreviewParts.admin().writes().rowWriter(ResourceVerb.CREATE).write(
+            new RowWriteCall(ResourceVerb.CREATE, null, coerced, stranger));
         assertThat(ungated)
             .as("step 1: ungated, a stranger creates a preview on a foreign application")
             .isNotNull();
+        assertThat(catchThrowable(() -> PanelResourceCalls.create("admin", PreviewParts.SLUG, coerced, stranger)))
+            .as("step 1: the admin parts' operator permission protects their actual create lane")
+            .isInstanceOf(AccessRefusedException.class);
         PreviewDeployments.destroy(((Number) ungated).intValue(), "operator");
         assertThat(PreviewDeployments.deployClaimed(((Number) ungated).intValue(), null, DeployTrigger.MANUAL))
             .as("step 1: a delayed queued worker cannot reclaim a destroyed preview").isNull();
@@ -241,6 +246,15 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
             new RowWriteCall(ResourceVerb.CREATE, null, coerced, manager));
         assertThat(created).as("step 3: a manage holder may create").isNotNull();
         PreviewDeployments.destroy(((Number) created).intValue(), "operator");
+
+        // 4. Revoking MANAGE removes that same writer's authority again; neither a successful earlier create nor
+        //    the retained destroyed rows are a permit to create the next preview.
+        RecordGrants.revoke(GrantSubjectType.USER, managerId, InstanceModel.MODEL_ID,
+            applicationId, HohenheimAccess.MANAGE);
+        assertThat(catchThrowable(() -> PreviewParts.manage().writes().rowWriter(ResourceVerb.CREATE).write(
+                new RowWriteCall(ResourceVerb.CREATE, null, coerced, manager))))
+            .as("step 4: the delegated writer rechecks the revoked application grant")
+            .isInstanceOf(Violations.class).hasMessageContaining("preview_application_required");
     }
 
     /**
