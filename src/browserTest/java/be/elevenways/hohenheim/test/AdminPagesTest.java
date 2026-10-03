@@ -306,7 +306,7 @@ class AdminPagesTest extends HohenheimTestBase {
         // AIDEV-NOTE: read over HTTP, not through a hydrated page load. The activity LIST is
         // server-rendered and nothing here asserts a client re-render, so the browser round
         // trip bought only latency (~1.6s). What the list proves for hohenheim is that the
-        // zenit-cms ActivityResource is MOUNTED here; the row's content is asserted straight
+        // zenit-cms activity log (ActivityAdmin) is MOUNTED here; the row's content is asserted straight
         // off the model, which is stronger than a substring of the whole body.
         // AIDEV-NOTE: the list is narrowed to this site's history and asserted to carry the
         // logged ENTRY's own detail link. It used to assert the raw "hohenheim:site" token,
