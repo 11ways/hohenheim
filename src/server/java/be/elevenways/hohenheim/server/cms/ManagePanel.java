@@ -123,7 +123,7 @@ public final class ManagePanel extends Panel {
         HohenheimPanel.addIf(peers, SiteParts.manage(), Role.PROXY);
         HohenheimPanel.addIf(peers, DomainParts.manage(), Role.PROXY);
         HohenheimPanel.addIf(peers, new ManageDnsRecordResource(), Role.DNS);
-        HohenheimPanel.addIf(peers, new ManageCertificateResource(), Role.PROXY);
+        HohenheimPanel.addIf(peers, CertificateParts.manage(), Role.PROXY);
         // The instance tier's tenant projection. Every one of these is scoped by a
         // walk-confirmed record capability, and the two schedule peers plus the
         // from-template page are nav-hidden: they are reached THROUGH an instance

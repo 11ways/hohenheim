@@ -20,7 +20,7 @@ import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.hohenheim.server.cms.AccessListParts;
 import be.elevenways.hohenheim.server.cms.AuthProviderParts;
-import be.elevenways.hohenheim.server.cms.CertificateResource;
+import be.elevenways.hohenheim.server.cms.CertificateParts;
 import be.elevenways.hohenheim.server.cms.DnsPeerResource;
 import be.elevenways.hohenheim.server.cms.DnsRecordResource;
 import be.elevenways.hohenheim.server.cms.DnsZoneResource;
@@ -167,10 +167,10 @@ class DeleteConfirmationTest {
                 .isEqualTo("delete_confirm");
 
             // 8. The certificate dialog names the domains whose HTTPS stops working.
-            CertificateResource certificates = new CertificateResource();
+            DeleteConfirmation<Row> certificates = CertificateParts.admin().deleteConfirmation();
             Row wildcard = Models.get(CertificateModel.class).find()
                 .where(CertificateModel.NICE_NAME.eq("wildcard")).first();
-            ConfirmationSpec certConfirm = certificates.deleteConfirmationFor(wildcard);
+            ConfirmationSpec certConfirm = certificates.forRow(wildcard, request);
             assertThat(certConfirm.body().key())
                 .as("step 8: a certificate with domains gets the domain wording")
                 .isEqualTo("delete_confirm_domains");
@@ -181,7 +181,7 @@ class DeleteConfirmationTest {
 
             // 9. A certificate with no stored names cannot name any, and says the rest.
             Row nameless = Models.get(CertificateModel.class).findById(certificate("empty", ""));
-            assertThat(certificates.deleteConfirmationFor(nameless).body().key())
+            assertThat(certificates.forRow(nameless, request).body().key())
                 .as("step 9: a nameless certificate keeps the generic wording")
                 .isEqualTo("delete_confirm");
 

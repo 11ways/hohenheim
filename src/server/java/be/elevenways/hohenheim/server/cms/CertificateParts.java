@@ -8,22 +8,29 @@ import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
-import be.elevenways.protoblast.common.http.Uri;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationGate;
+import be.elevenways.zenit.common.operation.SubjectArity;
+import be.elevenways.zenit.common.operation.SubjectType;
+import be.elevenways.zenit.server.operation.RowDeleteOperations;
 import be.elevenways.protoblast.common.time.RelativeTime;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
-import be.elevenways.zenit.cms.common.access.AccessFunction;
+import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
-import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.panel.NavGroup;
-import be.elevenways.zenit.cms.common.resource.ListChrome;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
-import be.elevenways.zenit.cms.common.resource.RecordViewPage;
+import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.cms.common.resource.RelatedPage;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
-import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.zenit.cms.common.resource.ResourceForm;
+import be.elevenways.zenit.cms.common.resource.ResourceList;
+import be.elevenways.zenit.cms.common.resource.ResourceMutations;
+import be.elevenways.zenit.cms.common.resource.ResourceReads;
+import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
@@ -37,10 +44,8 @@ import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
-import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
-import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.RouteScope;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -62,18 +67,27 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * TLS certificates: manual PEM uploads plus Let's Encrypt requests (via the
  * request page linked from the header). The internal ACME account row is
  * scoped out of every list/load.
+ * UI copy retains the certificate catalog; names and coverage remain user data.
+ *
+ * @author Jelle De Loecker
+ * @since 0.9.0
  */
-public class CertificateResource extends RowResource {
+public final class CertificateParts {
 
     /** Every certificate but the internal ACME account row; the /manage scope narrows this same base. */
     public static final RowScope ROWS = RowScope.within(HohenheimSources::notTheAcmeAccountRow);
 
+    /** Canonical O2 delete: the same model removal and hooks as the generated legacy verb. */
+    public static final Operation<Row, Void, Integer> DELETE = RowDeleteOperations.delete(CertificateModel.class,
+        SubjectArity.ONE, OperationGate.permission(HohenheimSources.ADMIN_ACCESS));
 
+    private CertificateParts() {}
     /**
      * Display-only form entries: VIRTUAL string fields, never schema columns.
      *
@@ -101,7 +115,7 @@ public class CertificateResource extends RowResource {
     /** Wall-clock shape of {@code Dates.wallText}, which needs a RenderContext this hook has not. */
     private static final DateTimeFormatter WALL_CLOCK = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
-    private final FormSpec formSpec = FormSpec.builder()
+    private static final FormSpec ADMIN_FORM = FormSpec.builder()
         .add(CertificateModel.NICE_NAME)
         .add(CertificateModel.CERTIFICATE_PEM)
         .add(CertificateModel.PRIVATE_KEY_PEM)
@@ -132,7 +146,7 @@ public class CertificateResource extends RowResource {
             .build();
     }
 
-    private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
+    private static final TableSpec<Row> ADMIN_TABLE = TableSpec.<Row>builder()
         // AIDEV-NOTE: eight visible columns down to six. The first pairs answer ONE
         // question in one cell -- what does it cover, why is it in this state -- while
         // every date stands alone, because a subtext line is not sortable.
@@ -183,88 +197,81 @@ public class CertificateResource extends RowResource {
         return ColumnSpec.fromField(field).sortable().dateStyle(ColumnSpec.DateStyle.ABSOLUTE);
     }
 
-    @Override public @NonNull Identifier id() { return HohenheimIds.id("certificate"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "certificate"); }
-    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "certificate"); }
-    @Override public @NonNull String slug() { return HohenheimSlugs.CERTIFICATES; }
-    @Override public @NonNull Model model() { return Models.get(CertificateModel.class); }
-    @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
-    @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
-
-    /**
-     * A certificate is READ far more often than it is edited (renewal is automatic), so its
-     * front door shows it: the overview first, the edit form as the "Edit" tab, and the
-     * framework history tabs after them.
-     */
-    @Override
-    public @NonNull List<RecordScopedPage<Row>> subpages() {
-        List<RecordScopedPage<Row>> pages = new ArrayList<>();
-        pages.add(new RecordViewPage<>());
-        pages.addAll(this.frameworkSubpages());
-        return pages;
+    /** Full installation surface: PEM authoring, read-first overview, and the canonical delete. */
+    public static @NonNull PanelResource<Row> admin() {
+        return PanelResource.builder(HohenheimIds.id("certificate"), HohenheimSlugs.CERTIFICATES,
+                SubjectType.record(CertificateModel.MODEL_ID))
+            .label(Microcopy.of("plural").withFilter("scope", "certificate"))
+            .recordLabel(Microcopy.of("singular").withFilter("scope", "certificate"))
+            .description(Microcopy.of("nav_hint").withFilter("scope", "certificate"))
+            .icon(Icon.of("certificate")).navGroup(HohenheimPanel.NETWORK_GROUP).navOrder(20)
+            .scope(ROWS)
+            .reads(ResourceReads.rows().mapValues(Set.of(COVERED_NAMES_DISPLAY.getName(), EXPIRY_DISPLAY.getName(),
+                CHALLENGE_DISPLAY.getName(), DNS_PUBLISHER_DISPLAY.getName(), RENEWAL_ERROR_DISPLAY.getName(),
+                NEXT_ATTEMPT_DISPLAY.getName()), CertificateParts::displayValues))
+            .list(ResourceList.rows(ADMIN_TABLE).chrome(CmsSupport.WIDE_LIST).facets().ruleFilters()
+                .search(CertificateModel.NICE_NAME, CertificateModel.DOMAIN_NAMES_TEXT).build())
+            .form(ResourceForm.<Row>of(ADMIN_FORM).bindings(fieldBindings()).wideRecordPages()
+                .landingTab(RecordOverview.SLUG).build())
+            .writes(ResourceMutations.rows().create(call -> create(call.values()))
+                .update(call -> { update(call.record(), call.values()); return null; }).delete(DELETE).build())
+            .deleteConfirmation(DeleteConfirmation.<Row>of(deleteConfirmation())
+                .forRow((row, request) -> deleteConfirmationFor(row)))
+            .actions(actions())
+            // AIDEV-NOTE: parity is the tab contract here: the legacy twin offered no contributed access tab.
+            .tabs(ResourceTabs.<Row>of(List.of(RecordOverview.<Row>fields())).withHistory())
+            .relatedPages(RelatedPage.toPeer("certificates-request"))
+            .build();
     }
 
-    @Override public @Nullable String landingSubpage() { return RecordViewPage.SLUG; }
-
-    /** The PEM blocks and the status column need the room a list gets. */
-    @Override public boolean wideRecordPages() { return true; }
-    /** Views deliberately dropped: a certificate list is read by expiry, never by a saved query. */
-    @Override public @NonNull ListChrome listChrome() { return CmsSupport.WIDE_LIST; }
-
-    /** The question asked here is always which certificate covers a hostname. */
-    @Override
-    public @NonNull List<Field<?, ?>> searchFields() {
-        return List.of(CertificateModel.NICE_NAME, CertificateModel.DOMAIN_NAMES_TEXT);
+    /** Status-only tenant twin: its form contains no PEM, and it declares no write or download. */
+    public static @NonNull PanelResource<Row> manage() {
+        FormSpec form = FormSpec.builder().add(CertificateModel.NICE_NAME).add(CertificateModel.DOMAIN_NAMES_TEXT)
+            .add(CertificateModel.STATUS).add(CertificateModel.EXPIRES_ON).add(CertificateModel.RENEWAL_ERROR).build();
+        List<ResourceFieldBinding> bindings = new ArrayList<>();
+        for (var entry : form.entries()) {
+            bindings.add(ResourceFieldBinding.of(entry.name(), FieldAccess.alwaysReadonly()));
+        }
+        TableSpec<Row> table = TableSpec.<Row>builder()
+            .column(ColumnSpec.fromField(CertificateModel.NICE_NAME).subtext("domain_names_text").build())
+            .column(ColumnSpec.fromField(CertificateModel.DOMAIN_NAMES_TEXT).hidden().build())
+            .column(ColumnSpec.fromField(CertificateModel.STATUS).subtext("renewal_error").build())
+            .column(ColumnSpec.fromField(CertificateModel.RENEWAL_ERROR).hidden().build())
+            .column(ColumnSpec.fromField(CertificateModel.EXPIRES_ON).build())
+            .defaultSort(SortSpec.desc(CertificateModel.EXPIRES_ON.getName())).build();
+        return PanelResource.builder(HohenheimIds.id("manage_certificate"), HohenheimSlugs.CERTIFICATES,
+                SubjectType.record(CertificateModel.MODEL_ID))
+            .label(Microcopy.of("plural").withFilter("scope", "certificate"))
+            .recordLabel(Microcopy.of("singular").withFilter("scope", "certificate"))
+            .description(Microcopy.of("nav_hint").withFilter("scope", "certificate"))
+            .icon(Icon.of("certificate")).navGroup(HohenheimPanel.NETWORK_GROUP).navOrder(20)
+            .scope(TenantScopes.CERTIFICATES).reads(ResourceReads.rows())
+            .list(ResourceList.rows(table).chrome(CmsSupport.WIDE_LIST).facets().ruleFilters()
+                .search(CertificateModel.NICE_NAME, CertificateModel.DOMAIN_NAMES_TEXT)
+                .build())
+            .hasInScopeRecords(access -> HohenheimAccess.isAdmin(access) || access.principalId() != null
+                || HohenheimAccess.reachesAny(access, CertificateModel.MODEL_ID, HohenheimAccess.VIEW))
+            .form(ResourceForm.<Row>of(form).bindings(bindings).wideRecordPages().build())
+            .tabs(ResourceTabs.<Row>none()).build();
     }
 
-    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.NETWORK_GROUP; }
-    @Override public int navOrder() { return 20; }
-
-    @Override
-    public @Nullable Microcopy description() {
-        return Microcopy.of("nav_hint").withFilter("scope", "certificate");
-    }
-    @Override public @NonNull Icon icon() { return Icon.of("certificate"); }
-
-    /** Deleting a certificate destroys its private key; the type-level dialog says so. */
-    @Override
-    public @NonNull ConfirmationSpec deleteConfirmation() {
-        return deleteConfirmation(Microcopy.of("delete_confirm").withFilter("scope", "certificate"));
+    private static @NonNull ConfirmationSpec deleteConfirmation() {
+        return DeleteConfirmation.body(Microcopy.of("delete_confirm").withFilter("scope", "certificate"));
     }
 
-    /**
-     * The same warning NAMING the domains this certificate secures, so an operator sees
-     * which hostnames stop serving HTTPS before the key is gone.
-     */
-    @Override
-    public @NonNull ConfirmationSpec deleteConfirmationFor(@NonNull Row record) {
+    /** The same warning NAMING the domains this certificate secures before its key is gone. */
+    private static @NonNull ConfirmationSpec deleteConfirmationFor(@NonNull Row record) {
         String domains = DeleteImpact.join(CertificateCoverage.namesOf(record));
         if (domains.isEmpty()) {
             return deleteConfirmation();
         }
-        return deleteConfirmation(Microcopy.of("delete_confirm_domains")
-            .withFilter("scope", "certificate")
+        return DeleteConfirmation.body(Microcopy.of("delete_confirm_domains").withFilter("scope", "certificate")
             .withArg("name", String.valueOf((Object) record.get(CertificateModel.NICE_NAME)))
             .withArg("domains", domains));
     }
 
-
-    /** provider/status are staged by persistRow but are not form entries; stamp them here. */
-    @Override
-    public @NonNull Row valuesToRow(@NonNull Map<String, Object> coerced) {
-        Row row = super.valuesToRow(coerced);
-        if (coerced.get("provider") instanceof String provider) {
-            row.set(CertificateModel.PROVIDER, provider);
-        }
-        if (coerced.get("status") instanceof String status) {
-            row.set(CertificateModel.STATUS, status);
-        }
-        return row;
-    }
-
     /** Coverage and renewal diagnostics are written by the ACME machinery, never by hand. */
-    @Override
-    public @NonNull List<ResourceFieldBinding> fieldBindings() {
+    private static @NonNull List<ResourceFieldBinding> fieldBindings() {
         return List.of(
             ResourceFieldBinding.of(COVERED_NAMES_DISPLAY.getName(), FieldAccess.alwaysReadonly()),
             ResourceFieldBinding.of(EXPIRY_DISPLAY.getName(), FieldAccess.alwaysReadonly()),
@@ -280,9 +287,9 @@ public class CertificateResource extends RowResource {
      * why the last renewal did or did not happen -- each as a sentence that says
      * something when the underlying column is empty.
      */
-    @Override
-    public @NonNull Map<String, Object> valuesFromRow(@NonNull Row row) {
-        Map<String, Object> values = new LinkedHashMap<>(super.valuesFromRow(row));
+    private static @NonNull Map<String, Object> displayValues(@NonNull Row row,
+                                                             @NonNull Map<String, Object> base) {
+        Map<String, Object> values = new LinkedHashMap<>(base);
         List<String> names = CertificateCoverage.namesOf(row);
         values.put(COVERED_NAMES_DISPLAY.getName(),
             names.isEmpty() ? copy("coverage_none") : String.join(", ", names));
@@ -336,32 +343,26 @@ public class CertificateResource extends RowResource {
         return CmsSupport.resolvedTextOrDefault(Microcopy.of(key).withFilter("scope", "certificate"));
     }
 
-    /** Scope out the internal ACME account row everywhere. */
-    @Override
-    public @NonNull AccessFunction<Row> accessFunction() {
-        return AccessFunction.scopedBy(ROWS);
-    }
-
-    @Override
-    public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
-                                      @NonNull AccessContext accessContext) {
-        Map<String, Object> values = CmsSupport.mutable(coerced);
+    private static @NonNull Object create(@NonNull Map<String, Object> submitted) {
+        Map<String, Object> values = CmsSupport.mutable(submitted);
         validatePems(values, null);
-        values.put("provider", "custom");
-        values.put("status", CertificateModel.STATUS_ACTIVE);
-        values.put(CertificateModel.AUTO_RENEW.getName(), false);
-        return super.persistRow(values, accessContext);
+        Row row = Models.get(CertificateModel.class).createEmptyRow();
+        values.forEach(row::set);
+        row.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_CUSTOM);
+        row.set(CertificateModel.STATUS, CertificateModel.STATUS_ACTIVE);
+        row.set(CertificateModel.AUTO_RENEW, false);
+        Models.get(CertificateModel.class).save(row);
+        return row.get(CertificateModel.ID);
     }
 
-    @Override
-    public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
-                          @NonNull AccessContext accessContext) {
-        Map<String, Object> values = CmsSupport.mutable(coerced);
+    private static void update(@NonNull Row existing, @NonNull Map<String, Object> submitted) {
+        Map<String, Object> values = CmsSupport.mutable(submitted);
         validatePems(values, existing);
         if (CertificateModel.DNS_PUBLISHER_MANUAL.equals(existing.get(CertificateModel.DNS_PUBLISHER))) {
             values.put(CertificateModel.AUTO_RENEW.getName(), false);
         }
-        super.updateRow(existing, values, accessContext);
+        values.forEach(existing::set);
+        Models.get(CertificateModel.class).save(existing);
     }
 
     /**
@@ -400,38 +401,32 @@ public class CertificateResource extends RowResource {
     }
 
 
-    @Override
-    public @NonNull List<RowAction<Row>> rowActions() {
-        List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
-        actions.add(RowAction.Url.<Row>builder(HohenheimIds.id("download_certificate"))
+    private static @NonNull List<PanelAction<Row>> actions() {
+        List<PanelAction<Row>> actions = new ArrayList<>();
+        actions.add(PanelAction.<Row>link(HohenheimIds.id("download_certificate"), ActionPlacement.ROW)
             .label(Microcopy.of("download").withFilter("scope", "certificate"))
             .icon(Icon.of("download"))
-            .url(row -> new Uri(HohenheimEndpoints.CERTIFICATES_DOWNLOAD
-                .with(HohenheimEndpoints.CERT_ID, row.get(CertificateModel.ID)).toUrl()))
+            .route((row, request) -> HohenheimEndpoints.CERTIFICATES_DOWNLOAD
+                .with(HohenheimEndpoints.CERT_ID, row.get(CertificateModel.ID)))
             // Exporting the PEM is rare next to edit/delete: overflow, not inline.
             .inlineInRow(false)
             .build());
         // Re-ordering a certificate is how a domain is added or HTTP-01/DNS-01 is switched:
         // the row's own domain list and challenge are readonly on the form because they
         // describe what the CA actually issued, and only a new order may change them.
-        actions.add(RowAction.Url.<Row>builder(HohenheimIds.id("reissue_certificate"))
+        actions.add(PanelAction.<Row>link(HohenheimIds.id("reissue_certificate"), ActionPlacement.ROW)
             .label(Microcopy.of("reissue").withFilter("scope", "certificate"))
             .icon(Icon.of("rotate"))
-            .url(row -> new Uri(CmsRoutes.list(HohenheimSlugs.ADMIN, HohenheimSlugs.CERTIFICATES_REQUEST)
-                .with(HohenheimParams.CERTIFICATE_REISSUE, row.get(CertificateModel.ID)).toUrl()))
+            .route((row, request) -> CmsRoutes.list(HohenheimSlugs.ADMIN, HohenheimSlugs.CERTIFICATES_REQUEST)
+                .with(HohenheimParams.CERTIFICATE_REISSUE, row.get(CertificateModel.ID)))
             // A manual upload has no order to repeat, and the ACME account row is not a
             // certificate at all. The page and the handler refuse them again -- this only
             // stops offering an action that could never succeed.
-            .visibleFor((row, ctx) -> CertificateModel.PROVIDER_LETSENCRYPT
+            .shownWhen((row, ctx) -> CertificateModel.PROVIDER_LETSENCRYPT
                 .equals(row.get(CertificateModel.PROVIDER)))
             .inlineInRow(false)
             .build());
         return actions;
     }
 
-    /** The order page is a sibling PEER, so it is declared as one rather than linked. */
-    @Override
-    public @NonNull List<RelatedPage> relatedPages() {
-        return List.of(RelatedPage.toPeer("certificates-request"));
-    }
 }

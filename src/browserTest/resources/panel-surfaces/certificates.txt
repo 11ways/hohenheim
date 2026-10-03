@@ -1,0 +1,255 @@
+case admin.certificates.operator admin certificates operator v2
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
+column nice_name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=domain_names_text relation=false
+column domain_names_text at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column provider at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column status at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext=renewal_error relation=false
+column renewal_error at=4 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column challenge_type at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column dns_publisher at=6 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column issued_on at=7 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column expires_on at=8 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
+column next_attempt_at at=9 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column error_count at=10 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=11 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
+filter nice_name at=0 kind=TEXT facet=false param=filter.nice_name
+filter provider at=1 kind=SELECT facet=true param=filter.provider
+filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_text
+filter status at=3 kind=SELECT facet=true param=filter.status
+filter expires_on at=4 kind=TEXT facet=false param=filter.expires_on
+filter created_at at=5 kind=TEXT facet=false param=filter.created_at
+link hohenheim:certificates_request at=0 lead=false target=/{panel}/certificates-request
+tab overview at=0 landing=true view=true
+tab history at=1 landing=false view=false
+control CREATE%20nice_name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20certificate_pem at=1 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control CREATE%20private_key_pem at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+
+case admin.certificates.tenant admin certificates tenant v2
+admission - verdict=zenit:forbidden
+
+case admin.certificates.operator.custom admin certificates operator v2
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
+column nice_name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=domain_names_text relation=false
+column domain_names_text at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column provider at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column status at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext=renewal_error relation=false
+column renewal_error at=4 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column challenge_type at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column dns_publisher at=6 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column issued_on at=7 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column expires_on at=8 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
+column next_attempt_at at=9 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column error_count at=10 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=11 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
+filter nice_name at=0 kind=TEXT facet=false param=filter.nice_name
+filter provider at=1 kind=SELECT facet=true param=filter.provider
+filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_text
+filter status at=3 kind=SELECT facet=true param=filter.status
+filter expires_on at=4 kind=TEXT facet=false param=filter.expires_on
+filter created_at at=5 kind=TEXT facet=false param=filter.created_at
+link hohenheim:certificates_request at=0 lead=false target=/{panel}/certificates-request
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:download_certificate at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{entry}/{record}/download
+row zenit:delete at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_domains%252Cscope%3Dcertificate,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab overview at=0 landing=true view=true
+tab history at=1 landing=false view=false
+control CREATE%20nice_name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20certificate_pem at=1 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control CREATE%20private_key_pem at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control EDIT%20nice_name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20certificate_pem at=1 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control EDIT%20private_key_pem at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control EDIT%20auto_renew at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20covered_names_display at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20expiry_display at=5 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20challenge_type_display at=6 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20dns_publisher_display at=7 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20renewal_error_display at=8 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20error_count at=9 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
+control EDIT%20next_attempt_display at=10 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20nice_name at=0 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20certificate_pem at=1 kind=zenitforms:control/text input=multiline required=false readonly=true options= binding=
+control DETAIL%20private_key_pem at=2 kind=zenitforms:control/text input=multiline required=false readonly=true options= binding=
+control DETAIL%20auto_renew at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=true options= binding=
+control DETAIL%20covered_names_display at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20expiry_display at=5 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20challenge_type_display at=6 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20dns_publisher_display at=7 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20renewal_error_display at=8 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20error_count at=9 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
+control DETAIL%20next_attempt_display at=10 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+
+case admin.certificates.operator.issued admin certificates operator v2
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
+column nice_name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=domain_names_text relation=false
+column domain_names_text at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column provider at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column status at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext=renewal_error relation=false
+column renewal_error at=4 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column challenge_type at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column dns_publisher at=6 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column issued_on at=7 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column expires_on at=8 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
+column next_attempt_at at=9 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column error_count at=10 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=11 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
+filter nice_name at=0 kind=TEXT facet=false param=filter.nice_name
+filter provider at=1 kind=SELECT facet=true param=filter.provider
+filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_text
+filter status at=3 kind=SELECT facet=true param=filter.status
+filter expires_on at=4 kind=TEXT facet=false param=filter.expires_on
+filter created_at at=5 kind=TEXT facet=false param=filter.created_at
+link hohenheim:certificates_request at=0 lead=false target=/{panel}/certificates-request
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:download_certificate at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{entry}/{record}/download
+row hohenheim:reissue_certificate at=2 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/certificates-request?cert_id%3D{issued}
+row zenit:delete at=3 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_domains%252Cscope%3Dcertificate,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab overview at=0 landing=true view=true
+tab history at=1 landing=false view=false
+control CREATE%20nice_name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20certificate_pem at=1 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control CREATE%20private_key_pem at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control EDIT%20nice_name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20certificate_pem at=1 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control EDIT%20private_key_pem at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control EDIT%20auto_renew at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20covered_names_display at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20expiry_display at=5 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20challenge_type_display at=6 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20dns_publisher_display at=7 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20renewal_error_display at=8 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20error_count at=9 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
+control EDIT%20next_attempt_display at=10 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20nice_name at=0 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20certificate_pem at=1 kind=zenitforms:control/text input=multiline required=false readonly=true options= binding=
+control DETAIL%20private_key_pem at=2 kind=zenitforms:control/text input=multiline required=false readonly=true options= binding=
+control DETAIL%20auto_renew at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=true options= binding=
+control DETAIL%20covered_names_display at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20expiry_display at=5 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20challenge_type_display at=6 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20dns_publisher_display at=7 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20renewal_error_display at=8 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20error_count at=9 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
+control DETAIL%20next_attempt_display at=10 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+
+case admin.certificates.operator.selection admin certificates operator v2
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
+column nice_name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=domain_names_text relation=false
+column domain_names_text at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column provider at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column status at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext=renewal_error relation=false
+column renewal_error at=4 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column challenge_type at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column dns_publisher at=6 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column issued_on at=7 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column expires_on at=8 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
+column next_attempt_at at=9 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column error_count at=10 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=11 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
+filter nice_name at=0 kind=TEXT facet=false param=filter.nice_name
+filter provider at=1 kind=SELECT facet=true param=filter.provider
+filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_text
+filter status at=3 kind=SELECT facet=true param=filter.status
+filter expires_on at=4 kind=TEXT facet=false param=filter.expires_on
+filter created_at at=5 kind=TEXT facet=false param=filter.created_at
+link hohenheim:certificates_request at=0 lead=false target=/{panel}/certificates-request
+tab overview at=0 landing=true view=true
+tab history at=1 landing=false view=false
+control CREATE%20nice_name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20certificate_pem at=1 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control CREATE%20private_key_pem at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+
+case admin.certificates.operator.account admin certificates operator v2
+admission - verdict=admitted
+record - found=false
+verb CREATE
+chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
+column nice_name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=domain_names_text relation=false
+column domain_names_text at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column provider at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column status at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext=renewal_error relation=false
+column renewal_error at=4 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column challenge_type at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column dns_publisher at=6 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column issued_on at=7 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column expires_on at=8 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
+column next_attempt_at at=9 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column error_count at=10 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=11 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
+filter nice_name at=0 kind=TEXT facet=false param=filter.nice_name
+filter provider at=1 kind=SELECT facet=true param=filter.provider
+filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_text
+filter status at=3 kind=SELECT facet=true param=filter.status
+filter expires_on at=4 kind=TEXT facet=false param=filter.expires_on
+filter created_at at=5 kind=TEXT facet=false param=filter.created_at
+link hohenheim:certificates_request at=0 lead=false target=/{panel}/certificates-request
+tab overview at=0 landing=true view=true
+tab history at=1 landing=false view=false
+control CREATE%20nice_name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20certificate_pem at=1 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control CREATE%20private_key_pem at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+
+case manage.certificates.tenant manage certificates tenant v2
+admission - verdict=admitted
+chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
+column nice_name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext=domain_names_text relation=false
+column domain_names_text at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column status at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext=renewal_error relation=false
+column renewal_error at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column expires_on at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+
+case manage.certificates.tenant.custom manage certificates tenant v2
+admission - verdict=admitted
+record - found=true
+chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
+column nice_name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext=domain_names_text relation=false
+column domain_names_text at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column status at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext=renewal_error relation=false
+column renewal_error at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column expires_on at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+control EDIT%20nice_name at=0 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20domain_names_text at=1 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20status at=2 kind=zenitforms:form/select input=select required=false readonly=true options=active,pending,error binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20expires_on at=3 kind=zenitforms:control/datetime input=datetime required=false readonly=true options= binding=
+control EDIT%20renewal_error at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+
+case manage.certificates.tenant.foreign manage certificates tenant v2
+admission - verdict=admitted
+record - found=false
+chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
+column nice_name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext=domain_names_text relation=false
+column domain_names_text at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column status at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext=renewal_error relation=false
+column renewal_error at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column expires_on at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+
+case manage.certificates.operator.custom manage certificates operator v2
+admission - verdict=admitted
+record - found=true
+chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
+column nice_name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext=domain_names_text relation=false
+column domain_names_text at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column status at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext=renewal_error relation=false
+column renewal_error at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column expires_on at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+control EDIT%20nice_name at=0 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20domain_names_text at=1 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20status at=2 kind=zenitforms:form/select input=select required=false readonly=true options=active,pending,error binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20expires_on at=3 kind=zenitforms:control/datetime input=datetime required=false readonly=true options= binding=
+control EDIT%20renewal_error at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+

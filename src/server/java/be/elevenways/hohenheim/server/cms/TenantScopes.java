@@ -92,11 +92,11 @@ public final class TenantScopes {
     /**
      * Certificates minus the ACME account row; tenants only the walk-reachable ones.
      *
-     * AIDEV-NOTE: the base is THE admin {@link CertificateResource#ROWS} (itself
+     * AIDEV-NOTE: the base is THE admin {@link CertificateParts#ROWS} (itself
      * {@link HohenheimSources#notTheAcmeAccountRow}), never a second spelling of the exclusion
      * (ManageCertificateResource used to carry one).
      */
-    public static final RowScope CERTIFICATES = CertificateResource.ROWS.andPerPrincipal(
+    public static final RowScope CERTIFICATES = CertificateParts.ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(CertificateModel.class),
             CertificateModel.MODEL_ID, HohenheimAccess.VIEW, CertificateModel.ID::in));
 
