@@ -2,7 +2,7 @@
 {% declare title: String %}
 {% declare origin: String %}
 {% declare zoneId: Integer %}
-{% declare links: List %}
+{% declare links: List<DnsSecondaryLinkView> %}
 {% declare attachPeerTarget: RouteTarget %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare timeWording: RelativeTimeWording %}
@@ -38,28 +38,28 @@
         <pl-table-body>
             {% each links as index, link %}
             <pl-table-row>
-                <pl-table-cell><a use:Zenit.route={% link.get("editTarget") %}>{{ link.get("peerName") }}</a></pl-table-cell>
-                <pl-table-cell><code>{{ link.get("transferHost") }}</code></pl-table-cell>
+                <pl-table-cell><a use:Zenit.route={% link.editTarget %}>{{ link.peerName }}</a></pl-table-cell>
+                <pl-table-cell><code>{{ link.transferHost }}</code></pl-table-cell>
                 <pl-table-cell>
-                    <pl-badge variant={% link.get("freshnessVariant") %}>{{ link.get("freshnessLabel") }}</pl-badge>
-                    {% if link.get("probeError") != "" %}<small>{{ link.get("probeError") }}</small>{% /if %}
+                    <pl-badge variant={% link.freshnessVariant %}>{{ link.freshnessLabel }}</pl-badge>
+                    {% if link.probeError != "" %}<small>{{ link.probeError }}</small>{% /if %}
                 </pl-table-cell>
-                <pl-table-cell><code>{{ link.get("servedSerial") }}</code></pl-table-cell>
+                <pl-table-cell><code>{{ link.servedSerial }}</code></pl-table-cell>
                 <pl-table-cell>
-                    {% if link.get("probedAtIso") != "" %}
-                    <pl-relative-time datetime={% link.get("probedAtIso") %} wording={% timeWording %} title={% link.get("probedAtIso") %}></pl-relative-time>
+                    {% if link.probedAtIso != "" %}
+                    <pl-relative-time datetime={% link.probedAtIso %} wording={% timeWording %} title={% link.probedAtIso %}></pl-relative-time>
                     {% /if %}
                 </pl-table-cell>
-                <pl-table-cell><code>{{ link.get("axfrSerial") }}</code></pl-table-cell>
+                <pl-table-cell><code>{{ link.axfrSerial }}</code></pl-table-cell>
                 <pl-table-cell>
-                    {% if link.get("axfrAtIso") != "" %}
-                    <pl-relative-time datetime={% link.get("axfrAtIso") %} wording={% timeWording %} title={% link.get("axfrAtIso") %}></pl-relative-time>
+                    {% if link.axfrAtIso != "" %}
+                    <pl-relative-time datetime={% link.axfrAtIso %} wording={% timeWording %} title={% link.axfrAtIso %}></pl-relative-time>
                     {% /if %}
                 </pl-table-cell>
-                <pl-table-cell><code>{{ link.get("notifyOutcome") }}</code></pl-table-cell>
+                <pl-table-cell><code>{{ link.notifyOutcome }}</code></pl-table-cell>
                 <pl-table-cell>
-                    {% if link.get("notifyAtIso") != "" %}
-                    <pl-relative-time datetime={% link.get("notifyAtIso") %} wording={% timeWording %} title={% link.get("notifyAtIso") %}></pl-relative-time>
+                    {% if link.notifyAtIso != "" %}
+                    <pl-relative-time datetime={% link.notifyAtIso %} wording={% timeWording %} title={% link.notifyAtIso %}></pl-relative-time>
                     {% /if %}
                 </pl-table-cell>
             </pl-table-row>

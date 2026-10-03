@@ -152,4 +152,5 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
             canOpen ? CmsRoutes.detail(request.panelSlug(), HohenheimSlugs.CERTIFICATES, certId).toUrl() : null,
             expiresOn != null ? expiresOn.toString() : null);
     }
+
 }
