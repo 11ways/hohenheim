@@ -47,6 +47,12 @@ import static org.assertj.core.api.Assertions.*;
  */
 class AdminPagesTest extends HohenheimTestBase {
 
+    @BeforeAll
+    static void seed() throws Exception {
+        // Collector cardinality and the dashboard must read this class's fleet, not earlier fixtures.
+        freshSeededDatabase();
+    }
+
     // -----------------------------------------------------------------------
     // Settings
     // -----------------------------------------------------------------------

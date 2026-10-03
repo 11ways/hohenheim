@@ -78,7 +78,9 @@ class ProjectOwnershipTest extends HohenheimTestBase {
     private static Integer admittedHostId;
 
     @BeforeAll
-    static void seed() {
+    static void seed() throws Exception {
+        // The roles and instance first pages belong to this journey's project inventory.
+        freshSeededDatabase();
         memberAId = ApiSupport.user("member-a@project.test", "Member A");
         memberBId = ApiSupport.user("member-b@project.test", "Member B");
         principalA = new UserPrincipal(memberAId, "Member A");

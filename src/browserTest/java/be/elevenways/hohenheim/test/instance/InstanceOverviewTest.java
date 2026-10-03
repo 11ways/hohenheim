@@ -15,6 +15,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeAll;
 
 import java.net.http.HttpResponse;
 import java.time.Instant;
@@ -36,6 +37,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 class InstanceOverviewTest extends HohenheimTestBase {
 
     private static Integer instanceId;
+
+    @BeforeAll
+    static void seed() throws Exception {
+        // The landing-row assertion must not depend on whether earlier classes filled the first page.
+        freshSeededDatabase();
+        instanceId = null;
+    }
 
     /** The deploy-blocker alert's own title copy, which identifies the band. */
     private static final String BLOCKER_TITLE = "This instance cannot start yet";
