@@ -188,6 +188,12 @@ class DatabaseApiTest extends HohenheimTestBase {
             + move.body()).isEqualTo(422);
         assertThat(move.body()).as("step 5: naming which of the four reasons it is")
             .contains("database_already_shared");
+        // The whole body is the frozen wire's form-level 422, byte for byte: the move runs through the
+        // move_database_shared operation now, and an ineligible record still answers exactly this.
+        String reason = "Database '" + PREFIX + "db' already lives on a shared engine";
+        assertThat(move.body()).as("step 5: the 422 body is unchanged by the operation lane")
+            .isEqualTo("{\"status\":422,\"code\":\"database_already_shared\",\"message\":\"" + reason
+                + "\",\"violations\":[{\"code\":\"database_already_shared\",\"message\":\"" + reason + "\"}]}");
         assertThat((String) databases.findById(databaseId).get(DatabaseModel.STATUS))
             .as("step 5: and nothing was queued -- the record never went provisioning")
             .isEqualTo(DatabaseModel.STATUS_ACTIVE);
