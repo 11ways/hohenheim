@@ -710,7 +710,7 @@ public final class TenantWrites {
 
     /**
      * The only columns a delegated tenant may author on a site: exactly what
-     * {@code ManageSiteResource} offers (its form, its field bindings, its updateRow and the
+     * the /manage site twin offers ({@code SiteParts.manage()}: its form, its bindings, its update and the
      * enable toggle). The upstream kind, the settings (every dial target: forward_host,
      * socket, root_path, ...), instance_id, slug, the access list, the auth provider, the
      * status and the quota bucket are all operator decisions -- authoring one is authoring

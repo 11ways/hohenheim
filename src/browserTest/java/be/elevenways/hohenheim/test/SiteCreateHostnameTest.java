@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.cms.SiteResource;
+import be.elevenways.hohenheim.server.cms.SiteWrites;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.edit.FormEntry;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -37,7 +39,8 @@ class SiteCreateHostnameTest extends HohenheimTestBase {
             + "&upstream_kind=hohenheim%3Astatic"
             + "&settings.root_path=%2Ftmp"
             + "&enabled=true"
-            + "&hostname=" + hostname;
+            + "&hostname=" + hostname
+            + "&" + PanelResourceCalls.createEnvelope();
     }
 
     private static Row siteNamed(String name) {
@@ -120,9 +123,10 @@ class SiteCreateHostnameTest extends HohenheimTestBase {
         long sitesBefore = siteCount();
         HttpResponse<String> refused = httpPostForm("/admin/sites/new",
             createBody("Takeover Site", HOLDER_HOSTNAME), sessionToken, csrfToken);
+        // The create is an operation now, whose refused submit re-renders under its refusal status.
         assertThat(refused.statusCode())
             .as("step 3: a claimed hostname rerenders the form instead of redirecting")
-            .isEqualTo(200);
+            .isEqualTo(422);
         assertThat(refused.body())
             .as("step 3: the refusal is the route-claim sentence, naming the holder")
             .contains("already claimed by site")
@@ -141,12 +145,11 @@ class SiteCreateHostnameTest extends HohenheimTestBase {
 
         // 4. The EDIT form is untouched: the entry is CREATE-only, so it neither renders
         //    nor coerces there -- a hand-posted hostname on an update writes nothing.
-        SiteResource resource = new SiteResource();
-        assertThat(resource.formSpec().forView(EditView.CREATE).entries().stream()
+        assertThat(SiteWrites.ADMIN_FORM.forView(EditView.CREATE).entries().stream()
                 .map(FormEntry::name))
             .as("step 4: the create view carries the hostname entry")
             .contains(SiteDomainModel.HOSTNAME.getName());
-        assertThat(resource.formSpec().forView(EditView.EDIT).entries().stream()
+        assertThat(SiteWrites.ADMIN_FORM.forView(EditView.EDIT).entries().stream()
                 .map(FormEntry::name))
             .as("step 4: the edit view does not")
             .doesNotContain(SiteDomainModel.HOSTNAME.getName());
@@ -156,7 +159,9 @@ class SiteCreateHostnameTest extends HohenheimTestBase {
             .as("step 4: so the edit form renders no hostname input")
             .doesNotContain("name=\"hostname\"");
         httpPostForm("/admin/sites/" + holderId,
-            "name=Hostname+Site&hostname=" + FREE_HOSTNAME, sessionToken, csrfToken);
+            "name=Hostname+Site&hostname=" + FREE_HOSTNAME + "&" + PanelResourceCalls.editEnvelope(
+                HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, holderId, TenantConduits.operator()),
+            sessionToken, csrfToken);
         assertThat(domainsOf(holder))
             .as("step 4: a hand-posted hostname on an update writes no second hostname row")
             .hasSize(1);

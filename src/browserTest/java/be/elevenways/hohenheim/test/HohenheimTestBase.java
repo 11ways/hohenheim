@@ -6,14 +6,10 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.AuthSettings;
-import be.elevenways.zenit.auth.model.GrantModel;
-import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
 import be.elevenways.zenit.common.Zenit;
@@ -126,26 +122,10 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         return port;
     }
 
-    /** Create an enabled admin user and an active session for it; returns the session id (cookie value).
+    /** The test admin ({@link TenantConduits#operatorUser}) and an active session for it; returns the session id.
      *  Package-visible: isolated boot tests (RoleRestrictedBootTest) reuse it instead of copying. */
     static String seedAuthenticatedAdmin() {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, "test@hohenheim.local");
-        user.set(UserModel.DISPLAY_NAME, "Test Admin");
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        ZenitAuth.markSeeded();   // a user exists, so the setup gate must not redirect
-
-        // Grant everything (the /setup admin's shape) so the CMS panel's
-        // hohenheim.admin.access permission check passes.
-        Row grant = AuthModels.grants().createEmptyRow();
-        grant.set(GrantModel.SUBJECT_TYPE, GrantSubjectType.USER.key());
-        grant.set(GrantModel.SUBJECT_ID, user.get(UserModel.ID));
-        grant.set(GrantModel.PERMISSION, "*");
-        grant.set(GrantModel.VALUE, true);
-        AuthModels.grants().save(grant);
+        Row user = TenantConduits.operatorUser();
 
         Session session = Zenit.getSessionStore().create();
         session.set(AuthKeys.USER_ID, ((Integer) user.get(UserModel.ID)).longValue());

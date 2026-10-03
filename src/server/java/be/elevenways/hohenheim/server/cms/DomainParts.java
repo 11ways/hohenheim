@@ -20,11 +20,11 @@ import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
-import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RowScope;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
@@ -158,6 +158,8 @@ public final class DomainParts {
         return ResourceList.rows(table)
             .chrome(ListChrome.MINIMAL)
             .search(SiteDomainModel.HOSTNAME, SiteDomainModel.PATH)
+            // What an empty list (a new site's Domains tab above all: it routes nothing yet) tells the reader to do.
+            .emptyDescription(Microcopy.of("empty_description").withFilter("scope", "site_domains"))
             .build();
     }
 
@@ -194,8 +196,8 @@ public final class DomainParts {
         Map<String, Object> values = new LinkedHashMap<>(spec.defaultValues());
         Integer siteId = CmsSupport.scopedParentId(request.conduit(), CmsEndpoints.PARENT_PARAM.getName(),
             HohenheimSlugs.SITES);
-        if (siteId != null && request.panel().entryBySlug(HohenheimSlugs.SITES) instanceof Resource<?> sites) {
-            Object site = sites.loadRow(siteId, request.access());
+        if (siteId != null && request.panel().entryBySlug(HohenheimSlugs.SITES) instanceof PanelResource<?> sites) {
+            Object site = PanelResourceViews.of(sites, request).loadRow(siteId, request.access());
             if (site instanceof Row row && TlsPassthroughUpstreamKind.ID.toString()
                     .equals(row.get(SiteModel.UPSTREAM_KIND))) {
                 values.put(SiteDomainModel.FORCE_SSL.getName(), false);

@@ -54,7 +54,7 @@ public final class SiteProtectedPathsPage implements RecordScopedPage<Row> {
         Integer siteId = site.get(SiteModel.ID);
         String panel = CmsSupport.panelSlug(conduit);
         // Per-row write authority is the RESOURCE's answer, never a second hand-rolled
-        // one -- the SiteDomainsPage seam; a read-only (trashed) site offers no add.
+        // one -- the site Domains tab seam; a read-only (trashed) site offers no add.
         Panel host = PanelRegistry.getBySlug(panel);
         ProtectedPathResource resource = pathResource(host);
         boolean canAdd = !this.hostReadOnly(conduit) && resource != null && resource.creatable()

@@ -3,10 +3,10 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
@@ -15,7 +15,9 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelPeer;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.Resource;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -299,7 +301,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
     void siteUpstreamPickIsNarrowedServerSide() throws Exception {
         HttpResponse<String> refused = httpPostForm("/admin/sites/new",
             "name=ui-wave-refused-site&upstream_kind=hohenheim%3Ainstance&instance_id="
-                + generatedDbInstanceId,
+                + generatedDbInstanceId + "&" + PanelResourceCalls.createEnvelope(),
             sessionToken, csrfToken);
         assertThat(refused.statusCode())
             .as("a database engine as an upstream must not create-redirect")
@@ -310,7 +312,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
 
         HttpResponse<String> accepted = httpPostForm("/admin/sites/new",
             "name=ui-wave-exposed-site&upstream_kind=hohenheim%3Ainstance&instance_id="
-                + applicationId,
+                + applicationId + "&" + PanelResourceCalls.createEnvelope(),
             sessionToken, csrfToken);
         assertThat(accepted.statusCode())
             .as("the control: the application is exposable").isIn(302, 303);
@@ -322,12 +324,12 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
             .isEqualTo(applicationId);
     }
 
-    /** The sites list keeps its verbs: the placed switch, edit and delete synthesized. */
+    /** The sites list keeps its verbs: the placed switch, the synthesized edit and the placed delete operation. */
     @Test
     void sitesListOffersItsRowActions() throws Exception {
         String list = adminGet("/admin/sites").body();
         assertThat(list).as("the site switch renders").containsAnyOf("hohenheim:enable_site", "hohenheim:disable_site");
-        assertThat(list).as("the synthesized delete renders").contains("data-action-id=\"zenit:delete\"");
+        assertThat(list).as("the delete operation renders").contains("data-action-id=\"hohenheim:delete_site\"");
     }
 
     /**
@@ -535,7 +537,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
             .as("the operator list names its demoted catalogs").isNotEmpty();
         assertThat(((Resource<?>) tenantList).relatedPages())
             .as("the tenant list names none of them").isEmpty();
-        assertThat(((Resource<?>) manage.peerBySlug("sites")).relatedPages())
+        assertThat(((PanelResource<?>) manage.entryBySlug("sites")).relatedPages())
             .as("nor does the tenant site list").isEmpty();
     }
 

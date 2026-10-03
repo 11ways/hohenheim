@@ -8,13 +8,13 @@ import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -116,7 +116,7 @@ class ManageScopeParityTest extends HohenheimTestBase {
 
         // 3. Every model the panel projects through BOTH a list and a source: the two reads
         //    are the same set, for the tenant and for the operator.
-        List<Projection> paired = List.of(Projection.of(new ManageSiteResource()),
+        List<Projection> paired = List.of(Projection.of(SiteParts.manage()),
             Projection.of(DomainParts.manage()),
             Projection.of(new ManageInstanceResource()), Projection.of(new ManageCertificateResource()),
             Projection.of(new ManageProtectedPathResource()), Projection.of(new ManageDnsRecordResource()),
