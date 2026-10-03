@@ -147,6 +147,69 @@ public final class InstanceOperations {
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
+    /** Roll a release-managed instance back to its retained release; POWER on the record. */
+    public static final Operation<Row, Void, Void> ROLLBACK =
+        Operation.declare(HohenheimIds.id("rollback_instance"))
+            .label(label("rollback", "instance", "Roll back"))
+            .icon(Icon.of("clock-rotate-left"))
+            .one(INSTANCE)
+            .gate(gate(HohenheimCapabilities.POWER))
+            .facts(OperationFact.REACHES_OUTSIDE)
+            .register();
+
+    /**
+     * Run (or resume, or retry) the template's install step; OPERATOR-ONLY through its authorizer, applicable while the
+     * install is neither absent nor done.
+     */
+    public static final Operation<Row, Void, Void> INSTALL =
+        Operation.declare(HohenheimIds.id("install_instance"))
+            .label(label("install", "instance", "Install"))
+            .icon(Icon.of("wand-magic-sparkles"))
+            .one(INSTANCE)
+            .gate(OperationGate.open())
+            .facts(OperationFact.REACHES_OUTSIDE)
+            .register();
+
+    /**
+     * Reinstall per the template's EXPLICIT data policy; OPERATOR-ONLY, applicable once installed or failed. The policy
+     * is enforced in InstanceInstalls; the placement's dialog is the accident guard.
+     */
+    public static final Operation<Row, Void, Void> REINSTALL =
+        Operation.declare(HohenheimIds.id("reinstall_instance"))
+            .label(label("reinstall", "instance", "Reinstall"))
+            .icon(Icon.of("rotate"))
+            .one(INSTANCE)
+            .gate(OperationGate.open())
+            .facts(OperationFact.REACHES_OUTSIDE)
+            .register();
+
+    /**
+     * Publish this STOPPED instance's state as a prepared (unapproved) template; OPERATOR-ONLY, because capture mints
+     * catalog authority. The result is the minted template.
+     */
+    public static final Operation<Row, Void, Integer> CAPTURE_TEMPLATE =
+        Operation.declare(HohenheimIds.id("capture_template"))
+            .label(label("capture_template", "instance", "Capture as template"))
+            .icon(Icon.of("box-archive"))
+            .one(INSTANCE)
+            .gate(OperationGate.open())
+            .result(Integer.class)
+            .facts(OperationFact.REACHES_OUTSIDE)
+            .register();
+
+    /**
+     * The one irreversible verb: destroy the workload AND the volumes it owns; OPERATOR-ONLY. A separate verb beside
+     * delete, which keeps the data by design.
+     */
+    public static final Operation<Row, Void, Void> DESTROY_WITH_DATA =
+        Operation.declare(HohenheimIds.id("destroy_instance_data"))
+            .label(label("delete_with_data", "instance", "Delete with data"))
+            .icon(Icon.of("trash-can"))
+            .one(INSTANCE)
+            .gate(OperationGate.open())
+            .facts(OperationFact.REACHES_OUTSIDE)
+            .register();
+
     /** The host a migration moves the workload to. */
     public static final IntegerField TARGET_SERVER = IntegerField.builder("targetServerId")
         .label(Microcopy.of("host").withFilter("scope", "instance_migrate"))

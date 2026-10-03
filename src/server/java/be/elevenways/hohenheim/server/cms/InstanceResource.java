@@ -26,7 +26,6 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
-import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.Panel;
@@ -98,7 +97,7 @@ public class InstanceResource extends RowResource {
     protected final InstanceService instances = new InstanceService();
 
     /** The instance verbs both panels offer, built once over {@link #instances}. */
-    final InstanceActions rowActionSet = new InstanceActions(this.instances);
+    final InstanceActions rowActionSet = new InstanceActions();
 
     /**
      * The create/edit form: choice cards decide the kind, and every placement pick
@@ -650,15 +649,7 @@ public class InstanceResource extends RowResource {
         return names.isEmpty() ? null : String.join(", ", names);
     }
 
-    /** The synthesized affordances, then the operator's instance verbs ({@link InstanceActions}). */
-    @Override
-    public @NonNull List<RowAction<Row>> rowActions() {
-        List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
-        actions.addAll(this.rowActionSet.operator());
-        return actions;
-    }
-
-    /** The operator's placed instance operations: power, backup and snapshot ({@link InstanceActions}). */
+    /** The operator's instance verbs, all placed ({@link InstanceActions}). */
     @Override
     public @NonNull List<PanelAction<Row>> actions() {
         return this.rowActionSet.placedOperator();
