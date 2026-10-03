@@ -627,7 +627,10 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             // Every instance verb is a placed operation now: the list asks them through the render's own batched
             // offer, once for all rows, exactly as the admin list draws them.
             Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN), "the admin panel");
-            Function<Row, List<RowOffer>> offers = PanelActionOffers.rowsForRender(resource, null, admin, rows, ctx, null);
+            PanelRequest request = new PanelRequest(admin,
+                new EndpointConduit().withAttribute(ConduitAttributes.PRINCIPAL, ctx.principal()), ctx, null);
+            Function<Row, List<RowOffer>> offers = PanelActionOffers.rowsForRender(
+                request, InstanceParts.admin(), null, rows, ctx, null);
             for (Row row : rows) {
                 sawAnAffordance |= resource.updatableBy(row, ctx);
                 sawAnAffordance |= !offers.apply(row).isEmpty();
