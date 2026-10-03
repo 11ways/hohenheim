@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.test.application;
 
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -13,7 +12,7 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -76,7 +75,8 @@ class ApplicationRuntimeContractTest {
         // The APPLICATION is minted before the headroom is closed: it is an instance too,
         // so creating it under the cap would refuse the owner instead of the release.
         int applicationId = application("quota-owner", Map.of(
-            "image", "alpine", "tag", "latest",
+            // Already pinned: this journey reaches the reservation hook without needing a daemon to resolve a tag.
+            "image", "sha256:" + "a".repeat(64),
             "container_port", 8080, "command", "sleep 60"));
         // 1. An ordinary instance spends the operator bucket's LAST slot (a cap of 0
         //    would mean uncapped, so headroom is exhausted by consumption, not by 0).
@@ -164,9 +164,10 @@ class ApplicationRuntimeContractTest {
         ordinary.set(InstanceModel.NAME, "contract-ordinary");
         ordinary.set(InstanceModel.KIND, "hohenheim:docker_container");
         Models.get(InstanceModel.class).save(ordinary);
-        AccessDecision decision = PanelResourceViews.forCaller(InstanceParts.admin()).accessFunction().decide(null);
+        Criteria criteria = InstanceParts.admin().rowScope().criteria(null);
+        assertThat(criteria).as("step 5: the instance parts declare their owned-row exclusion").isNotNull();
         List<Row> visible = Models.get(InstanceModel.class).find()
-            .where(decision.predicate().criteria())
+            .where(criteria)
             .where(InstanceModel.NAME.startsWith("contract-"))
             .all();
         assertThat(visible)

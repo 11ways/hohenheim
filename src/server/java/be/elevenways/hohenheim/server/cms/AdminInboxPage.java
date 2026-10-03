@@ -8,6 +8,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.PanelPage;
 import be.elevenways.zenit.comms.inbox.CommsInboxItemView;
 import be.elevenways.zenit.comms.server.CommsInbox;
@@ -79,7 +80,8 @@ public final class AdminInboxPage extends PanelPage {
     }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext accessContext) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request) {
+        Conduit conduit = request.conduit();
         long total = CommsInbox.itemCount(conduit);
         PageWindow window = PageWindow.of(requestedPage(conduit), total,
             CommsInbox.DEFAULT_LIMIT, PageWindow.OutOfRange.CLAMP);

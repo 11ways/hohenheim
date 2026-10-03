@@ -20,7 +20,6 @@ import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.PanelPage;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.server.page.PageActions;
-import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
@@ -93,11 +92,6 @@ public final class InstanceFromTemplatePage extends PanelPage {
         }
         vars.put("cancelTarget", CmsRoutes.list(request.panelSlug(), HohenheimSlugs.INSTANCE_TEMPLATES));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_FROM_TEMPLATE, vars);
-    }
-
-    @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext accessContext) {
-        throw new UnsupportedOperationException("The from-template wizard renders through its PanelRequest");
     }
 
     /**
