@@ -235,17 +235,19 @@ class ProxyListenerSupervisionTest {
 
     @Test
     @Timeout(60)
-    void httpListenerRidesTheSameBoundedRestartPath() {
-        // Step 1: HTTP on a privileged port fails at start and records attempt 1.
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 80);
+    void httpListenerRidesTheSameBoundedRestartPath() throws Exception {
+        // Step 1: HTTP on an occupied port fails at start and records attempt 1, even when the test runs as root.
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
         AtomicLong clock = new AtomicLong(Now.millis());
         ProxyServer httpProxy = new ProxyServer();
         httpProxy.setClockForTesting(clock::get);
-        httpProxy.start();
+        try (ServerSocket blocker = new ServerSocket(0)) {
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, blocker.getLocalPort());
+            httpProxy.start();
+        }
         try {
             assertThat(httpProxy.getHttpState())
-                .as("step 1: HTTP fails on the privileged port")
+                .as("step 1: HTTP fails on the occupied port")
                 .isEqualTo(ProxyServer.State.FAILED);
             assertThat(httpProxy.getHttpRestartAttemptsForTesting())
                 .as("step 1: the HTTP failure rides the shared bounded restart state")
@@ -281,14 +283,16 @@ class ProxyListenerSupervisionTest {
      */
     @Test
     @Timeout(60)
-    void theMinutelyTaskReachesTheAdoptedProxyAndHealsIt() {
-        // Step 1: an HTTP listener that failed to start (privileged port), attempt 1 armed.
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 80);
+    void theMinutelyTaskReachesTheAdoptedProxyAndHealsIt() throws Exception {
+        // Step 1: an HTTP listener that failed to start (occupied port), attempt 1 armed.
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
         AtomicLong clock = new AtomicLong(Now.millis());
         ProxyServer taskProxy = new ProxyServer();
         taskProxy.setClockForTesting(clock::get);
-        taskProxy.start();
+        try (ServerSocket blocker = new ServerSocket(0)) {
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, blocker.getLocalPort());
+            taskProxy.start();
+        }
         try {
             assertThat(taskProxy.getHttpState())
                 .as("step 1: HTTP failed to start, so there is something to heal")

@@ -22,6 +22,7 @@ import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
+import be.elevenways.zenit.cms.server.page.CmsRecordSources;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -72,6 +73,7 @@ class DnsZoneImportReadOnlyTest extends HohenheimTestBase {
         //    the answer zenit-cms gives every record create there.
         int site = site("import-readonly-owner");
         Panel zonesUnderSites = new ZonesUnderSites(Map.of(zoneId, site));
+        CmsRecordSources.ensureRegistered(zonesUnderSites);
         assertThatCode(() -> DnsRecordParts.requireImportable(zonesUnderSites, zoneId, operator))
             .as("step 3: under a live owner the zone takes an import").doesNotThrowAnyException();
         Models.get(SiteModel.class).delete(site);

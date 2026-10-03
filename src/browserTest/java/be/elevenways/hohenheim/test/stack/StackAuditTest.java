@@ -12,6 +12,10 @@ import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.server.GrantService;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
@@ -128,9 +132,16 @@ class StackAuditTest {
         //    attribution must survive the queue AND the worker thread, or the row lands as system work with no
         //    actor -- an accountability-shaped no-op.
         int panelId = stackRecord("audit-panel-stack");
-        Db.run(datasource, () -> Accountability.runAs(operator("99"), () -> PanelResourceCalls.invoke(
+        int clicker = Db.supply(datasource, () -> {
+            TenantConduits.operatorUser();
+            int id = ApiSupport.user("stack-clicker@hohenheim.local", "Stack Clicker");
+            GrantService.createDirectGrant(GrantSubjectType.USER, id, "*", true);
+            return id;
+        });
+        Db.run(datasource, () -> Accountability.runAs(operator(String.valueOf(clicker)), () -> PanelResourceCalls.invoke(
             HohenheimSlugs.ADMIN, StackParts.SLUG, StackOperations.DEPLOY.id(), panelId,
-            CmsConfirmation.PLAIN_PROOF, TenantConduits.operator())));
+            CmsConfirmation.PLAIN_PROOF,
+            AccessContext.of(TenantConduits.stubFor(new UserPrincipal(clicker, "Stack Clicker"))))));
         await("step 4: the queued panel deploy settles",
             () -> activityFor(panelId, HohenheimActivityAction.DEPLOYED.id().toString()).size() == 1);
         Row panelDeploy = onlyActivity(panelId, HohenheimActivityAction.DEPLOYED.id().toString());
@@ -138,7 +149,7 @@ class StackAuditTest {
                 "actor", String.valueOf((Object) panelDeploy.get(ActivityModel.ACTOR)),
                 "origin", String.valueOf((Object) panelDeploy.get(ActivityModel.ORIGIN))))
             .as("step 4: the operator who clicked survived the queue and the worker thread")
-            .isEqualTo(Map.of("actor", "99", "origin", Accountability.ORIGIN_WEB));
+            .isEqualTo(Map.of("actor", String.valueOf(clicker), "origin", Accountability.ORIGIN_WEB));
 
         // 5. ORIGIN is what tells the surfaces apart, so an unattended caller (stack
         //    adoption, boot recovery) must record as system rather than borrow an actor.

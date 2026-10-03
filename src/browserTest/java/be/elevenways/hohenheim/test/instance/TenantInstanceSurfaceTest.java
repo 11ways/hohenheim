@@ -435,7 +435,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
     void creationNeedsAuthorityAndPlacementAndChargesTheTenantsOwnQuota() throws Exception {
         ensureManageGrant();
         String createUrl = ApiSupport.fromTemplateTarget(HohenheimSlugs.MANAGE, approvedTemplateId);
-        String transport = "&" + ApiSupport.fromTemplateTransport();
+        // Each permission/placement transition opens a new logical create, never reuses a refused command envelope.
         Row createGrant = null;
         try {
             // 1. The catalog offers only APPROVED templates, and only those.
@@ -448,7 +448,8 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
 
             // 2. Without hohenheim.instances.create the submit is refused BY NAME, and
             //    nothing persists.
-            HttpResponse<String> unauthorized = tenantPost(createUrl, "name=" + PREFIX + "created" + transport);
+            HttpResponse<String> unauthorized = tenantPost(createUrl, "name=" + PREFIX + "created"
+                + "&" + ApiSupport.fromTemplateTransport());
             assertThat(unauthorized.body())
                 .as("step 2: a tenant without create authority is refused, named")
                 .contains("You are not allowed to create instances");
@@ -460,7 +461,8 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             //    falls back to the local daemon, which is the whole point of the decision.
             createGrant = GrantService.createDirectGrant(GrantSubjectType.USER, tenantAId,
                 HohenheimAccess.INSTANCES_CREATE.value(), true);
-            HttpResponse<String> nowhere = tenantPost(createUrl, "name=" + PREFIX + "created" + transport);
+            HttpResponse<String> nowhere = tenantPost(createUrl, "name=" + PREFIX + "created"
+                + "&" + ApiSupport.fromTemplateTransport());
             assertThat(nowhere.body())
                 .as("step 3: no admitted host means a NAMED placement refusal")
                 .contains("No admitted host currently accepts this workload");
@@ -472,12 +474,13 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             //    asked the host: one it NAMES ANYWAY is refused and nothing lands; without it, placement decides.
             admittedHostId = admittedHost();
             HttpResponse<String> named = tenantPost(createUrl, "name=" + PREFIX + "created"
-                + "&serverId=" + ServerModel.localServerId() + transport);
+                + "&serverId=" + ServerModel.localServerId() + "&" + ApiSupport.fromTemplateTransport());
             assertThat(named.statusCode()).as("step 4: a tenant-named host is refused").isEqualTo(422);
             assertThat(Models.get(InstanceModel.class).find()
                     .where(InstanceModel.NAME.eq(PREFIX + "created")).count())
                 .as("step 4: the refused create persisted NOTHING").isZero();
-            HttpResponse<String> created = tenantPost(createUrl, "name=" + PREFIX + "created" + transport);
+            HttpResponse<String> created = tenantPost(createUrl, "name=" + PREFIX + "created"
+                + "&" + ApiSupport.fromTemplateTransport());
             assertThat(created.statusCode()).as("step 4: the create lands").isIn(302, 303);
             Row instance = Models.get(InstanceModel.class).find()
                 .where(InstanceModel.NAME.eq(PREFIX + "created")).first();
@@ -513,7 +516,8 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER,
                 (int) InstanceQuota.usedBy(HohenheimAccess.packSubjects(
                     java.util.Set.of("user:" + tenantAId))));
-            HttpResponse<String> capped = tenantPost(createUrl, "name=" + PREFIX + "over-cap" + transport);
+            HttpResponse<String> capped = tenantPost(createUrl, "name=" + PREFIX + "over-cap"
+                + "&" + ApiSupport.fromTemplateTransport());
             assertThat(capped.body())
                 .as("step 7: the per-owner cap refuses the next create, named")
                 .contains("Instance quota reached");
@@ -527,14 +531,14 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             //    read: nothing about it is rendered, so a guessed id learns nothing.
             HttpResponse<String> unapproved = tenantPost(
                 ApiSupport.fromTemplateTarget(HohenheimSlugs.MANAGE, unapprovedTemplateId),
-                "name=" + PREFIX + "sneaky" + transport);
+                "name=" + PREFIX + "sneaky" + "&" + ApiSupport.fromTemplateTransport());
             assertThat(unapproved.statusCode()).as("step 8: an unapproved template answers as missing")
                 .isEqualTo(404);
             assertThat(unapproved.body())
                 .as("step 8: and nothing about the unapproved template is rendered")
                 .doesNotContain(PREFIX + "unapproved");
             HttpResponse<String> missing = tenantPost(ApiSupport.fromTemplateTarget(HohenheimSlugs.MANAGE, 999999999),
-                "name=" + PREFIX + "sneaky" + transport);
+                "name=" + PREFIX + "sneaky" + "&" + ApiSupport.fromTemplateTransport());
             assertThat(missing.statusCode())
                 .as("step 8: an unapproved id answers exactly like an id that does not exist")
                 .isEqualTo(unapproved.statusCode());

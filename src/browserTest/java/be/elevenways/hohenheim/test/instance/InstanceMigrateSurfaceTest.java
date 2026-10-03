@@ -319,7 +319,9 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
                 .statusCode())
             .withFailMessage("step 4: the tenant can GET the migrate page")
             .isEqualTo(404);
-        assertThat(httpPostForm("/manage/instances/" + instanceId + "/page/migrate",
+        String invoke = CmsRoutes.invoke(HohenheimSlugs.MANAGE, HohenheimSlugs.INSTANCES,
+            InstanceOperations.MIGRATE.id()).with(CmsEndpoints.SUBJECT_PARAM, String.valueOf(instanceId)).toUrl();
+        assertThat(httpPostForm(invoke,
                 "target_server_id=" + strangerHostId, tenantSession, tenantCsrf).statusCode())
             .withFailMessage("step 4: the tenant can POST a migration")
             .isEqualTo(404);
