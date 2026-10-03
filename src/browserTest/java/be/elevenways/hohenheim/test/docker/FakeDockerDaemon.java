@@ -662,11 +662,14 @@ public final class FakeDockerDaemon implements DockerTransport {
 
         // -- networks --------------------------------------------------------
         // The fake RUNTIME owns deploys, so nothing here creates a network; the sweeps
-        // that merely LOOK are answered honestly with "no such network".
+        // that LOOK and the teardowns that REMOVE are answered honestly with "no such network".
         if ("GET".equals(method) && "/networks".equals(path)) {
             return json(200, List.of());
         }
         if ("GET".equals(method) && path.startsWith("/networks/")) {
+            return json(404, Map.of("message", "network not found"));
+        }
+        if ("DELETE".equals(method) && path.startsWith("/networks/")) {
             return json(404, Map.of("message", "network not found"));
         }
 

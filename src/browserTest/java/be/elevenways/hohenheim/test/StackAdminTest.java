@@ -9,12 +9,17 @@ import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.cms.StackParts;
+import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
+import be.elevenways.hohenheim.server.stack.StackInstances;
+import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.model.Models;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
@@ -30,9 +35,27 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  * a missing source is a 500, and nothing else covers these pages), records
  * validate, and deleting cascades to the child rows that have no FK cascade.
  * Writes go through the registered StackParts entries (PanelResourceCalls), the
- * lane their forms post through.
+ * lane their forms post through. The daemon is {@link FakeDockerDaemon}: a delete's runtime
+ * teardown is part of the story, and it must never need a real Docker host.
  */
 class StackAdminTest extends HohenheimTestBase {
+
+    private static FakeDockerDaemon daemon;
+
+    @BeforeAll
+    static void installDaemon() {
+        daemon = new FakeDockerDaemon();
+        daemon.install();
+    }
+
+    @AfterAll
+    static void restoreDaemon() {
+        FakeDockerDaemon.restore();
+        if (daemon != null) {
+            daemon.close();
+            daemon = null;
+        }
+    }
 
     /**
      * The stack's own CRUD story in one pass: the list and create form render, the created
@@ -146,9 +169,13 @@ class StackAdminTest extends HohenheimTestBase {
             .as("step 6: keeping the original single mount")
             .hasSize(1);
 
-        // 7. Deleting the stack (its delete_stack operation) cascades to its services and their files.
+        // 7. Deleting the stack (its delete_stack operation) tears its runtime down on the daemon,
+        //    then cascades to its services and their files.
         PanelResourceCalls.delete(ADMIN, STACKS, stackId, operator());
 
+        String network = WorkloadNetworks.networkName(StackInstances.networkHandle("admin-test-stack"));
+        assertThat(daemon.callCount("api:DELETE /networks/" + network))
+            .as("step 7: the teardown removes the stack's network on the daemon").isEqualTo(1);
         assertThat(Models.get(StackModel.class).findById(stackId))
             .as("step 7: the stack row is gone").isNull();
         assertThat(Models.get(StackServiceModel.class).find()
