@@ -15,17 +15,18 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
-import be.elevenways.zenit.cms.common.access.AccessFunction;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
-import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
+import be.elevenways.zenit.common.data.RowScope;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -134,26 +135,23 @@ class ManageScopeParityTest extends HohenheimTestBase {
         }
     }
 
-    /** A /manage list's row reads: a legacy resource's access function, or a panel resource's row scope. */
-    private record Projection(Identifier id, Model model, AccessFunction<Row> accessFunction) {
-
-        static Projection of(RowResource resource) {
-            return new Projection(resource.id(), resource.model(), resource.accessFunction());
-        }
+    /** A /manage list's declared row scope and the entry whose admission guards that read. */
+    private record Projection(Identifier id, Model model, RowScope scope, PanelResource<Row> entry) {
 
         static Projection of(PanelResource<Row> resource) {
             return new Projection(resource.id(), Models.get(Objects.requireNonNull(resource.subject().modelId())),
-                AccessFunction.scopedBy(Objects.requireNonNull(resource.rowScope())));
+                Objects.requireNonNull(resource.rowScope()), resource);
         }
     }
 
-    /** The ids the resource's own access decision lets this context list. */
+    /** The ids the admitted entry's own row scope lets this context list. */
     private static Set<Object> resourceIds(Projection resource, AccessContext ctx) {
-        AccessDecision decision = resource.accessFunction().decide(ctx);
-        assertThat(decision.isDenied()).as("%s must not deny outright", resource.id()).isFalse();
+        Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(ManagePanel.SLUG));
+        assertThat(panel.admits(resource.entry(), ctx)).as("%s must not deny outright", resource.id()).isTrue();
+        Criteria criteria = resource.scope().criteria(ctx);
         QueryBuilder<Row> query = resource.model().find();
-        if (decision.predicate() != null) {
-            query.where(decision.predicate().criteria());
+        if (criteria != null) {
+            query.where(criteria);
         }
         return idsOf(resource.model(), query.all());
     }
