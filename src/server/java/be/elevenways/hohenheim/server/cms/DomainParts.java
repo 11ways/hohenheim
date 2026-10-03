@@ -222,7 +222,8 @@ public final class DomainParts {
     private static @NonNull List<FieldOption<String>> listenOnOptions() {
         List<FieldOption<String>> options = new ArrayList<>();
         for (String address : UpdateSystemIpAddresses.getLocalAddresses()) {
-            options.add(FieldOption.of(address, address));
+            // An address is data, never a translation key.
+            options.add(FieldOption.of(address, Microcopy.literal(address)));
         }
         return options;
     }
