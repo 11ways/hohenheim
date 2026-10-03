@@ -104,8 +104,11 @@ final class HohenheimGrantPolicy {
         // CertificateModel's owner row is live (requested_by_user_id with requested_by_kind).
         RecordGrants.declareGrantable(GrantableModel.of(DnsRecordModel.MODEL_ID));
         KnownCapabilities.register(DnsRecordModel.MODEL_ID,
+            // A holder who may EDIT a record may READ it: every VIEW-asking scope (pickers, the /manage list, the
+            // delete offer's subject read) then includes edit-grant holders, never a per-scope union.
             KnownCapability.of(VIEW)
                 .label(Microcopy.of("view").withFilter("scope", "capability"))
+                .impliedBy(EDIT)
                 .asDelegable()
                 .asOwnerImplied(),
             KnownCapability.of(EDIT)

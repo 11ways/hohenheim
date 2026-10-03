@@ -14,6 +14,8 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.cms.DnsRecordParts;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
+import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.hohenheim.server.cms.DomainParts;
 import be.elevenways.hohenheim.instance.InstanceScheduleOperations;
@@ -29,6 +31,7 @@ import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.cms.common.render.panel.ChildListSectionState;
 import be.elevenways.zenit.cms.common.render.table.TableState;
@@ -320,6 +323,16 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             .as("an edit-grant holder keeps its editor").isTrue();
         assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.DELETE, editable, holder()))
             .as("and its delete button").isTrue();
+        // An edit grant reads its record (DNS VIEW is impliedBy EDIT): the delete offer's subject read loads it, and
+        // the model's declared source lists it for the holder.
+        Integer editableId = editable.get(DnsRecordModel.ID);
+        assertThat(PartsReads.loadRows(panel, resource, List.of(editableId), holder()))
+            .as("the edit-grant holder reads its record").hasSize(1);
+        Criteria listed = RecordSourceRegistry.INSTANCE.requireDefaultFor(DnsRecordModel.MODEL_ID)
+            .scopeCriteria(null, null, null, holder());
+        assertThat(listed == null || Models.get(DnsRecordModel.class).find()
+                .where(DnsRecordModel.ID.eq(editableId)).where(listed).first() != null)
+            .as("and lists it through the model's source").isTrue();
 
         // The TYPE clause: an NS row is a zone-compromise primitive the pipeline refuses
         // for EVERY tenant writer, edit grant or not -- so no affordance either.
