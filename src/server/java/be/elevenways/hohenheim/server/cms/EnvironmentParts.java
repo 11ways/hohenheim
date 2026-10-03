@@ -31,16 +31,13 @@ import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.operation.Operation;
-import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectArity;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
-import be.elevenways.zenit.server.operation.OperationHandlers;
 import be.elevenways.zenit.server.operation.RowDeleteOperations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -52,11 +49,11 @@ import java.util.Map;
  * The project environments' parts: the admin environment resource and the admin environment-variable resource.
  *
  * AIDEV-NOTE: both models carry no domain version, so create and update are row writes under the value-digest stale
- * check. The environment delete is the domain operation {@link #DELETE}: an environment still holding instances or
- * variables is offered dead with the holders named (its availability), and the ProjectGuards write funnel stays the
- * gate that refuses after the click. The variable delete is core's canonical row delete over the variable model. Both
- * entries are admin-only: ManagePanel offers no environment surface, and PaasApi.visibleEnvironment answers to the
- * same panel permission.
+ * check. The environment delete is core's row delete under its own id {@link #DELETE}: an environment still holding
+ * instances or variables is offered dead with the holders named (its availability), and the ProjectGuards write funnel
+ * stays the gate that refuses after the click. The variable delete is core's canonical row delete over the variable
+ * model. Both entries are admin-only: ManagePanel offers no environment surface, and PaasApi.visibleEnvironment answers
+ * to the same panel permission.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -79,13 +76,9 @@ public final class EnvironmentParts {
 
     /** Deletes an environment nothing groups under; offered dead, naming the holders, while something does. */
     public static final Operation<Row, Void, Integer> DELETE =
-        Operation.declare(HohenheimIds.id("delete_environment"))
-            .label(Microcopy.of("delete").withFilter("scope", "cms"))
-            .icon(Icon.TRASH)
-            .one(SUBJECT)
-            .gate(OPERATOR)
-            .facts(OperationFact.DESTRUCTIVE)
-            .result(Integer.class)
+        RowDeleteOperations.declare(EnvironmentModel.class, SubjectArity.ONE, OPERATOR)
+            .id(HohenheimIds.id("delete_environment"))
+            .availability((environment, access) -> inUseReason(environment))
             .register();
 
     /** Removes one environment-owned variable; anything running keeps its value until its next deploy. */
@@ -108,18 +101,12 @@ public final class EnvironmentParts {
             InstanceVariableModel.PLAIN_VALUE.getName())
         .presets(InstanceVariableModel.ENVIRONMENT_ID.getName());
 
-    static {
-        OperationHandlers.attach(DELETE)
-            .availability((environment, access) -> inUseReason(environment))
-            .handle(call -> Models.get(EnvironmentModel.class).delete(call.subject()) ? 1 : 0);
-    }
-
     private EnvironmentParts() {
     }
 
     /** Loads the class, declaring both deletes at boot so they are verified with every other operation; idempotent. */
     public static void init() {
-        // The static initializer did the work.
+        // The static field initializers did the work.
     }
 
     /** @return the admin environment resource */

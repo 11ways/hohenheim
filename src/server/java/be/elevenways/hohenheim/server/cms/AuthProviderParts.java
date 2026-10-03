@@ -21,14 +21,14 @@ import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
-import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
+import be.elevenways.zenit.common.operation.SubjectArity;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.server.operation.OperationHandlers;
+import be.elevenways.zenit.server.operation.RowDeleteOperations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -38,10 +38,10 @@ import java.util.Map;
 /**
  * The site auth providers' parts: the admin resource over the shared authentication declarations sites point at.
  *
- * AIDEV-NOTE: the delete is the domain operation {@link #DELETE}, so the "still in use" refusal is its availability
- * (offered dead, with the reason on screen) and never a check after the click. Create and update keep the provider
- * type's canonical config storage through custom row writers; the update applies only what the write carries (a
- * one-entry inline map renames without touching the config).
+ * AIDEV-NOTE: the delete is core's row delete under its own id {@link #DELETE}, so the "still in use" refusal is its
+ * availability (offered dead, with the reason on screen, and asked again inside the delete) and never a check after
+ * the click. Create and update keep the provider type's canonical config storage through custom row writers; the
+ * update applies only what the write carries (a one-entry inline map renames without touching the config).
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -55,20 +55,11 @@ public final class AuthProviderParts {
 
     /** Deletes a provider no site and no access rule names; offered dead while one does. */
     public static final Operation<Row, Void, Integer> DELETE =
-        Operation.declare(HohenheimIds.id("delete_auth_provider"))
-            .label(Microcopy.of("delete").withFilter("scope", "cms"))
-            .icon(Icon.TRASH)
-            .one(SUBJECT)
-            .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
-            .facts(OperationFact.DESTRUCTIVE)
-            .result(Integer.class)
-            .register();
-
-    static {
-        OperationHandlers.attach(DELETE)
+        RowDeleteOperations.declare(SiteAuthProviderModel.class, SubjectArity.ONE,
+                OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
+            .id(HohenheimIds.id("delete_auth_provider"))
             .availability((provider, access) -> inUseReason(provider))
-            .handle(call -> Models.get(SiteAuthProviderModel.class).delete(call.subject()) ? 1 : 0);
-    }
+            .register();
 
     private AuthProviderParts() {
     }
