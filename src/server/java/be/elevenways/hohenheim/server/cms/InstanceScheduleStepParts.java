@@ -36,7 +36,6 @@ import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.OperationPipeline;
-import be.elevenways.zenit.server.task.record.RecordScheduleActions;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
 import be.elevenways.zenit.server.task.record.SchedulePlacements;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -243,34 +242,29 @@ public final class InstanceScheduleStepParts {
     }
 
     /**
-     * Why the editor may not put this action on the instance's chain, or null: an operation is asked what the pipeline
-     * would offer the editor on that instance now (its gate's authorization half), a legacy action its declared
-     * capability.
+     * Why the editor may not put this action on the instance's chain, or null: the operation is asked what the
+     * pipeline would offer the editor on that instance now (its gate's authorization half).
      *
-     * @return the refusal token, the same vocabulary for both
+     * @return the refusal token, from {@link RecordSchedules}
      */
-    @SuppressWarnings("removal")
     private static @Nullable String actionRefusal(@NonNull AccessContext editor, @NonNull String recordId,
                                                  @Nullable String action) {
         TypeDefinition member = ((RegistryMemberField) RecordScheduleStepModel.ACTION).memberFor(action);
-        if (!(member instanceof Operation<?, ?, ?> operation)) {
-            return RecordScheduleActions.editRefusal(editor, InstanceModel.MODEL_ID, recordId, action);
-        }
-        if (SchedulePlacements.find(operation.id()) == null) {
-            return RecordScheduleActions.REFUSAL_UNKNOWN_ACTION;
+        if (!(member instanceof Operation<?, ?, ?> operation) || SchedulePlacements.find(operation.id()) == null) {
+            return RecordSchedules.REFUSAL_UNKNOWN_ACTION;
         }
         if (operation.subjectType() == null
                 || !InstanceModel.MODEL_ID.equals(operation.subjectType().modelId())) {
-            return RecordScheduleActions.REFUSAL_MODEL_MISMATCH;
+            return RecordSchedules.REFUSAL_MODEL_MISMATCH;
         }
         Row instance = Models.get(InstanceModel.class).findById(InstanceScheduleParts.parseInstanceId(recordId));
         if (instance == null) {
-            return RecordScheduleActions.REFUSAL_UNKNOWN_ACTION;
+            return RecordSchedules.REFUSAL_UNKNOWN_ACTION;
         }
         @SuppressWarnings("unchecked")
         Operation<Row, ?, ?> onInstance = (Operation<Row, ?, ?>) operation;
         return OperationPipeline.offer(onInstance, editor, instance) instanceof OperationPipeline.Offer.Hidden
-            ? RecordScheduleActions.REFUSAL_CAPABILITY_DENIED : null;
+            ? RecordSchedules.REFUSAL_CAPABILITY_DENIED : null;
     }
 
     private static @Nullable Row loadSchedule(@Nullable Integer scheduleId) {
