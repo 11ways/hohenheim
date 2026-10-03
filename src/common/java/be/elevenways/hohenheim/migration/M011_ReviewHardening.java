@@ -17,6 +17,9 @@ import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.migration.ForeignKeyAction;
 import be.elevenways.zenit.common.orm.migration.FrozenModel;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
+import be.elevenways.zenit.common.orm.migration.MigrationCapableDatasource;
+import be.elevenways.zenit.common.orm.migration.MigrationKey;
+import be.elevenways.zenit.common.task.record.M006_RetireLegacyStepResults;
 import be.elevenways.zenit.common.orm.migration.PrincipalColumns;
 import be.elevenways.zenit.common.orm.migration.operation.AddIndexOperation;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -181,7 +184,7 @@ public class M011_ReviewHardening extends HohenheimMigration {
         schema.data("rewrite access-rule networks the strict parser refuses to their canonical spelling", "1",
             M011_ReviewHardening::canonicalizeNetworks);
         schema.data("name the instance operations on stored power, backup, snapshot, console and app update steps",
-            "1", M011_ReviewHardening::renameInstanceScheduleSteps);
+            "2", M011_ReviewHardening::renameInstanceScheduleSteps);
         schema.data("store every certificate requester with its kind", "1", PrincipalColumns.stampAccountKinds(
             "certificates", () -> IntegerField.builder().name("id").build(),
             () -> IntegerField.builder().name("requested_by_user_id").build(), "requested_by_kind", true));
@@ -582,7 +585,40 @@ public class M011_ReviewHardening extends HohenheimMigration {
                     .assign(operation, respelled.getValue())
                     .updateAll();
             }
+            respellRetainedRecordedOperationMaps(datasource);
         });
+    }
+
+    private static void respellRetainedRecordedOperationMaps(Datasource datasource) {
+        if (((MigrationCapableDatasource) datasource).getMigrationRecord(
+                MigrationKey.of(new M006_RetireLegacyStepResults())) != null) return;
+        IntegerField id = IntegerField.builder("id").build();
+        SchemaField results = SchemaField.builder("step_results").build();
+        FrozenModel runs = new FrozenModel("zenit_record_schedule_runs", id, results);
+        for (Row run : runs.find().where(results.isNotNull()).all()) {
+            Object original = run.get(results);
+            if (!(original instanceof Map<?, ?> map) || !(map.get("steps") instanceof List<?> entries)) continue;
+            List<Object> moved = new ArrayList<>(entries.size());
+            boolean changed = false;
+            for (Object member : entries) {
+                if (member instanceof Map<?, ?> entry && entry.get("action") instanceof String recorded
+                        && RECORDED_OPERATIONS.containsKey(recorded)) {
+                    Map<Object, Object> rewritten = new LinkedHashMap<>(entry);
+                    rewritten.put("action", RECORDED_OPERATIONS.get(recorded));
+                    moved.add(rewritten);
+                    changed = true;
+                } else {
+                    moved.add(member);
+                }
+            }
+            if (!changed) continue;
+            Map<Object, Object> rewritten = new LinkedHashMap<>(map);
+            rewritten.put("steps", moved);
+            long updated = runs.find().where(id.eq(run.get(id))).and(results.eq(original))
+                .assign(results, rewritten).updateAll();
+            if (updated != 1) throw new IllegalStateException("Record schedule run " + run.get(id)
+                + " changed while its retained operation names were being respelled");
+        }
     }
 
     /** @return a stored payload as a map, empty when it holds none */

@@ -341,9 +341,6 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
             // 1. A run fired now: its one failed operation attempt is recorded as a step-run row only.
             Row run = schedules.runNow(readScheduleId);
             assertThat(run).as("step 1: the schedule ran").isNotNull();
-            assertThat(run.get(RecordScheduleRunModel.STEP_RESULTS))
-                .as("step 1: a new run writes no step_results map, so a reader of it would show nothing")
-                .isNull();
             Row stepRun = Models.get(RecordScheduleStepRunModel.class).find()
                 .where(RecordScheduleStepRunModel.RUN_ID.eq((Integer) run.get(RecordScheduleRunModel.ID))).first();
             assertThat(stepRun).as("step 1: the step's outcome is a step-run row").isNotNull();
