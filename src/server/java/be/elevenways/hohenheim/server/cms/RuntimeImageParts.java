@@ -20,6 +20,8 @@ import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationCommand;
+import be.elevenways.zenit.common.orm.lease.LeaseKeys;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -46,7 +48,8 @@ public final class RuntimeImageParts {
         .label(Microcopy.of("delete").withFilter("scope", "cms"))
         .one(SubjectType.record(RuntimeImageModel.MODEL_ID))
         .gate(OperationGate.permission(HohenheimPanel.ACCESS))
-        .result(Integer.class).facts(OperationFact.DESTRUCTIVE).command(CmsCommands.TRANSACTIONAL).register();
+        .result(Integer.class).facts(OperationFact.DESTRUCTIVE)
+        .command(OperationCommand.perSubject(LeaseKeys.declare(RuntimeImageModel.MODEL_ID))).register();
 
     static {
         OperationHandlers.attach(DELETE).applies(RuntimeImageParts::custom)

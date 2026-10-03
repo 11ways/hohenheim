@@ -11,7 +11,6 @@ import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.orm.lease.LeaseKeys;
-import be.elevenways.zenit.common.operation.OperationInvocation;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -30,9 +29,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * @since  0.9.0
  */
 public final class GameDomainOperations {
-    private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("game_domain_command"));
-    private static final OperationCommand COMMAND = OperationCommand.serializedBy(KEYS, OperationInvocation::operationId);
-
     /** The subject of the record operations: one mapping. */
     public static final SubjectType<Row> MAPPING = SubjectType.record(GameDomainModel.MODEL_ID);
 
@@ -73,7 +69,7 @@ public final class GameDomainOperations {
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .input(INPUT)
             .result(Integer.class)
-            .command(COMMAND.onDatasource("default"))
+            .command(OperationCommand.perVerb(LeaseKeys.declare(HohenheimIds.id("game_domain_command"))).onDatasource("default"))
             .register();
 
     public static final Operation<Row, MappingForm, Void> UPDATE =
@@ -82,7 +78,7 @@ public final class GameDomainOperations {
             .one(MAPPING)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .input(INPUT)
-            .command(COMMAND)
+            .command(OperationCommand.perSubject(LeaseKeys.declare(HohenheimIds.id("game_domain_command"))))
             .register();
 
     public static final Operation<Row, Void, Void> DELETE =
@@ -90,7 +86,7 @@ public final class GameDomainOperations {
             .label(words("delete"))
             .one(MAPPING)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
-            .command(COMMAND)
+            .command(OperationCommand.perSubject(LeaseKeys.declare(HohenheimIds.id("game_domain_command"))))
             .register();
 
     private GameDomainOperations() {

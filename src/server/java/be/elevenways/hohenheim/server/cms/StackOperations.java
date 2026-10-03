@@ -12,6 +12,9 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationCommand;
+import be.elevenways.zenit.common.orm.command.CommandExecution;
+import be.elevenways.zenit.common.orm.lease.LeaseKeys;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -56,7 +59,7 @@ public final class StackOperations {
         .one(STACK)
         .gate(OPERATOR)
         .facts(OperationFact.REACHES_OUTSIDE)
-        .command(CmsCommands.EXTERNAL)
+        .command(OperationCommand.perSubject(LeaseKeys.declare(STACK.id())).execution(CommandExecution.OUTSIDE_TRANSACTION))
         .register();
 
     /** Queues stopping the stack's containers; applies to an active or degraded stack. */
@@ -66,7 +69,7 @@ public final class StackOperations {
         .one(STACK)
         .gate(OPERATOR)
         .facts(OperationFact.REACHES_OUTSIDE)
-        .command(CmsCommands.EXTERNAL)
+        .command(OperationCommand.perSubject(LeaseKeys.declare(STACK.id())).execution(CommandExecution.OUTSIDE_TRANSACTION))
         .register();
 
     /** Queues redeploying the last successful deployment; applies when one exists. */
@@ -76,7 +79,7 @@ public final class StackOperations {
         .one(STACK)
         .gate(OPERATOR)
         .facts(OperationFact.REACHES_OUTSIDE)
-        .command(CmsCommands.EXTERNAL)
+        .command(OperationCommand.perSubject(LeaseKeys.declare(STACK.id())).execution(CommandExecution.OUTSIDE_TRANSACTION))
         .register();
 
     /** Queues removing the stack's OWNED volumes; external volumes survive it. */
@@ -87,7 +90,7 @@ public final class StackOperations {
             .one(STACK)
             .gate(OPERATOR)
             .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
-            .command(CmsCommands.EXTERNAL)
+            .command(OperationCommand.perSubject(LeaseKeys.declare(STACK.id())).execution(CommandExecution.OUTSIDE_TRANSACTION))
             .register();
 
     /** Reads the stack's live state back into its status; the result is that status. */
@@ -98,7 +101,7 @@ public final class StackOperations {
         .gate(OPERATOR)
         .result(String.class)
         .facts(OperationFact.REACHES_OUTSIDE)
-        .command(CmsCommands.EXTERNAL)
+        .command(OperationCommand.perSubject(LeaseKeys.declare(STACK.id())).execution(CommandExecution.OUTSIDE_TRANSACTION))
         .register();
 
     /** Starts the image reclaim sweep over every daemon, the nightly ReclaimDockerImages task's own. */
@@ -109,7 +112,9 @@ public final class StackOperations {
             .noSubject()
             .gate(OPERATOR)
             .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
-            .command(CmsCommands.EXTERNAL)
+            .command(OperationCommand.perVerb(LeaseKeys.declare(HohenheimIds.id("reclaim_images_command")))
+                .onDatasource(() -> Models.get(StackModel.class).getResolvedDatasource())
+                .execution(CommandExecution.OUTSIDE_TRANSACTION))
             .register();
 
     /** Removes the stack's owned containers and network (volumes stay), then the stack with its rows. */
@@ -120,7 +125,7 @@ public final class StackOperations {
         .gate(OPERATOR)
         .result(Integer.class)
         .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
-        .command(CmsCommands.EXTERNAL)
+        .command(OperationCommand.perSubject(LeaseKeys.declare(STACK.id())).execution(CommandExecution.OUTSIDE_TRANSACTION))
         .register();
 
     /** Removes the service's owned workload, then the service with its config files. */
@@ -132,7 +137,7 @@ public final class StackOperations {
             .gate(OPERATOR)
             .result(Integer.class)
             .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
-            .command(CmsCommands.EXTERNAL)
+            .command(OperationCommand.perSubject(LeaseKeys.declare(SERVICE.id())).execution(CommandExecution.OUTSIDE_TRANSACTION))
             .register();
 
     static {

@@ -39,8 +39,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public final class InstanceOperations {
     public static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("instance"), "hohenheim_instance_");
-    private static final OperationCommand COMMAND_FACET = OperationCommand.serializedBy(KEYS,
-        invocation -> invocation.subjectKeys().get(0)).execution(CommandExecution.OUTSIDE_TRANSACTION);
 
     /** The subject of every instance operation: one instance record. */
     public static final SubjectType<Row> INSTANCE = SubjectType.record(InstanceModel.MODEL_ID);
@@ -70,7 +68,7 @@ public final class InstanceOperations {
             .one(INSTANCE)
             .gate(gate(HohenheimCapabilities.POWER))
             .result(PowerResult.class)
-            .command(COMMAND_FACET)
+            .command(OperationCommand.perSubject(KEYS).execution(CommandExecution.OUTSIDE_TRANSACTION))
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
@@ -80,7 +78,7 @@ public final class InstanceOperations {
         .one(INSTANCE)
         .gate(gate(HohenheimCapabilities.BACKUPS))
         .result(Integer.class)
-        .command(COMMAND_FACET)
+        .command(OperationCommand.perSubject(KEYS).execution(CommandExecution.OUTSIDE_TRANSACTION))
         .facts(OperationFact.REACHES_OUTSIDE)
         .register();
 
@@ -98,7 +96,7 @@ public final class InstanceOperations {
             .input(OperationInput.of(FormSpec.builder().add(NOTE).build(), SnapshotInput.class,
                 values -> new SnapshotInput(values.get(NOTE))))
             .result(Integer.class)
-            .command(COMMAND_FACET)
+            .command(OperationCommand.perSubject(KEYS).execution(CommandExecution.OUTSIDE_TRANSACTION))
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
@@ -125,7 +123,7 @@ public final class InstanceOperations {
             .input(OperationInput.of(FormSpec.builder().add(COMMAND).build(), ConsoleCommandInput.class,
                 values -> new ConsoleCommandInput(values.get(COMMAND))))
             .result(String.class)
-            .command(COMMAND_FACET)
+            .command(OperationCommand.perSubject(KEYS).execution(CommandExecution.OUTSIDE_TRANSACTION))
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
@@ -155,7 +153,7 @@ public final class InstanceOperations {
             .input(OperationInput.of(FormSpec.builder().add(EXEC_COMMAND).build(), ExecInput.class,
                 values -> new ExecInput(values.get(EXEC_COMMAND))))
             .result(ExecRun.class)
-            .command(COMMAND_FACET)
+            .command(OperationCommand.perSubject(KEYS).execution(CommandExecution.OUTSIDE_TRANSACTION))
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
@@ -166,7 +164,7 @@ public final class InstanceOperations {
             .icon(Icon.of("clock-rotate-left"))
             .one(INSTANCE)
             .gate(gate(HohenheimCapabilities.POWER))
-            .command(COMMAND_FACET)
+            .command(OperationCommand.perSubject(KEYS).execution(CommandExecution.OUTSIDE_TRANSACTION))
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
@@ -180,7 +178,7 @@ public final class InstanceOperations {
             .icon(Icon.of("wand-magic-sparkles"))
             .one(INSTANCE)
             .gate(OperationGate.open())
-            .command(COMMAND_FACET)
+            .command(OperationCommand.perSubject(KEYS).execution(CommandExecution.OUTSIDE_TRANSACTION))
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
@@ -194,7 +192,7 @@ public final class InstanceOperations {
             .icon(Icon.of("rotate"))
             .one(INSTANCE)
             .gate(OperationGate.open())
-            .command(COMMAND_FACET)
+            .command(OperationCommand.perSubject(KEYS).execution(CommandExecution.OUTSIDE_TRANSACTION))
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
@@ -209,7 +207,7 @@ public final class InstanceOperations {
             .one(INSTANCE)
             .gate(OperationGate.open())
             .result(Integer.class)
-            .command(COMMAND_FACET)
+            .command(OperationCommand.perSubject(KEYS).execution(CommandExecution.OUTSIDE_TRANSACTION))
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
@@ -223,7 +221,7 @@ public final class InstanceOperations {
             .icon(Icon.of("trash-can"))
             .one(INSTANCE)
             .gate(OperationGate.open())
-            .command(COMMAND_FACET)
+            .command(OperationCommand.perSubject(KEYS).execution(CommandExecution.OUTSIDE_TRANSACTION))
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
@@ -241,7 +239,7 @@ public final class InstanceOperations {
         .gate(OperationGate.open())
         .result(Integer.class)
         .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
-        .command(COMMAND_FACET)
+        .command(OperationCommand.perSubject(KEYS).execution(CommandExecution.OUTSIDE_TRANSACTION))
         .register();
 
     /** Re-reads one instance's stored evidence: the overview surface's refresh control. */
@@ -276,7 +274,7 @@ public final class InstanceOperations {
             .input(OperationInput.of(FormSpec.builder().add(TARGET_SERVER).build(), MigrateInput.class,
                 values -> new MigrateInput(values.get(TARGET_SERVER))))
             .result(Integer.class)
-            .command(COMMAND_FACET)
+            .command(OperationCommand.perSubject(KEYS).execution(CommandExecution.OUTSIDE_TRANSACTION))
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
@@ -331,7 +329,7 @@ public final class InstanceOperations {
             .one(INSTANCE)
             .gate(gate(HohenheimCapabilities.CONFIG))
             .result(String.class)
-            .command(COMMAND_FACET)
+            .command(OperationCommand.perSubject(KEYS).execution(CommandExecution.OUTSIDE_TRANSACTION))
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 

@@ -48,6 +48,9 @@ import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationCommand;
+import be.elevenways.zenit.common.orm.command.CommandExecution;
+import be.elevenways.zenit.common.orm.lease.LeaseKeys;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -178,7 +181,7 @@ public final class DatabaseParts {
         .gate(OperationGate.open())
         .facts(OperationFact.DESTRUCTIVE)
         .result(Integer.class)
-        .command(CmsCommands.EXTERNAL)
+        .command(OperationCommand.perSubject(LeaseKeys.declare(DATABASE.id())).execution(CommandExecution.OUTSIDE_TRANSACTION))
         .register();
 
     /** Moves a dedicated database onto its host's shared engine, in the background. */
@@ -189,7 +192,7 @@ public final class DatabaseParts {
             .icon(Icon.of("layer-group"))
             .one(DATABASE)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
-            .command(CmsCommands.EXTERNAL)
+            .command(OperationCommand.perSubject(LeaseKeys.declare(DATABASE.id())).execution(CommandExecution.OUTSIDE_TRANSACTION))
             .register();
 
     /** The recorded escape hatch once a normal destroy failed: the record goes, the host may keep orphans. */
@@ -201,7 +204,7 @@ public final class DatabaseParts {
             .one(DATABASE)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .facts(OperationFact.DESTRUCTIVE)
-            .command(CmsCommands.EXTERNAL)
+            .command(OperationCommand.perSubject(LeaseKeys.declare(DATABASE.id())).execution(CommandExecution.OUTSIDE_TRANSACTION))
             .register();
 
     /** Destroys an engine: its container and the volume every database sat on; offered dead while one still does. */
@@ -213,7 +216,7 @@ public final class DatabaseParts {
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .facts(OperationFact.DESTRUCTIVE)
             .result(Integer.class)
-            .command(CmsCommands.EXTERNAL)
+            .command(OperationCommand.perSubject(LeaseKeys.declare(ENGINE.id())).execution(CommandExecution.OUTSIDE_TRANSACTION))
             .register();
 
     /** The engine's recorded escape hatch once a normal destroy failed. */
@@ -225,7 +228,7 @@ public final class DatabaseParts {
             .one(ENGINE)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .facts(OperationFact.DESTRUCTIVE)
-            .command(CmsCommands.EXTERNAL)
+            .command(OperationCommand.perSubject(LeaseKeys.declare(ENGINE.id())).execution(CommandExecution.OUTSIDE_TRANSACTION))
             .register();
 
     static {

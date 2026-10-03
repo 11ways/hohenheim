@@ -73,7 +73,7 @@ public final class ReleasedClaimParts {
         .gate(OperationGate.open())
         .facts(OperationFact.DESTRUCTIVE)
         // Placed as a row action: a resubmitted click answers from the receipt instead of lifting twice.
-        .command(OperationCommand.serializedBy(KEYS, invocation -> invocation.subjectKeys().getFirst()))
+        .command(OperationCommand.perSubject(KEYS))
         .register();
 
     static {
