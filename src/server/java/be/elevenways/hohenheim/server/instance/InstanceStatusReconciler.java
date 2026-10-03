@@ -290,7 +290,10 @@ public final class InstanceStatusReconciler {
         // new thread; a raw virtual thread started the redeploy with no identity at all.
         JobRunner.startVirtualThread(() -> Db.run(datasource, () -> {
             try {
-                this.instances.deploy(instanceId);
+                // AIDEV-NOTE: the correction still holds this record's claim when it queues the restart. The new
+                // thread must wait for that claim to leave, then deploy re-entrantly under its own queued claim.
+                this.instances.operations().exclusive(instanceId, InstanceOperationLock.Contention.QUEUE,
+                    () -> this.instances.deploy(instanceId));
             } catch (RuntimeException refused) {
                 Blast.log("INSTANCE RECONCILE: crash restart of instance", name,
                     "refused:", refused.getMessage());
