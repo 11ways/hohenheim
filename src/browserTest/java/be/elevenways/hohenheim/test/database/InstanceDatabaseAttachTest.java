@@ -1,5 +1,9 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.test.PanelEntryViews;
+import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -9,7 +13,6 @@ import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.DatabaseResource;
-import be.elevenways.hohenheim.server.cms.InstanceDatabaseResource;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
@@ -381,7 +384,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         int incusInstanceId = p.incusInstance();
         int remoteInstanceId = p.remoteInstance();
 
-        InstanceDatabaseResource resource = new InstanceDatabaseResource();
+        RowResource resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES);
         AccessContext admin = AccessContext.anonymous();
 
         // 1. An Incus instance has no link networks at all, so its container could never
@@ -503,7 +506,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
 
     /**
      * The FORM path must not be an existence/name/host oracle: before the fix,
-     * {@code InstanceDatabaseResource.validate} ran its UNSCOPED lookups ahead of the
+     * {@code InstanceAttachmentParts.requireLinkReachable} ran its UNSCOPED lookups ahead of the
      * authority decision, so a tenant probing database ids from their own instance's
      * attach form got three distinguishable answers -- {@code database_missing} for an
      * absent id, {@code database_instance_server_mismatch} interpolating the stored
@@ -566,7 +569,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
 
         // 3. POSITIVE ANCHOR: the legitimate owner attaches THROUGH THE SAME FORM PATH,
         //    so the collapse above is an ordering, not a form that refuses everyone.
-        TenantConduits.as(principalA, () -> new InstanceDatabaseResource().persistRow(
+        TenantConduits.as(principalA, () -> PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES).persistRow(
             Map.of("instance_id", probeInstanceId, "database_id", databaseAId,
                 "env_prefix", "DB"),
             AccessContext.of(TenantConduits.stubFor(principalA))));
@@ -578,7 +581,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         //    nothing.
         Row link = links.get(0);
         Throwable repointed = catchThrowable(() -> TenantConduits.as(principalA,
-            () -> new InstanceDatabaseResource().updateRow(link,
+            () -> PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES).updateRow(link,
                 Map.of("database_id", databaseRemoteId),
                 AccessContext.of(TenantConduits.stubFor(principalA)))));
         assertThat(violationKeys(repointed))
@@ -595,7 +598,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         // 5. POSITIVE ANCHOR for the diagnostic: an OPERATOR (no tenant origin) still
         //    gets the reachability message by name -- the collapse is tenant-scoped
         //    ordering, not a lobotomized validator.
-        Throwable operator = catchThrowable(() -> new InstanceDatabaseResource().persistRow(
+        Throwable operator = catchThrowable(() -> PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES).persistRow(
             Map.of("instance_id", probeInstanceId, "database_id", databaseRemoteId,
                 "env_prefix", "OP"), AccessContext.anonymous()));
         assertThat(violationKeys(operator))
@@ -607,7 +610,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
     private static Throwable probeAs(Principal principal, Integer instanceId,
                                      Integer databaseId) {
         return catchThrowable(() -> TenantConduits.as(principal,
-            () -> new InstanceDatabaseResource().persistRow(
+            () -> PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES).persistRow(
                 Map.of("instance_id", instanceId, "database_id", databaseId,
                     "env_prefix", "DB"),
                 AccessContext.of(TenantConduits.stubFor(principal)))));

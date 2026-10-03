@@ -147,7 +147,7 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, new DatabaseEngineResource(), Role.DATABASES);
         // Needs BOTH tiers to exist: it joins an instance to a managed database.
         if (HohenheimRoles.enabled(Role.DATABASES) && HohenheimRoles.enabled(Role.INSTANCES)) {
-            peers.add(new InstanceDatabaseResource());
+            peers.add(InstanceAttachmentParts.databasesAdmin());
         }
         addIf(peers, InstanceParts.admin(), Role.INSTANCES);
         addIf(peers, InstanceTemplateParts.admin(), Role.INSTANCES);
@@ -168,7 +168,7 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, InstanceBackupParts.admin(), Role.INSTANCES);
         addIf(peers, InstanceScheduleParts.admin(), Role.INSTANCES);
         addIf(peers, InstanceScheduleStepParts.admin(), Role.INSTANCES);
-        addIf(peers, new InstanceDeviceResource(), Role.INSTANCES);
+        addIf(peers, InstanceAttachmentParts.devicesAdmin(), Role.INSTANCES);
         addIf(peers, VolumeParts.admin(), Role.INSTANCES);
         addIf(peers, RuntimeImageParts.admin(), Role.INSTANCES);
         addIf(peers, InstanceScheduleRunParts.admin(), Role.INSTANCES);

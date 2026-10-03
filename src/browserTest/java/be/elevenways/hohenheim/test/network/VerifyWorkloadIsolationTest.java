@@ -141,7 +141,7 @@ class VerifyWorkloadIsolationTest {
                 String instanceHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
                 // AIDEV-NOTE: a REAL application record, never a made-up id. The link owner
                 // is what InstanceDatabaseNetworks.liveLinkHandles reads the host off, and
-                // the only writer of instance_databases (InstanceDatabaseResource.validate)
+                // the only writer of instance_databases (InstanceAttachmentParts.requireLinkReachable)
                 // refuses an instance_id with no live row -- so an owner-less link row is a
                 // state the product cannot produce, and a fixture that invents one asserts
                 // the sweep against a world that does not exist.

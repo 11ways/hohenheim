@@ -137,7 +137,7 @@ public final class TenantScopes {
         ctx -> HohenheimAccess.databaseScope(ctx, HohenheimAccess.VIEW));
 
     /** Devices attached to an instance; tenants only those of viewable instances. */
-    public static final RowScope INSTANCE_DEVICES = InstanceDeviceResource.ROWS.andPerPrincipal(
+    public static final RowScope INSTANCE_DEVICES = InstanceAttachmentParts.DEVICE_ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(InstanceDeviceModel.class),
             InstanceModel.MODEL_ID, HohenheimAccess.VIEW, InstanceDeviceModel.INSTANCE_ID::in));
 
@@ -150,7 +150,7 @@ public final class TenantScopes {
             InstanceModel.MODEL_ID, HohenheimAccess.VIEW, InstanceVariableModel.INSTANCE_ID::in));
 
     /** Instance-database attachments; tenants only those of viewable instances. */
-    public static final RowScope INSTANCE_DATABASES = InstanceDatabaseResource.ROWS.andPerPrincipal(
+    public static final RowScope INSTANCE_DATABASES = InstanceAttachmentParts.DATABASE_ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(InstanceDatabaseModel.class),
             InstanceModel.MODEL_ID, HohenheimAccess.VIEW, InstanceDatabaseModel.INSTANCE_ID::in));
 

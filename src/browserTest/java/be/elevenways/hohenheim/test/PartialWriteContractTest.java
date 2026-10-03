@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.CertificateModel;
@@ -9,7 +10,6 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.AuthProviderParts;
-import be.elevenways.hohenheim.server.cms.InstanceDeviceResource;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleParts;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleStepParts;
@@ -289,14 +289,14 @@ class PartialWriteContractTest extends HohenheimTestBase {
      * Steps 1-2: a device resize is no longer refused as a rename it never asked for.
      *
      * AIDEV-NOTE: this asserts on the SHAPE of the refusal rather than on a stored value,
-     * because {@code InstanceDeviceResource.updateRow} funnels into the daemon and there is
+     * because {@code InstanceAttachmentParts.resizeDevice} funnels into the daemon and there is
      * no container behind this fixture. What must never come back is the identity refusal:
      * the resize either reaches the daemon and fails there, or succeeds.
      */
     @Test
     void aPartialDeviceWriteIsNoLongerRefusedAsARenameOrRetype() {
         Row device = Models.get(InstanceDeviceModel.class).findById(deviceId);
-        InstanceDeviceResource resource = new InstanceDeviceResource();
+        RowResource resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DEVICES);
 
         // 1. The one entry the cell lane would send for a disk resize.
         Throwable refusal = null;

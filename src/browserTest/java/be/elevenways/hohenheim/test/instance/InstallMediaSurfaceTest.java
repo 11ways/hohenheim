@@ -1,12 +1,15 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.test.PanelEntryViews;
+import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.ManageInstanceDeviceResource;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
@@ -377,7 +380,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
     @Test
     void theTenantDeviceFormNeitherOffersNorAcceptsCdrom() {
         int instanceId = mediaCapableInstance("media-surf-form");
-        ManageInstanceDeviceResource resource = new ManageInstanceDeviceResource();
+        RowResource resource = PanelEntryViews.of(HohenheimSlugs.MANAGE, InstanceAttachmentParts.DEVICES);
 
         Map<String, Object> submitted = new LinkedHashMap<>();
         submitted.put("instance_id", instanceId);

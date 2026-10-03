@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.instance.InstanceAttachmentOperations;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
@@ -262,7 +263,10 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
     @Test
     void theInstanceDeviceTwinsOfferWhatTheyOfferedBeforeTheMove() {
         SurfaceBaselines stored = SurfaceBaselines.load(ManagePanelSurfacesBrowserTest.class,
-            "/panel-surfaces/manage-instance-devices.txt");
+                "/panel-surfaces/manage-instance-devices.txt")
+            // The detach is the device funnel's detach_device operation on both twins.
+            .placedOperations(PlacedOperationMoves.NONE.synthesized(DEVICES, SynthesizedRowActions.DELETE,
+                InstanceAttachmentOperations.DETACH_DEVICE.id()));
         Map<String, String> devices = Map.of("disk", diskId, "cdrom", cdromId, "unknown", unknownDeviceId);
 
         // 1. The admin device entry and its tenant twin, for a VIEW-only and a CONFIG delegate of the instance, on a

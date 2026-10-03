@@ -1,12 +1,21 @@
 package be.elevenways.hohenheim.test.database;
 
+import java.util.Objects;
+import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.hohenheim.test.PanelEntryViews;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.hohenheim.server.cms.CmsSupport;
+import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.DatabaseResource;
-import be.elevenways.hohenheim.server.cms.InstanceDatabaseResource;
 import be.elevenways.hohenheim.server.cms.InstanceDatabasesPage;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
@@ -116,7 +125,8 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
     @Test
     void anAttachmentIsNamedByBothSidesAndTheDatabaseDeleteIsDeadWithTheDetachPage()
             throws Exception {
-        InstanceDatabaseResource attachments = new InstanceDatabaseResource();
+        RowResource attachments = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES);
+        Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN), "the admin panel");
         DatabaseResource databases = new DatabaseResource();
         Row link = Models.get(InstanceDatabaseModel.class).findById(linkId);
         Row database = Models.get(DatabaseModel.class).findById(databaseId);
@@ -131,7 +141,9 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
             .doesNotStartWith("DB");
 
         // 2. Its delete dialog names both sides and the injected family it takes away.
-        ConfirmationSpec confirmation = attachments.deleteConfirmationFor(link);
+        ConfirmationSpec confirmation = CmsSupport.rowEntry(admin, InstanceAttachmentParts.DATABASES)
+            .deleteConfirmation()
+            .forRow(link, new PanelRequest(admin, TenantConduits.stubFor(null), AccessContext.anonymous(), null));
         Microcopy body = confirmation.body();
         assertThat(body.key()).as("step 2: the attachment-specific warning").isEqualTo("delete_confirm");
         assertThat(String.valueOf(body.args().get("database"))).isEqualTo(PREFIX + "db");
