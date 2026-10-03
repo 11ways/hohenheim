@@ -205,9 +205,9 @@ class GitProviderOwnershipTest extends HohenheimTestBase {
         HttpResponse<String> created = httpPostForm("/manage/git-providers/new",
             "name=Tenant+Second+Forge&kind=hohenheim%3Agitea"
                 + "&base_url=https%3A%2F%2Fsecond.tenant.example"
-                + "&access_token=second-token&shared=true",
+                + "&access_token=second-token&shared=true&target_trusted=true",
             tenantSession, tenantCsrf);
-        assertThat(created.statusCode()).isIn(302, 303);
+        assertThat(created.statusCode()).as("the delegated create redirects").isIn(302, 303);
 
         Row row = Models.get(GitProviderModel.class).find()
             .where(GitProviderModel.NAME.eq("Tenant Second Forge")).first();
@@ -215,6 +215,9 @@ class GitProviderOwnershipTest extends HohenheimTestBase {
         assertThat(row.get(GitProviderModel.SHARED))
             .as("shared is not on this form, so a submitted value is dropped by coercion")
             .isNotEqualTo(true);
+        assertThat(row.get(GitProviderModel.TARGET_TRUSTED))
+            .as("a tenant-created target remains public-only, including when a forged trust mark is submitted")
+            .isEqualTo(false);
         assertThat(HohenheimAccess.manageSubjectsOf(GitProviderModel.MODEL_ID,
                 row.get(GitProviderModel.ID)))
             .as("creating adopts the row: the creator holds manage on what it registered")

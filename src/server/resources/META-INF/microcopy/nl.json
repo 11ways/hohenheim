@@ -3543,6 +3543,10 @@
     "text": "Dat exacte record bestaat al in deze zone",
     "scope": "violations"
   },
+  "dns_remote_action_invalid": {
+    "text": "Onbekende DNS-recordactie",
+    "scope": "violations"
+  },
   "dns_contact_format": {
     "text": "Geef een e-mailadres zoals hostmaster@example.com",
     "scope": "violations"

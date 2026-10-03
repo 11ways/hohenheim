@@ -23,6 +23,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.protoblast.common.thread.ExecutionContext;
+import be.elevenways.zenit.common.security.SystemPurpose;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -86,6 +87,8 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * {@code TenantInstanceApiTest}, which stays unchanged.
  */
 class InstancePowerOperationsTest {
+    private static final SystemPurpose OTHER_SYSTEM_WORK = SystemPurpose.declare(
+        Identifier.of("hohenheim_test", "other_power_work"));
 
     private static SqlDatasource datasource;
     private static BackupLaneFixture fixture;
@@ -135,6 +138,12 @@ class InstancePowerOperationsTest {
                         refusal -> assertThat(refusal.reason()).isSameAs(ZenitRefusalReason.NOT_FOUND));
                 assertThatThrownBy(() -> OperationRequest.of(operation, ZenitPlacementSurface.SCHEDULE_STEP)
                     .asSystem(ExecutionIdentity.system("record-schedule:" + scheduleId), null)
+                    .subjectKeys(List.of(String.valueOf(instanceId))).loadSubjects())
+                    .as("1: a schedule-shaped label cannot supply authority for %s", operation.id())
+                    .isInstanceOfSatisfying(DomainRefusal.class,
+                        refusal -> assertThat(refusal.reason()).isSameAs(ZenitRefusalReason.NOT_FOUND));
+                assertThatThrownBy(() -> OperationRequest.of(operation, ZenitPlacementSurface.SCHEDULE_STEP)
+                    .asSystem(ExecutionIdentity.system(OTHER_SYSTEM_WORK, "unrelated system work"), null)
                     .subjectKeys(List.of(String.valueOf(instanceId))).loadSubjects())
                     .as("1: another system purpose gets no subject of %s", operation.id())
                     .isInstanceOfSatisfying(DomainRefusal.class,
