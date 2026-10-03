@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSources;
-import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ProjectModel;
@@ -21,12 +20,11 @@ import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
-import be.elevenways.zenit.cms.common.resource.RowSave;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RowScope;
-import be.elevenways.zenit.common.edit.FieldAccess;
+import be.elevenways.zenit.common.edit.FormCarrier;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
@@ -73,6 +71,13 @@ public final class EnvironmentParts {
     private static final SubjectType<Row> SUBJECT = SubjectType.record(EnvironmentModel.MODEL_ID);
 
     private static final OperationGate OPERATOR = OperationGate.permission(HohenheimSources.ADMIN_ACCESS);
+
+    // AIDEV-NOTE: the shared form boundary owns the old no-script create mapping and retires the old carrier on
+    // a kind switch; bindings answer stored-kind reads, while showWhen retains both controls for live switching.
+    private static final FormCarrier VALUE_CARRIER = FormCarrier.of(InstanceVariableModel.KIND)
+        .choice(InstanceVariableModel.KIND_PLAIN, InstanceVariableModel.PLAIN_VALUE)
+        .choice(InstanceVariableModel.KIND_SECRET, InstanceVariableModel.SECRET_VALUE)
+        .retirePrevious().defaultCarrierOnCreate().build();
 
     /** Deletes an environment nothing groups under; offered dead, naming the holders, while something does. */
     public static final Operation<Row, Void, Integer> DELETE =
@@ -163,15 +168,16 @@ public final class EnvironmentParts {
     public static @NonNull PanelResource<Row> variables() {
         RelationPick environment = RelationPick.of(InstanceVariableModel.ENVIRONMENT_ID, EnvironmentModel.MODEL_ID)
             .build();
-        // AIDEV-NOTE: both carriers are declared, but the bindings leave exactly ONE visible per kind. They are
-        // separate entries because they are separate columns: a dynamic (schemaFrom) sub-form, which would switch them
-        // reactively, cannot hold secret_value, since zenit refuses .encrypted() under a JSON sub-schema.
+        // AIDEV-NOTE: both physical carriers stay mounted, but only the selected one is visible and submitting;
+        // authorization and retirement come from VALUE_CARRIER, never from the submitted visibility claim.
         FormSpec form = FormSpec.builder()
             .add(environment)
             .add(InstanceVariableModel.KEY)
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceVariableModel.KIND))
             .add(InstanceVariableModel.PLAIN_VALUE)
             .add(InstanceVariableModel.SECRET_VALUE)
+            .showWhen("plain_value", "kind", InstanceVariableModel.KIND_PLAIN)
+            .showWhen("secret_value", "kind", InstanceVariableModel.KIND_SECRET)
             .build();
         TableSpec<Row> table = TableSpec.<Row>builder()
             // The chip carries the KEY: it is what gets pasted into a compose file or a shell.
@@ -198,9 +204,9 @@ public final class EnvironmentParts {
             .form(ResourceForm.<Row>of(form)
                 .bindings(List.of(
                     ResourceFieldBinding.of(InstanceVariableModel.PLAIN_VALUE.getName(),
-                        FieldAccess.customRecordAware((access, record) -> carrierAccess(record, VariableKind.PLAIN))),
+                        VALUE_CARRIER.access(InstanceVariableModel.PLAIN_VALUE)),
                     ResourceFieldBinding.of(InstanceVariableModel.SECRET_VALUE.getName(),
-                        FieldAccess.customRecordAware((access, record) -> carrierAccess(record, VariableKind.SECRET)))))
+                        VALUE_CARRIER.access(InstanceVariableModel.SECRET_VALUE))))
                 .createDefaults(request -> prefill(request, HohenheimParams.ENVIRONMENT_ID_PREFILL,
                     InstanceVariableModel.ENVIRONMENT_ID.getName()))
                 .quickCreate(VARIABLE_QUICK_CREATE)
@@ -208,7 +214,6 @@ public final class EnvironmentParts {
                     SLUG))
                 .build())
             .writes(ResourceMutations.rows().create().update().delete(DELETE_VARIABLE)
-                .beforeSave(EnvironmentParts::placeValueInItsCarrier)
                 .build())
             .deleteConfirmation(DeleteConfirmation.<Row>of(variableDeleteBody(null))
                 .forRow((variable, request) -> variableDeleteBody(variable)))
@@ -224,38 +229,6 @@ public final class EnvironmentParts {
     static @Nullable Microcopy inUseReason(@NonNull Row environment) {
         var usage = DeleteImpact.environmentUsage(environment.get(EnvironmentModel.ID));
         return usage.isEmpty() ? null : usage.refusal();
-    }
-
-    /**
-     * Keeps a variable's value in the column its kind declares.
-     *
-     * AIDEV-NOTE: on CREATE the form has no record and so offers only the plain carrier (see the bindings); a variable
-     * created as a secret had its value typed there, and the submitted kind is the operator's declaration of what the
-     * value IS, so it moves to the secret carrier once. On UPDATE a submitted kind retires the carrier that kind does
-     * not use: without that a switch is impossible, since the model's one-carrier-per-kind hook refuses a secret row
-     * still holding plain_value and the retired column is hidden. Both read the kind only when the write carries it,
-     * because the inline-cell lane submits exactly one entry.
-     */
-    static void placeValueInItsCarrier(@NonNull RowSave save) {
-        String kindName = InstanceVariableModel.KIND.getName();
-        if (!save.values().containsKey(kindName)) {
-            return;
-        }
-        VariableKind kind = declaredKind(save.values().get(kindName));
-        Row row = save.row();
-        if (save.isCreate()) {
-            if (kind.isSecret() && save.values().containsKey(InstanceVariableModel.PLAIN_VALUE.getName())) {
-                row.set(InstanceVariableModel.SECRET_VALUE,
-                    (String) save.values().get(InstanceVariableModel.PLAIN_VALUE.getName()));
-                row.set(InstanceVariableModel.PLAIN_VALUE, null);
-            }
-            return;
-        }
-        if (kind.isSecret()) {
-            row.set(InstanceVariableModel.PLAIN_VALUE, null);
-        } else {
-            row.set(InstanceVariableModel.SECRET_VALUE, null);
-        }
     }
 
     /**
@@ -275,25 +248,6 @@ public final class EnvironmentParts {
             .withFilter("scope", "environment_variable")
             .withArg("key", key)
             .withArg("environment", environment));
-    }
-
-    /**
-     * EDITABLE only for the carrier the record's kind stores; CREATE has no record and so offers the plain carrier.
-     *
-     * AIDEV-NOTE: the form renderer and the write's FieldAccess enforcement ask this SAME resolver about the SAME row,
-     * so a hand-crafted submission cannot write the carrier the form withheld. It is a server-side decision: flipping
-     * the kind select does not swap the field live; the new carrier appears after the save.
-     */
-    private static FieldAccess.@NonNull Decision carrierAccess(@Nullable Object record,
-                                                               @NonNull VariableKind carrierKind) {
-        VariableKind stored = record instanceof Row row ? declaredKind(row.get(InstanceVariableModel.KIND))
-            : VariableKind.PLAIN;
-        return carrierKind == stored ? FieldAccess.Decision.EDITABLE : FieldAccess.Decision.HIDDEN;
-    }
-
-    /** Absent or blank is the column's default (plain); anything unrecognized fails closed as a secret. */
-    private static @NonNull VariableKind declaredKind(@Nullable Object token) {
-        return token == null || token.toString().isBlank() ? VariableKind.PLAIN : VariableKind.of(token);
     }
 
     /** A related-record link's {@code ?<parent>_id=} prefill. */
