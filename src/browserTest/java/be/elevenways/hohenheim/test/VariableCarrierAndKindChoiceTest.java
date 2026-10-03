@@ -12,6 +12,7 @@ import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violation;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.forms.common.render.FormEntryState;
 import be.elevenways.zenit.forms.common.render.FormState;
 import be.elevenways.zenit.forms.common.render.ConditionalEntryState;
@@ -27,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Two admin forms that used to leave the operator guessing: the environment-variable
@@ -167,6 +169,23 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
         assertThat(stored.get(InstanceVariableModel.PLAIN_VALUE)).as("step 9: refused write keeps old value").isEqualTo("new-config");
         assertThat(stored.get(InstanceVariableModel.SECRET_VALUE)).as("step 9: no hidden carrier write").isNull();
 
+        HttpResponse<String> blankKind = httpPostForm("/admin/environment-variables/" + variableId,
+            "environment_id=" + environmentId + "&key=CARRIER_PROBE&kind=&secret_value=smuggled",
+            sessionToken, csrfToken);
+        assertThat(blankKind.statusCode()).as("step 9: a blank kind refuses instead of retiring plain data").isEqualTo(200);
+        for (String kind : new String[] {null, "", "unknown"}) {
+            Row invalid = Models.get(InstanceVariableModel.class).createEmptyRow();
+            invalid.set(InstanceVariableModel.ID, variableId);
+            invalid.set(InstanceVariableModel.KIND, kind);
+            assertThatThrownBy(() -> Models.get(InstanceVariableModel.class).save(invalid))
+                .as("step 9: every writer refuses a missing or unknown kind").isInstanceOf(Violations.class);
+        }
+        stored = Models.get(InstanceVariableModel.class).find().where(InstanceVariableModel.ID.eq(variableId)).first();
+        assertThat(stored.get(InstanceVariableModel.PLAIN_VALUE))
+            .as("step 9: missing-kind refusals preserve the plain carrier").isEqualTo("new-config");
+        assertThat(stored.get(InstanceVariableModel.SECRET_VALUE))
+            .as("step 9: missing-kind refusals write no secret carrier").isNull();
+
         // 10. Hydrated switching retains the plain draft and excludes the hidden native controls from submission.
         navigateToApp("/admin/environment-variables/" + variableId);
         var plainInput = page.locator("pl-textarea[name='plain_value'] textarea");
@@ -228,6 +247,53 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
             .as("a plain variable still stores its plain carrier")
             .isEqualTo("visible-at-birth");
         assertThat(plainRow.get(InstanceVariableModel.SECRET_VALUE)).isNull();
+
+        // 5. Quick-add uses the full form's retained conditions, not a permanently visible second carrier.
+        navigateToApp("/admin/environment-variables?environment_id=" + environmentId);
+        String quick = "cms-quick-add ";
+        assertThat(page.locator(quick + "[data-zf-create-field='plain_value']").isVisible())
+            .as("step 5: quick-add initially offers the declared plain default").isTrue();
+        assertThat(page.locator(quick + "[data-zf-create-field='secret_value']").isVisible())
+            .as("step 5: quick-add retains but hides the secret carrier").isFalse();
+        page.locator(quick + "[data-zf-create-field='plain_value'] textarea").fill("inactive-plain-draft");
+        page.locator(quick + "[data-zf-create-field='kind'] .pl-select-field").click();
+        page.locator("he-bottom .pl-select-popup[data-open] [role='option'][data-value='secret']").click();
+        page.waitForFunction("() => document.querySelector('cms-quick-add [data-conditional-entry=secret_value]').hidden === false");
+        assertThat(page.locator(quick + "[data-zf-create-field='plain_value']").isVisible())
+            .as("step 5: choosing secret hides the retained plain carrier").isFalse();
+        assertThat(page.locator(quick + "[data-zf-create-field='secret_value']").isVisible())
+            .as("step 5: choosing secret shows its carrier").isTrue();
+
+        // 6. The real quick-add submit stores the typed secret and never its inactive plain draft.
+        page.locator(quick + "[data-zf-create-field='key'] input").fill("SECRET_QUICK_ADD");
+        page.locator(quick + "[data-zf-create-field='secret_value'] textarea").fill("hunter2-quick-add");
+        page.locator(quick + "[data-cms-quick-add-submit]").click();
+        page.waitForCondition(() -> Models.get(InstanceVariableModel.class).find()
+            .where(InstanceVariableModel.KEY.eq("SECRET_QUICK_ADD")).first() != null);
+        Row quickSecret = Models.get(InstanceVariableModel.class).find()
+            .where(InstanceVariableModel.KEY.eq("SECRET_QUICK_ADD")).first();
+        assertThat(quickSecret.get(InstanceVariableModel.KIND)).as("step 6: the chosen kind is stored")
+            .isEqualTo(InstanceVariableModel.KIND_SECRET);
+        assertThat(quickSecret.get(InstanceVariableModel.SECRET_VALUE)).as("step 6: quick-add stores the secret value")
+            .isEqualTo("hunter2-quick-add");
+        assertThat(quickSecret.get(InstanceVariableModel.PLAIN_VALUE)).as("step 6: the inactive draft is not stored")
+            .isNull();
+
+        // 7. A secret create without a value refuses on every writer instead of saving an empty secret.
+        long beforeRefusal = Models.get(InstanceVariableModel.class).find().count();
+        HttpResponse<String> emptySecret = httpPostForm("/admin/environment-variables/new",
+            "environment_id=" + environmentId + "&key=EMPTY_SECRET&kind=secret", sessionToken, csrfToken);
+        assertThat(emptySecret.statusCode()).as("step 7: missing secret rerenders the form").isEqualTo(200);
+        assertThat(emptySecret.body()).as("step 7: refusal names the secret carrier")
+            .containsPattern("<pl-field data-path=\"secret_value\"[^>]*\\sinvalid[\\s>=]");
+        Row missingSecret = Models.get(InstanceVariableModel.class).createEmptyRow();
+        missingSecret.set(InstanceVariableModel.ENVIRONMENT_ID, environmentId);
+        missingSecret.set(InstanceVariableModel.KEY, "EMPTY_SECRET_DIRECT");
+        missingSecret.set(InstanceVariableModel.KIND, InstanceVariableModel.KIND_SECRET);
+        assertThatThrownBy(() -> Models.get(InstanceVariableModel.class).save(missingSecret))
+            .as("step 7: a direct save enforces the same carrier requirement").isInstanceOf(Violations.class);
+        assertThat(Models.get(InstanceVariableModel.class).find().count())
+            .as("step 7: neither refused create stores a row").isEqualTo(beforeRefusal);
     }
 
     @Test

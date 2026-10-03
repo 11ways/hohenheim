@@ -91,15 +91,11 @@ public final class EnvironmentParts {
         .of(EnvironmentModel.NAME.getName(), EnvironmentModel.DESCRIPTION.getName())
         .presets(EnvironmentModel.PROJECT_ID.getName());
 
-    /**
-     * The variable list's quick-add entries; the environment rides along as a preset.
-     *
-     * AIDEV-NOTE: the bar offers the PLAIN carrier only. A secret typed into a one-line bar on a page everyone can see
-     * is not the place to mint one; the full form is, where the framework's mask/keep-on-blank pipeline is the surface.
-     */
+    /** The variable list's quick-add entries retain the full form's conditional value carriers. */
+    // AIDEV-NOTE: both carriers are declared; the shared form conditions activate only the selected one.
     private static final QuickCreateSpec VARIABLE_QUICK_CREATE = QuickCreateSpec
         .of(InstanceVariableModel.KEY.getName(), InstanceVariableModel.KIND.getName(),
-            InstanceVariableModel.PLAIN_VALUE.getName())
+            InstanceVariableModel.PLAIN_VALUE.getName(), InstanceVariableModel.SECRET_VALUE.getName())
         .presets(InstanceVariableModel.ENVIRONMENT_ID.getName());
 
     private EnvironmentParts() {
@@ -227,7 +223,8 @@ public final class EnvironmentParts {
     static void placeValueInItsCarrier(@NonNull RowSave save) {
         String kindName = InstanceVariableModel.KIND.getName();
         if (!save.values().containsKey(kindName)) return;
-        VariableKind kind = VariableKind.of(String.valueOf(save.values().get(kindName)));
+        VariableKind kind = VariableKind.parse(save.values().get(kindName));
+        if (kind == null) return;
         if (kind.isSecret()) save.row().set(InstanceVariableModel.PLAIN_VALUE, null);
         else save.row().set(InstanceVariableModel.SECRET_VALUE, null);
     }
