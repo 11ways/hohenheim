@@ -17,9 +17,9 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.common.security.PrincipalRef;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
@@ -140,13 +140,9 @@ class TenantAttributedRedeployGateTest extends HohenheimTestBase {
         row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
         row.set(ServerModel.PREFLIGHT_OK, true);
         row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        row.set(ServerModel.ACKNOWLEDGED_POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        row.set(ServerModel.ACKNOWLEDGED_WARNING_VERSION, ServerModel.POSTURE_WARNING_VERSION);
-        row.set(ServerModel.ACKNOWLEDGED_AT, Now.instant());
-        ServerModel.ACKNOWLEDGER.write(row, PrincipalRef.account(1));
-        row.set(ServerModel.ACKNOWLEDGED_BY_LABEL, "Test Operator");
         row.set(ServerModel.LAST_SEEN_AT, Now.instant());
         servers.save(row);
+        HostFixtures.acknowledgePosture(row);
         HostPreflight.store(name, new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
             Map.of(HostPreflight.MEM_TOTAL_FACT, 16L * 1024 * 1024 * 1024),

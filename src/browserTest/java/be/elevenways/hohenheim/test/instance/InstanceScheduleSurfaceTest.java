@@ -366,10 +366,10 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
 
             // 3. The schedule's Steps tab shows the same verdict for that run.
             Conduit conduit = TenantConduits.stubFor(new UserPrincipal(ownerId, "Schedule Owner"));
-            PanelRequest stepsRequest = new PanelRequest(PanelRegistry.getBySlug(ManagePanel.SLUG), conduit,
-                AccessContext.of(conduit), null);
+            PanelRequest request = new PanelRequest(Objects.requireNonNull(PanelRegistry.getBySlug(ManagePanel.SLUG)),
+                conduit, AccessContext.of(conduit), null);
             Map<String, Object> vars = (Map<String, Object>) new InstanceScheduleStepsPage()
-                .render(stepsRequest, scheduleModel.findById(readScheduleId)).get();
+                .render(request, scheduleModel.findById(readScheduleId)).get();
             List<ScheduleRunView> runs = (List<ScheduleRunView>) vars.get("runs");
             int runId = run.get(RecordScheduleRunModel.ID);
             assertThat(runs).as("step 3: the Steps tab lists the run with its steps")

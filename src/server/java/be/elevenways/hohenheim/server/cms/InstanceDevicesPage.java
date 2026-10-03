@@ -71,7 +71,7 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
         Conduit conduit = request.conduit();
         AccessContext accessContext = request.access();
         Integer instanceId = instance.get(InstanceModel.ID);
-        String panel = CmsSupport.panelSlug(conduit);
+        String panel = request.panelSlug();
 
         List<Map<String, Object>> devices = new ArrayList<>();
         for (Row device : new InstanceDevices().rowsFor(instanceId)) {

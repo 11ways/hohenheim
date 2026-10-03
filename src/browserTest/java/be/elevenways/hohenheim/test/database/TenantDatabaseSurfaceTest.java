@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.EngineHost;
 import be.elevenways.hohenheim.server.database.TenantDatabases;
+import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
@@ -25,6 +26,7 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.InstanceRowCleanup;
+import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -37,7 +39,9 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.quota.Quotas;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
@@ -62,6 +66,22 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * boundary being tested.
  */
 class TenantDatabaseSurfaceTest extends HohenheimTestBase {
+
+    private FakeDockerDaemon daemon;
+
+    @BeforeEach
+    void observeAbsentWorkloads() {
+        // AIDEV-NOTE: absence must be the daemon's authoritative 404, never an unreachable real socket. Destroy
+        // correctly refuses an unreachable shared engine, even when this control-plane fixture never deployed one.
+        this.daemon = new FakeDockerDaemon();
+        DockerClient.overrideLocalTransportForTest(() -> this.daemon);
+    }
+
+    @AfterEach
+    void restoreDaemon() {
+        DockerClient.overrideLocalTransportForTest(null);
+        this.daemon.close();
+    }
 
     private static final String PREFIX = "tenant-db-";
 

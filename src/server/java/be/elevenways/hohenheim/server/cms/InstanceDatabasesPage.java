@@ -69,7 +69,7 @@ public final class InstanceDatabasesPage implements RecordTab.Rendered<Row> {
         Conduit conduit = request.conduit();
         AccessContext accessContext = request.access();
         Integer instanceId = instance.get(InstanceModel.ID);
-        String panel = CmsSupport.panelSlug(conduit);
+        String panel = request.panelSlug();
 
         List<Map<String, Object>> attachments = new ArrayList<>();
         for (Row link : Models.get(InstanceDatabaseModel.class).findByInstanceId(instanceId)) {

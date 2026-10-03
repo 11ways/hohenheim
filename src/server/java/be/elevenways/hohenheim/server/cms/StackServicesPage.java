@@ -46,7 +46,7 @@ public final class StackServicesPage implements RecordTab.Rendered<Row> {
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row stack) {
         Conduit conduit = request.conduit();
         Integer stackId = stack.get(StackModel.ID);
-        String panel = CmsSupport.panelSlug(conduit);
+        String panel = request.panelSlug();
 
         Map<String, String> liveStates = StackRuntime.get().serviceStates(stackId);
         StackFileModel fileModel = Models.get(StackFileModel.class);

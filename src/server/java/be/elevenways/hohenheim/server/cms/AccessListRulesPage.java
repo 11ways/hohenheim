@@ -59,11 +59,11 @@ public final class AccessListRulesPage implements RecordTab.Rendered<Row> {
     @Override public @NonNull Icon icon() { return Icon.of("sitemap"); }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull PanelRequest tabRequest, @NonNull Row list) {
-        Conduit conduit = tabRequest.conduit();
-        AccessContext accessContext = tabRequest.access();
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row list) {
+        Conduit conduit = request.conduit();
+        AccessContext accessContext = request.access();
         Integer listId = list.get(AccessListModel.ID);
-        String panel = CmsSupport.panelSlug(conduit);
+        String panel = request.panelSlug();
         String pageUrl = CmsRoutes.subpage(panel, HohenheimSlugs.ACCESS_LISTS, listId, this.slug()).toUrl();
 
         List<Row> rules = Models.get(AccessRuleModel.class).findForAccessList(listId);
@@ -80,11 +80,10 @@ public final class AccessListRulesPage implements RecordTab.Rendered<Row> {
 
         // Each node's actions are the rule entry's own placed operations over the panel's twin, read in one batch the
         // way its list reads them, each invoke returning to this tab.
-        Panel cmsPanel = Objects.requireNonNull(PanelRegistry.getBySlug(panel), "no panel " + panel);
+        Panel cmsPanel = request.panel();
         @SuppressWarnings("unchecked")
         PanelResource<Row> rulesEntry = (PanelResource<Row>) Objects.requireNonNull(
             cmsPanel.entryBySlug(AccessRuleParts.SLUG), "panel " + panel + " declares no access-rule entry");
-        PanelRequest request = new PanelRequest(cmsPanel, conduit, accessContext, null);
         Function<Row, List<RowOffer>> offers = PanelActionOffers.rowsForRender(request, rulesEntry, null, rules,
             accessContext, ReturnPath.of(pageUrl));
 
