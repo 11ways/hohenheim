@@ -28,6 +28,8 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationCommand;
+import be.elevenways.zenit.common.orm.lease.LeaseKeys;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -53,7 +55,8 @@ public final class ProjectParts {
     public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_project"))
         .label(Microcopy.of("delete").withFilter("scope", "cms"))
         .one(SUBJECT).gate(OperationGate.permission(HohenheimPanel.ACCESS))
-        .result(Integer.class).facts(OperationFact.DESTRUCTIVE).command(CmsCommands.TRANSACTIONAL).register();
+        .result(Integer.class).facts(OperationFact.DESTRUCTIVE)
+        .command(OperationCommand.perSubject(LeaseKeys.declare(SUBJECT.id()))).register();
 
     static {
         OperationHandlers.attach(DELETE).handle(call -> {

@@ -28,8 +28,6 @@ import be.elevenways.zenit.common.ui.Icon;
  * @since  0.9.0
  */
 public final class PreviewOperations {
-    private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("preview_command"));
-
     /** The subject of every preview operation: one preview deployment record. */
     public static final SubjectType<Row> PREVIEW = SubjectType.record(PreviewDeploymentModel.MODEL_ID);
 
@@ -41,7 +39,7 @@ public final class PreviewOperations {
         .gate(OperationGate.open().subjectCapability(HohenheimCapabilities.MANAGE))
         .result(String.class)
         .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
-        .command(OperationCommand.serializedBy(KEYS, invocation -> invocation.subjectKeys().get(0))
+        .command(OperationCommand.perSubject(LeaseKeys.declare(HohenheimIds.id("preview_command")))
             .execution(CommandExecution.OUTSIDE_TRANSACTION))
         .register();
 

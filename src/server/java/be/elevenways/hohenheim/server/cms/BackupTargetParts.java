@@ -20,6 +20,9 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationCommand;
+import be.elevenways.zenit.common.orm.command.CommandExecution;
+import be.elevenways.zenit.common.orm.lease.LeaseKeys;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -57,7 +60,7 @@ public final class BackupTargetParts {
             .gate(OperationGate.open())
             .result(TestOutcome.class)
             .facts(OperationFact.REACHES_OUTSIDE)
-            .command(CmsCommands.EXTERNAL)
+            .command(OperationCommand.perSubject(LeaseKeys.declare(SUBJECT.id())).execution(CommandExecution.OUTSIDE_TRANSACTION))
             .register();
 
     /**

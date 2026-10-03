@@ -99,8 +99,8 @@ public final class BanParts {
         .one(SUBJECT)
         .gate(OperationGate.open())
         // Placed as a row action: a resubmitted click answers from the receipt instead of lifting twice.
-        .command(OperationCommand.serializedBy(LeaseKeys.declare(HohenheimIds.id("lift_ban_command"), "lift_ban:"),
-            invocation -> invocation.subjectKeys().getFirst()).execution(CommandExecution.OUTSIDE_TRANSACTION))
+        .command(OperationCommand.perSubject(LeaseKeys.declare(HohenheimIds.id("lift_ban_command"), "lift_ban:"))
+            .execution(CommandExecution.OUTSIDE_TRANSACTION))
         .register();
 
     static {

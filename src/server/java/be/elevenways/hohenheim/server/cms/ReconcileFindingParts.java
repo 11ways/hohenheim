@@ -27,6 +27,9 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationCommand;
+import be.elevenways.zenit.common.orm.command.CommandExecution;
+import be.elevenways.zenit.common.orm.lease.LeaseKeys;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -53,7 +56,9 @@ public final class ReconcileFindingParts {
     public static final Operation<Row, Void, Void> REMOVE = Operation.declare(HohenheimIds.id("remove_orphan"))
         .label(Microcopy.of("remove_orphan").withFilter("scope", "reconcile_finding"))
         .one(SubjectType.record(ReconcileFindingModel.MODEL_ID)).gate(OperationGate.permission(HohenheimPanel.ACCESS))
-        .facts(OperationFact.DESTRUCTIVE, OperationFact.REACHES_OUTSIDE).command(CmsCommands.EXTERNAL).register();
+        .facts(OperationFact.DESTRUCTIVE, OperationFact.REACHES_OUTSIDE)
+        .command(OperationCommand.perSubject(LeaseKeys.declare(ReconcileFindingModel.MODEL_ID))
+            .execution(CommandExecution.OUTSIDE_TRANSACTION)).register();
     static {
         OperationHandlers.attach(REMOVE).applies(row -> ReconcileFindingModel.BUCKET_ORPHANED
             .equals(row.get(ReconcileFindingModel.BUCKET))

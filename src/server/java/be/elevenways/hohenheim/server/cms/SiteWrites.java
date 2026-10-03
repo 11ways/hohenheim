@@ -21,6 +21,9 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationCommand;
+import be.elevenways.zenit.common.orm.command.CommandExecution;
+import be.elevenways.zenit.common.orm.lease.LeaseKeys;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationInput;
@@ -161,7 +164,8 @@ public final class SiteWrites {
                 v.get(SiteModel.TRUSTED_UPSTREAM), v.get(SiteModel.ENABLED), v.get(SiteModel.DESCRIPTION),
                 v.get(SiteModel.AUTH_PROVIDER_ID), v.get(SiteModel.ACCESS_LIST_ID))))
             .result(Integer.class)
-            .command(CmsCommands.TRANSACTIONAL)
+            .command(OperationCommand.perVerb(LeaseKeys.declare(HohenheimIds.id("site_create_command")))
+                .onDatasource(() -> Models.get(SiteModel.class).getResolvedDatasource()))
             .register();
 
     /** The operator's edit, checked against the site's latest revision; patchable for a partial write. */
@@ -176,7 +180,7 @@ public final class SiteWrites {
                 v.get(SiteModel.ENABLED), v.get(SiteModel.DESCRIPTION), v.get(SiteModel.AUTH_PROVIDER_ID),
                 v.get(SiteModel.ACCESS_LIST_ID))))
             .patchable()
-            .command(CmsCommands.TRANSACTIONAL)
+            .command(OperationCommand.perSubject(LeaseKeys.declare(HohenheimIds.id("site_command"))))
             .register();
 
     /** The delegated edit: name, switch and description only, never the admin normalizers. */
@@ -188,7 +192,7 @@ public final class SiteWrites {
             .input(OperationInput.of(MANAGE_FORM, ManageInput.class, v -> new ManageInput(
                 v.get(SiteModel.NAME), v.get(SiteModel.ENABLED), v.get(SiteModel.DESCRIPTION))))
             .patchable()
-            .command(CmsCommands.TRANSACTIONAL)
+            .command(OperationCommand.perSubject(LeaseKeys.declare(HohenheimIds.id("site_command"))))
             .register();
 
     /**
@@ -202,7 +206,8 @@ public final class SiteWrites {
         .gate(OperationGate.open())
         .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
         .result(Integer.class)
-        .command(CmsCommands.EXTERNAL)
+        .command(OperationCommand.perSubject(LeaseKeys.declare(HohenheimIds.id("site_command")))
+            .execution(CommandExecution.OUTSIDE_TRANSACTION))
         .register();
 
     /**

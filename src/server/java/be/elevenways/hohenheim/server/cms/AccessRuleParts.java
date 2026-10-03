@@ -67,8 +67,7 @@ import java.util.Objects;
  */
 public final class AccessRuleParts {
     private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("access_rule_command"), "access_rule:");
-    private static final OperationCommand COMMAND = OperationCommand.serializedBy(KEYS,
-        invocation -> invocation.subjectKeys().getFirst());
+    private static final OperationCommand COMMAND = OperationCommand.perSubject(KEYS);
 
     /** The entry slug both twins share, which the Rules tab's links and the add lane's landing name. */
     public static final String SLUG = "access-rules";

@@ -32,10 +32,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * @since  0.9.0
  */
 public final class SiteOperations {
-    private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("site_command"));
-    private static final OperationCommand COMMAND = OperationCommand.serializedBy(KEYS,
-        invocation -> invocation.subjectKeys().get(0));
-
     /** The subject of every site operation: one site record. */
     public static final SubjectType<Row> SITE = SubjectType.record(SiteModel.MODEL_ID);
 
@@ -46,7 +42,7 @@ public final class SiteOperations {
         .one(SITE)
         .gate(OperationGate.open())
         .facts(OperationFact.REACHES_OUTSIDE)
-        .command(COMMAND)
+        .command(OperationCommand.perSubject(LeaseKeys.declare(HohenheimIds.id("site_command"))))
         .register();
 
     /** Takes an enabled site's hostnames out of the route table. */
@@ -56,7 +52,7 @@ public final class SiteOperations {
         .one(SITE)
         .gate(OperationGate.open())
         .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
-        .command(COMMAND)
+        .command(OperationCommand.perSubject(LeaseKeys.declare(HohenheimIds.id("site_command"))))
         .register();
 
     /** The copy's name, the one thing a clone asks. */
@@ -74,7 +70,7 @@ public final class SiteOperations {
         .input(OperationInput.of(FormSpec.builder().add(CLONE_NAME).build(), CloneInput.class,
             values -> new CloneInput(Texts.trimmedOrNull(values.get(CLONE_NAME)))))
         .result(Integer.class)
-        .command(COMMAND)
+        .command(OperationCommand.perSubject(LeaseKeys.declare(HohenheimIds.id("site_command"))))
         .register();
 
     /** The clone's input. */
@@ -89,7 +85,8 @@ public final class SiteOperations {
             .one(SITE)
             .gate(OperationGate.open())
             .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
-            .command(COMMAND.execution(CommandExecution.OUTSIDE_TRANSACTION))
+            .command(OperationCommand.perSubject(LeaseKeys.declare(HohenheimIds.id("site_command")))
+                .execution(CommandExecution.OUTSIDE_TRANSACTION))
             .register();
 
     private SiteOperations() {

@@ -16,6 +16,9 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationCommand;
+import be.elevenways.zenit.common.orm.command.CommandExecution;
+import be.elevenways.zenit.common.orm.lease.LeaseKeys;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -130,7 +133,8 @@ final class ServerLifecycleActions {
             Function<Row, Microcopy> handler, Predicate<Row> applies) {
         Operation<Row, Void, Microcopy> operation = Operation.declare(HohenheimIds.id(id)).label(label)
             .one(SubjectType.record(ServerModel.MODEL_ID)).gate(OperationGate.permission(HohenheimPanel.ACCESS))
-            .command(CmsCommands.EXTERNAL)
+            .command(OperationCommand.perSubject(LeaseKeys.declare(ServerModel.MODEL_ID))
+                .execution(CommandExecution.OUTSIDE_TRANSACTION))
             .result(Microcopy.class).register();
         OperationHandlers.attach(operation).applies(applies::test).handle(call -> handler.apply(call.subject()));
         return PanelAction.<Row, Microcopy>places(operation, ActionPlacement.ROW,

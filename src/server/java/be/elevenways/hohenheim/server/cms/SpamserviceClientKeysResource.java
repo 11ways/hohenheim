@@ -64,11 +64,6 @@ import java.util.function.Supplier;
  * @since  0.1.0
  */
 public final class SpamserviceClientKeysResource {
-    private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("spamservice_key_command"));
-    private static final OperationCommand COMMAND = OperationCommand.serializedBy(KEYS,
-        invocation -> invocation.subjectKeys().get(0)).onDatasource("default")
-        .execution(CommandExecution.OUTSIDE_TRANSACTION);
-
     public static final String SLUG = "spamservice-keys";
 
     /** The client's tab the keys list on. */
@@ -107,7 +102,8 @@ public final class SpamserviceClientKeysResource {
         .icon(Icon.of("check"))
         .one(KEY)
         .gate(OperationGate.permission(HohenheimPanel.ACCESS))
-        .command(COMMAND)
+        .command(OperationCommand.perSubject(LeaseKeys.declare(HohenheimIds.id("spamservice_key_command")))
+            .onDatasource("default").execution(CommandExecution.OUTSIDE_TRANSACTION))
         .register();
 
     public static final Operation<ManagedClientKey, Void, Void> REVOKE = Operation.declare(
@@ -116,7 +112,8 @@ public final class SpamserviceClientKeysResource {
         .icon(Icon.of("xmark"))
         .one(KEY)
         .gate(OperationGate.permission(HohenheimPanel.ACCESS))
-        .command(COMMAND)
+        .command(OperationCommand.perSubject(LeaseKeys.declare(HohenheimIds.id("spamservice_key_command")))
+            .onDatasource("default").execution(CommandExecution.OUTSIDE_TRANSACTION))
         .register();
 
     static {

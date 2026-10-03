@@ -39,10 +39,6 @@ import java.util.Map;
  * @since  0.1.0
  */
 public final class InstanceTemplateOperations {
-    private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("template_command"));
-    private static final OperationCommand COMMAND = OperationCommand.serializedBy(KEYS,
-        invocation -> invocation.subjectKeys().get(0));
-
     /** The subject: one template of the catalog. */
     public static final SubjectType<Row> TEMPLATE = SubjectType.record(InstanceTemplateModel.MODEL_ID);
 
@@ -83,7 +79,8 @@ public final class InstanceTemplateOperations {
             .result(Integer.class)
             .rateLimit(HohenheimEndpoints.INSTANCE_CREATE_LIMIT)
             .facts(OperationFact.REACHES_OUTSIDE)
-            .command(COMMAND.execution(CommandExecution.OUTSIDE_TRANSACTION))
+            .command(OperationCommand.perSubject(LeaseKeys.declare(HohenheimIds.id("template_command")))
+                .execution(CommandExecution.OUTSIDE_TRANSACTION))
             .register();
 
     /**
@@ -98,7 +95,7 @@ public final class InstanceTemplateOperations {
             .icon(Icon.of("circle-check"))
             .one(TEMPLATE)
             .gate(OperationGate.open())
-            .command(COMMAND)
+            .command(OperationCommand.perSubject(LeaseKeys.declare(HohenheimIds.id("template_command"))))
             .register();
 
     /** Withdraws an approval, so tenants can no longer select the template; applicable while it is approved. */
@@ -108,7 +105,7 @@ public final class InstanceTemplateOperations {
             .icon(Icon.of("circle-xmark"))
             .one(TEMPLATE)
             .gate(OperationGate.open())
-            .command(COMMAND)
+            .command(OperationCommand.perSubject(LeaseKeys.declare(HohenheimIds.id("template_command"))))
             .register();
 
     private InstanceTemplateOperations() {}

@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
-import be.elevenways.zenit.common.operation.OperationInvocation;
 import be.elevenways.zenit.common.orm.lease.LeaseKeys;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationFact;
@@ -26,10 +25,6 @@ import be.elevenways.zenit.common.ui.Icon;
  * @since  0.9.0
  */
 public final class InstanceAttachmentOperations {
-    private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("attachment_command"));
-    private static final OperationCommand COMMAND = OperationCommand.serializedBy(KEYS, OperationInvocation::operationId)
-        .execution(CommandExecution.OUTSIDE_TRANSACTION);
-
     public static final SubjectType<Row> DEVICE = SubjectType.record(InstanceDeviceModel.MODEL_ID);
     public static final SubjectType<Row> DATABASE_LINK = SubjectType.record(InstanceDatabaseModel.MODEL_ID);
 
@@ -41,7 +36,8 @@ public final class InstanceAttachmentOperations {
             .one(DEVICE)
             .gate(OperationGate.open())
             .result(Integer.class)
-            .command(COMMAND)
+            .command(OperationCommand.perSubject(LeaseKeys.declare(HohenheimIds.id("device_command")))
+                .execution(CommandExecution.OUTSIDE_TRANSACTION))
             .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
             .register();
 
@@ -53,7 +49,8 @@ public final class InstanceAttachmentOperations {
             .one(DATABASE_LINK)
             .gate(OperationGate.open())
             .result(Integer.class)
-            .command(COMMAND)
+            .command(OperationCommand.perSubject(LeaseKeys.declare(HohenheimIds.id("database_link_command")))
+                .execution(CommandExecution.OUTSIDE_TRANSACTION))
             .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
             .register();
 
