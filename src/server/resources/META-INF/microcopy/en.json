@@ -11896,6 +11896,10 @@
     "text": "The full name, for example www.example.com; it must sit under a hostname of a site you manage",
     "scope": "help"
   },
+  "step_execution": {
+    "text": "Step {$id}: {$attempts} attempts; started {$started}; ended {$ended}",
+    "scope": "instance_schedule"
+  },
   "next_run": {
     "text": "Next run",
     "scope": "instance_schedule"
