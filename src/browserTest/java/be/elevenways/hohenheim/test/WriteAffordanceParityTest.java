@@ -42,6 +42,9 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
 import be.elevenways.zenit.test.support.EndpointConduit;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.server.panel.PanelActionOffers;
+import be.elevenways.zenit.cms.server.render.action.RowOffer;
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -54,6 +57,8 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiPredicate;
 import java.util.stream.Stream;
+import java.util.Objects;
+import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -599,7 +604,6 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             HohenheimAccess.POWER, true);
         try {
             InstanceResource resource = new InstanceResource();
-            List<RowAction<Row>> actions = resource.rowActions();
 
             List<Row> rows = new ArrayList<>();
             rows.add(instances.findById(instanceId));
@@ -612,11 +616,13 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             finds.set(0);
             AccessContext ctx = holder();
             boolean sawAnAffordance = false;
+            // Every instance verb is a placed operation now: the list asks them through the render's own batched
+            // offer, once for all rows, exactly as the admin list draws them.
+            Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN), "the admin panel");
+            Function<Row, List<RowOffer>> offers = PanelActionOffers.rowsForRender(resource, admin, rows, ctx, null);
             for (Row row : rows) {
                 sawAnAffordance |= resource.updatableBy(row, ctx);
-                for (RowAction<Row> action : actions) {
-                    sawAnAffordance |= action.isVisibleFor(row, ctx);
-                }
+                sawAnAffordance |= !offers.apply(row).isEmpty();
             }
             assertThat(sawAnAffordance)
                 .as("the granted instance still offers its affordances").isTrue();

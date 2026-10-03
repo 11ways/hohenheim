@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.action.PanelAction;
-import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RecordSubpageRegistry;
@@ -97,14 +96,6 @@ public final class ManageInstanceResource extends InstanceResource {
     @Override public boolean creatable() { return false; }
     @Override public boolean deletable() { return false; }
 
-    /**
-     * The in-place app update, carrying the capability gate it declares in {@link InstanceActions} -- the same
-     * builders the operator panel offers, so /manage and /admin can never drift on what an action requires.
-     */
-    @Override
-    public @NonNull List<RowAction<Row>> rowActions() {
-        return this.rowActionSet.delegated();
-    }
 
     /** Power without restart and the two artifact actions, placed operations gated by the record capability. */
     @Override

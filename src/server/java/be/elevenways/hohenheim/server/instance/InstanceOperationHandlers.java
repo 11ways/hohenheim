@@ -39,6 +39,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import be.elevenways.hohenheim.server.application.ReleaseEngine;
 
 import java.util.Map;
 
@@ -92,9 +93,46 @@ public final class InstanceOperationHandlers {
         OperationHandlers.attach(InstanceOperations.CONSOLE_COMMAND).source(SUBJECTS)
             .applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::consoleCommand);
+        OperationHandlers.attach(InstanceOperations.ROLLBACK).source(SUBJECTS)
+            .applies(instance -> authored(instance)
+                && InstanceKinds.isReleaseManaged(instance.get(InstanceModel.KIND)))
+            .handle(call -> {
+                ReleaseEngine.rollback(instanceId(call));
+                return null;
+            });
+        OperationHandlers.attach(InstanceOperations.INSTALL).source(SUBJECTS)
+            .applies(instance -> authored(instance) && instance.get(InstanceModel.TEMPLATE_ID) != null
+                && !InstanceModel.INSTALL_NONE.equals(instance.get(InstanceModel.INSTALL_STATE))
+                && !InstanceModel.INSTALL_INSTALLED.equals(instance.get(InstanceModel.INSTALL_STATE)))
+            .authorize(InstanceOperationHandlers::operatorOnly)
+            .handle(call -> {
+                new InstanceInstalls().install(instanceId(call));
+                return null;
+            });
+        OperationHandlers.attach(InstanceOperations.REINSTALL).source(SUBJECTS)
+            .applies(instance -> authored(instance) && instance.get(InstanceModel.TEMPLATE_ID) != null
+                && (InstanceModel.INSTALL_INSTALLED.equals(instance.get(InstanceModel.INSTALL_STATE))
+                    || InstanceModel.INSTALL_FAILED.equals(instance.get(InstanceModel.INSTALL_STATE))))
+            .authorize(InstanceOperationHandlers::operatorOnly)
+            .handle(call -> {
+                new InstanceInstalls().reinstall(instanceId(call));
+                return null;
+            });
+        OperationHandlers.attach(InstanceOperations.CAPTURE_TEMPLATE).source(SUBJECTS)
+            .applies(instance -> authored(instance)
+                && InstanceModel.STATUS_STOPPED.equals(instance.get(InstanceModel.STATUS))
+                && capturable(instance))
+            .authorize(InstanceOperationHandlers::operatorOnly)
+            .handle(call -> new InstanceTemplateCapture().capture(instanceId(call)));
+        OperationHandlers.attach(InstanceOperations.DESTROY_WITH_DATA).source(SUBJECTS)
+            .applies(InstanceOperationHandlers::authored)
+            .authorize(InstanceOperationHandlers::operatorOnly)
+            .handle(call -> {
+                new InstanceService().destroyWithData(instanceId(call));
+                return null;
+            });
         OperationHandlers.attach(InstanceOperations.MIGRATE).source(SUBJECTS)
-            .authorize((instance, input, access) -> HohenheimAccess.isAdmin(access) ? null
-                : new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "placement is an operator authority"))
+            .authorize(InstanceOperationHandlers::operatorOnly)
             .handle(InstanceOperationHandlers::migrate);
         OperationHandlers.attach(InstanceOperations.EXEC).source(SUBJECTS)
             .applies(InstanceOperationHandlers::authored)
@@ -170,6 +208,18 @@ public final class InstanceOperationHandlers {
      * Whether an operation applies to this instance at all: a generated instance (a product tier's lowered runtime) is
      * managed only through its owning record's surface, on every surface (the API never lists it either).
      */
+    /** The operator verbs (placement, install lifecycle, capture, destroy with data) answer to an operator alone. */
+    private static <I> @Nullable DomainRefusal operatorOnly(@NonNull Row instance, @Nullable I input,
+                                                            @NonNull AccessContext access) {
+        return HohenheimAccess.isAdmin(access) ? null
+            : new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "an operator verb");
+    }
+
+    private static boolean capturable(@NonNull Row instance) {
+        InstanceKindHandler handler = InstanceKinds.getHandler(instance.get(InstanceModel.KIND));
+        return handler != null && handler.supportsTemplateCapture();
+    }
+
     private static boolean authored(@NonNull Row instance) {
         return instance.get(InstanceModel.GENERATED_BY) == null;
     }
