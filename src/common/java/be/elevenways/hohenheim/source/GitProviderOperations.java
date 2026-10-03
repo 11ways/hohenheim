@@ -36,7 +36,7 @@ public final class GitProviderOperations {
             .one(PROVIDER)
             .gate(OperationGate.open().subjectCapability(HohenheimCapabilities.MANAGE))
             .result(ConnectionTest.class)
-            .facts(OperationFact.REACHES_OUTSIDE, OperationFact.READ_ONLY, OperationFact.IDEMPOTENT)
+            .facts(OperationFact.REACHES_OUTSIDE, OperationFact.READ_ONLY)
             .register();
 
     /**

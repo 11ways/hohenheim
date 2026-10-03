@@ -41,6 +41,17 @@ public final class InstanceOperations {
     public static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("instance"), "hohenheim_instance_");
     private static final OperationCommand COMMAND_FACET = OperationCommand.serializedBy(KEYS,
         invocation -> invocation.subjectKeys().get(0)).execution(CommandExecution.OUTSIDE_TRANSACTION);
+    /**
+     * Start and stop replay a completed answer; an interrupted one may run again, since powering an instance to the
+     * state it is already in changes nothing at the provider.
+     *
+     * AIDEV-NOTE: keyed per verb and instance, never on the instance lease: a start asked while a restart holds the
+     * instance must reach the service's in-progress refusal at once, not wait for that lease and time out.
+     */
+    private static final OperationCommand POWER_FACET = OperationCommand.serializedBy(
+            LeaseKeys.declare(HohenheimIds.id("power_command")),
+            invocation -> invocation.operationId() + ":" + invocation.subjectKeys().get(0))
+        .execution(CommandExecution.OUTSIDE_TRANSACTION_RETRY_SAFE);
 
     /** The subject of every instance operation: one instance record. */
     public static final SubjectType<Row> INSTANCE = SubjectType.record(InstanceModel.MODEL_ID);
@@ -52,6 +63,7 @@ public final class InstanceOperations {
         .gate(gate(HohenheimCapabilities.POWER))
         .result(PowerResult.class)
         .facts(OperationFact.REACHES_OUTSIDE, OperationFact.IDEMPOTENT)
+        .command(POWER_FACET)
         .register();
 
     public static final Operation<Row, Void, PowerResult> STOP = Operation.declare(HohenheimIds.id("stop_instance"))
@@ -61,6 +73,7 @@ public final class InstanceOperations {
         .gate(gate(HohenheimCapabilities.POWER))
         .result(PowerResult.class)
         .facts(OperationFact.REACHES_OUTSIDE, OperationFact.IDEMPOTENT, OperationFact.DESTRUCTIVE)
+        .command(POWER_FACET)
         .register();
 
     public static final Operation<Row, Void, PowerResult> RESTART =
@@ -251,7 +264,7 @@ public final class InstanceOperations {
             .icon(Icon.REFRESH)
             .one(INSTANCE)
             .gate(OperationGate.open())
-            .facts(OperationFact.READ_ONLY, OperationFact.IDEMPOTENT)
+            .facts(OperationFact.READ_ONLY)
             .register();
 
     /** The host a migration moves the workload to. */
