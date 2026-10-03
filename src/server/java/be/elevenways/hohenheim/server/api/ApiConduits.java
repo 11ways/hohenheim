@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.api;
 
 import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
@@ -137,6 +138,12 @@ public final class ApiConduits {
      * @throws DomainRefusal a refusal this wire has no answer of its own for
      */
     public static @Nullable ActionResult<Object> refusal(@NonNull Conduit conduit, @NonNull DomainRefusal refusal) {
+        return refusal(conduit, refusal, null);
+    }
+
+    /** The same frozen mapping with the instance the route already admitted, for shared-lock contention. */
+    public static @Nullable ActionResult<Object> refusal(@NonNull Conduit conduit, @NonNull DomainRefusal refusal,
+                                                        @Nullable Row instance) {
         DomainRefusal.Reason reason = refusal.reason();
         if (reason instanceof HohenheimRefusalReason hohenheim) {
             return switch (hohenheim) {
@@ -156,8 +163,13 @@ public final class ApiConduits {
                 // An offered-but-dead verb (an operation's availability) is the form-level 422 the
                 // row lane's unavailable reason wrote before the pipeline, same words.
                 case OPERATION_UNAVAILABLE -> refusal(conduit, Violations.ofForm(refusal.shown()));
+                case IN_PROGRESS -> {
+                    if (instance == null) throw refusal;
+                    yield refusal(conduit, Violations.ofForm(HohenheimViolations.text("instance_operation_in_progress")
+                        .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)))));
+                }
                 case BAD_REQUEST, METHOD_NOT_ALLOWED, LOGIN_REQUIRED, INTERACTIVE_LOGIN_REQUIRED, RATE_LIMITED,
-                     CSRF_ORIGIN, CSRF_TOKEN_MISSING, CSRF_TOKEN_INVALID, STALE, IN_PROGRESS, RETRY_MISMATCH, INVALID,
+                     CSRF_ORIGIN, CSRF_TOKEN_MISSING, CSRF_TOKEN_INVALID, STALE, RETRY_MISMATCH, INVALID,
                      ARCHIVED, CYCLE, IN_USE, STORE_BUSY, OUTCOME_UNKNOWN, SECRET_ALREADY_DISCLOSED -> throw refusal;
             };
         }

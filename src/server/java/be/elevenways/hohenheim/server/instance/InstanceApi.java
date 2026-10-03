@@ -152,7 +152,7 @@ public final class InstanceApi {
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             } catch (DomainRefusal refused) {
-                return ApiConduits.refusal(conduit, refused);
+                return ApiConduits.refusal(conduit, refused, row);
             }
             // No record call here: the service records every settled power operation itself, a restart as the
             // stop and deploy halves it is, under ONE operation lock.
@@ -186,7 +186,7 @@ public final class InstanceApi {
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             } catch (DomainRefusal refused) {
-                return ApiConduits.refusal(conduit, refused);
+                return ApiConduits.refusal(conduit, refused, row);
             }
             // The operation records the line on the instance, from every surface.
             return ApiConduits.json(Map.of("id", instanceId, "status", "sent"));
@@ -212,7 +212,7 @@ public final class InstanceApi {
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             } catch (DomainRefusal refused) {
-                return ApiConduits.refusal(conduit, refused);
+                return ApiConduits.refusal(conduit, refused, row);
             }
         });
 
@@ -237,7 +237,7 @@ public final class InstanceApi {
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             } catch (DomainRefusal refused) {
-                return ApiConduits.refusal(conduit, refused);
+                return ApiConduits.refusal(conduit, refused, row);
             }
         });
 

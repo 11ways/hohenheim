@@ -16,6 +16,10 @@ import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
+import be.elevenways.zenit.common.orm.lease.Leases;
+import be.elevenways.zenit.common.operation.OperationInvocation;
 import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.TenantConduits;
@@ -115,6 +119,52 @@ class InstancePowerOperationsTest {
         assertThatThrownBy(() -> ApiConduits.refusal(answering(status), refusal))
             .as("an unmapped core refusal reaches core unchanged").isSameAs(refusal);
         assertThat(status[0]).as("the frozen API adapter writes no replacement status").isZero();
+    }
+
+    @Test
+    void aBackupDuringAReleaseDeployKeepsItsFrozenInProgressBody() {
+        Db.run(datasource, () -> {
+            // 1. The release engine's live deploy window holds the very same instance claim as its commands.
+            int id = BackupLaneFixture.instanceRecord("backup-deploy-target", fixture.hostId);
+            Row row = Models.get(InstanceModel.class).findById(id);
+            row.set(InstanceModel.KIND, InstanceKinds.kindsWhere(handler -> handler.releaseManaged()).getFirst());
+            row.set(InstanceModel.BACKUP_TARGET_ID, fixture.targetId);
+            Models.get(InstanceModel.class).save(row);
+            for (String capability : List.of(HohenheimAccess.VIEW, HohenheimAccess.BACKUPS)) {
+                RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, id, capability, true);
+            }
+            AccessContext tenant = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(tenantId, "Power Operator")));
+            String commandKey = InstanceOperations.BACKUP.command().leaseKey().apply(
+                new OperationInvocation(InstanceOperations.BACKUP.id(), List.of(String.valueOf(id)), null, null, null, Map.of()));
+            assertThat(commandKey).as("step 1: the command and deploy claim use one physical key")
+                .isEqualTo(InstanceOperations.KEYS.key(id));
+            AtomicReference<Throwable> refused = new AtomicReference<>();
+            InstanceOperationLock.production().exclusive(id, InstanceOperationLock.Contention.REFUSE, () -> {
+                Thread backup = new Thread(ExecutionContext.wrap(() -> Db.run(datasource,
+                    () -> refused.set(catchThrowable(() -> api(InstanceOperations.BACKUP, tenant, id))))), "backup-during-deploy");
+                backup.start();
+                try {
+                    backup.join(TimeUnit.SECONDS.toMillis(Leases.DEFAULT_WAIT_SECONDS + 15L));
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Backup contention journey interrupted", interrupted);
+                }
+                assertThat(backup.isAlive()).as("step 2: the API refuses after the normal wait, never queues for an hour")
+                    .isFalse();
+            });
+            // 2. Lease acquisition contention is typed by core, then translated by the existing instance API edge.
+            assertThat(refused.get()).as("step 2: a live deploy is contention, not a crash")
+                .isInstanceOfSatisfying(DomainRefusal.class, refusal -> assertThat(refusal.reason())
+                    .isEqualTo(ZenitRefusalReason.IN_PROGRESS));
+            int[] status = {0};
+            String body = Json.stringify(ApiConduits.refusal(answering(status), (DomainRefusal) refused.get(), row).get());
+            assertThat(status[0]).as("step 2: the instance wire remains a 422 refusal").isEqualTo(422);
+            assertThat(body).as("step 2: backup during deploy has the byte-identical instance in-progress body")
+                .isEqualTo("{\"status\":422,\"code\":\"instance_operation_in_progress\",\"message\":\"Another operation on "
+                    + "instance backup-deploy-target is still running; try again when it has finished\",\"violations\":[{\"code\":"
+                    + "\"instance_operation_in_progress\",\"message\":\"Another operation on instance backup-deploy-target is still "
+                    + "running; try again when it has finished\"}]}");
+        });
     }
 
     @Test
