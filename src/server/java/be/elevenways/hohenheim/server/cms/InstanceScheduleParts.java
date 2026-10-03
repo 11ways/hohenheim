@@ -120,8 +120,9 @@ public final class InstanceScheduleParts {
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(18)
             .showInNav(false)
-            .parent(ResourceParent.<Row>of(HohenheimSlugs.INSTANCES,
-                row -> parseInstanceId(row.get(RecordScheduleModel.RECORD_ID))).tab("schedules"))
+            // A record schedule's owner is polymorphic (model + record id); this panel's schedules are instances'.
+            .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, RecordScheduleModel.RECORD_ID, RecordScheduleModel.MODEL)
+                .tab("schedules"))
             .reads(ResourceReads.rows())
             .form(ResourceForm.<Row>of(form)
                 // The target instance is chosen once: an existing schedule never moves to another instance (every

@@ -277,7 +277,11 @@ public final class StackParts {
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(27)
             .showInNav(false)
-            .parent(ResourceParent.<Row>of(SLUG, StackParts::stackOfFile).tab(StackServicesPage.SLUG))
+            // A file reaches its stack through its service: a path parent, which the framework walks and queries.
+            .parent(ResourceParent.path(SLUG,
+                    new ResourceParent.Hop(StackFileModel.STACK_SERVICE_ID, StackServiceModel.MODEL_ID),
+                    new ResourceParent.Hop(StackServiceModel.STACK_ID, StackModel.MODEL_ID))
+                .tab(StackServicesPage.SLUG))
             .reads(ResourceReads.rows())
             // The path only: CONTENT is encrypted at rest, so a search over it would match ciphertext.
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()
@@ -303,14 +307,6 @@ public final class StackParts {
     }
 
     /** @return the stack a config file's service belongs to, null when the service is gone */
-    private static @Nullable Object stackOfFile(@NonNull Row file) {
-        if (!(file.get(StackFileModel.STACK_SERVICE_ID) instanceof Integer serviceId)) {
-            return null;
-        }
-        Row service = Models.get(StackServiceModel.class).find().where(StackServiceModel.ID.eq(serviceId)).first();
-        return service != null ? service.get(StackServiceModel.STACK_ID) : null;
-    }
-
     // -- placed operations --------------------------------------------------------------------------------------------
 
     private static @NonNull List<PanelAction<Row>> stackActions() {
