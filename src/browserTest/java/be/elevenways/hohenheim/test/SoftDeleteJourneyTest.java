@@ -5,12 +5,14 @@ import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StoredRows;
-import be.elevenways.hohenheim.server.cms.AccessListResource;
+import be.elevenways.hohenheim.server.cms.AccessListParts;
 import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.quota.SiteQuota;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
@@ -24,6 +26,7 @@ import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.quota.Quotas;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -73,7 +76,7 @@ class SoftDeleteJourneyTest {
                 (PanelResource<Row>) Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN))
                     .entryBySlug(HohenheimSlugs.SITES),
                 Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN)));
-            AccessListResource lists = new AccessListResource();
+            DeleteConfirmation<Row> lists = AccessListParts.admin().deleteConfirmation();
 
             // 1. A live site gated by an access list: charged one site slot, and the list's
             //    delete dialog names it as a site the delete would open.
@@ -234,9 +237,10 @@ class SoftDeleteJourneyTest {
         return row.get(InstanceModel.ID);
     }
 
-    private static String gatingKey(AccessListResource lists, int listId) {
-        return lists.deleteConfirmationFor(Models.get(AccessListModel.class).findById(listId))
-            .body().key();
+    private static String gatingKey(DeleteConfirmation<Row> lists, int listId) {
+        PanelRequest request = new PanelRequest(Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN)),
+            TenantConduits.stubFor(null), AccessContext.anonymous(), null);
+        return lists.forRow(Models.get(AccessListModel.class).findById(listId), request).body().key();
     }
 
     private static List<Row> activityFor(String model, int recordId, String action) {

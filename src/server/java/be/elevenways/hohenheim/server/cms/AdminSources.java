@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.server.page.CmsRecordSources;
@@ -29,8 +30,10 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * so the facets must be declared HERE, on the explicit source; the browser registry does
  * not need these entries (registry membership is a server-authoritative question, and the
  * dependent pick rules carry their own mapping). A source whose explicit copy added
- * nothing over the derived default (dns_zone, site_auth_provider) is simply not declared:
- * the derived default IS the source.
+ * nothing over the derived default (dns_zone) is simply not declared: the derived default
+ * IS the source. A model whose admin entry is a PanelResource has NO derived model default
+ * (its one source is panel-qualified), so the pick every other panel reads is declared here
+ * (site_auth_provider: the /manage site form's provider pick).
  */
 public final class AdminSources {
 
@@ -73,6 +76,13 @@ public final class AdminSources {
                 Object description = row.get(RuntimeImageModel.DESCRIPTION);
                 return description != null ? String.valueOf(description) : "";
             }), RuntimeImageModel.class, new RuntimeImageResource()));
+
+        // Auth providers, for the site forms' provider pick (admin and /manage). AuthProviderParts is a panel
+        // resource, whose one source is panel-qualified, so the model's own source is this one: the parts' search
+        // fields, the admin gate and the edit link; no inline create (the pick never offered one).
+        RecordSourceRegistry.INSTANCE.register(admin(RecordSource.of(SiteAuthProviderModel.class)
+            .search(SiteAuthProviderModel.NAME, SiteAuthProviderModel.REQUIRED_PERMISSION),
+            SiteAuthProviderModel.class).build());
     }
 
     /**
@@ -83,12 +93,7 @@ public final class AdminSources {
     private static <M extends Model> @NonNull RecordSource<M> complete(RecordSource.@NonNull Builder<M> builder,
                                                                       @NonNull Class<M> modelClass,
                                                                       @NonNull RowResource resource) {
-        M model = Models.get(modelClass);
-        Identifier modelId = model.getModelId();
-        String primaryKey = model.getPrimaryKeyField().getName();
-        builder.permission(HohenheimSources.ADMIN_ACCESS)
-            .editUrl((Row row) -> AdminRecordLinks.detailUrl(modelId, String.valueOf(row.get(primaryKey))));
-
+        admin(builder, modelClass);
         RecordCreateProvider create = CmsRecordSources.createProviderFor(resource);
         if (create != null) {
             Permission createPermission = resource.createPermission();
@@ -99,5 +104,15 @@ public final class AdminSources {
             }
         }
         return builder.build();
+    }
+
+    /** The admin gate and the detail-page edit link. */
+    private static <M extends Model> RecordSource.@NonNull Builder<M> admin(RecordSource.@NonNull Builder<M> builder,
+                                                                            @NonNull Class<M> modelClass) {
+        M model = Models.get(modelClass);
+        Identifier modelId = model.getModelId();
+        String primaryKey = model.getPrimaryKeyField().getName();
+        return builder.permission(HohenheimSources.ADMIN_ACCESS)
+            .editUrl((Row row) -> AdminRecordLinks.detailUrl(modelId, String.valueOf(row.get(primaryKey))));
     }
 }

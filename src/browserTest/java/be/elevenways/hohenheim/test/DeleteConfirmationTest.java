@@ -18,8 +18,8 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
-import be.elevenways.hohenheim.server.cms.AccessListResource;
-import be.elevenways.hohenheim.server.cms.AuthProviderResource;
+import be.elevenways.hohenheim.server.cms.AccessListParts;
+import be.elevenways.hohenheim.server.cms.AuthProviderParts;
 import be.elevenways.hohenheim.server.cms.CertificateResource;
 import be.elevenways.hohenheim.server.cms.DnsPeerResource;
 import be.elevenways.hohenheim.server.cms.DnsRecordResource;
@@ -43,6 +43,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.server.operation.OperationPipeline;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -245,7 +246,8 @@ class DeleteConfirmationTest {
     @Test
     void thePreviouslyGenericDialogsNameTheirOwnConsequences() {
         Db.run(datasource, () -> {
-            AccessListResource lists = new AccessListResource();
+            DeleteConfirmation<Row> lists = AccessListParts.admin().deleteConfirmation();
+            PanelRequest request = adminRequest();
 
             // 1. A list nothing uses: the dialog names it and how many rules go with it,
             //    and says in so many words that nothing is gated by it.
@@ -254,7 +256,7 @@ class DeleteConfirmationTest {
             rule(listId);
             Row list = Models.get(AccessListModel.class).findById(listId);
 
-            ConfirmationSpec unused = lists.deleteConfirmationFor(list);
+            ConfirmationSpec unused = lists.forRow(list, request);
             assertThat(unused.body().key())
                 .as("step 1: an unused list gets the named wording")
                 .isEqualTo("delete_confirm_named");
@@ -273,7 +275,7 @@ class DeleteConfirmationTest {
             Models.get(SiteModel.class).save(guarded);
             protectedPath(siteId, listId, "/admin");
 
-            ConfirmationSpec gating = lists.deleteConfirmationFor(list);
+            ConfirmationSpec gating = lists.forRow(list, request);
             assertThat(gating.body().key())
                 .as("step 2: a list in use switches to the gating wording")
                 .isEqualTo("delete_confirm_gating");
@@ -283,7 +285,7 @@ class DeleteConfirmationTest {
                 .contains("/admin");
 
             // 3. The record-LESS dialog can only speak about the type, and does.
-            assertThat(lists.deleteConfirmation().body().filters().get("scope"))
+            assertThat(lists.fallback().body().filters().get("scope"))
                 .as("step 3: the type-level dialog is the access-list one, not the generic")
                 .isEqualTo("access_list");
 
@@ -380,17 +382,17 @@ class DeleteConfirmationTest {
 
             // 4. An auth provider nothing names is deletable and its dialog speaks for
             //    itself; one gating a live site is dead naming the site.
-            AuthProviderResource providers = new AuthProviderResource();
+            AccessContext admin = TenantConduits.operator();
             int providerId = authProvider("Office SSO");
             Row provider = Models.get(SiteAuthProviderModel.class).findById(providerId);
-            assertThat(providers.deleteUnavailableReason(provider, operator))
+            assertThat(deleteUnavailable(provider, admin))
                 .as("step 4: an unreferenced provider is deletable").isNull();
-            assertThat(providers.deleteConfirmation().body().filters().get("scope"))
+            assertThat(AuthProviderParts.admin().deleteConfirmation().fallback().body().filters().get("scope"))
                 .as("step 4: the provider dialog is its own, not the generic").isEqualTo("auth_provider");
             Row intranet = Models.get(SiteModel.class).findById(site("intranet", null));
             intranet.set(SiteModel.AUTH_PROVIDER_ID, providerId);
             Models.get(SiteModel.class).save(intranet);
-            Microcopy gating = providers.deleteUnavailableReason(provider, operator);
+            Microcopy gating = deleteUnavailable(provider, admin);
             assertThat(gating).as("step 4: a provider gating a site is dead").isNotNull();
             assertThat(gating.key()).isEqualTo("delete_in_use");
             assertThat(String.valueOf(gating.args().get("sites")))
@@ -400,10 +402,10 @@ class DeleteConfirmationTest {
             //    with the rules-only wording, since there is no site to name.
             intranet.set(SiteModel.DELETED_AT, Now.instant());
             Models.get(SiteModel.class).save(intranet);
-            assertThat(providers.deleteUnavailableReason(provider, operator))
+            assertThat(deleteUnavailable(provider, admin))
                 .as("step 5: a trashed site releases the provider").isNull();
             providerRule(accessList("Staff"), providerId);
-            Microcopy ruled = providers.deleteUnavailableReason(provider, operator);
+            Microcopy ruled = deleteUnavailable(provider, admin);
             assertThat(ruled).as("step 5: a rule naming the provider keeps it dead").isNotNull();
             assertThat(ruled.key()).isEqualTo("delete_in_use_rules");
             assertThat(ruled.args().get("rules")).as("step 5: counting the rules").isEqualTo(1L);
@@ -580,5 +582,17 @@ class DeleteConfirmationTest {
         row.set(CertificateModel.STATUS, CertificateModel.STATUS_ACTIVE);
         Models.get(CertificateModel.class).save(row);
         return row.get(CertificateModel.ID);
+    }
+
+    /** A request under the admin panel, for the declared row confirmations. */
+    private static PanelRequest adminRequest() {
+        return new PanelRequest(Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN)),
+            TenantConduits.stubFor(null), AccessContext.anonymous(), null);
+    }
+
+    /** @return the words the auth-provider delete is offered dead with, null when it is live */
+    private static Microcopy deleteUnavailable(Row provider, AccessContext access) {
+        OperationPipeline.Offer offer = OperationPipeline.offer(AuthProviderParts.DELETE, access, provider);
+        return offer instanceof OperationPipeline.Offer.Unavailable dead ? dead.reason() : null;
     }
 }

@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hawkeye.testSupport.HawkeyeBrowserTestBase;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
@@ -12,6 +13,7 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.csrf.CsrfTokens;
@@ -244,6 +246,23 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         String proof = CmsConfirmation.FIELD + "=" + URLEncoder.encode(
             CmsConfirmation.proofValue(typedPhrase, typedPhrase), StandardCharsets.UTF_8);
         return body == null || body.isEmpty() ? proof : body + "&" + proof;
+    }
+
+    /**
+     * The command envelope a hand-posted site CREATE form carries (url-encoded body pairs): the site create is an
+     * operation, which refuses a post without its reviewed identity.
+     */
+    protected static @NonNull String siteCreateEnvelope() {
+        return PanelResourceCalls.createEnvelope();
+    }
+
+    /**
+     * The command envelope a hand-posted site EDIT form carries, admin or /manage: a fresh identity and the site's
+     * domain version as of now, so read it at the post, never once for several posts.
+     */
+    protected static @NonNull String siteEditEnvelope(@NonNull Object siteId) {
+        return PanelResourceCalls.editEnvelope(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, siteId,
+            TenantConduits.operator());
     }
 
     /** A request builder aimed at {@code path} on the test server, for a shape the verbs below do not cover. */

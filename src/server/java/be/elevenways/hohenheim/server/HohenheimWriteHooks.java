@@ -71,7 +71,7 @@ public final class HohenheimWriteHooks implements ZenitModule {
         SiteDomainRouteInvariant.installRouteInvariant();
         // A protected path stores the canonical prefix the dispatcher guards, names a
         // list, and claims its (site, path) pair once (form, delegated form, restore).
-        be.elevenways.hohenheim.server.cms.ProtectedPathResource.installProtectionInvariant();
+        be.elevenways.hohenheim.server.cms.ProtectedPathInvariant.install();
         // A DNS record a system authored carries derived attribution, and no caller can
         // hand-write that attribution onto a row of its own.
         GeneratedDnsRecords.install();

@@ -1224,10 +1224,6 @@
     {
       "text": "Geen gekoppelde databanken",
       "scope": "instance_database"
-    },
-    {
-      "text": "Geen beschermde paden",
-      "scope": "site_protected_paths"
     }
   ],
   "empty_description": [
@@ -1274,10 +1270,6 @@
     {
       "text": "Nog geen beheerde databank injecteert haar verbindingsgegevens in deze instantie.",
       "scope": "instance_database"
-    },
-    {
-      "text": "Voeg een padprefix en een toegangslijst toe; aanvragen eronder moeten die lijst passeren bovenop wat de site al vereist.",
-      "scope": "site_protected_paths"
     }
   ],
   "engine": [
@@ -2827,10 +2819,6 @@
     {
       "text": "Optionele regelboom (adressen, wachtwoorden, aanmelding) die geldt voordat verzoeken de site bereiken.",
       "scope": "help"
-    },
-    {
-      "text": "Toegangslijst",
-      "scope": "site_protected_paths"
     }
   ],
   "auth_provider": [
@@ -4137,10 +4125,6 @@
     {
       "text": "Bewerken",
       "scope": "access_rule"
-    },
-    {
-      "text": "Bewerken",
-      "scope": "site_protected_paths"
     }
   ],
   "dyndns": {
@@ -6773,10 +6757,6 @@
     {
       "text": "Pad",
       "scope": "template_contents"
-    },
-    {
-      "text": "Pad",
-      "scope": "site_protected_paths"
     }
   ],
   "mode": [
@@ -9331,10 +9311,6 @@
     {
       "text": "{$name} - Deployments",
       "scope": "instance_deployments"
-    },
-    {
-      "text": "{$name} - Beschermde paden",
-      "scope": "site_protected_paths"
     }
   ],
   "not_found_title": {
@@ -11494,18 +11470,6 @@
     "text": "Deze rol hoort bij project {$name} en wordt verwijderd zodra dat project verdwijnt",
     "scope": "violations"
   },
-  "remove": [
-    {
-      "text": "Verwijderen",
-      "scope": "site_protected_paths"
-    }
-  ],
-  "remove_confirm": [
-    {
-      "text": "Bescherming van {$path} verwijderen? De map wordt bereikbaar voor iedereen die de site kan bereiken.",
-      "scope": "site_protected_paths"
-    }
-  ],
   "delete_confirm_named": [
     {
       "text": "De toegangslijst {$name} verwijderen? De {$rules} regels verdwijnen mee. Er wordt op dit moment niets door bewaakt.",
@@ -11677,10 +11641,6 @@
   "protected_paths": {
     "text": "Beschermde paden",
     "scope": "site"
-  },
-  "add_protected_path": {
-    "text": "Pad beschermen",
-    "scope": "site_protected_paths"
   },
   "protected_path_prefix": {
     "text": "Aanvragen waarvan het pad met deze prefix begint moeten de toegangslijst passeren, bovenop een eventuele sitebrede lijst.",

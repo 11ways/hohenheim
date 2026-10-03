@@ -157,9 +157,9 @@ public final class ManagePanel extends Panel {
         // tenant's own sites. Shared operator providers are usable but never listed
         // here -- see GitProviderParts.manage().
         HohenheimPanel.addIf(peers, GitProviderParts.manage(), Role.PROXY);
-        HohenheimPanel.addIf(peers, new ManageAccessListResource(), Role.PROXY);
+        HohenheimPanel.addIf(peers, AccessListParts.manage(), Role.PROXY);
         HohenheimPanel.addIf(peers, new ManageAccessRuleResource(), Role.PROXY);
-        HohenheimPanel.addIf(peers, new ManageProtectedPathResource(), Role.PROXY);
+        HohenheimPanel.addIf(peers, ProtectedPathParts.manage(), Role.PROXY);
         return peers;
     }
 
@@ -244,7 +244,7 @@ public final class ManagePanel extends Panel {
         // (TenantScopes.MANAGED_ACCESS_LISTS): a picker reads the reference policy ahead of any
         // panel resource's source, so the tenant list is never widened to offer a shared row.
         // An explicit override for the same two-panel shadowing reason as site_domain
-        // (AccessListResource and ManageAccessListResource both expose the model).
+        // (the admin access-list entry and its /manage twin, AccessListParts, both expose the model).
         RecordSourceRegistry.INSTANCE.override(RecordSource.of(AccessListModel.class)
             .search(AccessListModel.NAME)
             .scopedBy(TenantScopes.USABLE_ACCESS_LISTS)

@@ -139,9 +139,10 @@ public final class HohenheimSources implements ZenitModule {
         // edit link and inline create). An explicit copy here replaced that default
         // WITHOUT the edit/inline-create facets (source_capability_dropped at boot).
 
-        // No explicit source for SiteAuthProviderModel or DnsZoneModel either: their
-        // explicit copies added nothing over the derived defaults (AuthProviderResource and
-        // DnsZoneResource declare the same search fields) and only cost the edit link.
+        // No explicit source for DnsZoneModel either: its explicit copy added nothing over
+        // the derived default (DnsZoneResource declares the same search fields) and only
+        // cost the edit link. SiteAuthProviderModel's is server-side in AdminSources (its
+        // admin entry is a panel resource, which derives no model default).
         // Bans, hosts and runtime images DO need a projection / subtitle / sortable the
         // derived default lacks; they are declared server-side in AdminSources, where the
         // edit link and inline create can be spelled beside those facets.

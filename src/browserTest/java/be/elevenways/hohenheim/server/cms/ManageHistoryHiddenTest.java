@@ -29,9 +29,8 @@ class ManageHistoryHiddenTest extends HohenheimTestBase {
     void noDelegatedResourceOffersTheOperatorHistory() {
         // 1. Counterfactual anchor: the ADMIN bases do offer history in this runtime, so an
         //    empty result below is the override working and not a runtime without history.
-        List<Resource<?>> operatorBases = List.of(new ProtectedPathResource(), new AccessRuleResource(),
-            new PreviewDeploymentResource());
-        boolean operatorHasHistory = operatorBases.stream()
+        List<Resource<?>> operatorBases = List.of(new AccessRuleResource(), new PreviewDeploymentResource());
+        boolean operatorHasHistory = ProtectedPathParts.admin().tabs().history() || operatorBases.stream()
             .anyMatch(resource -> !historyPages(resource).isEmpty());
         assertThat(operatorHasHistory)
             .as("step 1: the operator resources offer a history page, or this proves nothing")
