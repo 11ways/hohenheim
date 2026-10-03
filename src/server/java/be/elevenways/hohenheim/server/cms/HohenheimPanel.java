@@ -217,7 +217,7 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, SpamserviceSecurityEventsResource.create(), Role.FIREWALL);
         addIf(peers, SpamserviceWordsResource.create(), Role.FIREWALL);
         addIf(peers, new SpamserviceReputationPage(), Role.FIREWALL);
-        peers.add(new AdminActivityResource());
+        peers.add(AdminActivityResource.admin());
         // Where a platform alert lands with nothing configured: every administrator's
         // own inbox, the local channel Alerts always fans out to.
         peers.add(new AdminInboxPage());
