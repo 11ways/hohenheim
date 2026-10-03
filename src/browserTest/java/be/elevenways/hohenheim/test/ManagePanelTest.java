@@ -118,6 +118,14 @@ class ManagePanelTest extends HohenheimTestBase {
         return httpGet(path, session);
     }
 
+    /** What the Access tab's Save posts beside its rows: the tab and the confirmation proof. */
+    private static final String SAVE_ACCESS_FIELDS = "_tab=access&_confirmed=1&";
+
+    /** The one invoke route the Access tab's form posts to, over site A. */
+    private String saveAccessPath() {
+        return "/admin/sites/invoke/zenit.save_record_sharing?ids=" + siteAId;
+    }
+
     private HttpResponse<String> operatorGet(String path) throws Exception {
         return httpGet(path, operatorSession);
     }
@@ -152,19 +160,18 @@ class ManagePanelTest extends HohenheimTestBase {
         // (403), it never redirects -- a redirect could only loop.
         assertThat(operatorGet("/").statusCode()).isEqualTo(403);
 
-        // The GENERIC record-access matrix (zenit-auth's contributed subpage)
-        // is the grant surface -- the hand-written SiteAccessPage is deleted.
-        HttpResponse<String> add = adminPostForm(
-            "/admin/sites/" + siteAId + "/page/access",
-            "access.0.type=user&access.0.id=" + operatorId
+        // The GENERIC record-access tab (zenit-auth's contributed tab, saving through its PAGE placement of
+        // zenit:save_record_sharing on the one invoke route) is the grant surface.
+        HttpResponse<String> add = adminPostForm(saveAccessPath(),
+            SAVE_ACCESS_FIELDS + "access.0.type=user&access.0.id=" + operatorId
                 + "&access.0.caps.0.key=manage&access.0.caps.0.value=allow");
         assertThat(add.statusCode()).isIn(302, 303);
 
-        // The Access tab IS the generic page: only it renders the
-        // za-capability-matrix, with the new grant as a subject row.
+        // The Access tab IS the generic page: it renders the sharing
+        // control, with the new grant as a subject row.
         HttpResponse<String> pageView = adminGet("/admin/sites/" + siteAId + "/page/access");
         assertThat(pageView.statusCode()).isEqualTo(200);
-        assertThat(pageView.body()).contains("<za-capability-matrix");
+        assertThat(pageView.body()).contains("<za-record-sharing");
         assertThat(pageView.body()).contains("data-subject=\"user:" + operatorId + "\"");
         assertThat(pageView.body()).contains("Site Operator");
 
@@ -200,7 +207,7 @@ class ManagePanelTest extends HohenheimTestBase {
         HttpResponse<String> manageAccess = operatorGet(
             "/manage/sites/" + siteAId + "/page/access");
         assertThat(manageAccess.statusCode()).isEqualTo(200);
-        assertThat(manageAccess.body()).contains("<za-capability-matrix");
+        assertThat(manageAccess.body()).contains("<za-record-sharing");
 
         // The tenant's subject picker is an EXACT lookup, never the directory: the
         // administrator's address (a fact of the installation, not of site A) is in the
@@ -417,16 +424,16 @@ class ManagePanelTest extends HohenheimTestBase {
     @Test
     void recordAndGlobalGrantsDrivePanelEligibility() throws Exception {
         // The operator holds site A through the Access tab, where the grant journey leaves it.
-        assertThat(adminPostForm("/admin/sites/" + siteAId + "/page/access",
-            "access.0.type=user&access.0.id=" + operatorId
+        assertThat(adminPostForm(saveAccessPath(),
+            SAVE_ACCESS_FIELDS + "access.0.type=user&access.0.id=" + operatorId
                 + "&access.0.caps.0.key=manage&access.0.caps.0.value=allow").statusCode())
             .as("fixture: the Access tab grants site A").isIn(302, 303);
         assertThat(HohenheimAccess.managedSiteIds(new UserPrincipal(operatorId, "Site Operator")))
             .as("fixture: the operator manages exactly site A").containsExactly(siteAId);
 
         GrantService.createDirectGrant(GrantSubjectType.USER, operatorId, "hohenheim.manage.access", true);
-        HttpResponse<String> remove = adminPostForm("/admin/sites/" + siteAId + "/page/access",
-            "access.__removed=" + java.net.URLEncoder.encode("user:" + operatorId,
+        HttpResponse<String> remove = adminPostForm(saveAccessPath(),
+            SAVE_ACCESS_FIELDS + "access.__removed=" + java.net.URLEncoder.encode("user:" + operatorId,
                 java.nio.charset.StandardCharsets.UTF_8));
         assertThat(remove.statusCode()).isIn(302, 303);
 
