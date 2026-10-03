@@ -6,7 +6,6 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
-import be.elevenways.zenit.common.orm.lease.LeaseKeys;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
@@ -32,9 +31,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * @since  0.9.0
  */
 public final class SiteOperations {
-    private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("site_command"));
-    private static final OperationCommand COMMAND = OperationCommand.serializedBy(KEYS,
-        invocation -> invocation.subjectKeys().get(0));
+    private static final OperationCommand COMMAND = OperationCommand.perSubject();
 
     /** The subject of every site operation: one site record. */
     public static final SubjectType<Row> SITE = SubjectType.record(SiteModel.MODEL_ID);

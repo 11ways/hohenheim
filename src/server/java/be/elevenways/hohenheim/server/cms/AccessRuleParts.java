@@ -30,7 +30,6 @@ import be.elevenways.zenit.common.edit.Nested;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
-import be.elevenways.zenit.common.orm.lease.LeaseKeys;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -66,9 +65,7 @@ import java.util.Objects;
  * @since  0.9.0
  */
 public final class AccessRuleParts {
-    private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("access_rule_command"), "access_rule:");
-    private static final OperationCommand COMMAND = OperationCommand.serializedBy(KEYS,
-        invocation -> invocation.subjectKeys().getFirst());
+    private static final OperationCommand COMMAND = OperationCommand.perSubject();
 
     /** The entry slug both twins share, which the Rules tab's links and the add lane's landing name. */
     public static final String SLUG = "access-rules";

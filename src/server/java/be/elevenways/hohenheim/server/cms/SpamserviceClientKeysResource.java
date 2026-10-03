@@ -30,9 +30,7 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.operation.OperationInput;
-import be.elevenways.zenit.common.operation.OperationInvocation;
 import be.elevenways.zenit.common.operation.SecretResult;
-import be.elevenways.zenit.common.orm.lease.LeaseKeys;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -68,9 +66,7 @@ import java.util.function.Supplier;
  * @since  0.1.0
  */
 public final class SpamserviceClientKeysResource {
-    private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("spamservice_key_command"));
-    private static final OperationCommand COMMAND = OperationCommand.serializedBy(KEYS,
-        invocation -> invocation.subjectKeys().get(0)).onDatasource("default")
+    private static final OperationCommand COMMAND = OperationCommand.perSubject().onDatasource("default")
         .execution(CommandExecution.OUTSIDE_TRANSACTION);
 
     public static final String SLUG = "spamservice-keys";
@@ -136,7 +132,7 @@ public final class SpamserviceClientKeysResource {
             values.get("last_used") instanceof Instant used ? used : null,
             values.get("created_at") instanceof Instant created ? created : null)))
         .result(SecretResult.<String>type())
-        .command(OperationCommand.serializedBy(KEYS, OperationInvocation::operationId).onDatasource("default")
+        .command(OperationCommand.perSubject().onDatasource("default")
             .execution(CommandExecution.OUTSIDE_TRANSACTION))
         .register();
 

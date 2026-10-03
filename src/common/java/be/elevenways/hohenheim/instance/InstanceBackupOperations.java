@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
-import be.elevenways.zenit.common.orm.lease.LeaseKeys;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -26,9 +25,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * @since  0.9.0
  */
 public final class InstanceBackupOperations {
-    private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("backup_command"));
-    private static final OperationCommand COMMAND = OperationCommand.serializedBy(KEYS,
-        invocation -> invocation.subjectKeys().get(0)).execution(CommandExecution.OUTSIDE_TRANSACTION);
+    private static final OperationCommand COMMAND = OperationCommand.perSubject()
+        .execution(CommandExecution.OUTSIDE_TRANSACTION);
 
     /** The subject of every backup operation: one backup row. */
     public static final SubjectType<Row> BACKUP = SubjectType.record(InstanceBackupModel.MODEL_ID);

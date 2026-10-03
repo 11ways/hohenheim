@@ -5,15 +5,18 @@ import be.elevenways.hohenheim.server.host.HostPostureAcknowledgement;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.auth.test.TestAccounts;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Test-side operator decisions over the host record: the admission gate refuses
@@ -25,7 +28,7 @@ public final class HostFixtures {
 
     /** The attribution a fixture acknowledges under; a real one is required, never null. */
     private static final Accountability OPERATOR =
-        new Accountability("user:1", null, "Test operator", null, null, "test");
+        new Accountability(null, null, "Test operator", null, null, "test");
 
     private HostFixtures() {
     }
@@ -183,6 +186,9 @@ public final class HostFixtures {
                 || ServerModel.postureAcknowledged(server)) {
             return;
         }
-        Accountability.runAs(OPERATOR, () -> HostPostureAcknowledgement.record(server));
+        int operator = TestAccounts.create("host-posture-" + UUID.randomUUID() + "@fixture.test",
+            "Test operator", true, true);
+        Accountability.runAs(OPERATOR.withActor(PrincipalRef.account(operator), "Test operator"),
+            () -> HostPostureAcknowledgement.record(server));
     }
 }

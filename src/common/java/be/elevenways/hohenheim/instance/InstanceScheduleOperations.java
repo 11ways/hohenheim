@@ -4,8 +4,6 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
-import be.elevenways.zenit.common.operation.OperationInvocation;
-import be.elevenways.zenit.common.orm.lease.LeaseKeys;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -28,8 +26,7 @@ import be.elevenways.zenit.common.ui.Icon;
  * @since  0.9.0
  */
 public final class InstanceScheduleOperations {
-    private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("schedule_command"));
-    private static final OperationCommand COMMAND = OperationCommand.serializedBy(KEYS, OperationInvocation::operationId);
+    private static final OperationCommand COMMAND = OperationCommand.perSubject();
 
     /** One record schedule. */
     public static final SubjectType<Row> SCHEDULE = SubjectType.record(RecordScheduleModel.MODEL_ID);

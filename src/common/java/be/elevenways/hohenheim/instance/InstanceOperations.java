@@ -39,8 +39,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public final class InstanceOperations {
     public static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("instance"), "hohenheim_instance_");
-    private static final OperationCommand COMMAND_FACET = OperationCommand.serializedBy(KEYS,
-        invocation -> invocation.subjectKeys().get(0)).execution(CommandExecution.OUTSIDE_TRANSACTION);
+    private static final OperationCommand COMMAND_FACET = OperationCommand.perSubject()
+        .execution(CommandExecution.OUTSIDE_TRANSACTION);
     /**
      * Start and stop replay a completed answer; an interrupted one may run again, since powering an instance to the
      * state it is already in changes nothing at the provider.
@@ -48,9 +48,7 @@ public final class InstanceOperations {
      * AIDEV-NOTE: keyed per verb and instance, never on the instance lease: a start asked while a restart holds the
      * instance must reach the service's in-progress refusal at once, not wait for that lease and time out.
      */
-    private static final OperationCommand POWER_FACET = OperationCommand.serializedBy(
-            LeaseKeys.declare(HohenheimIds.id("power_command")),
-            invocation -> invocation.operationId() + ":" + invocation.subjectKeys().get(0))
+    private static final OperationCommand POWER_FACET = OperationCommand.perVerbAndSubject()
         .execution(CommandExecution.OUTSIDE_TRANSACTION_RETRY_SAFE);
 
     /** The subject of every instance operation: one instance record. */

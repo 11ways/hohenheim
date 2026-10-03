@@ -10,8 +10,6 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
-import be.elevenways.zenit.common.operation.OperationInvocation;
-import be.elevenways.zenit.common.orm.lease.LeaseKeys;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
@@ -29,8 +27,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * @since 0.1.0
  */
 public final class VolumeOperations {
-    private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("volume_command"));
-    private static final OperationCommand COMMAND = OperationCommand.serializedBy(KEYS, OperationInvocation::operationId);
+    private static final OperationCommand COMMAND = OperationCommand.perSubject();
     public static final IntegerField QUOTA_MB = IntegerField.builder().name("quota_mb")
         .label(HohenheimFormCopy.label("quota_mb")).help(HohenheimFormCopy.help("volume_quota_mb"))
         .suffix("MB").build();

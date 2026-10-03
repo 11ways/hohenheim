@@ -9,7 +9,6 @@ import be.elevenways.zenit.common.edit.FormStep;
 import be.elevenways.zenit.common.edit.Nested;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
-import be.elevenways.zenit.common.orm.lease.LeaseKeys;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
@@ -24,6 +23,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -39,9 +39,7 @@ import java.util.Map;
  * @since  0.1.0
  */
 public final class InstanceTemplateOperations {
-    private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("template_command"));
-    private static final OperationCommand COMMAND = OperationCommand.serializedBy(KEYS,
-        invocation -> invocation.subjectKeys().get(0));
+    private static final OperationCommand COMMAND = OperationCommand.perSubject();
 
     /** The subject: one template of the catalog. */
     public static final SubjectType<Row> TEMPLATE = SubjectType.record(InstanceTemplateModel.MODEL_ID);
@@ -68,8 +66,8 @@ public final class InstanceTemplateOperations {
         .add(Nested.of(VARIABLES).subSpec(FormSpec.builder().build()).build())
         .step(FormStep.of("details", copy("step_details"), NAME.getName(), SERVER_ID.getName(),
             PROJECT_ID.getName(), ENVIRONMENT_ID.getName()))
-        .step(FormStep.of(VARIABLES, Microcopy.of("variables").withFilter("scope", "template_contents"), VARIABLES)
-            .describe(copy("step_variables_lead")))
+        .step(new FormStep(VARIABLES, Microcopy.of("variables").withFilter("scope", "template_contents"),
+            copy("step_variables_lead"), List.of(VARIABLES)))
         .build();
 
     public static final Operation<Row, CreateFromTemplate, Integer> CREATE_INSTANCE_FROM_TEMPLATE =
