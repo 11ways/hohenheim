@@ -17,9 +17,7 @@ import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.render.action.InvokeActionState;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
-import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.server.panel.PanelActionOffers;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.zenit.cms.server.render.action.ActionStateTranslator;
 import be.elevenways.zenit.cms.server.render.action.RowOffer;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -87,9 +85,8 @@ public final class AccessListRulesPage implements RecordScopedPage<Row> {
         @SuppressWarnings("unchecked")
         PanelResource<Row> rulesEntry = (PanelResource<Row>) Objects.requireNonNull(
             cmsPanel.entryBySlug(AccessRuleParts.SLUG), "panel " + panel + " declares no access-rule entry");
-        Resource<Row> rulesView = PanelResourceViews.of(rulesEntry,
-            new PanelRequest(cmsPanel, conduit, accessContext, null));
-        Function<Row, List<RowOffer>> offers = PanelActionOffers.rowsForRender(rulesView, null, cmsPanel, rules,
+        PanelRequest request = new PanelRequest(cmsPanel, conduit, accessContext, null);
+        Function<Row, List<RowOffer>> offers = PanelActionOffers.rowsForRender(request, rulesEntry, null, rules,
             accessContext, ReturnPath.of(pageUrl));
 
         List<AccessRuleView> views = new ArrayList<>();

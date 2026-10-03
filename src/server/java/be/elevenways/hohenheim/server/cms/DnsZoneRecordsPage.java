@@ -243,7 +243,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
             // Promoted seam: the framework's own affordance answer, which the generated
             // list page uses too -- this page used to carry a copy of it.
             row -> InlineEditStates.editableCellsFor(panel, resource, applied, row, accessContext),
-            PanelActionOffers.rowsForRender(resource, null, panel, records, accessContext,
+            PanelActionOffers.rowsForRender(request, resource, null, records, accessContext,
                 ReturnPath.of(returnTo)),
             accessContext);
 
