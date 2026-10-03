@@ -8,6 +8,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -85,8 +86,8 @@ final class AccessRuleSummaries {
      */
     static @NonNull EnumBadgeState enabledBadge(boolean enabled) {
         return enabled
-            ? new EnumBadgeState("on", ruleText("state_on"), null, "check", "success", null, true)
-            : new EnumBadgeState("off", ruleText("state_off"), null, "xmark", "secondary", null, true);
+            ? new EnumBadgeState("on", ruleText("state_on"), null, "check", BadgeVariant.SUCCESS, null, true)
+            : new EnumBadgeState("off", ruleText("state_off"), null, "xmark", BadgeVariant.SECONDARY, null, true);
     }
 
     /** The on/off cue of one stored rule row. */

@@ -46,6 +46,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
@@ -134,7 +135,7 @@ public final class ServerOverviewState {
             .withData(List.of(WidgetFact.badge(
                 text("volume_backend", locales, resolver),
                 WidgetBadge.of(volumeBackend.label().resolve(locales, resolver),
-                    volumeBackend.color().token(), volumeBackend.icon())))));
+                    volumeBackend.color(), volumeBackend.icon())))));
         if (!volumeBackend.supportsQuota() && volumeBackend.filesystemEnforcesQuota()) {
             // The filesystem COULD enforce a quota; this build has no operations for it.
             // Telling the operator to mount something else here would be a lie in the
@@ -240,14 +241,14 @@ public final class ServerOverviewState {
             return WidgetBadge.of(Microcopy.of("ack_current").withFilter("scope", "server_overview")
                 .withArg("actor", acknowledgement.actorLabel())
                 .withArg("version", String.valueOf(acknowledgement.version()))
-                .resolve(locales, resolver), "success", null);
+                .resolve(locales, resolver), BadgeVariant.SUCCESS, null);
         }
         if (acknowledgement.stale()) {
             return WidgetBadge.of(Microcopy.of("ack_stale").withFilter("scope", "server_overview")
                 .withArg("version", String.valueOf(acknowledgement.requiredVersion()))
-                .resolve(locales, resolver), "destructive", null);
+                .resolve(locales, resolver), BadgeVariant.DESTRUCTIVE, null);
         }
-        return WidgetBadge.of(text("ack_missing", locales, resolver), "destructive", null);
+        return WidgetBadge.of(text("ack_missing", locales, resolver), BadgeVariant.DESTRUCTIVE, null);
     }
 
     // -- trust ---------------------------------------------------------------------

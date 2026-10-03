@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.instance;
 
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -18,35 +19,35 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public enum InstallMediaFetchState {
 
     /** Accepted by the request, not yet picked up by its background job. */
-    PENDING("pending", true, "default",
+    PENDING("pending", true, BadgeVariant.PRIMARY,
         Microcopy.of("fetch_state_pending").withFilter("scope", "server_media")),
 
     /** The ISO is streaming onto the controller; the stored fraction moves when the size is known. */
-    DOWNLOADING("downloading", true, "default",
+    DOWNLOADING("downloading", true, BadgeVariant.PRIMARY,
         Microcopy.of("fetch_state_downloading").withFilter("scope", "server_media")),
 
     /** The download finished and the ISO is streaming into the host's managed pool. */
-    IMPORTING("importing", true, "default",
+    IMPORTING("importing", true, BadgeVariant.PRIMARY,
         Microcopy.of("fetch_state_importing").withFilter("scope", "server_media")),
 
     /** The medium reads back on the host. */
-    READY("ready", false, "success",
+    READY("ready", false, BadgeVariant.SUCCESS,
         Microcopy.of("fetch_state_ready").withFilter("scope", "server_media")),
 
     /** The fetch refused or failed; the stored reason says why. */
-    FAILED("failed", false, "destructive",
+    FAILED("failed", false, BadgeVariant.DESTRUCTIVE,
         Microcopy.of("fetch_state_failed").withFilter("scope", "server_media")),
 
     /** The controller stopped while the fetch was in flight; nothing will finish it. */
-    INTERRUPTED("interrupted", false, "warning",
+    INTERRUPTED("interrupted", false, BadgeVariant.WARNING,
         Microcopy.of("fetch_state_interrupted").withFilter("scope", "server_media"));
 
     private final String token;
     private final boolean active;
-    private final String variant;
+    private final BadgeVariant variant;
     private final Microcopy label;
 
-    InstallMediaFetchState(@NonNull String token, boolean active, @NonNull String variant,
+    InstallMediaFetchState(@NonNull String token, boolean active, @NonNull BadgeVariant variant,
                            @NonNull Microcopy label) {
         this.token = token;
         this.active = active;
@@ -65,7 +66,7 @@ public enum InstallMediaFetchState {
     }
 
     /** @return the pl-badge variant the tab draws the state with */
-    public @NonNull String variant() {
+    public @NonNull BadgeVariant variant() {
         return this.variant;
     }
 
