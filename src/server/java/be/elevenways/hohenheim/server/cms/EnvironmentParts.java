@@ -14,7 +14,6 @@ import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RelatedPage;
-import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
@@ -24,7 +23,8 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RowScope;
-import be.elevenways.zenit.common.edit.FormCarrier;
+import be.elevenways.zenit.cms.common.resource.RowSave;
+import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
@@ -72,12 +72,8 @@ public final class EnvironmentParts {
 
     private static final OperationGate OPERATOR = OperationGate.permission(HohenheimSources.ADMIN_ACCESS);
 
-    // AIDEV-NOTE: the shared form boundary owns the old no-script create mapping and retires the old carrier on
-    // a kind switch; bindings answer stored-kind reads, while showWhen retains both controls for live switching.
-    private static final FormCarrier VALUE_CARRIER = FormCarrier.of(InstanceVariableModel.KIND)
-        .choice(InstanceVariableModel.KIND_PLAIN, InstanceVariableModel.PLAIN_VALUE)
-        .choice(InstanceVariableModel.KIND_SECRET, InstanceVariableModel.SECRET_VALUE)
-        .retirePrevious().defaultCarrierOnCreate().build();
+    // AIDEV-NOTE: applicability is the form's typed condition, never a replacement for field authorization;
+    // physical retirement remains the row writer's existing beforeSave policy.
 
     /** Deletes an environment nothing groups under; offered dead, naming the holders, while something does. */
     public static final Operation<Row, Void, Integer> DELETE =
@@ -169,7 +165,7 @@ public final class EnvironmentParts {
         RelationPick environment = RelationPick.of(InstanceVariableModel.ENVIRONMENT_ID, EnvironmentModel.MODEL_ID)
             .build();
         // AIDEV-NOTE: both physical carriers stay mounted, but only the selected one is visible and submitting;
-        // authorization and retirement come from VALUE_CARRIER, never from the submitted visibility claim.
+        // typed server coercion ignores inactive submitted values and never overrides a denied field decision.
         FormSpec form = FormSpec.builder()
             .add(environment)
             .add(InstanceVariableModel.KEY)
@@ -202,11 +198,6 @@ public final class EnvironmentParts {
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()
                 .search(InstanceVariableModel.KEY).build())
             .form(ResourceForm.<Row>of(form)
-                .bindings(List.of(
-                    ResourceFieldBinding.of(InstanceVariableModel.PLAIN_VALUE.getName(),
-                        VALUE_CARRIER.access(InstanceVariableModel.PLAIN_VALUE)),
-                    ResourceFieldBinding.of(InstanceVariableModel.SECRET_VALUE.getName(),
-                        VALUE_CARRIER.access(InstanceVariableModel.SECRET_VALUE))))
                 .createDefaults(request -> prefill(request, HohenheimParams.ENVIRONMENT_ID_PREFILL,
                     InstanceVariableModel.ENVIRONMENT_ID.getName()))
                 .quickCreate(VARIABLE_QUICK_CREATE)
@@ -214,6 +205,7 @@ public final class EnvironmentParts {
                     SLUG))
                 .build())
             .writes(ResourceMutations.rows().create().update().delete(DELETE_VARIABLE)
+                .beforeSave(EnvironmentParts::placeValueInItsCarrier)
                 .build())
             .deleteConfirmation(DeleteConfirmation.<Row>of(variableDeleteBody(null))
                 .forRow((variable, request) -> variableDeleteBody(variable)))
@@ -229,6 +221,15 @@ public final class EnvironmentParts {
     static @Nullable Microcopy inUseReason(@NonNull Row environment) {
         var usage = DeleteImpact.environmentUsage(environment.get(EnvironmentModel.ID));
         return usage.isEmpty() ? null : usage.refusal();
+    }
+
+    /** Retires the physical column the submitted kind no longer uses after ordinary authorization and coercion. */
+    static void placeValueInItsCarrier(@NonNull RowSave save) {
+        String kindName = InstanceVariableModel.KIND.getName();
+        if (!save.values().containsKey(kindName)) return;
+        VariableKind kind = VariableKind.of(String.valueOf(save.values().get(kindName)));
+        if (kind.isSecret()) save.row().set(InstanceVariableModel.PLAIN_VALUE, null);
+        else save.row().set(InstanceVariableModel.SECRET_VALUE, null);
     }
 
     /**
