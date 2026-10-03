@@ -18,6 +18,10 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.text.HtmlEscape;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.server.cms.InstanceMigratePage;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -221,14 +225,9 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
     }
 
     /**
-     * A refused submit is an ERROR flash NAMING the refusal, never a success toast -- and
+     * A refused submit redraws its form NAMING the refusal, never a success redirect -- and
      * the two refusals it can meet (the same host, an ineligible other host) are told
-     * apart by the name each carries, not by a status code both shapes share.
-     *
-     * The flash is taken the way the redirect's own Location would take it, rather than off
-     * the landing page's markup: the handed-off session message IS what this lane produces,
-     * so asserting it keeps the refusal-vs-success distinction under test independently of
-     * the rendering half (which zenitcms:record-tabs now performs for every app-owned subpage).
+     * apart by the key each carries, not by a status code both shapes share.
      */
     @Test
     void arefusedSubmitSurfacesTheRefusalInsteadOfASuccessToast() throws Exception {
@@ -241,8 +240,9 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
             .withFailMessage("step 1: the refused move must answer as a refusal, never a success (HTTP %s)",
                 sameHost.statusCode())
             .isEqualTo(422);
-        assertThat(sameHost.body()).as("step 1: the answer NAMES the refusal")
-            .contains("already lives on that host");
+        assertRedrawnMigrateForm(sameHost, "step 1");
+        assertThat(sameHost.body()).as("step 1: the answer NAMES the refusal by its own key")
+            .contains(refusalText("migrate_same_host", "migrate-subject"));
 
         // 2. A DIFFERENT host, one the survey already called ineligible: the record must
         //    not move. Submitting the current host could never prove that -- "did not
@@ -254,8 +254,10 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
             .isTrue();
         HttpResponse<String> other = invokeMigrate(strangerHostId);
         assertThat(other.statusCode()).as("step 2: also refused").isEqualTo(422);
+        assertRedrawnMigrateForm(other, "step 2");
         assertThat(other.body()).as("step 2: and named as the ADMISSION refusal, so the operator learns what to fix")
-            .contains("is not admitted for placement");
+            .contains(refusalText("host_not_admitted", "migrate-stranger"))
+            .doesNotContain(refusalText("migrate_same_host", "migrate-subject"));
 
         // 3. THE STATE: the record still names the host it started on -- a move onto the
         //    stranger would have written its id here.
@@ -369,6 +371,23 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
 
     private static String migrateUrl() {
         return "/admin/instances/" + instanceId + "/page/migrate";
+    }
+
+    /**
+     * A refused submit redraws the migrate form it came from, still carrying its tab and the chosen destination, so a
+     * bare error page fails here.
+     */
+    private static void assertRedrawnMigrateForm(HttpResponse<String> response, String step) {
+        assertThat(response.body()).as(step + ": the migrate form is redrawn, still on its tab")
+            .contains("name=\"" + CmsEndpoints.TAB_PARAM.getName() + "\"")
+            .contains("value=\"" + InstanceMigratePage.SLUG + "\"")
+            .contains("name=\"" + InstanceOperations.TARGET_SERVER.getName() + "\"");
+    }
+
+    /** @return a refusal key's shipped English text for this name, as the page escapes it */
+    private static String refusalText(String key, String name) {
+        return HtmlEscape.text(HohenheimViolations.text(key).withArg("name", name)
+            .resolve(LocaleChain.ofTags("en"), new ShippedCatalogs()));
     }
 
     /** The no-script submit of the migrate tab's form for one destination: the operation's invoke with the tab. */

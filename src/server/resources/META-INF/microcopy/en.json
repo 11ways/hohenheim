@@ -7114,18 +7114,6 @@
     "text": "You may not manage schedules of this instance",
     "scope": "violations"
   },
-  "schedule_action_unknown_action": {
-    "text": "Unknown schedule action",
-    "scope": "violations"
-  },
-  "schedule_action_action_model_mismatch": {
-    "text": "This action does not apply to instances",
-    "scope": "violations"
-  },
-  "schedule_action_capability_denied": {
-    "text": "You lack the capability this action requires on the instance",
-    "scope": "violations"
-  },
   "port_protocol": [
     {
       "text": "Port protocol",
