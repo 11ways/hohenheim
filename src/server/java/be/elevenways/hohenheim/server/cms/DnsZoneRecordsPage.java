@@ -46,6 +46,7 @@ import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableView;
 import be.elevenways.zenit.cms.server.page.InlineEditStates;
 import be.elevenways.zenit.cms.server.page.QuickAddState;
+import be.elevenways.zenit.cms.server.panel.PartsWrites;
 import be.elevenways.zenit.cms.server.render.table.TableStateTranslator;
 import be.elevenways.zenit.common.data.FacetUrlState;
 import be.elevenways.zenit.common.data.ListState;
@@ -205,7 +206,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         RecordPage<Row> page = resource.listPage(applied, accessContext);
         List<Row> records = page.rows();
         // The per-row write verdicts below walk each record's parent (this zone) once for the whole page.
-        resource.prefetchLineage(panel, records, accessContext);
+        PartsWrites.prefetchLineage(resource, panel, records, accessContext);
 
         BoundEndpoint<?> listTarget = CmsRoutes.subpage(PANEL, DnsZoneParts.SLUG, zoneId, this.slug());
         String listUrl = listTarget.toUrl();
