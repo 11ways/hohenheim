@@ -44,7 +44,7 @@ public final class InstanceProvisioningPage implements RecordScopedPage<Row> {
     public static final String SLUG = "provisioning";
 
     /** The admin config-file resource's slug; the panel is asked for it, never assumed. */
-    private static final String FILE_RESOURCE_SLUG = "instance-files";
+    private static final String FILE_RESOURCE_SLUG = InstanceFileParts.SLUG;
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_provisioning"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("provisioning").withFilter("scope", "instance"); }
@@ -77,7 +77,7 @@ public final class InstanceProvisioningPage implements RecordScopedPage<Row> {
         // actually offers -- ask the panel, never assume a slug exists -- so /manage renders
         // the same rows read-only and a later decision to delegate the editor lights them up
         // with no change here.
-        boolean editable = request.panel().peerBySlug(FILE_RESOURCE_SLUG) != null;
+        boolean editable = request.panel().entryBySlug(FILE_RESOURCE_SLUG) != null;
 
         List<Map<String, Object>> files = new ArrayList<>();
         for (Row file : Models.get(InstanceFileModel.class).findByInstanceId(instanceId)) {

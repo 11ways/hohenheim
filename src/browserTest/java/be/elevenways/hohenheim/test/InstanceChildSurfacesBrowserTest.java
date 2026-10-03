@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.InstanceBackupOperations;
+import be.elevenways.hohenheim.instance.InstanceScheduleOperations;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceFileModel;
@@ -116,9 +117,12 @@ class InstanceChildSurfacesBrowserTest extends HohenheimTestBase {
                 .synthesized(BACKUPS, SynthesizedRowActions.DELETE, InstanceBackupOperations.DELETE_BACKUP.id())));
         stored.put(QUOTAS, baselines(QUOTAS).placedOperations(PlacedOperationMoves.NONE
             .synthesized(QUOTAS, SynthesizedRowActions.DELETE, InstanceChildDeletes.QUOTA.id())));
-        stored.put(FILES, baselines(FILES));
-        stored.put(SCHEDULES, baselines(SCHEDULES));
-        stored.put(STEPS, baselines(STEPS));
+        stored.put(FILES, baselines(FILES).placedOperations(PlacedOperationMoves.NONE
+            .synthesized(FILES, SynthesizedRowActions.DELETE, InstanceChildDeletes.FILE.id())));
+        stored.put(SCHEDULES, baselines(SCHEDULES).placedOperations(PlacedOperationMoves.NONE
+            .synthesized(SCHEDULES, SynthesizedRowActions.DELETE, InstanceScheduleOperations.DELETE_SCHEDULE.id())));
+        stored.put(STEPS, baselines(STEPS).placedOperations(PlacedOperationMoves.NONE
+            .synthesized(STEPS, SynthesizedRowActions.DELETE, InstanceScheduleOperations.DELETE_STEP.id())));
         stored.put(RUNS, baselines(RUNS).placedOperations(PlacedOperationMoves.NONE
             .synthesized(RUNS, SynthesizedRowActions.DELETE, InstanceChildDeletes.SCHEDULE_RUN.id())));
 

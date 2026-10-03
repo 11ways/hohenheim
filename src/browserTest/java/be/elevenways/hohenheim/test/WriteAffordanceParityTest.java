@@ -14,8 +14,9 @@ import be.elevenways.hohenheim.server.cms.DnsRecordResource;
 import be.elevenways.hohenheim.server.cms.DomainParts;
 import be.elevenways.hohenheim.server.cms.InstanceDatabaseResource;
 import be.elevenways.hohenheim.server.cms.InstanceResource;
-import be.elevenways.hohenheim.server.cms.InstanceScheduleResource;
-import be.elevenways.hohenheim.server.cms.InstanceScheduleStepResource;
+import be.elevenways.hohenheim.instance.InstanceScheduleOperations;
+import be.elevenways.hohenheim.server.cms.InstanceScheduleParts;
+import be.elevenways.hohenheim.server.cms.InstanceScheduleStepParts;
 import be.elevenways.hohenheim.server.cms.SiteParts;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
@@ -41,6 +42,7 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
 import be.elevenways.zenit.test.support.EndpointConduit;
+import be.elevenways.zenit.server.operation.OperationPipeline;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -555,7 +557,6 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         schedules.save(schedule);
         Integer scheduleId = schedule.get(RecordScheduleModel.ID);
         try {
-            InstanceScheduleStepResource resource = new InstanceScheduleStepResource();
             Row step = Models.get(RecordScheduleStepModel.class).createEmptyRow();
             step.set(RecordScheduleStepModel.SCHEDULE_ID, scheduleId);
 
@@ -567,7 +568,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             scheduleFinds.set(0);
             AccessContext ctx = holder();
             for (int i = 0; i < 6; i++) {
-                assertThat(resource.writableBy(step, ctx))
+                assertThat(InstanceScheduleStepParts.writableBy(step, ctx))
                     .as("the config holder keeps the step editor").isTrue();
             }
             assertThat(scheduleFinds.get())
@@ -639,7 +640,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
 
     /**
      * The schedule list asks the SAME question twice per row ({@code writableBy} and the
-     * run_now {@code visibleFor}); its {@code requireManage} write gate reads identically
+     * run_now operation's offer); its {@code requireManage} write gate reads identically
      * and deliberately keeps the fresh walk, so this pins which of the two is memoized.
      */
     @Test
@@ -658,8 +659,6 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             ids.add(schedule.get(RecordScheduleModel.ID));
         }
         try {
-            InstanceScheduleResource resource = new InstanceScheduleResource();
-            List<RowAction<Row>> actions = resource.rowActions();
             List<Row> rows = new ArrayList<>();
             for (Integer id : ids) {
                 rows.add(schedules.findById(id));
@@ -670,11 +669,9 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             finds.set(0);
             AccessContext ctx = holder();
             for (Row row : rows) {
-                assertThat(resource.writableBy(row, ctx))
+                assertThat(InstanceScheduleParts.writableBy(row, ctx))
                     .as("the config holder keeps the schedule editor").isTrue();
-                for (RowAction<Row> action : actions) {
-                    action.isVisibleFor(row, ctx);
-                }
+                OperationPipeline.offer(InstanceScheduleOperations.RUN_SCHEDULE, ctx, row);
             }
             // Memoized: ONE instance#config enumeration for all 12 evaluations.
             // Un-memoized was 2 walks x 6 rows. Never raise the cap.

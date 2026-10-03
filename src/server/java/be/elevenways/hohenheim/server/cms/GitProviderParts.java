@@ -97,12 +97,20 @@ public final class GitProviderParts {
             .hasInScopeRecords(access -> HohenheimAccess.reachesAny(access, GitProviderModel.MODEL_ID,
                 HohenheimAccess.MANAGE))
             .writes(ResourceMutations.rows().create().update().delete()
-                .beforeCreate((values, access) -> refuseSharedChange(values))
+                .beforeSave(save -> {
+                    if (save.isCreate()) {
+                        refuseSharedChange(save.values());
+                    }
+                })
                 // The grant IS the ownership, exactly as for a tenant's instance or database; an operator create
                 // plants nothing (an empty subject set IS operator ownership). THE planting loop also drops the scope
                 // memo the grant made stale, so the create's own scope check sees the new row.
-                .afterCreate((key, access) -> HohenheimAccess.grantCreatorManage(GitProviderModel.MODEL_ID,
-                    Integer.parseInt(String.valueOf(key)), access))
+                .afterSave(save -> {
+                    if (save.isCreate()) {
+                        HohenheimAccess.grantCreatorManage(GitProviderModel.MODEL_ID,
+                            Integer.parseInt(String.valueOf(save.key())), save.access());
+                    }
+                })
                 .build())
             // The contributed tabs only (the generic access matrix, which gates itself per record): the admin
             // activity and revision history stays off the delegated surface, which also 404s its routes.

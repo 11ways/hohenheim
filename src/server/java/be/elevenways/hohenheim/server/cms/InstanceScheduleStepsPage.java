@@ -78,7 +78,7 @@ public final class InstanceScheduleStepsPage implements RecordScopedPage<Row> {
                 error != null ? error : ""));
         }
 
-        int instanceId = InstanceScheduleResource.parseInstanceId(
+        int instanceId = InstanceScheduleParts.parseInstanceId(
             schedule.get(RecordScheduleModel.RECORD_ID));
 
         Map<String, Object> vars = new HashMap<>();

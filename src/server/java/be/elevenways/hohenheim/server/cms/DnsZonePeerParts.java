@@ -104,8 +104,16 @@ public final class DnsZonePeerParts {
                 .quickCreatePresets(DnsZonePeerParts::quickCreatePresets)
                 .build())
             .writes(ResourceMutations.rows().create().update().delete()
-                .beforeCreate((values, access) -> validate(values))
-                .afterCreate((key, access) -> notifyLinked(key))
+                .beforeSave(save -> {
+                    if (save.isCreate()) {
+                        validate(save.values());
+                    }
+                })
+                .afterSave(save -> {
+                    if (save.isCreate()) {
+                        notifyLinked(Objects.requireNonNull(save.key()));
+                    }
+                })
                 .build())
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
             .build();

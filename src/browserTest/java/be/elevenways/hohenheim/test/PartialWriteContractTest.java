@@ -11,8 +11,9 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.AuthProviderResource;
 import be.elevenways.hohenheim.server.cms.CertificateResource;
 import be.elevenways.hohenheim.server.cms.InstanceDeviceResource;
-import be.elevenways.hohenheim.server.cms.InstanceScheduleResource;
-import be.elevenways.hohenheim.server.cms.InstanceScheduleStepResource;
+import be.elevenways.hohenheim.server.cms.HohenheimPanel;
+import be.elevenways.hohenheim.server.cms.InstanceScheduleParts;
+import be.elevenways.hohenheim.server.cms.InstanceScheduleStepParts;
 import be.elevenways.hohenheim.server.cms.ServerResource;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -26,6 +27,10 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -34,6 +39,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -179,6 +185,14 @@ class PartialWriteContractTest extends HohenheimTestBase {
         return (before, values) -> PanelResourceCalls.patch(panel, HohenheimSlugs.SITES, id, values, admin());
     }
 
+    /** The registered /admin entry as the panel's own programmatic view. */
+    @SuppressWarnings("unchecked")
+    private static RowResource adminView(String slug) {
+        Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimPanel.SLUG), "the admin panel");
+        return (RowResource) PanelResourceViews.forCaller(
+            (PanelResource<Row>) Objects.requireNonNull(admin.entryBySlug(slug), slug), admin);
+    }
+
     private static List<Case> cases() {
         List<Case> cases = new ArrayList<>();
         cases.add(new Case("admin/sites", patch(HohenheimSlugs.ADMIN, gitSiteId), Models.get(SiteModel.class),
@@ -193,10 +207,10 @@ class PartialWriteContractTest extends HohenheimTestBase {
         cases.add(new Case("admin/certificates", rows(new CertificateResource()),
             Models.get(CertificateModel.class), certificateId,
             CertificateModel.NICE_NAME.getName(), PREFIX + "renamed cert"));
-        cases.add(new Case("admin/instance-schedules", rows(new InstanceScheduleResource()),
+        cases.add(new Case("admin/instance-schedules", rows(adminView(InstanceScheduleParts.SLUG)),
             Models.get(RecordScheduleModel.class), scheduleId,
             RecordScheduleModel.NAME.getName(), PREFIX + "renamed schedule"));
-        cases.add(new Case("admin/instance-schedule-steps", rows(new InstanceScheduleStepResource()),
+        cases.add(new Case("admin/instance-schedule-steps", rows(adminView(InstanceScheduleStepParts.SLUG)),
             Models.get(RecordScheduleStepModel.class), stepId,
             RecordScheduleStepModel.OFFSET_SECONDS.getName(), 30));
         return cases;

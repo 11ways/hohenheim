@@ -115,7 +115,7 @@ public final class TenantScopes {
         ctx -> HohenheimAccess.isAdmin(ctx) ? null : InstanceTemplateModel.APPROVED_AT.isNotNull());
 
     /** Instance schedules; tenants only those of viewable instances. */
-    public static final RowScope INSTANCE_SCHEDULES = InstanceScheduleResource.ROWS.andPerPrincipal(
+    public static final RowScope INSTANCE_SCHEDULES = InstanceScheduleParts.ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(RecordScheduleModel.class),
             InstanceModel.MODEL_ID, HohenheimAccess.VIEW, TenantScopes::recordIdIn));
 

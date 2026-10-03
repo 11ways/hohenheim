@@ -533,7 +533,7 @@ public class InstanceResource extends RowResource {
      * AIDEV-NOTE: reachesRecord, never hasInstanceCapability -- this and every
      * {@code visibleFor} below run once per RENDERED ROW, and the un-memoized walk was
      * SEVEN grant-store round trips per instance row. The fresh walk stays for the write
-     * gates that look identical (TenantWrites, InstanceScheduleResource.requireManage):
+     * gates that look identical (TenantWrites, InstanceScheduleParts.requireManage):
      * the memo deliberately does not see a grant written earlier in the same request.
      */
     @Override

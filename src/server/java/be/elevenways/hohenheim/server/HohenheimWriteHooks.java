@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.server.cms.SiteDomainRouteInvariant;
 import be.elevenways.hohenheim.server.cms.SiteEnableInvariant;
 import be.elevenways.hohenheim.server.auth.OperatorTrustedWrites;
@@ -15,6 +16,7 @@ import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.dns.DnsClaimReleases;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.game.GameDomains;
+import be.elevenways.hohenheim.server.instance.ContainerFileRules;
 import be.elevenways.hohenheim.server.instance.GeneratedInstanceFiles;
 import be.elevenways.hohenheim.server.instance.InstanceCatalogGuards;
 import be.elevenways.hohenheim.server.stack.StackCascades;
@@ -80,6 +82,9 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // The same derived-attribution discipline for instance config files a system
         // authored (the game-domains Velocity forced-hosts materialization).
         GeneratedInstanceFiles.install();
+        // A file staged into a container lands on an absolute, non-climbing path with an octal mode, whichever lane
+        // wrote it (form, inline cell, API, direct save).
+        ContainerFileRules.install(InstanceFileModel.SCHEMA, InstanceFileModel.CONTAINER_PATH, InstanceFileModel.MODE);
         // A game-domains mapping dies with its domain row, and its generated output
         // (forced-hosts config, DNS rows) dies with it.
         GameDomains.install();
