@@ -36,7 +36,7 @@ import java.util.Map;
  * credit a typed confirmation. Both understated it. The {@code clear} branch DESTROYS
  * THE WORKLOAD and then removes its volumes (see the inline comments at the branch),
  * and the typed confirmation is a property of the CALLER
- * ({@code InstanceResource#reinstallAction}), not of this class -- nothing here checks
+ * ({@code InstanceActions#reinstallAction}), not of this class -- nothing here checks
  * for one, which is why every future caller must supply its own interlock.
  *
  * AIDEV-NOTE: 2026-08-09 -- the AUTHORIZATION was missing entirely until now. Every other

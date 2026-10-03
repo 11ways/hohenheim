@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.test.PanelEntryViews;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.schedule.ScheduleRunView;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -26,7 +27,6 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
@@ -42,7 +42,6 @@ import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleStepRunModel;
 import be.elevenways.zenit.common.task.record.StepStatus;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
-import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.server.operation.OperationPipeline;
@@ -169,14 +168,6 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
         }
     }
 
-    /** The registered /manage entry as the panel's own programmatic view. */
-    @SuppressWarnings("unchecked")
-    private static RowResource manageView(String slug) {
-        Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(ManagePanel.SLUG), "the manage panel");
-        return (RowResource) PanelResourceViews.forCaller(
-            (PanelResource<Row>) Objects.requireNonNull(manage.entryBySlug(slug), slug), manage);
-    }
-
     private static AccessContext contextOf(int userId, String name) {
         return AccessContext.of(TenantConduits.stubFor(new UserPrincipal(userId, name)));
     }
@@ -228,8 +219,8 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
     void scheduleAndStepAffordancesFollowConfig() {
         Row schedule = Models.get(RecordScheduleModel.class).findById(scheduleId);
         Row step = Models.get(RecordScheduleStepModel.class).findById(stepId);
-        RowResource scheduleResource = manageView(InstanceScheduleParts.SLUG);
-        RowResource stepResource = manageView(InstanceScheduleStepParts.SLUG);
+        RowResource scheduleResource = PanelEntryViews.of(ManagePanel.SLUG, InstanceScheduleParts.SLUG);
+        RowResource stepResource = PanelEntryViews.of(ManagePanel.SLUG, InstanceScheduleStepParts.SLUG);
 
         AccessContext viewer = contextOf(viewerId, "Schedule Viewer");
         AccessContext owner = contextOf(ownerId, "Schedule Owner");
@@ -358,12 +349,12 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
         // grant-holding tenant. accessFunction() throwing here is exactly the 500 the
         // hand-rolled idiom would produce once a type-level row exists.
         for (var resource : new RowResource[] {
-                manageView(InstanceScheduleParts.SLUG),
+                PanelEntryViews.of(ManagePanel.SLUG, InstanceScheduleParts.SLUG),
                 new be.elevenways.hohenheim.server.cms.ManageInstanceSnapshotResource(),
                 (RowResource) PanelResourceViews.forCaller(InstanceBackupParts.manage()),
                 new be.elevenways.hohenheim.server.cms.ManageInstanceDeviceResource(),
                 new be.elevenways.hohenheim.server.cms.ManageInstanceDatabaseResource(),
-                manageView(InstanceScheduleStepParts.SLUG)}) {
+                PanelEntryViews.of(ManagePanel.SLUG, InstanceScheduleStepParts.SLUG)}) {
             assertThat(resource.accessFunction().decide(operator).isDenied())
                 .as("%s translates ALL without enumerating", resource.id()).isFalse();
             assertThat(resource.accessFunction().decide(viewer).isDenied())

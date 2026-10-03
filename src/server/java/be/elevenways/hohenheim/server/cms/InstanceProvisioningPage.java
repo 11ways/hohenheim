@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
-import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -14,6 +13,7 @@ import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.Resource;
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.zenit.cms.server.page.ChildListSections;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -29,7 +29,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * Provisioning tab on an instance: its template, install state, variables (SECRET
@@ -61,7 +60,6 @@ public final class InstanceProvisioningPage implements RecordScopedPage<Row> {
      * the instance this tab dispatch already admitted; the page keeps its wrapper, install state and files.
      */
     @Override
-    @SuppressWarnings("unchecked")
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
         Conduit conduit = request.conduit();
         Integer instanceId = instance.get(InstanceModel.ID);
@@ -99,16 +97,15 @@ public final class InstanceProvisioningPage implements RecordScopedPage<Row> {
         vars.put("installStateLabel", Microcopy.of(
                 installState == null ? InstanceModel.INSTALL_NONE : installState)
             .withFilter("scope", "install_state"));
-        // AIDEV-NOTE: the SECOND surface of the same leak InstanceOverviewPage's
+        // AIDEV-NOTE: the SECOND surface of the same leak InstanceOverview's
         // installError note describes -- this tab renders under /manage too, and the
         // stored text is the daemon's or transport's own. The install-state label above
         // carries the fact; the reason stays on the operator panel.
         String installError = ManagePanel.SLUG.equals(panel)
             ? null : instance.get(InstanceModel.INSTALL_ERROR);
         vars.put("installError", installError == null ? "" : installError);
-        Resource<Row> parent = (Resource<Row>) request.panel().entryBySlug(HohenheimSlugs.INSTANCES);
-        vars.put("sections", ChildListSections.embedded(request, Objects.requireNonNull(parent,
-            "the instance entry dispatched this tab"), instance, InstanceVariableParts.PROVISIONING));
+        Resource<Row> parent = PanelResourceViews.of(CmsSupport.rowEntry(request.panel(), InstanceParts.SLUG), request);
+        vars.put("sections", ChildListSections.embedded(request, parent, instance, InstanceVariableParts.PROVISIONING));
         vars.put("panelSlug", panel);
         vars.put("files", files);
         // Create form + prefill query parameter: composed off CmsEndpoints, since

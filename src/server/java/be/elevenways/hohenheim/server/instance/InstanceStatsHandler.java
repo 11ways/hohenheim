@@ -85,7 +85,7 @@ public final class InstanceStatsHandler implements ChannelHandler<Object, Object
             // the client's ready future fails and the page renders the empty state.
             // AIDEV-NOTE: the reason is the DAEMON's or transport's own text (socket
             // paths, host names, ssh failures), which is operator inventory -- the
-            // InstanceOverviewPage install_error rule. A delegated viewer is told there
+            // InstanceOverview install_error rule. A delegated viewer is told there
             // is nothing to stream; the operator gets the reason, and the log keeps it.
             Blast.log("STATS: no live stats for instance", instanceId, "-", noStream.getMessage());
             throw new ChannelException(this.isOperator()

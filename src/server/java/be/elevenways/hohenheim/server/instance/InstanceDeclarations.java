@@ -66,7 +66,7 @@ public final class InstanceDeclarations {
      * thrown at the first one, so a form shows all of them in one pass.
      *
      * AIDEV-NOTE: this is the one judgment; the write hook throws it and the CMS create
-     * lane ({@code InstanceResource.persistRow}) merges it with the placement refusal
+     * lane ({@code InstanceParts.place}) merges it with the placement refusal
      * BEFORE the save, because the hook can only run inside the save and a refusal thrown
      * ahead of it (placement) used to hide every refusal behind it. The save re-judges an
      * already-passing row, which is cheap and keeps the hook the authority.

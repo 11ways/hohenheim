@@ -69,7 +69,7 @@ public final class InstanceStatsPage implements RecordScopedPage<Row> {
         // enforces no root quota there is deliberately none. Stating both is the point --
         // a live-only page that silently omits the one stored figure reads as "we measure
         // nothing", which is wrong in one direction and right in the other.
-        vars.put("disk", InstanceOverviewPage.diskViewOf(instance));
+        vars.put("disk", InstanceOverview.diskViewOf(instance));
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_STATS, vars);
     }

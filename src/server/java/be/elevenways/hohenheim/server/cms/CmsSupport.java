@@ -8,6 +8,8 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -286,7 +288,7 @@ public final class CmsSupport {
      * projection is untestable by anyone who can also reach /admin -- which is everyone
      * who would notice a leak. Never rewrite this as an isAdmin check.
      *
-     * AIDEV-NOTE: shared subpages ({@code InstanceOverviewPage},
+     * AIDEV-NOTE: shared subpages ({@code InstanceOverview},
      * {@code InstanceProvisioningPage}) render under BOTH panels, so "the delegated
      * resource omits it" only covers the FORM. Anything a subpage puts in its template
      * vars -- a host name, a server id inside a route target, a daemon's own error text
@@ -294,5 +296,18 @@ public final class CmsSupport {
      */
     public static boolean isDelegatedPanel(@NonNull Conduit conduit) {
         return ManagePanel.SLUG.equals(panelSlug(conduit));
+    }
+
+    /**
+     * The row entry a panel registers under one slug: the panel's own declaration, never a second instance beside it.
+     *
+     * @throws IllegalStateException when the panel registers no row entry under that slug
+     */
+    @SuppressWarnings("unchecked")
+    public static @NonNull PanelResource<Row> rowEntry(@NonNull Panel panel, @NonNull String slug) {
+        if (panel.entryBySlug(slug) instanceof PanelResource<?> entry && entry.subject().modelId() != null) {
+            return (PanelResource<Row>) entry;
+        }
+        throw new IllegalStateException("panel '" + panel.slug() + "' declares no row entry '" + slug + "'");
     }
 }

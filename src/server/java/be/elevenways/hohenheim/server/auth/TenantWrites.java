@@ -929,7 +929,7 @@ public final class TenantWrites {
 
     /**
      * The only columns a delegated tenant may author on an instance: exactly what
-     * {@code ManageInstanceResource}'s form offers. Kind, settings (image, command,
+     * {@code InstanceParts.manage()}'s form offers. Kind, settings (image, command,
      * environment), the host pick and every lifecycle column are execution and placement
      * decisions -- authoring one is authoring what runs and where.
      */

@@ -30,7 +30,7 @@ import static be.elevenways.hohenheim.server.cms.AttentionItems.literal;
  * sweeper's observation, release operations); asking every daemon whether each workload is alive
  * is what the attention surface's no-per-render-probe rule forbids.
  *
- * AIDEV-NOTE: every link to an instance row goes through {@link InstanceResource#recordRoute}, because
+ * AIDEV-NOTE: every link to an instance row goes through {@link InstanceParts#recordRoute}, because
  * release rows are not served by the instance list (its accessFunction) and a direct link to one
  * 404s; their surface is their application's Deploys tab.
  *
@@ -67,7 +67,7 @@ public final class InstanceAttention {
                 copy("instance_crashed", "attention_title",
                     "name", instance.get(InstanceModel.NAME)),
                 copy("instance_crashed", "attention_detail"),
-                InstanceResource.recordRoute(ADMIN, instance, InstanceConsolePage.SLUG)));
+                InstanceParts.recordRoute(ADMIN, instance, InstanceConsolePage.SLUG)));
         }
     }
 
@@ -96,7 +96,7 @@ public final class InstanceAttention {
                 copy("instance_backup", "attention_title",
                     "name", instance.get(InstanceModel.NAME)),
                 literal(latest.get(InstanceBackupModel.ERROR)),
-                InstanceResource.recordRoute(ADMIN, instance, InstanceBackupsPage.SLUG)));
+                InstanceParts.recordRoute(ADMIN, instance, InstanceBackupsPage.SLUG)));
         }
     }
 
@@ -135,7 +135,7 @@ public final class InstanceAttention {
                     copy("instance_backup_never", "attention_title",
                         "name", instance.get(InstanceModel.NAME)),
                     copy("instance_backup_never", "attention_detail"),
-                    InstanceResource.recordRoute(ADMIN, instance, InstanceBackupsPage.SLUG)));
+                    InstanceParts.recordRoute(ADMIN, instance, InstanceBackupsPage.SLUG)));
                 continue;
             }
             Instant completedAt = newestComplete.get(InstanceBackupModel.CREATED_AT);
@@ -146,7 +146,7 @@ public final class InstanceAttention {
                     copy("instance_backup_stale", "attention_title",
                         "name", instance.get(InstanceModel.NAME)),
                     copy("instance_backup_stale", "attention_detail", "days", age),
-                    InstanceResource.recordRoute(ADMIN, instance, InstanceBackupsPage.SLUG)));
+                    InstanceParts.recordRoute(ADMIN, instance, InstanceBackupsPage.SLUG)));
             }
         }
     }
@@ -180,7 +180,7 @@ public final class InstanceAttention {
                 copy("instance_disk", "attention_detail",
                     "percent", Math.round(fraction * 100),
                     "limit", Math.round(limit / (1024.0 * 1024 * 1024))),
-                InstanceResource.recordRoute(ADMIN, instance, null)));
+                InstanceParts.recordRoute(ADMIN, instance, null)));
         }
     }
 
@@ -217,7 +217,7 @@ public final class InstanceAttention {
                     copy("deploy", "attention_title",
                         "name", application.get(InstanceModel.NAME)),
                     literal(operation.get(ReleaseOperationModel.FAILURE_REASON)),
-                    CmsRoutes.subpage(ADMIN, InstanceResource.SLUG, applicationId,
+                    CmsRoutes.subpage(ADMIN, InstanceParts.SLUG, applicationId,
                         InstanceDeploymentsPage.SLUG)));
             }
         }

@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 /**
  * A live-stats link that cannot open tells a DELEGATED viewer only that there is nothing
  * to stream; the daemon's own failure text (socket paths, host names, transport errors)
- * reaches operators alone -- the InstanceOverviewPage install_error rule.
+ * reaches operators alone -- the InstanceOverview install_error rule.
  */
 class InstanceStatsRefusalTest extends HohenheimTestBase {
 

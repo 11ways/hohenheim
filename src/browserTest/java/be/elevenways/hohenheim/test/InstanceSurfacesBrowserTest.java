@@ -12,6 +12,7 @@ import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.test.support.PanelSurfaces;
+import be.elevenways.zenit.cms.common.render.table.SynthesizedRowActions;
 import be.elevenways.zenit.cms.test.support.PlacedOperationMoves;
 import be.elevenways.zenit.cms.test.support.SurfaceBaselines;
 import be.elevenways.zenit.cms.test.support.SurfaceCase;
@@ -63,9 +64,11 @@ class InstanceSurfacesBrowserTest extends HohenheimTestBase {
     void theInstanceEntryOffersWhatItOfferedBeforeTheMove() {
         SurfaceBaselines stored = SurfaceBaselines.load(InstanceSurfacesBrowserTest.class,
             "/panel-surfaces/instances.txt")
-            // The legacy install-lifecycle and destroy-with-data invokes became placed operations of the same ids.
+            // The legacy install-lifecycle and destroy-with-data invokes became placed operations of the same ids, and
+            // the generic delete became the verified destroy's operation.
             .placedOperations(PlacedOperationMoves.of(InstanceOperations.INSTALL.id(),
-                InstanceOperations.REINSTALL.id(), InstanceOperations.DESTROY_WITH_DATA.id()));
+                    InstanceOperations.REINSTALL.id(), InstanceOperations.DESTROY_WITH_DATA.id())
+                .synthesized(INSTANCES, SynthesizedRowActions.DELETE, InstanceOperations.DELETE.id()));
 
         // 1. The operator's entry, record-less and on the failed-install record; a tenant is refused the admin panel.
         stored.check(capture(SurfaceCase.of(ADMIN, INSTANCES, "operator", operator)));

@@ -128,7 +128,7 @@ public final class ManagePanel extends Panel {
         // walk-confirmed record capability, and the two schedule peers plus the
         // from-template page are nav-hidden: they are reached THROUGH an instance
         // (or a template) whose own scope already decided the principal may be here.
-        HohenheimPanel.addIf(peers, new ManageInstanceResource(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, InstanceParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, InstanceScheduleParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, InstanceScheduleStepParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, new ManageInstanceDeviceResource(), Role.INSTANCES);
@@ -293,7 +293,7 @@ public final class ManagePanel extends Panel {
             .build());
 
         // Instances: the SAME two-panel shadowing hazard as sites and domains, now that
-        // ManageInstanceResource exposes the model beside the admin InstanceResource --
+        // InstanceParts.manage() exposes the model beside InstanceParts.admin() --
         // which of the two derived defaults wins (admin-gated-unscoped versus
         // manage-gated-scoped) would otherwise be decided by panel walk ORDER at boot.
         // AIDEV-NOTE: kind IS projected because the site form's dependent instance

@@ -90,9 +90,9 @@ class ManageScopeParityTest extends HohenheimTestBase {
 
         // 1. The instance pair, as the tenant: the authored instance is in both reads and the
         //    generated one -- granted just the same -- is in neither.
-        ManageInstanceResource instances = new ManageInstanceResource();
-        Set<Object> listed = resourceIds(Projection.of(instances), tenant);
-        Set<Object> picked = sourceIds(Projection.of(instances), tenant);
+        Projection instances = Projection.of(InstanceParts.manage());
+        Set<Object> listed = resourceIds(instances, tenant);
+        Set<Object> picked = sourceIds(instances, tenant);
         assertThat(listed)
             .as("step 1: the /manage instance list shows the authored instance")
             .contains(authoredInstanceId)
@@ -118,7 +118,11 @@ class ManageScopeParityTest extends HohenheimTestBase {
         //    are the same set, for the tenant and for the operator.
         List<Projection> paired = List.of(Projection.of(SiteParts.manage()),
             Projection.of(DomainParts.manage()),
+<<<<<<< Updated upstream
             Projection.of(new ManageInstanceResource()), Projection.of(CertificateParts.manage()),
+=======
+            Projection.of(InstanceParts.manage()), Projection.of(new ManageCertificateResource()),
+>>>>>>> Stashed changes
             Projection.of(ProtectedPathParts.manage()), Projection.of(new ManageDnsRecordResource()),
             Projection.of(InstanceTemplateParts.manage()), Projection.of(InstanceScheduleParts.manage()),
             Projection.of(new ManageProjectResource()), Projection.of(new ManageDatabaseResource()),

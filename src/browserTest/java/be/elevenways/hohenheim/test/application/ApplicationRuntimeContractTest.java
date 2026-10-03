@@ -1,10 +1,11 @@
 package be.elevenways.hohenheim.test.application;
 
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
-import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
@@ -163,7 +164,7 @@ class ApplicationRuntimeContractTest {
         ordinary.set(InstanceModel.NAME, "contract-ordinary");
         ordinary.set(InstanceModel.KIND, "hohenheim:docker_container");
         Models.get(InstanceModel.class).save(ordinary);
-        AccessDecision decision = new InstanceResource().accessFunction().decide(null);
+        AccessDecision decision = PanelResourceViews.forCaller(InstanceParts.admin()).accessFunction().decide(null);
         List<Row> visible = Models.get(InstanceModel.class).find()
             .where(decision.predicate().criteria())
             .where(InstanceModel.NAME.startsWith("contract-"))

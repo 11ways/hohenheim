@@ -119,7 +119,7 @@ public final class ManageDashboard extends PanelDashboard {
                         .withArg("instance", String.valueOf(instance.get(InstanceModel.NAME))),
                     Microcopy.of("blocked_instance_detail").withFilter("scope", "manage_dashboard"),
                     CmsRoutes.subpage(ManagePanel.SLUG, HohenheimSlugs.INSTANCES, id,
-                        InstanceOverviewPage.SLUG)));
+                        InstanceOverview.SLUG)));
             } catch (RuntimeException failed) {
                 // A broken host/kind record must never kill the landing page, but
                 // silence is not visibility either -- the log names the row.

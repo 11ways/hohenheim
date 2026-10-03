@@ -49,7 +49,7 @@ class DependentFieldApplicabilityTest extends HohenheimTestBase {
     @Test
     void theRuntimeImagePickerSaysWhyItOffersNothing() {
         ShippedCatalogs catalogs = new ShippedCatalogs();
-        // Built as InstanceResource declares it, off the kind handlers' own facts, minus the
+        // Built as InstanceParts declares it, off the kind handlers' own facts, minus the
         // Incus-only kinds: this test never picks one.
         HohenheimPickRules.RuntimeImageRules rules = new HohenheimPickRules.RuntimeImageRules(
             "kind",

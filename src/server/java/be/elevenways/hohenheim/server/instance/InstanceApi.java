@@ -13,8 +13,10 @@ import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.InstanceResource;
+import be.elevenways.hohenheim.server.cms.CmsSupport;
+import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.operation.Operation;
@@ -57,13 +59,13 @@ import java.util.Map;
  *
  *    AIDEV-NOTE: the resource-pipeline create (no {@code template_id} in the body) is the
  *    ONE place this file names a permission itself, and it is the SiteApi argument
- *    verbatim: {@code ManageInstanceResource} is not creatable, so the only panel with an
+ *    verbatim: the /manage instance entry is not creatable, so the only panel with an
  *    instance create form is the admin one, and mirroring it means demanding the admin
  *    permission as narrowed by the key's scopes. Everything the create then decides --
  *    placement, declarations, image policy, quota, project grouping -- is the resource's
  *    and the model hooks', not this file's. The delete lane names nothing: it reaches
- *    {@code InstanceService.destroy} through the resource, and THAT funnel demands the
- *    {@code destroy} capability.
+ *    {@code InstanceService.destroy} through the entry's delete operation, and THAT funnel
+ *    demands the {@code destroy} capability.
  *
  *    AIDEV-NOTE: {@link #visibleInstance} checks {@code view} and NOTHING ELSE, by design
  *    -- it answers "may you see this record", never "may you do this to it". Every
@@ -90,10 +92,12 @@ public final class InstanceApi {
         "stop", InstanceOperations.STOP,
         "restart", InstanceOperations.RESTART);
 
-    /** The admin create/delete form's own resource; see createThroughResource. */
-    private static final InstanceResource INSTANCES = new InstanceResource();
-
     private InstanceApi() {
+    }
+
+    /** The admin panel's instance entry, the create and delete form's own; see createThroughResource. */
+    private static @NonNull PanelResource<Row> instances() {
+        return CmsSupport.rowEntry(ApiConduits.adminPanel(), InstanceParts.SLUG);
     }
 
     public static void init() {
@@ -277,13 +281,15 @@ public final class InstanceApi {
             int instanceId = row.get(InstanceModel.ID);
             String name = row.get(InstanceModel.NAME);
             try {
-                // InstanceResource.deleteRow IS InstanceService.destroy: the workload is
+                // The entry's delete IS InstanceService.destroy: the workload is
                 // torn down for real and the row soft-deleted, and the service's own
                 // funnel demands the `destroy` capability -- so seeing an instance
                 // (rule 1's `view`) is not enough to destroy it, and the refusal is the
                 // service's typed one rather than anything decided here.
-                ResourceWrites.delete(ApiConduits.adminPanel(), INSTANCES, row, ctx);
+                ResourceWrites.delete(ApiConduits.adminPanel(), instances(), row, ctx);
             } catch (Violations refused) {
+                return ApiConduits.refusal(conduit, refused);
+            } catch (DomainRefusal refused) {
                 return ApiConduits.refusal(conduit, refused);
             } catch (AccessRefusedException refused) {
                 conduit.forbidden();
@@ -508,7 +514,7 @@ public final class InstanceApi {
     /**
      * Create one instance through the admin form's own pipeline: kind, name, host,
      * runtime image, environment and the kind's own settings schema, coerced and
-     * validated by {@link InstanceResource} and refused by every model hook that guards
+     * validated by the admin instance entry ({@link InstanceParts#admin()}) and refused by every model hook that guards
      * a form save (placement, declarations, image policy, quota, capacity, project
      * grouping).
      *
@@ -528,7 +534,7 @@ public final class InstanceApi {
             return null;
         }
         try {
-            int instanceId = (Integer) ResourceWrites.create(ApiConduits.adminPanel(), INSTANCES, form, ctx);
+            int instanceId = (Integer) ResourceWrites.create(ApiConduits.adminPanel(), instances(), form, ctx);
             Row created = reload(instanceId);
             ActivityLog.record(Models.get(InstanceModel.class), instanceId, ZenitActivityAction.CREATE,
                 created.get(InstanceModel.NAME));

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.test.PanelEntryViews;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleParts;
@@ -15,11 +16,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
-import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelRegistry;
-import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RowResource;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -31,7 +28,6 @@ import java.time.ZonedDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.TimeZone;
-import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -85,14 +81,6 @@ class InstanceScheduleZoneTest extends HohenheimTestBase {
             new UserPrincipal(admin.get(UserModel.ID), "Test Admin")));
     }
 
-    /** The registered /admin schedule entry as the panel's own programmatic view. */
-    @SuppressWarnings("unchecked")
-    private static RowResource adminSchedules() {
-        Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimPanel.SLUG), "the admin panel");
-        return (RowResource) PanelResourceViews.forCaller((PanelResource<Row>) Objects.requireNonNull(
-            admin.entryBySlug(InstanceScheduleParts.SLUG)), admin);
-    }
-
     private static Row stored() {
         return Models.get(RecordScheduleModel.class).findById(scheduleId);
     }
@@ -102,7 +90,7 @@ class InstanceScheduleZoneTest extends HohenheimTestBase {
         TimeZone original = TimeZone.getDefault();
         TimeZone.setDefault(TimeZone.getTimeZone("Asia/Kathmandu"));
         try {
-            RowResource resource = adminSchedules();
+            RowResource resource = PanelEntryViews.of(HohenheimPanel.SLUG, InstanceScheduleParts.SLUG);
             AccessContext operator = operator();
 
             // 1. A schedule saved with NO timezone arms its first fire at 04:00 UTC -- the

@@ -63,7 +63,7 @@ public class StackResource extends ValidatedRowResource {
     private final FormSpec formSpec = FormSpec.builder()
         .add(StackModel.NAME)
         .add(StackModel.ENABLED)
-        // See InstanceResource: a host is enrolled deliberately, never inline.
+        // See InstanceParts: a host is enrolled deliberately, never inline.
         .add(RelationPick.of(StackModel.SERVER_ID, ServerModel.MODEL_ID)
             .creatable(false).build())
         .add(StackModel.REGISTRY_SERVER)

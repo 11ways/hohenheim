@@ -281,7 +281,7 @@ final class HohenheimGrantPolicy {
         //   after create by design (it describes a provisioned container), so no edit
         //   operation exists for the verb to gate.
         // - power: the engine is a generatedOnly() DatabaseContainerKind instance, and
-        //   ManageInstanceResource excludes generated rows, so no tenant path reaches a
+        //   InstanceParts.manage() excludes generated rows, so no tenant path reaches a
         //   start/stop of it at all. A database is allocated and destroyed, not powered.
         // - exec: NEVER. Backup and restore are IMPLEMENTED by exec'ing into the engine
         //   container; offering the verb would be offering a superuser shell on the host.

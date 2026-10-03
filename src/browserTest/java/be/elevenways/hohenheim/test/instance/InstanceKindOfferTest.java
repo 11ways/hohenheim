@@ -1,10 +1,10 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.server.cms.InstanceTemplateParts;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
@@ -113,7 +113,7 @@ class InstanceKindOfferTest {
         // 3. The instance create form consumes that derivation -- the positive anchor
         //    (a real kind is offered) beside the negative one, so this can distinguish
         //    "filters correctly" from "offers nothing at all".
-        List<String> offered = optionValues(new InstanceResource().formSpec().findEntry("kind"));
+        List<String> offered = optionValues(InstanceParts.admin().form().spec().findEntry("kind"));
         assertThat(offered)
             .as("step 3: the create form offers every authorable kind")
             .containsExactlyInAnyOrderElementsOf(expected);
@@ -137,7 +137,7 @@ class InstanceKindOfferTest {
         // 1. Hiding the option is not a gate: coercion re-checks the offer, so a POST that
         //    never went through the form is refused on the "kind" field.
         assertThatThrownBy(() -> SubmittedValueCoercion.coerceFormOrThrow(
-                new InstanceResource().formSpec().forView(EditView.CREATE),
+                InstanceParts.admin().form().spec().forView(EditView.CREATE),
                 Map.of("name", "forged-kind", "kind", refused)))
             .as("step 1: the form layer refuses a kind it does not offer")
             .isInstanceOf(Violations.class);

@@ -1,10 +1,10 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
-import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -135,12 +135,12 @@ class InstanceOverviewTest extends HohenheimTestBase {
 
     /** The placed restart operation, which the overview page projects. */
     private static PanelAction<Row> restartAction() {
-        for (PanelAction<Row> action : new InstanceResource().actions()) {
+        for (PanelAction<Row> action : InstanceParts.admin().actions()) {
             if ("restart_instance".equals(action.id().getPath())) {
                 return action;
             }
         }
-        throw new AssertionError("InstanceResource places no restart_instance action");
+        throw new AssertionError("the instance entry places no restart_instance action");
     }
 
     /**
