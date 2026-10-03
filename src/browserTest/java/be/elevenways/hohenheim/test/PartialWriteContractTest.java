@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.cms.AuthProviderResource;
+import be.elevenways.hohenheim.server.cms.AuthProviderParts;
 import be.elevenways.hohenheim.server.cms.CertificateResource;
 import be.elevenways.hohenheim.server.cms.InstanceDeviceResource;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
@@ -182,7 +182,12 @@ class PartialWriteContractTest extends HohenheimTestBase {
 
     /** The site entries' updates are operations: a partial write is the patch their inline lane posts. */
     private static Writer patch(String panel, int id) {
-        return (before, values) -> PanelResourceCalls.patch(panel, HohenheimSlugs.SITES, id, values, admin());
+        return patch(panel, HohenheimSlugs.SITES, id);
+    }
+
+    /** An entry's partial write as its lane posts it: an operation's patch, or the row lane's partial map. */
+    private static Writer patch(String panel, String entry, int id) {
+        return (before, values) -> PanelResourceCalls.patch(panel, entry, id, values, admin());
     }
 
     /** The registered /admin entry as the panel's own programmatic view. */
@@ -201,7 +206,7 @@ class PartialWriteContractTest extends HohenheimTestBase {
             gitSiteId, SiteModel.DESCRIPTION.getName(), "a note the operator typed"));
         cases.add(new Case("admin/servers", rows(new ServerResource()), Models.get(ServerModel.class),
             serverId, ServerModel.NAME.getName(), PREFIX + "renamed-host"));
-        cases.add(new Case("admin/auth-providers", rows(new AuthProviderResource()),
+        cases.add(new Case("admin/auth-providers", patch(HohenheimSlugs.ADMIN, AuthProviderParts.SLUG, providerId),
             Models.get(SiteAuthProviderModel.class), providerId,
             SiteAuthProviderModel.NAME.getName(), PREFIX + "renamed provider"));
         cases.add(new Case("admin/certificates", rows(new CertificateResource()),

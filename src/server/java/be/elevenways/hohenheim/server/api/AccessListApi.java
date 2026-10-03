@@ -1,18 +1,19 @@
 package be.elevenways.hohenheim.server.api;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.server.auth.AccessRuleNodes;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.AccessListResource;
+import be.elevenways.hohenheim.server.cms.AccessListParts;
 import be.elevenways.hohenheim.server.cms.AccessRuleResource;
-import be.elevenways.hohenheim.server.cms.ManageAccessListResource;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.hohenheim.server.cms.ManageAccessRuleResource;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -49,8 +50,8 @@ import java.util.Objects;
  * {@code AccessRuleResource} is deliberately not creatable.
  *
  * Authorization mirrors the panels exactly, and both panels create access lists: an admin
- * key writes through {@link AccessListResource} (the operator form, {@code shared}
- * included), every other key through {@link ManageAccessListResource} -- the /manage form,
+ * key writes through the admin access-list entry (the operator form, {@code shared}
+ * included), every other key through its /manage twin ({@link AccessListParts}) -- the /manage form,
  * which drops {@code shared} and plants the creator's {@code manage} grant, so a tenant
  * owns what it authored. Reads and every write on an EXISTING list ask the same
  * {@code manage} walk the /manage resource scopes by (whose rules already demand the panel
@@ -60,8 +61,6 @@ import java.util.Objects;
  */
 public final class AccessListApi {
 
-    private static final AccessListResource ADMIN_LISTS = new AccessListResource();
-    private static final ManageAccessListResource TENANT_LISTS = new ManageAccessListResource();
     private static final AccessRuleResource ADMIN_RULES = new AccessRuleResource();
     private static final ManageAccessRuleResource TENANT_RULES = new ManageAccessRuleResource();
 
@@ -211,8 +210,14 @@ public final class AccessListApi {
         return HohenheimAccess.isAdmin(ctx) ? ApiConduits.adminPanel() : ApiConduits.managePanel();
     }
 
-    private static @NonNull RowResource listResource(@NonNull AccessContext ctx) {
-        return HohenheimAccess.isAdmin(ctx) ? ADMIN_LISTS : TENANT_LISTS;
+    /** The access-list entry of the caller's panel ({@link AccessListParts}): its admin or its /manage twin. */
+    @SuppressWarnings("unchecked")
+    private static @NonNull PanelResource<Row> listResource(@NonNull AccessContext ctx) {
+        Panel panel = panelFor(ctx);
+        if (panel.entryBySlug(HohenheimSlugs.ACCESS_LISTS) instanceof PanelResource<?> lists) {
+            return (PanelResource<Row>) lists;
+        }
+        throw new IllegalStateException("panel '" + panel.slug() + "' declares no access-list entry");
     }
 
     private static @NonNull RowResource ruleResource(@NonNull AccessContext ctx) {

@@ -110,6 +110,14 @@ public final class SiteParts {
             SiteParts::certificateCell)
         .headerLink(DomainParts.SLUG, requestCertificateLink());
 
+    /**
+     * The Protected paths tab: the framework's child list over the panel's protected-path entry (its /manage twin
+     * there), under the site. A TLS passthrough site terminates nothing here, so it has no paths to protect and no tab.
+     */
+    public static final ChildList<Row> PROTECTED_PATHS = ChildList.<Row>of(ProtectedPathParts.SLUG)
+        .label(Microcopy.of("protected_paths").withFilter("scope", "site"))
+        .visibleWhen((site, access) -> !tlsPassthrough(site));
+
     private SiteParts() {
     }
 
@@ -137,7 +145,7 @@ public final class SiteParts {
             .archive(ResourceArchive.of(SiteWrites.RESTORE, SiteWrites.RESTORE_MANY, SiteWrites.PURGE,
                 SiteWrites.PURGE_MANY, ResourceAuthority.<Row>builder().delete(HohenheimPanel.ACCESS, null).build()))
             .actions(SiteActions.operator())
-            .tabs(ResourceTabs.<Row>of(List.of(DOMAINS, new SiteProtectedPathsPage(), new SiteDevSessionsPage()))
+            .tabs(ResourceTabs.<Row>of(List.of(DOMAINS, PROTECTED_PATHS, new SiteDevSessionsPage()))
                 .withHistory().withContributions())
             .relatedPages(
                 // The hostname catalog itself: nav-hidden, so without this entry the only way to the cross-site
@@ -162,6 +170,7 @@ public final class SiteParts {
                     .column(ColumnSpec.fromField(SiteModel.ENABLED).build())
                     .build())
                 .chrome(ListChrome.MINIMAL)
+                .facets().ruleFilters()
                 .search(SiteModel.NAME, SiteModel.SLUG, SiteModel.DESCRIPTION)
                 .build())
             .form(ResourceForm.<Row>of(SiteWrites.MANAGE_FORM)
@@ -176,7 +185,7 @@ public final class SiteParts {
             .actions(SiteActions.delegated())
             // The operator tabs a delegate needs plus the CONTRIBUTED ones (the generic access matrix, so a manage
             // holder can delegate from /manage); never the admin history.
-            .tabs(ResourceTabs.<Row>of(List.of(DOMAINS, new SiteProtectedPathsPage())).withContributions())
+            .tabs(ResourceTabs.<Row>of(List.of(DOMAINS, PROTECTED_PATHS)).withContributions())
             .build();
     }
 
@@ -239,6 +248,8 @@ public final class SiteParts {
             .build();
         return ResourceList.rows(table)
             .chrome(ListChrome.DEFAULT)
+            // The legacy row resource's filter tiers: facet counts, and the query and advanced builder.
+            .facets().ruleFilters()
             // An operator looks a site up by what they call it, by what the paths call it, or by their note on it.
             .search(SiteModel.NAME, SiteModel.SLUG, SiteModel.DESCRIPTION)
             // A deleted site lands in the Trash, from where it is restored (the model's save, so every site write

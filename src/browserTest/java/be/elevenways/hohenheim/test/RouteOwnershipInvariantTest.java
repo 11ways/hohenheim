@@ -7,18 +7,16 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.ReleasedClaimResource;
+import be.elevenways.hohenheim.server.cms.ReleasedClaimParts;
 import be.elevenways.hohenheim.server.proxy.ReleasedClaims;
 import be.elevenways.hohenheim.server.proxy.RouteClaims;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.cms.common.action.ActionContext;
-import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
@@ -26,10 +24,13 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.zenit.server.operation.OperationRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -692,27 +693,23 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         assertThat(list.body()).as("step 3: and shows the quarantined hostname")
             .contains(hostname);
 
-        // 4. Visibility is NOT authorization: invoking the action's handler directly with a
-        //    non-admin context must refuse and leave the row standing. (The button is hidden
-        //    for that context too, but a hidden button is not a guard.)
-        RowAction<Row> lift = null;
-        for (RowAction<Row> action : new ReleasedClaimResource().rowActions()) {
-            if (Identifier.of("hohenheim", "lift_quarantine").equals(action.id())) {
-                lift = action;
-            }
-        }
-        assertThat(lift).as("step 4: the resource offers the lift action").isNotNull();
-        assertThat(lift.isVisibleFor(quarantine, AccessContext.anonymous()))
-            .as("step 4: the button is hidden for a non-admin").isFalse();
-        ((RowAction.Invoke<Row>) lift).invoke(quarantine,
-            ActionContext.of(AccessContext.anonymous()));
+        // 4. Visibility is NOT authorization: the lift is an operation whose authorizer is installation
+        //    administration, so a non-admin is neither offered it nor able to run it straight through the
+        //    pipeline, and the row stands. (A hidden button is not a guard.)
+        AccessContext stranger = AccessContext.of(TenantConduits.stubFor(null));
+        assertThat(OperationPipeline.offer(ReleasedClaimParts.LIFT, stranger, quarantine))
+            .as("step 4: the lift is not offered to a non-admin")
+            .isNotInstanceOf(OperationPipeline.Offer.Available.class);
+        assertThatThrownBy(() -> OperationPipeline.invoke(OperationRequest.of(ReleasedClaimParts.LIFT,
+                CmsPlacementSurface.ADMIN_ACTION).caller(stranger).subjects(List.of(quarantine))))
+            .as("step 4: a non-admin invoke is refused").isInstanceOf(DomainRefusal.class);
         assertThat(Models.get(ReleasedRouteClaimModel.class)
                 .findById(quarantine.get(ReleasedRouteClaimModel.ID)))
             .as("step 4: a non-admin invoke lifted NOTHING").isNotNull();
 
         // 5. The admin lifts it through the real invoke route, and the row is gone.
-        HttpResponse<String> lifted = adminPostForm("/admin/released-claims/"
-            + quarantine.get(ReleasedRouteClaimModel.ID) + "/action/lift_quarantine",
+        HttpResponse<String> lifted = adminPostForm("/admin/released-claims/invoke/hohenheim.lift_quarantine?ids="
+            + quarantine.get(ReleasedRouteClaimModel.ID),
             confirmed("", hostname));
         assertThat(lifted.statusCode()).as("step 5: the admin lift is accepted")
             .isIn(200, 302, 303);

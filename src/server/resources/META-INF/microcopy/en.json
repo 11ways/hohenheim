@@ -1224,10 +1224,6 @@
     {
       "text": "No attached databases",
       "scope": "instance_database"
-    },
-    {
-      "text": "No protected paths",
-      "scope": "site_protected_paths"
     }
   ],
   "empty_description": [
@@ -1274,10 +1270,6 @@
     {
       "text": "No managed database injects its connection details into this instance yet.",
       "scope": "instance_database"
-    },
-    {
-      "text": "Add a path prefix and an access list; requests under it must pass that list on top of anything the site already requires.",
-      "scope": "site_protected_paths"
     }
   ],
   "engine": [
@@ -2827,10 +2819,6 @@
     {
       "text": "Optional rule tree (addresses, passwords, sign-in) applied before requests reach the site.",
       "scope": "help"
-    },
-    {
-      "text": "Access list",
-      "scope": "site_protected_paths"
     }
   ],
   "auth_provider": [
@@ -4137,10 +4125,6 @@
     {
       "text": "Edit",
       "scope": "access_rule"
-    },
-    {
-      "text": "Edit",
-      "scope": "site_protected_paths"
     }
   ],
   "dyndns": {
@@ -6773,10 +6757,6 @@
     {
       "text": "Path",
       "scope": "template_contents"
-    },
-    {
-      "text": "Path",
-      "scope": "site_protected_paths"
     }
   ],
   "mode": [
@@ -9331,10 +9311,6 @@
     {
       "text": "{$name} - Deployments",
       "scope": "instance_deployments"
-    },
-    {
-      "text": "{$name} - Protected paths",
-      "scope": "site_protected_paths"
     }
   ],
   "not_found_title": {
@@ -11494,18 +11470,6 @@
     "text": "This role belongs to project {$name} and is removed when that project is deleted",
     "scope": "violations"
   },
-  "remove": [
-    {
-      "text": "Remove",
-      "scope": "site_protected_paths"
-    }
-  ],
-  "remove_confirm": [
-    {
-      "text": "Remove protection from {$path}? The folder becomes reachable by anyone who can reach the site.",
-      "scope": "site_protected_paths"
-    }
-  ],
   "delete_confirm_named": [
     {
       "text": "Delete the access list {$name}? Its {$rules} rules go with it. Nothing is gated by it right now.",
@@ -11677,10 +11641,6 @@
   "protected_paths": {
     "text": "Protected paths",
     "scope": "site"
-  },
-  "add_protected_path": {
-    "text": "Protect a path",
-    "scope": "site_protected_paths"
   },
   "protected_path_prefix": {
     "text": "Requests whose path starts with this prefix must pass the access list, in addition to any site-wide list.",

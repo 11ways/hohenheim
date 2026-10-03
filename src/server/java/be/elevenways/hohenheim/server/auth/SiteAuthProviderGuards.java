@@ -29,7 +29,7 @@ import java.util.Set;
  * through. Refusing the delete is still right: the operator would otherwise take a site
  * offline from a catalog page that never mentioned it, with the failure surfacing only at
  * the next route load. The refusal is declared here so a criteria delete and a direct
- * save meet it too; {@code AuthProviderResource} offers the same fact as a dead delete.
+ * save meet it too; the auth-provider delete operation offers the same fact as its availability.
  *
  * AIDEV-NOTE: a rule names its provider inside the type-specific {@code data} JSON, which
  * no backend correlates portably, so the rule half reads the provider-typed rules (a

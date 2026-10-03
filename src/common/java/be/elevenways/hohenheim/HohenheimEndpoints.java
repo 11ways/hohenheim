@@ -868,7 +868,7 @@ public class HohenheimEndpoints {
     //
     // The other half of the proxy tier's write lane, added for the same migration: a
     // legacy installation's htpasswd folders and IP allow-lists convert to a list plus
-    // one call per rule. Both panels create access lists (ManageAccessListResource is
+    // one call per rule. Both panels create access lists (the /manage access-list twin is
     // creatable and plants the creator's ownership grant), so these verbs demand no
     // permission of their own -- the resource pipeline and TenantWrites are the gate,
     // and the resource CHOSEN mirrors which panel the caller would have used.

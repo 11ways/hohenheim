@@ -36,7 +36,7 @@ class SiteLifecycleTest extends HohenheimTestBase {
     void addressSiteCreatesAndEdits() throws Exception {
         var response = adminPostForm("/admin/sites/new",
             "name=Test+Backend&upstream_kind=hohenheim%3Aaddress"
-            + "&settings.forward_host=127.0.0.1&settings.forward_port=8080");
+            + "&settings.forward_host=127.0.0.1&settings.forward_port=8080&" + siteCreateEnvelope());
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         Map<String, Object> proxySettings = settingsOf("Test Backend");
@@ -62,7 +62,8 @@ class SiteLifecycleTest extends HohenheimTestBase {
     void redirectAndGitSitesThroughActionsToDeletion() throws Exception {
         var response = adminPostForm("/admin/sites/new",
             "name=Old+Domain&upstream_kind=hohenheim%3Aredirect"
-            + "&settings.target_url=https%3A%2F%2Fexample.com&settings.http_status=301");
+            + "&settings.target_url=https%3A%2F%2Fexample.com&settings.http_status=301&"
+            + siteCreateEnvelope());
         assertThat(response.statusCode()).isIn(200, 302, 303);
         assertThat(settingsOf("Old Domain").get("target_url")).isEqualTo("https://example.com");
 
@@ -73,7 +74,8 @@ class SiteLifecycleTest extends HohenheimTestBase {
         response = adminPostForm("/admin/sites/new",
             "name=Git+App&upstream_kind=hohenheim%3Astatic&source=git"
             + "&settings.root_path=%2Fvar%2Fwww%2Fgitapp"
-            + "&source_settings.repository_url=https%3A%2F%2Fexample.com%2Frepo.git");
+            + "&source_settings.repository_url=https%3A%2F%2Fexample.com%2Frepo.git&"
+            + siteCreateEnvelope());
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         Row gitRow = site("Git App");
@@ -97,7 +99,7 @@ class SiteLifecycleTest extends HohenheimTestBase {
         response = adminPostForm("/admin/sites/" + redirectId,
             "name=Old+Domain&upstream_kind=hohenheim%3Aredirect"
             + "&settings.target_url=https%3A%2F%2Fexample.com"
-            + "&access_list_id=" + listId);
+            + "&access_list_id=" + listId + "&" + siteEditEnvelope(redirectId));
         assertThat(response.statusCode()).isIn(200, 302, 303);
         assertThat((Integer) site("Old Domain").get(SiteModel.ACCESS_LIST_ID)).isEqualTo(listId);
 

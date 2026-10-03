@@ -38,6 +38,7 @@ import java.util.Objects;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -258,7 +259,7 @@ class ManagePanelTest extends HohenheimTestBase {
                 + "&settings.system_user_id=hohenheim%3Aroot"
                 + "&settings.environment_variables.DAEMON_SECRET=stolen"
                 + "&source_settings.repository_url=ssh%3A%2F%2Fattacker%2Frepo.git"
-                + "&source_settings.build_command=malicious");
+                + "&source_settings.build_command=malicious&" + siteEditEnvelope(siteAId));
         assertThat(response.statusCode()).isIn(302, 303);
 
         Row site = Models.get(SiteModel.class).findById(siteAId);
@@ -753,7 +754,7 @@ class ManagePanelTest extends HohenheimTestBase {
 
             // 2. Neither does the delegated form's enabled checkbox.
             assertThat(operatorPost("/manage/sites/" + stagedId,
-                "name=Staged+Takeover&enabled=true&description=").statusCode())
+                "name=Staged+Takeover&enabled=true&description=&" + siteEditEnvelope(stagedId)).statusCode())
                 .isIn(200, 302, 303, 422);
             assertThat(siteModel.findById(stagedId).get(SiteModel.ENABLED))
                 .as("the delegated form must not enable a route-conflicting site")
@@ -774,9 +775,10 @@ class ManagePanelTest extends HohenheimTestBase {
 
             // 5. The admin form path refuses the same takeover (the invariant is shared,
             //    not per-panel).
-            String adminEnableBody = "name=Staged+Takeover&upstream_kind=hohenheim%3Astatic"
-                + "&enabled=true&settings.root_path=%2Ftmp&description=";
-            assertThat(adminPostForm("/admin/sites/" + stagedId, adminEnableBody).statusCode())
+            // Each submit carries the envelope of the version it reviewed, read at the post.
+            Supplier<String> adminEnableBody = () -> "name=Staged+Takeover&upstream_kind=hohenheim%3Astatic"
+                + "&enabled=true&settings.root_path=%2Ftmp&description=&" + siteEditEnvelope(stagedId);
+            assertThat(adminPostForm("/admin/sites/" + stagedId, adminEnableBody.get()).statusCode())
                 .isIn(200, 302, 303, 422);
             assertThat(siteModel.findById(stagedId).get(SiteModel.ENABLED))
                 .as("the admin form must not enable a route-conflicting site either")
@@ -793,14 +795,14 @@ class ManagePanelTest extends HohenheimTestBase {
             //     this is still a cross-owner takeover and is still refused -- on the real
             //     admin HTTP path. Lift it the way an administrator does, so step 6 keeps
             //     proving what it claims.
-            assertThat(adminPostForm("/admin/sites/" + stagedId, adminEnableBody).statusCode())
+            assertThat(adminPostForm("/admin/sites/" + stagedId, adminEnableBody.get()).statusCode())
                 .isIn(200, 422);
             assertThat(siteModel.findById(stagedId).get(SiteModel.ENABLED))
                 .as("a just-released hostname stays quarantined against a different owner")
                 .isEqualTo(false);
             Models.get(ReleasedRouteClaimModel.class).find().delete();
 
-            assertThat(adminPostForm("/admin/sites/" + stagedId, adminEnableBody).statusCode())
+            assertThat(adminPostForm("/admin/sites/" + stagedId, adminEnableBody.get()).statusCode())
                 .isIn(302, 303);
             assertThat(siteModel.findById(stagedId).get(SiteModel.ENABLED))
                 .as("with the conflict gone the same submit enables the site")
