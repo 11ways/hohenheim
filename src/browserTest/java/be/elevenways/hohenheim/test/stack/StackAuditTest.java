@@ -152,11 +152,13 @@ class StackAuditTest {
         assertThat(Map.of(
                 "actor", String.valueOf((Object) systemDeploy.get(ActivityModel.ACTOR)),
                 "actor_kind", String.valueOf((Object) systemDeploy.get(ActivityModel.ACTOR_KIND)),
+                "actor_label", String.valueOf((Object) systemDeploy.get(ActivityModel.ACTOR_LABEL)),
                 "origin", String.valueOf((Object) systemDeploy.get(ActivityModel.ORIGIN)),
                 "detail", String.valueOf((Object) systemDeploy.get(ActivityModel.DETAIL))))
-            .as("step 5: unattended work is recorded as system work, named by its reason")
+            .as("step 5: unattended work is recorded as system work, labelled by the purpose that declared it"
+                + " (never the stack lane that raised it again) and agreeing with its detail")
             .isEqualTo(Map.of("actor", String.valueOf(system.id()), "actor_kind", system.storedKind(),
-                "origin", Accountability.ORIGIN_SYSTEM, "detail", "adoption"));
+                "actor_label", "adoption", "origin", Accountability.ORIGIN_SYSTEM, "detail", "adoption"));
 
         // 6. A TENANT's request, whose attribution is its caller identity rather than an
         //    entered scope: the worker runs it as system work on that tenant's behalf.
