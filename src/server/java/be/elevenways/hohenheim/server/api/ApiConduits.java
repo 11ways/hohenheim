@@ -4,14 +4,17 @@ import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.conduit.ConduitAttributes;
+import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -189,6 +192,25 @@ public final class ApiConduits {
     /** The {@link #adminPanel()} twin for the tenant resources, which resolve their parents in the operator panel. */
     public static @NonNull Panel managePanel() {
         return registeredPanel(ManagePanel.SLUG);
+    }
+
+    /**
+     * The row entry an API write goes through, ending the response with the uniform 404 when the panel declares none
+     * under that slug: on a node without the entry's role the panel's own route for it is gone
+     * ({@code HohenheimPanel.addIf}), so the API answers what that route answers instead of failing on the lookup.
+     *
+     * AIDEV-NOTE: the role fact is read where it is declared, the panel's registration, never re-asked here; a second
+     * slug-to-role list would drift from addIf the day an entry changes role.
+     *
+     * @return the entry, or null when the response has already been ended
+     */
+    public static @Nullable PanelResource<Row> rowEntry(@NonNull Conduit conduit, @NonNull Panel panel,
+                                                        @NonNull String slug) {
+        PanelResource<Row> entry = CmsSupport.declaredRowEntry(panel, slug);
+        if (entry == null) {
+            conduit.notFound();
+        }
+        return entry;
     }
 
     private static @NonNull Panel registeredPanel(@NonNull String slug) {

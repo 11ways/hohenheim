@@ -1,6 +1,11 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.model.AccessRuleModel;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.hohenheim.server.ServerMain;
@@ -15,11 +20,15 @@ import be.elevenways.hohenheim.server.task.ResignDnssecZones;
 import be.elevenways.hohenheim.server.task.SecuritySweep;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.server.task.UpdateSystemUsers;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.task.TaskCatalog;
 import be.elevenways.zenit.common.task.orm.SystemTaskModel;
 import be.elevenways.zenit.server.ServerZenitRuntime;
@@ -33,7 +42,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -132,6 +143,49 @@ class RoleRestrictedBootTest {
                     .as("step 6: %s must 404 (route gone), not render or redirect", gone)
                     .isEqualTo(404);
             }
+
+            // 6b. The /api/v1 write lanes of the absent tiers answer the API's uniform 404, the
+            //     answer their panel routes give above -- never a 500 from looking up an entry
+            //     the role left out. Each target row EXISTS and is visible to the admin key (the
+            //     reads answer 200), so the 404 is the missing entry, not the row lookup.
+            int adminId = TenantConduits.operatorUser().get(UserModel.ID);
+            String key = ApiKeyService.create(adminId, "role-restricted-admin", List.of("hohenheim.*"), null)
+                .plaintext();
+            int siteId = site();
+            int domainId = domain(siteId);
+            int listId = accessList();
+            int instanceId = instance();
+            assertThat(apiSend(client, port, key, "GET", "/api/v1/sites/" + siteId, "").statusCode())
+                .as("step 6b: the site read lane stays open on a proxy-less node").isEqualTo(200);
+            assertThat(apiSend(client, port, key, "GET", "/api/v1/access-lists/" + listId, "").statusCode())
+                .as("step 6b: the access-list read lane stays open on a proxy-less node").isEqualTo(200);
+            int rulesBefore = Models.get(AccessRuleModel.class).findForAccessList(listId).size();
+            for (String write : List.of(
+                    "/api/v1/sites",
+                    "/api/v1/sites/" + siteId + "/delete",
+                    "/api/v1/sites/" + siteId + "/domains",
+                    "/api/v1/sites/" + siteId + "/domains/" + domainId + "/delete",
+                    "/api/v1/access-lists",
+                    "/api/v1/access-lists/" + listId + "/delete",
+                    "/api/v1/access-lists/" + listId + "/rules",
+                    "/api/v1/instances",
+                    "/api/v1/instances/" + instanceId + "/delete")) {
+                HttpResponse<String> answer = apiSend(client, port, key, "POST", write,
+                    "name=role-restricted-write&type=ip");
+                assertThat(answer.statusCode())
+                    .as("step 6b: POST %s answers the uniform 404 of an absent tier: %s", write, answer.body())
+                    .isEqualTo(404);
+            }
+            assertThat(Models.get(SiteModel.class).findById(siteId))
+                .as("step 6b: the refused delete left the site in place").isNotNull();
+            assertThat(Models.get(SiteDomainModel.class).findById(domainId))
+                .as("step 6b: the refused delete left the domain in place").isNotNull();
+            assertThat(Models.get(AccessListModel.class).findById(listId))
+                .as("step 6b: the refused delete left the access list in place").isNotNull();
+            assertThat(Models.get(AccessRuleModel.class).findForAccessList(listId))
+                .as("step 6b: the refused rule create birthed no node").hasSize(rulesBefore);
+            assertThat(Models.get(InstanceModel.class).findById(instanceId))
+                .as("step 6b: the refused delete left the instance in place").isNotNull();
         } finally {
             server.stop();
         }
@@ -177,6 +231,61 @@ class RoleRestrictedBootTest {
     @AfterAll
     static void stopTheAppliance() {
         ServerZenitRuntime.stop();
+    }
+
+    /** A static site row, stored through the model as SiteApiTest's fixture does. */
+    private static int site() {
+        Row row = Models.get(SiteModel.class).createEmptyRow();
+        row.set(SiteModel.NAME, "role-restricted-site");
+        row.set(SiteModel.SLUG, "role-restricted-site");
+        row.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
+        row.set(SiteModel.ENABLED, true);
+        row.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
+        row.set(SiteModel.SETTINGS, new LinkedHashMap<>(Map.of("root_path", "/tmp/role-restricted-site")));
+        Models.get(SiteModel.class).save(row);
+        return row.get(SiteModel.ID);
+    }
+
+    private static int domain(int siteId) {
+        Row row = Models.get(SiteDomainModel.class).createEmptyRow();
+        row.set(SiteDomainModel.SITE_ID, siteId);
+        row.set(SiteDomainModel.HOSTNAME, "role-restricted.test");
+        row.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        row.set(SiteDomainModel.FORCE_SSL, false);
+        Models.get(SiteDomainModel.class).save(row);
+        return row.get(SiteDomainModel.ID);
+    }
+
+    private static int accessList() {
+        Row row = Models.get(AccessListModel.class).createEmptyRow();
+        row.set(AccessListModel.NAME, "role-restricted-list");
+        row.set(AccessListModel.SATISFY, AccessListModel.SATISFY_ALL);
+        Models.get(AccessListModel.class).save(row);
+        return row.get(AccessListModel.ID);
+    }
+
+    /** A created (never deployed) instance row, InstanceApiTest's fixture shape. */
+    private static int instance() {
+        Row row = Models.get(InstanceModel.class).createEmptyRow();
+        row.set(InstanceModel.NAME, "role-restricted-instance");
+        row.set(InstanceModel.KIND, "hohenheim:docker_container");
+        row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine", "tag", "latest")));
+        row.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
+        Models.get(InstanceModel.class).save(row);
+        return row.get(InstanceModel.ID);
+    }
+
+    /** One API-key request with a urlencoded body, redirects never followed. */
+    private static HttpResponse<String> apiSend(HttpClient client, int port, String key, String method, String path,
+                                                String body) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + path))
+            .header("X-Api-Key", key)
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .method(method, method.equals("GET") ? HttpRequest.BodyPublishers.noBody()
+                : HttpRequest.BodyPublishers.ofString(body))
+            .build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private static int statusOf(HttpClient client, int port, String session, String path)

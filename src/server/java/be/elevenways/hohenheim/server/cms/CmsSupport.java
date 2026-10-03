@@ -9,6 +9,7 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
@@ -303,9 +304,27 @@ public final class CmsSupport {
      *
      * @throws IllegalStateException when the panel registers no row entry under that slug
      */
-    @SuppressWarnings("unchecked")
     public static @NonNull PanelResource<Row> rowEntry(@NonNull Panel panel, @NonNull String slug) {
-        if (panel.entryBySlug(slug) instanceof PanelResource<?> entry && entry.subject().modelId() != null) {
+        PanelResource<Row> entry = declaredRowEntry(panel, slug);
+        if (entry == null) {
+            throw new IllegalStateException("panel '" + panel.slug() + "' declares no row entry '" + slug + "'");
+        }
+        return entry;
+    }
+
+    /**
+     * {@link #rowEntry}, answering null when the panel declares nothing under that slug, which is what a role this
+     * node runs without leaves behind ({@link HohenheimPanel#addIf}).
+     *
+     * @throws IllegalStateException when the slug names an entry that is not a row entry
+     */
+    @SuppressWarnings("unchecked")
+    public static @Nullable PanelResource<Row> declaredRowEntry(@NonNull Panel panel, @NonNull String slug) {
+        PanelEntry declared = panel.entryBySlug(slug);
+        if (declared == null) {
+            return null;
+        }
+        if (declared instanceof PanelResource<?> entry && entry.subject().modelId() != null) {
             return (PanelResource<Row>) entry;
         }
         throw new IllegalStateException("panel '" + panel.slug() + "' declares no row entry '" + slug + "'");

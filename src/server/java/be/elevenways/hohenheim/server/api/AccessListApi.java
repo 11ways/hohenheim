@@ -97,8 +97,12 @@ public final class AccessListApi {
                 conduit.forbidden();
                 return null;
             }
+            PanelResource<Row> lists = listResource(conduit, ctx);
+            if (lists == null) {
+                return null;
+            }
             try {
-                int listId = (Integer) ResourceWrites.create(panelFor(ctx), listResource(ctx),
+                int listId = (Integer) ResourceWrites.create(panelFor(ctx), lists,
                     FormSubmissionRawValues.fromConduit(conduit), ctx);
                 Row created = Objects.requireNonNull(
                     Models.get(AccessListModel.class).findById(listId));
@@ -122,11 +126,15 @@ public final class AccessListApi {
             if (list == null) {
                 return null;
             }
+            PanelResource<Row> lists = listResource(conduit, ctx);
+            if (lists == null) {
+                return null;
+            }
             try {
                 // The resource's own delete: the rule rows cascade off the model hook and
                 // whatever the list gated stops being gated -- exactly what the form's
                 // confirmation warns about.
-                ResourceWrites.delete(panelFor(ctx), listResource(ctx), list, ctx);
+                ResourceWrites.delete(panelFor(ctx), lists, list, ctx);
                 return ApiConduits.json(Map.of("id", list.get(AccessListModel.ID),
                     "status", "deleted"));
             } catch (Violations refused) {
@@ -146,7 +154,12 @@ public final class AccessListApi {
             if (list == null) {
                 return null;
             }
-            return addRule(conduit, ctx, list.get(AccessListModel.ID));
+            // Resolved before the node's birth below, so a node without the entry never births an orphan.
+            PanelResource<Row> rules = ruleResource(conduit, ctx);
+            if (rules == null) {
+                return null;
+            }
+            return addRule(conduit, ctx, rules, list.get(AccessListModel.ID));
         });
     }
 
@@ -163,6 +176,7 @@ public final class AccessListApi {
      */
     private static @Nullable ActionResult<Object> addRule(@NonNull Conduit conduit,
                                                           @NonNull AccessContext ctx,
+                                                          @NonNull PanelResource<Row> rules,
                                                           int listId) {
         Map<String, Object> form = FormSubmissionRawValues.fromConduit(conduit);
         String type = stringOf(form.get("type"));
@@ -184,7 +198,7 @@ public final class AccessListApi {
                 form.get(AccessRuleModel.ENABLED.getName()));
         }
         try {
-            ResourceWrites.update(panelFor(ctx), ruleResource(ctx), rule.get(AccessRuleModel.ID), rule,
+            ResourceWrites.update(panelFor(ctx), rules, rule.get(AccessRuleModel.ID), rule,
                 values, ctx);
         } catch (Violations refused) {
             return ApiConduits.refusal(conduit, refused);
@@ -206,24 +220,22 @@ public final class AccessListApi {
         return HohenheimAccess.isAdmin(ctx) ? ApiConduits.adminPanel() : ApiConduits.managePanel();
     }
 
-    /** The access-list entry of the caller's panel ({@link AccessListParts}): its admin or its /manage twin. */
-    @SuppressWarnings("unchecked")
-    private static @NonNull PanelResource<Row> listResource(@NonNull AccessContext ctx) {
-        Panel panel = panelFor(ctx);
-        if (panel.entryBySlug(HohenheimSlugs.ACCESS_LISTS) instanceof PanelResource<?> lists) {
-            return (PanelResource<Row>) lists;
-        }
-        throw new IllegalStateException("panel '" + panel.slug() + "' declares no access-list entry");
+    /**
+     * The access-list entry of the caller's panel ({@link AccessListParts}): its admin or its /manage twin.
+     *
+     * @return the entry, or null when the response has already been ended (the uniform 404 of a proxy-less node)
+     */
+    private static @Nullable PanelResource<Row> listResource(@NonNull Conduit conduit, @NonNull AccessContext ctx) {
+        return ApiConduits.rowEntry(conduit, panelFor(ctx), HohenheimSlugs.ACCESS_LISTS);
     }
 
-    /** The access-rule entry of the caller's panel ({@link AccessRuleParts}): its admin or its /manage twin. */
-    @SuppressWarnings("unchecked")
-    private static @NonNull PanelResource<Row> ruleResource(@NonNull AccessContext ctx) {
-        Panel panel = panelFor(ctx);
-        if (panel.entryBySlug(AccessRuleParts.SLUG) instanceof PanelResource<?> rules) {
-            return (PanelResource<Row>) rules;
-        }
-        throw new IllegalStateException("panel '" + panel.slug() + "' declares no access-rule entry");
+    /**
+     * The access-rule entry of the caller's panel ({@link AccessRuleParts}): its admin or its /manage twin.
+     *
+     * @return the entry, or null when the response has already been ended (the uniform 404 of a proxy-less node)
+     */
+    private static @Nullable PanelResource<Row> ruleResource(@NonNull Conduit conduit, @NonNull AccessContext ctx) {
+        return ApiConduits.rowEntry(conduit, panelFor(ctx), AccessRuleParts.SLUG);
     }
 
     /** The lists this context manages; an admin's walk answers ALL, so it sees every one. */
