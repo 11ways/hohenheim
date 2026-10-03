@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
+import be.elevenways.protoblast.common.dry.BlastDrySerializers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
@@ -30,6 +31,8 @@ import be.elevenways.zenit.server.operation.OperationHandlers;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
@@ -70,6 +73,18 @@ public final class BackupTargetParts {
     }
 
     static {
+        // The test is a command operation: its outcome is stored as the receipt, so it must serialize, or the
+        // invoke fails after the check ran and the operator reads a generic "action failed".
+        BlastDrySerializers.addCustomRegistration(registry -> {
+            registry.registerSerializer(TestOutcome.class, (outcome, context) -> {
+                Map<String, Object> map = new LinkedHashMap<>();
+                map.put("name", outcome.name());
+                map.put("failure", outcome.failure());
+                return map;
+            });
+            registry.registerReviver(TestOutcome.class,
+                (data, context) -> new TestOutcome(data.getString("name"), data.getString("failure")));
+        });
         OperationHandlers.attach(TEST).handle(call -> {
             Row target = call.subject();
             String name = target.get(BackupTargetModel.NAME);
