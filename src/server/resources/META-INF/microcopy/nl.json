@@ -11896,6 +11896,10 @@
     "text": "De volledige naam, bijvoorbeeld www.example.com; ze moet onder een hostnaam van een site vallen die je beheert",
     "scope": "help"
   },
+  "step_execution": {
+    "text": "Stap {$id}: {$attempts} pogingen; gestart {$started}; geëindigd {$ended}",
+    "scope": "instance_schedule"
+  },
   "next_run": {
     "text": "Volgende uitvoering",
     "scope": "instance_schedule"

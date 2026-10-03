@@ -100,7 +100,7 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
 
     private static final String PREFIX = "schedsurf-";
 
-    /** A step action nothing registers: the step ends unrun deterministically, without a daemon. */
+    /** A step action nothing registers: the operation pipeline records its failed attempt without a daemon. */
     private static final String UNKNOWN_ACTION = "hohenheim:schedsurf_no_such_action";
 
     private static Integer ownerId;
@@ -330,7 +330,7 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
             step.set(RecordScheduleStepModel.ACTION, UNKNOWN_ACTION);
             Models.get(RecordScheduleStepModel.class).save(step);
 
-            // 1. A run fired now: its one step ends unrun (no such action), recorded as a step-run row only.
+            // 1. A run fired now: its one failed operation attempt is recorded as a step-run row only.
             Row run = schedules.runNow(readScheduleId);
             assertThat(run).as("step 1: the schedule ran").isNotNull();
             assertThat(run.get(RecordScheduleRunModel.STEP_RESULTS))
@@ -349,8 +349,12 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
             RowResource runResource = (RowResource) PanelResourceViews.forCaller(InstanceScheduleRunParts.admin());
             ColumnSpec stepsColumn = runResource.tableSpec().column("steps");
             assertThat(stepsColumn).as("step 2: the runs list declares a steps column").isNotNull();
-            assertThat(runResource.cellValue(run, stepsColumn)).as("step 2: the runs list shows the step's verdict")
-                .isEqualTo(expected);
+            String summary = (String) runResource.cellValue(run, stepsColumn);
+            assertThat(summary).as("step 2: the runs list retains the complete step verdict and refusal speech")
+                .startsWith(expected);
+            assertThat(summary).as("step 2: source step id and actual failed attempt come from the run descriptor")
+                .contains("Step " + step.get(RecordScheduleStepModel.ID) + ": 1 attempts; started ", "; ended ")
+                .doesNotContain("null");
 
             // 3. The schedule's Steps tab shows the same verdict for that run.
             Conduit conduit = TenantConduits.stubFor(new UserPrincipal(ownerId, "Schedule Owner"));
@@ -362,7 +366,7 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
                 .filteredOn(view -> view.id() == runId)
                 .singleElement()
                 .extracting(ScheduleRunView::summary)
-                .isEqualTo(expected);
+                .isEqualTo(summary);
         } finally {
             schedules.deleteSchedule(readScheduleId);
         }

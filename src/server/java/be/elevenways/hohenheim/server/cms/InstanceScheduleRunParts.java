@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.InstanceChildDeletes;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -13,12 +15,18 @@ import be.elevenways.zenit.cms.common.resource.ResourceReads;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RowScope;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.narration.FieldValueText;
+import be.elevenways.zenit.common.routing.RouteLocales;
+import be.elevenways.zenit.common.routing.RouteScope;
 import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleRuns;
+import be.elevenways.zenit.common.task.record.RecordScheduleStepRunModel;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -85,8 +93,13 @@ public final class InstanceScheduleRunParts {
             .build();
     }
 
-    /** @return each step's position, action, status and error, the one summary the list and the Steps tab share */
+    /** @return each step's verdict, source id, actual attempts and timing, shared by both run-history screens */
     static @NonNull String describeSteps(@NonNull Row run) {
+        Conduit conduit = RouteScope.currentConduit();
+        LocaleChain locales = conduit == null ? LocaleChain.of(RouteLocales.get().getDefaultLocale())
+            : conduit.getLocales();
+        MessageResolver resolver = conduit == null ? Zenit.getMessageResolver() : conduit.getMessageResolver();
+        FieldValueText text = FieldValueText.standard();
         StringBuilder summary = new StringBuilder();
         for (RecordScheduleRuns.Step step : RecordScheduleRuns.steps(run)) {
             if (summary.length() > 0) {
@@ -98,6 +111,12 @@ public final class InstanceScheduleRunParts {
             if (step.error() != null) {
                 summary.append(" (").append(step.error()).append(')');
             }
+            Microcopy execution = Microcopy.of("step_execution").withFilter("scope", "instance_schedule")
+                .withArg("id", text.text(null, RecordScheduleStepRunModel.STEP_ID, step.stepId(), locales, resolver))
+                .withArg("attempts", text.text(null, RecordScheduleStepRunModel.ATTEMPT, step.attempts(), locales, resolver))
+                .withArg("started", text.text(null, RecordScheduleStepRunModel.STARTED_AT, step.startedAt(), locales, resolver))
+                .withArg("ended", text.text(null, RecordScheduleStepRunModel.ENDED_AT, step.endedAt(), locales, resolver));
+            summary.append(' ').append(execution.resolve(locales, resolver));
         }
         return summary.toString();
     }
