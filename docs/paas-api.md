@@ -497,7 +497,7 @@ and a move onto a shared engine were browser-only, so an operator scripting a
 migration had to drive the panel by hand. The verbs are the panel's own lanes
 reached without a browser (`DatabaseApi`), and their doors are the panels':
 
-- `GET /api/v1/databases` -- the `view` scope `ManageDatabaseResource` renders.
+- `GET /api/v1/databases` -- the `view` scope `DatabaseParts.manage()` renders.
   An admin key gets the operator columns (`engine_id`, `server`, `ephemeral`,
   `memory_limit_mb`, `cpu_limit`, `failure_reason`) beside the shared ones (`id`,
   `name`, `engine`, `db_name`, `placement`, `status`, `attached`); a delegated key
@@ -506,7 +506,7 @@ reached without a browser (`DatabaseApi`), and their doors are the panels':
   The stored CREDENTIALS have no representation on this surface at all -- the
   Credentials tab answers to its own capability.
 - `POST /api/v1/databases/{id}/move-shared` -- **ADMIN-ONLY** (403 otherwise),
-  because only the admin panel offers the row action; `ManageDatabaseResource`
+  because only the admin panel offers the row action; `DatabaseParts.manage()`
   drops it. Eligibility is `DatabaseService.moveRefusal`, the one declaration the
   row action's visibility reads as well, so the API refuses exactly what the panel
   would not offer: `database_already_shared`, `database_not_active` (naming the
@@ -522,13 +522,13 @@ reached without a browser (`DatabaseApi`), and their doors are the panels':
   reason), **2** on timeout (default 600s, `--timeout`) naming the last status it saw.
   Rate limit: the database I/O bucket (5 per
   minute, `hh_db_io`) -- the move dumps and restores a whole database.
-- `POST /api/v1/databases/{id}/delete` -- rides `DatabaseResource`'s own delete
-  pipeline. Seeing a database (`view`) is not enough to destroy it: the resource
+- `POST /api/v1/databases/{id}/delete` -- rides the `DatabaseParts` entry's own delete
+  operation. Seeing a database (`view`) is not enough to destroy it: the resource
   demands `destroy` on the record and `DatabaseService.destroy` asks the same gate
   again, so a `view`-only key gets **403**. A database a live workload still holds
   is a **422** `delete_in_use` naming the workloads and the page each is detached
   on -- literally the reason the panel's dead Delete button renders, because the
-  pipeline asks `deleteUnavailableReason` before it acts. (`deleteRow` refuses the
+  delete operation's `availability` (`DatabaseParts`) answers it before it acts. (The destroy refuses the
   same fact as `database_in_use`; the dead-affordance reason is what a caller sees
   first, and the two never disagree.) An
   unverifiable teardown is a 422 `database_destroy_failed` and keeps the record

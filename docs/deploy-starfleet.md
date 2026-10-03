@@ -309,11 +309,10 @@ HTTP (`node.` and `vpn.` were dropped with their sites).
 external timeout there is not a defect -- check `ss -lntp` on the host before
 concluding anything. It has cost a session real time already.
 
-`/admin/instances` listing empty, and `/admin/instances/1/page/overview`
-returning 404, is also correct here: this host's only instance is
-stack-generated, and `InstanceResource.accessFunction()` deliberately hides
-instances with a non-null `generated_by` (they are managed through the owning
-stack's surface). The record-scoped pages inherit that gate, hence the 404.
+A stack-generated instance (non-null `generated_by`) is listed under
+`/admin/instances` with its owner in the Managed-by column, but it is
+read-only there: `InstanceParts`' `ResourceAuthority` refuses UPDATE for it,
+and it is managed through the owning stack's surface.
 
 The `settings.unknown_key` warnings for `hohenheim.security.spamservice_url`
 and `spamservice_key` still fire on every boot: the keys sit in

@@ -84,14 +84,14 @@ silently aborts used to make a run of nothing look green.
 ## Architecture notes
 
 - The admin UI is a zenit-cms panel served at `/admin` (`server/cms/HohenheimPanel`):
-  typed `RowResource` peers for sites/domains/certificates/access lists/auth
+  `PanelResource` entries built from parts (`server/cms/*Parts`) for sites/domains/certificates/access lists/auth
   providers/databases/servers/notification channels, zenit-cms's readonly
   `ActivityAdmin` parts over the framework activity log, the framework
   `SettingsPage` at `/admin/settings` (the `hohenheim` group and the framework
   mount, both editing `settings/local.dry`; DIFF-based save, secrets masked, restartRequired
   metadata drives the restart toast; a group deep-links by its path, e.g.
-  `/admin/settings?section=capacity` or `?section=database.backup`), and `RecordScopedPage` tabs on sites
-  (Domains, Protected paths on every non-passthrough site, Deployments on a site whose
+  `/admin/settings?section=capacity` or `?section=database.backup`), and record tabs
+  (`ResourceTabs`: `ChildList`, `RecordTab.Rendered`) on sites (Domains, Protected paths on every non-passthrough site, Deployments on a site whose
   instance carries a git source, Dev sessions)
   and databases (Restore). `HohenheimSettings` is the `hohenheim` group of
   `Zenit.SETTINGS_VALUES` (`hohenheim.proxy.http_port`, `ZENIT__HOHENHEIM__*`);
