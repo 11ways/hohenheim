@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.host;
 
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
@@ -13,7 +14,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public record PreflightCheckView(
     String name,
     String status,
-    String statusVariant,
+    BadgeVariant statusVariant,
     boolean required,
     String detail,
     @Nullable String atIso
@@ -22,7 +23,7 @@ public record PreflightCheckView(
     /** Build with the pl-badge variant READ OFF the verdict, never re-spelled here. */
     public static PreflightCheckView of(String name, String status, boolean required,
                                         String detail, @Nullable String atIso) {
-        String variant = PreflightStatus.fromToken(status).badgeVariant();
+        BadgeVariant variant = PreflightStatus.fromToken(status).badgeVariant();
         return new PreflightCheckView(name, status, variant, required, detail, atIso);
     }
 }

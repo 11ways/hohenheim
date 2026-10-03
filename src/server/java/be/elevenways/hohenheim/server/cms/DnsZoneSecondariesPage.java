@@ -22,6 +22,7 @@ import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -112,15 +113,15 @@ public final class DnsZoneSecondariesPage implements RecordTab.Rendered<Row> {
 
     /** The freshness pill a link row projects, as probed from this primary. */
     enum Freshness {
-        UNPROBED("unprobed", "secondary"),
-        CURRENT("current", "green"),
-        BEHIND("behind", "orange"),
-        STALE("stale", "red");
+        UNPROBED("unprobed", BadgeVariant.SECONDARY),
+        CURRENT("current", BadgeVariant.SUCCESS),
+        BEHIND("behind", BadgeVariant.WARNING),
+        STALE("stale", BadgeVariant.DESTRUCTIVE);
 
         private final String token;
-        private final String variant;
+        private final BadgeVariant variant;
 
-        Freshness(String token, String variant) {
+        Freshness(String token, BadgeVariant variant) {
             this.token = token;
             this.variant = variant;
         }
@@ -129,7 +130,7 @@ public final class DnsZoneSecondariesPage implements RecordTab.Rendered<Row> {
             return Microcopy.of(this.token).withFilter("scope", "dns_freshness");
         }
 
-        @NonNull String variant() {
+        @NonNull BadgeVariant variant() {
             return this.variant;
         }
     }

@@ -95,11 +95,11 @@ public final class StackDeploymentsPage implements RecordScopedPage<Row> {
      * own colour everywhere else. Unknown/blank still degrades to secondary, which is the
      * honest answer for a value the vocabulary does not contain.
      */
-    private static String statusVariant(@Nullable Object status) {
+    private static BadgeVariant statusVariant(@Nullable Object status) {
         EnumField.EnumValue value = status == null
             ? null : StackDeploymentModel.STATUS.getValues().get(String.valueOf(status));
         BadgeColor color = value != null ? value.color() : null;
-        return (color != null ? color : BadgeVariant.SECONDARY).token();
+        return color != null && color.variant() != null ? color.variant() : BadgeVariant.SECONDARY;
     }
 
     private static String durationLabel(@Nullable Object durationMs) {

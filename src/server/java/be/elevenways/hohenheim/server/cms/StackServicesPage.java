@@ -19,6 +19,7 @@ import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -129,13 +130,13 @@ public final class StackServicesPage implements RecordScopedPage<Row> {
      * a colour on, so there is no second list here to remove. The default arm is the
      * fail-closed half: an unrecognised daemon state renders neutral, never "success".
      */
-    private static String stateVariant(String state) {
+    private static BadgeVariant stateVariant(String state) {
         return switch (state) {
-            case "healthy", "running" -> "success";
-            case "starting" -> "warning";
-            case "unhealthy" -> "destructive";
-            case "stopped" -> "secondary";
-            default -> "outline";   // missing / unknown
+            case "healthy", "running" -> BadgeVariant.SUCCESS;
+            case "starting" -> BadgeVariant.WARNING;
+            case "unhealthy" -> BadgeVariant.DESTRUCTIVE;
+            case "stopped" -> BadgeVariant.SECONDARY;
+            default -> BadgeVariant.OUTLINE;   // missing / unknown
         };
     }
 }

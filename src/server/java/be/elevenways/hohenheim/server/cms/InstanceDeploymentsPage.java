@@ -254,11 +254,11 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
      * Unknown/blank degrades to secondary, the honest answer for a value the vocabulary
      * does not contain.
      */
-    private static String variantOf(@NonNull EnumField field, @Nullable Object status) {
+    private static BadgeVariant variantOf(@NonNull EnumField field, @Nullable Object status) {
         EnumField.EnumValue value = status == null
             ? null : field.getValues().get(String.valueOf(status));
         BadgeColor color = value != null ? value.color() : null;
-        return (color != null ? color : BadgeVariant.SECONDARY).token();
+        return color != null && color.variant() != null ? color.variant() : BadgeVariant.SECONDARY;
     }
 
     private static String shortSha(Object sha) {
