@@ -5,6 +5,9 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationCommand;
+import be.elevenways.zenit.common.orm.lease.LeaseKeys;
+import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -25,6 +28,7 @@ import be.elevenways.zenit.common.ui.Icon;
  * @since  0.9.0
  */
 public final class PreviewOperations {
+    private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("preview_command"));
 
     /** The subject of every preview operation: one preview deployment record. */
     public static final SubjectType<Row> PREVIEW = SubjectType.record(PreviewDeploymentModel.MODEL_ID);
@@ -37,6 +41,8 @@ public final class PreviewOperations {
         .gate(OperationGate.open().subjectCapability(HohenheimCapabilities.MANAGE))
         .result(String.class)
         .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
+        .command(OperationCommand.serializedBy(KEYS, invocation -> invocation.subjectKeys().get(0))
+            .execution(CommandExecution.OUTSIDE_TRANSACTION))
         .register();
 
     private PreviewOperations() {

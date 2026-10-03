@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.instance;
 
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimRefusalReason;
@@ -8,6 +9,9 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationCommand;
+import be.elevenways.zenit.common.orm.lease.LeaseKeys;
+import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationInput;
@@ -34,6 +38,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * @since  0.9.0
  */
 public final class InstanceOperations {
+    public static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("instance"), "hohenheim_instance_");
+    private static final OperationCommand COMMAND_FACET = OperationCommand.serializedBy(KEYS,
+        invocation -> invocation.subjectKeys().get(0)).execution(CommandExecution.OUTSIDE_TRANSACTION);
 
     /** The subject of every instance operation: one instance record. */
     public static final SubjectType<Row> INSTANCE = SubjectType.record(InstanceModel.MODEL_ID);
@@ -63,6 +70,7 @@ public final class InstanceOperations {
             .one(INSTANCE)
             .gate(gate(HohenheimCapabilities.POWER))
             .result(PowerResult.class)
+            .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
@@ -72,6 +80,7 @@ public final class InstanceOperations {
         .one(INSTANCE)
         .gate(gate(HohenheimCapabilities.BACKUPS))
         .result(Integer.class)
+        .command(COMMAND_FACET)
         .facts(OperationFact.REACHES_OUTSIDE)
         .register();
 
@@ -89,6 +98,7 @@ public final class InstanceOperations {
             .input(OperationInput.of(FormSpec.builder().add(NOTE).build(), SnapshotInput.class,
                 values -> new SnapshotInput(values.get(NOTE))))
             .result(Integer.class)
+            .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
@@ -115,6 +125,7 @@ public final class InstanceOperations {
             .input(OperationInput.of(FormSpec.builder().add(COMMAND).build(), ConsoleCommandInput.class,
                 values -> new ConsoleCommandInput(values.get(COMMAND))))
             .result(String.class)
+            .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
@@ -144,6 +155,7 @@ public final class InstanceOperations {
             .input(OperationInput.of(FormSpec.builder().add(EXEC_COMMAND).build(), ExecInput.class,
                 values -> new ExecInput(values.get(EXEC_COMMAND))))
             .result(ExecRun.class)
+            .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
@@ -154,6 +166,7 @@ public final class InstanceOperations {
             .icon(Icon.of("clock-rotate-left"))
             .one(INSTANCE)
             .gate(gate(HohenheimCapabilities.POWER))
+            .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
@@ -167,6 +180,7 @@ public final class InstanceOperations {
             .icon(Icon.of("wand-magic-sparkles"))
             .one(INSTANCE)
             .gate(OperationGate.open())
+            .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
@@ -180,6 +194,7 @@ public final class InstanceOperations {
             .icon(Icon.of("rotate"))
             .one(INSTANCE)
             .gate(OperationGate.open())
+            .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
@@ -194,6 +209,7 @@ public final class InstanceOperations {
             .one(INSTANCE)
             .gate(OperationGate.open())
             .result(Integer.class)
+            .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
@@ -207,6 +223,7 @@ public final class InstanceOperations {
             .icon(Icon.of("trash-can"))
             .one(INSTANCE)
             .gate(OperationGate.open())
+            .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
@@ -258,6 +275,7 @@ public final class InstanceOperations {
             .input(OperationInput.of(FormSpec.builder().add(TARGET_SERVER).build(), MigrateInput.class,
                 values -> new MigrateInput(values.get(TARGET_SERVER))))
             .result(Integer.class)
+            .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
@@ -275,6 +293,7 @@ public final class InstanceOperations {
      * @param exitCode the program's exit code
      * @param output   its captured output
      */
+    @HawkeyeClass
     public record ExecRun(int exitCode, @NonNull String output) {
     }
 
@@ -311,6 +330,7 @@ public final class InstanceOperations {
             .one(INSTANCE)
             .gate(gate(HohenheimCapabilities.CONFIG))
             .result(String.class)
+            .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
@@ -322,6 +342,7 @@ public final class InstanceOperations {
      * @param unchanged true when the instance already was in the asked state and nothing ran (a stopped instance's
      *                  stop)
      */
+    @HawkeyeClass
     public record PowerResult(@NonNull String status, @Nullable String trigger, boolean unchanged) {
 
         /** @return the schedule step's recorded outcome: the status, how it was reached, or that it already was */

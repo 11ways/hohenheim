@@ -28,6 +28,9 @@ import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.flash.FlashLevel;
 import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationCommand;
+import be.elevenways.zenit.common.orm.lease.LeaseKeys;
+import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.field.BooleanField;
@@ -61,6 +64,10 @@ import java.util.function.Supplier;
  * @since  0.1.0
  */
 public final class SpamserviceClientKeysResource {
+    private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("spamservice_key_command"));
+    private static final OperationCommand COMMAND = OperationCommand.serializedBy(KEYS,
+        invocation -> invocation.subjectKeys().get(0)).onDatasource("default")
+        .execution(CommandExecution.OUTSIDE_TRANSACTION);
 
     public static final String SLUG = "spamservice-keys";
 
@@ -100,6 +107,7 @@ public final class SpamserviceClientKeysResource {
         .icon(Icon.of("check"))
         .one(KEY)
         .gate(OperationGate.permission(HohenheimPanel.ACCESS))
+        .command(COMMAND)
         .register();
 
     public static final Operation<ManagedClientKey, Void, Void> REVOKE = Operation.declare(
@@ -108,6 +116,7 @@ public final class SpamserviceClientKeysResource {
         .icon(Icon.of("xmark"))
         .one(KEY)
         .gate(OperationGate.permission(HohenheimPanel.ACCESS))
+        .command(COMMAND)
         .register();
 
     static {
