@@ -4593,12 +4593,8 @@
       "scope": "spamservice_sample"
     }
   ],
-  "key_created": {
-    "text": "Sleutel aangemaakt. Kopieer hem nu; hij wordt niet opnieuw getoond: {$key}",
-    "scope": "spamservice_key"
-  },
-  "key_adopted": {
-    "text": "Bestaande sleutel overgenomen",
+  "create_key": {
+    "text": "Sleutel aanmaken",
     "scope": "spamservice_key"
   },
   "revoke": {
