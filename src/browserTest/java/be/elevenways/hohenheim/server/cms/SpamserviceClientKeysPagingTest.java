@@ -77,7 +77,7 @@ class SpamserviceClientKeysPagingTest {
 
         // 5. The list under a malformed parent is empty and asks the service nothing; so is the list outside one.
         TableView.Applied<ManagedClientKey> applied =
-            TableView.forPrincipal(0, keys.id()).build().apply(keys.list().table());
+            TableView.forPrincipal(0L, keys.id()).build().apply(keys.list().table());
         int beforeList = requests.get();
         AccessContext access = AccessContext.anonymous();
         assertThat(keys.list().childStorePages().page("not-a-uuid", applied, access).rows())

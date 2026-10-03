@@ -48,7 +48,7 @@ class SpamserviceRequestStateTest {
         AtomicReference<SpamserviceClient> current = new AtomicReference<>();
         PanelResource<ManagedClientKey> keys = SpamserviceClientKeysResource.create(current::get);
         TableView.Applied<ManagedClientKey> applied =
-            TableView.forPrincipal(0, keys.id()).build().apply(keys.list().table());
+            TableView.forPrincipal(0L, keys.id()).build().apply(keys.list().table());
         Map<String, String> scope = Map.of();
 
         // 1. Request A lists while the service is unreachable -- and, like a lane that lists

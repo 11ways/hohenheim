@@ -71,7 +71,7 @@ class SpamserviceCmsContractTest {
         @SuppressWarnings("unchecked")
         PanelResource<ManagedClient> clients = (PanelResource<ManagedClient>) resources.get(0);
         TableView.Applied<ManagedClient> applied =
-            TableView.forPrincipal(0, clients.id()).build().apply(clients.list().table());
+            TableView.forPrincipal(0L, clients.id()).build().apply(clients.list().table());
         RecordPage<ManagedClient> page = clients.list().storePages().page(applied, AccessContext.anonymous());
         assertThat(page.rows()).isEmpty();
         assertThat(page.total())
@@ -345,7 +345,7 @@ class SpamserviceCmsContractTest {
         // 1. A clients search is forwarded as the API's q, beside the enabled filter it always sent.
         PanelResource<ManagedClient> clients = SpamserviceClientsResource.create(() -> client);
         assertThat(clients.list().searchColumns()).as("step 1: the API searches client names").containsExactly("name");
-        TableView.Applied<ManagedClient> clientView = TableView.forPrincipal(0, clients.id()).build()
+        TableView.Applied<ManagedClient> clientView = TableView.forPrincipal(0L, clients.id()).build()
             .apply(clients.list().table()).withSearch("  prim ")
             .withFilter(FilterState.of(Map.of("enabled", "true")));
         clients.list().storePages().page(clientView, AccessContext.anonymous());
@@ -355,13 +355,13 @@ class SpamserviceCmsContractTest {
         // 2. A words search is forwarded as the API's q.
         PanelResource<SpamWordEntry> words = SpamserviceWordsResource.create(() -> client);
         assertThat(words.list().searchColumns()).as("step 2: the API searches words").containsExactly("word");
-        words.list().storePages().page(TableView.forPrincipal(0, words.id()).build().apply(words.list().table())
+        words.list().storePages().page(TableView.forPrincipal(0L, words.id()).build().apply(words.list().table())
             .withSearch("viagra"), AccessContext.anonymous());
         assertThat(parameters(query.get())).as("step 2: q carries the search").containsEntry("q", "viagra");
 
         // 3. The day leaf's bounds become the API's from/to; a lone lower bound sends only from.
         PanelResource<SecurityEventEntry> events = SpamserviceSecurityEventsResource.create(() -> client);
-        TableView.Applied<SecurityEventEntry> eventView = TableView.forPrincipal(0, events.id()).build()
+        TableView.Applied<SecurityEventEntry> eventView = TableView.forPrincipal(0L, events.id()).build()
             .apply(events.list().table());
         events.list().storePages().page(eventView.withFilter(FilterState.of(Map.of(
             "day", new RangeFilterValue("2026-07-01", "2026-07-31")))), AccessContext.anonymous());

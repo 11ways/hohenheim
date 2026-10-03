@@ -193,7 +193,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         ListState state = FacetUrlState.readState(ListState.Shape.PLAIN, conduit::getQueryParams);
         String search = state.text().isEmpty() ? null : state.text();
         TableView.Applied<Row> applied = TableView
-            .forPrincipal(accessContext.principal().id(), resource.id())
+            .forPrincipal(accessContext.principalId(), resource.id())
             .visibleColumns(COLUMNS)
             .sort(SortSpec.asc(DnsRecordModel.NAME.getName()))
             .filter(zoneScope(resource, zoneId))
