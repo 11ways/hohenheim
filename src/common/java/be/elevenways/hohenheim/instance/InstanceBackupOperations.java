@@ -1,9 +1,13 @@
 package be.elevenways.hohenheim.instance;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationCommand;
+import be.elevenways.zenit.common.orm.lease.LeaseKeys;
+import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -22,6 +26,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * @since  0.9.0
  */
 public final class InstanceBackupOperations {
+    private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("backup_command"));
+    private static final OperationCommand COMMAND = OperationCommand.serializedBy(KEYS,
+        invocation -> invocation.subjectKeys().get(0)).execution(CommandExecution.OUTSIDE_TRANSACTION);
 
     /** The subject of every backup operation: one backup row. */
     public static final SubjectType<Row> BACKUP = SubjectType.record(InstanceBackupModel.MODEL_ID);
@@ -34,6 +41,7 @@ public final class InstanceBackupOperations {
             .one(BACKUP)
             .gate(OperationGate.open())
             .result(Restored.class)
+            .command(COMMAND)
             .register();
 
     /**
@@ -50,6 +58,7 @@ public final class InstanceBackupOperations {
             .one(BACKUP)
             .gate(OperationGate.open())
             .result(Integer.class)
+            .command(COMMAND)
             .register();
 
     /**
@@ -58,6 +67,7 @@ public final class InstanceBackupOperations {
      * @param instanceId the new instance
      * @param missing    what could not be brought back, null when the restore was complete
      */
+    @HawkeyeClass
     public record Restored(int instanceId, @Nullable String missing) {
     }
 

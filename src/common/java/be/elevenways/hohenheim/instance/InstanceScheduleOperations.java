@@ -3,6 +3,10 @@ package be.elevenways.hohenheim.instance;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationCommand;
+import be.elevenways.zenit.common.operation.OperationInvocation;
+import be.elevenways.zenit.common.orm.lease.LeaseKeys;
+import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -24,6 +28,8 @@ import be.elevenways.zenit.common.ui.Icon;
  * @since  0.9.0
  */
 public final class InstanceScheduleOperations {
+    private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("schedule_command"));
+    private static final OperationCommand COMMAND = OperationCommand.serializedBy(KEYS, OperationInvocation::operationId);
 
     /** One record schedule. */
     public static final SubjectType<Row> SCHEDULE = SubjectType.record(RecordScheduleModel.MODEL_ID);
@@ -39,6 +45,7 @@ public final class InstanceScheduleOperations {
             .one(SCHEDULE)
             .gate(OperationGate.open())
             .result(String.class)
+            .command(COMMAND.execution(CommandExecution.OUTSIDE_TRANSACTION))
             .register();
 
     /** Removes the schedule with its chain and run history. */
@@ -49,6 +56,7 @@ public final class InstanceScheduleOperations {
             .one(SCHEDULE)
             .gate(OperationGate.open())
             .result(Integer.class)
+            .command(COMMAND)
             .register();
 
     /** Removes one chain step; the chain now runs under the authority of whoever removed it. */
@@ -59,6 +67,7 @@ public final class InstanceScheduleOperations {
             .one(STEP)
             .gate(OperationGate.open())
             .result(Integer.class)
+            .command(COMMAND)
             .register();
 
     private InstanceScheduleOperations() {

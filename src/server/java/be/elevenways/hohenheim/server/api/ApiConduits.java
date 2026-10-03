@@ -158,7 +158,7 @@ public final class ApiConduits {
                 case OPERATION_UNAVAILABLE -> refusal(conduit, Violations.ofForm(refusal.shown()));
                 case BAD_REQUEST, METHOD_NOT_ALLOWED, LOGIN_REQUIRED, INTERACTIVE_LOGIN_REQUIRED, RATE_LIMITED,
                      CSRF_ORIGIN, CSRF_TOKEN_MISSING, CSRF_TOKEN_INVALID, STALE, IN_PROGRESS, RETRY_MISMATCH, INVALID,
-                     ARCHIVED, CYCLE, IN_USE, STORE_BUSY -> throw refusal;
+                     ARCHIVED, CYCLE, IN_USE, STORE_BUSY, OUTCOME_UNKNOWN, SECRET_ALREADY_DISCLOSED -> throw refusal;
             };
         }
         throw refusal;

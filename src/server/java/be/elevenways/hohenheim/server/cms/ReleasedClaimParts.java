@@ -27,6 +27,7 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
+import be.elevenways.zenit.common.orm.lease.LeaseKeys;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -56,6 +57,7 @@ import java.util.Objects;
  * @since  0.9.0
  */
 public final class ReleasedClaimParts {
+    private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("lift_quarantine"), "lift_quarantine:");
 
     /** Virtual column names (computed cells). */
     static final String FORMER_SITE_COLUMN = "former_site";
@@ -71,7 +73,7 @@ public final class ReleasedClaimParts {
         .gate(OperationGate.open())
         .facts(OperationFact.DESTRUCTIVE)
         // Placed as a row action: a resubmitted click answers from the receipt instead of lifting twice.
-        .command(OperationCommand.serializedBy(invocation -> "lift_quarantine:" + invocation.subjectKeys().getFirst()))
+        .command(OperationCommand.serializedBy(KEYS, invocation -> invocation.subjectKeys().getFirst()))
         .register();
 
     static {

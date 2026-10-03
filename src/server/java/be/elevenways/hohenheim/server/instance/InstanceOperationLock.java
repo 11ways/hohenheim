@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.lease.ClaimedRows;
@@ -34,8 +35,8 @@ import java.util.function.UnaryOperator;
  *
  * AIDEV-NOTE: the claim is core's {@link ClaimedRows#hold} on {@code instances.claim_fence}, decided 2026-10-02
  * (module-fit item 35), replacing the 2026-09-23 pair of an in-process ReentrantLock and the HOST lease's fence on the
- * row. Why it is not zenit Commands still holds: Commands runs its body inside ONE transaction, and an instance
- * operation is minutes of daemon work. Why it is now a lease: the hold is taken OUTSIDE any transaction and
+ * row. A client-keyed operation now declares Commands' outside-transaction mode and holds this SAME key; ClaimedRows
+ * borrows that command's lease instead of acquiring another one. The hold is taken OUTSIDE any transaction and
  * heartbeats for as long as the operation runs, so it excludes this controller's other threads AND every rival
  * controller per record, which the in-process lock never could; a crashed holder stops heartbeating and the next
  * operation takes the record over after the controller's TTL with a strictly greater fence, so every late write of
@@ -82,7 +83,7 @@ public final class InstanceOperationLock {
     }
 
     /** The lease-key prefix of an instance record's claim. */
-    private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("instance"), "hohenheim_instance_");
+    private static final LeaseKeys KEYS = InstanceOperations.KEYS;
     public static final String KEY_PREFIX = KEYS.prefix();
 
     private static final Map<HostLeases, InstanceOperationLock> BY_CONTROLLER = new ConcurrentHashMap<>();
