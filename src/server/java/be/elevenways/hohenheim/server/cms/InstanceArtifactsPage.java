@@ -168,7 +168,6 @@ abstract class InstanceArtifactsPage implements RecordTab.Rendered<Row> {
         return ActionStateTranslator.bandRowOffers(placed, 0).allInvokes();
     }
 
-
     static @Nullable String isoOf(@Nullable Object value) {
         return value instanceof Instant instant ? instant.toString() : null;
     }

@@ -50,7 +50,7 @@ public final class InstanceSchedulesPage implements RecordTab.Rendered<Row> {
         Conduit conduit = request.conduit();
         AccessContext accessContext = request.access();
         Integer instanceId = instance.get(InstanceModel.ID);
-        String panel = CmsSupport.panelSlug(conduit);
+        String panel = request.panelSlug();
 
         List<Map<String, Object>> schedules = new ArrayList<>();
         for (Row schedule : Models.get(RecordScheduleModel.class)

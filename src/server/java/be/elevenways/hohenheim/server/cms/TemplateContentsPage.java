@@ -43,7 +43,7 @@ public final class TemplateContentsPage implements RecordTab.Rendered<Row> {
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row template) {
         Conduit conduit = request.conduit();
         Integer templateId = template.get(InstanceTemplateModel.ID);
-        String panel = CmsSupport.panelSlug(conduit);
+        String panel = request.panelSlug();
 
         List<Map<String, Object>> variables = new ArrayList<>();
         for (Row variable : Models.get(InstanceTemplateVariableModel.class)

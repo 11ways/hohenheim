@@ -49,7 +49,7 @@ public final class InstanceScheduleStepsPage implements RecordTab.Rendered<Row> 
         Conduit conduit = request.conduit();
         AccessContext accessContext = request.access();
         Integer scheduleId = schedule.get(RecordScheduleModel.ID);
-        String panel = CmsSupport.panelSlug(conduit);
+        String panel = request.panelSlug();
 
         List<Map<String, Object>> steps = new ArrayList<>();
         for (Row step : Models.get(RecordScheduleStepModel.class).findChain(scheduleId)) {

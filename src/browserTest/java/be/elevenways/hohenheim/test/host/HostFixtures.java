@@ -4,19 +4,20 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostPostureAcknowledgement;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.IncusPreflight;
+import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.auth.test.TestAccounts;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Accountability;
-import be.elevenways.zenit.common.security.PrincipalRef;
+import be.elevenways.zenit.common.security.AccountabilityOrigin;
+import be.elevenways.zenit.common.security.CallerChannel;
+import be.elevenways.zenit.common.security.Principal;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * Test-side operator decisions over the host record: the admission gate refuses
@@ -25,10 +26,6 @@ import java.util.UUID;
  * test that deploys must first do what an operator would.
  */
 public final class HostFixtures {
-
-    /** The attribution a fixture acknowledges under; a real one is required, never null. */
-    private static final Accountability OPERATOR =
-        new Accountability(null, null, "Test operator", null, null, "test");
 
     private HostFixtures() {
     }
@@ -186,9 +183,11 @@ public final class HostFixtures {
                 || ServerModel.postureAcknowledged(server)) {
             return;
         }
-        int operator = TestAccounts.create("host-posture-" + UUID.randomUUID() + "@fixture.test",
-            "Test operator", true, true);
-        Accountability.runAs(OPERATOR.withActor(PrincipalRef.account(operator), "Test operator"),
-            () -> HostPostureAcknowledgement.record(server));
+        // AIDEV-NOTE: resolve the shared fixture's real account in the CURRENT datasource, not a fabricated actor
+        // token or a cached id from another test database. Risk acceptance records an ACCOUNT principal.
+        Principal operator = TenantConduits.operator().principal();
+        Accountability attribution = Accountability.of(operator.reference(), operator.attributionLabel(),
+            new CallerChannel(AccountabilityOrigin.OFFLINE, null, null));
+        Accountability.runAs(attribution, () -> HostPostureAcknowledgement.record(server));
     }
 }
