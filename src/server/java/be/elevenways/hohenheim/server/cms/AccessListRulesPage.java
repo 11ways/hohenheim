@@ -10,27 +10,37 @@ import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.render.action.InvokeActionState;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.Resource;
+import be.elevenways.zenit.cms.server.panel.PanelActionOffers;
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.zenit.cms.server.render.action.ActionStateTranslator;
+import be.elevenways.zenit.cms.server.render.action.RowOffer;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
+import be.elevenways.zenit.common.routing.ReturnPath;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.http.ReturnTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
 
 /**
  * Rules tab on an access list: the rule TREE, an add form that chooses where a new node
@@ -44,7 +54,6 @@ import java.util.Map;
  */
 public final class AccessListRulesPage implements RecordScopedPage<Row> {
 
-    private final AccessRuleResource resource = new AccessRuleResource();
     private final ActionStateTranslator actions = new ActionStateTranslator();
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("access_list_rules"); }
@@ -72,10 +81,21 @@ public final class AccessListRulesPage implements RecordScopedPage<Row> {
             }
         }
 
+        // Each node's actions are the rule entry's own placed operations over the panel's twin, read in one batch the
+        // way its list reads them, each invoke returning to this tab.
+        Panel cmsPanel = Objects.requireNonNull(PanelRegistry.getBySlug(panel), "no panel " + panel);
+        @SuppressWarnings("unchecked")
+        PanelResource<Row> rulesEntry = (PanelResource<Row>) Objects.requireNonNull(
+            cmsPanel.entryBySlug(AccessRuleParts.SLUG), "panel " + panel + " declares no access-rule entry");
+        Resource<Row> rulesView = PanelResourceViews.of(rulesEntry,
+            new PanelRequest(cmsPanel, conduit, accessContext, null));
+        Function<Row, List<RowOffer>> offers = PanelActionOffers.rowsForRender(rulesView, cmsPanel, rules,
+            accessContext, ReturnPath.of(pageUrl));
+
         List<AccessRuleView> views = new ArrayList<>();
         List<AccessRuleOption> parents = new ArrayList<>();
         parents.add(new AccessRuleOption("", ruleText("root_group")));
-        flatten(roots, childrenByParent, 0, "", views, parents, accessContext, panel, pageUrl);
+        flatten(roots, childrenByParent, 0, "", views, parents, accessContext, panel, pageUrl, offers);
 
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", CmsSupport.pageTitle(conduit, "access_rule", list.get(AccessListModel.NAME)));
@@ -104,7 +124,8 @@ public final class AccessListRulesPage implements RecordScopedPage<Row> {
                          @NonNull List<AccessRuleOption> parents,
                          @NonNull AccessContext accessContext,
                          @NonNull String panel,
-                         @NonNull String pageUrl) {
+                         @NonNull String pageUrl,
+                         @NonNull Function<Row, List<RowOffer>> offers) {
         int position = 0;
         for (Row rule : level) {
             position++;
@@ -128,31 +149,29 @@ public final class AccessListRulesPage implements RecordScopedPage<Row> {
                 isGroup,
                 // The edit link carries the tab as its return target, like the invokes:
                 // a rule's Cancel/Delete then come back here, not to the global rule list.
-                ReturnTarget.bind(CmsRoutes.detail(panel, this.resource.slug(), id), pageUrl),
-                invokesFor(rule, accessContext, panel, id, pageUrl)));
+                ReturnTarget.bind(CmsRoutes.detail(panel, AccessRuleParts.SLUG, id), pageUrl),
+                invokesFor(rule, accessContext, offers)));
 
             if (isGroup) {
                 parents.add(new AccessRuleOption(String.valueOf(id),
                     ruleText("group_at").withArg("path", path)));
                 flatten(childrenByParent.getOrDefault(id, List.of()), childrenByParent,
-                    depth + 1, path, views, parents, accessContext, panel, pageUrl);
+                    depth + 1, path, views, parents, accessContext, panel, pageUrl, offers);
             }
         }
     }
 
-    /** The rule resource's own actions for THIS row and viewer, targeting its invoke route. */
+    /** The rule entry's placed operations for THIS row and viewer, on their shared invoke route. */
     private @NonNull List<InvokeActionState> invokesFor(@NonNull Row rule,
                                                         @NonNull AccessContext accessContext,
-                                                        @NonNull String panel,
-                                                        @Nullable Integer ruleId,
-                                                        @NonNull String pageUrl) {
-        ActionStateTranslator.RowActionPresentation presentation =
-            this.actions.translateRowActionsForList(this.resource.rowActions(), rule,
-                (actionId, row) -> ReturnTarget.bind(
-                    CmsRoutes.invokeRow(panel, this.resource.slug(), ruleId, actionId), pageUrl),
-                accessContext);
+                                                        @NonNull Function<Row, List<RowOffer>> offers) {
+        ActionStateTranslator.RowActionPresentation presentation = this.actions.translateRowActionsForList(
+            List.of(), rule, (actionId, row) -> {
+                throw new IllegalStateException("the rule entry declares no legacy row action, asked " + actionId);
+            }, accessContext, 0, offers.apply(rule));
         List<InvokeActionState> invokes = new ArrayList<>(presentation.inlineInvokes());
         invokes.addAll(presentation.overflowInvokes());
+        invokes.addAll(presentation.destructiveInvokes());
         return invokes;
     }
 

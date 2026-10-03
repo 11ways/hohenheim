@@ -133,7 +133,6 @@ class ProtectedPathEnforcementTest {
         denyRule.set(AccessRuleModel.TYPE, AccessRuleModel.TYPE_IP_DENY);
         denyRule.set(AccessRuleModel.DATA, new LinkedHashMap<>(Map.of("network", "127.0.0.0/8")));
         denyRule.set(AccessRuleModel.ENABLED, true);
-        denyRule.set(AccessRuleModel.SORT, 0);
         Models.get(AccessRuleModel.class).save(denyRule);
         Row storedSite = Models.get(SiteModel.class)
             .findById(site.get(SiteModel.ID));
@@ -248,7 +247,6 @@ class ProtectedPathEnforcementTest {
         row.set(AccessRuleModel.TYPE, AccessRuleModel.TYPE_BASIC_AUTH);
         row.set(AccessRuleModel.DATA, new LinkedHashMap<>(data));
         row.set(AccessRuleModel.ENABLED, true);
-        row.set(AccessRuleModel.SORT, 0);
         model.save(row);
     }
 

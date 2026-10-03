@@ -7,14 +7,12 @@ import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.server.auth.AccessRuleNodes;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.AccessListParts;
-import be.elevenways.hohenheim.server.cms.AccessRuleResource;
+import be.elevenways.hohenheim.server.cms.AccessRuleParts;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
-import be.elevenways.hohenheim.server.cms.ManageAccessRuleResource;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
-import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -43,11 +41,11 @@ import java.util.Objects;
  * AIDEV-NOTE: there is no model write here for anything an operator can type, on purpose.
  * The list is created through zenit-cms {@code ResourceWrites} and a rule is CONFIGURED
  * through it, which is what argon2-hashes a basic-auth password ({@code
- * AccessRuleResource.applyValuesToRow}) -- a raw {@code Model.save} of the same map stores
+ * AccessRuleParts} save hook) -- a raw {@code Model.save} of the same map stores
  * the plaintext, and {@code BasicCredentials.verifyPassword} then fails closed forever.
  * The one direct write left is the rule NODE's birth ({@link AccessRuleNodes}), shared
  * verbatim with the Rules tab, because a rule's place in the tree is not a form field and
- * {@code AccessRuleResource} is deliberately not creatable.
+ * {@code AccessRuleParts} declares no create.
  *
  * Authorization mirrors the panels exactly, and both panels create access lists: an admin
  * key writes through the admin access-list entry (the operator form, {@code shared}
@@ -61,8 +59,6 @@ import java.util.Objects;
  */
 public final class AccessListApi {
 
-    private static final AccessRuleResource ADMIN_RULES = new AccessRuleResource();
-    private static final ManageAccessRuleResource TENANT_RULES = new ManageAccessRuleResource();
 
     private AccessListApi() {
     }
@@ -220,8 +216,14 @@ public final class AccessListApi {
         throw new IllegalStateException("panel '" + panel.slug() + "' declares no access-list entry");
     }
 
-    private static @NonNull RowResource ruleResource(@NonNull AccessContext ctx) {
-        return HohenheimAccess.isAdmin(ctx) ? ADMIN_RULES : TENANT_RULES;
+    /** The access-rule entry of the caller's panel ({@link AccessRuleParts}): its admin or its /manage twin. */
+    @SuppressWarnings("unchecked")
+    private static @NonNull PanelResource<Row> ruleResource(@NonNull AccessContext ctx) {
+        Panel panel = panelFor(ctx);
+        if (panel.entryBySlug(AccessRuleParts.SLUG) instanceof PanelResource<?> rules) {
+            return (PanelResource<Row>) rules;
+        }
+        throw new IllegalStateException("panel '" + panel.slug() + "' declares no access-rule entry");
     }
 
     /** The lists this context manages; an admin's walk answers ALL, so it sees every one. */

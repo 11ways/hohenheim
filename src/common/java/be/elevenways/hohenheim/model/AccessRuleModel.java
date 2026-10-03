@@ -7,6 +7,8 @@ import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.net.IpRanges;
+import be.elevenways.zenit.common.orm.behaviour.TreeBehaviour;
+import be.elevenways.zenit.common.orm.behaviour.TreeDeletePolicy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -126,8 +128,12 @@ public class AccessRuleModel extends Model {
     /** The enclosing group row, or null for a direct child of the list's implicit root. */
     public static final IntegerField PARENT_ID = SCHEMA.addField(
         IntegerField.builder().name("parent_id").filterable(false).build());
+    /**
+     * The rule's position among its own siblings, dense from 0; null on a rule not placed yet, which the tree appends
+     * after its siblings. Written by {@link #TREE} only.
+     */
     public static final IntegerField SORT = SCHEMA.addField(
-        IntegerField.builder().name("sort").defaultValue(0).build());
+        IntegerField.builder().name("sort").build());
     public static final EnumField TYPE = SCHEMA.addField(EnumField.builder("type")
         .label(HohenheimFormCopy.label("rule_type")).help(HohenheimFormCopy.help("rule_type"))
         .value(TYPE_GROUP, v -> v.displayName("Group")
@@ -180,15 +186,15 @@ public class AccessRuleModel extends Model {
             .build());
 
     /**
-     * The enclosing group as a RELATION, so a query can name "the children of these rules"
-     * without materializing ids -- what the delete cascade asks.
+     * THE rule tree: one forest per access list (the list is the scope), dense sibling positions, a cycle guard, and a
+     * delete that takes the subtree with it -- an orphaned rule is a policy the proxy cannot reconstruct, and
+     * AccessRuleTree refuses (denies) a list that carries one.
      */
-    public static final BelongsTo<AccessRuleModel> PARENT = SCHEMA.addRelation(
-        BelongsTo.to(AccessRuleModel.class)
-            .name("parent")
-            .localKey(PARENT_ID)
-            .remoteKey(ID)
-            .build());
+    public static final TreeBehaviour TREE = SCHEMA.addBehaviour(TreeBehaviour.builder(PARENT_ID)
+        .position(SORT)
+        .scope(ACCESS_LIST_ID)
+        .onDelete(TreeDeletePolicy.CASCADE)
+        .build());
 
     /**
      * THE rule-type vocabulary, DERIVED from {@link #TYPE}'s declared values rather than

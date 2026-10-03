@@ -18,10 +18,14 @@ import be.elevenways.zenit.common.orm.migration.ForeignKeyAction;
 import be.elevenways.zenit.common.orm.migration.FrozenModel;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
 import be.elevenways.zenit.common.orm.migration.PrincipalColumns;
+import be.elevenways.zenit.common.orm.migration.operation.AddIndexOperation;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -37,7 +41,8 @@ import java.util.TreeSet;
  * and a certificate's requester stored as its principal reference ({@code requested_by_kind} beside the id);
  * and every stored host wildcard respelled into zenit's HostPattern grammar;
  * and the provenance mark of every operator-trustable target, set on the rows stored before it;
- * and the lock version of every game-domain mapping, whose writes became operations.
+ * and the lock version of every game-domain mapping, whose writes became operations;
+ * and the access-rule tree on core's TreeBehaviour: nullable positions, one tree index and dense sibling runs.
  *
  * AIDEV-NOTE: this is ONE migration on purpose (2026-09-30). It replaced M011, M012, M015, M016 and M017,
  * which no production install (kuifje at 009, robbedoes at 010) had applied; the two test installs that
@@ -204,6 +209,16 @@ public class M011_ReviewHardening extends HohenheimMigration {
                     .where(version.isNull()).assign(version, 0).updateAll();
             });
         });
+        // The access-rule tree is core's TreeBehaviour now: a position is null until the tree places the rule (no 0
+        // default, which would place every new rule first), one index serves the sibling reads, and every stored
+        // sibling run is renumbered dense from 0 in its stored order.
+        schema.alterTable("access_rules", table -> {
+            table.changeColumn("sort", ColumnType.INTEGER, column -> column.nullable(true));
+            table.addIndex("access_rules_tree_index", List.of("access_list_id", "parent_id", "sort"),
+                AddIndexOperation::overUpdatedColumns);
+        });
+        schema.data("renumber every access-rule sibling run dense from 0 in its stored order", "1",
+            M011_ReviewHardening::densifyRulePositions);
     }
 
     /**
@@ -264,6 +279,29 @@ public class M011_ReviewHardening extends HohenheimMigration {
     @Override
     public void down(@NonNull MigrationBuilder schema) {
         throw new UnsupportedOperationException("M011 is irreversible");
+    }
+
+    /**
+     * The data step renumbering each access list's sibling runs (one per parent) 0..n-1, ordered by the stored
+     * position and then the key, the order every reader used; idempotent, a dense run is left as stored.
+     */
+    public static void densifyRulePositions(@NonNull Datasource datasource) {
+        Db.run(datasource, () -> {
+            IntegerField id = IntegerField.builder().name("id").build();
+            IntegerField listId = IntegerField.builder().name("access_list_id").build();
+            IntegerField parentId = IntegerField.builder().name("parent_id").build();
+            IntegerField sort = IntegerField.builder().name("sort").build();
+            FrozenModel rules = new FrozenModel("access_rules", id, listId, parentId, sort);
+            Map<List<Object>, Integer> next = new HashMap<>();
+            for (Row row : rules.find().orderBy(listId, SortOrder.ASC).orderBy(sort, SortOrder.ASC)
+                    .orderBy(id, SortOrder.ASC).all()) {
+                List<Object> run = Arrays.asList(row.get(listId), row.get(parentId));
+                int position = next.merge(run, 1, Integer::sum) - 1;
+                if (!Integer.valueOf(position).equals(row.get(sort))) {
+                    rules.find().where(id.eq(row.get(id))).assign(sort, position).updateAll();
+                }
+            }
+        });
     }
 
     /** The data step hashing every Basic provider password still stored in plaintext, empty ones included. */

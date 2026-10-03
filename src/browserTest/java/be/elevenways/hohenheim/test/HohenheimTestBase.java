@@ -12,9 +12,11 @@ import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.ZenitAuth;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.csrf.CsrfTokens;
 import be.elevenways.zenit.common.session.Session;
@@ -246,6 +248,15 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         String proof = CmsConfirmation.FIELD + "=" + URLEncoder.encode(
             CmsConfirmation.proofValue(typedPhrase, typedPhrase), StandardCharsets.UTF_8);
         return body == null || body.isEmpty() ? proof : body + "&" + proof;
+    }
+
+    /**
+     * The invoke route of a placed operation on the admin sites list: a row verb names its one site in the query; a
+     * bulk verb (no site given) takes its selection in the posted body.
+     */
+    protected static @NonNull String siteInvoke(@NonNull Operation<?, ?, ?> verb, int... siteIds) {
+        String url = CmsRoutes.invoke(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, verb.id()).toUrl();
+        return siteIds.length == 0 ? url : url + "?ids=" + siteIds[0];
     }
 
     /**
