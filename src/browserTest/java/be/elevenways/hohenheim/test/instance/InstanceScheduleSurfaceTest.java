@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.schedule.ScheduleRunView;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.InstanceBackupParts;
+import be.elevenways.hohenheim.server.cms.InstanceSnapshotParts;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleRunParts;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleStepsPage;
 import be.elevenways.hohenheim.instance.InstanceScheduleOperations;
@@ -350,7 +351,7 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
         // hand-rolled idiom would produce once a type-level row exists.
         for (var resource : new RowResource[] {
                 PanelEntryViews.of(ManagePanel.SLUG, InstanceScheduleParts.SLUG),
-                new be.elevenways.hohenheim.server.cms.ManageInstanceSnapshotResource(),
+                PanelEntryViews.of(ManagePanel.SLUG, InstanceSnapshotParts.SLUG),
                 (RowResource) PanelResourceViews.forCaller(InstanceBackupParts.manage()),
                 new be.elevenways.hohenheim.server.cms.ManageInstanceDeviceResource(),
                 new be.elevenways.hohenheim.server.cms.ManageInstanceDatabaseResource(),

@@ -15,7 +15,8 @@ import be.elevenways.hohenheim.server.instance.InstallMediaFetches;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -38,7 +39,7 @@ import java.util.Map;
  * the background fetches (InstallMediaFetches), a fetch-from-URL form and per-medium delete. Hidden and 404d on Docker hosts -- their daemon has no
  * ISO volume to hold (the devices-tab hide-AND-enforce shape).
  */
-public final class ServerMediaPage implements RecordScopedPage<Row> {
+public final class ServerMediaTab implements RecordTab.Rendered<Row> {
 
     public static final String SLUG = "install-media";
 
@@ -48,7 +49,7 @@ public final class ServerMediaPage implements RecordScopedPage<Row> {
     @Override public @NonNull Icon icon() { return Icon.of("compact-disc"); }
 
     @Override
-    public boolean visibleFor(@NonNull Row record) {
+    public boolean visibleFor(@NonNull Row record, @NonNull AccessContext access) {
         return ServerModel.isIncus(record);
     }
 
@@ -63,9 +64,11 @@ public final class ServerMediaPage implements RecordScopedPage<Row> {
     }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row server) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row server) {
+        return body(request.conduit(), server);
+    }
+
+    @NonNull ActionResult<?> body(@NonNull Conduit conduit, @NonNull Row server) {
         Integer serverId = server.get(ServerModel.ID);
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", CmsSupport.pageTitle(conduit, "server_media",

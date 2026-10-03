@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.server.page.CmsRecordSources;
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.zenit.common.data.RecordCreateProvider;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
@@ -62,7 +63,7 @@ public final class AdminSources {
         // (HohenheimPickRules.KindHostRules) narrows on exactly those two.
         RecordSourceRegistry.INSTANCE.register(complete(RecordSource.of(ServerModel.class)
             .project(ServerModel.NAME, ServerModel.RUNTIME, ServerModel.VOLUME_BACKEND)
-            .search(ServerModel.NAME), ServerModel.class, new ServerResource()));
+            .search(ServerModel.NAME), ServerModel.class, (RowResource) PanelResourceViews.forCaller(ServerParts.admin())));
 
         // Runtime images ("yolks"), for the instance form's dependent image pick: enabled
         // and incus_image are the resolver's rule vocabulary (HohenheimPickRules.RuntimeImageRules).
@@ -73,7 +74,7 @@ public final class AdminSources {
             .subtitle(row -> {
                 Object description = row.get(RuntimeImageModel.DESCRIPTION);
                 return description != null ? String.valueOf(description) : "";
-            }), RuntimeImageModel.class, new RuntimeImageResource()));
+            }), RuntimeImageModel.class, (RowResource) PanelResourceViews.forCaller(RuntimeImageParts.admin())));
 
     }
 

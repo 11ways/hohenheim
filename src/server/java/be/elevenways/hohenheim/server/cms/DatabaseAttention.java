@@ -198,7 +198,7 @@ public final class DatabaseAttention {
         if (server == null) {
             return true;
         }
-        HostState state = ServerResource.statusCellOf(server).state();
+        HostState state = ServerParts.statusCellOf(server).state();
         return switch (state) {
             case ERROR -> true;
             case QUARANTINED, SILENT, NEVER_PROBED, OK -> false;

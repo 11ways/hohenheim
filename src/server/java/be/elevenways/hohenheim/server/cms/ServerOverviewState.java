@@ -36,6 +36,7 @@ import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
 import be.elevenways.zenit.cms.common.resource.RecordDashboardPage;
+import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.widget.RecordActionsWidget;
 import be.elevenways.zenit.cms.server.render.action.RecordActionBands;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -75,28 +76,22 @@ import java.util.function.UnaryOperator;
  * that hold the host -- rendered structured instead of flattened into form-field
  * sentences.
  *
- * The page IS a widget tree ({@link RecordDashboardPage}) and stays read-only: every
- * mutation on it is one of the resource's own {@code RowAction}s, projected through
+ * The RecordOverview mounts this widget tree and stays read-only: every
+ * mutation on it is one of the resource's own placed operations, projected through
  * {@code zenit:record_actions} so confirmations, permissions and per-row visibility
  * stay single-sourced.
+ *
+ * @author Jelle De Loecker
+ * @since 0.1.0
  */
-public final class ServerOverviewPage extends RecordDashboardPage<Row> {
+public final class ServerOverviewState {
 
     public static final String SLUG = "overview";
 
-    private final ServerResource resource;
+    private ServerOverviewState() {}
 
-    ServerOverviewPage(@NonNull ServerResource resource) {
-        this.resource = resource;
-    }
-
-    @Override public @NonNull Identifier id() { return HohenheimIds.id("server_overview"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("overview").withFilter("scope", "server"); }
-    @Override public @NonNull String slug() { return SLUG; }
-    @Override public @NonNull Icon icon() { return Icon.of("gauge"); }
-
-    @Override
-    public @NonNull WidgetTree widgets(@NonNull Row server, @NonNull AccessContext accessContext) {
+    @SuppressWarnings("unchecked")
+    public static @NonNull WidgetTree widgets(@NonNull Row server, @NonNull AccessContext accessContext) {
         Conduit conduit = accessContext.conduit();
         Integer serverId = server.get(ServerModel.ID);
         String panelSlug = CmsSupport.panelSlug(conduit);
@@ -123,7 +118,7 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
             Map.of("label", HohenheimWidgetCopy.localized("state", "server_overview")))
             .withData(stateBadges(server, locales, resolver)));
         state.add(new WidgetInstance(HohenheimWidgets.HOST_STATE.id(), Map.of())
-            .withData(ServerResource.statusCellOf(server)));
+            .withData(ServerParts.statusCellOf(server)));
 
         String lastError = blankable(server.get(ServerModel.LAST_ERROR));
         if (!lastError.isBlank()) {
@@ -169,9 +164,9 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
         }
 
         Panel panel = PanelRegistry.getBySlug(panelSlug);
-        if (panel != null) {
+        if (panel != null && panel.entryBySlug(ServerParts.SLUG) instanceof Resource<?> resource) {
             state.add(new WidgetInstance(RecordActionsWidget.ID, Map.of())
-                .withData(RecordActionBands.forRecord(panel, this.resource, server,
+                .withData(RecordActionBands.forRecord(panel, (Resource<Row>) resource, server,
                     accessContext, conduit)));
         }
         bands.add(band(new WidgetTree(state)));
@@ -207,7 +202,7 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
             new WidgetInstance(RecordsWidget.ID, Map.of(
                 "title", HohenheimWidgetCopy.localized("recent_activity", "server_overview"),
                 "source", CmsSupport.ACTIVITY_SOURCE,
-                "rules", ActivityRules.forRecord(this.resource.model(), serverId),
+                "rules", ActivityRules.forRecord(Models.get(ServerModel.class), serverId),
                 "sort", ActivityModel.CREATED_AT.getName(),
                 "descending", true,
                 "limit", 10))))));

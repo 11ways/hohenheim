@@ -192,6 +192,13 @@ public final class InstanceVolumes {
     public static @NonNull Row declare(int instanceId, @NonNull String name,
                                        @NonNull String containerPath, @Nullable Long quotaBytes,
                                        boolean exclusive) {
+        return declare(instanceId, name, containerPath, quotaBytes, exclusive, null);
+    }
+
+    /** The reviewed version guards the service's actual save, including edits made after the operation loaded. */
+    public static @NonNull Row declare(int instanceId, @NonNull String name,
+                                      @NonNull String containerPath, @Nullable Long quotaBytes,
+                                      boolean exclusive, @Nullable Long reviewedVersion) {
         requirePlainName(name);
         InstanceVolumeModel model = Models.get(InstanceVolumeModel.class);
         Row volume = model.find()
@@ -199,6 +206,9 @@ public final class InstanceVolumes {
             .where(InstanceVolumeModel.NAME.eq(name))
             .first();
         if (volume == null) {
+            if (reviewedVersion != null) {
+                throw HohenheimViolations.ofForm("unknown_instance");
+            }
             volume = model.createEmptyRow();
             volume.set(InstanceVolumeModel.INSTANCE_ID, instanceId);
             volume.set(InstanceVolumeModel.NAME, name);
@@ -207,6 +217,12 @@ public final class InstanceVolumes {
         volume.set(InstanceVolumeModel.QUOTA_BYTES, quotaBytes);
         volume.set(InstanceVolumeModel.EXCLUSIVE, exclusive);
         volume.set(InstanceVolumeModel.HOST_PATH, hostPathFor(instanceId, name));
+        if (reviewedVersion != null) {
+            volume.set(InstanceVolumeModel.VERSION, Math.toIntExact(reviewedVersion));
+        }
+        // AIDEV-NOTE: declaration writers do not own observations; a concurrent usage refresh must survive.
+        volume.remove(InstanceVolumeModel.USED_BYTES.getName());
+        volume.remove(InstanceVolumeModel.OBSERVED_AT.getName());
         model.save(volume);
         return volume;
     }
@@ -375,9 +391,10 @@ public final class InstanceVolumes {
                 if (used < 0) {
                     continue;
                 }
-                volume.set(InstanceVolumeModel.USED_BYTES, used);
-                volume.set(InstanceVolumeModel.OBSERVED_AT, Now.instant());
-                Models.get(InstanceVolumeModel.class).save(volume);
+                Models.get(InstanceVolumeModel.class).find()
+                    .where(InstanceVolumeModel.ID.eq(volume.get(InstanceVolumeModel.ID)))
+                    .assign(InstanceVolumeModel.USED_BYTES, used)
+                    .assign(InstanceVolumeModel.OBSERVED_AT, Now.instant()).updateAll();
             }
         } catch (RuntimeException unreadable) {
             Blast.log("VOLUMES: could not refresh usage of instance", ownerInstanceId,

@@ -27,7 +27,8 @@ import be.elevenways.hohenheim.server.cms.DnsZoneResource;
 import be.elevenways.hohenheim.server.cms.EnvironmentParts;
 import be.elevenways.hohenheim.server.cms.ManageDnsRecordResource;
 import be.elevenways.hohenheim.server.cms.NotificationChannelResource;
-import be.elevenways.hohenheim.server.cms.ServerResource;
+import be.elevenways.hohenheim.server.cms.ServerParts;
+import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
@@ -290,15 +291,14 @@ class DeleteConfirmationTest {
 
             // 4. A host carrying stored workloads: the delete is OFFERED and dead, with the
             //    count on screen, rather than orphaning every row that names the host.
-            ServerResource servers = new ServerResource();
-            AccessContext operator = AccessContext.of(TenantConduits.stubFor(null));
+            AccessContext operator = TenantConduits.operator();
             int hostId = server("delete-confirm-host");
             Row host = Models.get(ServerModel.class).findById(hostId);
-            assertThat(servers.deleteUnavailableReason(host, operator))
-                .as("step 4: an empty host is deletable").isNull();
+            assertThat(OperationPipeline.offer(ServerParts.DELETE, operator, host))
+                .as("step 4: an empty host is deletable").isInstanceOf(OperationPipeline.Offer.Available.class);
 
             stack("payments", hostId);
-            Microcopy inUse = servers.deleteUnavailableReason(host, operator);
+            Microcopy inUse = ((OperationPipeline.Offer.Unavailable) OperationPipeline.offer(ServerParts.DELETE, operator, host)).reason();
             assertThat(inUse).as("step 4: a host with workloads is not").isNotNull();
             assertThat(inUse.key()).isEqualTo("delete_in_use");
             assertThat(inUse.args().get("workloads"))
@@ -315,7 +315,7 @@ class DeleteConfirmationTest {
             assertThat(local.get(ServerModel.NAME))
                 .as("step 5: and it is the reserved local name")
                 .isEqualTo(ServerService.LOCAL_HOST_NAME);
-            assertThat(servers.deleteUnavailableReason(local, operator))
+            assertThat(((OperationPipeline.Offer.Unavailable) OperationPipeline.offer(ServerParts.DELETE, operator, local)).reason())
                 .as("step 5: the local host explains itself instead of failing on click")
                 .isNotNull()
                 .extracting(Microcopy::key).isEqualTo("delete_local");

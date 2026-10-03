@@ -133,7 +133,7 @@ public final class ManagePanel extends Panel {
         HohenheimPanel.addIf(peers, InstanceScheduleStepParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, new ManageInstanceDeviceResource(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, InstanceVariableParts.manage(), Role.INSTANCES);
-        HohenheimPanel.addIf(peers, new ManageInstanceSnapshotResource(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, InstanceSnapshotParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, InstanceBackupParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, InstanceTemplateParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, new InstanceFromTemplatePage(), Role.INSTANCES);
@@ -148,11 +148,11 @@ public final class ManagePanel extends Panel {
         // MEMBER of, and who else is in them. Both read-only -- see
         // ManageProjectResource for why a membership editor here could only refuse.
         // Projects span every product tier, so they are not gated on any single role.
-        peers.add(new ManageProjectResource());
-        peers.add(new ManageProjectMemberResource());
+        peers.add(ProjectParts.manage());
+        peers.add(ProjectMembershipParts.manage());
         // Preview deployments of granted sites: view, create for a chosen ref,
         // destroy. Scoped by the site's manage grant like domains are.
-        HohenheimPanel.addIf(peers, new ManagePreviewDeploymentResource(), Role.PROXY);
+        HohenheimPanel.addIf(peers, PreviewParts.manage(), Role.PROXY);
         // The tenant's OWN forge installations: register one, test it, use it on the
         // tenant's own sites. Shared operator providers are usable but never listed
         // here -- see GitProviderParts.manage().

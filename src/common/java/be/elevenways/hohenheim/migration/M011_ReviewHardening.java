@@ -195,6 +195,15 @@ public class M011_ReviewHardening extends HohenheimMigration {
         schema.alterTable("game_domains", table -> table.version());
         schema.data("start every stored game-domain mapping's lock version at 0", "1",
             M011_ReviewHardening::startGameDomainVersions);
+        schema.alterTable("instance_volumes", table -> table.version());
+        schema.data("start every stored volume declaration's lock version at 0", "1", datasource -> {
+            Db.run(datasource, () -> {
+                IntegerField id = IntegerField.builder().name("id").build();
+                IntegerField version = IntegerField.builder().name("version").build();
+                new FrozenModel("instance_volumes", id, version).find()
+                    .where(version.isNull()).assign(version, 0).updateAll();
+            });
+        });
     }
 
     /**

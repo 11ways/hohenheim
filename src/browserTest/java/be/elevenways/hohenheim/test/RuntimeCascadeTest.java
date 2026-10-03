@@ -26,8 +26,9 @@ import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
-import be.elevenways.hohenheim.server.cms.RuntimeImageResource;
-import be.elevenways.hohenheim.server.cms.ServerResource;
+import be.elevenways.hohenheim.server.cms.RuntimeImageParts;
+import be.elevenways.hohenheim.server.cms.ServerParts;
+import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -281,11 +282,11 @@ class RuntimeCascadeTest {
             int templateId = template("cascade-image-template", imageId);
             int instanceId = instance("cascade-in-image", null, imageId);
             Model images = Models.get(RuntimeImageModel.class);
-            RuntimeImageResource resource = new RuntimeImageResource();
-            AccessContext operator = AccessContext.of(TenantConduits.stubFor(null));
+            AccessContext operator = TenantConduits.operator();
 
             // 1. Offered dead with both counts.
-            Microcopy reason = resource.deleteUnavailableReason(images.findById(imageId), operator);
+            Microcopy reason = ((OperationPipeline.Offer.Unavailable) OperationPipeline.offer(
+                RuntimeImageParts.DELETE, operator, images.findById(imageId))).reason();
             assertThat(reason).as("step 1: an image in use is offered dead").isNotNull();
             assertThat(reason.filters().get("scope")).isEqualTo("runtime_image");
             assertThat(reason.args().get("instances")).as("step 1: one live instance").isEqualTo(1L);
@@ -450,8 +451,7 @@ class RuntimeCascadeTest {
             int targetId = server("cascade-target");
             int instanceId = instance("cascade-mover", null, null);
             Model servers = Models.get(ServerModel.class);
-            ServerResource resource = new ServerResource();
-            AccessContext operator = AccessContext.of(TenantConduits.stubFor(null));
+            AccessContext operator = TenantConduits.operator();
             // The window opens the way InstanceOperationGuard opens it: one set-based
             // statement that fires no write hooks and leaves SERVER_ID on the source.
             Models.get(InstanceModel.class).find()
@@ -462,7 +462,8 @@ class RuntimeCascadeTest {
                 .updateAll();
 
             // 1. The resource offers the target's delete DEAD, naming the workload.
-            Microcopy reason = resource.deleteUnavailableReason(servers.findById(targetId), operator);
+            Microcopy reason = ((OperationPipeline.Offer.Unavailable) OperationPipeline.offer(
+                ServerParts.DELETE, operator, servers.findById(targetId))).reason();
             assertThat(reason).as("step 1: a migration target is offered dead").isNotNull();
             assertThat(reason.key()).as("step 1: with the migrating reason").isEqualTo("delete_migrating");
             assertThat(reason.args().get("instance")).as("step 1: naming the workload")
@@ -482,8 +483,8 @@ class RuntimeCascadeTest {
                 .assign(InstanceModel.STATUS, "stopped")
                 .assign(InstanceModel.MIGRATE_TARGET_ID, (Object) null)
                 .updateAll();
-            assertThat(resource.deleteUnavailableReason(servers.findById(targetId), operator))
-                .as("step 3: nothing is moving onto it any more").isNull();
+            assertThat(OperationPipeline.offer(ServerParts.DELETE, operator, servers.findById(targetId)))
+                .as("step 3: nothing is moving onto it any more").isInstanceOf(OperationPipeline.Offer.Available.class);
             servers.delete(servers.findById(targetId));
             assertThat(servers.findById(targetId)).as("step 3: the host is gone").isNull();
 
@@ -713,7 +714,7 @@ class RuntimeCascadeTest {
     private static int template(String name, Integer imageId) {
         Row row = Models.get(InstanceTemplateModel.class).createEmptyRow();
         row.set(InstanceTemplateModel.NAME, name);
-        row.set(InstanceTemplateModel.KIND, "hohenheim:docker_container");
+        row.set(InstanceTemplateModel.KIND, "hohenheim:application");
         row.set(InstanceTemplateModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine", "tag", "latest")));
         row.set(InstanceTemplateModel.RUNTIME_IMAGE_ID, imageId);
         Models.get(InstanceTemplateModel.class).save(row);

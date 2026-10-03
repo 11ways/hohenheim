@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.instance.InstallMediaLive;
 import be.elevenways.hohenheim.model.InstallMediaFetchModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
-import be.elevenways.hohenheim.server.cms.ServerMediaPage;
+import be.elevenways.hohenheim.server.cms.ServerMediaTab;
 import be.elevenways.hohenheim.server.instance.InstallMedia;
 import be.elevenways.hohenheim.server.instance.InstallMediaFetches;
 import be.elevenways.protoblast.common.Blast;
@@ -60,7 +60,7 @@ final class ServerMediaHandlers {
                 conduit.notFound();
                 return null;
             }
-            return new DryResult<>(ServerMediaPage.view(server));
+            return new DryResult<>(ServerMediaTab.view(server));
         });
 
         HohenheimEndpoints.SERVERS_MEDIA_FETCH.setHandler(conduit -> {
@@ -182,7 +182,7 @@ final class ServerMediaHandlers {
 
     private static @NonNull RouteTarget mediaTab(@NonNull Integer serverId) {
         return CmsRoutes.subpage(HandlerSupport.ADMIN, "servers", serverId,
-            ServerMediaPage.SLUG);
+            ServerMediaTab.SLUG);
     }
 
     private static Microcopy mediaMessage(String key, String name) {

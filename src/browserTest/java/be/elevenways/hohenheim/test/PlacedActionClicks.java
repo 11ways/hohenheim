@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.resource.Resource;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationResult;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -27,12 +28,20 @@ public final class PlacedActionClicks {
 
     /** @return the resource's placed action whose id path is {@code path} */
     public static @NonNull PanelAction<Row> placed(@NonNull Resource<Row> resource, @NonNull String path) {
-        for (PanelAction<Row> action : resource.actions()) {
+        return placed(resource.slug(), resource.actions(), path);
+    }
+
+    public static @NonNull PanelAction<Row> placed(@NonNull PanelResource<Row> resource, @NonNull String path) {
+        return placed(resource.slug(), resource.actions(), path);
+    }
+
+    private static PanelAction<Row> placed(String slug, List<PanelAction<Row>> actions, String path) {
+        for (PanelAction<Row> action : actions) {
             if (path.equals(action.id().getPath())) {
                 return action;
             }
         }
-        throw new AssertionError(resource.slug() + " places no " + path);
+        throw new AssertionError(slug + " places no " + path);
     }
 
     /** Runs the placed operation over one row, as an admin whose every check passes. */
