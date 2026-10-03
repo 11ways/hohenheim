@@ -51,6 +51,9 @@ class SpamserviceManagerTest {
 
     @BeforeEach
     void startApi() throws Exception {
+        // macOS spells its temporary root through /var -> /private/var; the managed-path guard
+        // correctly refuses symlink ancestors, so the fixture supplies the actual directory.
+        this.temp = this.temp.toRealPath();
         this.api = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         this.port = this.api.getAddress().getPort();
         this.api.createContext("/v1/clients/ensure", this::ensureClient);

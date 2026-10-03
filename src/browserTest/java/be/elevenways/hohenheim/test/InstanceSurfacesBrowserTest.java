@@ -53,7 +53,9 @@ class InstanceSurfacesBrowserTest extends HohenheimTestBase {
     private static AccessContext tenant;
 
     @BeforeAll
-    static void seed() {
+    static void seed() throws Exception {
+        // The immutable capture assumes this fixture's inventory, not another class's git providers.
+        freshSeededDatabase();
         int tenantId = ApiSupport.user(PREFIX + "tenant@hohenheim.local", "B14 Instance Tenant");
         int template = template(PREFIX + "template");
         templateId = String.valueOf(template);

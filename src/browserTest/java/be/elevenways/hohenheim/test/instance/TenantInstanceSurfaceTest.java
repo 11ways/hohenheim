@@ -80,7 +80,9 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
      * A's manage grant re-asserts it first.
      */
     @BeforeAll
-    static void seed() {
+    static void seed() throws Exception {
+        // Both list twins must contain the fixture row regardless of earlier classes' inventory.
+        freshSeededDatabase();
         localBefore = HostFixtures.captureLocal();
         HostFixtures.blockLocal();
 

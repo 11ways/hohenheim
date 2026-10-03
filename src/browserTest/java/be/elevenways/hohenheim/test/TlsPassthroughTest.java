@@ -27,6 +27,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
@@ -230,7 +231,7 @@ class TlsPassthroughTest {
                 }
                 Thread.sleep(250);
             }
-            assertThat(client.getInputStream().read()).isEqualTo(-1);
+            assertClosed(client, "the incomplete handshake is closed at its absolute deadline");
         }
         assertThat(backendAccepted()).isFalse();
     }
@@ -302,7 +303,7 @@ class TlsPassthroughTest {
                 excess.setSoTimeout(3_000);
                 excess.getOutputStream().write(clientHello("capacity.example.test", false));
                 excess.getOutputStream().flush();
-                assertThat(excess.getInputStream().read()).isEqualTo(-1);
+                assertClosed(excess, "the excess active connection is refused");
             }
             release.complete(null);
         }
@@ -328,7 +329,7 @@ class TlsPassthroughTest {
                 excess.setSoTimeout(3_000);
                 excess.getOutputStream().write(hello);
                 excess.getOutputStream().flush();
-                assertThat(excess.getInputStream().read()).isEqualTo(-1);
+                assertClosed(excess, "the excess pending handshake is refused");
             }
         }
     }
@@ -359,6 +360,15 @@ class TlsPassthroughTest {
                     return false;
                 }
             }).get(3, TimeUnit.SECONDS)).isFalse();
+        }
+    }
+
+    /** A refusal may close with FIN or RST; returned data and a read timeout still fail. */
+    private static void assertClosed(Socket socket, String step) throws Exception {
+        try {
+            assertThat(socket.getInputStream().read()).as(step).isEqualTo(-1);
+        } catch (SocketException reset) {
+            assertThat(reset).as(step).hasMessageContaining("Connection reset");
         }
     }
 
