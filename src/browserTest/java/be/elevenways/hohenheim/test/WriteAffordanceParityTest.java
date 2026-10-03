@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.instance.InstanceAttachmentOperations;
+import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.HohenheimSlugs;
@@ -14,7 +16,6 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.DatabaseResource;
 import be.elevenways.hohenheim.server.cms.DnsRecordResource;
 import be.elevenways.hohenheim.server.cms.DomainParts;
-import be.elevenways.hohenheim.server.cms.InstanceDatabaseResource;
 import be.elevenways.hohenheim.instance.InstanceScheduleOperations;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleParts;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleStepParts;
@@ -67,7 +68,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Affordance-versus-funnel parity on every resource whose READ scope is wider than its
  * WRITE authority: the synthesized Edit/Delete affordances (and the detail form's Save
  * behind them) are offered exactly where the write pipeline would accept -- the
- * {@code InstanceDeviceResource} lesson, applied to the four remaining surfaces.
+ * {@code InstanceAttachmentParts.devicesAdmin()} lesson, applied to the four remaining surfaces.
  *
  * Enforcement was never broken (TenantWrites refuses every one of these on the model
  * pipeline); what these pin is that the SURFACE now agrees with the funnel instead of
@@ -269,15 +270,15 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     @Test
     void theAttachmentAffordancesFollowBothSides() {
         Row link = Models.get(InstanceDatabaseModel.class).findById(linkId);
-        InstanceDatabaseResource resource = new InstanceDatabaseResource();
+        RowResource resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES);
 
         assertThat(resource.updatableBy(link, viewer()))
             .as("a view-only delegate is offered no attachment editor").isFalse();
-        assertThat(resource.deletableBy(link, viewer()))
+        assertThat(detachOffered(link, viewer()))
             .as("nor a detach button").isFalse();
         assertThat(resource.updatableBy(link, holder()))
             .as("the two-sided holder keeps its editor").isTrue();
-        assertThat(resource.deletableBy(link, holder()))
+        assertThat(detachOffered(link, holder()))
             .as("and its detach button").isTrue();
 
         // ONE-SIDED: revoke the database half and the affordance must fall with it --
@@ -288,7 +289,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         try {
             assertThat(resource.updatableBy(link, holder()))
                 .as("instance config alone does not earn the attachment editor").isFalse();
-            assertThat(resource.deletableBy(link, holder()))
+            assertThat(detachOffered(link, holder()))
                 .as("nor the detach button").isFalse();
         } finally {
             RecordGrants.grant(GrantSubjectType.USER, holderId, DatabaseModel.MODEL_ID, databaseId,
@@ -527,7 +528,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
      */
     @Test
     void theAttachmentAffordanceStaysInsideTheGrantQueryBudget() {
-        InstanceDatabaseResource resource = new InstanceDatabaseResource();
+        RowResource resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES);
         Row link = Models.get(InstanceDatabaseModel.class).findById(linkId);
 
         AtomicInteger finds = new AtomicInteger();
@@ -703,5 +704,11 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
         instances.save(row);
         return row.get(InstanceModel.ID);
+    }
+
+    /** Whether the attachment's detach is offered to this caller: the operation's own offer. */
+    private static boolean detachOffered(Row link, AccessContext access) {
+        return !(OperationPipeline.offer(InstanceAttachmentOperations.DELETE_DATABASE_LINK, access, link)
+            instanceof OperationPipeline.Offer.Hidden);
     }
 }

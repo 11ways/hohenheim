@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
 import be.elevenways.hohenheim.test.PanelEntryViews;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.schedule.ScheduleRunView;
@@ -69,7 +70,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code run_as}, so the net effect was off-schedule triggering plus failed-run debris
  * -- contained, but an act the viewer held no verb for). And the list offered Edit and
  * Delete affordances to that same delegate, every submit refused by
- * {@code requireManage} -- the InstanceDeviceResource affordance lesson, unapplied.
+ * {@code requireManage} -- the InstanceAttachmentParts.devicesAdmin() affordance lesson, unapplied.
  */
 class InstanceScheduleSurfaceTest extends HohenheimTestBase {
     @Test
@@ -353,8 +354,8 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
                 PanelEntryViews.of(ManagePanel.SLUG, InstanceScheduleParts.SLUG),
                 PanelEntryViews.of(ManagePanel.SLUG, InstanceSnapshotParts.SLUG),
                 (RowResource) PanelResourceViews.forCaller(InstanceBackupParts.manage()),
-                new be.elevenways.hohenheim.server.cms.ManageInstanceDeviceResource(),
-                new be.elevenways.hohenheim.server.cms.ManageInstanceDatabaseResource(),
+                PanelEntryViews.of(ManagePanel.SLUG, InstanceAttachmentParts.DEVICES),
+                PanelEntryViews.of(ManagePanel.SLUG, InstanceAttachmentParts.DATABASES),
                 PanelEntryViews.of(ManagePanel.SLUG, InstanceScheduleStepParts.SLUG)}) {
             assertThat(resource.accessFunction().decide(operator).isDenied())
                 .as("%s translates ALL without enumerating", resource.id()).isFalse();

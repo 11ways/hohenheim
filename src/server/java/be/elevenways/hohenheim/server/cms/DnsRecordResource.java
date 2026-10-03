@@ -139,7 +139,7 @@ public class DnsRecordResource extends RowResource {
      * Edit and delete ride {@code TenantWrites}' record lanes (per-record {@code edit}
      * grant OR hostname authority, tenant-authorable types only), so the synthesized
      * affordances are offered on exactly that answer -- the
-     * {@link InstanceDeviceResource} shape: {@link ManageDnsRecordResource}'s read scope
+     * {@link InstanceAttachmentParts#devicesAdmin()} shape: {@link ManageDnsRecordResource}'s read scope
      * is wider ({@code view} grants and derived hostnames), and without this a view-only
      * delegate was shown buttons the write pipeline could only refuse.
      */

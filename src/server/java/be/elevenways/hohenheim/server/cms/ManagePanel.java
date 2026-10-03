@@ -131,7 +131,7 @@ public final class ManagePanel extends Panel {
         HohenheimPanel.addIf(peers, InstanceParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, InstanceScheduleParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, InstanceScheduleStepParts.manage(), Role.INSTANCES);
-        HohenheimPanel.addIf(peers, new ManageInstanceDeviceResource(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, InstanceAttachmentParts.devicesManage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, InstanceVariableParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, InstanceSnapshotParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, InstanceBackupParts.manage(), Role.INSTANCES);
@@ -142,7 +142,7 @@ public final class ManagePanel extends Panel {
         HohenheimPanel.addIf(peers, new ManageDatabaseResource(), Role.DATABASES);
         // Needs BOTH tiers to exist: it joins an instance to a managed database.
         if (HohenheimRoles.enabled(Role.DATABASES) && HohenheimRoles.enabled(Role.INSTANCES)) {
-            peers.add(new ManageInstanceDatabaseResource());
+            peers.add(InstanceAttachmentParts.databasesManage());
         }
         // The project tier's tenant projection: which projects the principal is a
         // MEMBER of, and who else is in them. Both read-only -- see

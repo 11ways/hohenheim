@@ -1145,7 +1145,7 @@ public final class TenantWrites {
      * network the attach creates does. Widening exposure is a manage-level act, and
      * DatabaseModel has no {@code config} verb by deliberate declaration.
      *
-     * PUBLIC because {@code InstanceDatabaseResource.validate} must ask the SAME question
+     * PUBLIC because {@code InstanceAttachmentParts.requireLinkReachable} must ask the SAME question
      * BEFORE its reachability lookups: those lookups are unscoped, so run first they were
      * an existence/name/host oracle for a probing tenant (absent, wrong-host-with-name,
      * and not-yours each answered differently). One derivation, asked early for the

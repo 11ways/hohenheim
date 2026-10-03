@@ -1,10 +1,15 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.hohenheim.instance.InstanceAttachmentOperations;
+import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.test.PanelEntryViews;
+import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.cms.ManageInstanceDeviceResource;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
@@ -453,7 +458,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
      * {@code requireOperationCapability(instanceId, CONFIG)} at InstanceDevices :53/:89/
      * :129/:161 had zero coverage. Nothing was exploitable (the check is present at all
      * four mutators); this is regression risk, and the surface makes it real:
-     * ManageInstanceDeviceResource scopes its READ predicate to {@code view}, so a
+     * InstanceAttachmentParts.devicesManage() scopes its READ predicate to {@code view}, so a
      * view-only delegate really is shown the device list and the edit route, and the
      * mutator gate is the only thing between it and a deleted volume.
      */
@@ -553,7 +558,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             .as("step 1: the fixture disk was attached").isEqualTo(200);
         Row row = deviceRows(instanceId).get(0);
 
-        ManageInstanceDeviceResource resource = new ManageInstanceDeviceResource();
+        RowResource resource = PanelEntryViews.of(HohenheimSlugs.MANAGE, InstanceAttachmentParts.DEVICES);
         AccessContext viewer = AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(viewerId, "Device Surface Viewer")));
         AccessContext operator = AccessContext.of(TenantConduits.stubFor(
@@ -574,7 +579,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         //    one is the whole point: a detach button deletes a tenant's volume.
         assertThat(resource.updatableBy(row, viewer))
             .as("step 3: a view-only delegate is offered no edit affordance").isFalse();
-        assertThat(resource.deletableBy(row, viewer))
+        assertThat(detachOffered(row, viewer))
             .as("step 3: nor a detach button that could only be refused").isFalse();
         assertThat(resource.creatableBy(viewer))
             .as("step 3: nor an attach (create) affordance: every attach it could submit is refused by the"
@@ -587,7 +592,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             HohenheimAccess.CONFIG, true);
         assertThat(resource.updatableBy(row, operator))
             .as("step 4: a config holder keeps its edit affordance").isTrue();
-        assertThat(resource.deletableBy(row, operator))
+        assertThat(detachOffered(row, operator))
             .as("step 4: and its detach button").isTrue();
         assertThat(resource.creatableBy(operator))
             .as("step 4: and its attach affordance").isTrue();
@@ -600,7 +605,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             new UserPrincipal(tenantId, "Device Surface Tenant")));
         assertThat(resource.updatableBy(row, revoked))
             .as("step 5: a revoked capability withdraws the edit affordance").isFalse();
-        assertThat(resource.deletableBy(row, revoked))
+        assertThat(detachOffered(row, revoked))
             .as("step 5: and the detach button").isFalse();
     }
 
@@ -766,5 +771,11 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
             return 128;
         }
+    }
+
+    /** Whether the detach is offered to this caller: the operation's own offer. */
+    private static boolean detachOffered(Row device, AccessContext access) {
+        return !(OperationPipeline.offer(InstanceAttachmentOperations.DETACH_DEVICE, access, device)
+            instanceof OperationPipeline.Offer.Hidden);
     }
 }

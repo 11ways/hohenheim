@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server;
 
+import be.elevenways.hohenheim.server.instance.InstanceAttachmentOperationHandlers;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimPaths;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -80,6 +81,7 @@ public final class HohenheimHandlers {
         GameDomainOperationHandlers.init();
         InstanceBackupOperationHandlers.init();
         InstanceChildDeletes.init();
+        InstanceAttachmentOperationHandlers.init();
         EnvironmentParts.init();
         InstanceScheduleOperationHandlers.init();
         StackOperations.init();

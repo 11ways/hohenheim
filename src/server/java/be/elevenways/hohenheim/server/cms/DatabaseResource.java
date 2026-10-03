@@ -338,7 +338,7 @@ public class DatabaseResource extends RowResource {
     /**
      * A database DELETE demands {@code destroy} on the record (the model's
      * before-remove hook in {@code TenantWrites}), so the synthesized Delete affordance
-     * is offered on exactly that answer -- the {@link InstanceDeviceResource} shape:
+     * is offered on exactly that answer -- the {@link InstanceAttachmentParts#devicesAdmin()} shape:
      * {@link ManageDatabaseResource} reads by the wider {@code view}, and without this
      * a view-only delegate was shown a destroy button the pipeline could only refuse.
      * No updatableBy twin: {@link #updatable()} is true only for the operator resize, which
