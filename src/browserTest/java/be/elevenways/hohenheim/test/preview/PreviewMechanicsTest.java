@@ -369,7 +369,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
         // awaitRunningSteps return before the destroy began. A null service means no background sweeper runs.
         TaskService taskService = TaskRuntime.service();
         try (TaskHold sweeperHold = taskService == null ? null
-                : taskService.hold(RunRecordSchedulesTask.ID.toString())) {
+                : taskService.pause(RunRecordSchedulesTask.ID)) {
             if (sweeperHold != null) {
                 assertThat(sweeperHold.awaitIdle(Duration.ofSeconds(20)))
                     .as("step 3: a background sweep already running has ended").isTrue();
