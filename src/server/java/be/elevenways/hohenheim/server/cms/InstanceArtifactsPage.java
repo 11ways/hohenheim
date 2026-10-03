@@ -27,6 +27,7 @@ import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
+import be.elevenways.zenit.common.routing.ReturnPath;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.server.http.ReturnTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -172,7 +173,7 @@ abstract class InstanceArtifactsPage implements RecordScopedPage<Row> {
                                                         @NonNull Object artifactId,
                                                         @NonNull String pageUrl) {
         List<RowOffer> placed = PanelActionOffers.rowOffers(resource, request.panel(), artifact, request.access(),
-            pageUrl);
+            ReturnPath.of(pageUrl));
         // AIDEV-NOTE: the invoke target travels TYPED (the translator renders it and pairs its
         // input lane off the same bindings); only RowAction.Url is Uri-typed.
         ActionStateTranslator.RowActionPresentation presentation =
