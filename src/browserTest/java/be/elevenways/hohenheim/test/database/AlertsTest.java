@@ -17,6 +17,7 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.comms.CommsChannel;
 import be.elevenways.zenit.comms.CommsRecipient;
+import be.elevenways.zenit.comms.CommsSettings;
 import be.elevenways.zenit.comms.server.Comms;
 import be.elevenways.zenit.comms.server.CommsDeliveryModel;
 import be.elevenways.zenit.comms.server.CommsDispatcher;
@@ -25,6 +26,11 @@ import be.elevenways.zenit.comms.server.CommsInboxOwners;
 import be.elevenways.zenit.comms.server.transport.TransportTypes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
+import be.elevenways.zenit.server.ServerZenitRuntime;
+import be.elevenways.zenit.server.setting.DrySettingsWriter;
+import be.elevenways.zenit.server.setting.PrivateNetworkBoot;
+import be.elevenways.zenit.test.support.OutboundFixture;
 import com.sun.net.httpserver.HttpServer;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.junit.jupiter.api.AfterEach;
@@ -35,6 +41,7 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.InetAddress;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -49,6 +56,12 @@ class AlertsTest {
 
     @BeforeAll
     static void boot() throws Exception {
+        // The test host declares its LAN webhook authority before runtime seals boot declarations.
+        ExecutionIdentity.runDetachedAsSystem("alerts test host boot", () -> {
+            new DrySettingsWriter(ServerZenitRuntime.settingsFile(PrivateNetworkBoot.FILE))
+                .setPath(CommsSettings.Webhook.ALLOW_PRIVATE_NETWORKS.configurationPath(), true).persist();
+            CommsSettings.Webhook.ALLOW_PRIVATE_NETWORKS.declareAtBoot(true);
+        });
         // The shared browserTest runtime registers models and runs migrations
         // (comms tables included, via migration auto-discovery).
         HohenheimEndpoints.init();
@@ -152,7 +165,7 @@ class AlertsTest {
                     .isEqualTo("sent");
             }
         } finally {
-            receiver.stop();
+            receiver.close();
         }
     }
 
@@ -171,7 +184,7 @@ class AlertsTest {
                 .contains("\"subject\":\"Expiring\"")
                 .contains("\"message\":\"cert x is old\"");
         } finally {
-            receiver.stop();
+            receiver.close();
         }
     }
 
@@ -285,12 +298,13 @@ class AlertsTest {
     }
 
     /** Tiny loopback HTTP server that records the last POST. */
-    private static final class Receiver {
+    private static final class Receiver implements AutoCloseable {
         final HttpServer server;
         final int port;
         final AtomicReference<String> lastPath = new AtomicReference<>();
         final AtomicReference<String> lastBody = new AtomicReference<>();
         private boolean stopped = false;
+        private OutboundFixture outbound;
 
         private Receiver(HttpServer server, int port) {
             this.server = server;
@@ -309,11 +323,13 @@ class AlertsTest {
                 exchange.close();
             });
             server.start();
+            receiver.outbound = OutboundFixture.routeResolved("alerts-lan.example.test",
+                InetAddress.getByAddress(new byte[] {10, 0, 0, 7}), receiver.port);
             return receiver;
         }
 
         String url(String path) {
-            return "http://127.0.0.1:" + this.port + path;
+            return "http://" + this.outbound.host() + ":" + this.port + path;
         }
 
         void stop() {
@@ -324,7 +340,13 @@ class AlertsTest {
         }
 
         void stopQuietly() {
+            close();
+        }
+
+        @Override
+        public void close() {
             stop();
+            this.outbound.close();
         }
     }
 }

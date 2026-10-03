@@ -40,8 +40,8 @@ class HostNetworkBootMigrationTest {
                 PrivateNetworkBoot.loadAndMigrate(root, local, new DryFileSource(local)));
             assertThat(ProteusAuthProviderType.realmGuard()).as("step 1: the existing LAN realm remains reachable")
                 .isSameAs(OutboundUrlGuard.PRIVATE_NETWORKS);
-            assertThat(new DryFileSource(local).snapshot().toString()).as("step 1: the editable file loses only the opt-in")
-                .contains("session_ttl_seconds=86400").doesNotContain("proteus_allow_private_networks");
+            assertThat(new DryFileSource(local).snapshot().toString()).as("step 1: operator configuration is preserved")
+                .contains("session_ttl_seconds=86400").contains("proteus_allow_private_networks=true");
             assertThat(new DryFileSource(root.resolve(PrivateNetworkBoot.FILE)).snapshot().toString())
                 .as("step 1: the stored allowance is retained in host boot configuration")
                 .contains("proteus_allow_private_networks=true");

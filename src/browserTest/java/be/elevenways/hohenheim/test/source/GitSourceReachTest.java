@@ -22,6 +22,7 @@ import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.protoblast.server.process.Subprocess;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 
@@ -35,7 +36,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -253,6 +254,7 @@ class GitSourceReachTest extends HohenheimTestBase {
             TenantConduits.as(operator(), () -> {
                 Row provider = providers.findById(providerId);
                 provider.set(GitProviderModel.NAME, "Provenance Forge (reviewed)");
+                provider.set(GitProviderModel.BASE_URL, provider.get(GitProviderModel.BASE_URL));
                 providers.save(provider);
             });
             assertThat(GitProviders.clientFor(providerId).listRepositories())
@@ -337,15 +339,8 @@ class GitSourceReachTest extends HohenheimTestBase {
     }
 
     private static void git(Path repo, String... args) throws Exception {
-        String[] command = new String[args.length + 1];
-        command[0] = "git";
-        System.arraycopy(args, 0, command, 1, args.length);
-        Process process = new ProcessBuilder(command).directory(repo.toFile())
-            .redirectErrorStream(true).start();
-        String output = new String(process.getInputStream().readAllBytes());
-        if (!process.waitFor(30, TimeUnit.SECONDS) || process.exitValue() != 0) {
-            throw new AssertionError("git " + String.join(" ", args) + " failed: " + output);
-        }
+        var outcome = Subprocess.of("git", args).directory(repo).timeout(Duration.ofSeconds(30)).mergeStderr().run();
+        assertThat(outcome.succeeded()).as("fixture git command: %s", outcome.describe()).isTrue();
     }
 
     /** The seeded operator account (it holds "*"), as a request caller rather than the test body's system work. */
