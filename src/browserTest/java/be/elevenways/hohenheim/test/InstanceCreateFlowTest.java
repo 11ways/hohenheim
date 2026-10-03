@@ -124,7 +124,7 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         page.waitForCondition(() -> page.locator(HOST_SELECT + "[disabled]").count() == 0);
         openPlSelect(HOST_SELECT);
         page.waitForSelector(hostOption(dockerHostId));
-        assertCount(hostOption(incusHostId), 0);
+        assertCount(hostOption(incusHostId), 0, "step 3: a Docker-only kind never offers the Incus host");
         closeOpenPopup();
 
         // ...and the runtime image picker is no longer held by the missing kind: it opens
@@ -148,7 +148,7 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         page.waitForCondition(() -> page.locator(HOST_SELECT + "[disabled]").count() == 0);
         openPlSelect(HOST_SELECT);
         page.waitForSelector(hostOption(incusHostId));
-        assertCount(hostOption(dockerHostId), 0);
+        assertCount(hostOption(dockerHostId), 0, "step 4: an Incus-only kind never offers the Docker host");
         closeOpenPopup();
 
         // 5. A workspace runs on both runtimes but DEMANDS a quota-capable volume
@@ -158,7 +158,8 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         page.waitForCondition(() -> page.locator(HOST_SELECT + "[disabled]").count() == 0);
         openPlSelect(HOST_SELECT);
         page.waitForSelector(hostOption(dockerHostId));
-        assertCount(hostOption(incusHostId), 0);
+        assertCount(hostOption(incusHostId), 0,
+            "step 5: a workspace never offers the Incus host, whose volume backend has no quota");
 
         // 6. A workspace runs inside a runtime image: the pick resolves, and the seeded
         //    catalog answers (RuntimeImageSeeder ships node-22 and friends).
@@ -296,7 +297,7 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         for (String section : List.of("build", "deployment", "runtime")) {
             waitForSelector(SETTINGS + " pl-card[data-section='" + section + "']");
             assertCount(SETTINGS + " pl-card[data-section='" + section
-                + "'][data-collapsed='true']", 1);
+                + "'][data-collapsed='true']", 1, "step 1: the " + section + " fold is collapsed on first paint");
         }
 
         // 2. The decisions stay OUTSIDE every fold: the seven fields a person answers.

@@ -408,13 +408,13 @@ class DnsCentralEditTest extends HohenheimTestBase {
 
         // 1. Cancel closes the dialog.
         click(deleteButton);
-        assertIsVisible(".pl-alertdialog-modal[data-open]");
+        assertIsVisible(".pl-alertdialog-modal[data-open]", "step 1: delete opens the confirmation");
         click("[data-cms-confirm-cancel]");
-        assertIsNotVisible(".pl-alertdialog-modal");
+        assertIsNotVisible(".pl-alertdialog-modal", "step 1: cancel closes it");
 
         // 2. Confirm forwards the delete to the owning peer.
         click(deleteButton);
-        assertIsVisible(".pl-alertdialog-modal[data-open]");
+        assertIsVisible(".pl-alertdialog-modal[data-open]", "step 2: delete opens the confirmation again");
         click("[data-cms-confirm-ok]");
         String deletePath = "/api/dns/zones/confirm.example/records/7/delete";
         page.waitForCondition(() -> stub.calls.stream()

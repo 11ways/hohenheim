@@ -219,13 +219,13 @@ class DnsListEditingTest extends HohenheimTestBase {
         // 2. A search narrows the list without adding an entry.
         page.locator(search).fill("mail");
         page.waitForURL("**/page/records?text=mail");
-        waitForCount("pl-table-row[data-row-key='" + wwwId + "']", 0);
+        assertCount("pl-table-row[data-row-key='" + wwwId + "']", 0, "step 2: the search hides the www row");
         assertThat(historyLength()).as("step 2: the search took over the tab's entry").isEqualTo(entries);
 
         // 3. A second term takes over the same entry again.
         page.locator(search).fill("www");
         page.waitForURL("**/page/records?text=www");
-        waitForCount("pl-table-row[data-row-key='" + mailId + "']", 0);
+        assertCount("pl-table-row[data-row-key='" + mailId + "']", 0, "step 3: the second term hides the mail row");
         assertThat(historyLength()).as("step 3: still no entry per term").isEqualTo(entries);
 
         // 4. Back leaves the tab: the zone list, never an earlier search term.
@@ -416,7 +416,7 @@ class DnsListEditingTest extends HohenheimTestBase {
                 + "[formaction^='/admin/dns-records/invoke/hohenheim.delete_dns_record?ids=" + second + "']";
             page.waitForSelector(deleteItem);
             click(deleteItem);
-            assertIsVisible(".pl-alertdialog-modal[data-open]");
+            assertIsVisible(".pl-alertdialog-modal[data-open]", "the compact delete opens the confirmation");
             click("[data-cms-confirm-ok]");
             page.waitForCondition(() -> Models.get(DnsRecordModel.class).findById(second) == null);
             page.waitForCondition(() -> page.locator(row).count() == 0);
@@ -458,9 +458,10 @@ class DnsListEditingTest extends HohenheimTestBase {
         page.setViewportSize(760, 844);
         navigateToApp(tab);
         waitForHydration();
-        assertIsNotVisible(row + ".cms-row-action-lane pl-button[data-action-id='zenit:edit']");
-        assertIsNotVisible(row + ".cms-row-action-more pl-button");
-        assertIsVisible(row + ".cms-row-action-compact pl-button");
+        assertIsNotVisible(row + ".cms-row-action-lane pl-button[data-action-id='zenit:edit']",
+            "step 1: the lane's Edit is out of a narrow layout");
+        assertIsNotVisible(row + ".cms-row-action-more pl-button", "step 1: so is the ordinary menu trigger");
+        assertIsVisible(row + ".cms-row-action-compact pl-button", "step 1: the compact trigger is in");
 
         // 2. That one menu carries BOTH halves: the lane's Edit as a menu link and the
         //    overflow's dyndns mint as a submitter associated with THIS page's form.
@@ -472,7 +473,7 @@ class DnsListEditingTest extends HohenheimTestBase {
         page.locator(row + ".cms-row-action-compact pl-dropdown-menu-trigger")
             .first().evaluate("el => el.click()");
         page.waitForSelector(compactEdit);
-        assertIsVisible(compactMint);
+        assertIsVisible(compactMint, "step 2: the compact menu carries the overflow's dyndns mint");
         assertThat(getAttribute(compactMint, "form"))
             .as("step 2: the compact copy submits through the tab's own carrier form")
             .isEqualTo("dns-records-list-form");
@@ -490,8 +491,9 @@ class DnsListEditingTest extends HohenheimTestBase {
         page.setViewportSize(1400, 900);
         navigateToApp(tab);
         waitForHydration();
-        assertIsVisible(row + ".cms-row-action-lane pl-button[data-action-id='zenit:edit']");
-        assertIsNotVisible(row + ".cms-row-action-compact pl-button");
+        assertIsVisible(row + ".cms-row-action-lane pl-button[data-action-id='zenit:edit']",
+            "step 4: a wide window shows the lane's Edit again");
+        assertIsNotVisible(row + ".cms-row-action-compact pl-button", "step 4: and drops the compact trigger");
     }
 
     /**
@@ -518,8 +520,8 @@ class DnsListEditingTest extends HohenheimTestBase {
         page.setViewportSize(760, 844);
         navigateToApp("/admin/dns-zones/" + zoneId + "/page/records");
         waitForHydration();
-        assertCount(scroller, 1);
-        assertCount("div.cms-table-scroll", 0);
+        assertCount(scroller, 1, "step 1: the scroll area is the component");
+        assertCount("div.cms-table-scroll", 0, "step 1: no bare div claims the class");
 
         // 2. It really is a scrollport: the table is wider than the box that holds it, and
         //    the box scrolls rather than clips.
