@@ -63,9 +63,8 @@ class SoftDeleteSurfacesTest extends HohenheimTestBase {
             HttpResponse<String> inTrash = adminGet("/admin/sites/" + siteId);
             assertThat(inTrash.statusCode()).as("step 2: the record page opens from the Trash").isEqualTo(200);
             // The Trash's restore is core's archive restore, placed on the shared invoke route.
-            assertThat(inTrash.body()).as("step 2: offering its restore")
-                .contains("/admin/sites/invoke/" + SiteWrites.RESTORE.id().getNamespace() + "."
-                    + SiteWrites.RESTORE.id().getPath());
+            assertThat(inTrash.body()).as("step 2: offering its restore over THIS site")
+                .contains(siteInvoke(SiteWrites.RESTORE, siteId));
             assertThat(pickerBody()).as("step 2: the picker no longer offers it").doesNotContain(NAME);
             assertThat(keyGet(keyAdmin, "/api/v1/sites").body())
                 .as("step 2: the API list drops it").doesNotContain(NAME);
