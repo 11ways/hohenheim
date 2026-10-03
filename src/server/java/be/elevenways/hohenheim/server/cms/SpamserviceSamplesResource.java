@@ -22,7 +22,6 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
-import be.elevenways.zenit.common.orm.lease.LeaseKeys;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -50,9 +49,7 @@ import java.util.function.Supplier;
  * @since  0.1.0
  */
 public final class SpamserviceSamplesResource {
-    private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("spamservice_sample_command"));
-    private static final OperationCommand COMMAND = OperationCommand.serializedBy(KEYS,
-        invocation -> invocation.subjectKeys().get(0)).onDatasource("default")
+    private static final OperationCommand COMMAND = OperationCommand.perSubject().onDatasource("default")
         .execution(CommandExecution.OUTSIDE_TRANSACTION);
 
     public static final String SLUG = "spamservice-samples";

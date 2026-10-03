@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
-import be.elevenways.zenit.common.orm.lease.LeaseKeys;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
@@ -20,9 +19,8 @@ import be.elevenways.zenit.common.ui.Icon;
  * @since 0.1.0
  */
 public final class InstanceSnapshotOperations {
-    private static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("snapshot_command"));
-    private static final OperationCommand COMMAND = OperationCommand.serializedBy(KEYS,
-        invocation -> invocation.subjectKeys().getFirst()).execution(CommandExecution.OUTSIDE_TRANSACTION);
+    private static final OperationCommand COMMAND = OperationCommand.perSubject()
+        .execution(CommandExecution.OUTSIDE_TRANSACTION);
     public static final SubjectType<Row> SNAPSHOT = SubjectType.record(InstanceSnapshotModel.MODEL_ID);
     public static final Operation<Row, Void, Void> RESTORE = Operation.declare(HohenheimIds.id("restore_snapshot"))
         .label(Microcopy.of("restore").withFilter("scope", "instance_snapshot"))

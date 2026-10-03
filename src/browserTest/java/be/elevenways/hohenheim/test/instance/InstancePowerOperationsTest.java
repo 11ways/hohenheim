@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -265,7 +266,9 @@ class InstancePowerOperationsTest {
                     "rival-start");
                 thread.start();
                 try {
-                    thread.join(TimeUnit.SECONDS.toMillis(60));
+                    thread.join(TimeUnit.SECONDS.toMillis(5));
+                    assertThat(thread.isAlive()).as("step 5: a different power verb reaches its refusal immediately")
+                        .isFalse();
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
                 }
@@ -275,6 +278,15 @@ class InstancePowerOperationsTest {
                 .isInstanceOfSatisfying(Violations.class, violations -> assertThat(violations.all())
                     .anySatisfy(violation -> assertThat(violation.message().key())
                         .isEqualTo("instance_operation_in_progress")));
+            int[] refusedStatus = {0};
+            String refusedBody = Json.stringify(ApiConduits.refusal(answering(refusedStatus),
+                (Violations) rival.get()).get());
+            assertThat(refusedStatus[0]).as("step 5: the frozen /api/v1 adapter still answers 422").isEqualTo(422);
+            assertThat(refusedBody).as("step 5: start during restart keeps the byte-identical /api/v1 refusal body")
+                .isEqualTo("{\"status\":422,\"code\":\"instance_operation_in_progress\",\"message\":\"Another operation on "
+                    + "instance ops-target is still running; try again when it has finished\",\"violations\":[{\"code\":"
+                    + "\"instance_operation_in_progress\",\"message\":\"Another operation on instance ops-target is still "
+                    + "running; try again when it has finished\"}]}");
 
             // 6. Stop is idempotent on every surface: the API stops a running instance, a second stop answers
             //    "already stopped" without touching it, and a scheduled stop of a stopped instance succeeds.
