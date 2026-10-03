@@ -46,7 +46,7 @@ public class SiteAuthProviderModel extends Model {
             .build());
 
     // Provider-agnostic required permission for claims-based providers (null = any identity).
-    // PermissionField: edits with the KnownPermissions vocabulary as autocomplete, plus
+    // PermissionField: edits with the declared permissions as autocomplete, plus
     // the assigned Proteus realm's fetched vocabulary on top.
     public static final StringField REQUIRED_PERMISSION = SCHEMA.addField(
         PermissionField.builder("required_permission")

@@ -28,6 +28,7 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationResult;
@@ -122,7 +123,7 @@ class InstancePowerOperationsTest {
                     InstanceOperations.RESTART, InstanceOperations.BACKUP, InstanceOperations.SNAPSHOT,
                     InstanceOperations.CONSOLE_COMMAND, InstanceOperations.APP_UPDATE)) {
                 Row subject = OperationRequest.of(operation, ZenitPlacementSurface.SCHEDULE_STEP)
-                    .asSystem(RecordSchedules.systemIdentity(scheduleId).reason(), null)
+                    .asSystem(RecordSchedules.systemIdentity(scheduleId), null)
                     .subjectKeys(List.of(String.valueOf(instanceId)))
                     .loadSubjects().getFirst();
                 assertThat(subject.get(InstanceModel.ID)).as("1: system loads the subject of %s", operation.id())
@@ -133,7 +134,8 @@ class InstancePowerOperationsTest {
                     .isInstanceOfSatisfying(DomainRefusal.class,
                         refusal -> assertThat(refusal.reason()).isSameAs(ZenitRefusalReason.NOT_FOUND));
                 assertThatThrownBy(() -> OperationRequest.of(operation, ZenitPlacementSurface.SCHEDULE_STEP)
-                    .asSystem("unrelated system work", null).subjectKeys(List.of(String.valueOf(instanceId))).loadSubjects())
+                    .asSystem(ExecutionIdentity.system("record-schedule:" + scheduleId), null)
+                    .subjectKeys(List.of(String.valueOf(instanceId))).loadSubjects())
                     .as("1: another system purpose gets no subject of %s", operation.id())
                     .isInstanceOfSatisfying(DomainRefusal.class,
                         refusal -> assertThat(refusal.reason()).isSameAs(ZenitRefusalReason.NOT_FOUND));

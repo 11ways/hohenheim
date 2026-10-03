@@ -40,8 +40,8 @@ class AuthProviderAdminTest extends HohenheimTestBase {
         assertThat(placeholder.count()).isEqualTo(1);
         assertThat(placeholder.innerText()).contains("choose a type");
 
-        // PermissionField: a free-text pl-select over the KnownPermissions
-        // vocabulary (the LuckPerms editor model) with described entries.
+        // PermissionField: a free-text pl-select over the declared permissions
+        // (Permissions.declared(), as FieldOption suggestions) (the LuckPerms editor model) with described entries.
         var picker = page.locator("pl-select[name='required_permission']");
         assertThat(picker.count()).isEqualTo(1);
         assertThat(picker.getAttribute("free-text")).isNotNull();
