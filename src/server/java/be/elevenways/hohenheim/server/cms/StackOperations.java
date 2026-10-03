@@ -56,6 +56,7 @@ public final class StackOperations {
         .one(STACK)
         .gate(OPERATOR)
         .facts(OperationFact.REACHES_OUTSIDE)
+        .command(CmsCommands.EXTERNAL)
         .register();
 
     /** Queues stopping the stack's containers; applies to an active or degraded stack. */
@@ -65,6 +66,7 @@ public final class StackOperations {
         .one(STACK)
         .gate(OPERATOR)
         .facts(OperationFact.REACHES_OUTSIDE)
+        .command(CmsCommands.EXTERNAL)
         .register();
 
     /** Queues redeploying the last successful deployment; applies when one exists. */
@@ -74,6 +76,7 @@ public final class StackOperations {
         .one(STACK)
         .gate(OPERATOR)
         .facts(OperationFact.REACHES_OUTSIDE)
+        .command(CmsCommands.EXTERNAL)
         .register();
 
     /** Queues removing the stack's OWNED volumes; external volumes survive it. */
@@ -84,6 +87,7 @@ public final class StackOperations {
             .one(STACK)
             .gate(OPERATOR)
             .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
+            .command(CmsCommands.EXTERNAL)
             .register();
 
     /** Reads the stack's live state back into its status; the result is that status. */
@@ -94,6 +98,7 @@ public final class StackOperations {
         .gate(OPERATOR)
         .result(String.class)
         .facts(OperationFact.REACHES_OUTSIDE)
+        .command(CmsCommands.EXTERNAL)
         .register();
 
     /** Starts the image reclaim sweep over every daemon, the nightly ReclaimDockerImages task's own. */
@@ -104,6 +109,7 @@ public final class StackOperations {
             .noSubject()
             .gate(OPERATOR)
             .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
+            .command(CmsCommands.EXTERNAL)
             .register();
 
     /** Removes the stack's owned containers and network (volumes stay), then the stack with its rows. */
@@ -114,6 +120,7 @@ public final class StackOperations {
         .gate(OPERATOR)
         .result(Integer.class)
         .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
+        .command(CmsCommands.EXTERNAL)
         .register();
 
     /** Removes the service's owned workload, then the service with its config files. */
@@ -125,6 +132,7 @@ public final class StackOperations {
             .gate(OPERATOR)
             .result(Integer.class)
             .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
+            .command(CmsCommands.EXTERNAL)
             .register();
 
     static {

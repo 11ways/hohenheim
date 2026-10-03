@@ -53,7 +53,7 @@ public final class ProjectParts {
     public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_project"))
         .label(Microcopy.of("delete").withFilter("scope", "cms"))
         .one(SUBJECT).gate(OperationGate.permission(HohenheimPanel.ACCESS))
-        .result(Integer.class).facts(OperationFact.DESTRUCTIVE).register();
+        .result(Integer.class).facts(OperationFact.DESTRUCTIVE).command(CmsCommands.TRANSACTIONAL).register();
 
     static {
         OperationHandlers.attach(DELETE).handle(call -> {
