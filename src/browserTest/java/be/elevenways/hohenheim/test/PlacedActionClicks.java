@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.cms.common.action.PanelAction;
-import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationResult;
@@ -27,10 +26,6 @@ public final class PlacedActionClicks {
     }
 
     /** @return the resource's placed action whose id path is {@code path} */
-    public static @NonNull PanelAction<Row> placed(@NonNull Resource<Row> resource, @NonNull String path) {
-        return placed(resource.slug(), resource.actions(), path);
-    }
-
     public static @NonNull PanelAction<Row> placed(@NonNull PanelResource<Row> resource, @NonNull String path) {
         return placed(resource.slug(), resource.actions(), path);
     }

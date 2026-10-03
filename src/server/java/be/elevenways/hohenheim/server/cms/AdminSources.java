@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.BanModel;
@@ -8,6 +7,7 @@ import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceVerb;
@@ -21,6 +21,9 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Permission;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
+
+import java.util.Objects;
 
 import java.util.Objects;
 
@@ -58,6 +61,7 @@ public final class AdminSources {
 
     /** The registration body, callable again so a test can replay it against a fresh registry. */
     static void declare() {
+        Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimPanel.SLUG), "the admin panel");
         // Bans: feeds the active-bans stat tile (rules on `active`) and any bans-created
         // chart (sortable doubles as the bucketable whitelist for created_at). BanParts is a
         // panel resource, so this is the model's own source; no inline create (no pick offers
@@ -70,12 +74,9 @@ public final class AdminSources {
         // Backup targets, for the instance form's target pick: BackupTargetParts is a panel resource, whose one
         // source is panel-qualified, so the model's own source is this one, creatable through the admin entry's
         // own create form exactly as the derived default was. Absent with the instance role.
-        Panel adminPanel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN),
-            "the admin panel is registered before its sources");
-        if (adminPanel.entryBySlug(BackupTargetParts.SLUG) instanceof PanelResource<?> targets) {
+        if (panel.entryBySlug(BackupTargetParts.SLUG) instanceof PanelResource<?> targets) {
             RecordSourceRegistry.INSTANCE.register(complete(RecordSource.of(BackupTargetModel.class)
-                .search(BackupTargetModel.NAME), BackupTargetModel.class,
-                adminPanel, targets));
+                .search(BackupTargetModel.NAME), BackupTargetModel.class, panel, targets));
         }
 
         // Hosts, for the instance form's DEPENDENT host pick: the projection is the rule
@@ -83,7 +84,7 @@ public final class AdminSources {
         // (HohenheimPickRules.KindHostRules) narrows on exactly those two.
         RecordSourceRegistry.INSTANCE.register(complete(RecordSource.of(ServerModel.class)
             .project(ServerModel.NAME, ServerModel.RUNTIME, ServerModel.VOLUME_BACKEND)
-            .search(ServerModel.NAME), ServerModel.class, adminPanel, ServerParts.admin()));
+            .search(ServerModel.NAME), ServerModel.class, panel, panel.entryBySlug(ServerParts.SLUG)));
 
         // Runtime images ("yolks"), for the instance form's dependent image pick: enabled
         // and incus_image are the resolver's rule vocabulary (HohenheimPickRules.RuntimeImageRules).
@@ -94,7 +95,7 @@ public final class AdminSources {
             .subtitle(row -> {
                 Object description = row.get(RuntimeImageModel.DESCRIPTION);
                 return description != null ? String.valueOf(description) : "";
-            }), RuntimeImageModel.class, adminPanel, RuntimeImageParts.admin()));
+            }), RuntimeImageModel.class, panel, panel.entryBySlug(RuntimeImageParts.SLUG)));
 
     }
 
@@ -106,9 +107,9 @@ public final class AdminSources {
     private static <M extends Model> @NonNull RecordSource<M> complete(RecordSource.@NonNull Builder<M> builder,
                                                                       @NonNull Class<M> modelClass,
                                                                       @NonNull Panel panel,
-                                                                      @NonNull PanelResource<?> resource) {
+                                                                      @Nullable PanelEntry resource) {
         admin(builder, modelClass);
-        RecordCreateProvider create = CmsRecordSources.createProviderFor(panel, resource);
+        RecordCreateProvider create = resource != null ? CmsRecordSources.createProviderFor(panel, resource) : null;
         if (create != null) {
             Permission createPermission = ResourceVerbs.permission(resource, ResourceVerb.CREATE);
             if (createPermission != null) {

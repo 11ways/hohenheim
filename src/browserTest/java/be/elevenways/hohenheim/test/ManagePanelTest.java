@@ -4,8 +4,9 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
-import be.elevenways.zenit.cms.common.resource.Resource;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
+import be.elevenways.zenit.cms.server.panel.PartsLists;
+import be.elevenways.zenit.cms.server.panel.PanelGate;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -380,8 +381,7 @@ class ManagePanelTest extends HohenheimTestBase {
             TenantConduits.stubFor(new UserPrincipal(operatorId, "Site Operator")));
         Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.MANAGE));
         @SuppressWarnings("unchecked")
-        Resource<Row> domains = PanelResourceViews.forCaller(
-            (PanelResource<Row>) Objects.requireNonNull(manage.entryBySlug(DomainParts.SLUG)), manage);
+        PanelResource<Row> domains = (PanelResource<Row>) Objects.requireNonNull(manage.entryBySlug(DomainParts.SLUG));
 
         // 1. The list shows site A's domain and never site B's.
         HttpResponse<String> list = operatorGet("/manage/domains");
@@ -390,7 +390,8 @@ class ManagePanelTest extends HohenheimTestBase {
             .contains(managedHost).doesNotContain(foreignHost);
 
         // 2. The count behind the pager counts the scope, not the table.
-        assertThat(domains.countRows(domains.tableView(tenant).apply(domains.tableSpec()), tenant))
+        assertThat(PartsReads.countRows(PanelGate.request(manage, tenant), domains, null,
+            PartsLists.tableView(domains, tenant).apply(PartsLists.<Row>tableSpec(domains)), tenant))
             .as("2. the tenant's domain count is its one domain").isEqualTo(1L);
 
         // 3. Site B's domain by direct id is not found on read, update and delete, and survives untouched.

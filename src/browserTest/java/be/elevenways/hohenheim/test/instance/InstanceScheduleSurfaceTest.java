@@ -30,9 +30,15 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.zenit.cms.server.panel.PartsLists;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
+import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.ResourceVerb;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -255,34 +261,36 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
     void scheduleAndStepAffordancesFollowConfig() {
         Row schedule = Models.get(RecordScheduleModel.class).findById(scheduleId);
         Row step = Models.get(RecordScheduleStepModel.class).findById(stepId);
-        RowResource scheduleResource = PanelEntryViews.of(ManagePanel.SLUG, InstanceScheduleParts.SLUG);
-        RowResource stepResource = PanelEntryViews.of(ManagePanel.SLUG, InstanceScheduleStepParts.SLUG);
+        PanelResource<Row> scheduleResource = PanelEntryViews.of(ManagePanel.SLUG, InstanceScheduleParts.SLUG);
+        PanelResource<Row> stepResource = PanelEntryViews.of(ManagePanel.SLUG, InstanceScheduleStepParts.SLUG);
+        Panel panel = PanelRegistry.getBySlug(ManagePanel.SLUG);
 
         AccessContext viewer = contextOf(viewerId, "Schedule Viewer");
         AccessContext owner = contextOf(ownerId, "Schedule Owner");
 
         // 1. THE PREMISE: the viewer's read scope really does include this schedule, so
         //    an absent affordance below is a WRITE decision and not invisibility.
-        assertThat(scheduleResource.accessFunction().decide(viewer).isDenied())
-            .as("step 1: the viewer's schedule read scope is an allow").isFalse();
+        assertThat(PartsReads.<Row>loadRow(new PanelRequest(panel, viewer.conduit(), viewer, null), scheduleResource,
+            scheduleId, viewer))
+            .as("step 1: the viewer's schedule read scope is an allow").isNotNull();
 
         // 2. Withheld from view-only; offered to the manage holder. Both resources.
-        assertThat(scheduleResource.updatableBy(schedule, viewer))
+        assertThat(ResourceVerbs.permitsBy(panel, scheduleResource, ResourceVerb.UPDATE, schedule, viewer))
             .as("step 2: a view-only delegate gets no schedule edit affordance").isFalse();
-        assertThat(scheduleResource.deletableBy(schedule, viewer))
+        assertThat(ResourceVerbs.permitsBy(panel, scheduleResource, ResourceVerb.DELETE, schedule, viewer))
             .as("step 2: nor a schedule delete button").isFalse();
-        assertThat(stepResource.updatableBy(step, viewer))
+        assertThat(ResourceVerbs.permitsBy(panel, stepResource, ResourceVerb.UPDATE, step, viewer))
             .as("step 2: nor a step edit affordance").isFalse();
-        assertThat(stepResource.deletableBy(step, viewer))
+        assertThat(ResourceVerbs.permitsBy(panel, stepResource, ResourceVerb.DELETE, step, viewer))
             .as("step 2: nor a step delete button").isFalse();
 
-        assertThat(scheduleResource.updatableBy(schedule, owner))
+        assertThat(ResourceVerbs.permitsBy(panel, scheduleResource, ResourceVerb.UPDATE, schedule, owner))
             .as("step 2: the manage holder keeps its schedule edit affordance").isTrue();
-        assertThat(scheduleResource.deletableBy(schedule, owner))
+        assertThat(ResourceVerbs.permitsBy(panel, scheduleResource, ResourceVerb.DELETE, schedule, owner))
             .as("step 2: and its delete button").isTrue();
-        assertThat(stepResource.updatableBy(step, owner))
+        assertThat(ResourceVerbs.permitsBy(panel, stepResource, ResourceVerb.UPDATE, step, owner))
             .as("step 2: and the step's edit affordance").isTrue();
-        assertThat(stepResource.deletableBy(step, owner))
+        assertThat(ResourceVerbs.permitsBy(panel, stepResource, ResourceVerb.DELETE, step, owner))
             .as("step 2: and the step's delete button").isTrue();
 
         // 3. Revocation withdraws them: the answer tracks the live grant graph.
@@ -292,10 +300,10 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
             HohenheimAccess.MANAGE);
         try {
             AccessContext revoked = contextOf(ownerId, "Schedule Owner");
-            assertThat(scheduleResource.updatableBy(schedule, revoked))
+            assertThat(ResourceVerbs.permitsBy(panel, scheduleResource, ResourceVerb.UPDATE, schedule, revoked))
                 .as("step 3: a revoked grant withdraws the schedule edit affordance")
                 .isFalse();
-            assertThat(stepResource.deletableBy(step, revoked))
+            assertThat(ResourceVerbs.permitsBy(panel, stepResource, ResourceVerb.DELETE, step, revoked))
                 .as("step 3: and the step delete button").isFalse();
         } finally {
             RecordGrants.grant(GrantSubjectType.USER, ownerId, InstanceModel.MODEL_ID, instanceId,
@@ -346,10 +354,10 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
             String expected = "1:" + UNKNOWN_ACTION + "=" + status + " (" + error + ")";
 
             // 2. The runs list shows the step's verdict in its steps column.
-            RowResource runResource = (RowResource) PanelResourceViews.forCaller(InstanceScheduleRunParts.admin());
-            ColumnSpec stepsColumn = runResource.tableSpec().column("steps");
+            PanelResource<Row> runResource = InstanceScheduleRunParts.admin();
+            ColumnSpec stepsColumn = PartsLists.tableSpec(runResource).column("steps");
             assertThat(stepsColumn).as("step 2: the runs list declares a steps column").isNotNull();
-            String summary = (String) runResource.cellValue(run, stepsColumn);
+            String summary = (String) PartsReads.cellValue(null, runResource, null, run, stepsColumn);
             assertThat(summary).as("step 2: the runs list retains the complete step verdict and refusal speech")
                 .startsWith(expected);
             assertThat(summary).as("step 2: source step id and actual failed attempt come from the run descriptor")
@@ -358,8 +366,10 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
 
             // 3. The schedule's Steps tab shows the same verdict for that run.
             Conduit conduit = TenantConduits.stubFor(new UserPrincipal(ownerId, "Schedule Owner"));
+            PanelRequest stepsRequest = new PanelRequest(PanelRegistry.getBySlug(ManagePanel.SLUG), conduit,
+                AccessContext.of(conduit), null);
             Map<String, Object> vars = (Map<String, Object>) new InstanceScheduleStepsPage()
-                .render(conduit, AccessContext.of(conduit), scheduleModel.findById(readScheduleId)).get();
+                .render(stepsRequest, scheduleModel.findById(readScheduleId)).get();
             List<ScheduleRunView> runs = (List<ScheduleRunView>) vars.get("runs");
             int runId = run.get(RecordScheduleRunModel.ID);
             assertThat(runs).as("step 3: the Steps tab lists the run with its steps")
@@ -386,19 +396,19 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
         AccessContext viewer = contextOf(viewerId, "Schedule Viewer");
 
         // Every refactored resource must survive an ALL answer AND keep scoping a
-        // grant-holding tenant. accessFunction() throwing here is exactly the 500 the
+        // grant-holding tenant. The scope throwing here is exactly the 500 the
         // hand-rolled idiom would produce once a type-level row exists.
-        for (var resource : new RowResource[] {
+        for (var resource : List.of(
                 PanelEntryViews.of(ManagePanel.SLUG, InstanceScheduleParts.SLUG),
                 PanelEntryViews.of(ManagePanel.SLUG, InstanceSnapshotParts.SLUG),
-                (RowResource) PanelResourceViews.forCaller(InstanceBackupParts.manage()),
+                InstanceBackupParts.manage(),
                 PanelEntryViews.of(ManagePanel.SLUG, InstanceAttachmentParts.DEVICES),
                 PanelEntryViews.of(ManagePanel.SLUG, InstanceAttachmentParts.DATABASES),
-                PanelEntryViews.of(ManagePanel.SLUG, InstanceScheduleStepParts.SLUG)}) {
-            assertThat(resource.accessFunction().decide(operator).isDenied())
-                .as("%s translates ALL without enumerating", resource.id()).isFalse();
-            assertThat(resource.accessFunction().decide(viewer).isDenied())
-                .as("%s answers a tenant without throwing", resource.id()).isFalse();
+                PanelEntryViews.of(ManagePanel.SLUG, InstanceScheduleStepParts.SLUG))) {
+            assertThat(resource.rowScope().accessCriteria(operator))
+                .as("%s translates ALL without enumerating", resource.id()).isNull();
+            assertThat(resource.rowScope().accessCriteria(viewer))
+                .as("%s answers a scoped tenant without throwing", resource.id()).isNotNull();
         }
     }
 

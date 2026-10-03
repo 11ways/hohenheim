@@ -11,17 +11,11 @@ import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.cms.common.render.action.InvokeActionState;
 import be.elevenways.zenit.cms.common.render.table.TableState;
 import be.elevenways.zenit.cms.server.render.table.TableStateTranslator;
-import be.elevenways.zenit.cms.common.resource.Resource;
-import be.elevenways.zenit.cms.common.panel.PanelRegistry;
-import be.elevenways.zenit.cms.common.panel.PanelRequest;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import be.elevenways.zenit.server.operation.OperationTestSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
-import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -133,8 +127,7 @@ class DnsZoneRecordsDeleteAffordanceTest extends HohenheimTestBase {
     /** The tab's own render, read as the row state it hands the template. */
     @SuppressWarnings("unchecked")
     private static TableState tableFor(AccessContext accessContext) {
-        Resource<Row> resource = PanelResourceViews.of(DnsRecordParts.admin(), new PanelRequest(
-            PanelRegistry.getBySlug("admin"), accessContext.conduit(), accessContext, null));
+        var resource = DnsRecordParts.admin();
         Row zone = Models.get(DnsZoneModel.class).findById(zoneId);
         Map<String, Object> vars = (Map<String, Object>) new DnsZoneRecordsPage()
             .renderLocal(accessContext.conduit(), accessContext, zone, resource).get();

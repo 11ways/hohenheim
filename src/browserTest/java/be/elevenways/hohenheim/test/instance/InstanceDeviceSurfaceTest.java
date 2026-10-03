@@ -2,7 +2,13 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.hohenheim.instance.InstanceAttachmentOperations;
-import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.ResourceVerb;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
+import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.test.PanelEntryViews;
 import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
@@ -558,7 +564,8 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             .as("step 1: the fixture disk was attached").isEqualTo(200);
         Row row = deviceRows(instanceId).get(0);
 
-        RowResource resource = PanelEntryViews.of(HohenheimSlugs.MANAGE, InstanceAttachmentParts.DEVICES);
+        PanelResource<Row> resource = PanelEntryViews.of(HohenheimSlugs.MANAGE, InstanceAttachmentParts.DEVICES);
+        Panel panel = PanelRegistry.getBySlug(HohenheimSlugs.MANAGE);
         AccessContext viewer = AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(viewerId, "Device Surface Viewer")));
         AccessContext operator = AccessContext.of(TenantConduits.stubFor(
@@ -568,20 +575,21 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         //    affordance below is a WRITE decision and not the row being invisible.
         RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.VIEW, true);
-        assertThat(resource.accessFunction().decide(viewer).isDenied())
+        assertThat(PartsReads.<Row>loadRow(new PanelRequest(panel, viewer.conduit(), viewer, null), resource,
+            row.get(InstanceDeviceModel.ID), viewer))
             .as("step 2: the view delegate's read scope is an allow, not a deny")
-            .isFalse();
+            .isNotNull();
         assertThat(HohenheimAccess.hasInstanceCapability(viewer, instanceId,
                 HohenheimAccess.VIEW))
             .as("step 2: and it really holds view on this instance").isTrue();
 
         // 3. The affordances are WITHHELD from it -- both of them, and the destructive
         //    one is the whole point: a detach button deletes a tenant's volume.
-        assertThat(resource.updatableBy(row, viewer))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, row, viewer))
             .as("step 3: a view-only delegate is offered no edit affordance").isFalse();
         assertThat(detachOffered(row, viewer))
             .as("step 3: nor a detach button that could only be refused").isFalse();
-        assertThat(resource.creatableBy(viewer))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.CREATE, null, viewer))
             .as("step 3: nor an attach (create) affordance: every attach it could submit is refused by the"
                 + " mutator gate with instance_not_permitted (pinned by the authorization journey)")
             .isFalse();
@@ -590,11 +598,11 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         //    not a surface that refuses everyone -- the way an untested gate rots.
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.CONFIG, true);
-        assertThat(resource.updatableBy(row, operator))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, row, operator))
             .as("step 4: a config holder keeps its edit affordance").isTrue();
         assertThat(detachOffered(row, operator))
             .as("step 4: and its detach button").isTrue();
-        assertThat(resource.creatableBy(operator))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.CREATE, null, operator))
             .as("step 4: and its attach affordance").isTrue();
 
         // 5. Revoking the capability takes the affordances away again, so the answer
@@ -603,7 +611,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             HohenheimAccess.CONFIG, false);
         AccessContext revoked = AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(tenantId, "Device Surface Tenant")));
-        assertThat(resource.updatableBy(row, revoked))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, row, revoked))
             .as("step 5: a revoked capability withdraws the edit affordance").isFalse();
         assertThat(detachOffered(row, revoked))
             .as("step 5: and the detach button").isFalse();

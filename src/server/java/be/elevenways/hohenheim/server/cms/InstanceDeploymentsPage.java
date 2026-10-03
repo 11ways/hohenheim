@@ -18,8 +18,8 @@ import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
@@ -56,7 +56,7 @@ import java.util.Map;
  * are the only difference the reader sees -- widening this page rather than growing a
  * second one is what keeps "where do I see my deploy" one answer.
  */
-public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
+public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
 
     public static final String SLUG = "deployments";
 
@@ -71,7 +71,7 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
      * repository deploys a bare container and has no history to show.
      */
     @Override
-    public boolean visibleFor(@NonNull Row record) {
+    public boolean visibleFor(@NonNull Row record, @NonNull AccessContext access) {
         return InstanceKinds.isReleaseManaged(record.get(InstanceModel.KIND))
             || WorkspaceBuilds.deploysSource(record);
     }
@@ -267,9 +267,4 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
         return value != null ? String.valueOf(value) : "";
     }
 
-    @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
-        throw new UnsupportedOperationException("The " + this.slug() + " tab renders through its PanelRequest");
-    }
 }

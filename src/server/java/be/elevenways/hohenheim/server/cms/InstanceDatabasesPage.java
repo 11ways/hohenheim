@@ -15,7 +15,8 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -42,7 +43,7 @@ import java.util.Map;
  * had no such tab (F6, 2026-08-29) -- the only way to an attachment was the nav-hidden
  * list at /admin/instance-databases.
  */
-public final class InstanceDatabasesPage implements RecordScopedPage<Row> {
+public final class InstanceDatabasesPage implements RecordTab.Rendered<Row> {
 
     public static final String SLUG = "databases";
 
@@ -58,15 +59,15 @@ public final class InstanceDatabasesPage implements RecordScopedPage<Row> {
      * refuses those kinds by name ({@code instance_kind_no_injection}).
      */
     @Override
-    public boolean visibleFor(@NonNull Row record) {
+    public boolean visibleFor(@NonNull Row record, @NonNull AccessContext access) {
         InstanceKindHandler handler = InstanceKinds.getHandler(record.get(InstanceModel.KIND));
         return handler != null && handler.supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER);
     }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
+        Conduit conduit = request.conduit();
+        AccessContext accessContext = request.access();
         Integer instanceId = instance.get(InstanceModel.ID);
         String panel = CmsSupport.panelSlug(conduit);
 

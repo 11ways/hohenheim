@@ -8,13 +8,14 @@ import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
-import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.FilterState;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.auth.test.TestAccounts;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.zenit.cms.server.panel.PanelGate;
+import be.elevenways.zenit.cms.server.panel.PartsLists;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.cms.server.resource.ActivityAdmin;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -82,19 +83,20 @@ class AdminActivityListTest extends HohenheimTestBase {
 
         var access = TestAccessContexts.allAllowed();
         var resource = adminActivityResource();
-        var applied = resource.tableView(access).apply(resource.tableSpec())
+        var applied = PartsLists.tableView(resource, access).apply(PartsLists.<Row>tableSpec(resource))
             .withFilter(FilterState.of(Map.of("record_id", "hh-actor-name"))).withSort(SortSpec.asc("actor"));
-        assertThat(resource.listRows(applied, access).stream().map(row -> row.get(ActivityModel.RECORD_ID)).toList())
+        assertThat(PartsReads.listRows(PanelGate.request(PanelRegistry.getBySlug("admin"), access), resource, null,
+            applied, access).stream().map(row -> row.get(ActivityModel.RECORD_ID)).toList())
             .as("step 4: account names sort Alpha before Zelda, not by their ids").containsExactly(second, first);
 
         Row user = AuthModels.users().findById(zeldaId);
         user.set(UserModel.DISPLAY_NAME, null);
         AuthModels.users().save(user);
-        Microcopy email = (Microcopy) resource.cellValue(zelda, column(resource, "actor"));
+        Microcopy email = (Microcopy) PartsReads.cellValue(null, resource, null, zelda, column(resource, "actor"));
         assertThat(email.resolve(LocaleChain.ofTags("en"), new ShippedCatalogs()))
             .as("step 5: missing display name falls back to the stored email").isEqualTo(user.get(UserModel.EMAIL));
         AuthModels.users().find().where(UserModel.ID.eq(zeldaId)).delete();
-        Microcopy deleted = (Microcopy) resource.cellValue(zelda, column(resource, "actor"));
+        Microcopy deleted = (Microcopy) PartsReads.cellValue(null, resource, null, zelda, column(resource, "actor"));
         assertThat(deleted.resolve(LocaleChain.ofTags("en"), new ShippedCatalogs()))
             .as("step 6: a deleted author is named as unknown, never by its id").isEqualTo("Account no longer known");
     }
@@ -154,8 +156,8 @@ class AdminActivityListTest extends HohenheimTestBase {
         new ActivityModel().save(row);
 
         // 1. The host preserves the core projection instead of resolving system id 1 as a user.
-        Resource<Row> resource = adminActivityResource();
-        Object cell = resource.cellValue(row, column(resource, ActivityModel.ACTOR.getName()));
+        PanelResource<Row> resource = adminActivityResource();
+        Object cell = PartsReads.cellValue(null, resource, null, row, column(resource, ActivityModel.ACTOR.getName()));
         assertThat(cell).as("step 1: the localized core actor name is preserved").isInstanceOf(Microcopy.class);
         assertThat(((Microcopy) cell).resolve(LocaleChain.ofTags("en"), new ShippedCatalogs()))
             .as("step 1: system work is not account #1").isEqualTo("System");
@@ -177,8 +179,8 @@ class AdminActivityListTest extends HohenheimTestBase {
         // 1. The hohenheim resource still describes the SAME columns the framework
         //    resource does: its spec is a copy (TableSpec has no toBuilder), so a column
         //    added upstream has to fail here rather than silently vanish from the panel.
-        Resource<Row> resource = adminActivityResource();
-        List<String> ours = resource.tableSpec().columns().stream().map(ColumnSpec::name).toList();
+        PanelResource<Row> resource = adminActivityResource();
+        List<String> ours = PartsLists.tableSpec(resource).columns().stream().map(ColumnSpec::name).toList();
         List<String> framework = ActivityAdmin.table().columns()
             .stream().map(ColumnSpec::name).toList();
         assertThat(ours)
@@ -187,7 +189,7 @@ class AdminActivityListTest extends HohenheimTestBase {
 
         // 2. Every filter an operator needs to reach ONE record is declared: the model,
         //    the record id, and the origin that flips the default scope.
-        List<String> filters = resource.tableSpec().filters().stream()
+        List<String> filters = PartsLists.tableSpec(resource).filters().stream()
             .map(FilterSpec::name).toList();
         assertThat(filters)
             .as("step 2: model, record and origin are all filterable")
@@ -247,7 +249,7 @@ class AdminActivityListTest extends HohenheimTestBase {
 
         // 5. A verb leaves the resource as its member's localized label, not as the raw
         //    snake_case token the column used to print; the legacy "created" reads as the core verb (F6).
-        Object verbCell = resource.cellValue(rowFor(OPERATOR_RECORD_ID),
+        Object verbCell = PartsReads.cellValue(null, resource, null, rowFor(OPERATOR_RECORD_ID),
             column(resource, ActivityModel.ACTION.getName()));
         assertThat(verbCell)
             .as("step 5: the verb cell is the localized label")
@@ -258,7 +260,7 @@ class AdminActivityListTest extends HohenheimTestBase {
 
         // 6. An undeclared verb reads as the one unknown label, never as its raw text and
         //    never as a blank cell.
-        Object unknownCell = resource.cellValue(rowFor(UNLINKABLE_RECORD_ID),
+        Object unknownCell = PartsReads.cellValue(null, resource, null, rowFor(UNLINKABLE_RECORD_ID),
             column(resource, ActivityModel.ACTION.getName()));
         assertThat(((Microcopy) unknownCell).key())
             .as("step 6: an undeclared verb reads as the unknown label")
@@ -269,7 +271,7 @@ class AdminActivityListTest extends HohenheimTestBase {
 
         // 7. A record a registered resource serves is a LINK to that record; the label is
         //    the title the row stored, never a fresh lookup.
-        Object linked = resource.cellValue(rowFor(OPERATOR_RECORD_ID),
+        Object linked = PartsReads.cellValue(null, resource, null, rowFor(OPERATOR_RECORD_ID),
             column(resource, ActivityModel.RECORD_ID.getName()));
         assertThat(linked).as("step 7: the record cell is structured").isInstanceOf(ActivityRecordCell.class);
         ActivityRecordCell linkedCell = (ActivityRecordCell) linked;
@@ -283,7 +285,7 @@ class AdminActivityListTest extends HohenheimTestBase {
         // 7b. A model BOTH panels mount (sites: the admin resource and its /manage narrowing)
         //     still links into THIS panel: the admin activity list never sends an operator to
         //     /manage, whatever order the framework's panel registry iterates in.
-        ActivityRecordCell siteCell = (ActivityRecordCell) resource.cellValue(
+        ActivityRecordCell siteCell = (ActivityRecordCell) PartsReads.cellValue(null, resource, null,
             rowFor(SITE_RECORD_ID), column(resource, ActivityModel.RECORD_ID.getName()));
         assertThat(siteCell.url())
             .as("step 7b: a site row links to the admin site page")
@@ -294,7 +296,7 @@ class AdminActivityListTest extends HohenheimTestBase {
             .doesNotContain("/manage/sites/" + SITE_RECORD_ID);
 
         // 8. A record no resource serves stays plain text -- named, but not linked.
-        ActivityRecordCell orphan = (ActivityRecordCell) resource.cellValue(
+        ActivityRecordCell orphan = (ActivityRecordCell) PartsReads.cellValue(null, resource, null,
             rowFor(UNLINKABLE_RECORD_ID), column(resource, ActivityModel.RECORD_ID.getName()));
         assertThat(orphan.label())
             .as("step 8: an unlinkable record is still named")
@@ -318,17 +320,17 @@ class AdminActivityListTest extends HohenheimTestBase {
 
     /** The panel's own activity log, viewed as its caller sees it -- never a fresh one, the registered one. */
     @SuppressWarnings("unchecked")
-    private static Resource<Row> adminActivityResource() {
+    private static PanelResource<Row> adminActivityResource() {
         Panel panel = PanelRegistry.getBySlug("admin");
         assertThat(panel).as("the admin panel is registered").isNotNull();
         if (panel.entryBySlug("activity") instanceof PanelResource<?> activity) {
-            return PanelResourceViews.forCaller((PanelResource<Row>) activity, panel);
+            return (PanelResource<Row>) activity;
         }
         throw new AssertionError("the admin panel exposes no activity resource");
     }
 
-    private static ColumnSpec column(Resource<Row> resource, String name) {
-        ColumnSpec column = resource.tableSpec().column(name);
+    private static ColumnSpec column(PanelResource<Row> resource, String name) {
+        ColumnSpec column = PartsLists.tableSpec(resource).column(name);
         assertThat(column).as("the activity table declares a '" + name + "' column").isNotNull();
         return column;
     }

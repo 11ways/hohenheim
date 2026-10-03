@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
-import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.server.panel.PartsForms;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.test.PanelEntryViews;
 import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
@@ -380,14 +381,14 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
     @Test
     void theTenantDeviceFormNeitherOffersNorAcceptsCdrom() {
         int instanceId = mediaCapableInstance("media-surf-form");
-        RowResource resource = PanelEntryViews.of(HohenheimSlugs.MANAGE, InstanceAttachmentParts.DEVICES);
+        PanelResource<Row> resource = PanelEntryViews.of(HohenheimSlugs.MANAGE, InstanceAttachmentParts.DEVICES);
 
         Map<String, Object> submitted = new LinkedHashMap<>();
         submitted.put("instance_id", instanceId);
         submitted.put("type", InstanceDeviceModel.TYPE_CDROM);
         submitted.put("name", PREFIX + "sneak");
         assertThat(catchThrowable(() -> SubmittedValueCoercion
-                .coerceFormOrThrow(resource.formSpec(), submitted)))
+                .coerceFormOrThrow(PartsForms.formSpec(resource), submitted)))
             .as("a hand-posted type=cdrom fails the tenant form's own coercion --"
                 + " the select declares disk and nic only")
             .isInstanceOf(Violations.class);
@@ -398,7 +399,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
         disk.put("name", PREFIX + "ok");
         disk.put("size_gb", 1);
         Map<String, Object> coerced = SubmittedValueCoercion
-            .coerceFormOrThrow(resource.formSpec(), disk);
+            .coerceFormOrThrow(PartsForms.formSpec(resource), disk);
         assertThat(coerced)
             .as("the positive anchor: a disk submit coerces through the same spec")
             .containsEntry("type", InstanceDeviceModel.TYPE_DISK);

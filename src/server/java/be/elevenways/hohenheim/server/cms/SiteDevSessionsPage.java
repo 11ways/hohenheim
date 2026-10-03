@@ -8,7 +8,8 @@ import be.elevenways.hohenheim.server.devtunnel.DevLeases;
 import be.elevenways.hohenheim.server.upstream.kinds.DevNamespaceUpstreamKind;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -26,7 +27,7 @@ import java.util.Map;
  * Dev sessions tab on a dev-namespace site: the live tunnel registrations
  * currently claiming subdomains.
  */
-public final class SiteDevSessionsPage implements RecordScopedPage<Row> {
+public final class SiteDevSessionsPage implements RecordTab.Rendered<Row> {
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("site_dev_sessions"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("dev_sessions").withFilter("scope", "site"); }
@@ -39,14 +40,13 @@ public final class SiteDevSessionsPage implements RecordScopedPage<Row> {
     @Override public @NonNull Icon icon() { return Icon.of("flask"); }
 
     @Override
-    public boolean visibleFor(@NonNull Row site) {
+    public boolean visibleFor(@NonNull Row site, @NonNull AccessContext access) {
         return DevNamespaceUpstreamKind.ID.toString().equals(site.get(SiteModel.UPSTREAM_KIND));
     }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row site) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row site) {
+        Conduit conduit = request.conduit();
         Integer siteId = site.get(SiteModel.ID);
 
         List<Map<String, Object>> sessions = new ArrayList<>();

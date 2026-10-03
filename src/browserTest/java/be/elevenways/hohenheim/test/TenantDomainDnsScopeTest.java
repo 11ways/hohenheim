@@ -9,8 +9,10 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.ManageDnsRecordParts;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.zenit.cms.server.panel.PartsLists;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
@@ -328,7 +330,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         assertThat(stolen.body()).as("step 2: the refusal is not the archived-parent copy")
             .doesNotContain("in the trash");
         assertThat(domainByHostname("stolen.tenantscope.test"))
-            .as("the AccessFunction scopes READS; the site_id a CREATE submits is a "
+            .as("the row scope scopes READS; the site_id a CREATE submits is a "
                 + "separate question and the write pipeline is what answers it")
             .isNull();
 
@@ -1048,14 +1050,13 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
     /** The delegated list's own read path, driven as the operator (who is scoped to everything). */
     private static List<Row> manageSearch(String term) {
         var parts = ManageDnsRecordParts.manage();
-        var resource = PanelResourceViews.forCaller(parts,
-            PanelRegistry.getBySlug("manage"));
+        AccessContext access = AccessContext.of(TenantConduits.stubFor(adminPrincipal));
+        PanelRequest request = new PanelRequest(PanelRegistry.getBySlug("manage"), access.conduit(), access, null);
         TableView.Applied<Row> applied = TableView
-            .forPrincipal(Objects.requireNonNull(adminPrincipal.reference()).id(), resource.id()).build()
-            .apply(resource.tableSpec())
+            .forPrincipal(Objects.requireNonNull(adminPrincipal.reference()).id(), parts.id()).build()
+            .apply(PartsLists.<Row>tableSpec(parts))
             .withSearch(parts.list().searchTerm(term));
-        return resource.listRows(applied,
-            AccessContext.of(TenantConduits.stubFor(adminPrincipal)));
+        return PartsReads.listRows(request, parts, null, applied, access);
     }
 
     private static List<Object> ids(List<Row> rows) {

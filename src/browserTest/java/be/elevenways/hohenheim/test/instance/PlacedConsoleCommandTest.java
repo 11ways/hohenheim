@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.test.instance;
 
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.instance.InstanceOperations;
@@ -87,9 +86,9 @@ class PlacedConsoleCommandTest {
     void theConsoleLineIsOnePlacedOperationOnEverySurface() {
         Db.run(datasource, () -> {
             // 1. Both instance panels place the operation and ask its line.
-            PanelAction<Row> onAdmin = PlacedActionClicks.placed(PanelResourceViews.forCaller(InstanceParts.admin()),
+            PanelAction<Row> onAdmin = PlacedActionClicks.placed(InstanceParts.admin(),
                 "console_command_instance");
-            PanelAction<Row> onManage = PlacedActionClicks.placed(PanelResourceViews.forCaller(InstanceParts.manage()),
+            PanelAction<Row> onManage = PlacedActionClicks.placed(InstanceParts.manage(),
                 "console_command_instance");
             assertThat(onAdmin.operation()).as("step 1: the admin places the console operation")
                 .isEqualTo(InstanceOperations.CONSOLE_COMMAND);

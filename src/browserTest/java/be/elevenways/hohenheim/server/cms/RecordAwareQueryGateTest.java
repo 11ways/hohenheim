@@ -8,10 +8,9 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
-import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.server.panel.PartsForms;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.zenit.cms.server.panel.PartsLists;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldQueryGate;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -41,24 +40,21 @@ class RecordAwareQueryGateTest extends HohenheimTestBase {
         // 1. Bans: the create form hides the stored state it never takes as input...
         // The admin panel's own ban entry, as its pages read it.
         Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
-        @SuppressWarnings("unchecked")
-        Resource<Row> bans = PanelResourceViews.forProgrammaticCaller(
-            (PanelResource<Row>) Objects.requireNonNull(admin.entryBySlug("bans")), admin);
-        assertThat(bans.fieldAccessFor(BanModel.ACTIVE.getName()).decide(VIEWER))
+        PanelResource<Row> bans = CmsSupport.rowEntry(admin, "bans");
+        assertThat(PartsForms.fieldAccessFor(bans, BanModel.ACTIVE.getName()).decide(VIEWER))
             .as("step 1: the create form hides the active flag")
             .isEqualTo(FieldAccess.Decision.HIDDEN);
         // ...yet across records it is queryable, so the list's Active filter stays offered.
-        FieldQueryGate banGate = bans.queryGate();
+        FieldQueryGate banGate = PartsForms.queryGate(bans);
         assertThat(banGate.mayQuery(BanModel.ACTIVE.getName(), VIEWER))
             .as("step 1: the active flag may be filtered by").isTrue();
-        TableSpec<?> spec = bans.tableSpec().queryableBy(name -> banGate.mayQuery(name, VIEWER));
+        TableSpec<?> spec = PartsLists.tableSpec(bans).queryableBy(name -> banGate.mayQuery(name, VIEWER));
         assertThat(spec.filter(BanModel.ACTIVE.getName()))
             .as("step 1: the viewer's list still offers the Active filter").isNotNull();
 
         // 2. DNS zones: replication diagnostics show only on the zones of their role, never on the
         //    create form, and stay queryable across the zone list.
-        FieldQueryGate zoneGate = PartsForms.queryGate(
-            PanelResourceViews.forCaller(DnsZoneParts.admin(), PanelRegistry.getBySlug(HohenheimPanel.SLUG)));
+        FieldQueryGate zoneGate = PartsForms.queryGate(DnsZoneParts.admin());
         for (String diagnostic : new String[] {DnsZoneModel.TRANSFER_STATUS.getName(),
                 DnsZoneModel.LAST_TRANSFER_AT.getName(), DnsZoneModel.DELEGATION_STATUS.getName(),
                 DnsZoneModel.DELEGATION_CHECKED_AT.getName()}) {
@@ -67,7 +63,7 @@ class RecordAwareQueryGateTest extends HohenheimTestBase {
         }
 
         // 3. Databases: a failure reason shows only on a record that carries one, and stays queryable.
-        FieldQueryGate databaseGate = PanelResourceViews.forCaller(DatabaseParts.admin()).queryGate();
+        FieldQueryGate databaseGate = PartsForms.queryGate(DatabaseParts.admin());
         assertThat(databaseGate.mayQuery(DatabaseModel.FAILURE_REASON.getName(), VIEWER))
             .as("step 3: the failure reason may still be queried across records").isTrue();
     }

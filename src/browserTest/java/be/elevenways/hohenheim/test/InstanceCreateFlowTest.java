@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.zenit.cms.server.panel.PartsWrites;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
 import com.microsoft.playwright.Locator;
 import be.elevenways.hohenheim.host.VolumeBackend;
@@ -525,7 +526,8 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
 
             // 2. And the refusal is PATHED ONTO THE HOST ENTRY, which is what puts the
             //    sentence beside the empty pick instead of in the form's generic error box.
-            Throwable refused = catchThrowable(() -> PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceParts.SLUG).persistRow(
+            Throwable refused = catchThrowable(() -> PartsWrites.persistRow(
+                PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceParts.SLUG),
                 Map.of("name", "cf-nowhere-direct", "kind", "hohenheim:docker_container"),
                 adminAccessContext()));
             assertThat(refused).as("step 2: the persist lane refuses").isInstanceOf(Violations.class);

@@ -8,7 +8,8 @@ import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -32,7 +33,7 @@ import java.util.Map;
  * dispatch enforces as hide AND 404. A view-only teammate does not get a tab they cannot
  * open, and a guessed URL is indistinguishable from a database that does not exist.
  */
-public final class ManageDatabaseCredentialsPage implements RecordScopedPage<Row> {
+public final class ManageDatabaseCredentialsPage implements RecordTab.Rendered<Row> {
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("database_credentials"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("credentials").withFilter("scope", "database"); }
@@ -47,9 +48,8 @@ public final class ManageDatabaseCredentialsPage implements RecordScopedPage<Row
     }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row record) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row record) {
+        Conduit conduit = request.conduit();
         int id = record.get(DatabaseModel.ID);
         ManagedDatabase.LiveStatus live = DatabaseInstances.liveStatus(id);
         String handle = DatabaseInstances.handleOf(id);

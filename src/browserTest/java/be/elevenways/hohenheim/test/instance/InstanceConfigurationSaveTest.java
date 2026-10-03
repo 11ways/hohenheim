@@ -1,6 +1,9 @@
 package be.elevenways.hohenheim.test.instance;
 
-import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.server.panel.PartsWrites;
+import be.elevenways.zenit.cms.server.panel.PartsForms;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.test.PanelEntryViews;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
@@ -39,7 +42,7 @@ class InstanceConfigurationSaveTest extends HohenheimTestBase {
     void bothResourceWritersPreserveTheWinningStatusAndFence() {
         int id = instance("configuration-direct");
         try {
-            for (RowResource resource : List.of(PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceParts.SLUG),
+            for (PanelResource<Row> resource : List.of(PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceParts.SLUG),
                     PanelEntryViews.of(HohenheimSlugs.MANAGE, InstanceParts.SLUG))) {
                 outcome(id, InstanceModel.STATUS_RUNNING, 7L);
                 Row stale = Models.get(InstanceModel.class).findById(id);
@@ -47,7 +50,8 @@ class InstanceConfigurationSaveTest extends HohenheimTestBase {
                 stale.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
                 stale.set(InstanceModel.CLAIM_FENCE, 7L);
                 outcome(id, InstanceModel.STATUS_STOPPED, 8L);
-                resource.updateRow(stale, Map.of("name", "configuration-renamed"), TestAccessContexts.allAllowed());
+                PartsWrites.updateRow(resource, stale, Map.of("name", "configuration-renamed"),
+                    TestAccessContexts.allAllowed());
                 assertWinner(id, "step 2: " + resource.id());
             }
         } finally {
@@ -60,9 +64,10 @@ class InstanceConfigurationSaveTest extends HohenheimTestBase {
         int id = instance("configuration-request");
         try {
             outcome(id, InstanceModel.STATUS_RUNNING, 7L);
-            RowResource resource = PanelEntryViews.of(HohenheimSlugs.MANAGE, InstanceParts.SLUG);
+            PanelResource<Row> resource = PanelEntryViews.of(HohenheimSlugs.MANAGE, InstanceParts.SLUG);
             Row loaded = Models.get(InstanceModel.class).findById(id);
-            String snapshot = FormConcurrency.token(resource.formSpec(), resource.valuesFromRow(loaded));
+            String snapshot = FormConcurrency.token(PartsForms.formSpec(resource),
+                PartsReads.valuesFromRow(resource, loaded));
             // 1. The winner advances after the request has loaded its row, before the configuration statement.
             DURING_WRITE.set(() -> outcome(id, InstanceModel.STATUS_STOPPED, 8L));
             var response = adminPostForm("/manage/instances/" + id,

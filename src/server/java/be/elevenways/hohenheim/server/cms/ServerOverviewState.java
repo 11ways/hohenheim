@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HostTrustLane;
 import be.elevenways.hohenheim.WorkloadTier;
 import be.elevenways.hohenheim.HohenheimWidgets;
@@ -30,13 +29,12 @@ import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
-import be.elevenways.zenit.cms.common.resource.RecordDashboardPage;
-import be.elevenways.zenit.cms.common.resource.Resource;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.widget.RecordActionsWidget;
 import be.elevenways.zenit.cms.server.render.action.RecordActionBands;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -47,7 +45,6 @@ import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.BadgeVariant;
-import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.AlertVariant;
@@ -165,10 +162,10 @@ public final class ServerOverviewState {
         }
 
         Panel panel = PanelRegistry.getBySlug(panelSlug);
-        if (panel != null && panel.entryBySlug(ServerParts.SLUG) instanceof Resource<?> resource) {
+        if (panel != null && panel.entryBySlug(ServerParts.SLUG) instanceof PanelResource<?> resource) {
             state.add(new WidgetInstance(RecordActionsWidget.ID, Map.of())
-                .withData(RecordActionBands.forRecord(panel, (Resource<Row>) resource, server,
-                    accessContext, conduit)));
+                .withData(RecordActionBands.forRecord(new PanelRequest(panel, conduit, accessContext, null),
+                    (PanelResource<Row>) resource, server)));
         }
         bands.add(band(new WidgetTree(state)));
 

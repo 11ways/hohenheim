@@ -8,12 +8,12 @@ import be.elevenways.spamservice.client.SecurityEventEntry;
 import be.elevenways.spamservice.client.SpamserviceApiException;
 import be.elevenways.spamservice.client.SpamWordEntry;
 import be.elevenways.spamservice.client.SpamserviceClient;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.zenit.cms.common.action.ActionPlacement;
+import be.elevenways.zenit.cms.common.action.ActionStyle;
+import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
-import be.elevenways.zenit.cms.common.action.ActionContext;
-import be.elevenways.zenit.cms.common.action.CmsActionResult;
-import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.schema.FilterState;
 import be.elevenways.zenit.cms.common.schema.RangeFilterValue;
@@ -25,6 +25,8 @@ import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.UuidField;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.zenit.test.support.TestAccessContexts;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
@@ -428,34 +430,37 @@ class SpamserviceCmsContractTest {
      * instead of offering a live Stop button whose only possible answer is a generic failure.
      */
     @Test
+    @SuppressWarnings("unchecked")
     void installationLifecycleActionsNameTheStateThatBlocksThem() {
         SpamserviceInstallationResource installation = new SpamserviceInstallationResource();
-        AccessContext context = AccessContext.anonymous();
+        AccessContext operator = TestAccessContexts.allAllowed();
 
-        // 1. All four lifecycle verbs are header invokes, in the order an operator meets them.
-        List<HeaderAction> actions = installation.headerActions();
-        assertThat(actions).hasSize(4).allSatisfy(action ->
-            assertThat(action).isInstanceOf(HeaderAction.Invoke.class));
+        // 1. All four lifecycle verbs are placed HEADER operations, in the order an operator meets them.
+        List<PanelAction<Void>> actions = installation.actions();
+        assertThat(actions).hasSize(4).allSatisfy(action -> {
+            assertThat(action.placement()).isEqualTo(ActionPlacement.HEADER);
+            assertThat(action.verb()).isEqualTo(PanelAction.Verb.OPERATION);
+        });
         assertThat(actions.stream().map(action -> action.id().getPath()).toList())
             .containsExactly("spamservice_start", "spamservice_stop", "spamservice_restart",
                 "spamservice_test");
 
-        // 2. Nothing is configured in this JVM, so every one of them declares the SAME
-        //    root state rather than a per-action guess.
-        for (HeaderAction action : actions) {
-            Microcopy reason = ((HeaderAction.Invoke) action).unavailableReason(context);
-            assertThat(reason).as("%s declares a reason", action.id()).isNotNull();
-            assertThat(reason.key()).as("%s names the unconfigured state", action.id())
-                .isEqualTo("not_configured");
-        }
+        // 2. Stop and restart are destructive and confirm first; start and test do neither.
+        assertThat(actions.stream().map(PanelAction::style).toList()).containsExactly(ActionStyle.DEFAULT,
+            ActionStyle.DESTRUCTIVE, ActionStyle.DESTRUCTIVE, ActionStyle.DEFAULT);
+        assertThat(actions.stream().map(action -> action.confirmation() != null).toList())
+            .containsExactly(false, true, true, false);
 
-        // 3. Test connection REFUSES with that reason as an error toast -- never the
-        //    generic cms.action.failed the operator cannot act on.
-        HeaderAction.Invoke test = (HeaderAction.Invoke) actions.get(3);
-        CmsActionResult result = test.invoke(ActionContext.of(context));
-        assertThat(result).isInstanceOf(CmsActionResult.Toast.class);
-        CmsActionResult.Toast toast = (CmsActionResult.Toast) result;
-        assertThat(toast.message().key()).isEqualTo("not_configured");
+        // 3. Nothing is configured in this JVM, so every one of them is offered DEAD with the SAME root state rather
+        //    than a per-action guess: the availability the toolbar draws and the pipeline refuses a POST with.
+        for (PanelAction<Void> action : actions) {
+            OperationPipeline.Offer offer = OperationPipeline.offer(
+                (Operation<Void, ?, ?>) action.operation(), operator, null);
+            assertThat(offer).as("%s is offered unavailable", action.id())
+                .isInstanceOf(OperationPipeline.Offer.Unavailable.class);
+            assertThat(((OperationPipeline.Offer.Unavailable) offer).reason().key())
+                .as("%s names the unconfigured state", action.id()).isEqualTo("not_configured");
+        }
     }
 
     private static Field<?, ?> field(PanelResource<?> resource, String name) {

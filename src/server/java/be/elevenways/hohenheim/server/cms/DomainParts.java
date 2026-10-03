@@ -25,7 +25,7 @@ import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RowScope;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
@@ -198,7 +198,7 @@ public final class DomainParts {
         Integer siteId = CmsSupport.scopedParentId(request.conduit(), CmsEndpoints.PARENT_PARAM.getName(),
             HohenheimSlugs.SITES);
         if (siteId != null && request.panel().entryBySlug(HohenheimSlugs.SITES) instanceof PanelResource<?> sites) {
-            Object site = PanelResourceViews.of(sites, request).loadRow(siteId, request.access());
+            Object site = PartsReads.loadRow(request, sites, siteId, request.access());
             if (site instanceof Row row && TlsPassthroughUpstreamKind.ID.toString()
                     .equals(row.get(SiteModel.UPSTREAM_KIND))) {
                 values.put(SiteDomainModel.FORCE_SSL.getName(), false);

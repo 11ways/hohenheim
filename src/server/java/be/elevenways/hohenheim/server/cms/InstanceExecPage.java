@@ -17,7 +17,7 @@ import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.cms.server.page.PageActions;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.operation.OperationResult;
@@ -40,7 +40,7 @@ import java.util.Map;
  * THIS record, an authored instance. InstanceExec asks the capability once more on its funnel, because that funnel is
  * what a future API lane would reach too.
  */
-public final class InstanceExecPage implements RecordScopedPage<Row> {
+public final class InstanceExecPage implements RecordTab.Rendered<Row> {
 
     public static final String SLUG = "exec";
 
@@ -109,9 +109,4 @@ public final class InstanceExecPage implements RecordScopedPage<Row> {
             HohenheimSlugs.INSTANCES, instanceId, SLUG).toUrl()));
     }
 
-    @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
-        throw new UnsupportedOperationException("The " + SLUG + " tab renders through its PanelRequest");
-    }
 }

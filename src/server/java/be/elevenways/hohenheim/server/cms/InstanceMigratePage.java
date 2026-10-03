@@ -17,7 +17,7 @@ import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.render.action.PageFormState;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.cms.server.page.PageActions;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -42,7 +42,7 @@ import java.util.Map;
  * {@code InstanceMigrations.migrateTo} refuse everyone else by name. Placement is an operator authority, so the
  * delegated surface never carries this page ({@link InstanceParts#manage()} does not list it).
  */
-public final class InstanceMigratePage implements RecordScopedPage<Row> {
+public final class InstanceMigratePage implements RecordTab.Rendered<Row> {
 
     public static final String SLUG = "migrate";
 
@@ -153,9 +153,4 @@ public final class InstanceMigratePage implements RecordScopedPage<Row> {
         return value instanceof Number number ? number.intValue() : -1;
     }
 
-    @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
-        throw new UnsupportedOperationException("The " + SLUG + " tab renders through its PanelRequest");
-    }
 }

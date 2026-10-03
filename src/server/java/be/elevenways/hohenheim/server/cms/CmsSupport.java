@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -28,7 +29,7 @@ import java.util.Map;
 
 /**
  * Shared helpers for the CMS resources: proxy reload and coerced-map copies.
- * Record-tab strips come from the framework (RecordScopedPage.recordTabs);
+ * Record-tab strips come from the framework (RecordTab.recordTabs);
  * mutation-driven reloads ride {@code ProxyReloadHooks}.
  *
  * AIDEV-NOTE: this used to state "audit writes ride the framework activity log" as an

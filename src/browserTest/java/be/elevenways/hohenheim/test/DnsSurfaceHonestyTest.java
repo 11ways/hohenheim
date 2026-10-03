@@ -11,13 +11,16 @@ import be.elevenways.hohenheim.server.dns.DelegationCheck;
 import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
+import be.elevenways.zenit.cms.server.panel.PartsForms;
+import be.elevenways.zenit.cms.server.panel.PartsLists;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.common.edit.FormEntry;
 import be.elevenways.zenit.common.edit.InputType;
 import be.elevenways.zenit.common.edit.RelationPick;
@@ -53,12 +56,13 @@ class DnsSurfaceHonestyTest extends HohenheimTestBase {
         int peerId = DnsFixtures.transferPeer("honesty-peer", "192.0.2.10", 53);
         int replicaId = DnsFixtures.createZone(origin, DnsZoneModel.ROLE_SECONDARY, peerId);
 
-        Resource<Row> zones = zoneCells();
+        PanelResource<Row> zones = DnsZoneParts.admin();
+        PanelRequest request = zoneRequest();
         ColumnSpec countColumn = column(zones, "record_count");
         Row replica = Models.get(DnsZoneModel.class).findById(replicaId);
 
         // 1. Nothing transferred yet: a replica that serves nothing honestly counts nothing.
-        assertThat(zones.cellValue(replica, countColumn))
+        assertThat(PartsReads.cellValue(request, zones, null, replica, countColumn))
             .as("step 1: an untransferred replica serves no records")
             .isEqualTo(0L);
 
@@ -67,7 +71,7 @@ class DnsSurfaceHonestyTest extends HohenheimTestBase {
         try {
             // 2. Once the transfer landed, the count is the SERVED snapshot's -- the zone
             //    will always hold zero dns_records rows, which is what used to be shown.
-            assertThat(zones.cellValue(replica, countColumn))
+            assertThat(PartsReads.cellValue(request, zones, null, replica, countColumn))
                 .as("step 2: a serving replica counts the records it answers with")
                 .isEqualTo(2L);
 
@@ -91,7 +95,7 @@ class DnsSurfaceHonestyTest extends HohenheimTestBase {
         }
 
         // 5. The outbound column is the mirror image: a replica replicates to nobody.
-        assertThat(zones.cellValue(replica, column(zones, "secondaries")))
+        assertThat(PartsReads.cellValue(request, zones, null, replica, column(zones, "secondaries")))
             .as("step 5: a replica shows no outbound state")
             .isNull();
     }
@@ -102,17 +106,18 @@ class DnsSurfaceHonestyTest extends HohenheimTestBase {
         int zoneId = DnsFixtures.createZone(origin, DnsZoneModel.ROLE_PRIMARY, null);
         DnsFixtures.record(zoneId, "www", DnsRecordModel.TYPE_A, "198.51.100.1");
 
-        Resource<Row> zones = zoneCells();
+        PanelResource<Row> zones = DnsZoneParts.admin();
+        PanelRequest request = zoneRequest();
         Row zone = Models.get(DnsZoneModel.class).findById(zoneId);
 
         // 1. A primary still counts the rows it authors.
-        assertThat(zones.cellValue(zone, column(zones, "record_count")))
+        assertThat(PartsReads.cellValue(request, zones, null, zone, column(zones, "record_count")))
             .as("step 1: a primary counts its stored records")
             .isEqualTo(1L);
 
         // 2. With no secondary linked, the outbound column says exactly that rather than
         //    leaving the reader with the blank transfer-status cell a primary always had.
-        assertThat(microcopyKey(zones.cellValue(zone, column(zones, "secondaries"))))
+        assertThat(microcopyKey(PartsReads.cellValue(request, zones, null, zone, column(zones, "secondaries"))))
             .as("step 2: an unreplicated primary names its lack of secondaries")
             .isEqualTo("secondaries_none");
 
@@ -120,7 +125,7 @@ class DnsSurfaceHonestyTest extends HohenheimTestBase {
         //    the current tally: an unprobed peer is the one that silently stopped pulling.
         int peerId = DnsFixtures.transferPeer("honesty-outbound", "192.0.2.11", 53);
         DnsFixtures.linkZonePeer(zoneId, peerId);
-        Microcopy linked = (Microcopy) zones.cellValue(zone, column(zones, "secondaries"));
+        Microcopy linked = (Microcopy) PartsReads.cellValue(request, zones, null, zone, column(zones, "secondaries"));
         assertThat(linked.key())
             .as("step 3: a linked primary summarizes its secondaries")
             .isEqualTo("secondaries_current");
@@ -132,11 +137,10 @@ class DnsSurfaceHonestyTest extends HohenheimTestBase {
             .isEqualTo(0);
     }
 
-    private static Resource<Row> zoneCells() {
+    private static PanelRequest zoneRequest() {
         var conduit = TenantConduits.stubFor(null);
-        var request = new PanelRequest(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN), conduit,
+        return new PanelRequest(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN), conduit,
             AccessContext.of(conduit), null);
-        return PanelResourceViews.of(DnsZoneParts.admin(), request);
     }
 
     @Test
@@ -148,24 +152,24 @@ class DnsSurfaceHonestyTest extends HohenheimTestBase {
             "sip.example", 10, 60, 5060);
         int aId = DnsFixtures.record(zoneId, "www", DnsRecordModel.TYPE_A, "198.51.100.1");
 
-        Resource<Row> records = PanelResourceViews.forCaller(DnsRecordParts.admin());
+        PanelResource<Row> records = DnsRecordParts.admin();
         ColumnSpec valueColumn = column(records, DnsRecordModel.VALUE.getName());
         DnsRecordModel model = Models.get(DnsRecordModel.class);
 
         // 1. The MX priority leads the target: five rows to Google's mail hosts are five
         //    DIFFERENT records and the list has to say so.
-        assertThat(records.cellValue(model.findById(mxId), valueColumn))
+        assertThat(PartsReads.cellValue(null, records, null, model.findById(mxId), valueColumn))
             .as("step 1: an MX cell carries its priority")
             .isEqualTo("10 aspmx.l.google.com");
 
         // 2. The SRV trio, in dig's order.
-        assertThat(records.cellValue(model.findById(srvId), valueColumn))
+        assertThat(PartsReads.cellValue(null, records, null, model.findById(srvId), valueColumn))
             .as("step 2: an SRV cell carries priority, weight and port")
             .isEqualTo("10 60 5060 sip.example");
 
         // 3. A type with no declared extras is untouched: this is presentation, and the
         //    stored column keeps the bare value the codec and the filters read.
-        assertThat(records.cellValue(model.findById(aId), valueColumn))
+        assertThat(PartsReads.cellValue(null, records, null, model.findById(aId), valueColumn))
             .as("step 3: a plain type renders its value unchanged")
             .isEqualTo("198.51.100.1");
         assertThat(model.findById(mxId).get(DnsRecordModel.VALUE))
@@ -209,7 +213,7 @@ class DnsSurfaceHonestyTest extends HohenheimTestBase {
 
     @Test
     void aZonePeerLinkIsNamedByBothHalvesAndPickedNotTyped() {
-        Resource<Row> links = PanelResourceViews.forCaller(DnsZonePeerParts.admin());
+        PanelResource<Row> links = DnsZonePeerParts.admin();
 
         // 1. The list carries the zone, so a peer secondarying four zones is four
         //    distinguishable rows instead of four rows called "robbedoes".
@@ -221,7 +225,7 @@ class DnsSurfaceHonestyTest extends HohenheimTestBase {
         // 2. And the editor picks that zone as a record, never as a primary key typed into
         //    a numeric stepper.
         FormEntry zoneEntry = null;
-        for (FormEntry entry : links.formSpec().entries()) {
+        for (FormEntry entry : PartsForms.formSpec(links).entries()) {
             if (DnsZonePeerModel.ZONE_ID.getName().equals(entry.name())) {
                 zoneEntry = entry;
             }
@@ -232,9 +236,9 @@ class DnsSurfaceHonestyTest extends HohenheimTestBase {
     }
 
     /** @return the named column of a resource's declared table spec */
-    private static ColumnSpec column(Resource<Row> resource,
+    private static ColumnSpec column(PanelEntry resource,
                                      String name) {
-        for (ColumnSpec column : resource.tableSpec().columns()) {
+        for (ColumnSpec column : PartsLists.tableSpec(resource).columns()) {
             if (name.equals(column.name())) {
                 return column;
             }

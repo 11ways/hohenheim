@@ -7,12 +7,12 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -31,7 +31,7 @@ import java.util.function.ToDoubleFunction;
  * chart that fills in as soon as the channel link opens, which is the honest rendering of
  * "there is no history because we keep none".
  */
-public final class InstanceStatsPage implements RecordScopedPage<Row> {
+public final class InstanceStatsPage implements RecordTab.Rendered<Row> {
 
     public static final String SLUG = "stats";
 
@@ -41,9 +41,8 @@ public final class InstanceStatsPage implements RecordScopedPage<Row> {
     @Override public @NonNull Icon icon() { return Icon.of("chart-line"); }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
+        Conduit conduit = request.conduit();
         Integer instanceId = instance.get(InstanceModel.ID);
         String status = instance.get(InstanceModel.STATUS);
         List<InstanceStats.Sample> history = InstanceStats.history(instanceId);

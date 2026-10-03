@@ -1,12 +1,11 @@
 package be.elevenways.hohenheim.test;
 
-import be.elevenways.hawkeye.testSupport.HawkeyeBrowserTestBase;
+import be.elevenways.zenit.browsertest.ZenitBrowserTestBase;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.hohenheim.server.ServerMain;
-import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -20,8 +19,6 @@ import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.csrf.CsrfTokens;
 import be.elevenways.zenit.common.session.Session;
-import be.elevenways.zenit.server.ServerZenitRuntime;
-import be.elevenways.zenit.server.http.ZenitHttpServer;
 import com.microsoft.playwright.options.Cookie;
 
 import java.net.URI;
@@ -52,21 +49,15 @@ import java.util.concurrent.ConcurrentHashMap;
 // browserTestIsolated bucket with a fresh JVM per class, because doing that
 // beside a live shared server yanks the database out from under it.
 @org.junit.jupiter.api.Tag("shared-server")
-public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
+public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
 
-    private static ZenitHttpServer zenitServer;
-    private static int port;
     protected static String sessionToken;
     protected static String csrfToken;
     /** Every session {@link #sessionFor} minted in this JVM, drained with the admin one before each test. */
     private static final Set<String> MINTED_SESSIONS = ConcurrentHashMap.newKeySet();
 
     @Override
-    protected int startServer() throws Exception {
-        if (ServerZenitRuntime.INSTANCE != null) {
-            return port;
-        }
-
+    protected void bootHost() throws Exception {
         // The shared harness DECLARES its role set instead of inheriting it by
         // omission: every role on, the full-node shape this suite has always
         // exercised. load() below snapshots these into HohenheimRoles.
@@ -117,13 +108,11 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         // bucket per principal; a full suite would trip them across classes.
         // The dedicated rate-limit test lifts the exemption for its hammer.
         RateLimitExemption.exemptAll();
+    }
 
-        zenitServer = ServerZenitRuntime.createServer(0);
-        zenitServer.start();
-        port = zenitServer.getPort();
-
-        System.out.println("Hohenheim test server started on http://localhost:" + port);
-        return port;
+    @Override
+    protected void afterServerStart() {
+        System.out.println("Hohenheim test server started on http://localhost:" + this.getServerPort());
     }
 
     /** The test admin ({@link TenantConduits#operatorUser}) and an active session for it; returns the session id.
@@ -146,17 +135,6 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         sessionToken = seedAuthenticatedAdmin();
     }
 
-    @Override
-    protected void stopServer() {
-        // Shared across the JVM (the CmsBrowserTestBase pattern): the first class to
-        // finish must NOT stop the server every later class in this fork still uses.
-        // Teardown rides on JVM shutdown.
-    }
-
-    @Override
-    protected int getServerPort() {
-        return port;
-    }
 
     /**
      * Take the admin session's flash toast that loading {@code answer}'s redirect would show.

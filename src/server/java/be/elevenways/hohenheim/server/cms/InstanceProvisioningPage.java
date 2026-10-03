@@ -11,9 +11,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
-import be.elevenways.zenit.cms.common.resource.Resource;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.cms.server.page.ChildListSections;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -21,7 +19,6 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.routing.RouteTarget;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -37,7 +34,7 @@ import java.util.Map;
  * @author Jelle De Loecker
  * @since  0.1.0
  */
-public final class InstanceProvisioningPage implements RecordScopedPage<Row> {
+public final class InstanceProvisioningPage implements RecordTab.Rendered<Row> {
 
     /** The tab's slug, which the variables child list names as its parent tab. */
     public static final String SLUG = "provisioning";
@@ -104,8 +101,8 @@ public final class InstanceProvisioningPage implements RecordScopedPage<Row> {
         String installError = ManagePanel.SLUG.equals(panel)
             ? null : instance.get(InstanceModel.INSTALL_ERROR);
         vars.put("installError", installError == null ? "" : installError);
-        Resource<Row> parent = PanelResourceViews.of(CmsSupport.rowEntry(request.panel(), InstanceParts.SLUG), request);
-        vars.put("sections", ChildListSections.embedded(request, parent, instance, InstanceVariableParts.PROVISIONING));
+        vars.put("sections", ChildListSections.embedded(request,
+            CmsSupport.rowEntry(request.panel(), InstanceParts.SLUG), instance, InstanceVariableParts.PROVISIONING));
         vars.put("panelSlug", panel);
         vars.put("files", files);
         // Create form + prefill query parameter: composed off CmsEndpoints, since
@@ -120,9 +117,4 @@ public final class InstanceProvisioningPage implements RecordScopedPage<Row> {
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_PROVISIONING, vars);
     }
 
-    @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
-        throw new UnsupportedOperationException("The provisioning tab renders through its PanelRequest");
-    }
 }

@@ -275,13 +275,13 @@ public final class ManagePanel extends Panel {
         // The create half serves the list pages' quick-add bar. It is ADMIN-gated on top
         // of the source's own read scope, because its form carries zone_id: adding "into
         // an arbitrary zone" is an operator act, while a tenant's create lane is
-        // ManageDnsRecordResource's form, which resolves the zone from the name it typed.
+        // ManageDnsRecordParts' form, which resolves the zone from the name it typed.
         // The write pipeline (TenantWrites) stays the gate either way -- this only decides
         // which surface is OFFERED.
         //
         // AIDEV-NOTE: the provider is the FRAMEWORK's own resource-backed one
         // (CmsRecordSources.createProviderFor), which is what zenit-cms derives for every
-        // creatable RowResource whose source it registers itself. An explicit source
+        // creatable entry whose source it registers itself. An explicit source
         // replaces the derived default WHOLE -- facets never merge -- so the create half
         // has to be declared here or the bar simply never appears. It used to be a
         // hand-written copy of that provider; nothing about the reduction or the
@@ -289,9 +289,10 @@ public final class ManagePanel extends Panel {
         var dnsRecords = RecordSource.of(DnsRecordModel.class)
             .search(DnsRecordModel.NAME, DnsRecordModel.VALUE)
             .scopedBy(TenantScopes.DNS_RECORDS);
-        Panel adminPanel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN),
+        Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN),
             "the admin panel is registered before its sources");
-        RecordCreateProvider dnsCreate = CmsRecordSources.createProviderFor(adminPanel, DnsRecordParts.admin());
+        PanelEntry dnsEntry = admin.entryBySlug(DnsRecordParts.SLUG);
+        RecordCreateProvider dnsCreate = dnsEntry != null ? CmsRecordSources.createProviderFor(admin, dnsEntry) : null;
         if (dnsCreate != null) {
             dnsRecords.creatable(dnsCreate, HohenheimSources.ADMIN_ACCESS);
         }

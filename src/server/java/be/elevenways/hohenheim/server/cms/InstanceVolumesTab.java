@@ -14,7 +14,6 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -36,7 +35,7 @@ import java.util.Map;
  * container path, quota, observed usage and exclusivity, linking into the (nav-hidden)
  * volume resource forms -- the InstanceDevicesPage shape over {@link InstanceVolumes}.
  */
-public final class InstanceVolumesTab implements RecordScopedPage<Row> {
+public final class InstanceVolumesTab implements RecordTab.Rendered<Row> {
 
     public static final String SLUG = "volumes";
 
@@ -60,11 +59,6 @@ public final class InstanceVolumesTab implements RecordScopedPage<Row> {
         return volumeCapable(record);
     }
 
-    @Override
-    public boolean visibleFor(@NonNull Row record) {
-        return volumeCapable(record);
-    }
-
     static boolean volumeCapable(@NonNull Row record) {
         InstanceKindHandler handler = InstanceKinds.getHandler(record.get(InstanceModel.KIND));
         return handler != null && handler.supportsVolumes();
@@ -73,13 +67,6 @@ public final class InstanceVolumesTab implements RecordScopedPage<Row> {
     @Override
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
         return body(request.conduit(), request.access(), instance, request.panelSlug());
-    }
-
-    /** The remaining legacy instance host dispatches here until its own parts conversion. */
-    @Override
-    @Deprecated(forRemoval = true)
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext access, @NonNull Row instance) {
-        return body(conduit, access, instance, CmsSupport.panelSlug(conduit));
     }
 
     @NonNull ActionResult<?> body(@NonNull Conduit conduit, @NonNull AccessContext accessContext,

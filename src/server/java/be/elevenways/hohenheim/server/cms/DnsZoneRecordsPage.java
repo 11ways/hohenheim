@@ -23,13 +23,11 @@ import be.elevenways.protoblast.common.typed.rule.Operand;
 import be.elevenways.plumage.component.Pager;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
-import be.elevenways.zenit.cms.common.page.CmsFormBody;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.render.table.TableState;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
-import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
@@ -38,7 +36,8 @@ import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.render.action.PageFormState;
 import be.elevenways.zenit.cms.server.page.PageActions;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.zenit.cms.server.panel.PartsLists;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.cms.server.panel.PanelActionOffers;
 import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
 import be.elevenways.zenit.cms.common.schema.FilterState;
@@ -63,7 +62,6 @@ import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.routing.ReturnPath;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
-import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.http.ReturnTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -149,7 +147,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
     private @NonNull ActionResult<?> renderLocal(@NonNull Conduit conduit,
                                                  @NonNull AccessContext accessContext,
                                                  @NonNull Row zone) {
-        Resource<Row> resource = recordResource(conduit, accessContext);
+        PanelResource<Row> resource = recordResource(conduit, accessContext);
         if (resource == null) {
             // The DNS role is off, so the record resource is not on the panel at all.
             return new RenderTemplateResult(TEMPLATE, unavailableVars(conduit, zone));
@@ -163,11 +161,11 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
      *
      * @return null when the DNS role is off, so the resource is not on the panel at all
      */
-    private static @Nullable Resource<Row> recordResource(Conduit conduit, AccessContext access) {
+    private static @Nullable PanelResource<Row> recordResource(Conduit conduit, AccessContext access) {
         Panel panel = PanelRegistry.getBySlug(PANEL);
         if (panel != null && panel.entryBySlug(DnsRecordParts.SLUG) instanceof PanelResource<?> entry) {
             @SuppressWarnings("unchecked") PanelResource<Row> records = (PanelResource<Row>) entry;
-            return PanelResourceViews.of(records, new PanelRequest(panel, conduit, access, null));
+            return records;
         }
         return null;
     }
@@ -181,7 +179,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
     @NonNull ActionResult<?> renderLocal(@NonNull Conduit conduit,
                                          @NonNull AccessContext accessContext,
                                          @NonNull Row zone,
-                                         @NonNull Resource<Row> resource) {
+                                          @NonNull PanelResource<Row> resource) {
         Integer zoneId = zone.get(DnsZoneModel.ID);
         String origin = zone.get(DnsZoneModel.ORIGIN);
         // The panel this tab renders under: the one whose peers every write predicate below
@@ -196,14 +194,14 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
             .forPrincipal(accessContext.principalId(), resource.id())
             .visibleColumns(COLUMNS)
             .sort(SortSpec.asc(DnsRecordModel.NAME.getName()))
-            .filter(zoneScope(resource, zoneId))
+            .filter(zoneScope(resource, zoneId, accessContext))
             .build()
-            .apply(resource.tableSpec())
+            .apply(PartsLists.<Row>tableSpec(resource))
             .withSearch(search)
             .withPage(state.page());
         // The resource's OWN list read: its access predicate, its search semantics, its
         // page window and its total -- this tab only adds the zone scope.
-        RecordPage<Row> page = resource.listPage(applied, accessContext);
+        RecordPage<Row> page = PartsReads.listPage(request, resource, null, applied, accessContext);
         List<Row> records = page.rows();
         // The per-row write verdicts below walk each record's parent (this zone) once for the whole page.
         PartsWrites.prefetchLineage(resource, panel, records, accessContext);
@@ -225,11 +223,8 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         TableState table = new TableStateTranslator().translate(
             applied,
             records,
-            resource::rowKey,
-            row -> resource.rowCells(applied, row),
-            resource.offeredRowActions(panel),
-            (actionId, row) -> ReturnTarget.bind(
-                CmsRoutes.invoke(PANEL, resource.slug(), actionId), returnTo),
+            row -> PartsReads.rowKey(resource, row),
+            row -> PartsReads.rowCells(request, resource, null, applied, row),
             column -> null,
             row -> recordUrl(resource, row, returnTo),
             row -> ResourceVerbs.editableBy(request, resource, row, accessContext)
@@ -238,7 +233,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
             row -> DeleteConfirmation.<Row>defaults().fallback(),
             // Per ROW: a delete the principal may perform in general yet the write will
             // refuse for THIS record stays on the menu, dead, with its reason (see
-            // Resource.deleteUnavailableReason); DELETE_SUBMIT refuses with the same text.
+            // ResourceVerbs.unavailable); DELETE_SUBMIT refuses with the same text.
             row -> null,
             // Promoted seam: the framework's own affordance answer, which the generated
             // list page uses too -- this page used to carry a copy of it.
@@ -266,13 +261,13 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         vars.put("listUrl", listUrl);
         vars.put("searchValue", search != null ? search : "");
         vars.put("searchParam", FacetUrlState.TEXT_PARAM);
-        vars.put("searchEnabled", resource.searchOffered());
+        vars.put("searchEnabled", PartsLists.searchOffered(resource));
         vars.put("searchActive", search != null);
         vars.put("pager", Pager.of(page.window(), page.total(), number -> pageUrl(listTarget, search, number)));
         vars.put("addRecordTarget", addRecordTarget);
         vars.put("recordTabs", recordTabs(conduit));
         // Promoted seam: the framework's own quick-add builder. The zone preset it needs
-        // is answered by DnsRecordResource.quickCreatePresetValues, which reads THIS route.
+        // is answered by the record entry's quick-create presets, which read THIS route.
         QuickAddState.putVars(vars, panel, resource, accessContext, refreshUrl,
             addRecordTarget == null ? null : addRecordTarget.toUrl());
         return new RenderTemplateResult(TEMPLATE, vars);
@@ -300,10 +295,11 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
      * would silently widen the tab to every zone's records -- so the tree is validated
      * against the resource's vocabulary first and a failure refuses loudly (fail closed).
      */
-    static @NonNull FilterState zoneScope(@NonNull Resource<Row> resource, @NonNull Integer zoneId) {
+    static @NonNull FilterState zoneScope(@NonNull PanelResource<Row> resource, @NonNull Integer zoneId,
+                                           @NonNull AccessContext access) {
         Condition scope = Condition.all(Condition.test(DnsRecordModel.ZONE_ID.getName(), CoreTypes.EQUALS,
             Operand.of(zoneId)));
-        if (!RuleCompiler.validate(scope, resource.filterVocabulary()).isEmpty()) {
+        if (!RuleCompiler.validate(scope, PartsLists.filterVocabulary(resource, access)).isEmpty()) {
             throw new IllegalStateException("The DNS record vocabulary cannot scope by "
                 + DnsRecordModel.ZONE_ID.getName());
         }
@@ -318,7 +314,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         return number > 1 ? target.with(CmsEndpoints.LIST_PAGE_PARAM, number).toUrl() : target.toUrl();
     }
 
-    private static @NonNull String recordUrl(@NonNull Resource<Row> resource, @NonNull Row row,
+    private static @NonNull String recordUrl(@NonNull PanelResource<Row> resource, @NonNull Row row,
                                              @Nullable String returnTo) {
         return ReturnTarget.bind(
             CmsRoutes.detail(PANEL, resource.slug(), resource.rowKey(row)), returnTo).toUrl();
