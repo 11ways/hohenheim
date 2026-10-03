@@ -18,6 +18,8 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.forms.common.render.FormEntryState;
 import be.elevenways.zenit.forms.common.render.FormState;
+import be.elevenways.zenit.forms.common.render.ConditionalEntryState;
+import be.elevenways.zenit.common.edit.FormCondition;
 import be.elevenways.zenit.forms.server.render.FormStateTranslator;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.Test;
@@ -49,11 +51,14 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
             (PanelResource<?>) admin.entryBySlug(EnvironmentParts.VARIABLES_SLUG), admin);
         FormState state = new FormStateTranslator().translate(
             resource.formSpec(), resource.fieldAccessByPath(), view,
-            TestAccessContexts.contextFor(null), Map.of(), List.<Violation>of(),
+            TestAccessContexts.contextFor(null), record == null ? resource.createValues()
+                : resource.valuesFromRow(record), List.<Violation>of(),
             null, false, record);
 
         List<String> carriers = new ArrayList<>();
         for (FormEntryState entry : state.entries()) {
+            if (entry instanceof ConditionalEntryState conditional
+                    && !FormCondition.matches(conditional.conditions(), Map.of())) continue;
             if (entry.path().equals(InstanceVariableModel.PLAIN_VALUE.getName())
                 || entry.path().equals(InstanceVariableModel.SECRET_VALUE.getName())) {
                 carriers.add(entry.path());
@@ -147,6 +152,40 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
         assertThat(stored.get(InstanceVariableModel.PLAIN_VALUE))
             .as("the withheld carrier stays unwritable")
             .isNull();
+
+        // 8. The newly selected carrier can be written in the same POST that changes kind.
+        HttpResponse<String> liveSwitched = httpPostForm("/admin/environment-variables/" + variableId,
+            "environment_id=" + environmentId + "&key=CARRIER_PROBE&kind=plain&plain_value=new-config",
+            sessionToken, csrfToken);
+        assertThat(liveSwitched.statusCode()).as("step 8: selected carrier writes with its kind").isEqualTo(302);
+        stored = Models.get(InstanceVariableModel.class).find().where(InstanceVariableModel.ID.eq(variableId)).first();
+        assertThat(stored.get(InstanceVariableModel.PLAIN_VALUE)).as("step 8: new carrier is stored").isEqualTo("new-config");
+        assertThat(stored.get(InstanceVariableModel.SECRET_VALUE)).as("step 8: old secret is retired").isNull();
+
+        // 9. Unknown kinds refuse before either physical carrier is touched.
+        HttpResponse<String> unknown = httpPostForm("/admin/environment-variables/" + variableId,
+            "environment_id=" + environmentId + "&key=CARRIER_PROBE&kind=unknown&secret_value=smuggled",
+            sessionToken, csrfToken);
+        assertThat(unknown.statusCode()).as("step 9: unknown kind is a form refusal").isEqualTo(200);
+        stored = Models.get(InstanceVariableModel.class).find().where(InstanceVariableModel.ID.eq(variableId)).first();
+        assertThat(stored.get(InstanceVariableModel.PLAIN_VALUE)).as("step 9: refused write keeps old value").isEqualTo("new-config");
+        assertThat(stored.get(InstanceVariableModel.SECRET_VALUE)).as("step 9: no hidden carrier write").isNull();
+
+        // 10. Hydrated switching retains the plain draft and excludes the hidden native controls from submission.
+        navigateToApp("/admin/environment-variables/" + variableId);
+        var plainInput = page.locator("pl-textarea[name='plain_value'] textarea");
+        plainInput.fill("retained-draft");
+        page.locator("zf-select-field pl-select[name='kind'] .pl-select-field").click();
+        page.locator("he-bottom .pl-select-popup[data-open] [role='option'][data-value='secret']").click();
+        page.waitForFunction("() => document.querySelector('[data-conditional-entry=secret_value]').hidden === false");
+        assertThat(page.locator("[data-conditional-entry='plain_value']").isVisible())
+            .as("step 10: old carrier is hidden").isFalse();
+        assertThat(page.evaluate("() => new FormData(document.querySelector('textarea[name=plain_value]').form).has('plain_value')"))
+            .as("step 10: hidden carrier is not a successful control").isEqualTo(false);
+        page.locator("zf-select-field pl-select[name='kind'] .pl-select-field").click();
+        page.locator("he-bottom .pl-select-popup[data-open] [role='option'][data-value='plain']").click();
+        page.waitForFunction("() => document.querySelector('[data-conditional-entry=plain_value]').hidden === false");
+        assertThat(plainInput.inputValue()).as("step 10: switching back retains the native draft").isEqualTo("retained-draft");
     }
 
     /**
