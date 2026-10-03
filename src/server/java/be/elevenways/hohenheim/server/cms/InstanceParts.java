@@ -153,8 +153,8 @@ public final class InstanceParts {
                 RelatedPage.toPeer(BackupTargetResource.SLUG),
                 RelatedPage.toPeer(InstanceQuotaParts.SLUG),
                 RelatedPage.toPeer(GameDomainResource.SLUG),
-                RelatedPage.toPeer(BuildOperationResource.SLUG),
-                RelatedPage.toPeer(ReleaseOperationResource.SLUG))
+                RelatedPage.toPeer(OperationHistoryParts.BUILDS),
+                RelatedPage.toPeer(OperationHistoryParts.RELEASES))
             .build();
     }
 

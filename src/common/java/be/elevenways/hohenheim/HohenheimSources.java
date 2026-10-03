@@ -141,8 +141,8 @@ public final class HohenheimSources implements ZenitModule {
 
         // No explicit source for DnsZoneModel either: its explicit copy added nothing over
         // the derived default (DnsZoneResource declares the same search fields) and only
-        // cost the edit link. SiteAuthProviderModel's is server-side in AdminSources (its
-        // admin entry is a panel resource, which derives no model default).
+        // cost the edit link. SiteAuthProviderModel and the stack models need none: their
+        // admin entries are panel resources, whose model-level source zenit-cms derives.
         // Bans, hosts and runtime images DO need a projection / subtitle / sortable the
         // derived default lacks; they are declared server-side in AdminSources, where the
         // edit link and inline create can be spelled beside those facets.

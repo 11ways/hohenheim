@@ -86,7 +86,7 @@ public final class PortLedger {
 
     /**
      * The canonical per-host claim string, VERBATIM the spelling
-     * StackServiceResource.portClaim established: trims both sides, folds a blank bind
+     * StackParts' service port check established: trims both sides, folds a blank bind
      * address and {@code 0.0.0.0} into one whole-host bind, defaults {@code tcp}.
      */
     public static @NonNull String portClaim(@Nullable Object hostIp, int port,

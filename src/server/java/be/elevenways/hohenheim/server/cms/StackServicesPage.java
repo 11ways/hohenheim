@@ -64,7 +64,7 @@ public final class StackServicesPage implements RecordScopedPage<Row> {
             entry.put("state", state);
             entry.put("stateLabel", stateLabel(state));
             entry.put("stateVariant", stateVariant(state));
-            entry.put("editTarget", CmsRoutes.detail(panel, "stack-services", serviceId));
+            entry.put("editTarget", CmsRoutes.detail(panel, StackParts.SERVICES_SLUG, serviceId));
 
             StringBuilder ports = new StringBuilder();
             for (Row port : service.getRecords(StackServiceModel.PORTS)) {
@@ -82,7 +82,7 @@ public final class StackServicesPage implements RecordScopedPage<Row> {
                 Map<String, Object> fileEntry = new HashMap<>();
                 fileEntry.put("id", file.get(StackFileModel.ID));
                 fileEntry.put("path", file.get(StackFileModel.CONTAINER_PATH));
-                fileEntry.put("editTarget", CmsRoutes.detail(panel, "stack-files",
+                fileEntry.put("editTarget", CmsRoutes.detail(panel, StackParts.FILES_SLUG,
                     file.get(StackFileModel.ID)));
                 files.add(fileEntry);
             }
@@ -91,7 +91,7 @@ public final class StackServicesPage implements RecordScopedPage<Row> {
             // CmsRoutes.create returns the RouteTarget interface (no with(...)).
             entry.put("addFileTarget", CmsEndpoints.CREATE_FORM
                 .with(CmsEndpoints.PANEL_PARAM, panel)
-                .with(CmsEndpoints.RESOURCE_PARAM, "stack-files")
+                .with(CmsEndpoints.RESOURCE_PARAM, StackParts.FILES_SLUG)
                 .with(HohenheimParams.STACK_SERVICE_ID_PREFILL, serviceId));
 
             services.add(entry);
@@ -104,14 +104,14 @@ public final class StackServicesPage implements RecordScopedPage<Row> {
         vars.put("services", services);
         vars.put("addServiceTarget", CmsEndpoints.CREATE_FORM
             .with(CmsEndpoints.PANEL_PARAM, panel)
-            .with(CmsEndpoints.RESOURCE_PARAM, "stack-services")
+            .with(CmsEndpoints.RESOURCE_PARAM, StackParts.SERVICES_SLUG)
             .with(HohenheimParams.STACK_ID_PREFILL, stackId));
         // The front door of a FAILED stack states the reason and links the row that
         // carries it: a status badge alone sent the operator hunting through tabs.
         String failure = StackFailures.reasonOf(stack);
         vars.put("failureReason", failure != null ? failure : "");
         vars.put("deploymentsTarget", failure != null
-            ? CmsRoutes.subpage(panel, StackResource.SLUG, stackId, StackDeploymentsPage.SLUG) : null);
+            ? CmsRoutes.subpage(panel, StackParts.SLUG, stackId, StackDeploymentsPage.SLUG) : null);
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.STACK_SERVICES, vars);
     }

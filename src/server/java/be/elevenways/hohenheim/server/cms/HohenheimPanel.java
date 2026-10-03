@@ -176,15 +176,15 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, new BackupTargetResource(), Role.INSTANCES);
         // Build history serves the two tiers that produce images today (Docker sites
         // through the proxy role, container instances through the instances role).
-        addIf(peers, new BuildOperationResource(), Role.PROXY, Role.INSTANCES);
+        addIf(peers, OperationHistoryParts.builds(), Role.PROXY, Role.INSTANCES);
         // Release history: applications (the instance tier) release through the
         // health gate since the phase-0 re-keying; the proxy role merely exposes them.
-        addIf(peers, new ReleaseOperationResource(), Role.PROXY, Role.INSTANCES);
+        addIf(peers, OperationHistoryParts.releases(), Role.PROXY, Role.INSTANCES);
         addIf(peers, GitProviderParts.admin(), Role.PROXY);
         addIf(peers, new PreviewDeploymentResource(), Role.PROXY);
-        addIf(peers, new StackResource(), Role.STACKS);
-        addIf(peers, new StackServiceResource(), Role.STACKS);
-        addIf(peers, new StackFileResource(), Role.STACKS);
+        addIf(peers, StackParts.stacks(), Role.STACKS);
+        addIf(peers, StackParts.services(), Role.STACKS);
+        addIf(peers, StackParts.files(), Role.STACKS);
         // The host inventory serves stacks, managed databases AND the instance
         // tier: instance placement is gated on an ADMITTED host, and admit/
         // preflight/trust live on this resource -- an instances-only node

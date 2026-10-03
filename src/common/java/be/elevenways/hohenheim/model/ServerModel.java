@@ -779,7 +779,7 @@ public class ServerModel extends Model {
      *
      * AIDEV-NOTE: THE one spelling normalisation. The local daemon used to be spelled
      * both {@code ""} and {@code "local"} across three separate normalisations
-     * (DockerSiteRequestHandler, DatabaseService, StackServiceResource), which would
+     * (DockerSiteRequestHandler, DatabaseService, StackParts), which would
      * have split one machine's port claims into two disjoint sets while every unique
      * constraint held. Every consumer -- runtime resolution ({@link #canonicalServerId})
      * AND the M051 legacy heal -- must route through this method; never re-derive.
