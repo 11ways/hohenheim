@@ -14,16 +14,21 @@ import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
-import be.elevenways.zenit.common.flash.FlashLevel;
-import be.elevenways.zenit.common.flash.FlashNotice;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.server.cms.InstanceMigratePage;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -229,28 +234,15 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
     void arefusedSubmitSurfacesTheRefusalInsteadOfASuccessToast() throws Exception {
         int localHost = ServerModel.localServerId();
 
-        // 1. The host the workload ALREADY runs on: refused by its own name, as an ERROR.
-        //    A success toast here would carry migrated_toast at level SUCCESS, so the two
-        //    outcomes can no longer look alike to this test.
-        HttpResponse<String> sameHost = adminPostForm(migrateUrl(),
-            "target_server_id=" + localHost);
+        // 1. The host the workload ALREADY runs on: the migrate operation refuses it by its own name, answered on
+        //    the invoke lane as a refusal (never a success redirect), naming why.
+        HttpResponse<String> sameHost = invokeMigrate(localHost);
         assertThat(sameHost.statusCode())
-            .withFailMessage("step 1: the refused submit must answer with the lane's"
-                + " post-redirect-get, never an error page (HTTP %s)", sameHost.statusCode())
-            .isIn(302, 303);
-        FlashNotice sameHostFlash = popFlash(sameHost);
-        assertThat(sameHostFlash)
-            .withFailMessage("step 1: the refused submit stashed no flash at all -- the"
-                + " operator would see the page reload as if the move had happened")
-            .isNotNull();
-        assertThat(sameHostFlash.toast())
-            .withFailMessage("step 1: a refused migration reported variant %s -- anything"
-                + " but ERROR reads as a success", sameHostFlash.toast())
-            .isEqualTo(FlashLevel.ERROR.toast());
-        assertThat(sameHostFlash.message().key())
-            .withFailMessage("step 1: the flash must NAME the refusal (found '%s')",
-                sameHostFlash.message().key())
-            .isEqualTo("migrate_same_host");
+            .withFailMessage("step 1: the refused move must answer as a refusal, never a success (HTTP %s)",
+                sameHost.statusCode())
+            .isEqualTo(422);
+        assertThat(sameHost.body()).as("step 1: the answer NAMES the refusal")
+            .contains("already lives on that host");
 
         // 2. A DIFFERENT host, one the survey already called ineligible: the record must
         //    not move. Submitting the current host could never prove that -- "did not
@@ -260,20 +252,10 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
                     && !candidate.eligible()))
             .as("step 2: the stranger host is a genuine OTHER destination, and ineligible")
             .isTrue();
-        HttpResponse<String> other = adminPostForm(migrateUrl(),
-            "target_server_id=" + strangerHostId);
-        assertThat(other.statusCode())
-            .withFailMessage("step 2: the refused submit must answer with the lane's"
-                + " post-redirect-get (HTTP %s)", other.statusCode())
-            .isIn(302, 303);
-        FlashNotice otherFlash = popFlash(other);
-        assertThat(otherFlash).as("step 2: the second refusal stashed a flash too").isNotNull();
-        assertThat(otherFlash.toast())
-            .as("step 2: also as an ERROR").isEqualTo(FlashLevel.ERROR.toast());
-        assertThat(otherFlash.message().key())
-            .withFailMessage("step 2: and named as the ADMISSION refusal, so the operator"
-                + " learns what to fix (found '%s')", otherFlash.message().key())
-            .isEqualTo("host_not_admitted");
+        HttpResponse<String> other = invokeMigrate(strangerHostId);
+        assertThat(other.statusCode()).as("step 2: also refused").isEqualTo(422);
+        assertThat(other.body()).as("step 2: and named as the ADMISSION refusal, so the operator learns what to fix")
+            .contains("is not admitted for placement");
 
         // 3. THE STATE: the record still names the host it started on -- a move onto the
         //    stranger would have written its id here.
@@ -384,5 +366,16 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
 
     private static String migrateUrl() {
         return "/admin/instances/" + instanceId + "/page/migrate";
+    }
+
+    /** The no-script submit of the migrate tab's form for one destination: the operation's invoke with the tab. */
+    private HttpResponse<String> invokeMigrate(int target) throws Exception {
+        String path = CmsRoutes.invoke(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES,
+                InstanceOperations.MIGRATE.id())
+            .with(CmsEndpoints.SUBJECT_PARAM, String.valueOf(instanceId)).toUrl();
+        return adminPostForm(path, ApiSupport.form(CmsEndpoints.TAB_PARAM.getName(), InstanceMigratePage.SLUG,
+            InstanceOperations.TARGET_SERVER.getName(), String.valueOf(target),
+            CmsEndpoints.INVOCATION_PARAM.getName(), UUID.randomUUID().toString(),
+            CmsConfirmation.FIELD, CmsConfirmation.PLAIN_PROOF));
     }
 }

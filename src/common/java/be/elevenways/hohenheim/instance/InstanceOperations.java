@@ -15,6 +15,7 @@ import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.common.orm.field.IntegerField;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -145,6 +146,35 @@ public final class InstanceOperations {
             .result(ExecRun.class)
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
+
+    /** The host a migration moves the workload to. */
+    public static final IntegerField TARGET_SERVER = IntegerField.builder("targetServerId")
+        .label(Microcopy.of("host").withFilter("scope", "instance_migrate"))
+        .required()
+        .build();
+
+    /**
+     * The cold move of one instance to another host: what the migrate tab places, once per destination row.
+     *
+     * AIDEV-NOTE: OPERATOR-ONLY, twice over: its server authorizer refuses anyone else, and InstanceMigrations
+     * refuses every tenant-originated call by name. Placement is an operator authority, the same decision
+     * InstancePlacement records for creates. The result is the destination, so the toast can name it.
+     */
+    public static final Operation<Row, MigrateInput, Integer> MIGRATE =
+        Operation.declare(HohenheimIds.id("migrate_instance"))
+            .label(label("migrate", "instance_migrate", "Migrate"))
+            .icon(Icon.of("truck-fast"))
+            .one(INSTANCE)
+            .gate(OperationGate.open())
+            .input(OperationInput.of(FormSpec.builder().add(TARGET_SERVER).build(), MigrateInput.class,
+                values -> new MigrateInput(values.get(TARGET_SERVER))))
+            .result(Integer.class)
+            .facts(OperationFact.REACHES_OUTSIDE)
+            .register();
+
+    /** The migration's input: the destination host. */
+    public record MigrateInput(@Nullable Integer targetServerId) {
+    }
 
     /** The exec tab's input. */
     public record ExecInput(@Nullable String command) {

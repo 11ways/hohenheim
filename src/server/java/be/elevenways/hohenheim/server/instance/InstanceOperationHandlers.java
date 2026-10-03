@@ -33,6 +33,10 @@ import be.elevenways.zenit.server.operation.OperationHandlers;
 import be.elevenways.zenit.server.task.record.SchedulePlacements;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
 import be.elevenways.zenit.server.task.record.StepFailure;
+import be.elevenways.hohenheim.instance.InstanceOperations.MigrateInput;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -88,6 +92,10 @@ public final class InstanceOperationHandlers {
         OperationHandlers.attach(InstanceOperations.CONSOLE_COMMAND).source(SUBJECTS)
             .applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::consoleCommand);
+        OperationHandlers.attach(InstanceOperations.MIGRATE).source(SUBJECTS)
+            .authorize((instance, input, access) -> HohenheimAccess.isAdmin(access) ? null
+                : new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "placement is an operator authority"))
+            .handle(InstanceOperationHandlers::migrate);
         OperationHandlers.attach(InstanceOperations.EXEC).source(SUBJECTS)
             .applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::exec);
@@ -219,6 +227,21 @@ public final class InstanceOperationHandlers {
      * @throws IllegalStateException for a blank line: a schedule step that stores none fails rather than sending
      *                               nothing
      */
+    /**
+     * Moves the workload; every refusal (an ineligible host, a device row, a held publication, an occupied
+     * destination, an unreachable daemon) arrives as Violations, never a success.
+     */
+    private static @NonNull Integer migrate(@NonNull OperationCall<Row, MigrateInput> call) {
+        MigrateInput input = call.input();
+        Integer target = input == null ? null : input.targetServerId();
+        if (target == null) {
+            throw Violations.ofField(InstanceOperations.TARGET_SERVER.getName(), null,
+                HohenheimViolations.text("migrate_target_required"));
+        }
+        new InstanceMigrations().migrateTo(instanceId(call), target);
+        return target;
+    }
+
     /** Runs the program through InstanceExec, which asks the exec capability once more on its funnel. */
     private static @NonNull ExecRun exec(@NonNull OperationCall<Row, ExecInput> call) {
         ExecInput input = call.input();
