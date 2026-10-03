@@ -7,13 +7,13 @@ import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.widget.common.data.WidgetBadge;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -30,7 +30,7 @@ import java.util.Map;
  * and rollback live on the stack's row actions (record toolbar), so this page
  * is pure history.
  */
-public final class StackDeploymentsPage implements RecordScopedPage<Row> {
+public final class StackDeploymentsPage implements RecordTab.Rendered<Row> {
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("stack_deployments"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("deployments").withFilter("scope", "stack"); }
@@ -40,9 +40,8 @@ public final class StackDeploymentsPage implements RecordScopedPage<Row> {
     @Override public @NonNull Icon icon() { return Icon.of("rocket"); }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row stack) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row stack) {
+        Conduit conduit = request.conduit();
         Integer stackId = stack.get(StackModel.ID);
 
         List<Map<String, Object>> deployments = new ArrayList<>();

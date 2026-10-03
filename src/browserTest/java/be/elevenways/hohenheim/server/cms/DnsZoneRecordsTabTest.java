@@ -10,9 +10,6 @@ import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.cms.common.render.table.TableState;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
-import be.elevenways.zenit.cms.common.panel.PanelRegistry;
-import be.elevenways.zenit.cms.common.panel.PanelRequest;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -110,8 +107,7 @@ class DnsZoneRecordsTabTest extends HohenheimTestBase {
         Conduit conduit = withQuery(operator.conduit(), query);
         Row zone = Models.get(DnsZoneModel.class).findById(zoneId);
         return (Map<String, Object>) new DnsZoneRecordsPage()
-            .renderLocal(conduit, AccessContext.of(conduit), zone, PanelResourceViews.of(DnsRecordParts.admin(),
-                new PanelRequest(PanelRegistry.getBySlug("admin"), conduit, AccessContext.of(conduit), null))).get();
+            .renderLocal(conduit, AccessContext.of(conduit), zone, DnsRecordParts.admin()).get();
     }
 
     /** The stub carrier, additionally answering the given query string parameters. */

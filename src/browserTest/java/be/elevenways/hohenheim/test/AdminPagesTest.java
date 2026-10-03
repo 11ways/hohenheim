@@ -27,7 +27,7 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import be.elevenways.zenit.test.support.RateLimitExemption;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
 import com.microsoft.playwright.Locator;
 import org.junit.jupiter.api.*;
 
@@ -977,7 +977,7 @@ class AdminPagesTest extends HohenheimTestBase {
 
             // 4. The record's own TITLE is the same name, so the delete confirmation asks
             //    about a person rather than about a storage key.
-            assertThat(PanelResourceViews.forCaller(InstanceQuotaParts.admin()).recordTitle(quota))
+            assertThat(PartsReads.recordTitle(InstanceQuotaParts.admin(), quota))
                 .as("step 4: the record title names the owner too")
                 .isEqualTo("Quota Label Owner");
         } finally {

@@ -24,7 +24,6 @@ import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.cms.common.widget.RecordActionsWidget;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.zenit.cms.server.render.action.RecordActionBands;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
@@ -168,9 +167,8 @@ public final class InstanceOverview {
         Panel panel = PanelRegistry.getBySlug(panelSlug);
         if (panel != null) {
             state.add(new WidgetInstance(RecordActionsWidget.ID, Map.of())
-                .withData(RecordActionBands.forRecord(panel, PanelResourceViews.of(
-                    CmsSupport.rowEntry(panel, InstanceParts.SLUG),
-                    new PanelRequest(panel, conduit, accessContext, null)), instance, accessContext, conduit)));
+                .withData(RecordActionBands.forRecord(new PanelRequest(panel, conduit, accessContext, null),
+                    CmsSupport.rowEntry(panel, InstanceParts.SLUG), instance)));
         }
         state.add(new WidgetInstance(ActionButtonWidget.ID, Map.of(
             "label", HohenheimWidgetCopy.localized("refresh", "instance_overview"),

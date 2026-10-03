@@ -42,7 +42,6 @@ import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
-import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
@@ -241,9 +240,9 @@ public final class SiteParts {
                 .label(FieldLabels.labelFor(SiteModel.ENABLED)).build())
             .filter(FilterSpec.leaf(SiteModel.CREATED_AT, CoreTypes.BETWEEN, CoreTypes.GTE, CoreTypes.LTE)
                 .label(FieldLabels.labelFor(SiteModel.CREATED_AT)).build())
-            .filter(FilterSpec.globalLeaf(RowResource.ARCHIVED_FILTER,
+            .filter(FilterSpec.globalLeaf(ResourceList.ARCHIVED_FILTER,
                 Microcopy.of("trashed").withFilter("scope", "cms").withFilter("target", "filter"),
-                RowResource.ARCHIVED_FILTER, CoreTypes.IS_TRUE, CoreTypes.IS_FALSE).build())
+                ResourceList.ARCHIVED_FILTER, CoreTypes.IS_TRUE, CoreTypes.IS_FALSE).build())
             .defaultSort(SortSpec.desc(SiteModel.CREATED_AT.getName()))
             .rowClasses(row -> Boolean.TRUE.equals(row.get(SiteModel.ENABLED)) ? "" : "hh-site-disabled")
             .build();

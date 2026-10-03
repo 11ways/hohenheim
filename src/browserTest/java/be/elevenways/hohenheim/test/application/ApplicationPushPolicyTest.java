@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.test.application;
 
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -213,7 +212,7 @@ class ApplicationPushPolicyTest {
             try {
                 // 1. The panel's OWN placed deploy, run as its invoke route runs it: no HTTP, no markup.
                 PanelAction<Row> deploy = PlacedActionClicks.placed(
-                    PanelResourceViews.forCaller(InstanceParts.admin()), "start_instance");
+                    InstanceParts.admin(), "start_instance");
                 Row row = Models.get(InstanceModel.class).findById(applicationId);
                 Accountability.runAs(operator("42"), () -> PlacedActionClicks.click(deploy, row));
 

@@ -27,7 +27,7 @@ import static be.elevenways.hohenheim.server.cms.ServerWords.serverCopy;
  *
  * AIDEV-NOTE: split out of ServerResource (review, 2026-09). HostEnrolment mints through THIS table too, so no second
  * "which lane applies and how is its credential minted" vocabulary exists. An Incus host may carry both TLS and SSH
- * relationships; neither shares the other's pin or key. The legacy RowAction handlers are replaced and deleted.
+ * relationships; neither shares the other's pin or key. The former row action handlers are replaced and deleted.
  *
  * AIDEV-NOTE: a mismatching scan stores evidence and quarantines; it never repins silently. Repin asks the digest of
  * the actually offered material. A typed phrase guards a mis-click, not authority or evidence of comparison.

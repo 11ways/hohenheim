@@ -19,7 +19,6 @@ import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
-import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.resource.ResourceVerb;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.registry.Registries;
@@ -170,8 +169,7 @@ class EmptyDatabaseWalkthroughBrowserTest extends HawkeyeBrowserTestBase {
                 try {
                     boolean hasList = !(entry instanceof PanelResource<?> parts) || parts.list() != null;
                     boolean creates = entry instanceof PanelResource<?> parts
-                        ? parts.form() != null && parts.offers(ResourceVerb.CREATE)
-                        : entry instanceof Resource<?> resource && resource.creatable();
+                        && parts.form() != null && parts.offers(ResourceVerb.CREATE);
 
                     // 5. Visit every declared list, page, singleton and settings page, even when the list is empty.
                     String landing = entry.landingTarget() == null ? null : entry.landingTarget().toUrl();

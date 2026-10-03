@@ -14,7 +14,8 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -34,7 +35,7 @@ import java.util.Map;
  * (nav-hidden) device resource forms. This tab plus that resource are the whole reason
  * InstanceDevices is reachable by a human at all.
  */
-public final class InstanceDevicesPage implements RecordScopedPage<Row> {
+public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_devices"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_device"); }
@@ -60,15 +61,15 @@ public final class InstanceDevicesPage implements RecordScopedPage<Row> {
      * here, so a later kind answers for itself.
      */
     @Override
-    public boolean visibleFor(@NonNull Row record) {
+    public boolean visibleFor(@NonNull Row record, @NonNull AccessContext access) {
         InstanceKindHandler handler = InstanceKinds.getHandler(record.get(InstanceModel.KIND));
         return handler != null && handler.supportsDevices();
     }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
+        Conduit conduit = request.conduit();
+        AccessContext accessContext = request.access();
         Integer instanceId = instance.get(InstanceModel.ID);
         String panel = CmsSupport.panelSlug(conduit);
 

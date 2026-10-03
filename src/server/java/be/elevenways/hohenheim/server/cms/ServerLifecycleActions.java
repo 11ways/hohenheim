@@ -39,7 +39,7 @@ import static be.elevenways.hohenheim.server.cms.ServerWords.serverCopy;
  * The host lifecycle operations and their one placement: acknowledgement, probes, admission and fleet decisions.
  *
  * AIDEV-NOTE: originally split out of ServerResource beside ServerTrustActions (review, 2026-09). ServerParts now
- * owns form/list wiring; the legacy RowAction handlers were replaced and deleted, not retained as a second lane.
+ * owns form/list wiring; the former row action handlers were replaced and deleted, not retained as a second lane.
  * A typed confirmation is a mis-click guard, never evidence of acknowledgement: HostPostureAcknowledgement records
  * the real actor. Changing posture clears acceptance through the model hook; there is no parallel revoke control.
  *

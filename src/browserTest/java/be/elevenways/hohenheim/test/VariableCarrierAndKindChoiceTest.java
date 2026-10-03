@@ -6,7 +6,11 @@ import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.cms.EnvironmentParts;
-import be.elevenways.zenit.cms.common.resource.Resource;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.server.panel.PartsForms;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -44,11 +48,12 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
      * is the same walk that hides the carrier and the same one that strips it on submit.
      */
     private static List<String> valueEntriesOf(@Nullable Row record, EditView view) {
-        Resource<Row> resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, EnvironmentParts.VARIABLES_SLUG);
+        Panel admin = PanelRegistry.getBySlug(HohenheimSlugs.ADMIN);
+        PanelResource<?> resource = (PanelResource<?>) admin.entryBySlug(EnvironmentParts.VARIABLES_SLUG);
         FormState state = new FormStateTranslator().translate(
-            resource.formSpec(), resource.fieldAccessByPath(), view,
-            TestAccessContexts.contextFor(null), record == null ? resource.createValues()
-                : resource.valuesFromRow(record), List.<Violation>of(),
+            PartsForms.formSpec(resource), PartsForms.fieldAccessByPath(resource), view,
+            TestAccessContexts.contextFor(null), record == null ? PartsForms.formSpec(resource).defaultValues()
+                : PartsReads.valuesFromRow(resource, record), List.<Violation>of(),
             null, false, record);
 
         List<String> carriers = new ArrayList<>();

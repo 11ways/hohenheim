@@ -483,7 +483,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
      * bar carries none of them.
      *
      * Steps 1-3 are the contract, step 4 the falsification: the demoted peers used to be
-     * HeaderAction.Url buttons in the title bar, and the whole point of declaring them as
+     * header link buttons in the title bar, and the whole point of declaring them as
      * related pages is that no such button can come back.
      */
     @Test

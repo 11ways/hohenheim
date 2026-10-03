@@ -8,15 +8,15 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -29,7 +29,7 @@ import java.util.Map;
  * Restore tab on a managed database: connection details plus the dump-upload
  * form posting to the host-declared restore endpoint.
  */
-public final class DatabaseRestorePage implements RecordScopedPage<Row> {
+public final class DatabaseRestorePage implements RecordTab.Rendered<Row> {
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("database_restore"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("restore").withFilter("scope", "database"); }
@@ -37,9 +37,8 @@ public final class DatabaseRestorePage implements RecordScopedPage<Row> {
     @Override public @NonNull Icon icon() { return Icon.of("upload"); }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row record) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row record) {
+        Conduit conduit = request.conduit();
         String name = record.get(DatabaseModel.NAME);
         Map<String, Object> vars = new HashMap<>(DatabaseConnectionCard.facts(record));
         vars.put("title", CmsSupport.pageTitle(conduit, "database_restore", name));

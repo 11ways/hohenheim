@@ -11,7 +11,6 @@ import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
-import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -82,11 +81,7 @@ class AdminListPresentationTest extends HohenheimTestBase {
             Panel panel = PanelRegistry.getBySlug(slug);
             assertThat(panel).as("the '" + slug + "' panel is registered").isNotNull();
             for (PanelEntry entry : panel.entries()) {
-                if (entry instanceof Resource<?> resource) {
-                    resources.add(new Declared(resource.id() + " (" + resource.slug() + ")", resource.slug(),
-                        resource::validateDeclarations, resource.tableSpec(), resource.searchFields(),
-                        !resource.searchColumns().isEmpty(), resource.searchOffered()));
-                } else if (entry instanceof PanelResource<?> parts && parts.list() != null) {
+                if (entry instanceof PanelResource<?> parts && parts.list() != null) {
                     // A parts-built entry declares its list as a part; its search box is offered from that part.
                     List<Field<?, ?>> search = parts.list().search();
                     resources.add(new Declared(parts.id() + " (" + parts.slug() + ")", parts.slug(),

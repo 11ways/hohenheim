@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
@@ -15,12 +14,9 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
-import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
-import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -31,8 +27,6 @@ import be.elevenways.zenit.cms.common.resource.ResourceMutations;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.resource.ResourceAuthority;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
-import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
@@ -55,7 +49,6 @@ import be.elevenways.zenit.server.setting.ServerSettings;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -108,7 +101,7 @@ public final class DnsRecordParts {
     }
 
     public static void requireImportable(@NonNull Panel panel, int zoneId, @NonNull AccessContext access) {
-        ResourceWrites.requireOutsideArchive(panel, PanelResourceViews.forProgrammaticCaller(admin(), panel),
+        ResourceWrites.requireOutsideArchive(panel, admin(),
             Map.of(DnsRecordModel.ZONE_ID.getName(), zoneId), access, "import");
     }
 

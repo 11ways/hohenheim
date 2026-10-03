@@ -16,7 +16,8 @@ import be.elevenways.hohenheim.server.cms.InstanceScheduleStepParts;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
-import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.server.panel.PartsWrites;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -169,8 +170,8 @@ class PartialWriteContractTest extends HohenheimTestBase {
         void write(Row before, Map<String, Object> values);
     }
 
-    private static Writer rows(RowResource resource) {
-        return (before, values) -> resource.updateRow(before, values, admin());
+    private static Writer rows(PanelResource<Row> resource) {
+        return (before, values) -> PartsWrites.updateRow(resource, before, values, admin());
     }
 
     /** The site entries' updates are operations: a partial write is the patch their inline lane posts. */
@@ -296,12 +297,12 @@ class PartialWriteContractTest extends HohenheimTestBase {
     @Test
     void aPartialDeviceWriteIsNoLongerRefusedAsARenameOrRetype() {
         Row device = Models.get(InstanceDeviceModel.class).findById(deviceId);
-        RowResource resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DEVICES);
+        PanelResource<Row> resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DEVICES);
 
         // 1. The one entry the cell lane would send for a disk resize.
         Throwable refusal = null;
         try {
-            resource.updateRow(device, Map.of(InstanceDeviceModel.SIZE_GB.getName(), 8), admin());
+            PartsWrites.updateRow(resource, device, Map.of(InstanceDeviceModel.SIZE_GB.getName(), 8), admin());
         } catch (Throwable thrown) {
             refusal = thrown;
         }

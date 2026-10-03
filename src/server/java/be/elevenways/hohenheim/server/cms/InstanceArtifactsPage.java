@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.instance.InstanceArtifactView;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
@@ -13,10 +12,9 @@ import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.render.action.InvokeActionState;
 import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
-import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.cms.server.panel.PanelActionOffers;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.cms.server.render.action.ActionStateTranslator;
 import be.elevenways.zenit.cms.server.render.action.RowOffer;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -29,7 +27,6 @@ import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.routing.ReturnPath;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.server.http.ReturnTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -44,23 +41,21 @@ import java.util.Map;
  * rows the panel-wide resource lists, narrowed to one record.
  *
  * A scoped VIEW, not a second UI (the {@link InstanceSchedulesPage} shape): every row
- * relays its own entry's placed operations and declared row actions through the standard
- * action-state translation -- so restore keeps the confirmation and the operator-only
- * refusal it declares there -- and links to the generated record page, which stays the one
- * place a row is deleted or inspected in full.
+ * relays its own entry's placed operations through the standard row banding -- so restore
+ * keeps the confirmation and the operator-only refusal it declares there -- and links to the
+ * generated record page, which stays the one place a row is deleted or inspected in full.
  *
  * AIDEV-NOTE: the entry is READ FROM THE HOSTING PANEL by slug because /admin and /manage
  * hold different ones (the /manage backup twin places no restore-to-new, which is how it
  * stays operator-only). Constructing one here would put a second answer beside the
  * panel's, which is exactly the drift reading the panel's own prevents.
  */
-abstract class InstanceArtifactsPage implements RecordScopedPage<Row> {
+abstract class InstanceArtifactsPage implements RecordTab.Rendered<Row> {
 
     /** How many of the newest artifacts this scoped tab renders; the full list lives on the resource. */
     private static final int RECENT_LIMIT = 50;
 
     private final String entrySlug;
-    private final ActionStateTranslator actions = new ActionStateTranslator();
 
     /** @param entrySlug the artifact entry both panels register under, admin and tenant twin alike */
     InstanceArtifactsPage(@NonNull String entrySlug) {
@@ -113,17 +108,17 @@ abstract class InstanceArtifactsPage implements RecordScopedPage<Row> {
         String panel = request.panelSlug();
         String pageUrl = CmsRoutes.subpage(panel, HohenheimSlugs.INSTANCES, instanceId, this.slug()).toUrl();
         WithheldFailure failures = WithheldFailure.of(conduit);
-        RowResource resource = this.entryOf(request);
+        PanelEntry resource = this.entryOf(request);
 
         // The newest page only: the panel-wide resource paginates, and this scoped view
         // must not turn into an unbounded load of every artifact an instance ever made.
         List<InstanceArtifactView> rows = new ArrayList<>();
-        for (Row artifact : resource.model().find()
+        for (Row artifact : PartsReads.model(resource).find()
                 .where(this.instanceIdField().eq(instanceId))
                 .orderBy(this.createdAtField(), SortOrder.DESC)
                 .limit(RECENT_LIMIT)
                 .all()) {
-            Object artifactId = artifact.get(resource.model().getPrimaryKeyField());
+            Object artifactId = artifact.get(PartsReads.model(resource).getPrimaryKeyField());
             rows.add(new InstanceArtifactView(
                 artifactId instanceof Integer id ? id : 0,
                 EnumBadgeState.of(this.statusField(), artifact.get(this.statusField())),
@@ -132,7 +127,7 @@ abstract class InstanceArtifactsPage implements RecordScopedPage<Row> {
                 isoOf(artifact.get(this.createdAtField())),
                 failures.shown(this.errorOf(artifact)),
                 CmsRoutes.detail(panel, this.entrySlug, artifactId),
-                this.invokesFor(request, resource, artifact, artifactId, pageUrl)));
+                this.invokesFor(request, resource, artifact, pageUrl)));
         }
 
         Map<String, Object> vars = new HashMap<>();
@@ -148,49 +143,31 @@ abstract class InstanceArtifactsPage implements RecordScopedPage<Row> {
     }
 
     /**
-     * The panel's own entry this tab lists the rows of: a parts entry through its request view, a legacy row resource
-     * as registered.
+     * The panel's own row entry this tab lists the records of.
      *
      * @throws IllegalStateException when the hosting panel does not register it beside the instance entry
      */
-    @SuppressWarnings("unchecked")
-    private @NonNull RowResource entryOf(@NonNull PanelRequest request) {
+    private @NonNull PanelEntry entryOf(@NonNull PanelRequest request) {
         PanelEntry entry = request.panel().entryBySlug(this.entrySlug);
         if (entry instanceof PanelResource<?> parts) {
-            return (RowResource) PanelResourceViews.of((PanelResource<Row>) parts, request);
-        }
-        if (entry instanceof RowResource legacy) {
-            return legacy;
+            return parts;
         }
         throw new IllegalStateException("Panel " + request.panelSlug() + " registers no row entry "
             + this.entrySlug + " beside its instances");
     }
 
-    /** That entry's placed operations and then its legacy actions, for THIS row and viewer. */
+    /** That entry's placed operations for THIS row and viewer. */
     private @NonNull List<InvokeActionState> invokesFor(@NonNull PanelRequest request,
-                                                        @NonNull RowResource resource,
+                                                        @NonNull PanelEntry resource,
                                                         @NonNull Row artifact,
-                                                        @NonNull Object artifactId,
                                                         @NonNull String pageUrl) {
-        List<RowOffer> placed = PanelActionOffers.rowOffers(resource, request.panel(), artifact, request.access(),
+        List<RowOffer> placed = PanelActionOffers.rowOffers(request, resource, artifact, request.access(),
             ReturnPath.of(pageUrl));
-        // AIDEV-NOTE: the invoke target travels TYPED (the translator renders it and pairs its
-        // input lane off the same bindings); only RowAction.Url is Uri-typed.
-        ActionStateTranslator.RowActionPresentation presentation =
-            this.actions.translateRowActionsForList(resource.rowActions(), artifact,
-                (actionId, row) -> ReturnTarget.bind(
-                    CmsRoutes.invokeRow(request.panelSlug(), this.entrySlug, artifactId, actionId), pageUrl),
-                request.access(), 0, placed);
         // Every band, the destructive tail included: restore IS destructive, and summing
         // the inline and overflow buckets by hand silently dropped it.
-        return presentation.allInvokes();
+        return ActionStateTranslator.bandRowOffers(placed, 0).allInvokes();
     }
 
-    @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
-        throw new UnsupportedOperationException("The " + this.slug() + " tab renders through its PanelRequest");
-    }
 
     static @Nullable String isoOf(@Nullable Object value) {
         return value instanceof Instant instant ? instant.toString() : null;

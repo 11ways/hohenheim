@@ -64,7 +64,7 @@ public final class HohenheimPanel extends Panel {
     // a peer stays visible only when an operator would go LOOKING for it by name. Every
     // demoted peer is showInNav(false) -- which removes the sidebar entry and NOTHING else,
     // the route and the record stay live -- and each one has a declared home: a record tab
-    // on its parent (instance snapshots/backups), a HeaderAction on the parent list
+    // on its parent (instance snapshots/backups), a HEADER link on the parent list
     // (backup targets, quotas, game domains, auth providers, previews, build/release
     // history, reconcile findings, environments, DNS peers), or a link on the surface that
     // owns it (the spamservice sub-resources, off the abuse-protection overview). A peer

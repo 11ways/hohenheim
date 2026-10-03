@@ -16,7 +16,8 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
-import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.server.panel.PartsWrites;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -90,7 +91,7 @@ class InstanceScheduleZoneTest extends HohenheimTestBase {
         TimeZone original = TimeZone.getDefault();
         TimeZone.setDefault(TimeZone.getTimeZone("Asia/Kathmandu"));
         try {
-            RowResource resource = PanelEntryViews.of(HohenheimPanel.SLUG, InstanceScheduleParts.SLUG);
+            PanelResource<Row> resource = PanelEntryViews.of(HohenheimPanel.SLUG, InstanceScheduleParts.SLUG);
             AccessContext operator = operator();
 
             // 1. A schedule saved with NO timezone arms its first fire at 04:00 UTC -- the
@@ -101,7 +102,7 @@ class InstanceScheduleZoneTest extends HohenheimTestBase {
             create.put(RecordScheduleModel.CRON.getName(), "0 4 * * *");
             create.put(RecordScheduleModel.TIMEZONE.getName(), "");
             create.put(RecordScheduleModel.ENABLED.getName(), true);
-            scheduleId = (Integer) resource.persistRow(Map.copyOf(create), operator);
+            scheduleId = (Integer) PartsWrites.persistRow(resource, Map.copyOf(create), operator);
 
             Instant first = stored().get(RecordScheduleModel.NEXT_FIRE_AT);
             assertThat(first).as("step 1: the create armed a first fire").isNotNull();
@@ -113,7 +114,7 @@ class InstanceScheduleZoneTest extends HohenheimTestBase {
 
             // 2. Moving the zone re-arms in THAT zone.
             ZoneId brussels = ZoneId.of("Europe/Brussels");
-            resource.updateRow(stored(),
+            PartsWrites.updateRow(resource, stored(),
                 Map.of(RecordScheduleModel.TIMEZONE.getName(), brussels.getId()), operator);
             ZonedDateTime moved = ((Instant) stored().get(RecordScheduleModel.NEXT_FIRE_AT)).atZone(brussels);
             assertThat(moved.getHour() * 60 + moved.getMinute())
@@ -127,7 +128,7 @@ class InstanceScheduleZoneTest extends HohenheimTestBase {
             disabled.set(RecordScheduleModel.NEXT_FIRE_AT, stale);
             Models.get(RecordScheduleModel.class).save(disabled);
 
-            resource.updateRow(stored(),
+            PartsWrites.updateRow(resource, stored(),
                 Map.of(RecordScheduleModel.ENABLED.getName(), true), operator);
             Instant rearmed = stored().get(RecordScheduleModel.NEXT_FIRE_AT);
             assertThat(rearmed)

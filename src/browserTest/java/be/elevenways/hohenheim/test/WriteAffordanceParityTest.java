@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.instance.InstanceAttachmentOperations;
 import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
-import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -27,17 +26,14 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
-import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.cms.common.render.panel.ChildListSectionState;
 import be.elevenways.zenit.cms.common.render.table.TableState;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceVerb;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
 import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -244,13 +240,14 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     @Test
     void theInstanceEditorFollowsConfig() {
         Row instance = Models.get(InstanceModel.class).findById(instanceId);
-        RowResource resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceParts.SLUG);
+        var resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceParts.SLUG);
+        Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
 
-        assertThat(resource.updatableBy(instance, viewer()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, instance, viewer()))
             .as("a view-only delegate is offered no instance editor").isFalse();
-        assertThat(resource.updatableBy(instance, holder()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, instance, holder()))
             .as("a config holder keeps it").isTrue();
-        assertThat(resource.updatableBy(instance, operator()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, instance, operator()))
             .as("and the operator passes through the walk's admin row").isTrue();
     }
 
@@ -260,7 +257,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         Row database = Models.get(DatabaseModel.class).findById(databaseId);
         // A delegate reaches databases through the /manage twin, whose delete is the same operation.
         Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.MANAGE));
-        Resource<Row> resource = PanelResourceViews.forCaller(DatabaseParts.manage(), manage);
+        PanelResource<Row> resource = DatabaseParts.manage();
 
         assertThat(ResourceVerbs.removableBy(manage, resource, database, viewer()))
             .as("a view-only delegate is offered no destroy button").isFalse();
@@ -275,13 +272,14 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     @Test
     void theAttachmentAffordancesFollowBothSides() {
         Row link = Models.get(InstanceDatabaseModel.class).findById(linkId);
-        RowResource resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES);
+        var resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES);
+        Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
 
-        assertThat(resource.updatableBy(link, viewer()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, link, viewer()))
             .as("a view-only delegate is offered no attachment editor").isFalse();
         assertThat(detachOffered(link, viewer()))
             .as("nor a detach button").isFalse();
-        assertThat(resource.updatableBy(link, holder()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, link, holder()))
             .as("the two-sided holder keeps its editor").isTrue();
         assertThat(detachOffered(link, holder()))
             .as("and its detach button").isTrue();
@@ -292,7 +290,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         RecordGrants.revoke(GrantSubjectType.USER, holderId, DatabaseModel.MODEL_ID, databaseId,
             HohenheimAccess.MANAGE);
         try {
-            assertThat(resource.updatableBy(link, holder()))
+            assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, link, holder()))
                 .as("instance config alone does not earn the attachment editor").isFalse();
             assertThat(detachOffered(link, holder()))
                 .as("nor the detach button").isFalse();
@@ -311,29 +309,30 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     void theDnsRecordAffordancesFollowTheRecordLanes() {
         Row editable = Models.get(DnsRecordModel.class).findById(recordId);
         Row delegated = Models.get(DnsRecordModel.class).findById(foreignTypeRecordId);
-        var resource = PanelResourceViews.forCaller(DnsRecordParts.admin());
+        PanelResource<Row> resource = DnsRecordParts.admin();
+        Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
 
-        assertThat(resource.updatableBy(editable, viewer()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, editable, viewer()))
             .as("a view-only delegate is offered no record editor").isFalse();
-        assertThat(resource.deletableBy(editable, viewer()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.DELETE, editable, viewer()))
             .as("nor a delete button").isFalse();
-        assertThat(resource.updatableBy(editable, holder()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, editable, holder()))
             .as("an edit-grant holder keeps its editor").isTrue();
-        assertThat(resource.deletableBy(editable, holder()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.DELETE, editable, holder()))
             .as("and its delete button").isTrue();
 
         // The TYPE clause: an NS row is a zone-compromise primitive the pipeline refuses
         // for EVERY tenant writer, edit grant or not -- so no affordance either.
-        assertThat(resource.updatableBy(delegated, holder()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, delegated, holder()))
             .as("an NS row offers no tenant editor even to an edit-grant holder")
             .isFalse();
-        assertThat(resource.deletableBy(delegated, holder()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.DELETE, delegated, holder()))
             .as("nor a delete button").isFalse();
 
         // While the operator, whom the tenant lanes never gate, keeps both on both rows.
-        assertThat(resource.updatableBy(delegated, operator()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, delegated, operator()))
             .as("the operator keeps the NS editor").isTrue();
-        assertThat(resource.deletableBy(editable, operator()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.DELETE, editable, operator()))
             .as("and every delete button").isTrue();
     }
 
@@ -534,7 +533,8 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
      */
     @Test
     void theAttachmentAffordanceStaysInsideTheGrantQueryBudget() {
-        RowResource resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES);
+        var resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES);
+        Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
         Row link = Models.get(InstanceDatabaseModel.class).findById(linkId);
 
         AtomicInteger finds = new AtomicInteger();
@@ -542,7 +542,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         finds.set(0);
         AccessContext ctx = holder();
         for (int i = 0; i < 6; i++) {
-            resource.updatableBy(link, ctx);
+            ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, link, ctx);
         }
         // Memoized: one enumeration per DISTINCT set (instance#config, database#manage)
         // for all 6 rows. Un-memoized was 2 walks x 6 rows. Never raise the cap.
@@ -611,7 +611,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         RecordGrants.grant(GrantSubjectType.USER, holderId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.POWER, true);
         try {
-            RowResource resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceParts.SLUG);
+            var resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceParts.SLUG);
 
             List<Row> rows = new ArrayList<>();
             rows.add(instances.findById(instanceId));
@@ -630,9 +630,9 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             PanelRequest request = new PanelRequest(admin,
                 new EndpointConduit().withAttribute(ConduitAttributes.PRINCIPAL, ctx.principal()), ctx, null);
             Function<Row, List<RowOffer>> offers = PanelActionOffers.rowsForRender(
-                request, InstanceParts.admin(), null, rows, ctx, null);
+                request, resource, null, rows, ctx, null);
             for (Row row : rows) {
-                sawAnAffordance |= resource.updatableBy(row, ctx);
+                sawAnAffordance |= ResourceVerbs.permitsBy(admin, resource, ResourceVerb.UPDATE, row, ctx);
                 sawAnAffordance |= !offers.apply(row).isEmpty();
             }
             assertThat(sawAnAffordance)

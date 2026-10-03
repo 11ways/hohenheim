@@ -11,12 +11,12 @@ import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.render.action.InvokeActionState;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.cms.server.panel.PanelActionOffers;
 import be.elevenways.zenit.cms.server.render.action.ActionStateTranslator;
 import be.elevenways.zenit.cms.server.render.action.RowOffer;
@@ -50,9 +50,8 @@ import java.util.function.Function;
  * indent depth and a dotted outline number, which is also how the add form's parent select
  * names a group.
  */
-public final class AccessListRulesPage implements RecordScopedPage<Row> {
+public final class AccessListRulesPage implements RecordTab.Rendered<Row> {
 
-    private final ActionStateTranslator actions = new ActionStateTranslator();
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("access_list_rules"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "access_rule"); }
@@ -60,9 +59,9 @@ public final class AccessListRulesPage implements RecordScopedPage<Row> {
     @Override public @NonNull Icon icon() { return Icon.of("sitemap"); }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row list) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest tabRequest, @NonNull Row list) {
+        Conduit conduit = tabRequest.conduit();
+        AccessContext accessContext = tabRequest.access();
         Integer listId = list.get(AccessListModel.ID);
         String panel = CmsSupport.panelSlug(conduit);
         String pageUrl = CmsRoutes.subpage(panel, HohenheimSlugs.ACCESS_LISTS, listId, this.slug()).toUrl();
@@ -162,14 +161,7 @@ public final class AccessListRulesPage implements RecordScopedPage<Row> {
     private @NonNull List<InvokeActionState> invokesFor(@NonNull Row rule,
                                                         @NonNull AccessContext accessContext,
                                                         @NonNull Function<Row, List<RowOffer>> offers) {
-        ActionStateTranslator.RowActionPresentation presentation = this.actions.translateRowActionsForList(
-            List.of(), rule, (actionId, row) -> {
-                throw new IllegalStateException("the rule entry declares no legacy row action, asked " + actionId);
-            }, accessContext, 0, offers.apply(rule));
-        List<InvokeActionState> invokes = new ArrayList<>(presentation.inlineInvokes());
-        invokes.addAll(presentation.overflowInvokes());
-        invokes.addAll(presentation.destructiveInvokes());
-        return invokes;
+        return ActionStateTranslator.bandRowOffers(offers.apply(rule), 0).allInvokes();
     }
 
     /** The add form's type choices, DERIVED from the model's type vocabulary. */

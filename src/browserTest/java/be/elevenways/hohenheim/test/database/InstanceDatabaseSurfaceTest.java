@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
@@ -127,7 +126,7 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
     @Test
     void anAttachmentIsNamedByBothSidesAndTheDatabaseDeleteIsDeadWithTheDetachPage()
             throws Exception {
-        RowResource attachments = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES);
+        var attachments = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES);
         Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN), "the admin panel");
         Row link = Models.get(InstanceDatabaseModel.class).findById(linkId);
         Row database = Models.get(DatabaseModel.class).findById(databaseId);

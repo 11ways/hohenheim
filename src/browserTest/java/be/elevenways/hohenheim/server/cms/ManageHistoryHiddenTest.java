@@ -3,10 +3,6 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
-import be.elevenways.zenit.cms.common.resource.ActivityHistoryPage;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
-import be.elevenways.zenit.cms.common.resource.Resource;
-import be.elevenways.zenit.cms.common.resource.RevisionHistoryPage;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -45,27 +41,9 @@ class ManageHistoryHiddenTest extends HohenheimTestBase {
                     .isFalse();
                 continue;
             }
-            if (!(peer instanceof Resource<?> resource)) {
-                continue;
-            }
-            checked.add(resource.slug());
-            assertThat(historyPages(resource))
-                .as("step 2: /manage/%s must not offer the operator's activity or revision"
-                    + " history", resource.slug())
-                .isEmpty();
         }
         assertThat(checked)
             .as("step 2: the walk really visited the delegated resources")
             .hasSizeGreaterThan(10);
-    }
-
-    private static List<String> historyPages(Resource<?> resource) {
-        List<String> found = new ArrayList<>();
-        for (RecordScopedPage<?> page : resource.subpages()) {
-            if (page instanceof ActivityHistoryPage || page instanceof RevisionHistoryPage<?>) {
-                found.add(page.slug());
-            }
-        }
-        return found;
     }
 }

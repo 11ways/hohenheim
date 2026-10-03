@@ -12,14 +12,14 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.routing.RouteTarget;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -32,7 +32,7 @@ import java.util.Map;
  * Contents tab on a template: its typed variables, config files and declared databases,
  * with links into the (nav-hidden) variable, file and database resource forms.
  */
-public final class TemplateContentsPage implements RecordScopedPage<Row> {
+public final class TemplateContentsPage implements RecordTab.Rendered<Row> {
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("template_contents"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("contents").withFilter("scope", "instance_template"); }
@@ -40,9 +40,8 @@ public final class TemplateContentsPage implements RecordScopedPage<Row> {
     @Override public @NonNull Icon icon() { return Icon.of("list-check"); }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row template) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row template) {
+        Conduit conduit = request.conduit();
         Integer templateId = template.get(InstanceTemplateModel.ID);
         String panel = CmsSupport.panelSlug(conduit);
 

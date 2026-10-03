@@ -21,7 +21,12 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.ResourceVerb;
+import be.elevenways.zenit.cms.server.panel.PartsWrites;
+import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.panel.Panel;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -151,7 +156,8 @@ class ScheduleStepAuthorityTest extends HohenheimTestBase {
 
     @Test
     void shapingTheChainDemandsConfigAndAStepStaysInItsSchedule() {
-        RowResource steps = PanelEntryViews.of(ManagePanel.SLUG, InstanceScheduleStepParts.SLUG);
+        PanelResource<Row> steps = PanelEntryViews.of(ManagePanel.SLUG, InstanceScheduleStepParts.SLUG);
+        Panel panel = PanelRegistry.getBySlug(ManagePanel.SLUG);
         AccessContext powerOnly = contextOf(powerOnlyId, "Power Only");
         AccessContext owner = contextOf(ownerId, "Chain Owner");
         long stepsBefore = Models.get(RecordScheduleStepModel.class).find()
@@ -159,15 +165,17 @@ class ScheduleStepAuthorityTest extends HohenheimTestBase {
 
         // 1. The create AFFORDANCE: a power-only delegate on the schedule's Steps tab is not
         //    offered "add step"; the chain's manager is.
-        assertThat(steps.creatableBy(onCreateFormFor(powerOnlyId, "Power Only", scheduleId)))
+        assertThat(ResourceVerbs.permitsBy(panel, steps, ResourceVerb.CREATE, null,
+            onCreateFormFor(powerOnlyId, "Power Only", scheduleId)))
             .as("step 1: a delegate holding only the action's verb is not offered step create")
             .isFalse();
-        assertThat(steps.creatableBy(onCreateFormFor(ownerId, "Chain Owner", scheduleId)))
+        assertThat(ResourceVerbs.permitsBy(panel, steps, ResourceVerb.CREATE, null,
+            onCreateFormFor(ownerId, "Chain Owner", scheduleId)))
             .as("step 1: the manage holder (CONFIG implied) is").isTrue();
 
         // 2. The create GATE: a direct submit by the power-only delegate is refused, although
         //    they hold the power step's own capability, and nothing is written.
-        assertThatThrownBy(() -> steps.persistRow(stepValues(scheduleId), powerOnly))
+        assertThatThrownBy(() -> PartsWrites.persistRow(steps, stepValues(scheduleId), powerOnly))
             .as("step 2: a power-only delegate cannot add a step to the chain")
             .isInstanceOf(Violations.class);
         assertThat(Models.get(RecordScheduleStepModel.class).find()
@@ -175,14 +183,14 @@ class ScheduleStepAuthorityTest extends HohenheimTestBase {
             .as("step 2: the refused create wrote no step").isEqualTo(stepsBefore);
 
         // 3. The manage holder adds the step.
-        Integer stepId = (Integer) steps.persistRow(stepValues(scheduleId), owner);
+        Integer stepId = (Integer) PartsWrites.persistRow(steps, stepValues(scheduleId), owner);
         stepIds.add(stepId);
         assertThat(stepId).as("step 3: the manage holder's create succeeds").isNotNull();
 
         // 4. An edit may not MOVE the step to another schedule -- not even by someone who
         //    manages both instances.
         Row step = Models.get(RecordScheduleStepModel.class).findById(stepId);
-        assertThatThrownBy(() -> steps.updateRow(step,
+        assertThatThrownBy(() -> PartsWrites.updateRow(steps, step,
                 Map.of(RecordScheduleStepModel.SCHEDULE_ID.getName(), otherScheduleId), owner))
             .as("step 4: repointing a step at another schedule is refused")
             .isInstanceOf(Violations.class);
@@ -193,12 +201,12 @@ class ScheduleStepAuthorityTest extends HohenheimTestBase {
 
         // 5. An ordinary edit that leaves the schedule alone still works for the manage holder
         //    and is refused for the power-only delegate.
-        steps.updateRow(Models.get(RecordScheduleStepModel.class).findById(stepId),
+        PartsWrites.updateRow(steps, Models.get(RecordScheduleStepModel.class).findById(stepId),
             Map.of(RecordScheduleStepModel.POSITION.getName(), 2), owner);
         assertThat((Integer) Models.get(RecordScheduleStepModel.class).findById(stepId)
                 .get(RecordScheduleStepModel.POSITION))
             .as("step 5: the manage holder's in-place edit lands").isEqualTo(2);
-        assertThatThrownBy(() -> steps.updateRow(
+        assertThatThrownBy(() -> PartsWrites.updateRow(steps,
                 Models.get(RecordScheduleStepModel.class).findById(stepId),
                 Map.of(RecordScheduleStepModel.POSITION.getName(), 3), powerOnly))
             .as("step 5: a power-only delegate cannot edit the chain")

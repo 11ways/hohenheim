@@ -281,7 +281,7 @@ public final class DnsZoneParts {
     }
 
     private static @NonNull String recordsUrl(@NonNull Row row) {
-        // rowUrl / RowAction.Url are String- and Uri-typed boundaries, so the typed
+        // rowUrl is a String-typed boundary, so the typed
         // target is rendered here rather than concatenated.
         return CmsRoutes.subpage(HohenheimSlugs.ADMIN, SLUG, row.get(DnsZoneModel.ID),
             DnsZoneRecordsPage.SLUG).toUrl();

@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.zenit.cms.server.panel.PartsWrites;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -182,7 +182,7 @@ class InstanceResizeTest {
     /** The admin entry's update, inside one transaction as the panel's write runs it, so the recreate waits for it. */
     private static void write(Row existing, Map<String, Object> values) {
         Models.get(InstanceModel.class).getResolvedDatasource().withTransaction(transaction ->
-            PanelResourceViews.forCaller(InstanceParts.admin()).updateRow(existing, values, AccessContext.anonymous()));
+            PartsWrites.updateRow(InstanceParts.admin(), existing, values, AccessContext.anonymous()));
     }
 
     private static Integer memoryOf(int instanceId) {

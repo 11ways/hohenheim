@@ -11,14 +11,14 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.routing.RouteTarget;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -32,7 +32,7 @@ import java.util.Map;
  * Services tab on a stack: every service with its live container state, its
  * config files, and links into the (nav-hidden) service and file resource forms.
  */
-public final class StackServicesPage implements RecordScopedPage<Row> {
+public final class StackServicesPage implements RecordTab.Rendered<Row> {
 
     /** The stack's front door: a stack without services runs nothing, so this is where creation lands. */
     public static final String SLUG = "services";
@@ -43,9 +43,8 @@ public final class StackServicesPage implements RecordScopedPage<Row> {
     @Override public @NonNull Icon icon() { return Icon.of("cubes"); }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row stack) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row stack) {
+        Conduit conduit = request.conduit();
         Integer stackId = stack.get(StackModel.ID);
         String panel = CmsSupport.panelSlug(conduit);
 

@@ -16,8 +16,8 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -40,7 +40,7 @@ import java.util.Map;
  * WebSocket) and the command form. The admin CSP (zenit's STRICT_ADMIN) carries ghostty's
  * wasm concessions panel-wide, so this tab is reached by soft navigation like every other.
  */
-public final class InstanceConsolePage implements RecordScopedPage<Row> {
+public final class InstanceConsolePage implements RecordTab.Rendered<Row> {
 
     public static final String SLUG = "console";
 
@@ -179,9 +179,4 @@ public final class InstanceConsolePage implements RecordScopedPage<Row> {
             .with(HohenheimParams.SELECTED_LOG, logId);
     }
 
-    @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
-        throw new UnsupportedOperationException("The " + this.slug() + " tab renders through its PanelRequest");
-    }
 }

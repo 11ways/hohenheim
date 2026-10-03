@@ -11,13 +11,12 @@ import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.quota.SiteQuota;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
-import be.elevenways.zenit.cms.common.resource.Resource;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -72,10 +71,8 @@ class SoftDeleteJourneyTest {
             SiteModel sites = Models.get(SiteModel.class);
             // The admin panel's own site entry, as its record page reads it.
             @SuppressWarnings("unchecked")
-            Resource<Row> resource = PanelResourceViews.forProgrammaticCaller(
-                (PanelResource<Row>) Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN))
-                    .entryBySlug(HohenheimSlugs.SITES),
-                Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN)));
+            Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
+            PanelResource<Row> resource = (PanelResource<Row>) panel.entryBySlug(HohenheimSlugs.SITES);
             DeleteConfirmation<Row> lists = AccessListParts.admin().deleteConfirmation();
 
             // 1. A live site gated by an access list: charged one site slot, and the list's
@@ -98,7 +95,7 @@ class SoftDeleteJourneyTest {
                 .as("step 2: a default find no longer sees the trashed site").isNull();
             assertThat(sites.find().where(SiteModel.ID.eq(siteId)).count())
                 .as("step 2: nor does a default count").isZero();
-            Row inTrash = resource.loadRow(siteId, TenantConduits.operator());
+            Row inTrash = PartsReads.loadRow(panel, resource, siteId, TenantConduits.operator());
             assertThat(inTrash).as("step 2: the admin record page opens it from the Trash").isNotNull();
             assertThat(resource.isArchived(inTrash)).as("step 2: as an archived, read-only record").isTrue();
             Row trashed = StoredRows.byId(sites, siteId);

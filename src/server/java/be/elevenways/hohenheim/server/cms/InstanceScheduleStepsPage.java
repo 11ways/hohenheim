@@ -10,7 +10,8 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -33,7 +34,7 @@ import java.util.Map;
  * Steps tab on a schedule: the ordered chain plus its recent runs (per-step verdicts
  * inline), linking into the (nav-hidden) step resource forms.
  */
-public final class InstanceScheduleStepsPage implements RecordScopedPage<Row> {
+public final class InstanceScheduleStepsPage implements RecordTab.Rendered<Row> {
 
     /** The schedule's front door: a schedule without steps runs nothing, so creation lands here. */
     public static final String SLUG = "steps";
@@ -44,9 +45,9 @@ public final class InstanceScheduleStepsPage implements RecordScopedPage<Row> {
     @Override public @NonNull Icon icon() { return Icon.of("list-ol"); }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row schedule) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row schedule) {
+        Conduit conduit = request.conduit();
+        AccessContext accessContext = request.access();
         Integer scheduleId = schedule.get(RecordScheduleModel.ID);
         String panel = CmsSupport.panelSlug(conduit);
 

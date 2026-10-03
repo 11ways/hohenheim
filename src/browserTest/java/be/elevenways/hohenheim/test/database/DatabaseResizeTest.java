@@ -11,9 +11,9 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.InstanceRowCleanup;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.cms.common.resource.Resource;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceVerb;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.zenit.cms.server.panel.PartsWrites;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -85,7 +85,7 @@ class DatabaseResizeTest extends HohenheimTestBase {
 
     @Test
     void anOperatorResizesADatabaseInPlaceAndAnUnaffordableCeilingIsRefusedOnTheForm() {
-        Resource<Row> databases = PanelResourceViews.forCaller(DatabaseParts.admin());
+        PanelResource<Row> databases = DatabaseParts.admin();
         Model model = Models.get(DatabaseModel.class);
 
         // 1. The surface is open at all -- the counterfactual for the whole gap. Before
@@ -106,7 +106,7 @@ class DatabaseResizeTest extends HohenheimTestBase {
         //    every live connection for nothing.
         Row database = model.findById(databaseId);
         Object settingsBefore = engineSettings(databaseId);
-        databases.updateRow(database, coerced(null, null), AccessContext.anonymous());
+        PartsWrites.updateRow(databases, database, coerced(null, null), AccessContext.anonymous());
         assertThat((String) model.findById(databaseId).get(DatabaseModel.STATUS))
             .as("step 3: an unchanged save leaves the record alone")
             .isEqualTo(DatabaseModel.STATUS_ACTIVE);
@@ -115,7 +115,7 @@ class DatabaseResizeTest extends HohenheimTestBase {
             .isEqualTo(settingsBefore);
 
         // 4. A NEW ceiling lands on the record...
-        databases.updateRow(model.findById(databaseId), coerced(2048, null),
+        PartsWrites.updateRow(databases, model.findById(databaseId), coerced(2048, null),
             AccessContext.anonymous());
         Row resized = model.findById(databaseId);
         assertThat((Integer) resized.get(DatabaseModel.MEMORY_LIMIT_MB))
@@ -142,7 +142,7 @@ class DatabaseResizeTest extends HohenheimTestBase {
         //    would have been the record turning red minutes later.
         Row cramped = model.findById(crampedDatabaseId);
         Integer ceilingBefore = cramped.get(DatabaseModel.MEMORY_LIMIT_MB);
-        Throwable refused = catchThrowable(() -> databases.updateRow(cramped,
+        Throwable refused = catchThrowable(() -> PartsWrites.updateRow(databases, cramped,
             coerced(65536, null), AccessContext.anonymous()));
         assertThat(refused)
             .as("step 7: an unaffordable ceiling is refused on the form")

@@ -8,8 +8,8 @@ import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -28,7 +28,7 @@ import java.util.Map;
  * needed -- the pl-framebuffer viewer is pure canvas (no wasm), and same-origin
  * WebSockets already ride the default admin {@code connect-src 'self'}.
  */
-public final class InstanceFramebufferPage implements RecordScopedPage<Row> {
+public final class InstanceFramebufferPage implements RecordTab.Rendered<Row> {
 
     public static final String SLUG = "framebuffer";
 
@@ -77,9 +77,4 @@ public final class InstanceFramebufferPage implements RecordScopedPage<Row> {
             HohenheimTemplateIds.INSTANCE_FRAMEBUFFER, vars);
     }
 
-    @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
-        throw new UnsupportedOperationException("The " + this.slug() + " tab renders through its PanelRequest");
-    }
 }
