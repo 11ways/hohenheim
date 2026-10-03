@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.security;
 
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -40,11 +41,11 @@ public record BanStateCell(@NonNull String token) {
     }
 
     /** The pl-badge variant for this state (derived, so it never crosses the wire). */
-    public @NonNull String variant() {
+    public @NonNull BadgeVariant variant() {
         return switch (this.token) {
-            case ACTIVE -> "destructive";
-            case LIFTED -> "secondary";
-            default -> "outline";
+            case ACTIVE -> BadgeVariant.DESTRUCTIVE;
+            case LIFTED -> BadgeVariant.SECONDARY;
+            default -> BadgeVariant.OUTLINE;
         };
     }
 

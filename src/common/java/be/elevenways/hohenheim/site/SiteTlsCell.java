@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.site;
 
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
@@ -25,12 +26,12 @@ public record SiteTlsCell(@NonNull String token) {
     public static final String NONE = "none";
 
     /** The pl-badge variant for this state (derived, so it never crosses the wire). */
-    public @NonNull String variant() {
+    public @NonNull BadgeVariant variant() {
         return switch (this.token) {
-            case FORCED -> "success";
-            case PARTIAL -> "warning";
-            case OFF -> "secondary";
-            default -> "outline";
+            case FORCED -> BadgeVariant.SUCCESS;
+            case PARTIAL -> BadgeVariant.WARNING;
+            case OFF -> BadgeVariant.SECONDARY;
+            default -> BadgeVariant.OUTLINE;
         };
     }
 

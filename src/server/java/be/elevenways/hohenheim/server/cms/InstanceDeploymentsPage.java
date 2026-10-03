@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
+import be.elevenways.hohenheim.common.cms.InstanceDeploymentView;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
@@ -139,7 +140,7 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
         vars.put("currentCommit", serving == null ? ""
             : shortSha(ApplicationReleases.storedSettings(serving).get("commit_sha")));
 
-        List<Map<String, Object>> deployments = new ArrayList<>();
+        List<InstanceDeploymentView> deployments = new ArrayList<>();
         for (Row row : operations) {
             deployments.add(entry(row.get(ReleaseOperationModel.ID),
                 ReleaseOperationModel.STATUS, row.get(ReleaseOperationModel.STATUS),
@@ -177,7 +178,7 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
         vars.put("currentCommit", latest == null ? ""
             : shortSha(latest.get(BuildOperationModel.SOURCE_REF)));
 
-        List<Map<String, Object>> deployments = new ArrayList<>();
+        List<InstanceDeploymentView> deployments = new ArrayList<>();
         for (Row row : operations) {
             deployments.add(entry(row.get(BuildOperationModel.ID),
                 BuildOperationModel.STATUS, row.get(BuildOperationModel.STATUS), "",
@@ -191,23 +192,14 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
     }
 
     /** One history row in the shape both lanes and the shared deploy-detail partial read. */
-    private static @NonNull Map<String, Object> entry(@Nullable Object id, @NonNull EnumField statusField,
+    private static @NonNull InstanceDeploymentView entry(@Nullable Integer id, @NonNull EnumField statusField,
                                                      @Nullable Object status, @NonNull String reason,
                                                      @Nullable Object commit, @Nullable Object durationMs,
                                                      @NonNull String failure, @Nullable Instant startedAt,
                                                      @Nullable String log) {
-        Map<String, Object> entry = new HashMap<>();
-        entry.put("id", id);
-        entry.put("status", orEmpty(status));
-        entry.put("statusVariant", variantOf(statusField, status));
-        entry.put("reason", reason);
-        entry.put("commit", shortSha(commit));
-        entry.put("duration", durationLabel(durationMs));
-        entry.put("error", failure);
-        entry.put("startedAtIso", startedAt != null ? startedAt.toString() : "");
-        entry.put("log", log != null ? log : "");
-        entry.put("hasLog", log != null && !log.isBlank());
-        return entry;
+        return new InstanceDeploymentView(id, orEmpty(status), variantOf(statusField, status), reason,
+            shortSha(commit), durationLabel(durationMs), failure, startedAt != null ? startedAt.toString() : "",
+            log != null ? log : "", log != null && !log.isBlank());
     }
 
     /**
@@ -254,11 +246,12 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
      * Unknown/blank degrades to secondary, the honest answer for a value the vocabulary
      * does not contain.
      */
-    private static String variantOf(@NonNull EnumField field, @Nullable Object status) {
+    private static BadgeVariant variantOf(@NonNull EnumField field, @Nullable Object status) {
         EnumField.EnumValue value = status == null
             ? null : field.getValues().get(String.valueOf(status));
         BadgeColor color = value != null ? value.color() : null;
-        return (color != null ? color : BadgeVariant.SECONDARY).token();
+        BadgeVariant variant = color != null ? color.variant() : null;
+        return variant != null ? variant : BadgeVariant.SECONDARY;
     }
 
     private static String shortSha(Object sha) {
