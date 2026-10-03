@@ -10,13 +10,11 @@ import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.ui.BadgeColor;
-import be.elevenways.zenit.common.ui.BadgeVariant;
+import be.elevenways.zenit.widget.common.data.WidgetBadge;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -52,7 +50,12 @@ public final class StackDeploymentsPage implements RecordScopedPage<Row> {
             Map<String, Object> entry = new HashMap<>();
             entry.put("id", row.get(StackDeploymentModel.ID));
             entry.put("statusLabel", scopedLabel(row.get(StackDeploymentModel.STATUS), "stack_deploy_status"));
-            entry.put("statusVariant", statusVariant(row.get(StackDeploymentModel.STATUS)));
+            // AIDEV-NOTE: the same classifier supplies roles, hues and unknown-key honesty on every badge surface.
+            WidgetBadge.Colors colors = WidgetBadge.colorsOf(StackDeploymentModel.STATUS,
+                row.get(StackDeploymentModel.STATUS));
+            entry.put("statusVariant", colors.variant());
+            entry.put("statusColorSet", colors.colorSet());
+            entry.put("statusKnown", colors.known());
             entry.put("reasonLabel", scopedLabel(row.get(StackDeploymentModel.REASON), "stack_deploy_reason"));
             entry.put("duration", durationLabel(row.get(StackDeploymentModel.DURATION_MS)));
             entry.put("error", orEmpty(row.get(StackDeploymentModel.ERROR)));
@@ -84,22 +87,6 @@ public final class StackDeploymentsPage implements RecordScopedPage<Row> {
             return null;
         }
         return Microcopy.of(String.valueOf(value)).withFilter("scope", scope);
-    }
-
-    /**
-     * The badge variant DECLARED on the status enum value itself.
-     *
-     * AIDEV-NOTE: this was a switch re-spelling running/success/failed with the very
-     * colours {@code StackDeploymentModel.STATUS} already declares three lines apart in
-     * the model -- a fourth status would have rendered "secondary" here while carrying its
-     * own colour everywhere else. Unknown/blank still degrades to secondary, which is the
-     * honest answer for a value the vocabulary does not contain.
-     */
-    private static BadgeVariant statusVariant(@Nullable Object status) {
-        EnumField.EnumValue value = status == null
-            ? null : StackDeploymentModel.STATUS.getValues().get(String.valueOf(status));
-        BadgeColor color = value != null ? value.color() : null;
-        return color != null && color.variant() != null ? color.variant() : BadgeVariant.SECONDARY;
     }
 
     private static String durationLabel(@Nullable Object durationMs) {

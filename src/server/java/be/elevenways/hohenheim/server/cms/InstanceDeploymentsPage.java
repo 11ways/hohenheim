@@ -27,8 +27,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.ui.BadgeColor;
-import be.elevenways.zenit.common.ui.BadgeVariant;
+import be.elevenways.zenit.widget.common.data.WidgetBadge;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.http.ReturnTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -191,7 +190,7 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
     }
 
     /** One history row in the shape both lanes and the shared deploy-detail partial read. */
-    private static @NonNull Map<String, Object> entry(@Nullable Object id, @NonNull EnumField statusField,
+    static @NonNull Map<String, Object> entry(@Nullable Object id, @NonNull EnumField statusField,
                                                      @Nullable Object status, @NonNull String reason,
                                                      @Nullable Object commit, @Nullable Object durationMs,
                                                      @NonNull String failure, @Nullable Instant startedAt,
@@ -199,7 +198,11 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
         Map<String, Object> entry = new HashMap<>();
         entry.put("id", id);
         entry.put("status", orEmpty(status));
-        entry.put("statusVariant", variantOf(statusField, status));
+        // AIDEV-NOTE: forward the shared enum facets so semantic roles and categorical hues survive both lanes.
+        WidgetBadge.Colors colors = WidgetBadge.colorsOf(statusField, status);
+        entry.put("statusVariant", colors.variant());
+        entry.put("statusColorSet", colors.colorSet());
+        entry.put("statusKnown", colors.known());
         entry.put("reason", reason);
         entry.put("commit", shortSha(commit));
         entry.put("duration", durationLabel(durationMs));
@@ -243,22 +246,6 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
             url = scheme + "://" + domain.get(SiteDomainModel.HOSTNAME) + path;
         }
         vars.put("webhookUrl", url);
-    }
-
-    /**
-     * The badge variant DECLARED on the status enum value itself, for either vocabulary.
-     *
-     * AIDEV-NOTE: read off the field rather than switched on here, so a new status carries
-     * its colour everywhere at once -- and so the two status vocabularies this page renders
-     * (release operations, build operations) need no mapping table between them.
-     * Unknown/blank degrades to secondary, the honest answer for a value the vocabulary
-     * does not contain.
-     */
-    private static BadgeVariant variantOf(@NonNull EnumField field, @Nullable Object status) {
-        EnumField.EnumValue value = status == null
-            ? null : field.getValues().get(String.valueOf(status));
-        BadgeColor color = value != null ? value.color() : null;
-        return color != null && color.variant() != null ? color.variant() : BadgeVariant.SECONDARY;
     }
 
     private static String shortSha(Object sha) {
