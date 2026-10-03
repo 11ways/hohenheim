@@ -12,6 +12,11 @@ import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
+import be.elevenways.zenit.common.security.AccountabilityOrigin;
+import be.elevenways.zenit.common.security.SystemPrincipal;
+import be.elevenways.protoblast.common.time.Now;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.BeforeAll;
@@ -65,8 +70,6 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
     private static final Pattern SPACE = Pattern.compile("\\s+");
     private static final Pattern START_TAG = Pattern.compile("<([a-z][a-z0-9-]*)((?:\\s+[^\\s=>\"]+(?:=\"[^\"]*\")?)+)\\s*>");
     private static final Pattern ATTRIBUTE = Pattern.compile("[^\\s=>\"]+(?:=\"[^\"]*\")?");
-    private static final Pattern RECORD_TEXT = Pattern.compile(
-        "(<span class=\"widget-record-(?:title|subtitle)\">).*?(</span>)", Pattern.DOTALL);
 
     private static TestSession tenant;
     private static TestSession outsider;
@@ -89,6 +92,42 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
             HohenheimAccess.MANAGE, true);
         tenant = sessionFor(tenantId);
         outsider = sessionFor(outsiderId);
+        seedRecentActivity();
+    }
+
+    /** Seed a fixed mixed-provenance history instead of capturing boot seeders and the host's OS accounts. */
+    private static void seedRecentActivity() {
+        Model activity = Models.get(ActivityModel.class);
+        activity.find().delete();
+        var now = Now.instant();
+        String[][] records = {
+            {"zenit-auth:record_grant", "manage", "system"},
+            {"hohenheim:site", "landing-site", "system"},
+            {"hohenheim:quota", "", "system"},
+            {"zenit-auth:user", "Landing Outsider", "system"},
+            {"zenit-auth:user", "Landing Tenant", "system"},
+            {"zenit-auth:grant", "*", "unattributed"},
+            {"zenit-auth:user", "Test Admin", "unattributed"},
+            {"hohenheim:system_user", "skerit", "system"},
+            {"hohenheim:system_user", "nobody", "system"},
+            {"hohenheim:system_user", "root", "system"}
+        };
+        for (int index = 0; index < records.length; index++) {
+            String[] fixture = records[index];
+            Row row = activity.createEmptyRow();
+            row.set(ActivityModel.MODEL, fixture[0]);
+            row.set(ActivityModel.RECORD_ID, "landing-fixture-" + index);
+            row.set(ActivityModel.RECORD_TITLE, fixture[1]);
+            row.set(ActivityModel.ACTION, ZenitActivityAction.CREATE.id().toString());
+            row.set(ActivityModel.CREATED_AT, now.minusSeconds(index));
+            if (AccountabilityOrigin.SYSTEM.token().equals(fixture[2])) {
+                var system = SystemPrincipal.INSTANCE.reference();
+                row.set(ActivityModel.ACTOR_KIND, system.storedKind());
+                row.set(ActivityModel.ACTOR, Long.toString(system.id()));
+            }
+            row.set(ActivityModel.ORIGIN, fixture[2]);
+            activity.save(row);
+        }
     }
 
     @Test
@@ -119,7 +158,7 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
                 "surface=\"" + normalize(dashboardToken(panelSlug)) + "\"");
         }
         assertThat(cases(current)).as("step 3: every audience's landing dashboards are the stored ones")
-            .containsExactlyElementsOf(cases(normalizeRecordText(sortAttributes(stored))));
+            .containsExactlyElementsOf(cases(sortAttributes(stored)));
     }
 
     /** @return the surface token the panel's dashboard entry answers to */
@@ -162,12 +201,7 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
         text = UUID.matcher(text).replaceAll("<uuid>");
         text = MARKUP_ID.matcher(text).replaceAll("$1-#");
         text = DIGITS.matcher(text).replaceAll("#");
-        return normalizeRecordText(sortAttributes(SPACE.matcher(text).replaceAll(" ").trim()));
-    }
-
-    /** Keep the record links and row structure while excluding the widget data this conversion never compared. */
-    private static @NonNull String normalizeRecordText(@NonNull String html) {
-        return RECORD_TEXT.matcher(html).replaceAll("$1<record-text>$2");
+        return sortAttributes(SPACE.matcher(text).replaceAll(" ").trim());
     }
 
     /** @return the text with every start tag's attributes in name order */
