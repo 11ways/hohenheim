@@ -25,6 +25,7 @@ import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.server.page.CmsRecordSources;
 import be.elevenways.zenit.common.data.RecordCreateProvider;
 import be.elevenways.zenit.common.data.RecordSource;
@@ -38,6 +39,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Delegated operator panel at /manage: only the sites (and their domains) the
@@ -287,7 +289,9 @@ public final class ManagePanel extends Panel {
         var dnsRecords = RecordSource.of(DnsRecordModel.class)
             .search(DnsRecordModel.NAME, DnsRecordModel.VALUE)
             .scopedBy(TenantScopes.DNS_RECORDS);
-        RecordCreateProvider dnsCreate = CmsRecordSources.createProviderFor(DnsRecordParts.admin());
+        Panel adminPanel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN),
+            "the admin panel is registered before its sources");
+        RecordCreateProvider dnsCreate = CmsRecordSources.createProviderFor(adminPanel, DnsRecordParts.admin());
         if (dnsCreate != null) {
             dnsRecords.creatable(dnsCreate, HohenheimSources.ADMIN_ACCESS);
         }
