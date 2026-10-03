@@ -19,7 +19,7 @@ import java.util.List;
  * resource IS the page, nav-hidden, never created here, and every entry read-only.
  *
  * AIDEV-NOTE: the rows are written by their engine only (the build orchestrator, the release
- * engine), so every field is read-only through the FieldAccess binding (the ActivityResource
+ * engine), so every field is read-only through the FieldAccess binding (the activity log's
  * shape) -- an editable image pin or step log would be a second authority over what ran and what
  * served when. A subclass declares only what differs: its columns, its form, its slug, its model.
  *
