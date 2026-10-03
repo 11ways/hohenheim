@@ -6,11 +6,7 @@ import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.cms.EnvironmentParts;
-import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelRegistry;
-import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.Resource;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -46,9 +42,7 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
      * is the same walk that hides the carrier and the same one that strips it on submit.
      */
     private static List<String> valueEntriesOf(@Nullable Row record, EditView view) {
-        Panel admin = PanelRegistry.getBySlug(HohenheimSlugs.ADMIN);
-        Resource<?> resource = PanelResourceViews.forProgrammaticCaller(
-            (PanelResource<?>) admin.entryBySlug(EnvironmentParts.VARIABLES_SLUG), admin);
+        Resource<Row> resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, EnvironmentParts.VARIABLES_SLUG);
         FormState state = new FormStateTranslator().translate(
             resource.formSpec(), resource.fieldAccessByPath(), view,
             TestAccessContexts.contextFor(null), record == null ? resource.createValues()
@@ -67,10 +61,11 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
         return carriers;
     }
 
-    /** Creates one variable through the panel entry's CREATE, as its form posts it (the plain carrier only). */
+    /** Creates one variable through the panel entry's CREATE with the value field its submitted kind declares. */
     private static void create(Integer environmentId, String key, String kind, String value) {
         PanelResourceCalls.create(HohenheimSlugs.ADMIN, EnvironmentParts.VARIABLES_SLUG, Map.of(
-            "environment_id", String.valueOf(environmentId), "key", key, "kind", kind, "plain_value", value),
+            "environment_id", String.valueOf(environmentId), "key", key, "kind", kind,
+            "secret".equals(kind) ? "secret_value" : "plain_value", value),
             TenantConduits.operator());
     }
 
@@ -117,14 +112,15 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
             .as("a plain row edits its plain carrier and nothing else")
             .containsExactly(InstanceVariableModel.PLAIN_VALUE.getName());
 
-        // 5. Switching the kind retires the previous carrier instead of being refused
-        //    by the model's one-carrier-per-kind hook.
+        // 5. The submitted kind and secret are accepted together; an inactive plain value is ignored.
         patch(variableId, Map.of("environment_id", environmentId, "key", "CARRIER_PROBE", "kind", "secret",
-            "plain_value", "visible-config"));
+            "plain_value", "smuggled-config", "secret_value", "hunter2-carrier"));
 
         stored = Models.get(InstanceVariableModel.class).find()
             .where(InstanceVariableModel.ID.eq(variableId)).first();
         assertThat(stored.get(InstanceVariableModel.KIND)).isEqualTo(InstanceVariableModel.KIND_SECRET);
+        assertThat(stored.get(InstanceVariableModel.SECRET_VALUE)).as("step 5: secret switches in one request")
+            .isEqualTo("hunter2-carrier");
         assertThat(stored.get(InstanceVariableModel.PLAIN_VALUE))
             .as("the retired carrier is cleared, not left behind")
             .isNull();
