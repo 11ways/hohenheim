@@ -408,9 +408,10 @@ class SpamserviceCmsContractTest {
         });
 
         PanelResource<ManagedClientKey> keys = SpamserviceClientKeysResource.create(() -> client);
-        Object createdKey = keys.writes().storeCreateUnder().create(clientId,
-            Map.of("client_id", UUID.fromString(clientId), "name", "primary", "key", ""), AccessContext.anonymous());
-        assertThat(createdKey).isEqualTo(clientId + "~" + keyId);
+        var created = SpamserviceClientKeysResource.mint(() -> client, clientId, "primary", "");
+        assertThat(created.key()).isEqualTo(clientId + "~" + keyId);
+        assertThat(created.secret().reveal()).as("the generated key is the create's one-time result")
+            .isEqualTo("spam_once");
         assertThat(keys.reads().values().apply(new ManagedClientKey(keyId, clientId, "primary", true, null,
             Instant.parse("2026-07-23T00:00:00Z"))))
             .containsEntry("key", "").doesNotContainValue("spam_once");

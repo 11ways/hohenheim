@@ -4593,12 +4593,8 @@
       "scope": "spamservice_sample"
     }
   ],
-  "key_created": {
-    "text": "Key created. Copy it now; it will not be shown again: {$key}",
-    "scope": "spamservice_key"
-  },
-  "key_adopted": {
-    "text": "Existing key adopted",
+  "create_key": {
+    "text": "Create key",
     "scope": "spamservice_key"
   },
   "revoke": {

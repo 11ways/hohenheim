@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.key.IdentityKey;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.spamservice.client.CreatedClientKey;
 import be.elevenways.spamservice.client.ManagedClientKey;
@@ -26,9 +27,11 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FormSpec;
-import be.elevenways.zenit.common.flash.FlashLevel;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
+import be.elevenways.zenit.common.operation.OperationInput;
+import be.elevenways.zenit.common.operation.OperationInvocation;
+import be.elevenways.zenit.common.operation.SecretResult;
 import be.elevenways.zenit.common.orm.lease.LeaseKeys;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.operation.OperationGate;
@@ -38,23 +41,24 @@ import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.UuidField;
-import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.Secret;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.ui.Icon;
-import be.elevenways.zenit.server.flash.Flash;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
 
 /**
- * A client's keys, a store child of the client listed on its Keys tab, with one-shot raw-key disclosure.
+ * A client's keys, a store child of the client listed on its Keys tab; the create answers the raw key as its one-time
+ * {@link SecretResult}.
  *
  * AIDEV-NOTE: the management API lists keys per client only, so the child lists under its client through
  * {@code ChildStorePages} and creates through {@code createUnder} (C-3); outside a client the list asks nothing.
@@ -101,6 +105,41 @@ public final class SpamserviceClientKeysResource {
     /** The largest page the management API serves ({@code ManagementService.MAX_PAGE_SIZE}). */
     private static final int REMOTE_PAGE_SIZE = 200;
 
+    private static final FormSpec FORM = FormSpec.builder()
+        .add(CLIENT_ID).add(NAME).add(RAW_KEY).add(ACTIVE).add(LAST_USED).add(CREATED_AT).build();
+
+    /**
+     * The client the create writes through, attached by a caller holding its own (a host test); a create the CMS runs
+     * attaches none and writes through the managed runtime's.
+     */
+    static final IdentityKey<Supplier<SpamserviceClient>> CLIENTS = IdentityKey.create("spamservice_key_clients");
+
+    /** The key form, one component per form entry as the operation boot check requires. */
+    public record KeyInput(@Nullable Object client_id, @Nullable String name, @Nullable Object key,
+                           @Nullable Boolean active, @Nullable Instant last_used, @Nullable Instant created_at) {}
+
+    /**
+     * Creates one key under its client and answers its key with the raw value, once.
+     *
+     * AIDEV-NOTE: a receipted command, so a resubmitted create after a lost answer is refused as
+     * SECRET_ALREADY_DISCLOSED instead of minting a second key; offered from the client's Keys tab with the parent
+     * fixed into {@code client_id}.
+     */
+    public static final Operation<Void, KeyInput, SecretResult<String>> CREATE = Operation.declare(
+            HohenheimIds.id("spamservice_key_create"))
+        .label(words("create_key"))
+        .noSubject()
+        .gate(OperationGate.permission(HohenheimPanel.ACCESS))
+        .input(OperationInput.of(FORM, KeyInput.class, values -> new KeyInput(values.get("client_id"),
+            values.get("name") instanceof String name ? name : null, values.get("key"),
+            values.get("active") instanceof Boolean active ? active : null,
+            values.get("last_used") instanceof Instant used ? used : null,
+            values.get("created_at") instanceof Instant created ? created : null)))
+        .result(SecretResult.<String>type())
+        .command(OperationCommand.serializedBy(KEYS, OperationInvocation::operationId).onDatasource("default")
+            .execution(CommandExecution.OUTSIDE_TRANSACTION))
+        .register();
+
     public static final Operation<ManagedClientKey, Void, Void> ENABLE = Operation.declare(
             HohenheimIds.id("spamservice_key_enable"))
         .label(words("enable"))
@@ -121,6 +160,12 @@ public final class SpamserviceClientKeysResource {
 
     static {
         OperationHandlers.loader(KEY, key -> load(SpamserviceRemoteStore.MANAGED, key));
+        OperationHandlers.attach(CREATE).handle(call -> {
+            Supplier<SpamserviceClient> attached = call.attachment(CLIENTS);
+            KeyInput input = Objects.requireNonNull(call.input(), "the key form is the input");
+            return mint(attached != null ? attached : SpamserviceRemoteStore.MANAGED,
+                input.client_id() == null ? "" : String.valueOf(input.client_id()), input.name(), input.key());
+        });
         OperationHandlers.attach(ENABLE).handle(call -> {
             SpamserviceRemoteStore.require(SpamserviceRemoteStore.MANAGED).updateKey(call.subject().id(), null, true);
             return null;
@@ -147,8 +192,6 @@ public final class SpamserviceClientKeysResource {
             .column(ColumnSpec.fromField(LAST_USED).build())
             .column(ColumnSpec.fromField(CREATED_AT).build())
             .build();
-        FormSpec form = FormSpec.builder()
-            .add(CLIENT_ID).add(NAME).add(RAW_KEY).add(ACTIVE).add(LAST_USED).add(CREATED_AT).build();
         return PanelResource.builder(ID, SLUG, KEY)
             .label(words("plural"))
             .recordLabel(words("singular"))
@@ -175,17 +218,15 @@ public final class SpamserviceClientKeysResource {
                 .chrome(ListChrome.MINIMAL)
                 .notice(SpamserviceRemoteStore.notice(ID, clients))
                 .build())
-            .form(ResourceForm.<ManagedClientKey>of(form)
+            .form(ResourceForm.<ManagedClientKey>of(FORM)
                 .bindings(List.of(
                     ResourceFieldBinding.of("last_used", FieldAccess.alwaysReadonly()),
                     ResourceFieldBinding.of("created_at", FieldAccess.alwaysReadonly())))
                 .createDefaults(request -> createDefaults(request))
                 .build())
             .writes(ResourceMutations.<ManagedClientKey>store()
-                // The form's own client pick keeps the standalone create the entry always offered.
-                .create((values, access) -> mint(clients,
-                    SpamserviceRemoteStore.requiredText(values, "client_id", ""), values, access))
-                .createUnder((parentKey, values, access) -> mint(clients, String.valueOf(parentKey), values, access))
+                // From the Keys tab the client is the tab's parent; the standalone create keeps the form's own pick.
+                .create(CREATE, "client_id")
                 .update((existing, values, access) -> update(clients, existing, values))
                 .delete((existing, access) -> SpamserviceRemoteStore.require(clients).revokeKey(existing.id()))
                 .build())
@@ -256,25 +297,17 @@ public final class SpamserviceClientKeysResource {
         }
     }
 
-    /** Creates the key under its client; a generated key is a one-shot disclosure through the request's flash. */
-    private static @NonNull Object mint(@NonNull Supplier<SpamserviceClient> clients, @NonNull String clientId,
-                                        @NonNull Map<String, Object> values, @NonNull AccessContext access) {
-        String name = SpamserviceRemoteStore.requiredText(values, "name", "key");
-        String raw = Texts.trimmedOrNull(values.get("key"));
+    /**
+     * Creates the key under its client and answers it with its raw value: a generated key, or an adopted one shown back
+     * once (the operator typed it, so that exposes nothing new and one result shape keeps one retry answer).
+     */
+    static @NonNull SecretResult<String> mint(@NonNull Supplier<SpamserviceClient> clients, @NonNull String clientId,
+                                              @Nullable String name, @Nullable Object key) {
+        String raw = key instanceof Secret secret ? Texts.trimmedOrNull(secret.reveal()) : Texts.trimmedOrNull(key);
         UUID parsed = SpamserviceRemoteStore.uuidOrNull(clientId);
-        CreatedClientKey created = SpamserviceRemoteStore.require(clients)
-            .createKey(parsed != null ? parsed.toString() : clientId, name, raw);
-        Microcopy message = created.generated()
-            ? words("key_created").withArg("key", created.key())
-            : words("key_adopted");
-        if (access.conduit() != null) {
-            // AIDEV-NOTE: the generated key is a one-shot disclosure; the secret-arg variant parks it in
-            // SecretDisclosures so only a single-use handle rides the session (an adopted key was operator-entered,
-            // not disclosed).
-            Flash.stash(access.conduit(), message, FlashLevel.SUCCESS,
-                created.generated() ? Set.of("key") : Set.of());
-        }
-        return created.clientId() + "~" + created.id();
+        CreatedClientKey created = SpamserviceRemoteStore.require(clients).createKey(
+            parsed != null ? parsed.toString() : clientId, name == null || name.isBlank() ? "key" : name, raw);
+        return new SecretResult<>(created.clientId() + "~" + created.id(), Secret.of(created.key()));
     }
 
     /**
