@@ -46,8 +46,8 @@ class DatabaseMoveRefusalSurfaceTest extends HohenheimTestBase {
             .as("step 1: the move is offered for this record").isNull();
 
         // 2. Driving the action answers the page lane (a redirect or a render), never a 500.
-        var moved = adminPostForm("/admin/databases/" + record.get(DatabaseModel.ID)
-            + "/action/move_database_shared", confirmed(""));
+        var moved = adminPostForm("/admin/databases/invoke/hohenheim.move_database_shared?ids="
+            + record.get(DatabaseModel.ID), confirmed(""));
         assertThat(moved.statusCode())
             .as("step 2: the refused claim is not a server error: " + moved.body())
             .isIn(200, 302, 303);

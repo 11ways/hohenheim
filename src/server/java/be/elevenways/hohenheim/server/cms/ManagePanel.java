@@ -141,7 +141,7 @@ public final class ManagePanel extends Panel {
         HohenheimPanel.addIf(peers, new InstanceFromTemplatePage(), Role.INSTANCES);
         // The managed-database tier's tenant projection: allocate, read credentials
         // (its own capability, its own tab), back up and destroy your OWN databases.
-        HohenheimPanel.addIf(peers, new ManageDatabaseResource(), Role.DATABASES);
+        HohenheimPanel.addIf(peers, DatabaseParts.manage(), Role.DATABASES);
         // Needs BOTH tiers to exist: it joins an instance to a managed database.
         if (HohenheimRoles.enabled(Role.DATABASES) && HohenheimRoles.enabled(Role.INSTANCES)) {
             peers.add(InstanceAttachmentParts.databasesManage());
@@ -348,8 +348,8 @@ public final class ManagePanel extends Panel {
 
         // Managed databases: the common registration (HohenheimSources) is ADMIN_ACCESS
         // with no accessCriteria, which the browser registry legitimately keeps. Here the
-        // model is exposed by a SECOND RowResource (ManageDatabaseResource beside the
-        // admin DatabaseResource), so without this the widest of the two derived defaults
+        // model is exposed by a SECOND resource (DatabaseParts#manage beside the admin
+        // DatabaseParts#admin), so without this the widest of the two derived defaults
         // decides -- and it would name every tenant's database to whoever a picker
         // rendered for, starting with the site-database attachment picker. override, not
         // register: the manage panel deliberately serves a WIDER audience than the

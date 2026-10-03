@@ -23,6 +23,7 @@ import be.elevenways.hohenheim.server.instance.InstanceResize;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
+import be.elevenways.zenit.cms.common.page.CmsRecordLinks;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
@@ -580,7 +581,8 @@ public final class InstanceParts {
             return new ManagedByCell(null, Microcopy.of("managed_by").withFilter("scope", "instance"),
                 modelId + " #" + ownerId, null);
         }
-        PanelEntry ownerEntry = adminEntryForModel(ownerModel.getModelId());
+        Panel admin = PanelRegistry.getBySlug(HohenheimSlugs.ADMIN);
+        PanelEntry ownerEntry = admin != null ? CmsRecordLinks.recordEntry(admin, ownerModel.getModelId()) : null;
         String url = ownerEntry != null
             ? CmsRoutes.detail(HohenheimSlugs.ADMIN, ownerEntry.slug(), ownerId).toUrl() : null;
         String name = ownerModel.getDisplayTitle(owner);
@@ -589,19 +591,5 @@ public final class InstanceParts {
             ownerEntry != null ? ownerEntry.label() : Microcopy.of("managed_by").withFilter("scope", "instance"),
             name != null ? name : modelId + " #" + ownerId,
             url);
-    }
-
-    /** The admin panel's resource entry over a model, legacy or parts; null when none serves it. */
-    private static @Nullable PanelEntry adminEntryForModel(@NonNull Identifier modelId) {
-        Panel panel = PanelRegistry.getBySlug(HohenheimSlugs.ADMIN);
-        if (panel == null) {
-            return null;
-        }
-        for (PanelEntry entry : panel.entries()) {
-            if (modelId.equals(Panel.modelIdOf(entry))) {
-                return entry;
-            }
-        }
-        return null;
     }
 }

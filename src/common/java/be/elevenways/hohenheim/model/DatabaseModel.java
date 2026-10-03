@@ -289,7 +289,7 @@ public class DatabaseModel extends Model {
      * spelled, and the name stays usable as a container handle.
      *
      * AIDEV-NOTE: SUPERSEDED 2026-08-08, second half. The two earlier notes both rested on
-     * "admin-reachable only" -- that premise is GONE: ManageDatabaseResource lets a
+     * "admin-reachable only" -- that premise is GONE: the /manage databases let a
      * delegated tenant allocate, so this validator is now a tenant boundary and not merely
      * a containment fix. Nothing about the RULE had to change (it already refuses every
      * separator, so no traversal can be spelled by anyone), but two things around it did.

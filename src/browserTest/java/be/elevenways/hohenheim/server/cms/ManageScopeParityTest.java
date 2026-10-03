@@ -121,7 +121,7 @@ class ManageScopeParityTest extends HohenheimTestBase {
             Projection.of(InstanceParts.manage()), Projection.of(CertificateParts.manage()),
             Projection.of(ProtectedPathParts.manage()), Projection.of(new ManageDnsRecordResource()),
             Projection.of(InstanceTemplateParts.manage()), Projection.of(InstanceScheduleParts.manage()),
-            Projection.of(ProjectParts.manage()), Projection.of(new ManageDatabaseResource()),
+            Projection.of(ProjectParts.manage()), Projection.of(DatabaseParts.manage()),
             Projection.of(InstanceAttachmentParts.devicesManage()), Projection.of(InstanceAttachmentParts.databasesManage()),
             Projection.of(PreviewParts.manage()));
         for (Projection resource : paired) {

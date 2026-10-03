@@ -9,8 +9,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.DatabaseResource;
-import be.elevenways.hohenheim.server.cms.ManageDatabaseResource;
+import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.EngineHost;
@@ -23,7 +22,7 @@ import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.quota.DatabaseQuota;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.InstanceRowCleanup;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -270,8 +269,8 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         return DatabaseQuota.bucketKeyOf(packedOf(userId));
     }
 
-    private static boolean offersAction(List<RowAction<Row>> actions, String actionName) {
-        for (RowAction<Row> action : actions) {
+    private static boolean offersAction(List<PanelAction<Row>> actions, String actionName) {
+        for (PanelAction<Row> action : actions) {
             if (action.id().getPath().equals(actionName)) {
                 return true;
             }
@@ -614,9 +613,9 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         // 4. The operator's "move to shared engine" action is NOT a tenant verb: a tenant
         //    never sees, let alone drives, where the operator's data lives. The positive
         //    anchor is the operator resource declaring it, so this is not a typo test.
-        assertThat(offersAction(new DatabaseResource().rowActions(), "move_database_shared"))
+        assertThat(offersAction(DatabaseParts.admin().actions(), "move_database_shared"))
             .as("step 4 anchor: the operator resource offers the move").isTrue();
-        assertThat(offersAction(new ManageDatabaseResource().rowActions(), "move_database_shared"))
+        assertThat(offersAction(DatabaseParts.manage().actions(), "move_database_shared"))
             .as("step 4: the tenant resource does not").isFalse();
     }
 

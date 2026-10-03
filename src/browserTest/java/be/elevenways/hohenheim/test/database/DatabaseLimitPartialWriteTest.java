@@ -7,8 +7,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.cms.WithheldFailure;
-import be.elevenways.hohenheim.server.cms.DatabaseEngineResource;
-import be.elevenways.hohenheim.server.cms.DatabaseResource;
+import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
@@ -18,6 +17,8 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.cms.common.resource.Resource;
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
@@ -86,7 +87,7 @@ class DatabaseLimitPartialWriteTest extends HohenheimTestBase {
 
     @Test
     void aWriteThatCarriesNoCeilingNeverUncapsOrRecreatesTheContainer() {
-        DatabaseResource databases = new DatabaseResource();
+        Resource<Row> databases = PanelResourceViews.forCaller(DatabaseParts.admin());
         Model model = Models.get(DatabaseModel.class);
         Object engineSettingsBefore = engineSettings(databaseId);
 
@@ -123,7 +124,7 @@ class DatabaseLimitPartialWriteTest extends HohenheimTestBase {
 
         // 4. A shared engine follows the same lane: an empty write and an unchanged
         //    one-entry write leave its ceilings and status alone.
-        DatabaseEngineResource engines = new DatabaseEngineResource();
+        Resource<Row> engines = PanelResourceViews.forCaller(DatabaseParts.engines());
         Model engineModel = Models.get(DatabaseEngineModel.class);
         engines.updateRow(engineModel.findById(engineId), Map.of(), AccessContext.anonymous());
         engines.updateRow(engineModel.findById(engineId), Map.of("cpu_limit", 2.0),

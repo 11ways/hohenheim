@@ -65,7 +65,8 @@ class RecordAwareQueryGateTest extends HohenheimTestBase {
         }
 
         // 3. Databases: a failure reason shows only on a record that carries one, and stays queryable.
-        assertThat(new DatabaseResource().queryGate().mayQuery(DatabaseModel.FAILURE_REASON.getName(), VIEWER))
+        FieldQueryGate databaseGate = PanelResourceViews.forCaller(DatabaseParts.admin()).queryGate();
+        assertThat(databaseGate.mayQuery(DatabaseModel.FAILURE_REASON.getName(), VIEWER))
             .as("step 3: the failure reason may still be queried across records").isTrue();
     }
 }

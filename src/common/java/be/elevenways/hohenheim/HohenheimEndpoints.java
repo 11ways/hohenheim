@@ -1120,14 +1120,14 @@ public class HohenheimEndpoints {
     // authorization decision in a handler beyond the shared visibility walk, no existence
     // oracle, no field that was not enumerated), and the DOORS are the panels' own:
     //
-    // - the list is scoped by the `view` capability, exactly like ManageDatabaseResource,
+    // - the list is scoped by the `view` capability, exactly like the /manage databases,
     //   and projects the DELEGATED columns for a non-admin (a shared engine's name is
     //   another tenant's neighbour list);
     // - the move is ADMIN-ONLY, because only the admin panel offers the row action
-    //   (ManageDatabaseResource drops it), and its eligibility is DatabaseService's own
+    //   (the /manage twin has none), and its eligibility is DatabaseService's own
     //   moveRefusal -- the single declaration the row action reads too;
-    // - the delete rides DatabaseResource's delete pipeline, so `destroy` on the record
-    //   and the in-use refusal are the service's and the resource's, never this file's;
+    // - the delete is the delete_database operation the panel runs, so `destroy` on the
+    //   record and the in-use refusal are the operation's, never this file's;
     // - the engine list is ADMIN-ONLY: an engine row exists on the admin panel alone.
 
     public static final Endpoint<Object> API_DATABASES = Endpoint.<Object>builder()

@@ -3,8 +3,7 @@ package be.elevenways.hohenheim.test.database;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.cms.DatabaseResource;
-import be.elevenways.hohenheim.server.cms.ManageDatabaseResource;
+import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
@@ -12,6 +11,9 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.InstanceRowCleanup;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.cms.common.resource.Resource;
+import be.elevenways.zenit.cms.common.resource.ResourceVerb;
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -83,19 +85,19 @@ class DatabaseResizeTest extends HohenheimTestBase {
 
     @Test
     void anOperatorResizesADatabaseInPlaceAndAnUnaffordableCeilingIsRefusedOnTheForm() {
-        DatabaseResource databases = new DatabaseResource();
+        Resource<Row> databases = PanelResourceViews.forCaller(DatabaseParts.admin());
         Model model = Models.get(DatabaseModel.class);
 
         // 1. The surface is open at all -- the counterfactual for the whole gap. Before
-        //    this change updatable() was false and there was no edit form to submit.
-        assertThat(databases.updatable())
+        //    this change the resource offered no update and there was no edit form to submit.
+        assertThat(DatabaseParts.admin().offers(ResourceVerb.UPDATE))
             .as("step 1: the admin database form saves, for the resource ceilings")
             .isTrue();
 
         // 2. ... and it is open for the OPERATOR only. A tenant write to a stored
         //    database row is refused by the model funnel whatever it carries, so the
         //    /manage surface must not inherit an editor whose every Save is refused.
-        assertThat(new ManageDatabaseResource().updatable())
+        assertThat(DatabaseParts.manage().offers(ResourceVerb.UPDATE))
             .as("step 2: the tenant surface stays closed")
             .isFalse();
 

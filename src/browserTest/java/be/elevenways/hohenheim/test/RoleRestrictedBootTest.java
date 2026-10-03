@@ -121,7 +121,7 @@ class RoleRestrictedBootTest {
         assertThat(slugs)
             .as("step 5: disabled roles' peers are gone from the peer list")
             .doesNotContain("sites", "domains", "certificates", "stacks",
-                "databases", "instances", "servers", "bans", "spamservice");
+                "databases", "database-engines", "instances", "servers", "bans", "spamservice");
 
         // 6. Omitted slugs 404 over real HTTP -- the routes are GONE, not merely
         //    hidden from the nav. The enabled peers answer 200 with the same
