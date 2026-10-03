@@ -3,7 +3,9 @@ package be.elevenways.hohenheim.test.stack;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackModel;
-import be.elevenways.hohenheim.server.cms.StackResource;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.server.cms.StackOperations;
+import be.elevenways.hohenheim.server.cms.StackParts;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.hohenheim.test.Poll;
@@ -11,8 +13,8 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.cms.common.action.ActionContext;
-import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
@@ -20,10 +22,11 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.security.PrincipalRef;
+import be.elevenways.zenit.common.security.SystemPrincipal;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
@@ -121,18 +124,13 @@ class StackAuditTest {
             .as("step 3: the stop names the stack it settled against")
             .isEqualTo("audit-stack");
 
-        // 4. THE HOLE THIS TEST EXISTS FOR: the panel's own row action, which is ASYNC.
-        //    The attribution must survive the queue AND the worker thread, or the row
-        //    lands as system work with no actor -- an accountability-shaped no-op.
+        // 4. THE HOLE THIS TEST EXISTS FOR: the panel's own placed deploy operation, which is ASYNC. The
+        //    attribution must survive the queue AND the worker thread, or the row lands as system work with no
+        //    actor -- an accountability-shaped no-op.
         int panelId = stackRecord("audit-panel-stack");
-        RowAction.Invoke<Row> deployAction = (RowAction.Invoke<Row>) new StackResource()
-            .rowActions().stream()
-            .filter(action -> "deploy_stack".equals(action.id().getPath()))
-            .findFirst().orElseThrow();
-        Row panelRow = read(() -> Models.get(StackModel.class).findById(panelId));
-        ActionContext ctx = ActionContext.of(AccessContext.anonymous());
-        Accountability.runAs(operator("99"),
-            () -> deployAction.handler().apply(panelRow, ctx));
+        Db.run(datasource, () -> Accountability.runAs(operator("99"), () -> PanelResourceCalls.invoke(
+            HohenheimSlugs.ADMIN, StackParts.SLUG, StackOperations.DEPLOY.id(), panelId,
+            CmsConfirmation.PLAIN_PROOF, TenantConduits.operator())));
         await("step 4: the queued panel deploy settles",
             () -> activityFor(panelId, HohenheimActivityAction.DEPLOYED.id().toString()).size() == 1);
         Row panelDeploy = onlyActivity(panelId, HohenheimActivityAction.DEPLOYED.id().toString());
@@ -144,15 +142,20 @@ class StackAuditTest {
 
         // 5. ORIGIN is what tells the surfaces apart, so an unattended caller (stack
         //    adoption, boot recovery) must record as system rather than borrow an actor.
+        //    The unattended work is declared the way a boot thread is: system work that is
+        //    nobody's action. Its actor is the system principal, told apart from the
+        //    operator account (also id 1 in this suite) by its kind.
         int systemId = stackRecord("audit-system-stack");
-        deployQuietly(systemId, "adoption");
+        ExecutionIdentity.runDetachedAsSystem("adoption", () -> deployQuietly(systemId, "adoption"));
         Row systemDeploy = onlyActivity(systemId, HohenheimActivityAction.DEPLOYED.id().toString());
+        PrincipalRef system = SystemPrincipal.INSTANCE.reference();
         assertThat(Map.of(
                 "actor", String.valueOf((Object) systemDeploy.get(ActivityModel.ACTOR)),
+                "actor_kind", String.valueOf((Object) systemDeploy.get(ActivityModel.ACTOR_KIND)),
                 "origin", String.valueOf((Object) systemDeploy.get(ActivityModel.ORIGIN)),
                 "detail", String.valueOf((Object) systemDeploy.get(ActivityModel.DETAIL))))
             .as("step 5: unattended work is recorded as system work, named by its reason")
-            .isEqualTo(Map.of("actor", "null",
+            .isEqualTo(Map.of("actor", String.valueOf(system.id()), "actor_kind", system.storedKind(),
                 "origin", Accountability.ORIGIN_SYSTEM, "detail", "adoption"));
 
         // 6. A TENANT's request, whose attribution is its caller identity rather than an

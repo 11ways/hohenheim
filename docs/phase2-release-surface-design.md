@@ -81,7 +81,7 @@ Everything lands on the EXISTING Deploys tab (`InstanceDeploymentsPage`,
 peer type `RecordScopedPage<Row>` -- cited from the zenit-cms-resources skill;
 it stays a primary tab, `secondaryTab()` false, Overview stays the
 `landingSubpage`). No new panel peer, no second UI over the same records
-(`ReleaseOperationResource` stays the hidden read-only audit list). The tab is
+(`OperationHistoryParts.releases()` stays the hidden read-only audit list). The tab is
 renamed in presentation only ("Releases"); slug `deployments` stays.
 
 Vertical order and information hierarchy (each card states what it hides):

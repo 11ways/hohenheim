@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.cms.EnvironmentParts;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleOperationHandlers;
 import be.elevenways.hohenheim.server.cms.SiteOperationHandlers;
+import be.elevenways.hohenheim.server.cms.StackOperations;
 import be.elevenways.hohenheim.server.database.DatabaseApi;
 import be.elevenways.hohenheim.server.files.InstanceFileEndpoints;
 import be.elevenways.hohenheim.server.game.GameDomainOperationHandlers;
@@ -81,6 +82,7 @@ public final class HohenheimHandlers {
         InstanceChildDeletes.init();
         EnvironmentParts.init();
         InstanceScheduleOperationHandlers.init();
+        StackOperations.init();
         InstanceApi.init();
         PaasApi.init();
         DatabaseApi.init();

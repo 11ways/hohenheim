@@ -31,7 +31,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Config files of an instance template (StackFileResource generalized). Hidden from
+ * Config files of an instance template (the stack file entry generalized). Hidden from
  * the sidebar -- reached through a template's Contents tab. Content may carry
  * {@code {{KEY}}} variable placeholders, substituted at deploy-time upload.
  */
@@ -120,7 +120,7 @@ public final class InstanceTemplateFileResource extends RowResource {
     }
 
     /**
-     * Absolute, traversal-free path; octal mode (the StackFileResource contract).
+     * Absolute, traversal-free path; octal mode (the ContainerFileRules contract).
      *
      * AIDEV-NOTE: it CANONICALISES (the trimmed path is written back), so it returns a
      * COPY instead of mutating what it was handed. The map the framework passes is

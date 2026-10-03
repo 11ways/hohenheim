@@ -28,7 +28,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * CMS lane this refusal never fires -- it exists for a direct {@code model.delete}, which
  * would otherwise leave a running container attributed to a record that no longer exists.
  *
- * AIDEV-NOTE: {@code StackResource.deleteRow} used to carry this cascade by hand, inside its
+ * AIDEV-NOTE: the legacy stack resource's deleteRow used to carry this cascade by hand, inside its
  * own transaction and reachable from that one button alone; the funnel is what makes a
  * criteria delete, the API and a test do the same thing. The resource keeps the transaction
  * so the stack row never survives its children or the reverse.

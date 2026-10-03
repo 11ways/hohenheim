@@ -209,7 +209,7 @@ public final class StackServiceKind implements InstanceKindHandler {
      * teardown path already refuses to fall into for nftables. Degrading is safe because
      * it can only ever NARROW: the container is created from this profile, so the worst
      * case is the baseline. The REFUSAL is not lost, it moved to the two places that are
-     * about authoring a declaration -- {@code StackServiceResource} (the form) and
+     * about authoring a declaration -- {@code StackParts.services()} (the form) and
      * {@link StackInstances#deploy} (the runtime funnel) -- both calling
      * {@link #hardeningFor}, so there is one definition and no second copy of the rule.
      */

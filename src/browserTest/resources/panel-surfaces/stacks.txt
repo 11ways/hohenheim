@@ -1,0 +1,271 @@
+case admin.stacks.operator admin stacks operator v2
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=description relation=false
+column description at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column server_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column status at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext=last_failure relation=false
+column last_failure at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column enabled at=5 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+filter name at=0 kind=TEXT facet=false param=filter.name
+filter status at=1 kind=SELECT facet=true param=filter.status
+filter enabled at=2 kind=BOOLEAN facet=false param=filter.enabled
+header hohenheim:reclaim_images at=0 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:reclaim_images%252Cscope%3Dstack,body:reclaim_images_confirm%252Cscope%3Dstack,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/action/reclaim_images
+tab services at=0 landing=true view=false
+tab deployments at=1 landing=false view=false
+tab history at=2 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20enabled at=1 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20server_id at=2 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.server,rules:,siblings:,resolver:,clearable:true,creatable:false
+control CREATE%20registry_server at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20registry_user at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20registry_password at=5 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control CREATE%20description at=6 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+
+case admin.stacks.tenant admin stacks tenant v2
+admission - verdict=zenit:forbidden
+
+case admin.stack-services.operator admin stack-services operator v2
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column image at=1 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column enabled at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column stack_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+tab history at=0 landing=false view=false
+control CREATE%20stack_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.stack,rules:,siblings:,resolver:,clearable:true,creatable:true
+control CREATE%20name at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20enabled at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20image at=3 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20command at=4 kind=zenitforms:form/array input=text required=false readonly=false options= binding=min:0,max:-1,tags:false,closed:false
+control CREATE%20environment at=5 kind=zenitforms:form/key-value input=secret required=false readonly=false options= binding=
+control CREATE%20capabilities at=6 kind=zenitforms:form/array input=text required=false readonly=false options=NET_RAW,IPC_LOCK,SYS_CHROOT,KILL,AUDIT_WRITE binding=min:0,max:-1,tags:true,closed:false
+control CREATE%20mounts at=7 kind=zenitforms:form/records input=text required=false readonly=false options= binding=type:SELECT%252Crequired:false%252Coptions:volume%25252Ctmpfs,name:TEXT%252Crequired:false%252Coptions:,container_path:TEXT%252Crequired:false%252Coptions:,external_name:TEXT%252Crequired:false%252Coptions:
+control CREATE%20ports at=8 kind=zenitforms:form/records input=text required=false readonly=false options= binding=container_port:NUMBER%252Crequired:false%252Coptions:,host_port:NUMBER%252Crequired:false%252Coptions:,protocol:SELECT%252Crequired:false%252Coptions:tcp%25252Cudp,host_ip:TEXT%252Crequired:false%252Coptions:
+control CREATE%20depends_on at=9 kind=zenitforms:form/records input=text required=false readonly=false options= binding=service:TEXT%252Crequired:false%252Coptions:,condition:SELECT%252Crequired:false%252Coptions:started%25252Chealthy
+control CREATE%20health_cmd at=10 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20health_interval_seconds at=11 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20health_timeout_seconds at=12 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20health_retries at=13 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20health_start_period_seconds at=14 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20restart_policy at=15 kind=zenitforms:form/select input=select required=false readonly=false options=unless-stopped,always,on-failure,no binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20memory_limit_mb at=16 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20cpu_limit at=17 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+
+case admin.stack-services.tenant admin stack-services tenant v2
+admission - verdict=zenit:forbidden
+
+case admin.stack-files.operator admin stack-files operator v2
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column container_path at=0 shown=true hidden=false sortable=false filterable=false copyable=true subtext=mode relation=false
+column mode at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column stack_service_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+tab history at=0 landing=false view=false
+control CREATE%20stack_service_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.stack_service,rules:,siblings:,resolver:,clearable:true,creatable:true
+control CREATE%20container_path at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20content at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control CREATE%20mode at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+
+case admin.stack-files.tenant admin stack-files tenant v2
+admission - verdict=zenit:forbidden
+
+case admin.stacks.operator.active admin stacks operator v2
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=description relation=false
+column description at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column server_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column status at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext=last_failure relation=false
+column last_failure at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column enabled at=5 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+filter name at=0 kind=TEXT facet=false param=filter.name
+filter status at=1 kind=SELECT facet=true param=filter.status
+filter enabled at=2 kind=BOOLEAN facet=false param=filter.enabled
+header hohenheim:reclaim_images at=0 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:reclaim_images%252Cscope%3Dstack,body:reclaim_images_confirm%252Cscope%3Dstack,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/action/reclaim_images
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:deploy_stack at=1 verb=invoke band=inline style=DEFAULT disabled= confirm=style:DEFAULT,title:deploy%252Cscope%3Dstack,body:deploy_confirm%252Cscope%3Dstack,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/deploy_stack
+row hohenheim:stop_stack at=2 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:stop%252Cscope%3Dstack,body:stop_confirm%252Cscope%3Dstack,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/stop_stack
+row hohenheim:rollback_stack at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:rollback%252Cscope%3Dstack,body:rollback_confirm%252Cscope%3Dstack,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/rollback_stack
+row hohenheim:refresh_stack at=4 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/refresh_stack
+row hohenheim:purge_stack_volumes at=5 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:purge_volumes%252Cscope%3Dstack,body:purge_volumes_confirm%252Cscope%3Dstack,confirm:purge_volumes_ok%252Cscope%3Dstack,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:%3Dbatch7-surf-active,input:false target=/{panel}/{entry}/{record}/action/purge_stack_volumes
+row zenit:delete at=6 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dstack,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab services at=0 landing=true view=false
+tab deployments at=1 landing=false view=false
+tab history at=2 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20enabled at=1 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20server_id at=2 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.server,rules:,siblings:,resolver:,clearable:true,creatable:false
+control CREATE%20registry_server at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20registry_user at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20registry_password at=5 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control CREATE%20description at=6 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control EDIT%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20enabled at=1 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20server_id at=2 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.server,rules:,siblings:,resolver:,clearable:true,creatable:false
+control EDIT%20registry_server at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20registry_user at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20registry_password at=5 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control EDIT%20description at=6 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+
+case admin.stacks.operator.inactive admin stacks operator v2
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=description relation=false
+column description at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column server_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column status at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext=last_failure relation=false
+column last_failure at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column enabled at=5 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+filter name at=0 kind=TEXT facet=false param=filter.name
+filter status at=1 kind=SELECT facet=true param=filter.status
+filter enabled at=2 kind=BOOLEAN facet=false param=filter.enabled
+header hohenheim:reclaim_images at=0 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:reclaim_images%252Cscope%3Dstack,body:reclaim_images_confirm%252Cscope%3Dstack,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/action/reclaim_images
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:deploy_stack at=1 verb=invoke band=inline style=DEFAULT disabled= confirm=style:DEFAULT,title:deploy%252Cscope%3Dstack,body:deploy_confirm%252Cscope%3Dstack,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/deploy_stack
+row hohenheim:refresh_stack at=2 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/refresh_stack
+row hohenheim:purge_stack_volumes at=3 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:purge_volumes%252Cscope%3Dstack,body:purge_volumes_confirm%252Cscope%3Dstack,confirm:purge_volumes_ok%252Cscope%3Dstack,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:%3Dbatch7-surf-inactive,input:false target=/{panel}/{entry}/{record}/action/purge_stack_volumes
+row zenit:delete at=4 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dstack,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab services at=0 landing=true view=false
+tab deployments at=1 landing=false view=false
+tab history at=2 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20enabled at=1 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20server_id at=2 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.server,rules:,siblings:,resolver:,clearable:true,creatable:false
+control CREATE%20registry_server at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20registry_user at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20registry_password at=5 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control CREATE%20description at=6 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control EDIT%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20enabled at=1 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20server_id at=2 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.server,rules:,siblings:,resolver:,clearable:true,creatable:false
+control EDIT%20registry_server at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20registry_user at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20registry_password at=5 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control EDIT%20description at=6 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+
+case admin.stack-services.operator.service admin stack-services operator v2
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column image at=1 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column enabled at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column stack_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab history at=0 landing=false view=false
+control CREATE%20stack_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.stack,rules:,siblings:,resolver:,clearable:true,creatable:true
+control CREATE%20name at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20enabled at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20image at=3 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20command at=4 kind=zenitforms:form/array input=text required=false readonly=false options= binding=min:0,max:-1,tags:false,closed:false
+control CREATE%20environment at=5 kind=zenitforms:form/key-value input=secret required=false readonly=false options= binding=
+control CREATE%20capabilities at=6 kind=zenitforms:form/array input=text required=false readonly=false options=NET_RAW,IPC_LOCK,SYS_CHROOT,KILL,AUDIT_WRITE binding=min:0,max:-1,tags:true,closed:false
+control CREATE%20mounts at=7 kind=zenitforms:form/records input=text required=false readonly=false options= binding=type:SELECT%252Crequired:false%252Coptions:volume%25252Ctmpfs,name:TEXT%252Crequired:false%252Coptions:,container_path:TEXT%252Crequired:false%252Coptions:,external_name:TEXT%252Crequired:false%252Coptions:
+control CREATE%20ports at=8 kind=zenitforms:form/records input=text required=false readonly=false options= binding=container_port:NUMBER%252Crequired:false%252Coptions:,host_port:NUMBER%252Crequired:false%252Coptions:,protocol:SELECT%252Crequired:false%252Coptions:tcp%25252Cudp,host_ip:TEXT%252Crequired:false%252Coptions:
+control CREATE%20depends_on at=9 kind=zenitforms:form/records input=text required=false readonly=false options= binding=service:TEXT%252Crequired:false%252Coptions:,condition:SELECT%252Crequired:false%252Coptions:started%25252Chealthy
+control CREATE%20health_cmd at=10 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20health_interval_seconds at=11 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20health_timeout_seconds at=12 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20health_retries at=13 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20health_start_period_seconds at=14 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20restart_policy at=15 kind=zenitforms:form/select input=select required=false readonly=false options=unless-stopped,always,on-failure,no binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20memory_limit_mb at=16 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20cpu_limit at=17 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20stack_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.stack,rules:,siblings:,resolver:,clearable:true,creatable:true
+control EDIT%20name at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20enabled at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20image at=3 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20command at=4 kind=zenitforms:form/array input=text required=false readonly=false options= binding=min:0,max:-1,tags:false,closed:false
+control EDIT%20environment at=5 kind=zenitforms:form/key-value input=secret required=false readonly=false options= binding=
+control EDIT%20capabilities at=6 kind=zenitforms:form/array input=text required=false readonly=false options=NET_RAW,IPC_LOCK,SYS_CHROOT,KILL,AUDIT_WRITE binding=min:0,max:-1,tags:true,closed:false
+control EDIT%20mounts at=7 kind=zenitforms:form/records input=text required=false readonly=false options= binding=type:SELECT%252Crequired:false%252Coptions:volume%25252Ctmpfs,name:TEXT%252Crequired:false%252Coptions:,container_path:TEXT%252Crequired:false%252Coptions:,external_name:TEXT%252Crequired:false%252Coptions:
+control EDIT%20ports at=8 kind=zenitforms:form/records input=text required=false readonly=false options= binding=container_port:NUMBER%252Crequired:false%252Coptions:,host_port:NUMBER%252Crequired:false%252Coptions:,protocol:SELECT%252Crequired:false%252Coptions:tcp%25252Cudp,host_ip:TEXT%252Crequired:false%252Coptions:
+control EDIT%20depends_on at=9 kind=zenitforms:form/records input=text required=false readonly=false options= binding=service:TEXT%252Crequired:false%252Coptions:,condition:SELECT%252Crequired:false%252Coptions:started%25252Chealthy
+control EDIT%20health_cmd at=10 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20health_interval_seconds at=11 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20health_timeout_seconds at=12 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20health_retries at=13 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20health_start_period_seconds at=14 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20restart_policy at=15 kind=zenitforms:form/select input=select required=false readonly=false options=unless-stopped,always,on-failure,no binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20memory_limit_mb at=16 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20cpu_limit at=17 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+
+case admin.stack-files.operator.file admin stack-files operator v2
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column container_path at=0 shown=true hidden=false sortable=false filterable=false copyable=true subtext=mode relation=false
+column mode at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column stack_service_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab history at=0 landing=false view=false
+control CREATE%20stack_service_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.stack_service,rules:,siblings:,resolver:,clearable:true,creatable:true
+control CREATE%20container_path at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20content at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control CREATE%20mode at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20stack_service_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.stack_service,rules:,siblings:,resolver:,clearable:true,creatable:true
+control EDIT%20container_path at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20content at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control EDIT%20mode at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+
+case admin.stack-services.operator.prefill admin stack-services operator v2
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column image at=1 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column enabled at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column stack_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+tab history at=0 landing=false view=false
+control CREATE%20stack_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.stack,rules:,siblings:,resolver:,clearable:true,creatable:true
+control CREATE%20name at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20enabled at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20image at=3 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20command at=4 kind=zenitforms:form/array input=text required=false readonly=false options= binding=min:0,max:-1,tags:false,closed:false
+control CREATE%20environment at=5 kind=zenitforms:form/key-value input=secret required=false readonly=false options= binding=
+control CREATE%20capabilities at=6 kind=zenitforms:form/array input=text required=false readonly=false options=NET_RAW,IPC_LOCK,SYS_CHROOT,KILL,AUDIT_WRITE binding=min:0,max:-1,tags:true,closed:false
+control CREATE%20mounts at=7 kind=zenitforms:form/records input=text required=false readonly=false options= binding=type:SELECT%252Crequired:false%252Coptions:volume%25252Ctmpfs,name:TEXT%252Crequired:false%252Coptions:,container_path:TEXT%252Crequired:false%252Coptions:,external_name:TEXT%252Crequired:false%252Coptions:
+control CREATE%20ports at=8 kind=zenitforms:form/records input=text required=false readonly=false options= binding=container_port:NUMBER%252Crequired:false%252Coptions:,host_port:NUMBER%252Crequired:false%252Coptions:,protocol:SELECT%252Crequired:false%252Coptions:tcp%25252Cudp,host_ip:TEXT%252Crequired:false%252Coptions:
+control CREATE%20depends_on at=9 kind=zenitforms:form/records input=text required=false readonly=false options= binding=service:TEXT%252Crequired:false%252Coptions:,condition:SELECT%252Crequired:false%252Coptions:started%25252Chealthy
+control CREATE%20health_cmd at=10 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20health_interval_seconds at=11 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20health_timeout_seconds at=12 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20health_retries at=13 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20health_start_period_seconds at=14 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20restart_policy at=15 kind=zenitforms:form/select input=select required=false readonly=false options=unless-stopped,always,on-failure,no binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20memory_limit_mb at=16 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20cpu_limit at=17 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+
+case admin.stack-files.operator.prefill admin stack-files operator v2
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column container_path at=0 shown=true hidden=false sortable=false filterable=false copyable=true subtext=mode relation=false
+column mode at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column stack_service_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+tab history at=0 landing=false view=false
+control CREATE%20stack_service_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.stack_service,rules:,siblings:,resolver:,clearable:true,creatable:true
+control CREATE%20container_path at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20content at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control CREATE%20mode at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+

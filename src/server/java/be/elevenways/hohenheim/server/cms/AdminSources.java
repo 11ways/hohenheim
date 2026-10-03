@@ -1,20 +1,12 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.BanModel;
-import be.elevenways.hohenheim.model.EnvironmentModel;
-import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelRegistry;
-import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.server.page.CmsRecordSources;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.zenit.common.data.RecordCreateProvider;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
@@ -23,8 +15,6 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Permission;
 import org.checkerframework.checker.nullness.qual.NonNull;
-
-import java.util.Objects;
 
 /**
  * The admin-gated record sources that need MORE than the zenit-cms-derived default
@@ -40,9 +30,8 @@ import java.util.Objects;
  * not need these entries (registry membership is a server-authoritative question, and the
  * dependent pick rules carry their own mapping). A source whose explicit copy added
  * nothing over the derived default (dns_zone) is simply not declared: the derived default
- * IS the source. A model whose admin entry is a PanelResource has NO derived model default
- * (its one source is panel-qualified), so the pick every other panel reads is declared here
- * (site_auth_provider: the /manage site form's provider pick).
+ * IS the source. A model whose admin entry is a PanelResource gets its model-level source from
+ * zenit-cms as well (CmsRecordSources: the entry's gate, search, edit link and inline create).
  */
 public final class AdminSources {
 
@@ -86,32 +75,6 @@ public final class AdminSources {
                 return description != null ? String.valueOf(description) : "";
             }), RuntimeImageModel.class, new RuntimeImageResource()));
 
-        // Auth providers, for the site forms' provider pick (admin and /manage). AuthProviderParts is a panel
-        // resource, whose one source is panel-qualified, so the model's own source is this one: the parts' search
-        // fields, the admin gate and the edit link; no inline create (the pick never offered one).
-        RecordSourceRegistry.INSTANCE.register(admin(RecordSource.of(SiteAuthProviderModel.class)
-            .search(SiteAuthProviderModel.NAME, SiteAuthProviderModel.REQUIRED_PERMISSION),
-            SiteAuthProviderModel.class).build());
-
-        // Environments and their variables, for every pick and programmatic read that names the model: the instance
-        // form's environment pick and the variable form's, and a caller-side write's load. EnvironmentParts are panel
-        // resources, whose one source is panel-qualified, so the model's own source is declared here with what the
-        // legacy resources' derived default carried: their search fields, the variables' environment-only scope, the
-        // admin gate, the edit link and the same quick-create provider, built over the parts' admin-panel view.
-        Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN),
-            "the admin panel is constructed before its sources");
-        RecordSourceRegistry.INSTANCE.register(complete(RecordSource.of(EnvironmentModel.class)
-            .search(EnvironmentModel.NAME, EnvironmentModel.DESCRIPTION),
-            EnvironmentModel.class, rowView(EnvironmentParts.admin(), admin)));
-        RecordSourceRegistry.INSTANCE.register(complete(RecordSource.of(InstanceVariableModel.class)
-            .search(InstanceVariableModel.KEY)
-            .scopedBy(EnvironmentParts.VARIABLE_ROWS),
-            InstanceVariableModel.class, rowView(EnvironmentParts.variables(), admin)));
-    }
-
-    /** The row resource view of a panel resource in its panel, the shape {@link #complete} derives a create from. */
-    private static @NonNull RowResource rowView(@NonNull PanelResource<Row> parts, @NonNull Panel panel) {
-        return (RowResource) PanelResourceViews.forCaller(parts, panel);
     }
 
     /**
