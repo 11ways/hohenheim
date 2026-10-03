@@ -364,6 +364,11 @@ class SiteApiTest extends HohenheimTestBase {
         assertThat(tenant.statusCode()).as("step 1: refused as a typed violation").isEqualTo(422);
         assertThat(codeOf(tenant.body())).as("step 1: the neutral sentence")
             .isEqualTo("hostname_unavailable");
+        assertThat(tenant.body()).as("step 1: byte-identical to before-module-fit 1446a91a's live API response")
+            .isEqualTo("{\"status\":422,\"code\":\"hostname_unavailable\","
+                + "\"message\":\"This hostname is not available on this installation\",\"field\":\"hostname\","
+                + "\"violations\":[{\"code\":\"hostname_unavailable\","
+                + "\"message\":\"This hostname is not available on this installation\",\"field\":\"hostname\"}]}");
         assertThat(tenant.body()).as("step 1: the holder is not named")
             .doesNotContain(PREFIX + "catch-all").doesNotContain("**." + ZONE);
 
