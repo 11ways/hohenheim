@@ -16,6 +16,7 @@ import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -25,6 +26,8 @@ import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.zenit.server.operation.OperationRequest;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -96,6 +99,12 @@ public final class DatabaseApi {
             if (row == null) {
                 return null;
             }
+            if (ApiConduits.rowEntry(conduit, ApiConduits.adminPanel(), DatabaseParts.SLUG) == null) {
+                return null;
+            }
+            // AIDEV-NOTE: the eligibility is asked HERE first, of the operation's own declaration
+            // (DatabaseService.moveRefusal, which its applies() reads), because the pipeline refuses a subject the
+            // operation does not apply to as NOT_FOUND without words -- this frozen wire answers the named 422.
             Microcopy refusal = DatabaseService.moveRefusal(row);
             if (refusal != null) {
                 return ApiConduits.refusal(conduit, Violations.ofForm(refusal));
@@ -103,10 +112,16 @@ public final class DatabaseApi {
             int databaseId = row.get(DatabaseModel.ID);
             String name = row.get(DatabaseModel.NAME);
             try {
-                // The claim is atomic and synchronous: a second submit of the same move
-                // (or one racing the panel's action) is refused here, by name.
-                new DatabaseService().moveToSharedEngineInBackground(name);
+                // The panel's move_database_shared operation, the one writer. Its claim is atomic and
+                // synchronous: a second submit of the same move (or one racing the panel's action) is refused
+                // here, by name.
+                OperationPipeline.invoke(OperationRequest.of(DatabaseParts.MOVE_TO_SHARED,
+                        ZenitPlacementSurface.HTTP_API)
+                    .caller(ctx)
+                    .subjects(List.of(row)));
             } catch (Violations refused) {
+                return ApiConduits.refusal(conduit, refused);
+            } catch (DomainRefusal refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
             ActivityLog.record(Models.get(DatabaseModel.class), databaseId, HohenheimActivityAction.MOVE_SHARED, name);

@@ -6,11 +6,12 @@ import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.cms.DnsRecordParts;
 import be.elevenways.hohenheim.server.cms.DnsZoneParts;
-import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -18,6 +19,7 @@ import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.http.body.FormSubmissionRawValues;
@@ -36,15 +38,13 @@ import java.util.Objects;
  * through the very pipeline the admin panel runs.
  *
  * AIDEV-NOTE: no model write here either (the {@link SiteApi} stance). A create rides
- * zenit-cms {@code ResourceWrites} over {@link DnsZoneParts}, so validation, the origin
+ * zenit-cms {@code ResourceWrites} over the admin panel's own {@link DnsZoneParts} entry, so validation, the origin
  * canonicalization, the declared-nameserver seeding and the served-snapshot reload are the
  * form's; an import is {@link DnsZoneFiles#importText} exactly as the Zone-file tab posts
  * it, {@code keep_ns} included. Every verb demands the admin permission, because zones are
  * an operator surface: the tenant panel exposes records under a delegated zone, never zones.
  */
 public final class DnsZoneApi {
-
-    private static final PanelResource<Row> ZONES = DnsZoneParts.admin();
 
     private DnsZoneApi() {
     }
@@ -68,8 +68,13 @@ public final class DnsZoneApi {
             if (ctx == null) {
                 return null;
             }
+            Panel panel = ApiConduits.adminPanel();
+            PanelResource<Row> zones = ApiConduits.rowEntry(conduit, panel, DnsZoneParts.SLUG);
+            if (zones == null) {
+                return null;
+            }
             try {
-                int zoneId = (Integer) ResourceWrites.create(ApiConduits.adminPanel(), ZONES,
+                int zoneId = (Integer) ResourceWrites.create(panel, zones,
                     FormSubmissionRawValues.fromConduit(conduit), ctx);
                 Row created = Objects.requireNonNull(
                     Models.get(DnsZoneModel.class).findById(zoneId));
@@ -77,6 +82,8 @@ public final class DnsZoneApi {
                     created.get(DnsZoneModel.ORIGIN));
                 return ApiConduits.json(projection(created));
             } catch (Violations refused) {
+                return ApiConduits.refusal(conduit, refused);
+            } catch (DomainRefusal refused) {
                 return ApiConduits.refusal(conduit, refused);
             } catch (AccessRefusedException refused) {
                 conduit.forbidden();
@@ -89,6 +96,10 @@ public final class DnsZoneApi {
             if (ctx == null) {
                 return null;
             }
+            Panel panel = ApiConduits.adminPanel();
+            if (ApiConduits.rowEntry(conduit, panel, DnsZoneParts.SLUG) == null) {
+                return null;
+            }
             Row zone = zoneOf(conduit);
             if (zone == null) {
                 conduit.notFound();
@@ -96,7 +107,7 @@ public final class DnsZoneApi {
             }
             int zoneId = zone.get(DnsZoneModel.ID);
             try {
-                DnsRecordParts.requireImportable(ApiConduits.adminPanel(), zoneId, ctx);
+                DnsRecordParts.requireImportable(panel, zoneId, ctx);
             } catch (AccessRefusedException readOnly) {
                 ResourceWrites.answer(conduit, readOnly);
                 return null;
