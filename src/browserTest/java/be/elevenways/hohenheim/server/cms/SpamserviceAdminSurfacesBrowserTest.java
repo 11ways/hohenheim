@@ -29,7 +29,7 @@ import java.util.Objects;
 /**
  * The remote Spamservice entries' admin surfaces, stored before they moved onto store parts and compared exactly
  * after it (stage 4 contract 4.9 and 4.10); the q-to-search and date-pair-to-leaf filter moves are declared
- * correspondences.
+ * correspondences, as is the keys create showing its judged client read-only.
  *
  * AIDEV-NOTE: the stored set ({@code /panel-surfaces/spamservice-remote.txt}) is today's behaviour, captured from the
  * legacy Resource family before the move; a failing comparison is a changed admin surface, never a file to refresh.
@@ -55,7 +55,10 @@ class SpamserviceAdminSurfacesBrowserTest extends HohenheimTestBase {
             before.put(recorded.caseName(), recorded);
         }
 
-        // 1. Keys and samples changed nothing an operator sees: compared exactly.
+        // 1. Keys and samples changed nothing an operator sees: compared exactly, except that the keys create now
+        //    shows the client its operation always takes from the parent read-only (declared correspondence).
+        stored.judgedParentReadonly(surfaceCase(SpamserviceClientKeysResource.SLUG, operator).name(),
+            SpamserviceClientKeysResource.create());
         for (String entry : List.of(SpamserviceClientKeysResource.SLUG, SpamserviceSamplesResource.SLUG)) {
             stored.check(capture(entry, operator));
         }
@@ -82,7 +85,11 @@ class SpamserviceAdminSurfacesBrowserTest extends HohenheimTestBase {
     }
 
     private static PanelSurfaces capture(String entry, AccessContext operator) {
-        return PanelSurfaces.capture(SurfaceCase.of(HohenheimSlugs.ADMIN, entry, "operator", operator));
+        return PanelSurfaces.capture(surfaceCase(entry, operator));
+    }
+
+    private static SurfaceCase surfaceCase(String entry, AccessContext operator) {
+        return SurfaceCase.of(HohenheimSlugs.ADMIN, entry, "operator", operator);
     }
 
     private static String baseline() {
