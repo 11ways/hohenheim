@@ -14,6 +14,7 @@ import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.server.page.BuildInfoPage;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.zenit.comms.CommsSettings;
+import be.elevenways.zenit.comms.server.cms.CommsHubAdmin;
 import be.elevenways.zenit.comms.server.cms.CommsSettingsLabels;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.ui.Icon;
@@ -198,6 +199,11 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, DnsPeerParts.admin(), Role.DNS);
         addIf(peers, DnsZonePeerParts.admin(), Role.DNS);
         peers.add(NotificationChannelParts.admin());
+        // zenit-comms' delivery log: every alert the channels above sent, whether it arrived, and its retry. Gated by
+        // comms' own permissions (other people's notification history), never the delegable panel grant; an operator
+        // holding "*" sees it, a delegated admin only through an explicit comms.deliveries.* grant. Hohenheim is no
+        // hub, so the hub's projects entry is not mounted.
+        peers.add(CommsHubAdmin.install(CommsHubAdmin.Permissions.MODULE).deliveryLog(NavGroup.SYSTEM, 93));
         addIf(peers, BanParts.admin(), Role.FIREWALL);
         // zenit-auth's generated admin resources, wired into THIS panel (the
         // module's own default panel is disabled via auth.cms.auto_panel).
