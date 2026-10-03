@@ -68,7 +68,8 @@ public final class InstanceTemplateOperations {
         .add(Nested.of(VARIABLES).subSpec(FormSpec.builder().build()).build())
         .step(FormStep.of("details", copy("step_details"), NAME.getName(), SERVER_ID.getName(),
             PROJECT_ID.getName(), ENVIRONMENT_ID.getName()))
-        .step(FormStep.of(VARIABLES, Microcopy.of("variables").withFilter("scope", "template_contents"), VARIABLES))
+        .step(FormStep.of(VARIABLES, Microcopy.of("variables").withFilter("scope", "template_contents"), VARIABLES)
+            .describe(copy("step_variables_lead")))
         .build();
 
     public static final Operation<Row, CreateFromTemplate, Integer> CREATE_INSTANCE_FROM_TEMPLATE =
