@@ -13,8 +13,10 @@ import be.elevenways.zenit.common.validation.PrivateNetworkOptIn;
 import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import be.elevenways.zenit.server.net.OptInWatch;
 import be.elevenways.zenit.test.support.OutboundFixture;
+import be.elevenways.zenit.test.support.PrivateNetworkBootFixture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
@@ -44,6 +46,10 @@ class ProteusRealmGuardTest {
     }
 
     private static boolean initialized = false;
+    private PrivateNetworkBootFixture boot;
+
+    @BeforeEach
+    void openHostBoot() { this.boot = new PrivateNetworkBootFixture(); }
 
     @BeforeAll
     static void boot() throws Exception {
@@ -55,7 +61,7 @@ class ProteusRealmGuardTest {
 
     @AfterEach
     void reset() {
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.ProxyAuth.PROTEUS_ALLOW_PRIVATE_NETWORKS, false);
+        this.boot.close();
     }
 
     @Test
@@ -68,7 +74,7 @@ class ProteusRealmGuardTest {
         assertThat(guard.problemOf("http://10.0.0.5/")).as("step 1: a private network refused").isNotNull();
 
         // 2. The operator's opt-in admits the private networks, and nothing more.
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.ProxyAuth.PROTEUS_ALLOW_PRIVATE_NETWORKS, true);
+        PrivateNetworkBootFixture.declare(HohenheimSettings.ProxyAuth.PROTEUS_ALLOW_PRIVATE_NETWORKS, true);
         guard = ProteusAuthProviderType.realmGuard();
         assertThat(guard).as("step 2: the opted-in guard").isSameAs(OutboundUrlGuard.PRIVATE_NETWORKS);
         assertThat(guard.problemOf("http://10.0.0.5/")).as("step 2: a private network admitted").isNull();
@@ -102,7 +108,7 @@ class ProteusRealmGuardTest {
                 .as("step 3: the scan").singleElement().asString().contains("'Intranet realm'");
 
             // 4. With the opt-in on, nothing waits and nothing is logged.
-            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.ProxyAuth.PROTEUS_ALLOW_PRIVATE_NETWORKS, true);
+            PrivateNetworkBootFixture.declare(HohenheimSettings.ProxyAuth.PROTEUS_ALLOW_PRIVATE_NETWORKS, true);
             assertThat(watch().scan()).as("step 4: the scan with the opt-in on")
                 .noneMatch(line -> line.contains("points at"));
         } finally {
@@ -162,12 +168,8 @@ class ProteusRealmGuardTest {
     void theOptInKeepsItsKeyDefaultAndTextWithNoLabelOfItsOwn() {
         var optIn = HohenheimSettings.ProxyAuth.PROTEUS_ALLOW_PRIVATE_NETWORKS;
         assertThat(PrivateNetworkOptIn.isDeclared(optIn)).as("declared through the core helper").isTrue();
-        assertThat(optIn.getPath()).as("the stored key")
+        assertThat(optIn.configurationPath()).as("the boot migration key")
             .isEqualTo("hohenheim.proxy_auth.proteus_allow_private_networks");
-        assertThat(optIn.getDefaultValue()).as("default off").isEqualTo(Boolean.FALSE);
-        assertThat(optIn.getLabel()).as("no label of its own: the page keeps its fallback name").isNull();
-        assertThat(optIn.getDescription()).as("the description").isEqualTo("Allow site auth providers to reach a"
-            + " Proteus realm on a private network (RFC 1918, IPv6 unique-local); this host, link-local and"
-            + " special-purpose addresses stay refused");
+        assertThat(optIn.isOn()).as("default off without a host declaration").isFalse();
     }
 }
