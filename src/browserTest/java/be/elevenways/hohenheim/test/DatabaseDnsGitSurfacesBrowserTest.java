@@ -25,10 +25,6 @@ import be.elevenways.zenit.cms.common.render.table.SynthesizedRowActions;
 import be.elevenways.zenit.cms.test.support.PanelSurfaceComparer;
 import be.elevenways.zenit.cms.test.support.PanelSurfaces;
 import be.elevenways.zenit.cms.test.support.PlacedOperationMoves;
-import be.elevenways.zenit.cms.test.support.FilterLeafMoves;
-import be.elevenways.zenit.cms.common.schema.FilterSpec;
-import be.elevenways.protoblast.common.typed.CoreTypes;
-import be.elevenways.zenit.common.orm.query.rules.SchemaVocabulary;
 import be.elevenways.hohenheim.server.cms.DnsOperations;
 import be.elevenways.zenit.cms.test.support.SurfaceBaselines;
 import be.elevenways.zenit.cms.test.support.SurfaceCase;
@@ -268,14 +264,7 @@ class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
             .key(HohenheimSlugs.INSTANCES, "backend", backendId).key(HohenheimSlugs.INSTANCES, "proxy", proxyId)
             .key("zone_id", "primary_zone", primaryZoneId)
             .key("parent", "primary_zone", primaryZoneId).key("parent", "replica_zone", replicaZoneId);
-        PanelSurfaces capture = PanelSurfaces.capture(keyed);
-        if (!ZONES.equals(capture.entrySlug())) return capture;
-        var vocabulary = SchemaVocabulary.of(Models.get(DnsZoneModel.class));
-        return FilterLeafMoves.of(FilterSpec.Kind.TEXT,
-                FilterSpec.leaf(DnsZoneModel.ORIGIN, CoreTypes.CONTAINS).build(), vocabulary, null)
-            .and(FilterLeafMoves.of(FilterSpec.Kind.BOOLEAN,
-                FilterSpec.leaf(DnsZoneModel.ENABLED, CoreTypes.IS_TRUE, CoreTypes.IS_FALSE).build(), vocabulary, null))
-            .legacyProjection(capture);
+        return PanelSurfaces.capture(keyed);
     }
 
     private static AccessContext access(UserPrincipal principal) {

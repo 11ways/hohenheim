@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviderTypeHandler;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -74,7 +75,7 @@ public final class AuthProviderParts {
             .column(ColumnSpec.fromField(SiteAuthProviderModel.REQUIRED_PERMISSION).hidden().build())
             .column(ColumnSpec.fromField(SiteAuthProviderModel.PROVIDER_TYPE).filterable().build())
             .column(ColumnSpec.fromField(SiteAuthProviderModel.CREATED_AT).build())
-            .filter(FilterSpec.forField(SiteAuthProviderModel.NAME, FilterSpec.Kind.TEXT)
+            .filter(FilterSpec.leaf(SiteAuthProviderModel.NAME, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(SiteAuthProviderModel.NAME)).build())
             .build();
         FormSpec form = FormSpec.builder()

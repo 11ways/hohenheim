@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.spamservice.client.SampleSummary;
 import be.elevenways.spamservice.client.SpamserviceClient;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
@@ -129,10 +130,10 @@ public final class SpamserviceSamplesResource {
             .column(ColumnSpec.fromField(SPAM).filterable().build()).column(ColumnSpec.fromField(SCORE).build())
             .column(ColumnSpec.fromField(IP).filterable().copyable().build())
             .column(ColumnSpec.fromField(CONFIRMED).filterable().build())
-            .filter(FilterSpec.forField(CLIENT_ID, FilterSpec.Kind.TEXT).build())
-            .filter(FilterSpec.forField(SPAM, FilterSpec.Kind.BOOLEAN).build())
-            .filter(FilterSpec.forField(CONFIRMED, FilterSpec.Kind.BOOLEAN).build())
-            .filter(FilterSpec.forField(IP, FilterSpec.Kind.TEXT).build())
+            .filter(FilterSpec.leaf(CLIENT_ID, CoreTypes.EQUALS).build())
+            .filter(FilterSpec.leaf(SPAM, CoreTypes.IS_TRUE, CoreTypes.IS_FALSE).build())
+            .filter(FilterSpec.leaf(CONFIRMED, CoreTypes.IS_TRUE, CoreTypes.IS_FALSE).build())
+            .filter(FilterSpec.leaf(IP, CoreTypes.CONTAINS).build())
             .defaultSort(SortSpec.desc("created_at")).build();
         return PanelResource.builder(ID, SLUG, SAMPLE)
             .label(words("plural"))

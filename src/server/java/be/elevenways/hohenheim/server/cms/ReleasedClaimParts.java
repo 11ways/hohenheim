@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
@@ -110,7 +111,7 @@ public final class ReleasedClaimParts {
             .column(ColumnSpec.virtual(FORMER_OWNER_COLUMN,
                 FieldLabels.labelFor(ReleasedRouteClaimModel.FORMER_SUBJECTS)).build())
             .column(ColumnSpec.fromField(ReleasedRouteClaimModel.RELEASED_AT).build())
-            .filter(FilterSpec.forField(ReleasedRouteClaimModel.HOSTNAME, FilterSpec.Kind.TEXT)
+            .filter(FilterSpec.leaf(ReleasedRouteClaimModel.HOSTNAME, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(ReleasedRouteClaimModel.HOSTNAME)).build())
             .defaultSort(SortSpec.desc(ReleasedRouteClaimModel.RELEASED_AT.getName()))
             .build();

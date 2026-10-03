@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
@@ -56,9 +57,9 @@ public final class AccessListParts {
             .column(ColumnSpec.fromField(AccessListModel.SATISFY).filterable().build())
             .column(ColumnSpec.fromField(AccessListModel.SHARED).filterable().build())
             .column(ColumnSpec.fromField(AccessListModel.CREATED_AT).build())
-            .filter(FilterSpec.forField(AccessListModel.NAME, FilterSpec.Kind.TEXT)
+            .filter(FilterSpec.leaf(AccessListModel.NAME, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(AccessListModel.NAME)).build())
-            .filter(FilterSpec.forField(AccessListModel.SATISFY, FilterSpec.Kind.SELECT)
+            .filter(FilterSpec.leaf(AccessListModel.SATISFY, CoreTypes.EQUALS)
                 .label(FieldLabels.labelFor(AccessListModel.SATISFY)).build())
             .build();
         FormSpec form = FormSpec.builder()

@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceAuthority;
@@ -97,7 +98,7 @@ public final class RuntimeImageParts {
             .column(ColumnSpec.fromField(RuntimeImageModel.DEFAULT_PORT).build())
             .column(ColumnSpec.fromField(RuntimeImageModel.BUILTIN).build())
             .column(ColumnSpec.fromField(RuntimeImageModel.ENABLED).filterable().build())
-            .filter(FilterSpec.forField(RuntimeImageModel.NAME, FilterSpec.Kind.TEXT)
+            .filter(FilterSpec.leaf(RuntimeImageModel.NAME, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(RuntimeImageModel.NAME)).build()).build();
     }
 

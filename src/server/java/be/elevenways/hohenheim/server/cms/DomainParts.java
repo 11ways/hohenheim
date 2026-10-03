@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.server.upstream.kinds.TlsPassthroughUpstreamKind;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
@@ -148,11 +149,11 @@ public final class DomainParts {
             .column(ColumnSpec.fromField(SiteDomainModel.SITE_ID)
                 .label(FieldLabels.labelForRelation(SiteDomainModel.SITE_ID))
                 .relation(RelationPick.of(SiteDomainModel.SITE_ID, SiteModel.MODEL_ID).build()).build())
-            .filter(FilterSpec.forField(SiteDomainModel.HOSTNAME, FilterSpec.Kind.TEXT)
+            .filter(FilterSpec.leaf(SiteDomainModel.HOSTNAME, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(SiteDomainModel.HOSTNAME)).build())
-            .filter(FilterSpec.forField(SiteDomainModel.MATCH_TYPE, FilterSpec.Kind.SELECT)
+            .filter(FilterSpec.leaf(SiteDomainModel.MATCH_TYPE, CoreTypes.EQUALS)
                 .label(FieldLabels.labelFor(SiteDomainModel.MATCH_TYPE)).build())
-            .filter(FilterSpec.forField(SiteDomainModel.FORCE_SSL, FilterSpec.Kind.BOOLEAN)
+            .filter(FilterSpec.leaf(SiteDomainModel.FORCE_SSL, CoreTypes.IS_TRUE, CoreTypes.IS_FALSE)
                 .label(FieldLabels.labelFor(SiteDomainModel.FORCE_SSL)).build())
             .build();
         return ResourceList.rows(table)

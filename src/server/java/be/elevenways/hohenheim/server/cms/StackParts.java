@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.hohenheim.server.stack.StackServiceKind;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionRequest;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
@@ -124,11 +125,11 @@ public final class StackParts {
             .column(ColumnSpec.fromField(StackModel.STATUS).filterable().subtext(LAST_FAILURE_COLUMN).build())
             .column(ColumnSpec.virtual(LAST_FAILURE_COLUMN, StackOperations.words("last_failure")).hidden().build())
             .column(ColumnSpec.fromField(StackModel.ENABLED).filterable().build())
-            .filter(FilterSpec.forField(StackModel.NAME, FilterSpec.Kind.TEXT)
+            .filter(FilterSpec.leaf(StackModel.NAME, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(StackModel.NAME)).build())
-            .filter(FilterSpec.forField(StackModel.STATUS, FilterSpec.Kind.SELECT)
+            .filter(FilterSpec.leaf(StackModel.STATUS, CoreTypes.EQUALS)
                 .label(FieldLabels.labelFor(StackModel.STATUS)).build())
-            .filter(FilterSpec.forField(StackModel.ENABLED, FilterSpec.Kind.BOOLEAN)
+            .filter(FilterSpec.leaf(StackModel.ENABLED, CoreTypes.IS_TRUE, CoreTypes.IS_FALSE)
                 .label(FieldLabels.labelFor(StackModel.ENABLED)).build())
             .build();
         return PanelResource.builder(HohenheimIds.id("stack"), SLUG, StackOperations.STACK)

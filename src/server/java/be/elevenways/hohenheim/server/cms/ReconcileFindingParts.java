@@ -94,11 +94,11 @@ public final class ReconcileFindingParts {
             .column(ColumnSpec.fromField(ReconcileFindingModel.RESOURCE_NAME).filterable().subtext("detail").copyable().build())
             .column(ColumnSpec.fromField(ReconcileFindingModel.DETAIL).hidden().build())
             .column(ColumnSpec.fromField(ReconcileFindingModel.BUCKET).filterable().build())
-            .filter(FilterSpec.forField(ReconcileFindingModel.SERVER_NAME, FilterSpec.Kind.TEXT)
+            .filter(FilterSpec.leaf(ReconcileFindingModel.SERVER_NAME, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(ReconcileFindingModel.SERVER_NAME)).build())
-            .filter(FilterSpec.forField(ReconcileFindingModel.BUCKET, FilterSpec.Kind.MULTI_SELECT)
+            .filter(FilterSpec.leaf(ReconcileFindingModel.BUCKET, CoreTypes.IN)
                 .label(FieldLabels.labelFor(ReconcileFindingModel.BUCKET)).build())
-            .filter(FilterSpec.forField(ReconcileFindingModel.KIND, FilterSpec.Kind.MULTI_SELECT)
+            .filter(FilterSpec.leaf(ReconcileFindingModel.KIND, CoreTypes.IN)
                 .label(FieldLabels.labelFor(ReconcileFindingModel.KIND)).build()).build();
     }
     static WidgetTree widgets(ListScope scope) {

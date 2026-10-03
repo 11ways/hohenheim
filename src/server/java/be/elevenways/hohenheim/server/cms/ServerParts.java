@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.options.ServerOptions;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
+import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
@@ -140,10 +141,10 @@ public final class ServerParts {
             .column(ColumnSpec.fromField(ServerModel.ADMISSION).filterable().build())
             .column(ColumnSpec.fromField(ServerModel.POSTURE).filterable().build())
             .column(ColumnSpec.virtual("host_status", serverCopy("host_status")).renderer(HohenheimTemplateIds.CELL_HOST_STATUS).build())
-            .filter(FilterSpec.forField(ServerModel.NAME, FilterSpec.Kind.TEXT).label(FieldLabels.labelFor(ServerModel.NAME)).build())
-            .filter(FilterSpec.forField(ServerModel.RUNTIME, FilterSpec.Kind.SELECT).label(FieldLabels.labelFor(ServerModel.RUNTIME)).build())
-            .filter(FilterSpec.forField(ServerModel.ADMISSION, FilterSpec.Kind.SELECT).label(FieldLabels.labelFor(ServerModel.ADMISSION)).build())
-            .filter(FilterSpec.forField(ServerModel.SSH_TARGET, FilterSpec.Kind.TEXT).label(FieldLabels.labelFor(ServerModel.SSH_TARGET)).build())
+            .filter(FilterSpec.leaf(ServerModel.NAME, CoreTypes.CONTAINS).label(FieldLabels.labelFor(ServerModel.NAME)).build())
+            .filter(FilterSpec.leaf(ServerModel.RUNTIME, CoreTypes.EQUALS).label(FieldLabels.labelFor(ServerModel.RUNTIME)).build())
+            .filter(FilterSpec.leaf(ServerModel.ADMISSION, CoreTypes.EQUALS).label(FieldLabels.labelFor(ServerModel.ADMISSION)).build())
+            .filter(FilterSpec.leaf(ServerModel.SSH_TARGET, CoreTypes.CONTAINS).label(FieldLabels.labelFor(ServerModel.SSH_TARGET)).build())
             .build();
     }
 
