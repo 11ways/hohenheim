@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.preview.PreviewOperations;
@@ -16,6 +17,7 @@ import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.ResourceAuthority;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
@@ -51,17 +53,18 @@ public final class PreviewParts {
     private PreviewParts() {}
 
     public static @NonNull PanelResource<Row> admin() {
-        return entry("preview_deployment").navOrder(20).showInNav(false)
+        return entry("preview_deployment", false).navOrder(20).showInNav(false)
+            .authority(ResourceAuthority.<Row>builder().create(HohenheimSources.ADMIN_ACCESS, null).build())
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions()).build();
     }
 
     public static @NonNull PanelResource<Row> manage() {
-        return entry("manage_preview_deployment").navOrder(25).scope(TenantScopes.PREVIEWS)
+        return entry("manage_preview_deployment", true).navOrder(25).scope(TenantScopes.PREVIEWS)
             .hasInScopeRecords(ManagePanel::hasManageScope)
             .tabs(ResourceTabs.<Row>none().withContributions()).build();
     }
 
-    private static PanelResource.@NonNull Builder<Row> entry(String id) {
+    private static PanelResource.@NonNull Builder<Row> entry(String id, boolean requireApplicationManage) {
         FormSpec form = formSpec();
         List<ResourceFieldBinding> bindings = new ArrayList<>();
         for (var field : form.entries()) {
@@ -81,7 +84,7 @@ public final class PreviewParts {
             .list(ResourceList.rows(tableSpec()).chrome(ListChrome.MINIMAL)
                 .search(PreviewDeploymentModel.HOSTNAME, PreviewDeploymentModel.REF, PreviewDeploymentModel.HEAD_SHA).build())
             .reads(ResourceReads.rows())
-            .writes(ResourceMutations.rows().create(call -> queue(call.values(), call.access()))
+            .writes(ResourceMutations.rows().create(call -> queue(call.values(), call.access(), requireApplicationManage))
                 .scopeVerifiedBeforeWrite().ownsWriteEnvelope(ResourceVerb.CREATE).build())
             .actions(List.of(destroy()));
     }
@@ -104,9 +107,12 @@ public final class PreviewParts {
             .column(ColumnSpec.fromField(PreviewDeploymentModel.CREATED_AT).sortable().build()).build();
     }
 
-    static @NonNull Object queue(Map<String, Object> values, AccessContext access) {
+    static @NonNull Object queue(Map<String, Object> values, AccessContext access, boolean requireApplicationManage) {
         Object chosen = values.get(PreviewDeploymentModel.APPLICATION_ID.getName());
-        if (!(chosen instanceof Number owner) || !HohenheimAccess.canManageInstance(access, owner.intValue())) {
+        // AIDEV-NOTE: admin create authority is the parts' operator permission; the delegated writer must ask the
+        // selected application's MANAGE before the queue claims or charges anything.
+        if (!(chosen instanceof Number owner)
+                || (requireApplicationManage && !HohenheimAccess.canManageInstance(access, owner.intValue()))) {
             throw Violations.ofField(PreviewDeploymentModel.APPLICATION_ID.getName(), chosen,
                 CmsSupport.violationText("preview_application_required"));
         }

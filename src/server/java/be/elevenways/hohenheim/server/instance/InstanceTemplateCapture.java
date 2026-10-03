@@ -15,6 +15,7 @@ import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.text.Slugs;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -22,7 +23,6 @@ import java.io.IOException;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -139,9 +139,7 @@ public final class InstanceTemplateCapture {
 
     /** A daemon-safe alias derived from the instance: {@code tpl-<slug>-<stamp>}. */
     static @NonNull String aliasFor(@NonNull Row instance) {
-        String slug = nameOf(instance).toLowerCase(Locale.ROOT)
-            .replaceAll("[^a-z0-9]+", "-")
-            .replaceAll("(^-+|-+$)", "");
+        String slug = Slugs.slugify(nameOf(instance));
         if (slug.isEmpty()) {
             slug = "instance";
         }
