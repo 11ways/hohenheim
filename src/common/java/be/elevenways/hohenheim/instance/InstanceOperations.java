@@ -39,7 +39,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public final class InstanceOperations {
     public static final LeaseKeys KEYS = LeaseKeys.declare(HohenheimIds.id("instance"), "hohenheim_instance_");
-    private static final OperationCommand COMMAND_FACET = OperationCommand.perSubject()
+    private static final OperationCommand COMMAND_FACET = OperationCommand.perSubject(KEYS)
         .execution(CommandExecution.OUTSIDE_TRANSACTION);
     /**
      * Start and stop replay a completed answer; an interrupted one may run again, since powering an instance to the
