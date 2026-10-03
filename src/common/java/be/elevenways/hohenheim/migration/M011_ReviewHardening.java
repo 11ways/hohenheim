@@ -39,6 +39,7 @@ import java.util.TreeSet;
  * instance operations: stored power, backup, snapshot, console command and app update schedule steps name the
  * operations that replaced them;
  * and a certificate's requester stored as its principal reference ({@code requested_by_kind} beside the id);
+ * and a host's posture acknowledger stored the same way ({@code acknowledged_by_kind} beside the id);
  * and every stored host wildcard respelled into zenit's HostPattern grammar;
  * and the provenance mark of every operator-trustable target, set on the rows stored before it;
  * and the lock version of every game-domain mapping, whose writes became operations;
@@ -171,6 +172,8 @@ public class M011_ReviewHardening extends HohenheimMigration {
             table.addColumn("workload_killed_at", ColumnType.DATETIME, column -> column.nullable(true)));
         // Every requester id stored before kinds existed was an account's: the stamp step reads it so.
         schema.alterTable("certificates", table -> PrincipalColumns.addKindColumn(table, "requested_by_kind"));
+        // Every decimal acknowledger stored before kinds existed was an account's; any other token stays kindless.
+        schema.alterTable("servers", table -> PrincipalColumns.addKindColumn(table, "acknowledged_by_kind"));
         schema.data("hash every plaintext Basic auth provider password", "1",
             M011_ReviewHardening::hashPlaintext);
         schema.data("trust the operator-authored upstream of every tenant-owned site", "1",
@@ -182,6 +185,9 @@ public class M011_ReviewHardening extends HohenheimMigration {
         schema.data("store every certificate requester with its kind", "1", PrincipalColumns.stampAccountKinds(
             "certificates", () -> IntegerField.builder().name("id").build(),
             () -> IntegerField.builder().name("requested_by_user_id").build(), "requested_by_kind", true));
+        schema.data("store every posture acknowledger with its kind", "1", PrincipalColumns.stampAccountKinds(
+            "servers", () -> IntegerField.builder().name("id").build(),
+            () -> StringField.builder().name("acknowledged_by").build(), "acknowledged_by_kind", true));
         schema.data("translate every stored legacy host wildcard into the HostPattern grammar", "1",
             M011_ReviewHardening::respellHostWildcards);
         // A port claim's controller fence was written null by every caller and read by none.
