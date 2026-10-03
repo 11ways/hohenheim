@@ -8,10 +8,12 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.DatabaseResource;
+import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -20,6 +22,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -38,15 +41,14 @@ import java.util.Map;
  * authorization decision of its own beyond the shared visibility walk, no existence
  * oracle, and no field that was not enumerated. What is specific to this tier:
  *
- * 1. The DOORS are the panels'. The list is the {@code view} scope {@code
- *    ManageDatabaseResource} renders, and it projects the DELEGATED columns for a
+ * 1. The DOORS are the panels'. The list is the {@code view} scope the /manage
+ *    databases ({@link DatabaseParts#manage}) render, and it projects the DELEGATED columns for a
  *    non-admin -- the engine a shared record lives on, its host and its ceilings are
  *    operator facts, and an engine name is another tenant's neighbour list. The move and
  *    the engine list are ADMIN-ONLY because only the admin panel offers them at all
- *    ({@code ManageDatabaseResource} overrides {@code rowActions} to drop the move, and
- *    there is no delegated engine resource). The delete rides
- *    {@link DatabaseResource}'s own pipeline, so {@code destroy} on the record and the
- *    in-use refusal are the resource's and the service's.
+ *    (the /manage twin places no move, and there is no delegated engine resource). The
+ *    delete is the panel's own {@link DatabaseParts#DELETE} operation, so {@code destroy}
+ *    on the record and the in-use refusal are the operation's and the service's.
  *
  * 2. The move ANSWERS BEFORE IT ACTS. It runs in the background exactly as the row
  *    action does, so the answer is an accepted/queued shape and the record's status is
@@ -55,9 +57,6 @@ import java.util.Map;
  *    background lane that refuses is invisible to a script.
  */
 public final class DatabaseApi {
-
-    /** The admin resource whose delete pipeline the delete verb rides. */
-    private static final DatabaseResource DATABASES = new DatabaseResource();
 
     private DatabaseApi() {
     }
@@ -128,12 +127,19 @@ public final class DatabaseApi {
             }
             int databaseId = row.get(DatabaseModel.ID);
             String name = row.get(DatabaseModel.NAME);
+            Panel panel = ApiConduits.adminPanel();
+            PanelResource<Row> databases = ApiConduits.rowEntry(conduit, panel, DatabaseParts.SLUG);
+            if (databases == null) {
+                return null;
+            }
             try {
-                // The resource's pipeline: deletableBy demands `destroy` on the record,
-                // deleteUnavailableReason refuses while a workload holds it, and deleteRow
-                // is DatabaseService.destroy -- which asks the destroy gate again itself.
-                ResourceWrites.delete(ApiConduits.adminPanel(), DATABASES, row, ctx);
+                // The panel's delete operation: it demands `destroy` on the record, its
+                // availability refuses while a workload holds it, and its handler is
+                // DatabaseService.destroy -- which asks the destroy gate again itself.
+                ResourceWrites.delete(panel, databases, row, ctx);
             } catch (Violations refused) {
+                return ApiConduits.refusal(conduit, refused);
+            } catch (DomainRefusal refused) {
                 return ApiConduits.refusal(conduit, refused);
             } catch (AccessRefusedException refused) {
                 conduit.forbidden();
@@ -191,7 +197,7 @@ public final class DatabaseApi {
     /**
      * The databases this context may see: admins everything, everyone else exactly the
      * records the walk confirms {@code view} on -- the SAME scope
-     * {@code ManageDatabaseResource.accessFunction} renders.
+     * /manage databases ({@link DatabaseParts#manage}) render.
      */
     private static @NonNull List<Row> visibleDatabases(@NonNull AccessContext ctx) {
         var query = Models.get(DatabaseModel.class).find();

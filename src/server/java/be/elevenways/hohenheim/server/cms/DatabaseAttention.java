@@ -84,7 +84,7 @@ public final class DatabaseAttention {
                     ? copy("provisioning_failed", "attention_detail")
                     : copy("engine_provisioning_failed_reason", "attention_detail",
                         "reason", reason),
-                CmsRoutes.detail(ADMIN, DatabaseEngineResource.SLUG,
+                CmsRoutes.detail(ADMIN, DatabaseParts.ENGINES_SLUG,
                     row.get(DatabaseEngineModel.ID))));
         }
     }

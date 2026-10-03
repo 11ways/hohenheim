@@ -17,8 +17,8 @@ import java.util.function.IntConsumer;
 
 /**
  * The shared form shape and resize lane of a record that describes a provisioned container: a
- * dedicated managed database ({@link DatabaseResource}) and a shared engine
- * ({@link DatabaseEngineResource}).
+ * dedicated managed database ({@link DatabaseParts#admin}) and a shared engine
+ * ({@link DatabaseParts#engines}).
  *
  * @author Jelle De Loecker
  * @since 0.1.0

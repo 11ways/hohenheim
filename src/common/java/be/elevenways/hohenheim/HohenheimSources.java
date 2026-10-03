@@ -134,10 +134,9 @@ public final class HohenheimSources implements ZenitModule {
             .build());
 
         // No explicit source for DatabaseEngineModel: the shared-engine pick on a
-        // database's create form and the engine column ride the zenit-cms-derived default
-        // of DatabaseEngineResource (its declared NAME search, the admin permission, the
-        // edit link and inline create). An explicit copy here replaced that default
-        // WITHOUT the edit/inline-create facets (source_capability_dropped at boot).
+        // database's create form and the engine column ride the model source zenit-cms
+        // derives from the engines panel resource, DatabaseParts#engines (its declared NAME
+        // search, the admin gate and the edit link).
 
         // No explicit source for DnsZoneModel either: its explicit copy added nothing over
         // the derived default (DnsZoneResource declares the same search fields) and only

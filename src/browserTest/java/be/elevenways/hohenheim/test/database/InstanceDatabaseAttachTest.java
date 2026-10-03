@@ -6,13 +6,14 @@ import be.elevenways.hohenheim.test.PanelEntryViews;
 import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.DatabaseResource;
+import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
@@ -30,6 +31,9 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -44,6 +48,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -455,11 +460,12 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         //    would have let this through and left the workload unable to connect with
         //    nothing anywhere saying why.
         Row database = Models.get(DatabaseModel.class).findById(databaseAId);
+        Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
         Throwable inUse = catchThrowable(() ->
-            new DatabaseResource().deleteRow(database, AccessContext.anonymous()));
+            ResourceWrites.delete(admin, DatabaseParts.admin(), database, TenantConduits.operator()));
         assertThat(violationKeys(inUse))
             .as("step 1: a database attached to a live instance cannot be destroyed")
-            .contains("database_in_use");
+            .contains("delete_in_use");
         assertThat(InstanceDatabaseLinks.liveInstanceNames(databaseAId))
             .as("step 1: and the refusal names the workload the operator has to detach")
             .contains(p.tag() + "srv-a");

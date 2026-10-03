@@ -158,7 +158,7 @@ class DatabaseApiTest extends HohenheimTestBase {
             .doesNotContain("memory_limit_mb");
 
         // 3. ... and the two ADMIN-ONLY verbs are shut for it, because only the admin
-        //    panel offers them at all (ManageDatabaseResource drops the move row action,
+        //    panel offers them at all (DatabaseParts#manage places no move,
         //    and there is no delegated engine resource).
         assertThat(keyPost(keyTenant, "/api/v1/databases/" + databaseId + "/move-shared", "")
                 .statusCode())

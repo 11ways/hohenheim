@@ -13,7 +13,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.DatabaseResource;
+import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.cms.DnsRecordResource;
 import be.elevenways.hohenheim.server.cms.DomainParts;
 import be.elevenways.hohenheim.instance.InstanceScheduleOperations;
@@ -29,12 +29,14 @@ import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.cms.common.render.panel.ChildListSectionState;
 import be.elevenways.zenit.cms.common.render.table.TableState;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceVerb;
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
 import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -255,14 +257,16 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     @Test
     void theDatabaseDeleteFollowsDestroy() {
         Row database = Models.get(DatabaseModel.class).findById(databaseId);
-        DatabaseResource resource = new DatabaseResource();
+        // A delegate reaches databases through the /manage twin, whose delete is the same operation.
+        Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.MANAGE));
+        Resource<Row> view = PanelResourceViews.forCaller(DatabaseParts.manage(), manage);
 
-        assertThat(resource.deletableBy(database, viewer()))
+        assertThat(ResourceVerbs.removableBy(view, manage, database, viewer()))
             .as("a view-only delegate is offered no destroy button").isFalse();
         // MANAGE implies DESTROY on databases, so the holder passes the implied row.
-        assertThat(resource.deletableBy(database, holder()))
+        assertThat(ResourceVerbs.removableBy(view, manage, database, holder()))
             .as("a manage holder keeps its destroy button").isTrue();
-        assertThat(resource.deletableBy(database, operator()))
+        assertThat(ResourceVerbs.removableBy(view, manage, database, operator()))
             .as("and the operator passes").isTrue();
     }
 

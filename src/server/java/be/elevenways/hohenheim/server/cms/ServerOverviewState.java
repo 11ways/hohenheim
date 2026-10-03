@@ -468,7 +468,7 @@ public final class ServerOverviewState {
                 WorkloadTier.DATABASE_ENGINE,
                 badgeOf(DatabaseEngineModel.STATUS, engine.get(DatabaseEngineModel.STATUS)),
                 engine.get(DatabaseEngineModel.MEMORY_LIMIT_MB),
-                CmsRoutes.detail(panel, DatabaseEngineResource.SLUG,
+                CmsRoutes.detail(panel, DatabaseParts.ENGINES_SLUG,
                     engine.get(DatabaseEngineModel.ID))));
         }
         return workloads;

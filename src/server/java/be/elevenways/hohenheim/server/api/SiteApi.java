@@ -19,8 +19,6 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
-import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
-import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.http.body.FormSubmissionRawValues;
@@ -79,7 +77,7 @@ public final class SiteApi {
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             } catch (DomainRefusal refused) {
-                return refused(conduit, refused);
+                return ApiConduits.refusal(conduit, refused);
             } catch (AccessRefusedException refused) {
                 conduit.forbidden();
                 return null;
@@ -110,7 +108,7 @@ public final class SiteApi {
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             } catch (DomainRefusal refused) {
-                return refused(conduit, refused);
+                return ApiConduits.refusal(conduit, refused);
             } catch (AccessRefusedException refused) {
                 conduit.forbidden();
                 return null;
@@ -208,21 +206,6 @@ public final class SiteApi {
                 return null;
             }
         });
-    }
-
-    /**
-     * A site verb's pipeline refusal on this frozen wire: an offered-but-dead verb (the panel lockout, the operation's
-     * availability) answers the 422 envelope the row lane's form-level {@code Violations} of the same words wrote,
-     * byte-identical; every other reason through the API's one refusal adapter.
-     *
-     * @return the answer, or null when the response has already been ended
-     * @throws DomainRefusal a refusal this wire has no answer of its own for
-     */
-    static @Nullable ActionResult<Object> refused(@NonNull Conduit conduit, @NonNull DomainRefusal refusal) {
-        if (refusal.is(ZenitRefusalReason.OPERATION_UNAVAILABLE)) {
-            return ApiConduits.refusal(conduit, Violations.ofForm(refusal.shown()));
-        }
-        return ApiConduits.refusal(conduit, refusal);
     }
 
     /** Every domain row of a site, oldest first, as the enumerated projection. */

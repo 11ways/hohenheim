@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.game.GameDomainOperations;
+import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -12,6 +13,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.source.GiteaProviderKind;
 import be.elevenways.hohenheim.source.GitProviderOperations;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -45,10 +47,16 @@ import java.util.Map;
  * shared parts and compared exactly after it.
  *
  * AIDEV-NOTE: the stored set ({@code /panel-surfaces/database-dns-git.txt}) is the behaviour captured before the
- * legacy GitProviderResource, ManageGitProviderResource, GameDomainResource and DnsZonePeerResource moved onto parts
- * (GitProviderParts, GameDomainResource's parts, DnsZonePeerParts); the zone, database and credentials tabs are
- * captured on their hosts' records. The one accepted difference is the connection test's route, declared as a placed
- * operation move. A failing comparison is a changed surface, never a file to refresh.
+ * legacy GitProviderResource, ManageGitProviderResource, GameDomainResource, DnsZonePeerResource and the database
+ * resources (DatabaseResource, ManageDatabaseResource, DatabaseEngineResource) moved onto parts (GitProviderParts,
+ * GameDomainResource's parts, DnsZonePeerParts, DatabaseParts); the zone, database and credentials tabs are captured on
+ * their hosts' records. The accepted differences are the moved actions' routes, declared as placed operation moves. A
+ * failing comparison is a changed surface, never a file to refresh.
+ *
+ * AIDEV-NOTE: intended difference, Access tab added (Jelle 2026-10-03): the stored set carries one added
+ * {@code tab access} fact per database record case, re-recorded beside the legacy capture, because zenit-auth's record
+ * access page rides every parts entry over a grantable model (RecordTab#ridesEveryEntry). Every other fact is the
+ * legacy capture as stored.
  */
 class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
 
@@ -60,6 +68,7 @@ class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
     private static final String ZONE_PEERS = "dns-zone-peers";
     private static final String ZONES = HohenheimSlugs.DNS_ZONES;
     private static final String DATABASES = "databases";
+    private static final String DATABASE_ENGINES = "database-engines";
 
     private static String sharedProviderId;
     private static String tenantProviderId;
@@ -72,6 +81,7 @@ class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
     private static String replicaZoneId;
     private static String zonePeerId;
     private static String databaseId;
+    private static String engineId;
     private static AccessContext operator;
     private static AccessContext tenantGit;
     private static AccessContext tenantDatabaseView;
@@ -122,6 +132,7 @@ class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
             peer));
         zonePeerId = String.valueOf(DnsFixtures.linkZonePeer(primary, peer));
 
+        engineId = String.valueOf(engine(PREFIX + "engine"));
         int database = database(PREFIX + "db");
         databaseId = String.valueOf(database);
         RecordGrants.grant(GrantSubjectType.USER, viewId, DatabaseModel.MODEL_ID, database, HohenheimAccess.VIEW,
@@ -140,12 +151,16 @@ class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
 
     @Test
     void theDatabaseDnsAndGitEntriesOfferWhatTheyOfferedBeforeTheMove() {
-        // The connection test moved from its legacy record action route onto the placed operation of the same id, and
-        // the game-domain delete's synthesized row action is its delete_game_domain operation (O2's canonical delete).
+        // The connection test and the move onto a shared engine moved from their legacy record action routes onto the
+        // placed operations of the same ids, and the game-domain, database and engine deletes' synthesized row actions
+        // are their delete operations (O2's canonical delete).
         SurfaceBaselines stored = SurfaceBaselines.load(DatabaseDnsGitSurfacesBrowserTest.class,
             "/panel-surfaces/database-dns-git.txt")
-            .placedOperations(PlacedOperationMoves.of(GitProviderOperations.TEST_CONNECTION.id())
-                .synthesized(GAME_DOMAINS, SynthesizedRowActions.DELETE, GameDomainOperations.DELETE.id()));
+            .placedOperations(PlacedOperationMoves.of(GitProviderOperations.TEST_CONNECTION.id(),
+                    DatabaseParts.MOVE_TO_SHARED.id())
+                .synthesized(GAME_DOMAINS, SynthesizedRowActions.DELETE, GameDomainOperations.DELETE.id())
+                .synthesized(DATABASES, SynthesizedRowActions.DELETE, DatabaseParts.DELETE.id())
+                .synthesized(DATABASE_ENGINES, SynthesizedRowActions.DELETE, DatabaseParts.DELETE_ENGINE.id()));
 
         // 1. The admin entries for the operator, record-less and on each record; a tenant is refused the panel.
         for (String entry : List.of(GIT_PROVIDERS, GAME_DOMAINS, ZONE_PEERS)) {
@@ -167,13 +182,16 @@ class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
             .selecting(List.of(sharedProviderId, tenantProviderId), "sel")));
 
         // 2. The tabs these entries' pages are: the zone file and secondaries tabs on a primary and a replica zone,
-        //    the restore tab on a database.
+        //    the restore tab on a database, and the shared engines list and record.
         stored.check(capture(SurfaceCase.of(ADMIN, ZONES, "operator", operator)
             .onRecord(primaryZoneId, "primary")));
         stored.check(capture(SurfaceCase.of(ADMIN, ZONES, "operator", operator)
             .onRecord(replicaZoneId, "replica")));
         stored.check(capture(SurfaceCase.of(ADMIN, DATABASES, "operator", operator)
             .onRecord(databaseId, "database")));
+        stored.check(capture(SurfaceCase.of(ADMIN, DATABASE_ENGINES, "operator", operator)));
+        stored.check(capture(SurfaceCase.of(ADMIN, DATABASE_ENGINES, "operator", operator)
+            .onRecord(engineId, "engine")));
 
         // 3. The /manage twins: the tenant's own git provider (the operator's shared one is out of its scope), and the
         //    database credentials tab for a VIEW and a CREDENTIALS delegate; a tenant holding nothing is refused.
@@ -313,6 +331,18 @@ class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
         row.set(GameDomainModel.ENABLED, false);
         mappings.save(row);
         return row.get(GameDomainModel.ID);
+    }
+
+    private static int engine(String name) {
+        Model engines = Models.get(DatabaseEngineModel.class);
+        Row row = engines.createEmptyRow();
+        row.set(DatabaseEngineModel.NAME, name);
+        row.set(DatabaseEngineModel.ENGINE, "postgres");
+        row.set(DatabaseEngineModel.ROOT_USER, "root");
+        row.set(DatabaseEngineModel.ROOT_PASSWORD, "s3cret");
+        row.set(DatabaseEngineModel.STATUS, DatabaseModel.STATUS_ACTIVE);
+        engines.save(row);
+        return row.get(DatabaseEngineModel.ID);
     }
 
     private static int database(String name) {

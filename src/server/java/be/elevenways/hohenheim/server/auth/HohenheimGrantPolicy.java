@@ -277,9 +277,9 @@ final class HohenheimGrantPolicy {
         //   variant of that page is built here, so there is nothing to enforce a `restore`
         //   grant ON. It stays operator-only and is the first candidate when a delegated
         //   restore surface is actually designed.
-        // - config: DatabaseResource is updatable() == false -- the record is immutable
-        //   after create by design (it describes a provisioned container), so no edit
-        //   operation exists for the verb to gate.
+        // - config: the /manage twin (DatabaseParts#manage) offers no update -- the record
+        //   describes a provisioned container and only the OPERATOR resizes it, so no
+        //   delegated edit operation exists for the verb to gate.
         // - power: the engine is a generatedOnly() DatabaseContainerKind instance, and
         //   InstanceParts.manage() excludes generated rows, so no tenant path reaches a
         //   start/stop of it at all. A database is allocated and destroyed, not powered.

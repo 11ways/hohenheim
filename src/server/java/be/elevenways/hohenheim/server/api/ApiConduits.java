@@ -128,9 +128,10 @@ public final class ApiConduits {
      * AIDEV-NOTE: a frozen external wire keeps its shape (stage 2 contract 6.10, S3), so this maps reasons where every
      * new API lets core's edge render them. Hohenheim's instance-tier reasons answer the 422 envelope a form-level
      * {@code Violations} of the same key writes, byte-identical to the service gates' refusal; a core NOT_FOUND is the
-     * route's own 404 and a core FORBIDDEN or PERMISSION_DENIED the key gate's 403. Both switches are exhaustive with
-     * no default, so a new member is a compile error here; any other reason, and any other module's, is rethrown to
-     * core's edge, the answer an unexpected refusal escaping a handler always got.
+     * route's own 404, a core FORBIDDEN or PERMISSION_DENIED the key gate's 403, and a core OPERATION_UNAVAILABLE the
+     * form-level 422 of its shown reason (the words the row lane's unavailable reason wrote). Both switches are
+     * exhaustive with no default, so a new member is a compile error here; any other reason, and any other module's, is
+     * rethrown to core's edge, the answer an unexpected refusal escaping a handler always got.
      *
      * @return the answer, or null when the response has already been ended
      * @throws DomainRefusal a refusal this wire has no answer of its own for
@@ -143,22 +144,22 @@ public final class ApiConduits {
             };
         }
         if (reason instanceof ZenitRefusalReason zenit) {
-            boolean answered = switch (zenit) {
+            return switch (zenit) {
                 case NOT_FOUND -> {
                     conduit.notFound();
-                    yield true;
+                    yield null;
                 }
                 case FORBIDDEN, PERMISSION_DENIED -> {
                     conduit.forbidden();
-                    yield true;
+                    yield null;
                 }
+                // An offered-but-dead verb (an operation's availability) is the form-level 422 the
+                // row lane's unavailable reason wrote before the pipeline, same words.
+                case OPERATION_UNAVAILABLE -> refusal(conduit, Violations.ofForm(refusal.shown()));
                 case BAD_REQUEST, METHOD_NOT_ALLOWED, LOGIN_REQUIRED, INTERACTIVE_LOGIN_REQUIRED, RATE_LIMITED,
                      CSRF_ORIGIN, CSRF_TOKEN_MISSING, CSRF_TOKEN_INVALID, STALE, IN_PROGRESS, RETRY_MISMATCH, INVALID,
-                     ARCHIVED, CYCLE, IN_USE, OPERATION_UNAVAILABLE, STORE_BUSY -> false;
+                     ARCHIVED, CYCLE, IN_USE, STORE_BUSY -> throw refusal;
             };
-            if (answered) {
-                return null;
-            }
         }
         throw refusal;
     }

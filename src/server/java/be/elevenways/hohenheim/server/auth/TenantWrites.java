@@ -1051,8 +1051,9 @@ public final class TenantWrites {
 
     /**
      * The only columns a delegated tenant may author on a managed database: NONE. A
-     * database record DESCRIBES a provisioned container, is immutable after create
-     * ({@code DatabaseResource.updatable() == false}), and every column on it is either a
+     * database record DESCRIBES a provisioned container, is immutable after create to a
+     * tenant (the /manage twin, {@code DatabaseParts#manage}, offers no update; only the
+     * operator resizes), and every column on it is either a
      * placement/execution decision or a credential the runtime must agree with.
      *
      * Why each of the load-bearing ones is frozen, so a future reader does not "helpfully"
