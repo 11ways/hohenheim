@@ -87,7 +87,7 @@ public final class InstanceSchedulesPage implements RecordScopedPage<Row> {
         // AIDEV-NOTE: gated on the SAME boolean the template's {% if %} uses. A declared
         // template variable is serialized into the hydration payload whether or not any
         // element renders it, so an ungated target would publish an editor route to a
-        // viewer who may not edit (the certificates-request leak SiteDomainsPage hit).
+        // viewer who may not edit (the certificates-request leak the site Domains tab hit).
         vars.put("addScheduleTarget", canEdit ? CmsEndpoints.CREATE_FORM
             .with(CmsEndpoints.PANEL_PARAM, panel)
             .with(CmsEndpoints.RESOURCE_PARAM, InstanceScheduleResource.SLUG)

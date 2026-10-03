@@ -45,7 +45,6 @@ public final class HohenheimTemplateIds {
     public static final Identifier INSTANCE_VOLUMES = Identifier.of("hohenheim", "cms/instance-volumes");
     public static final Identifier SERVER_MEDIA = Identifier.of("hohenheim", "cms/server-media");
     public static final Identifier SITE_DEV_SESSIONS = Identifier.of("hohenheim", "cms/site-dev-sessions");
-    public static final Identifier SITE_DOMAINS = Identifier.of("hohenheim", "cms/site-domains");
     public static final Identifier SITE_PROTECTED_PATHS = Identifier.of("hohenheim", "cms/site-protected-paths");
     public static final Identifier SPAMSERVICE_OVERVIEW = Identifier.of("hohenheim", "cms/spamservice-overview");
     public static final Identifier SPAMSERVICE_REPUTATION = Identifier.of("hohenheim", "cms/spamservice-reputation");

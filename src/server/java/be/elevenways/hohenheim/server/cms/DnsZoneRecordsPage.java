@@ -126,7 +126,7 @@ public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row
 
     /**
      * The record resource this tab renders through, the sibling of
-     * {@code SiteDomainsPage.domainResource}.
+     * {@code SiteParts.DOMAINS}.
      *
      * @return null when the DNS role is off, so the resource is not on the panel at all
      */

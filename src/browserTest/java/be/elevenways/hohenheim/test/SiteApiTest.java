@@ -154,7 +154,7 @@ class SiteApiTest extends HohenheimTestBase {
         int proxySiteId = idOf(proxy.body());
         Row proxySite = Models.get(SiteModel.class).findById(proxySiteId);
         assertThat((Object) proxySite.get(SiteModel.SLUG))
-            .as("step 1: the slug is derived exactly as SiteResource.persistRow derives it")
+            .as("step 1: the slug is derived exactly as the site create operation derives it")
             .isEqualTo(PREFIX + "proxy");
         assertThat(String.valueOf(proxySite.get(SiteModel.SETTINGS)))
             .as("step 1: the settings were coerced against the address kind's schema")
@@ -316,6 +316,42 @@ class SiteApiTest extends HohenheimTestBase {
         assertThat(domainsOf(redirectSiteId)).as("step 9: its rows stay for a restore").hasSize(1);
         assertThat(keyGet(keyAdmin, "/api/v1/sites/" + staticSiteId).statusCode())
             .as("step 9: the static site is untouched").isEqualTo(200);
+    }
+
+    /**
+     * The site serving the address a delete arrives at refuses it, on this wire exactly as before the delete became
+     * an operation: the 422 envelope of a form-level violation carrying the lockout sentence (stage 4 contract 10,
+     * orchestrator decision 2026-10-02 ~23:55: the operation's availability, mapped by SiteApi).
+     */
+    @Test
+    void aSiteServingTheArrivalAddressRefusesItsDeleteAsBefore() throws Exception {
+        // 1. A switched-off site answering on the hostname this suite's requests arrive at (the Host header).
+        int lockedId = site(PREFIX + "locked", false);
+        domain(lockedId, "localhost", SiteDomainModel.MATCH_EXACT);
+        String sentence = "This site serves localhost, the address this panel is open at. Deleting it would take"
+            + " this panel offline. Move the panel to another hostname first.";
+
+        // 2. Its delete is refused with the row lane's answer: status 422, the code and the sentence at the top
+        //    level, the one form-level violation (no field) in the list, served as every other 422 of this API.
+        HttpResponse<String> refused = keyPost(keyAdmin, "/api/v1/sites/" + lockedId + "/delete", "");
+        assertThat(refused.statusCode()).as("step 2: refused as a typed violation: " + refused.body())
+            .isEqualTo(422);
+        assertThat(has(refused.body(), "status", "422")).as("step 2: the envelope's status").isTrue();
+        assertThat(has(refused.body(), "code", "\"delete_self_lockout\"")).as("step 2: the lockout code").isTrue();
+        assertThat(has(refused.body(), "message", "\"" + sentence + "\""))
+            .as("step 2: naming the address in the lockout sentence").isTrue();
+        assertThat(refused.body()).as("step 2: a form-level violation names no field").doesNotContain("\"field\"");
+        assertThat(Pattern.compile("\"code\"\\s*:").matcher(refused.body()).results().count())
+            .as("step 2: the top-level code and exactly one violation").isEqualTo(2);
+        HttpResponse<String> other = keyPost(keyAdmin, "/api/v1/sites", form("colour", "red"));
+        assertThat(refused.headers().firstValue("Content-Type"))
+            .as("step 2: served as every other refusal of this API")
+            .isEqualTo(other.headers().firstValue("Content-Type"));
+
+        // 3. Nothing was deleted: the site stays out of the trash, its hostname kept.
+        assertThat((Object) StoredRows.byId(Models.get(SiteModel.class), lockedId).get(SiteModel.DELETED_AT))
+            .as("step 3: the site is not trashed").isNull();
+        assertThat(domainsOf(lockedId)).as("step 3: and keeps its hostname").hasSize(1);
     }
 
     /** The tenancy refusals are the panel's: neutral for a tenant, detailed for an admin. */

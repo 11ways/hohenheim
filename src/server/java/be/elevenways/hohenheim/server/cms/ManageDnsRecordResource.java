@@ -288,7 +288,7 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
      * The contributed subpages only (the generic access matrix): a delegable holder must be
      * able to delegate from /manage, and the page gates itself per record via visibleFor.
      * The admin activity/revision history stays off the delegated surface, exactly like
-     * {@link ManageSiteResource}.
+     * {@link SiteParts#manage()}.
      */
     @Override
     public @NonNull List<RecordScopedPage<Row>> subpages() {

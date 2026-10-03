@@ -44,7 +44,7 @@ public class ProtectedPathResource extends RowResource {
     private final FormSpec formSpec = FormSpec.builder()
         .add(RelationPick.of(ProtectedPathModel.SITE_ID, SiteModel.MODEL_ID).build())
         .add(ProtectedPathModel.PATH)
-        // Creating a list from inside this pick stays off for the SiteResource reason: an
+        // Creating a list from inside this pick stays off for the site form's reason: an
         // empty list going live here would GUARD NOTHING while reading as protection.
         .add(RelationPick.of(ProtectedPathModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID)
             .creatable(false).build())

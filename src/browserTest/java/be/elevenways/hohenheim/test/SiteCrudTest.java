@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StoredRows;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.*;
@@ -42,7 +43,8 @@ class SiteCrudTest extends HohenheimTestBase {
         assertThat(page.content()).contains("upstream_kind");
 
         HttpResponse<String> response = adminPostForm("/admin/sites/new",
-            "name=Crud+Test+Site&upstream_kind=hohenheim%3Astatic&enabled=true");
+            "name=Crud+Test+Site&upstream_kind=hohenheim%3Astatic&enabled=true&"
+            + PanelResourceCalls.createEnvelope());
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         Row site = crudSite();
@@ -75,7 +77,8 @@ class SiteCrudTest extends HohenheimTestBase {
         waitForHydration();
         assertThat(page.content()).contains("Crud Test Site");
 
-        response = adminPostForm("/admin/sites/" + siteId + "/delete", confirmed(""));
+        // The delete is the site's delete_site operation, placed on the shared invoke route.
+        response = adminPostForm("/admin/sites/invoke/hohenheim.delete_site?ids=" + siteId, confirmed(""));
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         Row after = StoredRows.byId(Models.get(SiteModel.class), siteId);

@@ -120,7 +120,7 @@ public final class ManagePanel extends Panel {
         // accessible DashboardPanelPeer, so the landing is a real page (what needs
         // attention, then the principal's instances), never a contentless card grid.
         peers.add(new ManageDashboard());
-        HohenheimPanel.addIf(peers, new ManageSiteResource(), Role.PROXY);
+        HohenheimPanel.addIf(peers, SiteParts.manage(), Role.PROXY);
         HohenheimPanel.addIf(peers, DomainParts.manage(), Role.PROXY);
         HohenheimPanel.addIf(peers, new ManageDnsRecordResource(), Role.DNS);
         HohenheimPanel.addIf(peers, new ManageCertificateResource(), Role.PROXY);
@@ -212,7 +212,7 @@ public final class ManagePanel extends Panel {
      */
     static void declareSources() {
         // The SiteModel default source. zenit-cms derives one from SiteModel.NAME through
-        // both the admin SiteResource and the delegated ManageSiteResource; this server-side
+        // both the admin site entry and its delegated twin (SiteParts); this server-side
         // declaration replaces it deliberately, because its scope reads zenit-auth grants
         // unavailable to the common/browser registration lane.
         RecordSourceRegistry.INSTANCE.override(RecordSource.of(SiteModel.class)

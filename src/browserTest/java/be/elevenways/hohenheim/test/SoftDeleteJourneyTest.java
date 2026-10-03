@@ -1,14 +1,20 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.cms.AccessListResource;
-import be.elevenways.hohenheim.server.cms.SiteResource;
+import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.quota.SiteQuota;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.Resource;
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
@@ -18,7 +24,6 @@ import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.quota.Quotas;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -26,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -61,9 +67,13 @@ class SoftDeleteJourneyTest {
     void aTrashedSiteIsHiddenKeepsItsSlugRestoresAndPurges() {
         Db.run(datasource, () -> {
             SiteModel sites = Models.get(SiteModel.class);
-            SiteResource resource = new SiteResource();
+            // The admin panel's own site entry, as its record page reads it.
+            @SuppressWarnings("unchecked")
+            Resource<Row> resource = PanelResourceViews.forProgrammaticCaller(
+                (PanelResource<Row>) Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN))
+                    .entryBySlug(HohenheimSlugs.SITES),
+                Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN)));
             AccessListResource lists = new AccessListResource();
-            AccessContext anyone = AccessContext.anonymous();
 
             // 1. A live site gated by an access list: charged one site slot, and the list's
             //    delete dialog names it as a site the delete would open.
@@ -80,12 +90,12 @@ class SoftDeleteJourneyTest {
             //    read (find, count, the record page), still stored, the slot handed back and
             //    the delete recorded as the soft delete it is.
             long beforeTrash = Quotas.usedOf(SITE_BUCKET);
-            resource.deleteRow(sites.findById(siteId), anyone);
+            PanelResourceCalls.delete(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, siteId, TenantConduits.operator());
             assertThat(sites.findById(siteId))
                 .as("step 2: a default find no longer sees the trashed site").isNull();
             assertThat(sites.find().where(SiteModel.ID.eq(siteId)).count())
                 .as("step 2: nor does a default count").isZero();
-            Row inTrash = resource.loadRow(siteId, anyone);
+            Row inTrash = resource.loadRow(siteId, TenantConduits.operator());
             assertThat(inTrash).as("step 2: the admin record page opens it from the Trash").isNotNull();
             assertThat(resource.isArchived(inTrash)).as("step 2: as an archived, read-only record").isTrue();
             Row trashed = StoredRows.byId(sites, siteId);
@@ -119,10 +129,12 @@ class SoftDeleteJourneyTest {
             assertThat(sites.find().withTrashed().where(SiteModel.SLUG.eq(PREFIX + "journey")).count())
                 .as("step 5: and exactly one row carries it").isEqualTo(1);
 
-            // 6. The behaviour's restore brings it back: visible, the slot re-booked, the
-            //    restore on the record's history, and the list gating it again.
+            // 6. The Trash's restore (the admin site entry's placed restore operation, core's archive restore) brings
+            //    it back: visible, the slot re-booked, the restore on the record's history, and the list gating it
+            //    again.
             long beforeRestore = Quotas.usedOf(SITE_BUCKET);
-            SiteModel.SOFT_DELETE.restore(StoredRows.byId(sites, siteId));
+            PanelResourceCalls.invoke(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, SiteWrites.RESTORE.id(), siteId,
+                null, TenantConduits.operator());
             Row restored = sites.findById(siteId);
             assertThat(restored).as("step 6: a default find sees the restored site").isNotNull();
             assertThat((Object) restored.get(SiteModel.DELETED_AT))

@@ -22,12 +22,13 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.cms.common.render.table.SynthesizedRowActions;
+import be.elevenways.zenit.cms.common.resource.ListLane;
 import be.elevenways.zenit.cms.test.support.PanelSurfaceComparer;
 import be.elevenways.zenit.cms.test.support.PanelSurfaces;
 import be.elevenways.zenit.cms.test.support.PlacedOperationMoves;
 import be.elevenways.zenit.cms.test.support.SurfaceBaselines;
 import be.elevenways.zenit.cms.test.support.SurfaceCase;
-import be.elevenways.zenit.cms.common.resource.ListLane;
 import be.elevenways.zenit.cms.test.support.TwinCorrespondence;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -129,7 +130,10 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
         // 0. Legacy row actions that became placed operations compare on the shared invoke route, every other fact of
         //    theirs exactly: the template approve and unapprove and the site clone keep their identities, and the one
         //    state-dependent site toggle became enable_site on the disabled fixture and disable_site on the enabled
-        //    one (D5-B04). The site rollback applies to no fixture (a static site), so no stored case carries it.
+        //    one (D5-B04). The site rollback applies to no fixture (a static site), so no stored case carries it. The
+        //    site's synthesized delete is now its delete_site operation and its Trash's restore and purge core's
+        //    archive operations, ONE on a row and MANY in the bulk bar (SiteParts), every fact but their identity and
+        //    route compared exactly.
         assertThat((Boolean) Models.get(SiteModel.class).findById(Integer.parseInt(siteId)).get(SiteModel.ENABLED))
             .as("step 0: the site fixture is enabled").isTrue();
         assertThat((Boolean) Models.get(SiteModel.class).findById(Integer.parseInt(disabledSiteId))
@@ -141,7 +145,11 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
                     ADMIN + "." + SITES + ".operator.site", SiteOperations.DISABLE.id(),
                     ADMIN + "." + SITES + ".operator.disabled", SiteOperations.ENABLE.id(),
                     MANAGE + "." + SITES + ".tenant-one.site", SiteOperations.DISABLE.id(),
-                    MANAGE + "." + SITES + ".tenant-one.disabled", SiteOperations.ENABLE.id())));
+                    MANAGE + "." + SITES + ".tenant-one.disabled", SiteOperations.ENABLE.id()))
+                .synthesized(SITES, SynthesizedRowActions.DELETE, SiteWrites.DELETE.id())
+                .synthesized(SITES, SynthesizedRowActions.RESTORE, SiteWrites.RESTORE.id(),
+                    SiteWrites.RESTORE_MANY.id())
+                .synthesized(SITES, SynthesizedRowActions.PURGE, SiteWrites.PURGE.id(), SiteWrites.PURGE_MANY.id()));
 
         // 1. The admin entries for the operator, record-less and on each record; a tenant is refused the panel.
         for (String entry : List.of(SITES, DOMAINS, TEMPLATES)) {

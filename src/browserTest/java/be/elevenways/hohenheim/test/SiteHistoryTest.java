@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.*;
@@ -18,10 +20,17 @@ class SiteHistoryTest extends HohenheimTestBase {
         "upstream_kind=hohenheim%3Aaddress"
         + "&settings.forward_host=127.0.0.1&settings.forward_port=9090";
 
+    /** The envelope the site's edit form renders: a fresh identity and the revision it reviews. */
+    private static String reviewed(int siteId) {
+        return PanelResourceCalls.editEnvelope(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, siteId,
+            TenantConduits.operator());
+    }
+
     /** Create, rename, read the feed deltas and restore the first revision without leaving the history page. */
     @Test
     void historyFeedShowsDeltasAndRestores() throws Exception {
-        var created = adminPostForm("/admin/sites/new", "name=History+Site&" + SITE_FORM);
+        var created = adminPostForm("/admin/sites/new", "name=History+Site&" + SITE_FORM + "&"
+            + PanelResourceCalls.createEnvelope());
         assertThat(created.statusCode()).isIn(200, 302, 303);
 
         Row site = Models.get(SiteModel.class).find()
@@ -29,7 +38,8 @@ class SiteHistoryTest extends HohenheimTestBase {
         assertThat(site).isNotNull();
         Integer siteId = site.get(SiteModel.ID);
 
-        var updated = adminPostForm("/admin/sites/" + siteId, "name=Renamed+Site&" + SITE_FORM);
+        var updated = adminPostForm("/admin/sites/" + siteId, "name=Renamed+Site&" + SITE_FORM + "&"
+            + reviewed(siteId));
         assertThat(updated.statusCode()).isIn(200, 302, 303);
 
         navigateToApp("/admin/sites/" + siteId + "/page/history");
@@ -71,7 +81,8 @@ class SiteHistoryTest extends HohenheimTestBase {
     @Test
     void restoringARevisionOfADeletedSiteDoesNotResurrectIt() throws Exception {
         // 1. A site with two revisions, the first taken while it was live.
-        var created = adminPostForm("/admin/sites/new", "name=Doomed+Site&" + SITE_FORM);
+        var created = adminPostForm("/admin/sites/new", "name=Doomed+Site&" + SITE_FORM + "&"
+            + PanelResourceCalls.createEnvelope());
         assertThat(created.statusCode()).isIn(200, 302, 303);
 
         var model = Models.get(SiteModel.class);
@@ -82,11 +93,13 @@ class SiteHistoryTest extends HohenheimTestBase {
         // The CMS edit path saves a LOADED row, so this revision's snapshot carries
         // every column the site has -- deleted_at = null included. That is the shape
         // that turns a naive replay into an undelete.
-        var updated = adminPostForm("/admin/sites/" + siteId, "name=Doomed+Site+Renamed&" + SITE_FORM);
+        var updated = adminPostForm("/admin/sites/" + siteId, "name=Doomed+Site+Renamed&" + SITE_FORM + "&"
+            + reviewed(siteId));
         assertThat(updated.statusCode()).isIn(200, 302, 303);
         int liveRevision = SiteModel.REVISIONABLE.latestRevisionOf(model, siteId);
 
-        var again = adminPostForm("/admin/sites/" + siteId, "name=Doomed+Site+Final&" + SITE_FORM);
+        var again = adminPostForm("/admin/sites/" + siteId, "name=Doomed+Site+Final&" + SITE_FORM + "&"
+            + reviewed(siteId));
         assertThat(again.statusCode()).isIn(200, 302, 303);
 
         // 2. Delete it the way SiteResource does: the site's SoftDeleteBehaviour trashes it,

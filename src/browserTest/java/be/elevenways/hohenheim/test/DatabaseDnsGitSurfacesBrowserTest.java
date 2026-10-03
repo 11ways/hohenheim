@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.game.GameDomainOperations;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -18,6 +19,7 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.cms.common.render.table.SynthesizedRowActions;
 import be.elevenways.zenit.cms.test.support.PanelSurfaceComparer;
 import be.elevenways.zenit.cms.test.support.PanelSurfaces;
 import be.elevenways.zenit.cms.test.support.PlacedOperationMoves;
@@ -29,6 +31,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.security.AccessContext;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -75,9 +78,23 @@ class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
     private static AccessContext tenantDatabaseCredentials;
     private static AccessContext tenantEmpty;
 
+    private static int gitId;
+
+    /**
+     * The git providers leave with the class: their rows are options of every git provider pick, so a later class in the
+     * same JVM (the slice-three capture's template settings) would otherwise capture them as its own.
+     */
+    @AfterAll
+    static void removeProviders() {
+        RecordGrants.revoke(GrantSubjectType.USER, gitId, GitProviderModel.MODEL_ID,
+            Integer.parseInt(tenantProviderId), HohenheimAccess.MANAGE);
+        HardDeletes.byId(Models.get(GitProviderModel.class), Integer.parseInt(tenantProviderId));
+        HardDeletes.byId(Models.get(GitProviderModel.class), Integer.parseInt(sharedProviderId));
+    }
+
     @BeforeAll
     static void seed() {
-        int gitId = ApiSupport.user(PREFIX + "git@hohenheim.local", "B13 Git Tenant");
+        gitId = ApiSupport.user(PREFIX + "git@hohenheim.local", "B13 Git Tenant");
         int viewId = ApiSupport.user(PREFIX + "db-view@hohenheim.local", "B13 Database Viewer");
         int credentialsId = ApiSupport.user(PREFIX + "db-credentials@hohenheim.local", "B13 Database Credentials");
         int emptyId = ApiSupport.user(PREFIX + "empty@hohenheim.local", "B13 Empty Tenant");
@@ -123,10 +140,12 @@ class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
 
     @Test
     void theDatabaseDnsAndGitEntriesOfferWhatTheyOfferedBeforeTheMove() {
-        // The connection test moved from its legacy record action route onto the placed operation of the same id.
+        // The connection test moved from its legacy record action route onto the placed operation of the same id, and
+        // the game-domain delete's synthesized row action is its delete_game_domain operation (O2's canonical delete).
         SurfaceBaselines stored = SurfaceBaselines.load(DatabaseDnsGitSurfacesBrowserTest.class,
             "/panel-surfaces/database-dns-git.txt")
-            .placedOperations(PlacedOperationMoves.of(GitProviderOperations.TEST_CONNECTION.id()));
+            .placedOperations(PlacedOperationMoves.of(GitProviderOperations.TEST_CONNECTION.id())
+                .synthesized(GAME_DOMAINS, SynthesizedRowActions.DELETE, GameDomainOperations.DELETE.id()));
 
         // 1. The admin entries for the operator, record-less and on each record; a tenant is refused the panel.
         for (String entry : List.of(GIT_PROVIDERS, GAME_DOMAINS, ZONE_PEERS)) {

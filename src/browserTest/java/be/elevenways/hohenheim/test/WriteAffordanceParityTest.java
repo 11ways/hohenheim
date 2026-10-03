@@ -16,7 +16,7 @@ import be.elevenways.hohenheim.server.cms.InstanceDatabaseResource;
 import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleResource;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleStepResource;
-import be.elevenways.hohenheim.server.cms.SiteDomainsPage;
+import be.elevenways.hohenheim.server.cms.SiteParts;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -27,6 +27,7 @@ import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.cms.common.render.panel.ChildListSectionState;
 import be.elevenways.zenit.cms.common.render.table.TableState;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -421,13 +422,21 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     private static List<Boolean> rowAffordances(Row site, AccessContext ctx) {
         // The tab renders under the panel the principal reaches: a delegate's is /manage, the operator's /admin.
         String panel = HohenheimAccess.isAdmin(ctx) ? HohenheimSlugs.ADMIN : HohenheimSlugs.MANAGE;
+        // The tab dispatches through the framework's record subpage route, as a click on it does.
         EndpointConduit conduit = new EndpointConduit()
             .withAttribute(ConduitAttributes.PRINCIPAL, ctx.principal())
             .setParameter(CmsEndpoints.PANEL_PARAM, panel)
-            .setParameter(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.SITES);
-        AccessContext under = AccessContext.of(conduit);
-        PanelRequest request = new PanelRequest(PanelRegistry.getBySlug(panel), conduit, under, null);
-        Map<String, Object> vars = (Map<String, Object>) new SiteDomainsPage().render(request, site).get();
+            .setParameter(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.SITES)
+            .setParameter(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf((Object) site.get(SiteModel.ID)))
+            .setParameter(CmsEndpoints.SUBPAGE_PARAM, SiteParts.DOMAINS_TAB);
+        Object tab = CmsEndpoints.RECORD_SUBPAGE.handle(conduit);
+        if (tab == null) {
+            // The panel refused the site itself: a delegate's /manage site entry lists only the sites it manages, so
+            // a view-only delegate never reaches the tab, let alone a row on it.
+            assertThat(conduit.status).as("the tab is refused, not broken").isIn(403, 404);
+            return List.of(false, false);
+        }
+        Map<String, Object> vars = ((RenderTemplateResult) tab).get();
         List<ChildListSectionState> sections = (List<ChildListSectionState>) vars.get("sections");
         assertThat(sections).as("the tab embeds the one domains section").hasSize(1);
         List<TableState.RowState> rows = sections.get(0).table().rows();

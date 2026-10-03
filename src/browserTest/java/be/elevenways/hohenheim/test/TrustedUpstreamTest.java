@@ -1,16 +1,17 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.ManageSiteResource;
-import be.elevenways.hohenheim.server.cms.SiteResource;
+import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.edit.FormEntry;
@@ -118,13 +119,14 @@ class TrustedUpstreamTest extends HohenheimTestBase {
 
             // 4. Nor through the delegated surface: /manage offers no such field, and a
             //    hand-posted one writes nothing.
-            assertThat(new ManageSiteResource().formSpec().forView(EditView.EDIT).entries().stream()
+            assertThat(SiteWrites.MANAGE_FORM.forView(EditView.EDIT).entries().stream()
                     .map(FormEntry::name))
                 .as("step 4: the /manage form does not offer the flag")
                 .doesNotContain(SiteModel.TRUSTED_UPSTREAM.getName());
             TestSession tenantSession = sessionFor(tenantId);
             httpPostForm("/manage/sites/" + siteId,
-                "name=Trusted+Upstream+Site&enabled=true&trusted_upstream=true",
+                "name=Trusted+Upstream+Site&enabled=true&trusted_upstream=true&" + PanelResourceCalls.editEnvelope(
+                    HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, siteId, TenantConduits.operator()),
                 tenantSession.token(), tenantSession.csrf());
             assertThat((Boolean) siteModel.findById(siteId).get(SiteModel.TRUSTED_UPSTREAM))
                 .as("step 4: a hand-posted flag on /manage writes nothing").isNotEqualTo(Boolean.TRUE);
@@ -133,7 +135,7 @@ class TrustedUpstreamTest extends HohenheimTestBase {
                 .as("step 4: and the dial still refuses").isEqualTo(503);
 
             // 5. The admin form offers it, and the operator setting it serves the site again.
-            assertThat(new SiteResource().formSpec().forView(EditView.EDIT).entries().stream()
+            assertThat(SiteWrites.ADMIN_FORM.forView(EditView.EDIT).entries().stream()
                     .map(FormEntry::name))
                 .as("step 5: the admin form offers the flag")
                 .contains(SiteModel.TRUSTED_UPSTREAM.getName());

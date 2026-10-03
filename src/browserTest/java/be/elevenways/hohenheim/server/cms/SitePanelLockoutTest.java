@@ -96,12 +96,15 @@ class SitePanelLockoutTest extends HohenheimTestBase {
         }
 
         // 5. The same fact refuses the DELETE, which is the outage without the second
-        //    click that would undo it.
-        SiteResource resource = new SiteResource();
-        assertThat(resource.deleteUnavailableReason(panelSite, atPanel))
+        //    click that would undo it: the delete operation's availability, per row.
+        Microcopy deleteRefusal = unavailable(SiteWrites.DELETE, panelSite, atPanel);
+        assertThat(deleteRefusal)
             .as("step 5: deleting the panel's own site is refused too")
             .isNotNull();
-        assertThat(resource.deleteUnavailableReason(siteRow(otherSiteId), atPanel))
+        assertThat(deleteRefusal.key())
+            .as("step 5: with its own lockout reason")
+            .isEqualTo("delete_self_lockout");
+        assertThat(unavailable(SiteWrites.DELETE, siteRow(otherSiteId), atPanel))
             .as("step 5: and only that one")
             .isNull();
     }
@@ -174,7 +177,7 @@ class SitePanelLockoutTest extends HohenheimTestBase {
 
     /** The placed switch under test, read off the resource rather than rebuilt here. */
     private static PanelAction<Row> placed(Operation<Row, ?, ?> operation) {
-        return new SiteResource().actions().stream()
+        return SiteParts.admin().actions().stream()
             .filter(action -> operation.id().equals(action.id()))
             .findFirst()
             .orElseThrow(() -> new AssertionError("the sites resource places no " + operation.id()));
