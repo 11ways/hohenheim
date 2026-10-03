@@ -138,7 +138,7 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, SiteParts.admin(), Role.PROXY);
         addIf(peers, DomainParts.admin(), Role.PROXY);
         addIf(peers, ReleasedClaimParts.admin(), Role.PROXY);
-        addIf(peers, new CertificateResource(), Role.PROXY);
+        addIf(peers, CertificateParts.admin(), Role.PROXY);
         addIf(peers, AccessListParts.admin(), Role.PROXY);
         addIf(peers, new AccessRuleResource(), Role.PROXY);
         addIf(peers, ProtectedPathParts.admin(), Role.PROXY);

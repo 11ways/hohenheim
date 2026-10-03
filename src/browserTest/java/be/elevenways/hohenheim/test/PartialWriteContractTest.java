@@ -9,7 +9,6 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.AuthProviderParts;
-import be.elevenways.hohenheim.server.cms.CertificateResource;
 import be.elevenways.hohenheim.server.cms.InstanceDeviceResource;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleParts;
@@ -209,7 +208,7 @@ class PartialWriteContractTest extends HohenheimTestBase {
         cases.add(new Case("admin/auth-providers", patch(HohenheimSlugs.ADMIN, AuthProviderParts.SLUG, providerId),
             Models.get(SiteAuthProviderModel.class), providerId,
             SiteAuthProviderModel.NAME.getName(), PREFIX + "renamed provider"));
-        cases.add(new Case("admin/certificates", rows(new CertificateResource()),
+        cases.add(new Case("admin/certificates", patch(HohenheimSlugs.ADMIN, HohenheimSlugs.CERTIFICATES, certificateId),
             Models.get(CertificateModel.class), certificateId,
             CertificateModel.NICE_NAME.getName(), PREFIX + "renamed cert"));
         cases.add(new Case("admin/instance-schedules", rows(adminView(InstanceScheduleParts.SLUG)),
