@@ -3,7 +3,8 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.ManageInstanceScheduleStepResource;
+import be.elevenways.hohenheim.server.cms.InstanceScheduleStepParts;
+import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -19,6 +20,11 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -29,6 +35,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -120,6 +127,14 @@ class ScheduleStepAuthorityTest extends HohenheimTestBase {
     }
 
     /** A carrier whose query string holds {@code ?schedule_id=}, the prefill the Steps tab links with. */
+    /** The registered /manage step entry as the panel's own programmatic view. */
+    @SuppressWarnings("unchecked")
+    private static RowResource manageSteps() {
+        Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(ManagePanel.SLUG), "the manage panel");
+        return (RowResource) PanelResourceViews.forCaller((PanelResource<Row>) Objects.requireNonNull(
+            manage.entryBySlug(InstanceScheduleStepParts.SLUG)), manage);
+    }
+
     private static AccessContext onCreateFormFor(int userId, String name, int forSchedule) {
         Conduit stub = TenantConduits.stubFor(new UserPrincipal(userId, name));
         Conduit carrier = (Conduit) Proxy.newProxyInstance(
@@ -148,7 +163,7 @@ class ScheduleStepAuthorityTest extends HohenheimTestBase {
 
     @Test
     void shapingTheChainDemandsConfigAndAStepStaysInItsSchedule() {
-        ManageInstanceScheduleStepResource steps = new ManageInstanceScheduleStepResource();
+        RowResource steps = manageSteps();
         AccessContext powerOnly = contextOf(powerOnlyId, "Power Only");
         AccessContext owner = contextOf(ownerId, "Chain Owner");
         long stepsBefore = Models.get(RecordScheduleStepModel.class).find()

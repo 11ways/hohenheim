@@ -129,8 +129,8 @@ public final class ManagePanel extends Panel {
         // from-template page are nav-hidden: they are reached THROUGH an instance
         // (or a template) whose own scope already decided the principal may be here.
         HohenheimPanel.addIf(peers, new ManageInstanceResource(), Role.INSTANCES);
-        HohenheimPanel.addIf(peers, new ManageInstanceScheduleResource(), Role.INSTANCES);
-        HohenheimPanel.addIf(peers, new ManageInstanceScheduleStepResource(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, InstanceScheduleParts.manage(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, InstanceScheduleStepParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, new ManageInstanceDeviceResource(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, InstanceVariableParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, new ManageInstanceSnapshotResource(), Role.INSTANCES);

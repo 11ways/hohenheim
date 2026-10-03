@@ -29,7 +29,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * WRITE already re-asks InstanceDevices (which demands CONFIG on the instance -- the
  * enforced verb, manage merely implies it; this note said "manage" until the capability
  * split's prose drift was swept), but a READ would have listed every tenant's disk names
- * and sizes -- the same half-gate ManageInstanceScheduleResource was created to close.
+ * and sizes -- the same half-gate the /manage schedule twin was created to close.
  * The read scope below is deliberately the WIDER {@code view}: seeing that a device
  * exists on an instance you may view is not the authority to change it.
  *

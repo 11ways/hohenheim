@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationGate;
@@ -13,7 +14,7 @@ import be.elevenways.zenit.server.operation.RowDeleteOperations;
  * The plain row deletes of the operator's instance children, each its entry's canonical delete.
  *
  * AIDEV-NOTE: declared once per model and arity, and loaded by {@link #init()} at boot so the lifecycle declaration
- * is verified with every other operation. Both entries live on /admin only, so the gate is the admin panel's own
+ * is verified with every other operation. These entries live on /admin only, so the gate is the admin panel's own
  * permission; the entries' scopes still narrow which rows a delete accepts.
  *
  * @author Jelle De Loecker
@@ -22,6 +23,10 @@ import be.elevenways.zenit.server.operation.RowDeleteOperations;
 public final class InstanceChildDeletes {
 
     private static final OperationGate OPERATOR = OperationGate.permission(HohenheimSources.ADMIN_ACCESS);
+
+    /** Removes one config file of an instance; a generated one is refused by the model's attribution guard. */
+    public static final Operation<Row, Void, Integer> FILE =
+        RowDeleteOperations.delete(InstanceFileModel.class, SubjectArity.ONE, OPERATOR);
 
     /** Removes one quota override. */
     public static final Operation<Row, Void, Integer> QUOTA =
