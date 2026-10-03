@@ -31,6 +31,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Immutable before/after surface evidence for the certificate administration and its status-only tenant twin.
  *
+ * AIDEV-NOTE: intended difference, Access tab added (Jelle 2026-10-03): the stored set carries one added
+ * {@code tab access} fact per record case, re-recorded beside the legacy capture, because zenit-auth's record access
+ * page rides every parts entry over a grantable model (RecordTab#ridesEveryEntry). Every other fact is the legacy
+ * capture as stored.
+ *
  * @author Jelle De Loecker
  * @since 0.9.0
  */
