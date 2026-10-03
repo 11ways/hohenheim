@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.MigrationTargetView;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -10,17 +10,23 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.action.ActionPlacement;
+import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
-import be.elevenways.zenit.cms.common.page.CmsFormBody;
-import be.elevenways.zenit.cms.common.resource.SubmittableRecordScopedPage;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
+import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.render.action.PageFormState;
+import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.server.page.PageActions;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
-import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -28,22 +34,40 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Migrate tab on an instance: the cold move to another host, which had no caller at all
- * outside a whole-host drain until this page shipped.
+ * Migrate tab on an instance: the cold move to another host, one placed migrate operation offered once per eligible
+ * destination row, its form preset with that host and its dialog naming both the source and the destination.
  *
- * OPERATOR-ONLY, twice over and deliberately: {@link #visibleFor} hides the tab AND 404s
- * its route (render and submit share that gate) for anyone without the installation-wide
- * admin permission, and {@code InstanceMigrations.migrateTo} refuses every
- * tenant-originated call by name. Placement is an operator authority -- the same decision
- * {@code InstancePlacement} records for creates -- so the delegated surface never carries
- * this page ({@link ManageInstanceResource} does not list it).
+ * OPERATOR-ONLY, twice over and deliberately: {@link #visibleFor} hides the tab AND 404s its route for anyone without
+ * the installation-wide admin permission, and the migrate operation's authorizer and
+ * {@code InstanceMigrations.migrateTo} refuse everyone else by name. Placement is an operator authority, so the
+ * delegated surface never carries this page ({@link ManageInstanceResource} does not list it).
  */
-public final class InstanceMigratePage implements SubmittableRecordScopedPage<Row> {
+public final class InstanceMigratePage implements RecordScopedPage<Row> {
 
     public static final String SLUG = "migrate";
 
-    /** The submitted destination host id. */
-    private static final String TARGET_FIELD = "target_server_id";
+    /** The migrate operation over this tab's own record, its destination carried hidden per row. */
+    private static final PanelAction<Row> MIGRATE = PanelAction.<Row, Integer>places(InstanceOperations.MIGRATE,
+            ActionPlacement.PAGE, (request, result) -> CmsActionResult.refreshWithToast(
+                Microcopy.of("migrated_toast").withFilter("scope", "instance")
+                    .withArg("name", request.subject().get(InstanceModel.NAME))
+                    .withArg("host", ServerModel.nameOf(result.value()))))
+        .confirmation(ConfirmationSpec.builder()
+            .title(Microcopy.of("migrate").withFilter("scope", "instance_migrate"))
+            .body(Microcopy.of("cold_note").withFilter("scope", "instance_migrate"))
+            .confirmLabel(Microcopy.of("migrate_here").withFilter("scope", "instance_migrate"))
+            .style(ActionStyle.DESTRUCTIVE)
+            .build())
+        // The destination is the row's own; the dialog names it beside the source, so a move is confirmed for
+        // exactly the two hosts it involves.
+        .confirmationBody((instance, input) -> Microcopy.of("migrate_confirm")
+            .withFilter("scope", "instance_migrate")
+            .withArg("name", instance.get(InstanceModel.NAME))
+            .withArg("from", sourceHost(instance))
+            .withArg("to", ServerModel.nameOf(destination(input))))
+        .transport(InstanceOperations.TARGET_SERVER.getName())
+        .selectedByRoute(instance -> String.valueOf((Object) instance.get(InstanceModel.ID)))
+        .build();
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_migrate"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("migrate").withFilter("scope", "instance"); }
@@ -65,70 +89,73 @@ public final class InstanceMigratePage implements SubmittableRecordScopedPage<Ro
     }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
+    public @NonNull List<PanelAction<Row>> actions() {
+        return List.of(MIGRATE);
+    }
+
+    @Override
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
+        Conduit conduit = request.conduit();
         Integer instanceId = instance.get(InstanceModel.ID);
         String name = String.valueOf((Object) instance.get(InstanceModel.NAME));
+        // The protected-status vocabulary is asked, never re-listed: a fourth in-flight
+        // status refuses here the moment it refuses in InstanceOperationGuard.
+        boolean operable = InstanceModel.isOperable(instance);
 
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", CmsSupport.pageTitle(conduit, "instance_migrate", name));
         vars.put("instanceName", name);
         vars.put("instanceId", instanceId);
-        vars.put("sourceHost", ServerModel.nameOf(
-            ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID))));
-        // The protected-status vocabulary is asked, never re-listed: a fourth in-flight
-        // status refuses here the moment it refuses in InstanceOperationGuard.
-        vars.put("operable", InstanceModel.isOperable(instance));
+        vars.put("sourceHost", sourceHost(instance));
+        vars.put("operable", operable);
         vars.put("status", instance.get(InstanceModel.STATUS));
-        vars.put("targets", targetsFor(conduit, instanceId));
+        vars.put("targets", this.targetsFor(request, instance, operable));
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_MIGRATE, vars);
     }
 
-    /**
-     * Move the workload. Every refusal -- an ineligible host, a device row, a held
-     * publication, an occupied destination, an unreachable daemon -- arrives as
-     * {@link Violations} and the subpage-submit lane renders its message as an ERROR
-     * toast; there is no path here on which a refused migration reports success.
-     */
-    @Override
-    public @NonNull CmsActionResult submit(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
-        Map<String, Object> body = conduit.getBody(CmsFormBody.BODY);
-        Object raw = body == null ? null : body.get(TARGET_FIELD);
-        int instanceId = instance.get(InstanceModel.ID);
-        Integer parsed = CmsSupport.parsedInt(raw);
-        if (parsed == null) {
-            throw Violations.ofField(TARGET_FIELD, raw,
-                HohenheimViolations.text("migrate_target_required"));
-        }
-        int target = parsed;
-        new InstanceMigrations().migrateTo(instanceId, target);
-        return CmsActionResult.refreshWithToast(
-            Microcopy.of("migrated_toast").withFilter("scope", "instance")
-                .withArg("name", instance.get(InstanceModel.NAME))
-                .withArg("host", ServerModel.nameOf(target)));
-    }
-
-    /** The survey, with every refusal resolved for this reader's locale. */
-    private static @NonNull List<MigrationTargetView> targetsFor(@NonNull Conduit conduit,
-                                                                 int instanceId) {
+    /** The survey, every refusal resolved for this reader's locale, an eligible row carrying its preset form. */
+    private @NonNull List<MigrationTargetView> targetsFor(@NonNull PanelRequest request, @NonNull Row instance,
+                                                          boolean operable) {
+        Conduit conduit = request.conduit();
         List<MigrationTargetView> views = new ArrayList<>();
         for (InstanceMigrations.Destination destination
-                : new InstanceMigrations().destinationsFor(instanceId)) {
+                : new InstanceMigrations().destinationsFor(instance.get(InstanceModel.ID))) {
+            boolean offered = destination.eligible() && operable;
             views.add(new MigrationTargetView(
                 destination.serverId(),
                 destination.name(),
                 destination.eligible(),
                 destination.refusal() == null ? ""
-                    : destination.refusal().resolve(conduit.getLocales(),
-                        conduit.getMessageResolver()),
+                    : destination.refusal().resolve(conduit.getLocales(), conduit.getMessageResolver()),
                 destination.bookableMb() > 0,
                 destination.bookedMb(),
-                destination.bookableMb()));
+                destination.bookableMb(),
+                offered ? this.formFor(request, instance, destination.serverId()) : null));
         }
         return views;
+    }
+
+    /** The migrate form preset with one destination; null when the operation withholds a form. */
+    private @Nullable PageFormState formFor(@NonNull PanelRequest request, @NonNull Row instance, int serverId) {
+        PageActions.Opened opened = PageActions.open(request, this, instance, MIGRATE.id(),
+            Map.of(InstanceOperations.TARGET_SERVER.getName(), serverId));
+        return opened instanceof PageActions.Form form ? form.state() : null;
+    }
+
+    private static @NonNull String sourceHost(@NonNull Row instance) {
+        return ServerModel.nameOf(ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID)));
+    }
+
+    /** @return the destination the form opens with, -1 when it names none */
+    private static int destination(@NonNull Map<String, Object> input) {
+        Object value = input.get(InstanceOperations.TARGET_SERVER.getName());
+        return value instanceof Number number ? number.intValue() : -1;
+    }
+
+    @Override
+    public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext accessContext,
+                                           @NonNull Row instance) {
+        throw new UnsupportedOperationException("The " + SLUG + " tab renders through its PanelRequest");
     }
 }
