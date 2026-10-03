@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -40,14 +39,9 @@ import java.util.Objects;
  * @author Jelle De Loecker
  * @since  0.1.0
  */
-@SuppressWarnings("removal")
 class SpamserviceAdminSurfacesBrowserTest extends HohenheimTestBase {
 
     private static final String BASELINE = "/panel-surfaces/spamservice-remote.txt";
-
-    /** The clients and words lists' legacy global text filter, as the stored capture recorded it. */
-    private static final FilterSpec LEGACY_Q = FilterSpec.global("q", Microcopy.literal("search"),
-        FilterSpec.Kind.TEXT).build();
 
     @Test
     void theRemoteSpamserviceEntriesOfferWhatTheyOfferedBeforeTheMove() {
@@ -71,7 +65,7 @@ class SpamserviceAdminSurfacesBrowserTest extends HohenheimTestBase {
         for (String entry : List.of(SpamserviceClientsResource.SLUG, SpamserviceWordsResource.SLUG)) {
             PanelSurfaces after = capture(entry, operator);
             List<String> columns = entry.equals(SpamserviceClientsResource.SLUG) ? List.of("name") : List.of("word");
-            stored.check(GlobalTextSearchMoves.of(LEGACY_Q, columns).legacyProjection(
+            stored.check(GlobalTextSearchMoves.of(columns).legacyProjection(
                 before.get(after.caseName()), after));
         }
 
@@ -80,10 +74,7 @@ class SpamserviceAdminSurfacesBrowserTest extends HohenheimTestBase {
         FilterSpec day = events.list().table().filters().stream().filter(filter -> filter.name().equals("day"))
             .findFirst().orElseThrow();
         PanelSurfaces after = capture(SpamserviceSecurityEventsResource.SLUG, operator);
-        stored.check(TemporalFilterMoves.of(
-                FilterSpec.global("since", Microcopy.literal("since"), FilterSpec.Kind.DATE).build(),
-                FilterSpec.global("until", Microcopy.literal("until"), FilterSpec.Kind.DATE).build(),
-                day, events.list().storePages().filterVocabulary(), null)
+        stored.check(TemporalFilterMoves.of("since", "until", day, events.list().storePages().filterVocabulary(), null)
             .legacyProjection(before.get(after.caseName()), after));
 
         // 4. Every stored case matched exactly or through its declared move.

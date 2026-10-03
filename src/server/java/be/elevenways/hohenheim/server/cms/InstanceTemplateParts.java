@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
@@ -159,9 +160,9 @@ public final class InstanceTemplateParts {
             .column(ColumnSpec.fromField(InstanceTemplateModel.REINSTALL_POLICY).build())
             .column(ColumnSpec.fromField(InstanceTemplateModel.APPROVED_AT).build())
             .column(ColumnSpec.fromField(InstanceTemplateModel.SOURCE).build())
-            .filter(FilterSpec.forField(InstanceTemplateModel.NAME, FilterSpec.Kind.TEXT)
+            .filter(FilterSpec.leaf(InstanceTemplateModel.NAME, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(InstanceTemplateModel.NAME)).build())
-            .filter(FilterSpec.forField(InstanceTemplateModel.KIND, FilterSpec.Kind.SELECT)
+            .filter(FilterSpec.leaf(InstanceTemplateModel.KIND, CoreTypes.EQUALS)
                 .label(FieldLabels.labelFor(InstanceTemplateModel.KIND)).build())
             .build();
     }

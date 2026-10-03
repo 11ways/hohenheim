@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
@@ -71,8 +72,8 @@ public final class ProjectMembershipParts {
                     .column(ColumnSpec.fromField(PROJECT).filterable().build())
                     .column(ColumnSpec.fromField(MEMBER).filterable().build())
                     .column(ColumnSpec.fromField(KIND).build())
-                    .filter(FilterSpec.forField(PROJECT, FilterSpec.Kind.TEXT).build())
-                    .filter(FilterSpec.forField(MEMBER, FilterSpec.Kind.TEXT).build())
+                    .filter(FilterSpec.leaf(PROJECT, CoreTypes.CONTAINS).build())
+                    .filter(FilterSpec.leaf(MEMBER, CoreTypes.CONTAINS).build())
                     .defaultSort(SortSpec.asc("project")).build(), PAGES)
                 .chrome(ListChrome.MINIMAL).build())
             .reads(ResourceReads.<Membership>typed(Membership::key)

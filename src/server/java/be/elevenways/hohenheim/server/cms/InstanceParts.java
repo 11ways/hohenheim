@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.server.instance.InstanceResize;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.page.CmsRecordLinks;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -342,16 +343,16 @@ public final class InstanceParts {
                     Microcopy.of("managed_by").withFilter("scope", "instance"))
                 .renderer(HohenheimTemplateIds.CELL_MANAGED_BY).build())
             .column(ColumnSpec.fromField(InstanceModel.CREATED_AT).filterable().hidden().build())
-            .filter(FilterSpec.forField(InstanceModel.NAME, FilterSpec.Kind.TEXT)
+            .filter(FilterSpec.leaf(InstanceModel.NAME, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(InstanceModel.NAME)).build())
-            .filter(FilterSpec.forField(InstanceModel.KIND, FilterSpec.Kind.SELECT)
+            .filter(FilterSpec.leaf(InstanceModel.KIND, CoreTypes.EQUALS)
                 .label(FieldLabels.labelFor(InstanceModel.KIND)).build())
-            .filter(FilterSpec.forField(InstanceModel.STATUS, FilterSpec.Kind.SELECT)
+            .filter(FilterSpec.leaf(InstanceModel.STATUS, CoreTypes.EQUALS)
                 .label(FieldLabels.labelFor(InstanceModel.STATUS)).build())
             // Relational host filter: "the instances on daystrom" is a typed host name, riding the server.name
             // variable the declared source's vocabulary adds.
-            .filter(FilterSpec.global(HOST_FILTER, FieldLabels.labelFor(InstanceModel.SERVER_ID),
-                FilterSpec.Kind.TEXT).build())
+            .filter(FilterSpec.globalLeaf(HOST_FILTER, FieldLabels.labelFor(InstanceModel.SERVER_ID), HOST_FILTER,
+                CoreTypes.CONTAINS).build())
             .build();
     }
 

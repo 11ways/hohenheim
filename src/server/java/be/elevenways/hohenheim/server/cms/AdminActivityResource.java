@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.activity.ActivityRecordCell;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -64,11 +65,11 @@ public final class AdminActivityResource {
         .column(ColumnSpec.fromField(ActivityModel.RECORD_ID)
             .renderer(RECORD_RENDERER).filterable().build())
         .column(ColumnSpec.fromField(ActivityModel.ORIGIN).filterable().build())
-        .filter(FilterSpec.forField(ActivityModel.MODEL, FilterSpec.Kind.TEXT).build())
-        .filter(FilterSpec.forField(ActivityModel.RECORD_ID, FilterSpec.Kind.TEXT).build())
-        .filter(FilterSpec.forField(ActivityModel.ACTION, FilterSpec.Kind.TEXT).build())
+        .filter(FilterSpec.leaf(ActivityModel.MODEL, CoreTypes.CONTAINS).build())
+        .filter(FilterSpec.leaf(ActivityModel.RECORD_ID, CoreTypes.CONTAINS).build())
+        .filter(FilterSpec.leaf(ActivityModel.ACTION, CoreTypes.CONTAINS).build())
         .filter(FilterSpec.forPrincipal(ActivityModel.ACTOR_KIND, ActivityModel.ACTOR).build())
-        .filter(FilterSpec.forField(ActivityModel.ORIGIN, FilterSpec.Kind.TEXT).build())
+        .filter(FilterSpec.leaf(ActivityModel.ORIGIN, CoreTypes.CONTAINS).build())
         .defaultSort(SortSpec.desc(ActivityModel.CREATED_AT.getName()))
         .build();
 

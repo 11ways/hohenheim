@@ -81,9 +81,9 @@ public final class SpamserviceSecurityEventsResource {
             .column(ColumnSpec.fromField(COUNT).build())
             .column(ColumnSpec.fromField(CLIENT_ID).filterable().build())
             .column(ColumnSpec.fromField(LAST_AT).build())
-            .filter(FilterSpec.forField(TYPE, FilterSpec.Kind.TEXT).build())
-            .filter(FilterSpec.forField(IP, FilterSpec.Kind.TEXT).build())
-            .filter(FilterSpec.forField(CLIENT_ID, FilterSpec.Kind.TEXT).build())
+            .filter(FilterSpec.leaf(TYPE, CoreTypes.CONTAINS).build())
+            .filter(FilterSpec.leaf(IP, CoreTypes.CONTAINS).build())
+            .filter(FilterSpec.leaf(CLIENT_ID, CoreTypes.EQUALS).build())
             // One temporal leaf over the day the API's from/to bounds compare (BETWEEN, or a lone GTE/LTE bound).
             .filter(FilterSpec.leaf(DAY, CoreTypes.BETWEEN, CoreTypes.GTE, CoreTypes.LTE).build())
             .defaultSort(SortSpec.desc("last_at")).build();

@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.site.SiteUpstreamCell;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
@@ -232,17 +233,17 @@ public final class SiteParts {
                 .hidden().build())
             .column(ColumnSpec.fromField(SiteModel.UPSTREAM_KIND).filterable().hidden().build())
             .column(ColumnSpec.fromField(SiteModel.CREATED_AT).filterable().hidden().build())
-            .filter(FilterSpec.forField(SiteModel.NAME, FilterSpec.Kind.TEXT)
+            .filter(FilterSpec.leaf(SiteModel.NAME, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(SiteModel.NAME)).build())
-            .filter(FilterSpec.forField(SiteModel.UPSTREAM_KIND, FilterSpec.Kind.SELECT)
+            .filter(FilterSpec.leaf(SiteModel.UPSTREAM_KIND, CoreTypes.EQUALS)
                 .label(FieldLabels.labelFor(SiteModel.UPSTREAM_KIND)).build())
-            .filter(FilterSpec.forField(SiteModel.ENABLED, FilterSpec.Kind.BOOLEAN)
+            .filter(FilterSpec.leaf(SiteModel.ENABLED, CoreTypes.IS_TRUE, CoreTypes.IS_FALSE)
                 .label(FieldLabels.labelFor(SiteModel.ENABLED)).build())
-            .filter(FilterSpec.forField(SiteModel.CREATED_AT, FilterSpec.Kind.DATETIME_RANGE)
+            .filter(FilterSpec.leaf(SiteModel.CREATED_AT, CoreTypes.BETWEEN, CoreTypes.GTE, CoreTypes.LTE)
                 .label(FieldLabels.labelFor(SiteModel.CREATED_AT)).build())
-            .filter(FilterSpec.global(RowResource.ARCHIVED_FILTER,
+            .filter(FilterSpec.globalLeaf(RowResource.ARCHIVED_FILTER,
                 Microcopy.of("trashed").withFilter("scope", "cms").withFilter("target", "filter"),
-                FilterSpec.Kind.BOOLEAN).build())
+                RowResource.ARCHIVED_FILTER, CoreTypes.IS_TRUE, CoreTypes.IS_FALSE).build())
             .defaultSort(SortSpec.desc(SiteModel.CREATED_AT.getName()))
             .rowClasses(row -> Boolean.TRUE.equals(row.get(SiteModel.ENABLED)) ? "" : "hh-site-disabled")
             .build();

@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.spamservice.client.ManagedClient;
 import be.elevenways.spamservice.client.ManagedClientInput;
 import be.elevenways.spamservice.client.SpamserviceClient;
@@ -99,7 +100,7 @@ public final class SpamserviceClientsResource {
             .column(ColumnSpec.fromField(MANAGER).build())
             .column(ColumnSpec.fromField(EXTERNAL_ID).build())
             .column(ColumnSpec.fromField(SPAM_THRESHOLD).build())
-            .filter(FilterSpec.forField(ENABLED, FilterSpec.Kind.BOOLEAN).build())
+            .filter(FilterSpec.leaf(ENABLED, CoreTypes.IS_TRUE, CoreTypes.IS_FALSE).build())
             .build();
         FormSpec form = FormSpec.builder()
             .add(NAME).add(ENABLED).add(TRUSTED).add(PROVISIONER).add(MANAGER)

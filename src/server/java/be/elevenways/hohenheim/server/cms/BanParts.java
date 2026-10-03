@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.security.BanStateCell;
 import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
@@ -133,15 +134,15 @@ public final class BanParts {
             .column(ColumnSpec.fromField(BanModel.EVENT_TYPE).filterable().build())
             .column(ColumnSpec.fromField(BanModel.EXPIRES_AT).build())
             .column(ColumnSpec.fromField(BanModel.CREATED_AT).build())
-            .filter(FilterSpec.forField(BanModel.IP, FilterSpec.Kind.TEXT)
+            .filter(FilterSpec.leaf(BanModel.IP, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(BanModel.IP)).build())
-            .filter(FilterSpec.forField(BanModel.SOURCE, FilterSpec.Kind.SELECT)
+            .filter(FilterSpec.leaf(BanModel.SOURCE, CoreTypes.EQUALS)
                 .label(FieldLabels.labelFor(BanModel.SOURCE)).build())
-            .filter(FilterSpec.forField(BanModel.SCOPE, FilterSpec.Kind.SELECT)
+            .filter(FilterSpec.leaf(BanModel.SCOPE, CoreTypes.EQUALS)
                 .label(FieldLabels.labelFor(BanModel.SCOPE)).build())
-            .filter(FilterSpec.forField(BanModel.ACTIVE, FilterSpec.Kind.BOOLEAN)
+            .filter(FilterSpec.leaf(BanModel.ACTIVE, CoreTypes.IS_TRUE, CoreTypes.IS_FALSE)
                 .label(FieldLabels.labelFor(BanModel.ACTIVE)).build())
-            .filter(FilterSpec.forField(BanModel.EVENT_TYPE, FilterSpec.Kind.TEXT)
+            .filter(FilterSpec.leaf(BanModel.EVENT_TYPE, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(BanModel.EVENT_TYPE)).build())
             .defaultSort(SortSpec.desc("created_at"))
             .build();

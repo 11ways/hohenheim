@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
@@ -313,17 +314,17 @@ public final class DatabaseParts {
                 .relation(RelationPick.of(DatabaseModel.ENGINE_ID, DatabaseEngineModel.MODEL_ID).build()).build())
             .column(ColumnSpec.fromField(DatabaseModel.EPHEMERAL).filterable().hidden().build())
             .column(ColumnSpec.fromField(DatabaseModel.STATUS).filterable().build())
-            .filter(FilterSpec.forField(DatabaseModel.NAME, FilterSpec.Kind.TEXT)
+            .filter(FilterSpec.leaf(DatabaseModel.NAME, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(DatabaseModel.NAME)).build())
-            .filter(FilterSpec.forField(DatabaseModel.ENGINE, FilterSpec.Kind.SELECT)
+            .filter(FilterSpec.leaf(DatabaseModel.ENGINE, CoreTypes.EQUALS)
                 .label(FieldLabels.labelFor(DatabaseModel.ENGINE)).build())
-            .filter(FilterSpec.forField(DatabaseModel.DB_NAME, FilterSpec.Kind.TEXT)
+            .filter(FilterSpec.leaf(DatabaseModel.DB_NAME, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(DatabaseModel.DB_NAME)).build())
-            .filter(FilterSpec.forField(DatabaseModel.PLACEMENT, FilterSpec.Kind.SELECT)
+            .filter(FilterSpec.leaf(DatabaseModel.PLACEMENT, CoreTypes.EQUALS)
                 .label(FieldLabels.labelFor(DatabaseModel.PLACEMENT)).build())
-            .filter(FilterSpec.forField(DatabaseModel.EPHEMERAL, FilterSpec.Kind.BOOLEAN)
+            .filter(FilterSpec.leaf(DatabaseModel.EPHEMERAL, CoreTypes.IS_TRUE, CoreTypes.IS_FALSE)
                 .label(FieldLabels.labelFor(DatabaseModel.EPHEMERAL)).build())
-            .filter(FilterSpec.forField(DatabaseModel.STATUS, FilterSpec.Kind.SELECT)
+            .filter(FilterSpec.leaf(DatabaseModel.STATUS, CoreTypes.EQUALS)
                 .label(FieldLabels.labelFor(DatabaseModel.STATUS)).build())
             .build();
         return entry("database")
@@ -725,11 +726,11 @@ public final class DatabaseParts {
             .column(ColumnSpec.virtual(DATABASES_COLUMN,
                 Microcopy.of("databases").withFilter("scope", "database_engine")).build())
             .column(ColumnSpec.fromField(DatabaseEngineModel.MEMORY_LIMIT_MB).build())
-            .filter(FilterSpec.forField(DatabaseEngineModel.NAME, FilterSpec.Kind.TEXT)
+            .filter(FilterSpec.leaf(DatabaseEngineModel.NAME, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(DatabaseEngineModel.NAME)).build())
-            .filter(FilterSpec.forField(DatabaseEngineModel.ENGINE, FilterSpec.Kind.SELECT)
+            .filter(FilterSpec.leaf(DatabaseEngineModel.ENGINE, CoreTypes.EQUALS)
                 .label(FieldLabels.labelFor(DatabaseEngineModel.ENGINE)).build())
-            .filter(FilterSpec.forField(DatabaseEngineModel.STATUS, FilterSpec.Kind.SELECT)
+            .filter(FilterSpec.leaf(DatabaseEngineModel.STATUS, CoreTypes.EQUALS)
                 .label(FieldLabels.labelFor(DatabaseEngineModel.STATUS)).build())
             .build();
         return PanelResource.builder(HohenheimIds.id("database_engine"), ENGINES_SLUG, ENGINE)

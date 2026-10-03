@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.PanelAction;
@@ -109,9 +110,9 @@ public final class NotificationChannelParts {
                 Microcopy.of("events").withFilter("scope", "notification_channel")).hidden().build())
             .column(ColumnSpec.fromField(NotificationChannelModel.FORMAT).filterable().build())
             .column(ColumnSpec.fromField(NotificationChannelModel.CREATED_AT).build())
-            .filter(FilterSpec.forField(NotificationChannelModel.NAME, FilterSpec.Kind.TEXT)
+            .filter(FilterSpec.leaf(NotificationChannelModel.NAME, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(NotificationChannelModel.NAME)).build())
-            .filter(FilterSpec.forField(NotificationChannelModel.FORMAT, FilterSpec.Kind.SELECT)
+            .filter(FilterSpec.leaf(NotificationChannelModel.FORMAT, CoreTypes.EQUALS)
                 .label(FieldLabels.labelFor(NotificationChannelModel.FORMAT)).build())
             .build();
         // AIDEV-NOTE: the format select is spelled out to keep it CLEARABLE although the field is required. A

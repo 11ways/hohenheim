@@ -10,16 +10,8 @@ import be.elevenways.zenit.cms.test.support.SurfaceBaselines;
 import be.elevenways.zenit.cms.test.support.SurfaceCase;
 import be.elevenways.zenit.cms.test.support.SurfaceFact;
 import be.elevenways.zenit.cms.test.support.PlacedOperationMoves;
-import be.elevenways.zenit.cms.test.support.FilterLeafMoves;
 import be.elevenways.zenit.cms.common.render.table.SynthesizedRowActions;
-import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.hohenheim.server.cms.DnsOperations;
-import be.elevenways.hohenheim.server.cms.DnsRecordParts;
-import be.elevenways.hohenheim.server.cms.DnsPeerParts;
-import be.elevenways.hohenheim.server.cms.ManageDnsRecordParts;
-import be.elevenways.zenit.cms.common.resource.PanelResource;
-import be.elevenways.zenit.common.orm.query.rules.SchemaVocabulary;
-import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -57,27 +49,14 @@ class DnsPartsSurfacesBrowserTest extends HohenheimTestBase {
         }
         for (Map.Entry<String, Integer> record : Map.of("address", address, "text", text).entrySet()) {
             for (String panel : new String[] {HohenheimSlugs.ADMIN, HohenheimSlugs.MANAGE}) {
-                stored.check(project(PanelSurfaces.capture(SurfaceCase.of(panel, "dns-records", "operator", operator)
-                    .onRecord(record.getValue().toString(), record.getKey())),
-                    panel.equals(HohenheimSlugs.ADMIN) ? DnsRecordParts.admin() : ManageDnsRecordParts.manage()));
+                stored.check(PanelSurfaces.capture(SurfaceCase.of(panel, "dns-records", "operator", operator)
+                    .onRecord(record.getValue().toString(), record.getKey())));
             }
         }
         for (Map.Entry<String, Integer> record : Map.of("in-use", peer, "remote", remote).entrySet()) {
-            stored.check(project(PanelSurfaces.capture(SurfaceCase.of(HohenheimSlugs.ADMIN, "dns-peers", "operator", operator)
-                .onRecord(record.getValue().toString(), record.getKey())), DnsPeerParts.admin()));
+            stored.check(PanelSurfaces.capture(SurfaceCase.of(HohenheimSlugs.ADMIN, "dns-peers", "operator", operator)
+                .onRecord(record.getValue().toString(), record.getKey())));
         }
         stored.finish();
-    }
-
-    private static PanelSurfaces project(PanelSurfaces capture, PanelResource<Row> parts) {
-        var vocabulary = SchemaVocabulary.of(parts.model());
-        Map<String, FilterSpec.Kind> legacy = Map.of("name", FilterSpec.Kind.TEXT,
-            "type", FilterSpec.Kind.SELECT, "enabled", FilterSpec.Kind.BOOLEAN);
-        FilterLeafMoves moves = null;
-        for (FilterSpec filter : parts.list().table().filters()) {
-            var move = FilterLeafMoves.of(legacy.get(filter.name()), filter, vocabulary, null);
-            moves = moves == null ? move : moves.and(move);
-        }
-        return moves == null ? capture : moves.legacyProjection(capture);
     }
 }

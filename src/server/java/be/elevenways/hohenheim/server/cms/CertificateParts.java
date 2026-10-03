@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectArity;
@@ -173,17 +174,17 @@ public final class CertificateParts {
         // the two-line date cells, the list still ran 73px past a 1440px viewport with it,
         // and a certificate list is read by "what expires next", so that is the sort.
         .column(dateColumn(CertificateModel.CREATED_AT).filterable().hidden().build())
-        .filter(FilterSpec.forField(CertificateModel.NICE_NAME, FilterSpec.Kind.TEXT)
+        .filter(FilterSpec.leaf(CertificateModel.NICE_NAME, CoreTypes.CONTAINS)
             .label(FieldLabels.labelFor(CertificateModel.NICE_NAME)).build())
-        .filter(FilterSpec.forField(CertificateModel.PROVIDER, FilterSpec.Kind.SELECT)
+        .filter(FilterSpec.leaf(CertificateModel.PROVIDER, CoreTypes.EQUALS)
             .label(FieldLabels.labelFor(CertificateModel.PROVIDER)).build())
-        .filter(FilterSpec.forField(CertificateModel.DOMAIN_NAMES_TEXT, FilterSpec.Kind.TEXT)
+        .filter(FilterSpec.leaf(CertificateModel.DOMAIN_NAMES_TEXT, CoreTypes.CONTAINS)
             .label(FieldLabels.labelFor(CertificateModel.DOMAIN_NAMES_TEXT)).build())
-        .filter(FilterSpec.forField(CertificateModel.STATUS, FilterSpec.Kind.SELECT)
+        .filter(FilterSpec.leaf(CertificateModel.STATUS, CoreTypes.EQUALS)
             .label(FieldLabels.labelFor(CertificateModel.STATUS)).build())
-        .filter(FilterSpec.forField(CertificateModel.EXPIRES_ON, FilterSpec.Kind.TEXT)
+        .filter(FilterSpec.leaf(CertificateModel.EXPIRES_ON, CoreTypes.BETWEEN, CoreTypes.GTE, CoreTypes.LTE)
             .label(FieldLabels.labelFor(CertificateModel.EXPIRES_ON)).build())
-        .filter(FilterSpec.forField(CertificateModel.CREATED_AT, FilterSpec.Kind.TEXT)
+        .filter(FilterSpec.leaf(CertificateModel.CREATED_AT, CoreTypes.BETWEEN, CoreTypes.GTE, CoreTypes.LTE)
             .label(FieldLabels.labelFor(CertificateModel.CREATED_AT)).build())
         .defaultSort(SortSpec.asc(CertificateModel.EXPIRES_ON.getName()))
         .build();
