@@ -7,8 +7,7 @@ import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.zenit.auth.server.cms.AuthRolesResource;
-import be.elevenways.zenit.auth.server.cms.AuthUsersResource;
+import be.elevenways.zenit.auth.server.cms.AuthAdminParts;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
@@ -205,9 +204,9 @@ public final class HohenheimPanel extends Panel {
         // AIDEV-NOTE: zenit-auth grew the description seam (a third constructor argument),
         // so these two describe themselves like every other entry and
         // AdminNavigationJourneyTest step 2 no longer exempts anything.
-        peers.add(new AuthUsersResource(SECURITY_GROUP, 10,
+        peers.add(AuthAdminParts.users(SECURITY_GROUP, 10,
             Microcopy.of("nav_hint").withFilter("scope", "user")));
-        peers.add(new AuthRolesResource(SECURITY_GROUP, 20,
+        peers.add(AuthAdminParts.roles(SECURITY_GROUP, 20,
             Microcopy.of("nav_hint").withFilter("scope", "role")));
         addIf(peers, new SpamserviceOverviewPage(), Role.FIREWALL);
         addIf(peers, new SpamserviceInstallationResource(), Role.FIREWALL);
