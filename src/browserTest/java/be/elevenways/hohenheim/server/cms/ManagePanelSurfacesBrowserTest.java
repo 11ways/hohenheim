@@ -90,7 +90,8 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
     private static AccessContext tenantEmpty;
 
     @BeforeAll
-    static void seed() {
+    static void seed() throws Exception {
+        freshSeededDatabase();
         int oneId = ApiSupport.user(PREFIX + "one@hohenheim.local", "Surfaces Tenant One");
         int emptyId = ApiSupport.user(PREFIX + "empty@hohenheim.local", "Surfaces Tenant Empty");
         int site = site(PREFIX + "site", true);

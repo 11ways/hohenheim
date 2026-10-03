@@ -6,8 +6,6 @@ import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.server.cms.RuntimeImageParts;
-import be.elevenways.zenit.cms.common.resource.RowResource;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.server.page.CmsRecordSources;
 import be.elevenways.zenit.common.data.RecordSource;
@@ -58,18 +56,17 @@ class AdminSourcesTest extends HohenheimTestBase {
 
         // 3. Inline create follows the resource exactly as the derived default would have:
         //    offered when the framework can derive a provider for it, absent otherwise.
-        boolean imageCreatable = CmsRecordSources.createProviderFor(
-            (RowResource) PanelResourceViews.forCaller(RuntimeImageParts.admin())) != null;
+        boolean imageCreatable = CmsRecordSources.createProviderFor(RuntimeImageParts.admin()) != null;
         assertThat(images.isCreatable())
             .as("step 3: runtime images offer inline create iff the framework derives a provider")
             .isEqualTo(imageCreatable);
 
-        // 4. Zones keep the derived default; the composed auth-provider entry needs its explicit model picker source.
+        // 4. Both composed entries derive their model picker source from the panel's declaration.
         for (Identifier modelId : List.of(DnsZoneModel.MODEL_ID, SiteAuthProviderModel.MODEL_ID)) {
             RecordSource<?> source = RecordSourceRegistry.INSTANCE.requireById(modelId);
             assertThat(entryOf(modelId).derivedDefault())
                 .as("step 4: %s has the source appropriate to its entry kind", modelId)
-                .isEqualTo(modelId.equals(DnsZoneModel.MODEL_ID));
+                .isTrue();
             assertThat(source.hasEditUrl()).as("step 4: %s links to its record", modelId).isTrue();
             assertThat(source.searchOffered()).as("step 4: %s is searchable", modelId).isTrue();
         }
