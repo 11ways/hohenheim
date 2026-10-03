@@ -360,13 +360,14 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         Row domain = Models.get(SiteDomainModel.class).findById(domainId);
         Row site = Models.get(SiteModel.class).findById(siteId);
         PanelResource<Row> resource = DomainParts.admin();
+        Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
 
         // 1. The resource's own answer: manage on the OWNING SITE, nothing else.
-        assertThat(ResourceVerbs.permits(resource, ResourceVerb.UPDATE, domain, viewer()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, domain, viewer()))
             .as("a delegate without manage on the site is offered no domain editor").isFalse();
-        assertThat(ResourceVerbs.permits(resource, ResourceVerb.UPDATE, domain, holder()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, domain, holder()))
             .as("a manage holder keeps its editor").isTrue();
-        assertThat(ResourceVerbs.permits(resource, ResourceVerb.DELETE, domain, holder()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.DELETE, domain, holder()))
             .as("and its detach button").isTrue();
 
         // 2. The TAB answers exactly the same, row by row.
