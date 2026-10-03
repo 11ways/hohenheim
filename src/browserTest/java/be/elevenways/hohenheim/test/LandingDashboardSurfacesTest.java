@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.dns.DnsServer;
-import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
@@ -61,8 +60,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * AIDEV-NOTE: the attention widget reads JVM-global inputs other classes of a lane change (decided 2026-10-03: pin
  * every input the test does not own, never compare host state). {@link #pinAttentionInputs} sets the settings and
- * servers and restores them after; the DNS zone cache is rebuilt from this class's database; Docker health and the
- * Spamservice manager change only in a real ServerMain boot, which runs solo, so they are asserted untouched.
+ * servers and restores them after (the DNS zones follow this class's datasource by themselves); Docker health and
+ * the Spamservice manager change only in a real ServerMain boot, which runs solo, so they are asserted untouched.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -128,8 +127,6 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.SSH_WATCH_ENABLED, false);
         ServerMain.adoptProxyServer(null);
         ServerMain.adoptDnsServer(null);
-        // Earlier classes publish their zones into this cache; it answers this class's database once rebuilt.
-        DnsZoneStore.INSTANCE.reload();
         assertThat(DockerHealth.instance().status()).as("setup: no boot probed the shared Docker health")
             .isEqualTo(DockerHealth.Status.UNPROBED);
         assertThat(SpamserviceManager.get().snapshot().needsAttention())
