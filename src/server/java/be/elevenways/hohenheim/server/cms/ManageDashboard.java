@@ -16,7 +16,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.resource.DashboardPanelPeer;
+import be.elevenways.zenit.cms.common.panel.PanelDashboard;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
@@ -46,7 +46,7 @@ import java.util.Map;
  * @author Jelle De Loecker
  * @since 0.2.0
  */
-public final class ManageDashboard extends DashboardPanelPeer {
+public final class ManageDashboard extends PanelDashboard {
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("manage_dashboard"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("dashboard").withFilter("scope", "manage"); }

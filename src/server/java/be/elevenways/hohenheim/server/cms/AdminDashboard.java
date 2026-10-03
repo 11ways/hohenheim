@@ -15,7 +15,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.protoblast.common.typed.rule.Condition;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.resource.DashboardPanelPeer;
+import be.elevenways.zenit.cms.common.panel.PanelDashboard;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -41,7 +41,7 @@ import java.util.Map;
  * The /admin landing dashboard: entity-count stat tiles plus the most
  * recent activity-log entries.
  */
-public final class AdminDashboard extends DashboardPanelPeer {
+public final class AdminDashboard extends PanelDashboard {
 
     /** The dashboard is the OPERATOR surface; every tile links into the admin panel. */
     private static final String ADMIN = HohenheimSlugs.ADMIN;

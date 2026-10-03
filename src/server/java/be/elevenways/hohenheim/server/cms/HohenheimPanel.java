@@ -128,7 +128,7 @@ public final class HohenheimPanel extends Panel {
     public @NonNull List<PanelEntry> buildEntries() {
         List<PanelEntry> peers = new ArrayList<>();
         // The dashboard comes first: the panel landing soft-redirects to the
-        // first accessible DashboardPanelPeer.
+        // first accessible dashboard entry.
         peers.add(new AdminDashboard());
         // Projects/environments span every product tier (sites, instances, databases
         // through their sites), so they are not gated on any single role.

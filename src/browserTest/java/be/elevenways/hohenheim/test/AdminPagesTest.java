@@ -296,7 +296,7 @@ class AdminPagesTest extends HohenheimTestBase {
     @Test
     void activityLogDashboardFeedAndActivityDetailReflectACreation() throws Exception {
         var createResponse = adminPostForm("/admin/sites/new",
-            "name=Audit+Test+Site&upstream_kind=hohenheim%3Astatic");
+            "name=Audit+Test+Site&upstream_kind=hohenheim%3Astatic&" + siteCreateEnvelope());
         assertThat(createResponse.statusCode()).isIn(200, 302, 303);
 
         Row site = Models.get(SiteModel.class).find()
@@ -718,7 +718,7 @@ class AdminPagesTest extends HohenheimTestBase {
 
         // A site of this test's own, created through the form like an operator's.
         assertThat(adminPostForm("/admin/sites/new",
-            "name=Record+Tabs+Site&upstream_kind=hohenheim%3Astatic").statusCode())
+            "name=Record+Tabs+Site&upstream_kind=hohenheim%3Astatic&" + siteCreateEnvelope()).statusCode())
             .as("the tab fixture site is created").isIn(200, 302, 303);
         Row site = Models.get(SiteModel.class).find()
             .where(SiteModel.NAME.eq("Record Tabs Site")).first();
