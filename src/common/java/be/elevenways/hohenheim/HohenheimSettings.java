@@ -8,6 +8,7 @@ import be.elevenways.zenit.common.setting.SettingsRule;
 import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.zenit.common.validation.PathKind;
 import be.elevenways.zenit.common.validation.PrivateNetworkOptIn;
+import be.elevenways.zenit.common.validation.PrivateNetworkOptIn.Consumer;
 import be.elevenways.hohenheim.net.IpLiterals;
 import be.elevenways.hohenheim.net.LegacyIpSpellings;
 import be.elevenways.protoblast.common.util.BlastString;
@@ -883,10 +884,8 @@ public class HohenheimSettings {
          * Explicit operator opt-in for site auth providers whose Proteus realm is on a private network. Declared without
          * a label, as it always was: the settings page keeps its fallback name.
          */
-        public static final SettingDefinition<Boolean> PROTEUS_ALLOW_PRIVATE_NETWORKS = PrivateNetworkOptIn.declare(
-            GROUP, "proteus_allow_private_networks", null,
-            "Allow site auth providers to reach a Proteus realm on a private network (RFC 1918, IPv6"
-                + " unique-local); this host, link-local and special-purpose addresses stay refused");
+        public static final Consumer PROTEUS_ALLOW_PRIVATE_NETWORKS = PrivateNetworkOptIn.consumer(
+            HohenheimIds.id("proteus_private_networks"), "hohenheim.proxy_auth.proteus_allow_private_networks");
     }
 
     // --- Per-owner consumption caps (the reservation ledger's policy side) ---
