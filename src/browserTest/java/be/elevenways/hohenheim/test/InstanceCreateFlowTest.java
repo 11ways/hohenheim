@@ -401,8 +401,11 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
             clickKindCard("workspace");
             page.waitForCondition(() -> page.locator(HOST_SELECT + "[disabled]").count() == 0);
             openPlSelect(HOST_SELECT);
+            // AIDEV-NOTE: zero options is also true while the provider request is still loading. Wait for the
+            // empty row presentation before asserting the declared explanation.
             page.waitForCondition(() -> page.locator(
-                OPEN_SELECT_POPUP + " div[role='option']").count() == 0);
+                OPEN_SELECT_POPUP + " div[role='option']").count() == 0
+                && page.locator(OPEN_SELECT_POPUP + " .pl-select-empty").isVisible());
             assertThat(page.locator(OPEN_SELECT_POPUP + " .pl-select-empty").isVisible())
                 .as("step 3: nothing qualifies, so the empty row is what the operator sees")
                 .isTrue();
