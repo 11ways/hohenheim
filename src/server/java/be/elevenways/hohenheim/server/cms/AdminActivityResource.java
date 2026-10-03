@@ -68,7 +68,7 @@ public final class AdminActivityResource {
         .filter(FilterSpec.leaf(ActivityModel.MODEL, CoreTypes.CONTAINS).build())
         .filter(FilterSpec.leaf(ActivityModel.RECORD_ID, CoreTypes.CONTAINS).build())
         .filter(FilterSpec.leaf(ActivityModel.ACTION, CoreTypes.CONTAINS).build())
-        .filter(FilterSpec.forPrincipal(ActivityModel.ACTOR_KIND, ActivityModel.ACTOR).build())
+        .filter(FilterSpec.forPrincipal(ActivityModel.ACTOR_PRINCIPAL).build())
         .filter(FilterSpec.leaf(ActivityModel.ORIGIN, CoreTypes.CONTAINS).build())
         .defaultSort(SortSpec.desc(ActivityModel.CREATED_AT.getName()))
         .build();
