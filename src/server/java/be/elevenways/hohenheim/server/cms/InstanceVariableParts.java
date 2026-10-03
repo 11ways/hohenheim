@@ -57,6 +57,10 @@ public final class InstanceVariableParts {
      * @param scope the rows this panel's viewers may read
      */
     public static @NonNull PanelResource<Row> create(@NonNull Identifier id, @NonNull RowScope scope) {
+        return entry(id, scope).build();
+    }
+
+    private static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id, @NonNull RowScope scope) {
         TableSpec<Row> table = tableSpec();
         return PanelResource.builder(Objects.requireNonNull(id, "id cannot be null"), SLUG,
                 SubjectType.record(InstanceVariableModel.MODEL_ID))
@@ -72,13 +76,18 @@ public final class InstanceVariableParts {
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).search(InstanceVariableModel.KEY)
                 .computed(Objects.requireNonNull(table.column(VALUE_COLUMN)),
                     (row, request) -> plainValue(row))
-                .build())
-            .build();
+                .build());
     }
 
-    /** The admin panel's entry: every instance-owned value. */
+    /**
+     * The admin panel's entry: every instance-owned value.
+     *
+     * AIDEV-NOTE: the panel's other entry over the variable model, EnvironmentParts.variables(), reads the
+     * environment-owned rows; this one stays the source of the panel's variable pickers, as it was while it was the
+     * panel's only resource over the model.
+     */
     public static @NonNull PanelResource<Row> admin() {
-        return create(HohenheimIds.id("instance_variable"), ROWS);
+        return entry(HohenheimIds.id("instance_variable"), ROWS).pickerSource().build();
     }
 
     /** The /manage entry: the values of instances the viewer may view. */

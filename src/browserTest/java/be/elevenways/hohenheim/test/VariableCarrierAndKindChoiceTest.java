@@ -4,7 +4,14 @@ import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ProjectModel;
-import be.elevenways.hohenheim.server.cms.EnvironmentVariableResource;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.server.cms.EnvironmentParts;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.Resource;
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -17,6 +24,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -36,7 +44,9 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
      * is the same walk that hides the carrier and the same one that strips it on submit.
      */
     private static List<String> valueEntriesOf(@Nullable Row record, EditView view) {
-        EnvironmentVariableResource resource = new EnvironmentVariableResource();
+        Panel admin = PanelRegistry.getBySlug(HohenheimSlugs.ADMIN);
+        Resource<?> resource = PanelResourceViews.forProgrammaticCaller(
+            (PanelResource<?>) admin.entryBySlug(EnvironmentParts.VARIABLES_SLUG), admin);
         FormState state = new FormStateTranslator().translate(
             resource.formSpec(), resource.fieldAccessByPath(), view,
             TestAccessContexts.contextFor(null), Map.of(), List.<Violation>of(),
@@ -50,6 +60,21 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
             }
         }
         return carriers;
+    }
+
+    /** Creates one variable through the panel entry's CREATE, as its form posts it (the plain carrier only). */
+    private static void create(Integer environmentId, String key, String kind, String value) {
+        PanelResourceCalls.create(HohenheimSlugs.ADMIN, EnvironmentParts.VARIABLES_SLUG, Map.of(
+            "environment_id", String.valueOf(environmentId), "key", key, "kind", kind, "plain_value", value),
+            TenantConduits.operator());
+    }
+
+    /** Saves one variable through the panel entry's UPDATE, as its edit form posts the given entries. */
+    private static void patch(Integer variableId, Map<String, Object> values) {
+        Map<String, Object> raw = new LinkedHashMap<>();
+        values.forEach((name, value) -> raw.put(name, String.valueOf(value)));
+        PanelResourceCalls.patch(HohenheimSlugs.ADMIN, EnvironmentParts.VARIABLES_SLUG, variableId, raw,
+            TenantConduits.operator());
     }
 
     @Test
@@ -73,10 +98,7 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
             .containsExactly(InstanceVariableModel.PLAIN_VALUE.getName());
 
         // 3. A plain variable created through the real form stores plain_value.
-        HttpResponse<String> created = httpPostForm("/admin/environment-variables/new",
-            "environment_id=" + environmentId + "&key=CARRIER_PROBE&kind=plain"
-                + "&plain_value=visible-config", sessionToken, csrfToken);
-        assertThat(created.statusCode()).as("the create succeeds").isEqualTo(302);
+        create(environmentId, "CARRIER_PROBE", "plain", "visible-config");
 
         Row stored = Models.get(InstanceVariableModel.class).find()
             .where(InstanceVariableModel.KEY.eq("CARRIER_PROBE")).first();
@@ -92,10 +114,8 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
 
         // 5. Switching the kind retires the previous carrier instead of being refused
         //    by the model's one-carrier-per-kind hook.
-        HttpResponse<String> switched = httpPostForm("/admin/environment-variables/" + variableId,
-            "environment_id=" + environmentId + "&key=CARRIER_PROBE&kind=secret"
-                + "&plain_value=visible-config", sessionToken, csrfToken);
-        assertThat(switched.statusCode()).as("the kind switch saves").isEqualTo(302);
+        patch(variableId, Map.of("environment_id", environmentId, "key", "CARRIER_PROBE", "kind", "secret",
+            "plain_value", "visible-config"));
 
         stored = Models.get(InstanceVariableModel.class).find()
             .where(InstanceVariableModel.ID.eq(variableId)).first();
@@ -110,11 +130,8 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
             .as("a secret row edits its secret carrier and nothing else")
             .containsExactly(InstanceVariableModel.SECRET_VALUE.getName());
 
-        HttpResponse<String> secretSaved = httpPostForm(
-            "/admin/environment-variables/" + variableId,
-            "environment_id=" + environmentId + "&key=CARRIER_PROBE&kind=secret"
-                + "&secret_value=hunter2-carrier", sessionToken, csrfToken);
-        assertThat(secretSaved.statusCode()).isEqualTo(302);
+        patch(variableId, Map.of("environment_id", environmentId, "key", "CARRIER_PROBE", "kind", "secret",
+            "secret_value", "hunter2-carrier"));
 
         stored = Models.get(InstanceVariableModel.class).find()
             .where(InstanceVariableModel.ID.eq(variableId)).first();
@@ -123,11 +140,8 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
 
         // 7. The hidden carrier is not merely unrendered: a hand-crafted submission
         //    naming it is stripped, so the stored column can never disagree with the kind.
-        HttpResponse<String> smuggled = httpPostForm(
-            "/admin/environment-variables/" + variableId,
-            "environment_id=" + environmentId + "&key=CARRIER_PROBE&kind=secret"
-                + "&plain_value=smuggled", sessionToken, csrfToken);
-        assertThat(smuggled.statusCode()).isEqualTo(302);
+        patch(variableId, Map.of("environment_id", environmentId, "key", "CARRIER_PROBE", "kind", "secret",
+            "plain_value", "smuggled"));
         stored = Models.get(InstanceVariableModel.class).find()
             .where(InstanceVariableModel.ID.eq(variableId)).first();
         assertThat(stored.get(InstanceVariableModel.PLAIN_VALUE))
@@ -155,10 +169,7 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
         // 2. The operator picks Kind = Secret on the create form and types the value into
         //    the one value field it offers. This used to be refused, in column language,
         //    with no field on the page that could have satisfied it.
-        HttpResponse<String> created = httpPostForm("/admin/environment-variables/new",
-            "environment_id=" + environmentId + "&key=SECRET_AT_BIRTH&kind=secret"
-                + "&plain_value=hunter2-at-birth", sessionToken, csrfToken);
-        assertThat(created.statusCode()).as("the create is accepted").isEqualTo(302);
+        create(environmentId, "SECRET_AT_BIRTH", "secret", "hunter2-at-birth");
 
         // 3. And it landed in the column its kind declares, not the one it was typed in.
         Row stored = Models.get(InstanceVariableModel.class).find()
@@ -175,10 +186,7 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
             .isNull();
 
         // 4. A PLAIN create is untouched by that move.
-        HttpResponse<String> plain = httpPostForm("/admin/environment-variables/new",
-            "environment_id=" + environmentId + "&key=PLAIN_AT_BIRTH&kind=plain"
-                + "&plain_value=visible-at-birth", sessionToken, csrfToken);
-        assertThat(plain.statusCode()).isEqualTo(302);
+        create(environmentId, "PLAIN_AT_BIRTH", "plain", "visible-at-birth");
         Row plainRow = Models.get(InstanceVariableModel.class).find()
             .where(InstanceVariableModel.KEY.eq("PLAIN_AT_BIRTH")).first();
         assertThat(plainRow.get(InstanceVariableModel.PLAIN_VALUE))

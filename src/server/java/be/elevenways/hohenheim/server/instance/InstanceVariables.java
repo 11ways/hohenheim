@@ -203,7 +203,7 @@ public final class InstanceVariables {
      * here, and that is a statement about THIS method, not a hole: they hang off a
      * project, so there is no instance capability for a service-level gate to ask about.
      * Their gate is PaasApi.visibleEnvironment, which is now ADMIN-ONLY -- the same
-     * permission EnvironmentVariableResource's panel demands. This note previously said
+     * permission EnvironmentParts.variables()'s panel demands. This note previously said
      * that gate was "project membership AND an API key covering the instance vocabulary";
      * it was, and that was the defect: membership is grant-derived and a scope token only
      * narrows a key, so neither is authority over the instances an environment value

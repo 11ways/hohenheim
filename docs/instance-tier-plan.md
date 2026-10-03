@@ -4757,7 +4757,7 @@ network, quota, ownership, secret and durable-operation mechanisms.
   CORRECTED 2026-08-13: the ENVIRONMENT half of that variable lane shipped
   gated on membership plus an instance scope token, neither of which is
   authority over the instances an environment value reaches; it is now
-  admin-only, matching the admin-only `EnvironmentVariableResource` that is its
+  admin-only, matching the admin-only `EnvironmentParts.variables()` entry that is its
   sole UI. Environments still have no tenant surface (see above). One
   uniform 404 everywhere, including child records of another site. Rollback
   demands no server-side phrase ON PURPOSE (ConfirmationSpec is a client

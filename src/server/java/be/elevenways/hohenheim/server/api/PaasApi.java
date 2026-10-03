@@ -667,7 +667,7 @@ public final class PaasApi {
      * ({@code HohenheimPanel.ACCESS}, which is what {@link HohenheimAccess#isAdmin}
      * asks), and the environment must hang off a real project.
      *
-     * AIDEV-NOTE: admin-only because the UI is. EnvironmentVariableResource is
+     * AIDEV-NOTE: admin-only because the UI is. EnvironmentParts.variables() is
      * registered on HohenheimPanel alone, and ManagePanel offers NO environment peer at
      * all -- its project tier is deliberately a read-only projection -- so ANY tenant
      * write here is by construction a wider door than the admin UI, which is the one

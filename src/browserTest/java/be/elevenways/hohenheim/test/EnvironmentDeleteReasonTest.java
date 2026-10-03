@@ -4,27 +4,33 @@ import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
-import be.elevenways.hohenheim.server.cms.EnvironmentResource;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.server.cms.EnvironmentParts;
 import be.elevenways.hohenheim.server.project.ProjectGuards;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.operation.OperationPipeline;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
 
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * An environment still in use refuses deletion BY NAME: the delete affordance is dead
- * with the holders on it, and the write gate's refusal names the same holders.
+ * An environment still in use refuses deletion BY NAME: the delete operation is offered
+ * dead with the holders on it, and the panel's delete is refused naming the same holders.
  *
  * Pinned defect (QA 2026-08-29, F11): "still referenced by instances or variables"
  * named nothing the operator could act on.
@@ -79,8 +85,8 @@ class EnvironmentDeleteReasonTest extends HohenheimTestBase {
             new UserPrincipal(admin.get(UserModel.ID), "Test Admin")));
         Row environment = Models.get(EnvironmentModel.class).findById(environmentId);
 
-        // 1. The resource declares the delete dead, naming the variable that holds it.
-        Microcopy reason = new EnvironmentResource().deleteUnavailableReason(environment, operator);
+        // 1. The entry's delete operation is offered dead, naming the variable that holds it.
+        Microcopy reason = deleteUnavailable(environment, operator);
         assertThat(reason).as("step 1: an environment in use has a dead delete").isNotNull();
         assertThat(resolve(reason)).as("step 1: the reason names the holder").contains(KEY);
 
@@ -96,21 +102,28 @@ class EnvironmentDeleteReasonTest extends HohenheimTestBase {
         assertThat(list.statusCode()).isEqualTo(200);
         assertThat(list.body()).as("step 3: the reason is on screen").contains(KEY);
 
-        // 4. A direct POST is refused with the same reason and the row survives.
-        HttpResponse<String> refused = httpPostForm(
-            "/admin/environments/" + environmentId + "/delete", confirmed(""), sessionToken, csrfToken);
-        assertThat(refused.statusCode()).as("step 4: the refusal redirects back").isEqualTo(302);
+        // 4. The panel's own delete is refused with the same reason and the row survives.
+        Violations refused = catchThrowableOfType(() -> PanelResourceCalls.delete(
+            HohenheimSlugs.ADMIN, EnvironmentParts.SLUG, environmentId, operator), Violations.class);
+        assertThat((Object) refused).as("step 4: the delete is refused").isNotNull();
+        assertThat(resolve(refused.all().get(0).message())).as("step 4: naming the holder").contains(KEY);
         assertThat(Models.get(EnvironmentModel.class).findById(environmentId))
             .as("step 4: the environment was not deleted").isNotNull();
-        var flash = popFlash(refused);
-        assertThat(flash).as("step 4: the operator gets an error toast").isNotNull();
-        assertThat(resolve(flash.message())).as("step 4: naming the holder").contains(KEY);
 
-        // 5. Once the variable is gone the delete comes alive again.
+        // 5. Once the variable is gone the delete comes alive again, and runs.
         Models.get(InstanceVariableModel.class).delete(variableId);
         variableId = null;
-        assertThat(new EnvironmentResource().deleteUnavailableReason(environment, operator))
+        assertThat(deleteUnavailable(environment, operator))
             .as("step 5: nothing holds the environment any more").isNull();
+        PanelResourceCalls.delete(HohenheimSlugs.ADMIN, EnvironmentParts.SLUG, environmentId, operator);
+        assertThat(Models.get(EnvironmentModel.class).findById(environmentId))
+            .as("step 5: the free environment is deleted").isNull();
+        environmentId = null;
+    }
+
+    private static Microcopy deleteUnavailable(Row environment, AccessContext access) {
+        OperationPipeline.Offer offer = OperationPipeline.offer(EnvironmentParts.DELETE, access, environment);
+        return offer instanceof OperationPipeline.Offer.Unavailable dead ? dead.reason() : null;
     }
 
     private static String resolve(Microcopy copy) {

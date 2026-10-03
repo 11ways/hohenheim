@@ -24,8 +24,7 @@ import be.elevenways.hohenheim.server.cms.CertificateParts;
 import be.elevenways.hohenheim.server.cms.DnsPeerResource;
 import be.elevenways.hohenheim.server.cms.DnsRecordResource;
 import be.elevenways.hohenheim.server.cms.DnsZoneResource;
-import be.elevenways.hohenheim.server.cms.EnvironmentResource;
-import be.elevenways.hohenheim.server.cms.EnvironmentVariableResource;
+import be.elevenways.hohenheim.server.cms.EnvironmentParts;
 import be.elevenways.hohenheim.server.cms.ManageDnsRecordResource;
 import be.elevenways.hohenheim.server.cms.NotificationChannelResource;
 import be.elevenways.hohenheim.server.cms.ServerResource;
@@ -323,7 +322,7 @@ class DeleteConfirmationTest {
 
             // 6. The remaining two speak for themselves rather than through the framework's
             //    "this cannot be undone".
-            assertThat(new EnvironmentResource().deleteConfirmation().body().filters().get("scope"))
+            assertThat(EnvironmentParts.admin().deleteConfirmation().fallback().body().filters().get("scope"))
                 .as("step 6: the environment dialog states the refusal policy it enforces")
                 .isEqualTo("environment");
             assertThat(new NotificationChannelResource().deleteConfirmation()
@@ -412,23 +411,24 @@ class DeleteConfirmationTest {
 
             // 6. An environment variable's dialog names the key and the environment it
             //    leaves; the record-less one still says when the removal lands.
-            EnvironmentVariableResource variables = new EnvironmentVariableResource();
+            DeleteConfirmation<Row> variables = EnvironmentParts.variables().deleteConfirmation();
+            PanelRequest request = adminRequest();
             int environmentId = environment("production");
             Row variable = Models.get(InstanceVariableModel.class)
                 .findById(environmentVariable(environmentId, "DATABASE_URL"));
-            ConfirmationSpec named = variables.deleteConfirmationFor(variable);
+            ConfirmationSpec named = variables.forRow(variable, request);
             assertThat(named.body().key()).as("step 6: the named wording").isEqualTo("delete_confirm_named");
             assertThat(named.body().filters().get("scope")).isEqualTo("environment_variable");
             assertThat(named.body().args().get("key")).as("step 6: naming the key").isEqualTo("DATABASE_URL");
             assertThat(named.body().args().get("environment")).as("step 6: and the environment")
                 .isEqualTo("production");
-            assertThat(variables.deleteConfirmation().body().filters().get("scope"))
+            assertThat(variables.fallback().body().filters().get("scope"))
                 .as("step 6: the record-less dialog is the variable's own").isEqualTo("environment_variable");
 
             // 7. A variable whose environment reference dangles cannot name one and keeps
             //    the type-level body rather than a sentence with a hole in it.
             variable.set(InstanceVariableModel.ENVIRONMENT_ID, null);
-            assertThat(variables.deleteConfirmationFor(variable).body().key())
+            assertThat(variables.forRow(variable, request).body().key())
                 .as("step 7: an unresolvable environment falls back to the type-level body")
                 .isEqualTo("delete_confirm");
         });

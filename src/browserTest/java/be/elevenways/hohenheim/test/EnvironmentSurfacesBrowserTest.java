@@ -5,8 +5,11 @@ import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ProjectModel;
+import be.elevenways.hohenheim.server.cms.EnvironmentParts;
 import be.elevenways.zenit.auth.model.UserPrincipal;
+import be.elevenways.zenit.cms.common.render.table.SynthesizedRowActions;
 import be.elevenways.zenit.cms.test.support.PanelSurfaces;
+import be.elevenways.zenit.cms.test.support.PlacedOperationMoves;
 import be.elevenways.zenit.cms.test.support.SurfaceBaselines;
 import be.elevenways.zenit.cms.test.support.SurfaceCase;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -21,6 +24,10 @@ import java.util.List;
 
 /**
  * Frozen environment and variable surfaces, including both value carriers and a used environment's delete gate.
+ *
+ * AIDEV-NOTE: the stored set ({@code /panel-surfaces/environments.txt}) is the behaviour captured on the legacy
+ * EnvironmentResource and EnvironmentVariableResource before they moved onto EnvironmentParts. A failing comparison is
+ * a changed surface, never a file to refresh; an accepted difference is declared as a move.
  *
  * @author Jelle De Loecker
  * @since 0.9.0
@@ -56,7 +63,13 @@ class EnvironmentSurfacesBrowserTest extends HohenheimTestBase {
     @Test
     void theEnvironmentEntriesKeepTheirCapturedSurfaces() {
         SurfaceBaselines before = SurfaceBaselines.load(EnvironmentSurfacesBrowserTest.class,
-            "/panel-surfaces/environments.txt");
+            "/panel-surfaces/environments.txt")
+            // Each entry's synthesized delete became its placed delete operation: the environment's
+            // delete_environment (its in-use refusal the operation's availability) and core's canonical row delete
+            // over the variable model; every other fact compares exactly.
+            .placedOperations(PlacedOperationMoves.of()
+                .synthesized(ENVIRONMENTS, SynthesizedRowActions.DELETE, EnvironmentParts.DELETE.id())
+                .synthesized(VARIABLES, SynthesizedRowActions.DELETE, EnvironmentParts.DELETE_VARIABLE.id()));
         // 1. Installation administration admits its operator and refuses an ordinary account.
         for (String entry : List.of(ENVIRONMENTS, VARIABLES)) {
             before.check(capture(SurfaceCase.of(HohenheimSlugs.ADMIN, entry, "operator", operator)));
