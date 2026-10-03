@@ -1,7 +1,11 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
+import be.elevenways.hohenheim.server.cms.NotificationChannelParts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.comms.server.CommsDeliveryModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -86,7 +90,10 @@ class NotificationAdminTest extends HohenheimTestBase {
         assertThat(row).isNotNull();
         Integer id = row.get(NotificationChannelModel.ID);
 
-        var test = adminPostForm("/admin/notifications/" + id + "/action/test_channel", "");
+        // The test send is the placed operation, posted to the one invoke route with the row as its subject.
+        var test = adminPostForm(CmsRoutes.invoke(HohenheimSlugs.ADMIN, "notifications",
+                NotificationChannelParts.TEST.id())
+            .with(CmsEndpoints.SUBJECT_PARAM, String.valueOf(id)).toUrl(), "");
         assertThat(test.statusCode()).isIn(302, 303);
         // The failure toast rides the SESSION; the redirect hands it off to the load of
         // its own Location, so the test follows that Location to see it.

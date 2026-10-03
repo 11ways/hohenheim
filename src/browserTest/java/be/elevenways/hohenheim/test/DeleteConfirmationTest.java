@@ -26,7 +26,7 @@ import be.elevenways.hohenheim.server.cms.DnsRecordResource;
 import be.elevenways.hohenheim.server.cms.DnsZoneResource;
 import be.elevenways.hohenheim.server.cms.EnvironmentParts;
 import be.elevenways.hohenheim.server.cms.ManageDnsRecordResource;
-import be.elevenways.hohenheim.server.cms.NotificationChannelResource;
+import be.elevenways.hohenheim.server.cms.NotificationChannelParts;
 import be.elevenways.hohenheim.server.cms.ServerParts;
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.hohenheim.server.docker.ServerService;
@@ -325,7 +325,7 @@ class DeleteConfirmationTest {
             assertThat(EnvironmentParts.admin().deleteConfirmation().fallback().body().filters().get("scope"))
                 .as("step 6: the environment dialog states the refusal policy it enforces")
                 .isEqualTo("environment");
-            assertThat(new NotificationChannelResource().deleteConfirmation()
+            assertThat(NotificationChannelParts.admin().deleteConfirmation().fallback()
                     .body().filters().get("scope"))
                 .as("step 6: and the channel dialog names the deliveries that stop")
                 .isEqualTo("notification_channel");

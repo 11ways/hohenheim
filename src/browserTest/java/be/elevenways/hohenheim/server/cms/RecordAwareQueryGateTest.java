@@ -1,14 +1,23 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldQueryGate;
+import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.AccessContext;
 import org.junit.jupiter.api.Test;
+
+import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -29,7 +38,11 @@ class RecordAwareQueryGateTest extends HohenheimTestBase {
     @Test
     void presentationOnlyHidingNeverWithholdsAFieldFromTheList() {
         // 1. Bans: the create form hides the stored state it never takes as input...
-        BanResource bans = new BanResource();
+        // The admin panel's own ban entry, as its pages read it.
+        Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
+        @SuppressWarnings("unchecked")
+        Resource<Row> bans = PanelResourceViews.forProgrammaticCaller(
+            (PanelResource<Row>) Objects.requireNonNull(admin.entryBySlug("bans")), admin);
         assertThat(bans.fieldAccessFor(BanModel.ACTIVE.getName()).decide(VIEWER))
             .as("step 1: the create form hides the active flag")
             .isEqualTo(FieldAccess.Decision.HIDDEN);

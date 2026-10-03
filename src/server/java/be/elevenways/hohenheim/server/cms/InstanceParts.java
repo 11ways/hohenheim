@@ -150,7 +150,7 @@ public final class InstanceParts {
             // AIDEV-NOTE: these are peers, not verbs, so they are DECLARED as related pages and rendered in the list
             // toolbar's one quiet overflow; each entry keeps the TARGET peer's own label, icon and description.
             .relatedPages(
-                RelatedPage.toPeer(BackupTargetResource.SLUG),
+                RelatedPage.toPeer(BackupTargetParts.SLUG),
                 RelatedPage.toPeer(InstanceQuotaParts.SLUG),
                 RelatedPage.toPeer(GameDomainResource.SLUG),
                 RelatedPage.toPeer(OperationHistoryParts.BUILDS),
