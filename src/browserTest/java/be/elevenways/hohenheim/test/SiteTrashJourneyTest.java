@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.test;
 
-import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -12,9 +11,7 @@ import be.elevenways.hohenheim.server.quota.SiteQuota;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.cms.common.action.PanelAction;
-import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.flash.FlashNotice;
-import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
@@ -81,7 +78,7 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
             .as("step 1: and links the Trash").contains("filter.archived=true");
 
         // 2. Restore brings it back live, re-books its slot and records the restore under the administrator.
-        adminPostForm(trash(SiteWrites.RESTORE, oak), "");
+        adminPostForm(siteInvoke(SiteWrites.RESTORE, oak), "");
         assertThat((Object) stored(oak).get(SiteModel.DELETED_AT)).as("step 2: the restore untrashed the site")
             .isNull();
         assertThat(Quotas.usedOf(SITE_BUCKET)).as("step 2: its slot is booked again").isEqualTo(beforeTrash);
@@ -93,7 +90,7 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
         // 3. Trashed again and deleted for good: the row is gone and the purge moves no quota.
         delete(oak);
         long beforePurge = Quotas.usedOf(SITE_BUCKET);
-        adminPostForm(trash(SiteWrites.PURGE, oak), confirmed(""));
+        adminPostForm(siteInvoke(SiteWrites.PURGE, oak), confirmed(""));
         assertThat(stored(oak)).as("step 3: the permanent delete removed the row").isNull();
         assertThat(Quotas.usedOf(SITE_BUCKET)).as("step 3: a purge of a trashed site releases nothing twice")
             .isEqualTo(beforePurge);
@@ -106,12 +103,12 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
         // 4. In bulk: two trashed sites come back together, then go for good together.
         delete(pine);
         delete(elm);
-        adminPostForm(trash(SiteWrites.RESTORE_MANY), selection(pine, elm));
+        adminPostForm(siteInvoke(SiteWrites.RESTORE_MANY), selection(pine, elm));
         assertThat((Object) stored(pine).get(SiteModel.DELETED_AT)).as("step 4: the first is live again").isNull();
         assertThat((Object) stored(elm).get(SiteModel.DELETED_AT)).as("step 4: the second too").isNull();
         delete(pine);
         delete(elm);
-        adminPostForm(trash(SiteWrites.PURGE_MANY), confirmed(selection(pine, elm)));
+        adminPostForm(siteInvoke(SiteWrites.PURGE_MANY), confirmed(selection(pine, elm)));
         assertThat(stored(pine)).as("step 4: the first is gone for good").isNull();
         assertThat(stored(elm)).as("step 4: the second too").isNull();
 
@@ -157,7 +154,7 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
             .containsExactly("/private");
 
         // 7. Restored, the tabs offer their writes again.
-        adminPostForm(trash(SiteWrites.RESTORE, cedar), "");
+        adminPostForm(siteInvoke(SiteWrites.RESTORE, cedar), "");
         assertThat(adminGet(domainsTab(cedar)).body()).as("step 7: the Domains tab offers its add again")
             .contains(DOMAIN_ADD).contains(PREFIX + "cedar.test").contains(domainDelete);
         assertThat(adminGet(pathsTab(cedar)).body()).as("step 7: the Protected paths tab too")
@@ -169,7 +166,7 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
         delete(cedar);
         int birch = site("birch");
         domain(birch);
-        HttpResponse<String> refused = adminPostForm(trash(SiteWrites.RESTORE, cedar), "");
+        HttpResponse<String> refused = adminPostForm(siteInvoke(SiteWrites.RESTORE, cedar), "");
         assertThat(refused.statusCode()).as("step 8: the refused restore answers back to the page").isIn(302, 303);
         assertThat((Object) stored(cedar).get(SiteModel.DELETED_AT)).as("step 8: the site stays in the Trash")
             .isNotNull();
@@ -183,7 +180,7 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
             .as("step 8: and the site holding it").contains(PREFIX + "birch");
 
         // 9. The bulk restore refuses the same way, by name.
-        HttpResponse<String> bulk = adminPostForm(trash(SiteWrites.RESTORE_MANY), selection(cedar));
+        HttpResponse<String> bulk = adminPostForm(siteInvoke(SiteWrites.RESTORE_MANY), selection(cedar));
         assertThat((Object) stored(cedar).get(SiteModel.DELETED_AT)).as("step 9: the bulk restore left it trashed")
             .isNotNull();
         FlashNotice bulkToast = popFlash(bulk);
@@ -211,15 +208,6 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
     /** The Domains tab's add: its domain section's create link. */
     private static final String DOMAIN_ADD = "data-cms-child-create=\"domains\"";
     private static final String PATH_ADD = "data-cms-child-create=\"" + ProtectedPathParts.SLUG + "\"";
-
-    /**
-     * The Trash verb's invoke route: core's archive operation placed on the sites list. A row verb names its one site
-     * in the route's query; a bulk verb takes its selection in the body ({@link #selection}).
-     */
-    private static String trash(Operation<?, ?, ?> verb, int... siteIds) {
-        String url = CmsRoutes.invoke(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, verb.id()).toUrl();
-        return siteIds.length == 0 ? url : url + "?ids=" + siteIds[0];
-    }
 
     /** A bulk verb's selection, as the list's checkboxes post it. */
     private static String selection(int... siteIds) {

@@ -24,7 +24,7 @@ class FormRefusalVisibilityTest extends HohenheimTestBase {
         // Step 1: a static site with settings, the positive anchor.
         var create = adminPostForm("/admin/sites/new",
             "name=Refusal+Probe&upstream_kind=hohenheim%3Astatic"
-                + "&settings.root_path=%2Ftmp%2Frefusal-probe&settings.indexes=true");
+                + "&settings.root_path=%2Ftmp%2Frefusal-probe&settings.indexes=true&" + siteCreateEnvelope());
         assertThat(create.statusCode()).as("the well-formed create succeeds").isEqualTo(302);
 
         Row site = Models.get(SiteModel.class).find().where(SiteModel.NAME.eq("Refusal Probe")).first();
@@ -38,8 +38,9 @@ class FormRefusalVisibilityTest extends HohenheimTestBase {
         // discriminator is refused, leaves the record untouched, and the
         // rerendered error is a human sentence naming the missing sibling.
         var noSibling = adminPostForm("/admin/sites/" + id,
-            "name=Refusal+Probe&settings.root_path=%2Ftmp%2Felsewhere");
-        assertThat(noSibling.statusCode()).as("refusal rerenders the form").isEqualTo(200);
+            "name=Refusal+Probe&settings.root_path=%2Ftmp%2Felsewhere&" + siteEditEnvelope(id));
+        // The site edit is an operation: a refused submit re-renders its form at 422.
+        assertThat(noSibling.statusCode()).as("refusal rerenders the form").isEqualTo(422);
         site = Models.get(SiteModel.class).find().where(SiteModel.ID.eq(id)).first();
         Object afterNoSibling = site.get(SiteModel.SETTINGS);
         assertThat(afterNoSibling)
@@ -54,8 +55,8 @@ class FormRefusalVisibilityTest extends HohenheimTestBase {
         // boolean sentence, again with nothing written.
         var badBoolean = adminPostForm("/admin/sites/" + id,
             "name=Refusal+Probe&upstream_kind=hohenheim%3Astatic"
-                + "&settings.root_path=%2Ftmp%2Frefusal-probe&settings.indexes=index.html");
-        assertThat(badBoolean.statusCode()).isEqualTo(200);
+                + "&settings.root_path=%2Ftmp%2Frefusal-probe&settings.indexes=index.html&" + siteEditEnvelope(id));
+        assertThat(badBoolean.statusCode()).as("refusal rerenders the form").isEqualTo(422);
         site = Models.get(SiteModel.class).find().where(SiteModel.ID.eq(id)).first();
         Object afterBadBoolean = site.get(SiteModel.SETTINGS);
         assertThat(afterBadBoolean).isEqualTo(before);

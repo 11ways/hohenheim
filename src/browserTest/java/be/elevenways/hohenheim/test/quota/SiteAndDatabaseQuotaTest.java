@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.quota;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.server.quota.DatabaseQuota;
 import be.elevenways.hohenheim.server.quota.SiteQuota;
 import be.elevenways.hohenheim.test.HardDeletes;
@@ -166,8 +167,7 @@ class SiteAndDatabaseQuotaTest extends HohenheimTestBase {
 
         // 6b. The admin Trash's Restore is that same untrash: refused by the same name, the site
         //     stays trashed and the ledger stays full.
-        HttpResponse<String> restore = adminPostForm(
-            "/admin/sites/" + winner.get(SiteModel.ID) + "/action/trash_restore", "");
+        HttpResponse<String> restore = adminPostForm(siteInvoke(SiteWrites.RESTORE, winner.get(SiteModel.ID)), "");
         assertThat(popFlash(restore)).as("step 6b: the refusal is toasted").isNotNull()
             .extracting(flash -> flash.message().key()).isEqualTo("site_quota_reached");
         assertThat((Object) Models.get(SiteModel.class).find().withTrashed()
@@ -261,7 +261,7 @@ class SiteAndDatabaseQuotaTest extends HohenheimTestBase {
 
     private HttpResponse<String> postCreate(String name) throws Exception {
         return adminPostForm("/admin/sites/new", "name=" + name + "&upstream_kind=hohenheim%3Aaddress"
-            + "&settings.forward_host=127.0.0.1&settings.forward_port=8080");
+            + "&settings.forward_host=127.0.0.1&settings.forward_port=8080&" + siteCreateEnvelope());
     }
 
     private static String violationKeyOf(Throwable thrown) {

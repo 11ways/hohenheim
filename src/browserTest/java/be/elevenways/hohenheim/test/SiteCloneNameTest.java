@@ -30,7 +30,7 @@ class SiteCloneNameTest extends HohenheimTestBase {
     private Integer createRedirectSite(String name) throws Exception {
         HttpResponse<String> response = adminPostForm("/admin/sites/new",
             "name=" + URLEncoder.encode(name, StandardCharsets.UTF_8) + "&upstream_kind=hohenheim%3Aredirect"
-            + "&settings.target_url=https%3A%2F%2Fexample.com&settings.http_status=301");
+            + "&settings.target_url=https%3A%2F%2Fexample.com&settings.http_status=301&" + siteCreateEnvelope());
         assertThat(response.statusCode()).as("the site '%s' is created", name).isIn(302, 303);
         return site(name).get(SiteModel.ID);
     }

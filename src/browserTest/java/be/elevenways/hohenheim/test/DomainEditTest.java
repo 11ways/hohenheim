@@ -71,7 +71,7 @@ class DomainEditTest extends HohenheimTestBase {
         var response = adminPostForm("/admin/sites/new",
             "name=" + URLEncoder.encode(name, StandardCharsets.UTF_8)
             + "&upstream_kind=hohenheim%3Aaddress"
-            + "&settings.forward_host=127.0.0.1&settings.forward_port=9090" + extra);
+            + "&settings.forward_host=127.0.0.1&settings.forward_port=9090" + extra + "&" + siteCreateEnvelope());
         assertThat(response.statusCode()).as("fixture: the site %s is accepted", name)
             .isIn(200, 302, 303);
         Row site = Models.get(SiteModel.class).find().where(SiteModel.NAME.eq(name)).first();
@@ -506,9 +506,11 @@ class DomainEditTest extends HohenheimTestBase {
             + "&upstream_kind=hohenheim%3Aaddress"
             + "&enabled=false&enabled=true"
             + "&settings.forward_host=127.0.0.1&settings.forward_port=9090"
-            + "&cms__snapshot=" + URLEncoder.encode(snapshot, StandardCharsets.UTF_8));
-        assertThat(enableResponse.statusCode()).as("step 3: the enable edit answers")
-            .isIn(200, 302, 303);
+            + "&cms__snapshot=" + URLEncoder.encode(snapshot, StandardCharsets.UTF_8)
+            + "&" + siteEditEnvelope(draftId));
+        // The site edit is an operation: a refused submit re-renders its form at 422, never a 200.
+        assertThat(enableResponse.statusCode()).as("step 3: the refused enable edit re-renders its form")
+            .isEqualTo(422);
         assertThat(enableResponse.body())
             .as("step 3: the refusal names the conflicting route")
             .contains(ENABLE_ROUTE_CONFLICT);

@@ -226,7 +226,6 @@ class ProteusAuthGateTest {
         rule.set(AccessRuleModel.TYPE, AccessRuleModel.TYPE_AUTH_PROVIDER);
         rule.set(AccessRuleModel.DATA, data);
         rule.set(AccessRuleModel.ENABLED, true);
-        rule.set(AccessRuleModel.SORT, 0);
         rules.save(rule);
 
         var guarded = Models.get(ProtectedPathModel.class);

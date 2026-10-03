@@ -66,7 +66,7 @@ class RoutedLinkTargetsTest extends HohenheimTestBase {
         // 1. A site with one domain, so the tab has both header links and a row.
         var siteResponse = adminPostForm("/admin/sites/new",
             "name=Routed+Link+Site&upstream_kind=hohenheim%3Aaddress"
-            + "&settings.forward_host=127.0.0.1&settings.forward_port=9091");
+            + "&settings.forward_host=127.0.0.1&settings.forward_port=9091&" + siteCreateEnvelope());
         assertThat(siteResponse.statusCode()).as("step 1: the site is created").isIn(200, 302, 303);
         Row site = Models.get(SiteModel.class).find()
             .where(SiteModel.NAME.eq("Routed Link Site")).first();

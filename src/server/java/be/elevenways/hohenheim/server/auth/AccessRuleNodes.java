@@ -18,7 +18,7 @@ import java.util.List;
  * enforced per request, so a rule that counted the moment it appeared (before its network
  * or its credential was typed) would refuse live traffic between two writes. A group
  * carries nothing that can be half-typed, so it starts on. Whatever configures the node
- * afterwards must go through {@code AccessRuleResource}'s form pipeline: that is where the
+ * afterwards must go through {@code AccessRuleParts}' form pipeline: that is where the
  * basic-auth password is argon2-hashed, and a raw model save would store it in plaintext.
  */
 public final class AccessRuleNodes {
@@ -45,7 +45,7 @@ public final class AccessRuleNodes {
         rule.set(AccessRuleModel.ACCESS_LIST_ID, listId);
         rule.set(AccessRuleModel.PARENT_ID, parentId);
         rule.set(AccessRuleModel.TYPE, type);
-        rule.set(AccessRuleModel.SORT, model.findChildren(listId, parentId).size());
+        // No position: the rule tree appends an unplaced rule after its siblings (AccessRuleModel.TREE).
         rule.set(AccessRuleModel.ENABLED, AccessRuleModel.TYPE_GROUP.equals(type));
         model.save(rule);
         ActivityLog.record(model, rule.get(AccessRuleModel.ID), ZenitActivityAction.CREATE, type);

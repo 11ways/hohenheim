@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
@@ -83,8 +84,8 @@ public final class ManagePanel extends Panel {
      * least one record of a model this panel projects. It asks no conduit.
      *
      * AIDEV-NOTE: every model this panel projects belongs in this disjunction: keying it on sites alone locked a pure
-     * instance tenant out of the panel built for them, and databases, git providers and projects joined for the same
-     * reason. Each record-capability term asks reachesAny, never "ids.isEmpty()": an id set cannot express
+     * instance tenant out of the panel built for them, and databases, git providers, projects and access lists joined
+     * for the same reason. Each record-capability term asks reachesAny, never "ids.isEmpty()": an id set cannot express
      * every-record authority, which 403'd a hohenheim.sites.manage_all holder. The walk consults the checker's
      * decide() only, never this computation, so there is no recursion.
      */
@@ -93,6 +94,7 @@ public final class ManagePanel extends Panel {
             || HohenheimAccess.reachesAny(ctx, InstanceModel.MODEL_ID, HohenheimAccess.VIEW)
             || HohenheimAccess.reachesAny(ctx, DatabaseModel.MODEL_ID, HohenheimAccess.VIEW)
             || HohenheimAccess.reachesAny(ctx, GitProviderModel.MODEL_ID, HohenheimAccess.MANAGE)
+            || HohenheimAccess.reachesAny(ctx, AccessListModel.MODEL_ID, HohenheimAccess.MANAGE)
             || !Projects.visibleTo(ctx).isEmpty();
     }
 
@@ -158,7 +160,7 @@ public final class ManagePanel extends Panel {
         // here -- see GitProviderParts.manage().
         HohenheimPanel.addIf(peers, GitProviderParts.manage(), Role.PROXY);
         HohenheimPanel.addIf(peers, AccessListParts.manage(), Role.PROXY);
-        HohenheimPanel.addIf(peers, new ManageAccessRuleResource(), Role.PROXY);
+        HohenheimPanel.addIf(peers, AccessRuleParts.manage(), Role.PROXY);
         HohenheimPanel.addIf(peers, ProtectedPathParts.manage(), Role.PROXY);
         return peers;
     }
@@ -255,6 +257,14 @@ public final class ManagePanel extends Panel {
         RecordSourceRegistry.INSTANCE.override(RecordSource.of(ProtectedPathModel.class)
             .search(ProtectedPathModel.PATH)
             .scopedBy(TenantScopes.PROTECTED_PATHS)
+            .build());
+
+        // Access rules: child rows scoped by their parent LIST, like protected paths by their site. zenit-cms would
+        // derive the model's source from the admin entry (AccessRuleParts), admin-gated; the API's tenant writes and
+        // the pickers read through the parent list's manage scope instead, so this explicit source replaces it.
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(AccessRuleModel.class)
+            .search(AccessRuleModel.SEARCH_TEXT)
+            .scopedBy(TenantScopes.ACCESS_RULES)
             .build());
 
         // DNS records: this one scopes child rows by their parent zone, so a tenant reaches

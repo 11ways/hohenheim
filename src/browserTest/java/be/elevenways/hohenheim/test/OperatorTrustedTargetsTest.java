@@ -113,17 +113,20 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
             //    changing the description only, and is accepted; changing the host in the same form is refused.
             String form = "upstream_kind=hohenheim%3Aaddress&settings.forward_scheme=http"
                 + "&settings.forward_host=203.0.113.30&settings.forward_port=8080&settings.rewrite_location=false";
-            assertThat(adminPostForm("/admin/sites/new", "name=trusted-target-form&" + form).statusCode())
+            assertThat(adminPostForm("/admin/sites/new",
+                    "name=trusted-target-form&" + form + "&" + siteCreateEnvelope()).statusCode())
                 .as("step 7: the operator creates the site through the form").isIn(302, 303);
             formSite[0] = sites.find().where(SiteModel.NAME.eq("trusted-target-form")).first().get(SiteModel.ID);
             TestSession session = sessionFor(adminId);
             assertThat(httpPostForm("/admin/sites/" + formSite[0],
-                    "name=trusted-target-form&description=delegate+notes&" + form, session.token(), session.csrf())
+                    "name=trusted-target-form&description=delegate+notes&" + form + "&" + siteEditEnvelope(formSite[0]),
+                    session.token(), session.csrf())
                 .statusCode()).as("step 7: the delegate's whole-form save of another field is accepted")
                 .isIn(302, 303);
             assertThat((String) sites.findById(formSite[0]).get(SiteModel.DESCRIPTION)).isEqualTo("delegate notes");
             assertThat(httpPostForm("/admin/sites/" + formSite[0],
-                    "name=trusted-target-form&" + form.replace("203.0.113.30", "127.0.0.2"), session.token(),
+                    "name=trusted-target-form&" + form.replace("203.0.113.30", "127.0.0.2") + "&"
+                        + siteEditEnvelope(formSite[0]), session.token(),
                     session.csrf()).statusCode())
                 .as("step 7: the delegate's form aiming it at loopback is refused").isNotIn(302, 303);
             assertThat(forwardHost(formSite[0])).as("step 7: the host is unchanged").isEqualTo("203.0.113.30");
