@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
@@ -186,6 +187,20 @@ class RoleRestrictedBootTest {
                 .as("step 6b: the refused rule create birthed no node").hasSize(rulesBefore);
             assertThat(Models.get(InstanceModel.class).findById(instanceId))
                 .as("step 6b: the refused delete left the instance in place").isNotNull();
+
+            // The template lane is a create too: naming an EXISTING template must not ride
+            // the template funnel around the absent entry, so it answers the same 404 and
+            // no instance row is born.
+            int templateId = template();
+            long instancesBefore = Models.get(InstanceModel.class).find().withTrashed().count();
+            HttpResponse<String> templated = apiSend(client, port, key, "POST", "/api/v1/instances",
+                "name=role-restricted-templated&template_id=" + templateId);
+            assertThat(templated.statusCode())
+                .as("step 6b: POST /api/v1/instances with a template_id answers the uniform 404: %s",
+                    templated.body())
+                .isEqualTo(404);
+            assertThat(Models.get(InstanceModel.class).find().withTrashed().count())
+                .as("step 6b: the refused template create birthed no instance").isEqualTo(instancesBefore);
         } finally {
             server.stop();
         }
@@ -273,6 +288,16 @@ class RoleRestrictedBootTest {
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
+    }
+
+    /** A template the admin key may select, so only the absent entry can refuse the create. */
+    private static int template() {
+        Row row = Models.get(InstanceTemplateModel.class).createEmptyRow();
+        row.set(InstanceTemplateModel.NAME, "role-restricted-template");
+        row.set(InstanceTemplateModel.KIND, "hohenheim:docker_container");
+        row.set(InstanceTemplateModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine", "tag", "latest")));
+        Models.get(InstanceTemplateModel.class).save(row);
+        return row.get(InstanceTemplateModel.ID);
     }
 
     /** One API-key request with a urlencoded body, redirects never followed. */

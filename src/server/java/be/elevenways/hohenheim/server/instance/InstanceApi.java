@@ -95,7 +95,8 @@ public final class InstanceApi {
     }
 
     /**
-     * The admin panel's instance entry, the create and delete form's own; see createThroughResource.
+     * The admin panel's instance entry, the create and delete form's own; every create lane, template or not,
+     * asks it first.
      *
      * @return the entry, or null when the response has already been ended (the uniform 404 of an instance-less node)
      */
@@ -250,6 +251,11 @@ public final class InstanceApi {
                 // The migration lane: no template, so the admin create form's own
                 // pipeline decides everything instead.
                 return createThroughResource(conduit, ctx, form);
+            }
+            // The template funnel never touches the entry, but a node that declares none (no
+            // INSTANCES role) has no instance create at all: answer its 404 before anything.
+            if (instances(conduit) == null) {
+                return null;
             }
             Row template = InstanceTemplates.templateFrom(form);
             if (template == null) {
