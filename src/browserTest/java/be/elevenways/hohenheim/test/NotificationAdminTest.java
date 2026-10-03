@@ -117,6 +117,14 @@ class NotificationAdminTest extends HohenheimTestBase {
         assertThat((String) delivery.get(CommsDeliveryModel.STATUS))
             .as("an inline test delivery must not stay queued for retry")
             .isEqualTo("failed");
+
+        // The operator finds that failure without asking anyone: the delivery log in the system group lists the
+        // row, failed.
+        navigateToApp("/admin/deliveries");
+        waitForHydration();
+        String deliveryRow = page.locator("pl-table-row[data-row-key='" + delivery.get(CommsDeliveryModel.ID) + "']")
+            .innerText();
+        assertThat(deliveryRow).as("the delivery log lists the failed test send").contains("failed");
     }
 
     /**
