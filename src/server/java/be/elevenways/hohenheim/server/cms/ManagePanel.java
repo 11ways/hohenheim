@@ -124,7 +124,7 @@ public final class ManagePanel extends Panel {
         peers.add(new ManageDashboard());
         HohenheimPanel.addIf(peers, SiteParts.manage(), Role.PROXY);
         HohenheimPanel.addIf(peers, DomainParts.manage(), Role.PROXY);
-        HohenheimPanel.addIf(peers, new ManageDnsRecordResource(), Role.DNS);
+        HohenheimPanel.addIf(peers, ManageDnsRecordParts.manage(), Role.DNS);
         HohenheimPanel.addIf(peers, CertificateParts.manage(), Role.PROXY);
         // The instance tier's tenant projection. Every one of these is scoped by a
         // walk-confirmed record capability, and the two schedule peers plus the
@@ -287,7 +287,7 @@ public final class ManagePanel extends Panel {
         var dnsRecords = RecordSource.of(DnsRecordModel.class)
             .search(DnsRecordModel.NAME, DnsRecordModel.VALUE)
             .scopedBy(TenantScopes.DNS_RECORDS);
-        RecordCreateProvider dnsCreate = CmsRecordSources.createProviderFor(new DnsRecordResource());
+        RecordCreateProvider dnsCreate = CmsRecordSources.createProviderFor(DnsRecordParts.admin());
         if (dnsCreate != null) {
             dnsRecords.creatable(dnsCreate, HohenheimSources.ADMIN_ACCESS);
         }

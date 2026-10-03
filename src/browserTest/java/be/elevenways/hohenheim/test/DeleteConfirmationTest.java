@@ -21,11 +21,11 @@ import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.hohenheim.server.cms.AccessListParts;
 import be.elevenways.hohenheim.server.cms.AuthProviderParts;
 import be.elevenways.hohenheim.server.cms.CertificateParts;
-import be.elevenways.hohenheim.server.cms.DnsPeerResource;
-import be.elevenways.hohenheim.server.cms.DnsRecordResource;
-import be.elevenways.hohenheim.server.cms.DnsZoneResource;
 import be.elevenways.hohenheim.server.cms.EnvironmentParts;
-import be.elevenways.hohenheim.server.cms.ManageDnsRecordResource;
+import be.elevenways.hohenheim.server.cms.DnsPeerParts;
+import be.elevenways.hohenheim.server.cms.DnsRecordParts;
+import be.elevenways.hohenheim.server.cms.DnsZoneParts;
+import be.elevenways.hohenheim.server.cms.ManageDnsRecordParts;
 import be.elevenways.hohenheim.server.cms.NotificationChannelParts;
 import be.elevenways.hohenheim.server.cms.ServerParts;
 import be.elevenways.zenit.server.operation.OperationPipeline;
@@ -77,7 +77,7 @@ class DeleteConfirmationTest {
     @Test
     void everyDeleteDialogNamesWhatThisRecordTakesWithIt() {
         Db.run(datasource, () -> {
-            DnsZoneResource zones = new DnsZoneResource();
+            DnsZoneParts zones = new DnsZoneParts();
 
             // 1. A zone nothing depends on yet: the dialog NAMES the origin and how many
             //    stored records go with it, and gates the click behind typing the origin.
@@ -188,7 +188,7 @@ class DeleteConfirmationTest {
             // 10. A DNS record's dialog names the record, its TYPE, its VALUE and the ZONE
             //     it answers in -- the generic dialog names only the owner label, which
             //     tells an operator nothing about what stops resolving.
-            DnsRecordResource records = new DnsRecordResource();
+            DnsRecordParts records = new DnsRecordParts();
             Row visualQa = Models.get(DnsRecordModel.class)
                 .findById(record(zoneId, "visual-qa"));
 
@@ -220,7 +220,7 @@ class DeleteConfirmationTest {
             // 12. The tenant-facing subclass inherits the SAME composing method -- there is
             //     one home for this wording, and the zone's Records tab renders its rows
             //     through this very hook too.
-            assertThat(new ManageDnsRecordResource().deleteConfirmationFor(visualQa).body())
+            assertThat(ManageDnsRecordParts.manage().deleteConfirmation().forRow(visualQa, request).body())
                 .as("step 12: /manage speaks the same sentence as the admin panel")
                 .isEqualTo(recordConfirm.body());
 
@@ -342,7 +342,7 @@ class DeleteConfirmationTest {
     void theCrossReferenceDialogsNameTheirZonesSitesAndEnvironments() {
         Db.run(datasource, () -> {
             AccessContext operator = AccessContext.of(TenantConduits.stubFor(null));
-            DnsPeerResource peers = new DnsPeerResource();
+            DnsPeerParts peers = new DnsPeerParts();
 
             // 1. A peer nothing links to: the dialog names it and says nothing notifies it.
             int peerId = peer("ns2");

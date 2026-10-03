@@ -89,7 +89,7 @@ public final class AccessListRulesPage implements RecordScopedPage<Row> {
             cmsPanel.entryBySlug(AccessRuleParts.SLUG), "panel " + panel + " declares no access-rule entry");
         Resource<Row> rulesView = PanelResourceViews.of(rulesEntry,
             new PanelRequest(cmsPanel, conduit, accessContext, null));
-        Function<Row, List<RowOffer>> offers = PanelActionOffers.rowsForRender(rulesView, cmsPanel, rules,
+        Function<Row, List<RowOffer>> offers = PanelActionOffers.rowsForRender(rulesView, null, cmsPanel, rules,
             accessContext, ReturnPath.of(pageUrl));
 
         List<AccessRuleView> views = new ArrayList<>();

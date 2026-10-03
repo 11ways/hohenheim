@@ -12,7 +12,12 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.AuthModels;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.test.support.EndpointConduit;
+import be.elevenways.zenit.common.conduit.ConduitAttributes;
+import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
+import java.util.UUID;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -239,8 +244,8 @@ class DnsCentralEditTest extends HohenheimTestBase {
         stub.calls.clear();
         stub.status = 200;
         stub.body = "{\"id\":6}";
-        var created = adminPostForm("/admin/dns-zones/" + zoneId + "/page/records",
-            "name=api&type=CNAME&value=owned.example.&ttl=&priority=&weight=&port=&enabled=true");
+        var created = adminPostForm(remoteSubmit(zoneId), invocation()
+            + "name=api&type=CNAME&value=owned.example.&ttl=&priority=&weight=&port=&enabled=true");
         assertThat(created.statusCode()).isEqualTo(302);
         assertThat(landingOf(created))
             .describedAs("the confirmation rides the session flash, so the URL stays clean")
@@ -259,16 +264,15 @@ class DnsCentralEditTest extends HohenheimTestBase {
         // Update and delete address the owner's record id.
         stub.calls.clear();
         stub.body = "";
-        var updated = adminPostForm("/admin/dns-zones/" + zoneId + "/page/records",
-            "record_id=6&name=api&type=CNAME&value=other.example.&enabled=true");
+        var updated = adminPostForm(remoteSubmit(zoneId), invocation()
+            + "record_id=6&name=api&type=CNAME&value=other.example.&enabled=true");
         assertThat(landingOf(updated)).doesNotContain("saved");
         assertThat(popFlash(updated)).isNotNull()
             .extracting(flash -> flash.message().key()).isEqualTo("edit_saved");
         assertThat(stub.calls.get(0).path()).isEqualTo("/api/dns/zones/central.example/records/6");
 
         stub.calls.clear();
-        var deleted = adminPostForm("/admin/dns-zones/" + zoneId + "/page/records",
-            "action=delete&record_id=6");
+        var deleted = adminPostForm(remoteSubmit(zoneId), invocation() + "action=delete&record_id=6");
         assertThat(landingOf(deleted)).doesNotContain("saved");
         assertThat(popFlash(deleted)).isNotNull()
             .extracting(flash -> flash.message().key()).isEqualTo("edit_saved");
@@ -315,8 +319,8 @@ class DnsCentralEditTest extends HohenheimTestBase {
         stub.calls.clear();
         stub.status = 422;
         stub.body = "{\"error\":\"validation\",\"field\":\"value\",\"key\":\"dns_record_duplicate\"}";
-        var refused = adminPostForm("/admin/dns-zones/" + zoneId + "/page/records",
-            "name=www&type=A&value=198.51.100.9&enabled=true");
+        var refused = adminPostForm(remoteSubmit(zoneId), invocation()
+            + "name=www&type=A&value=198.51.100.9&enabled=true");
         String location = landingOf(refused);
         assertThat(location)
             .describedAs("the refusal rides the session flash, never the URL")
@@ -350,8 +354,11 @@ class DnsCentralEditTest extends HohenheimTestBase {
     @SuppressWarnings("unchecked")
     private static Map<String, Object> renderRecordsTab(int zoneId, boolean hostReadOnly) {
         Row admin = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
-        Conduit conduit = TenantConduits.stubFor(new UserPrincipal(admin.get(UserModel.ID), "Test Admin"));
-        conduit.setAttribute(RecordScopedPage.RECORD_READ_ONLY, hostReadOnly);
+        Conduit conduit = EndpointConduit.at("/admin/dns-zones/" + zoneId + "/page/records")
+            .withAttribute(ConduitAttributes.PRINCIPAL, new UserPrincipal(admin.get(UserModel.ID), "Test Admin"))
+            .setParameter(CmsEndpoints.RESOURCE_PARAM, "dns-zones")
+            .setParameter(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf(zoneId));
+        conduit.setAttribute(RecordTab.RECORD_READ_ONLY, hostReadOnly);
         Row zone = Models.get(DnsZoneModel.class).findById(zoneId);
         return (Map<String, Object>) new DnsZoneRecordsPage().render(conduit, AccessContext.of(conduit), zone).get();
     }
@@ -387,7 +394,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         // Every write the PAGE issues towards the forwarding route, in issue order.
         List<String> pagePosts = new CopyOnWriteArrayList<>();
         page.onRequest(request -> {
-            if ("POST".equals(request.method()) && request.url().contains("/page/records")) {
+            if ("POST".equals(request.method()) && request.url().contains("/invoke/hohenheim.edit_remote_dns_record")) {
                 pagePosts.add(request.url());
             }
         });
@@ -446,7 +453,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         stub.body = "{\"status\":\"ok\",\"key_name\":\"" + keyName + "\",\"peer\":\"us\","
             + "\"transfer_host\":\"198.51.100.7\",\"transfer_port\":53,\"transfer_kept\":false}";
 
-        var negotiated = adminPostForm("/admin/dns-peers/" + peerId + "/action/negotiate_transfer_key", confirmed(""));
+        var negotiated = adminPostForm("/admin/dns-peers/invoke/hohenheim.negotiate_transfer_key?ids=" + peerId, confirmed(""));
         assertThat(negotiated.statusCode()).describedAs("the action runs").isIn(200, 302, 303);
 
         // 2. The peer was called on the symmetric endpoint, with the API key.
@@ -475,7 +482,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         // 4. Falsification -- a peer confirming a DIFFERENT key name stores nothing: the
         //    two sides would look each other up under names that never match.
         stub.body = "{\"status\":\"ok\",\"key_name\":\"xfer-somebody-else\",\"peer\":\"us\"}";
-        adminPostForm("/admin/dns-peers/" + peerId + "/action/negotiate_transfer_key", confirmed(""));
+        adminPostForm("/admin/dns-peers/invoke/hohenheim.negotiate_transfer_key?ids=" + peerId, confirmed(""));
         assertThat((String) peers.findById(peerId).get(DnsPeerModel.TSIG_SECRET))
             .describedAs("a mismatched confirmation must not rotate the working key")
             .isEqualTo(sentSecret);
@@ -483,7 +490,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         // 5. Falsification -- a peer that refuses leaves the working key alone too.
         stub.status = 500;
         stub.body = "nope";
-        adminPostForm("/admin/dns-peers/" + peerId + "/action/negotiate_transfer_key", confirmed(""));
+        adminPostForm("/admin/dns-peers/invoke/hohenheim.negotiate_transfer_key?ids=" + peerId, confirmed(""));
         assertThat((String) peers.findById(peerId).get(DnsPeerModel.TSIG_SECRET))
             .isEqualTo(sentSecret);
 
@@ -617,5 +624,13 @@ class DnsCentralEditTest extends HohenheimTestBase {
             .header("Authorization", "Bearer " + apiKey)
             .header("Content-Type", "application/x-www-form-urlencoded")
             .POST(HttpRequest.BodyPublishers.ofString(body)));
+    }
+    private static String remoteSubmit(int zoneId) {
+        return "/admin/dns-zones/invoke/hohenheim.edit_remote_dns_record?ids=" + zoneId;
+    }
+
+    private static String invocation() {
+        return CmsEndpoints.INVOCATION_PARAM.getName() + "=" + UUID.randomUUID() + "&"
+            + CmsConfirmation.FIELD + "=1&" + CmsEndpoints.TAB_PARAM.getName() + "=records&";
     }
 }

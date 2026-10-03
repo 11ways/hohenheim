@@ -11,10 +11,13 @@ import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
-import be.elevenways.zenit.cms.common.resource.RecordSubpageRegistry;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.ResourceReads;
+import be.elevenways.zenit.cms.common.resource.ResourceForm;
+import be.elevenways.zenit.cms.common.resource.ResourceList;
+import be.elevenways.zenit.cms.common.resource.ResourceMutations;
+import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.common.schema.TableView;
@@ -46,10 +49,28 @@ import java.util.Map;
  * resulting FQDN on the model write pipeline, which a direct POST, the peer API and a
  * revision restore all pass and this method does not.
  */
-public final class ManageDnsRecordResource extends DnsRecordResource {
+public final class ManageDnsRecordParts {
+    private final DnsRecordParts records = new DnsRecordParts();
+
+    public static @NonNull PanelResource<Row> manage() {
+        ManageDnsRecordParts parts = new ManageDnsRecordParts();
+        return DnsRecordParts.entry(parts.id()).showInNav(true).navOrder(35).description(parts.description())
+            .scope(TenantScopes.DNS_RECORDS).hasInScopeRecords(parts::hasInScopeRecords)
+            .reads(ResourceReads.rows().mapCells(parts::cellValue)
+                .mapValues((row, values) -> parts.valuesFromRow(row)))
+            .list(ResourceList.rows(parts.tableSpec()).chrome(CmsSupport.FILTERABLE_LIST).facets().ruleFilters()
+                .search(DnsRecordModel.NAME, DnsRecordModel.VALUE)
+                .searchTerm(term -> { String relative = relativeTerm(term); return relative == null ? term : relative; })
+                .build())
+            .form(ResourceForm.<Row>of(parts.formSpec()).inlineEditable(DnsRecordModel.NAME, DnsRecordModel.VALUE,
+                DnsRecordModel.TTL, DnsRecordModel.ENABLED).build())
+            .writes(ResourceMutations.rows().create(call -> parts.persistRow(call.values(), call.access()))
+                .update(call -> { parts.updateRow(call.record(), call.values(), call.access()); return null; })
+                .delete(DnsOperations.DELETE_RECORD).build())
+            .tabs(ResourceTabs.<Row>none().withContributions()).build();
+    }
 
     /** The tenant surface carries no zone peer (zones are admin-only), so its records stand on their own. */
-    @Override
     public @Nullable ResourceParent<Row> parent() {
         return null;
     }
@@ -88,29 +109,20 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
         .column(ColumnSpec.fromField(DnsRecordModel.ENABLED).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return HohenheimIds.id("manage_dns_record"); }
-    @Override public @NonNull FormSpec formSpec() { return this.manageFormSpec; }
-    @Override public @NonNull TableSpec<Row> tableSpec() { return this.manageTableSpec; }
-    @Override public boolean showInNav() { return true; }
-    @Override public int navOrder() { return 35; }
+    public @NonNull Identifier id() { return HohenheimIds.id("manage_dns_record"); }
+    public @NonNull FormSpec formSpec() { return this.manageFormSpec; }
+    public @NonNull TableSpec<Row> tableSpec() { return this.manageTableSpec; }
 
-    @Override
     public @Nullable Microcopy description() {
         return CmsSupport.navHint("dns_record");
     }
     /** Admins see every record; everyone else only the names they answer for. */
-    @Override
-    public @NonNull AccessFunction<Row> accessFunction() {
-        return AccessFunction.scopedBy(TenantScopes.DNS_RECORDS);
-    }
-
     /**
      * No quick-add bar here: the admin declaration presets {@code zone_id}, which this
      * form does not carry at all -- a tenant names the record absolutely and the zone is
      * RESOLVED from it (a zone picker is the permanent non-goal this resource exists to
      * avoid). Inheriting that declaration would refuse this peer's registration outright.
      */
-    @Override
     public @Nullable QuickCreateSpec quickCreate() {
         return null;
     }
@@ -133,14 +145,6 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
      * example.com and sub.example.com both hosted, "sub.example.com" collapsed the same way.
      * An apex owner is therefore NOT a rewrite; see {@link #relativeTerm}.
      */
-    @Override
-    public @NonNull List<Row> listRows(TableView.@NonNull Applied<Row> applied,
-                                       @NonNull AccessContext accessContext) {
-        String term = applied.searchTerm();
-        String relative = term == null ? null : relativeTerm(term);
-        return super.listRows(relative == null ? applied : applied.withSearch(relative), accessContext);
-    }
-
     /**
      * The typed term rewritten to the owner relative to the longest hosted zone containing
      * it, or null when no rewrite applies.
@@ -189,41 +193,29 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
     }
 
     /** The list renders the absolute name; a tenant has no relative-to-what to read it against. */
-    @Override
     public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
         if (DnsRecordModel.NAME.getName().equals(column.name())) {
             return absoluteName(row);
         }
-        return super.cellValue(row, column);
+        return this.records.cellValue(row, column);
     }
 
-    @Override
     public @NonNull Map<String, Object> valuesFromRow(@NonNull Row row) {
-        Map<String, Object> values = new HashMap<>(super.valuesFromRow(row));
+        Map<String, Object> values = new HashMap<>(DnsRowWrites.values(Models.get(DnsRecordModel.class),
+            this.formSpec(), row));
         values.put(DnsRecordModel.NAME.getName(), absoluteName(row));
         return values;
     }
 
     /** zone_id is resolved from the name and is not a form entry; stamp it like the provider stamp. */
-    @Override
-    public @NonNull Row valuesToRow(@NonNull Map<String, Object> coerced) {
-        Row row = super.valuesToRow(coerced);
-        if (coerced.get(DnsRecordModel.ZONE_ID.getName()) instanceof Integer zoneId) {
-            row.set(DnsRecordModel.ZONE_ID, zoneId);
-        }
-        return row;
-    }
-
-    @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
-        return super.persistRow(resolveZone(coerced, null, accessContext), accessContext);
+        return this.records.persistRow(resolveZone(coerced, null, accessContext), accessContext);
     }
 
-    @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
-        super.updateRow(existing, resolveZone(coerced, existing, accessContext), accessContext);
+        this.records.updateRow(existing, resolveZone(coerced, existing, accessContext), accessContext);
     }
 
     /**
@@ -290,12 +282,6 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
      * The admin activity/revision history stays off the delegated surface, exactly like
      * {@link SiteParts#manage()}.
      */
-    @Override
-    public @NonNull List<RecordScopedPage<Row>> subpages() {
-        return new ArrayList<>(
-            RecordSubpageRegistry.INSTANCE.contributionsFor(this.model().getModelId()));
-    }
-
     /**
      * NAV-ONLY; the route itself stays scoped by accessFunction.
      *
@@ -303,7 +289,6 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
      * authority, so the set spelling hid this peer from an every-site holder (and threw once
      * the walk started saying ALL out loud).
      */
-    @Override
     public boolean hasInScopeRecords(@NonNull AccessContext access) {
         return HohenheimAccess.managesAnySite(access)
             || HohenheimAccess.reachesAny(access, DnsRecordModel.MODEL_ID, HohenheimAccess.VIEW);

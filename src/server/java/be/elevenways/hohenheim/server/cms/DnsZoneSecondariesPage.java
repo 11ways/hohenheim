@@ -13,7 +13,8 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -35,7 +36,7 @@ import java.util.Map;
  * (NOTIFY targets + AXFR-authorized keys). Only shown for primary zones; a
  * secondary zone's authority lives on its own primary.
  */
-public final class DnsZoneSecondariesPage implements RecordScopedPage<Row> {
+public final class DnsZoneSecondariesPage implements RecordTab.Rendered<Row> {
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("dns_zone_secondaries"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("secondaries").withFilter("scope", "dns_zone"); }
@@ -43,11 +44,15 @@ public final class DnsZoneSecondariesPage implements RecordScopedPage<Row> {
     @Override public @NonNull Icon icon() { return Icon.of("handshake"); }
 
     @Override
-    public boolean visibleFor(@NonNull Row zone) {
+    public boolean visibleFor(@NonNull Row zone, @NonNull AccessContext access) {
         return !DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone));
     }
 
     @Override
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row zone) {
+        return render(request.conduit(), request.access(), zone);
+    }
+
     public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
                                            @NonNull AccessContext accessContext,
                                            @NonNull Row zone) {

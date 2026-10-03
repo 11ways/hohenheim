@@ -8,7 +8,9 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.ManageDnsRecordResource;
+import be.elevenways.hohenheim.server.cms.ManageDnsRecordParts;
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
@@ -622,14 +624,14 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         assertGranted(DnsRecordModel.MODEL_ID, dynamicId, HohenheimAccess.VIEW);
         String storedDigest = DynamicDnsService.credentialFor(dynamicId)
             .get(DnsDyndnsCredentialModel.TOKEN_DIGEST);
-        assertThat(tenantPost("/manage/dns-records/" + dynamicId + "/action/dyndns_token", "")
+        assertThat(tenantPost("/manage/dns-records/invoke/hohenheim.dyndns_token?ids=" + dynamicId, "")
             .statusCode()).as("edit is not dyndns").isIn(403, 404);
         assertThat((String) DynamicDnsService.credentialFor(dynamicId)
             .get(DnsDyndnsCredentialModel.TOKEN_DIGEST))
             .as("the refused action minted nothing").isEqualTo(storedDigest);
 
         assertGranted(DnsRecordModel.MODEL_ID, dynamicId, HohenheimAccess.DYNDNS);
-        assertThat(tenantPost("/manage/dns-records/" + dynamicId + "/action/dyndns_token", "")
+        assertThat(tenantPost("/manage/dns-records/invoke/hohenheim.dyndns_token?ids=" + dynamicId, "")
             .statusCode()).as("the dyndns holder may re-mint").isIn(200, 302, 303);
         assertThat((String) DynamicDnsService.credentialFor(dynamicId)
             .get(DnsDyndnsCredentialModel.TOKEN_DIGEST))
@@ -1045,11 +1047,13 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
 
     /** The delegated list's own read path, driven as the operator (who is scoped to everything). */
     private static List<Row> manageSearch(String term) {
-        ManageDnsRecordResource resource = new ManageDnsRecordResource();
+        var parts = ManageDnsRecordParts.manage();
+        var resource = PanelResourceViews.forCaller(parts,
+            PanelRegistry.getBySlug("manage"));
         TableView.Applied<Row> applied = TableView
             .forPrincipal(Objects.requireNonNull(adminPrincipal.reference()).id(), resource.id()).build()
             .apply(resource.tableSpec())
-            .withSearch(term);
+            .withSearch(parts.list().searchTerm(term));
         return resource.listRows(applied,
             AccessContext.of(TenantConduits.stubFor(adminPrincipal)));
     }

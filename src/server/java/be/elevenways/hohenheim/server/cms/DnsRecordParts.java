@@ -16,13 +16,24 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
-import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
-import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.ResourceReads;
+import be.elevenways.zenit.cms.common.resource.ResourceList;
+import be.elevenways.zenit.cms.common.resource.ResourceForm;
+import be.elevenways.zenit.cms.common.resource.ResourceMutations;
+import be.elevenways.zenit.cms.common.resource.ResourceTabs;
+import be.elevenways.zenit.cms.common.resource.ResourceAuthority;
+import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.zenit.common.operation.SubjectType;
+import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
@@ -57,7 +68,49 @@ import java.util.Map;
  * selected type declares ({@code data} schemaFrom), and the dyndns actions
  * exist only on address records.
  */
-public class DnsRecordResource extends RowResource {
+public final class DnsRecordParts {
+
+    public static @NonNull PanelResource<Row> admin() {
+        DnsRecordParts parts = new DnsRecordParts();
+        return entry(parts.id())
+            .reads(ResourceReads.rows().mapCells(parts::cellValue))
+            .list(ResourceList.rows(parts.tableSpec()).chrome(CmsSupport.FILTERABLE_LIST).facets().ruleFilters()
+                .search(parts.searchFields().toArray(Field<?, ?>[]::new)).build())
+            .form(ResourceForm.<Row>of(parts.formSpec()).quickCreate(QUICK_CREATE)
+                .quickCreatePresets(parts::quickCreatePresetValues)
+                .createDefaults(request -> parts.createValues(request.conduit()))
+                .inlineEditable(parts.inlineEditableFields().toArray(Field<?, ?>[]::new)).build())
+            .parent(parts.parent())
+            .writes(ResourceMutations.rows().create(call -> parts.persistRow(call.values(), call.access()))
+                .update(call -> { parts.updateRow(call.record(), call.values(), call.access()); return null; })
+                .delete(DnsOperations.DELETE_RECORD).build())
+            .tabs(ResourceTabs.<Row>none().withHistory().withContributions()).build();
+    }
+
+    static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id) {
+        DnsOperations.init();
+        return PanelResource.builder(id, SLUG, DnsOperations.RECORD)
+            .label(Microcopy.of("plural").withFilter("scope", "dns_record"))
+            .recordLabel(Microcopy.of("singular").withFilter("scope", "dns_record"))
+            .navGroup(HohenheimPanel.NETWORK_GROUP).navOrder(31).icon(Icon.of("list-ul")).showInNav(false)
+            .authority(ResourceAuthority.<Row>builder().write(null,
+                (row, access) -> TenantWrites.mayAuthorRecord(access, row)).build())
+            .deleteConfirmation(DeleteConfirmation.<Row>defaults().forRow((row, request) ->
+                new DnsRecordParts().deleteConfirmationFor(row)))
+            .actions(List.of(PanelAction.<Row, CmsActionResult>places(DnsOperations.MINT_DYNAMIC_TOKEN,
+                ActionPlacement.ROW, (request, result) -> result.value()).inlineInRow(false)
+                .dynamicDescription(row -> Microcopy.of("dyndns_token_hint").withFilter("scope", "dns_record")
+                    .withArg("url", dyndnsUpdateUrl())).build(),
+                PanelAction.<Row, CmsActionResult>places(DnsOperations.REVOKE_DYNAMIC_TOKEN,
+                    ActionPlacement.ROW, (request, result) -> result.value()).inlineInRow(false)
+                    .confirmation(ConfirmationSpec.destructive(Microcopy.of("dyndns_revoke_confirm")
+                        .withFilter("scope", "dns_record"))).build()));
+    }
+
+    public static void requireImportable(@NonNull Panel panel, int zoneId, @NonNull AccessContext access) {
+        ResourceWrites.requireOutsideArchive(panel, PanelResourceViews.forProgrammaticCaller(admin(), panel),
+            Map.of(DnsRecordModel.ZONE_ID.getName(), zoneId), access, "import");
+    }
 
     /** The list's quick-add entries; the zone rides along as a host-supplied preset. */
     private static final QuickCreateSpec QUICK_CREATE = QuickCreateSpec
@@ -90,60 +143,41 @@ public class DnsRecordResource extends RowResource {
         .column(ColumnSpec.fromField(DnsRecordModel.MANAGED_BY).build())
         .column(ColumnSpec.fromField(DnsRecordModel.ZONE_ID)
             .relation(RelationPick.of(DnsRecordModel.ZONE_ID, DnsZoneModel.MODEL_ID).build()).build())
-        .filter(FilterSpec.forField(DnsRecordModel.NAME, FilterSpec.Kind.TEXT)
+        .filter(FilterSpec.leaf(DnsRecordModel.NAME, CoreTypes.CONTAINS)
             .label(FieldLabels.labelFor(DnsRecordModel.NAME)).build())
-        .filter(FilterSpec.forField(DnsRecordModel.TYPE, FilterSpec.Kind.SELECT)
+        .filter(FilterSpec.leaf(DnsRecordModel.TYPE, CoreTypes.EQUALS)
             .label(FieldLabels.labelFor(DnsRecordModel.TYPE)).build())
-        .filter(FilterSpec.forField(DnsRecordModel.ENABLED, FilterSpec.Kind.BOOLEAN)
+        .filter(FilterSpec.leaf(DnsRecordModel.ENABLED, CoreTypes.IS_TRUE, CoreTypes.IS_FALSE)
             .label(FieldLabels.labelFor(DnsRecordModel.ENABLED)).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return HohenheimIds.id("dns_record"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "dns_record"); }
-    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "dns_record"); }
+    public @NonNull Identifier id() { return HohenheimIds.id("dns_record"); }
+    public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "dns_record"); }
+    public @NonNull Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "dns_record"); }
     /** The panel slug, which the zone's Records tab looks this resource up by. */
     public static final String SLUG = "dns-records";
 
-    @Override public @NonNull String slug() { return SLUG; }
-    @Override public @NonNull Model model() { return Models.get(DnsRecordModel.class); }
-    @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
-    @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
-    @Override public @NonNull ListChrome listChrome() { return CmsSupport.FILTERABLE_LIST; }
-    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.NETWORK_GROUP; }
-    @Override public int navOrder() { return 31; }
-    @Override public @NonNull Icon icon() { return Icon.of("list-ul"); }
-    @Override public boolean showInNav() { return false; }
+    public @NonNull String slug() { return SLUG; }
+    public @NonNull Model model() { return Models.get(DnsRecordModel.class); }
+    public @NonNull FormSpec formSpec() { return this.formSpec; }
+    public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
 
     /**
      * A record belongs to its zone: the zone's Records tab is its home, and a zone that becomes read-only (trashed,
      * or under a trashed record) makes every write of its records refused by zenit-cms.
      */
-    @Override
     public @Nullable ResourceParent<Row> parent() {
-        return ResourceParent.of(DnsZoneResource.SLUG, DnsRecordModel.ZONE_ID).tab(DnsZoneRecordsPage.SLUG);
-    }
-
-    /**
-     * Refuse a zone-file import into {@code zoneId} while the zone is read-only, with the refusal zenit-cms gives every
-     * record create there: the import writes its records itself, so it asks before it writes.
-     *
-     * @param panel the panel the zone's lineage resolves in (the operator panel)
-     * @throws AccessRefusedException coded {@code CmsRefusalCopy.ARCHIVED_PARENT}
-     */
-    public void requireImportable(@NonNull Panel panel, int zoneId, @NonNull AccessContext accessContext) {
-        ResourceWrites.requireOutsideArchive(panel, this, Map.of(DnsRecordModel.ZONE_ID.getName(), zoneId),
-            accessContext, "import");
+        return ResourceParent.of(DnsZoneParts.SLUG, DnsRecordModel.ZONE_ID).tab(DnsZoneRecordsPage.SLUG);
     }
 
     /**
      * Edit and delete ride {@code TenantWrites}' record lanes (per-record {@code edit}
      * grant OR hostname authority, tenant-authorable types only), so the synthesized
      * affordances are offered on exactly that answer -- the
-     * {@link InstanceAttachmentParts#devicesAdmin()} shape: {@link ManageDnsRecordResource}'s read scope
+     * {@link InstanceAttachmentParts#devicesAdmin()} shape: {@link ManageDnsRecordParts}'s read scope
      * is wider ({@code view} grants and derived hostnames), and without this a view-only
      * delegate was shown buttons the write pipeline could only refuse.
      */
-    @Override
     public boolean writableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
         return TenantWrites.mayAuthorRecord(accessContext, record);
     }
@@ -155,7 +189,6 @@ public class DnsRecordResource extends RowResource {
      * REPLACES the base implementation, which is what serves them, so the create form
      * used to open with Enabled unticked and create a disabled record.
      */
-    @Override
     public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
         Map<String, Object> values = new LinkedHashMap<>(this.formSpec().defaultValues());
         Integer zoneId = prefilledZoneId(conduit);
@@ -166,7 +199,6 @@ public class DnsRecordResource extends RowResource {
     }
 
     /** Name and value are what an operator scans a zone for; the rest is structure. */
-    @Override
     public @NonNull List<Field<?, ?>> searchFields() {
         return List.of(DnsRecordModel.NAME, DnsRecordModel.VALUE);
     }
@@ -182,7 +214,6 @@ public class DnsRecordResource extends RowResource {
      * Add into a link to the full form on its own. Adding a type here therefore
      * needs no change in either place.
      */
-    @Override
     public @Nullable QuickCreateSpec quickCreate() {
         return QUICK_CREATE;
     }
@@ -192,14 +223,13 @@ public class DnsRecordResource extends RowResource {
      * the zone whose Records tab is being rendered ({@link CmsSupport#scopedParentId}, which
      * documents why the answer comes off the REQUEST).
      */
-    @Override
     public @NonNull Map<String, Object> quickCreatePresetValues(@NonNull AccessContext accessContext) {
         Conduit conduit = accessContext.conduit();
         if (conduit == null) {
             return Map.of();
         }
         Integer zoneId = CmsSupport.scopedParentId(conduit, DnsRecordModel.ZONE_ID.getName(),
-            DnsZoneResource.SLUG);
+            DnsZoneParts.SLUG);
         return zoneId != null ? Map.of(DnsRecordModel.ZONE_ID.getName(), zoneId) : Map.of();
     }
 
@@ -212,7 +242,6 @@ public class DnsRecordResource extends RowResource {
      * one-cell editor never showed -- that belongs on the full form, where those
      * fields render.
      */
-    @Override
     public @NonNull List<Field<?, ?>> inlineEditableFields() {
         return List.of(DnsRecordModel.NAME, DnsRecordModel.VALUE,
             DnsRecordModel.TTL, DnsRecordModel.ENABLED);
@@ -232,7 +261,6 @@ public class DnsRecordResource extends RowResource {
      * alternative -- caching the zone on the resource -- would serve a stale default after a
      * zone edit, which is exactly the lie this override exists to remove.
      */
-    @Override
     public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
         // The value cell prints the rdata the way a resolver does: MX priority and the SRV
         // priority/weight/port live in the type's sub-schema, so without them five MX rows
@@ -243,7 +271,7 @@ public class DnsRecordResource extends RowResource {
                 && DnsRecordModel.VALUE.getName().equals(column.source().getName())) {
             return DnsRecordModel.presentationValue(row);
         }
-        Object value = super.cellValue(row, column);
+        Object value = row.get(column.name());
         if (value != null || column.source() == null
                 || !DnsRecordModel.TTL.getName().equals(column.source().getName())) {
             return value;
@@ -262,36 +290,33 @@ public class DnsRecordResource extends RowResource {
         return CmsSupport.prefill(conduit, HohenheimParams.ZONE_ID_PREFILL);
     }
 
-    @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
         int zoneId = validate(values, null, this.model());
-        Object id = super.persistRow(values, accessContext);
+        Object id = DnsRowWrites.create(this.model(), this.formSpec(), values, accessContext);
         DnsZoneStore.INSTANCE.bumpSerialAndReload(zoneId);
         return id;
     }
 
-    @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
         int zoneId = validate(values, existing, this.model());
-        super.updateRow(existing, values, accessContext);
         Integer previousZone = existing.get(DnsRecordModel.ZONE_ID);
+        DnsRowWrites.update(this.model(), this.formSpec(), existing, values, accessContext);
         if (previousZone != null && previousZone != zoneId) {
             DnsZoneStore.INSTANCE.bumpSerialAndReload(previousZone);
         }
         DnsZoneStore.INSTANCE.bumpSerialAndReload(zoneId);
     }
 
-    @Override
     public void deleteRow(@NonNull Row existing, @NonNull AccessContext accessContext) {
         Integer zoneId = existing.get(DnsRecordModel.ZONE_ID);
         // The dyndns credential dies with the record via the model-level cascade
         // (DynamicDnsService.installCredentialCascade), shared with the peer API
         // and the zone-file import's replace.
-        super.deleteRow(existing, accessContext);
+        this.model().delete(existing);
         if (zoneId != null) {
             DnsZoneStore.INSTANCE.bumpSerialAndReload(zoneId);
         }
@@ -312,9 +337,8 @@ public class DnsRecordResource extends RowResource {
      * microcopy args echo VERBATIM: an absent zone or value would render a dangling
      * preposition in every locale. THE single composing home for this wording -- the zone's
      * bespoke Records tab ({@link DnsZoneRecordsPage}) renders its rows through this same
-     * hook, and {@link ManageDnsRecordResource} inherits it.
+     * policy, which {@link ManageDnsRecordParts} shares through the common entry declaration.
      */
-    @Override
     public @NonNull ConfirmationSpec deleteConfirmationFor(@NonNull Row record) {
         String origin = DeleteImpact.originOfZone(record.get(DnsRecordModel.ZONE_ID));
         String owner = record.get(DnsRecordModel.NAME);
@@ -323,54 +347,15 @@ public class DnsRecordResource extends RowResource {
 
         if (origin == null || origin.isBlank() || owner == null || owner.isBlank()
                 || type == null || type.isBlank() || value == null || value.isBlank()) {
-            return super.deleteConfirmationFor(record);
+            return DeleteConfirmation.<Row>defaults().fallback();
         }
 
-        return deleteConfirmation(Microcopy.of("delete_confirm_named")
+        return DeleteConfirmation.body(Microcopy.of("delete_confirm_named")
             .withFilter("scope", "dns_record")
             .withArg("name", DnsNames.absolute(origin, owner))
             .withArg("type", type)
             .withArg("value", value)
             .withArg("origin", origin));
-    }
-
-    @Override
-    public @NonNull List<RowAction<Row>> rowActions() {
-        List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
-        actions.add(RowAction.Invoke.<Row>builder(HohenheimIds.id("dyndns_token"))
-            .label(Microcopy.of("dyndns_token").withFilter("scope", "dns_record"))
-            .icon(Icon.of("rotate"))
-            .description(Microcopy.of("dyndns_token_hint").withFilter("scope", "dns_record")
-                .withArg("url", dyndnsUpdateUrl()))
-            // Dynamic DNS is a capability of ADDRESS records: the action does not exist
-            // on any other type (visibleFor is re-checked on invoke, so a direct POST
-            // 404s). The token is a bearer credential that survives grant revocation,
-            // so minting it is additionally its OWN capability -- an operator passes
-            // through the walk's admin bypass, so one predicate answers for both panels.
-            // reachesRecord, never ctx.hasCapability: this runs once per RENDERED ROW.
-            .visibleFor((row, ctx) -> DnsRecordModel.isAddressType(row.get(DnsRecordModel.TYPE))
-                && HohenheimAccess.reachesRecord(ctx, DnsRecordModel.MODEL_ID,
-                    row.get(DnsRecordModel.ID), HohenheimAccess.DYNDNS))
-            .handler((row, ctx) -> mintDynamicToken(row))
-            // A credential chore, not a per-row affordance: it belongs in the overflow menu.
-            .inlineInRow(false)
-            .build());
-        actions.add(RowAction.Invoke.<Row>builder(HohenheimIds.id("dyndns_revoke"))
-            .label(Microcopy.of("dyndns_revoke").withFilter("scope", "dns_record"))
-            .icon(Icon.of("ban"))
-            .description(Microcopy.of("dyndns_revoke_hint").withFilter("scope", "dns_record"))
-            .confirmation(ConfirmationSpec.destructive(
-                Microcopy.of("dyndns_revoke_confirm").withFilter("scope", "dns_record")))
-            // Only offered where a credential actually exists: revoke on a record that
-            // is not dynamic is not a no-op button, it is not a button at all.
-            .visibleFor((row, ctx) -> DnsRecordModel.isAddressType(row.get(DnsRecordModel.TYPE))
-                && HohenheimAccess.reachesRecord(ctx, DnsRecordModel.MODEL_ID,
-                    row.get(DnsRecordModel.ID), HohenheimAccess.DYNDNS)
-                && DynamicDnsService.credentialFor(row.get(DnsRecordModel.ID)) != null)
-            .handler((row, ctx) -> revokeDynamicToken(row))
-            .inlineInRow(false)
-            .build());
-        return actions;
     }
 
     /**
@@ -384,7 +369,7 @@ public class DnsRecordResource extends RowResource {
      * host to send a DNS-write credential to. Unset leaves the PATH, which is still true
      * and is what the endpoint itself declares -- never a hand-typed literal.
      */
-    private static @NonNull String dyndnsUpdateUrl() {
+    static @NonNull String dyndnsUpdateUrl() {
 
         String path = HohenheimEndpoints.DYNDNS_UPDATE.toUrl();
         String base = ServerSettings.VALUES.getValue(ServerSettings.Network.MAIN_URL);
@@ -403,9 +388,9 @@ public class DnsRecordResource extends RowResource {
     }
 
     /** Arms (or re-keys) the record's dyndns credential; the plaintext is disclosed ONCE in the toast. */
-    private CmsActionResult mintDynamicToken(@NonNull Row row) {
+    static CmsActionResult mintDynamicToken(@NonNull Row row) {
         String token = DynamicDnsService.mintFor(row.get(DnsRecordModel.ID));
-        ActivityLog.record(this.model(), row.get(DnsRecordModel.ID), HohenheimActivityAction.DYNDNS_TOKEN_MINTED, null);
+        ActivityLog.record(Models.get(DnsRecordModel.class), row.get(DnsRecordModel.ID), HohenheimActivityAction.DYNDNS_TOKEN_MINTED, null);
 
         // AIDEV-NOTE: only the digest is at rest (dns_dyndns_credentials), so this
         // toast is the ONLY disclosure. Re-mint is the recovery path. withSecretArg
@@ -417,9 +402,9 @@ public class DnsRecordResource extends RowResource {
     }
 
     /** Deletes the credential: the record stops being dynamic and its token dies now. */
-    private CmsActionResult revokeDynamicToken(@NonNull Row row) {
+    static CmsActionResult revokeDynamicToken(@NonNull Row row) {
         DynamicDnsService.revokeFor(row.get(DnsRecordModel.ID));
-        ActivityLog.record(this.model(), row.get(DnsRecordModel.ID), HohenheimActivityAction.DYNDNS_TOKEN_REVOKED, null);
+        ActivityLog.record(Models.get(DnsRecordModel.class), row.get(DnsRecordModel.ID), HohenheimActivityAction.DYNDNS_TOKEN_REVOKED, null);
         return CmsActionResult.refreshWithToast(
             Microcopy.of("dyndns_revoked").withFilter("scope", "dns_record"));
     }

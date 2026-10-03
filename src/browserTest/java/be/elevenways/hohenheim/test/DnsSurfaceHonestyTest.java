@@ -4,9 +4,9 @@ import be.elevenways.hohenheim.dns.DelegationVerdict;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
-import be.elevenways.hohenheim.server.cms.DnsRecordResource;
+import be.elevenways.hohenheim.server.cms.DnsRecordParts;
 import be.elevenways.hohenheim.server.cms.DnsZonePeerParts;
-import be.elevenways.hohenheim.server.cms.DnsZoneResource;
+import be.elevenways.hohenheim.server.cms.DnsZoneParts;
 import be.elevenways.hohenheim.server.dns.DelegationCheck;
 import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
@@ -14,6 +14,10 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.zenit.common.edit.FormEntry;
 import be.elevenways.zenit.common.edit.InputType;
 import be.elevenways.zenit.common.edit.RelationPick;
@@ -49,7 +53,7 @@ class DnsSurfaceHonestyTest extends HohenheimTestBase {
         int peerId = DnsFixtures.transferPeer("honesty-peer", "192.0.2.10", 53);
         int replicaId = DnsFixtures.createZone(origin, DnsZoneModel.ROLE_SECONDARY, peerId);
 
-        DnsZoneResource zones = new DnsZoneResource();
+        Resource<Row> zones = zoneCells();
         ColumnSpec countColumn = column(zones, "record_count");
         Row replica = Models.get(DnsZoneModel.class).findById(replicaId);
 
@@ -98,7 +102,7 @@ class DnsSurfaceHonestyTest extends HohenheimTestBase {
         int zoneId = DnsFixtures.createZone(origin, DnsZoneModel.ROLE_PRIMARY, null);
         DnsFixtures.record(zoneId, "www", DnsRecordModel.TYPE_A, "198.51.100.1");
 
-        DnsZoneResource zones = new DnsZoneResource();
+        Resource<Row> zones = zoneCells();
         Row zone = Models.get(DnsZoneModel.class).findById(zoneId);
 
         // 1. A primary still counts the rows it authors.
@@ -128,6 +132,13 @@ class DnsSurfaceHonestyTest extends HohenheimTestBase {
             .isEqualTo(0);
     }
 
+    private static Resource<Row> zoneCells() {
+        var conduit = TenantConduits.stubFor(null);
+        var request = new PanelRequest(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN), conduit,
+            AccessContext.of(conduit), null);
+        return PanelResourceViews.of(DnsZoneParts.admin(), request);
+    }
+
     @Test
     void aRecordValueCellPrintsTheRdataAResolverWouldShow() {
         int zoneId = DnsFixtures.createZone("honesty-rdata.example", DnsZoneModel.ROLE_PRIMARY, null);
@@ -137,7 +148,7 @@ class DnsSurfaceHonestyTest extends HohenheimTestBase {
             "sip.example", 10, 60, 5060);
         int aId = DnsFixtures.record(zoneId, "www", DnsRecordModel.TYPE_A, "198.51.100.1");
 
-        DnsRecordResource records = new DnsRecordResource();
+        Resource<Row> records = PanelResourceViews.forCaller(DnsRecordParts.admin());
         ColumnSpec valueColumn = column(records, DnsRecordModel.VALUE.getName());
         DnsRecordModel model = Models.get(DnsRecordModel.class);
 

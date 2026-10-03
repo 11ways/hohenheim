@@ -370,7 +370,7 @@ class DnsListEditingTest extends HohenheimTestBase {
         String body = adminGet(tab).body();
 
         // 1. The row's delete carrier names the tab as where to come back to.
-        String item = buttonCarrying(body, "/admin/dns-records/" + recordId + "/delete");
+        String item = buttonCarrying(body, "/admin/dns-records/invoke/hohenheim.delete_dns_record?ids=" + recordId);
         assertThat(item).as("step 1: the tab offers the delete").isNotNull();
         String target = attributeOf(item, "formaction");
         assertThat(target)
@@ -413,7 +413,7 @@ class DnsListEditingTest extends HohenheimTestBase {
                 .first().evaluate("el => el.click()");
             String popup = "he-bottom .pl-dropdown-menu-content__popup:visible ";
             String deleteItem = popup + "button.cms-menu-action[data-cms-lane='compact']"
-                + "[formaction^='/admin/dns-records/" + second + "/delete?']";
+                + "[formaction^='/admin/dns-records/invoke/hohenheim.delete_dns_record?ids=" + second + "']";
             page.waitForSelector(deleteItem);
             click(deleteItem);
             assertIsVisible(".pl-alertdialog-modal[data-open]");
@@ -468,7 +468,7 @@ class DnsListEditingTest extends HohenheimTestBase {
         String compactEdit = popup + "a.cms-menu-action[data-cms-lane='compact']"
             + "[data-action-id='zenit:edit']";
         String compactMint = popup + "button.cms-menu-action[data-cms-lane='compact']"
-            + "[formaction^='/admin/dns-records/" + recordId + "/action/dyndns_token?']";
+            + "[formaction^='/admin/dns-records/invoke/hohenheim.dyndns_token?ids=" + recordId + "']";
         page.locator(row + ".cms-row-action-compact pl-dropdown-menu-trigger")
             .first().evaluate("el => el.click()");
         page.waitForSelector(compactEdit);

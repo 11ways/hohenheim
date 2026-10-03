@@ -10,6 +10,7 @@ import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.cms.server.panel.PartsForms;
 import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldQueryGate;
@@ -56,7 +57,8 @@ class RecordAwareQueryGateTest extends HohenheimTestBase {
 
         // 2. DNS zones: replication diagnostics show only on the zones of their role, never on the
         //    create form, and stay queryable across the zone list.
-        FieldQueryGate zoneGate = new DnsZoneResource().queryGate();
+        FieldQueryGate zoneGate = PartsForms.queryGate(
+            PanelResourceViews.forCaller(DnsZoneParts.admin(), PanelRegistry.getBySlug(HohenheimPanel.SLUG)));
         for (String diagnostic : new String[] {DnsZoneModel.TRANSFER_STATUS.getName(),
                 DnsZoneModel.LAST_TRANSFER_AT.getName(), DnsZoneModel.DELEGATION_STATUS.getName(),
                 DnsZoneModel.DELEGATION_CHECKED_AT.getName()}) {
