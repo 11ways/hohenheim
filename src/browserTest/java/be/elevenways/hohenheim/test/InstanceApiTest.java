@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -54,9 +55,14 @@ class InstanceApiTest extends HohenheimTestBase {
 
     /** A Docker host the application kind's picker rules accept. */
     private static Integer hostId;
+    private static FakeDockerDaemon daemon;
 
     @BeforeAll
     static void seed() {
+        // The granted destroy reaches the runtime; this API journey uses the shared daemon, never a host socket.
+        daemon = new FakeDockerDaemon();
+        daemon.install();
+        daemon.installContainerKind();
         hostId = host(PREFIX + "docker-host");
         tenantId = user("instance-api-tenant@surface.test", "Instance Api Tenant");
 
@@ -81,9 +87,14 @@ class InstanceApiTest extends HohenheimTestBase {
 
     @AfterAll
     static void cleanUp() {
-        InstanceModel instances = Models.get(InstanceModel.class);
-        for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
-            HardDeletes.byId(instances, row.get(InstanceModel.ID));
+        try {
+            InstanceModel instances = Models.get(InstanceModel.class);
+            for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
+                HardDeletes.byId(instances, row.get(InstanceModel.ID));
+            }
+        } finally {
+            FakeDockerDaemon.restore();
+            if (daemon != null) daemon.close();
         }
     }
 
