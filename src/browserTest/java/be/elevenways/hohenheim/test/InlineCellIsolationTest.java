@@ -29,12 +29,14 @@ import be.elevenways.hohenheim.server.instance.variable.StringVariableType;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelPeer;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
+import be.elevenways.zenit.cms.common.panel.PanelEntryKinds;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.render.inline.InlineEditResult;
 import be.elevenways.zenit.cms.common.render.inline.InlineEditState;
 import be.elevenways.zenit.cms.common.render.inline.InlineEditSubmit;
-import be.elevenways.zenit.cms.common.resource.Resource;
+import be.elevenways.zenit.cms.server.panel.PartsForms;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.BooleanField;
@@ -133,7 +135,7 @@ class InlineCellIsolationTest extends HohenheimTestBase {
         Set<String> covered = new TreeSet<>();
 
         for (Target target : targets) {
-            Model model = target.resource().model();
+            Model model = PartsReads.model(target.resource());
             String who = target.panel() + "/" + target.resource().slug();
 
             // 2. Every declaring resource must be reachable with a real row. A model with
@@ -144,7 +146,7 @@ class InlineCellIsolationTest extends HohenheimTestBase {
                     + model.getModelId() + "; add one to this test when declaring inline"
                     + " editing on a new model").isNotNull();
 
-            for (Field<?, ?> field : target.resource().inlineEditableFields()) {
+            for (Field<?, ?> field : PartsForms.inlineEditableFields(target.resource())) {
                 String name = field.getName();
                 Map<String, Object> before = storedValues(model, id);
 
@@ -198,17 +200,17 @@ class InlineCellIsolationTest extends HohenheimTestBase {
     // --- the walk ---------------------------------------------------------------------
 
     /** One (panel, resource) pair per resource that declares an inline cell. */
-    private record Target(String panel, Resource<?> resource) {}
+    private record Target(String panel, PanelEntry resource) {}
 
     private static List<Target> declaredTargets() {
         List<Target> targets = new ArrayList<>();
         for (String slug : List.of("admin", ManagePanel.SLUG)) {
             Panel panel = PanelRegistry.getBySlug(slug);
             assertThat(panel).as("the '" + slug + "' panel is registered").isNotNull();
-            for (PanelPeer peer : panel.peers()) {
-                if (peer instanceof Resource<?> resource
-                        && !resource.inlineEditableFields().isEmpty()) {
-                    targets.add(new Target(slug, resource));
+            for (PanelEntry entry : panel.entries()) {
+                if (entry.kind() == PanelEntryKinds.RESOURCE
+                        && !PartsForms.inlineEditableFields(entry).isEmpty()) {
+                    targets.add(new Target(slug, entry));
                 }
             }
         }

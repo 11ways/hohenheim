@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
+import be.elevenways.hohenheim.instance.VolumeOperations;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
@@ -11,12 +12,14 @@ import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
+import be.elevenways.hohenheim.server.cms.VolumeParts;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelPeer;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
-import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -246,7 +249,8 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
     void volumesDeclareThroughTheFunnelAndTheGuardsHold() throws Exception {
         // Declare via the CMS form: quota entered in MB, stored in bytes.
         HttpResponse<String> create = httpPostForm("/admin/instance-volumes/new",
-            "instance_id=" + workspaceId + "&name=data&container_path=%2Fdata&quota_mb=100",
+            "instance_id=" + workspaceId + "&name=data&container_path=%2Fdata&quota_mb=100&"
+                + PanelResourceCalls.createEnvelope(),
             sessionToken, csrfToken);
         assertThat(create.statusCode()).isIn(302, 303);
         Row declared = Models.get(InstanceVolumeModel.class).find()
@@ -269,8 +273,8 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
             .where(InstanceVolumeModel.INSTANCE_ID.eq(workspaceId))
             .where(InstanceVolumeModel.NAME.eq("home")).first();
         HttpResponse<String> destroyHome = httpPostForm(
-            "/admin/instance-volumes/" + home.get(InstanceVolumeModel.ID)
-                + "/action/destroy_volume",
+            CmsRoutes.invoke("admin", VolumeParts.SLUG, VolumeOperations.DESTROY.id())
+                .with(CmsEndpoints.SUBJECT_PARAM, String.valueOf(home.get(InstanceVolumeModel.ID))).toUrl(),
             confirmed("", "home"), sessionToken, csrfToken);
         assertThat(destroyHome.statusCode()).isIn(302, 303);
         assertThat(Models.get(InstanceVolumeModel.class)
@@ -279,7 +283,8 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
 
         // FALSIFICATION 2: a kind that mounts no volumes cannot be declared onto.
         HttpResponse<String> wrongKind = httpPostForm("/admin/instance-volumes/new",
-            "instance_id=" + dockerId + "&name=data&container_path=%2Fdata",
+            "instance_id=" + dockerId + "&name=data&container_path=%2Fdata&"
+                + PanelResourceCalls.createEnvelope(),
             sessionToken, csrfToken);
         assertThat(wrongKind.statusCode()).isNotIn(302, 303);
         assertThat(Models.get(InstanceVolumeModel.class).find()
@@ -528,14 +533,14 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
         assertThat(admin).isNotNull();
         assertThat(manage).isNotNull();
 
-        PanelPeer operatorList = admin.peerBySlug("instances");
-        PanelPeer tenantList = manage.peerBySlug("instances");
-        assertThat(operatorList).isInstanceOf(Resource.class);
-        assertThat(tenantList).isInstanceOf(Resource.class);
+        PanelEntry operatorList = admin.entryBySlug("instances");
+        PanelEntry tenantList = manage.entryBySlug("instances");
+        assertThat(operatorList).isInstanceOf(PanelResource.class);
+        assertThat(tenantList).isInstanceOf(PanelResource.class);
 
-        assertThat(((Resource<?>) operatorList).relatedPages())
+        assertThat(((PanelResource<?>) operatorList).relatedPages())
             .as("the operator list names its demoted catalogs").isNotEmpty();
-        assertThat(((Resource<?>) tenantList).relatedPages())
+        assertThat(((PanelResource<?>) tenantList).relatedPages())
             .as("the tenant list names none of them").isEmpty();
         assertThat(((PanelResource<?>) manage.entryBySlug("sites")).relatedPages())
             .as("nor does the tenant site list").isEmpty();

@@ -18,8 +18,7 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
-import be.elevenways.zenit.cms.common.resource.Resource;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.zenit.cms.server.panel.PartsWrites;
 import be.elevenways.zenit.common.flash.FlashNotice;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -149,9 +148,7 @@ class GitProviderTenantSurfaceTest extends HohenheimTestBase {
     @Test
     void theTenantSurfaceRefusesToPublishACredential() {
         Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.MANAGE));
-        @SuppressWarnings("unchecked")
-        Resource<Row> resource = PanelResourceViews.forCaller(
-            (PanelResource<Row>) Objects.requireNonNull(manage.entryBySlug(HohenheimSlugs.GIT_PROVIDERS)), manage);
+        PanelResource<Row> resource = CmsSupport.rowEntry(manage, HohenheimSlugs.GIT_PROVIDERS);
         UserPrincipal principal = new UserPrincipal(tenantId, "Git Provider Tenant");
         AccessContext tenant = AccessContext.of(TenantConduits.stubFor(principal));
         Model providers = Models.get(GitProviderModel.class);
@@ -160,7 +157,7 @@ class GitProviderTenantSurfaceTest extends HohenheimTestBase {
         // 1. A create handed a map that carries shared=true is refused before any write.
         Map<String, Object> published = values(PREFIX + "published");
         published.put(GitProviderModel.SHARED.getName(), true);
-        Throwable createRefused = catchThrowable(() -> resource.persistRow(published, tenant));
+        Throwable createRefused = catchThrowable(() -> PartsWrites.persistRow(resource, published, tenant));
         assertThat(createRefused)
             .as("step 1: a create publishing the credential is refused")
             .isInstanceOf(Violations.class);
@@ -171,7 +168,7 @@ class GitProviderTenantSurfaceTest extends HohenheimTestBase {
             .as("step 1: and nothing was written").isEqualTo(before);
 
         // 2. An ordinary create goes through and hands the tenant manage on its provider.
-        Object key = resource.persistRow(values(PREFIX + "own"), tenant);
+        Object key = PartsWrites.persistRow(resource, values(PREFIX + "own"), tenant);
         int providerId = Integer.parseInt(String.valueOf(key));
         assertThat(HohenheimAccess.reachesRecord(tenant, GitProviderModel.MODEL_ID, providerId,
                 HohenheimAccess.MANAGE))
@@ -184,7 +181,7 @@ class GitProviderTenantSurfaceTest extends HohenheimTestBase {
         Row stored = providers.findById(providerId);
         Map<String, Object> flip = new HashMap<>();
         flip.put(GitProviderModel.SHARED.getName(), true);
-        TenantConduits.as(principal, () -> resource.updateRow(stored, flip, tenant));
+        TenantConduits.as(principal, () -> PartsWrites.updateRow(resource, stored, flip, tenant));
         assertThat((Boolean) providers.findById(providerId).get(GitProviderModel.SHARED))
             .as("step 3: an update through the twin leaves the row private").isNotEqualTo(Boolean.TRUE);
 
@@ -210,7 +207,8 @@ class GitProviderTenantSurfaceTest extends HohenheimTestBase {
         // 4. A write that does not touch shared is unaffected by the refusal.
         Map<String, Object> rename = new HashMap<>();
         rename.put(GitProviderModel.NAME.getName(), PREFIX + "renamed");
-        TenantConduits.as(principal, () -> resource.updateRow(providers.findById(providerId), rename, tenant));
+        TenantConduits.as(principal, () -> PartsWrites.updateRow(resource,
+            providers.findById(providerId), rename, tenant));
         assertThat((String) providers.findById(providerId).get(GitProviderModel.NAME))
             .as("step 4: an ordinary edit still saves").isEqualTo(PREFIX + "renamed");
     }

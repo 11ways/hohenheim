@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.server.tls.CommandDnsTxtPublisher;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.PanelPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -44,7 +45,9 @@ public final class CertificateRequestPage extends PanelPage {
     @Override public boolean showInNav() { return false; }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext accessContext) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request) {
+        Conduit conduit = request.conduit();
+        AccessContext accessContext = request.access();
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", Microcopy.of("request_certificate")
             .withFilter("scope", "certificate_request")
