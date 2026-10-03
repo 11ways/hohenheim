@@ -1,7 +1,10 @@
 package be.elevenways.hohenheim.test.host;
 
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.cms.ServerResource;
+import be.elevenways.hohenheim.server.cms.ServerParts;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.ResourceVerb;
+import be.elevenways.zenit.cms.common.resource.RowWriteCall;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.TestDatabases;
@@ -44,7 +47,7 @@ class LocalHostEditRefusalTest {
     @Test
     void theLocalHostOffersOnlyWhatItSavesAndRefusesTheRest() {
         Db.run(datasource, () -> {
-            ServerResource resource = new ServerResource();
+            PanelResource<Row> resource = ServerParts.admin();
             AccessContext operator = AccessContext.of(TenantConduits.stubFor(null));
             ServerModel servers = Models.get(ServerModel.class);
             int localId = ServerModel.localServerId();
@@ -77,8 +80,8 @@ class LocalHostEditRefusalTest {
                 .isNull();
 
             // 2. A submitted identity change is REFUSED by field, never dropped silently.
-            assertThatThrownBy(() -> resource.updateRow(local,
-                    Map.of("ssh_target", "evil@intruder.example.test"), operator))
+            assertThatThrownBy(() -> resource.writes().rowWriter(ResourceVerb.UPDATE).write(new RowWriteCall(ResourceVerb.UPDATE, local,
+                    Map.of("ssh_target", "evil@intruder.example.test"), operator)))
                 .as("step 2: changing the local host's ssh target is refused")
                 .isInstanceOf(Violations.class)
                 .hasMessageContaining("ssh_target");
@@ -87,10 +90,10 @@ class LocalHostEditRefusalTest {
                 .isNull();
 
             // 3. The editable half saves -- and a resubmitted UNCHANGED identity is no refusal.
-            resource.updateRow(servers.findById(localId), Map.of(
+            resource.writes().rowWriter(ResourceVerb.UPDATE).write(new RowWriteCall(ResourceVerb.UPDATE, servers.findById(localId), Map.of(
                 "name", "local",
                 "posture", ServerModel.POSTURE_DEDICATED,
-                "public_ipv4", "203.0.113.7"), operator);
+                "public_ipv4", "203.0.113.7"), operator));
             Row saved = servers.findById(localId);
             assertThat((String) saved.get(ServerModel.POSTURE))
                 .as("step 3: the local host's posture is stored")
@@ -105,10 +108,10 @@ class LocalHostEditRefusalTest {
     }
 
     /** The resource's declared decision for one entry, or null when it binds none. */
-    private static FieldAccess.@Nullable Decision decisionOf(@NonNull ServerResource resource,
+    private static FieldAccess.@Nullable Decision decisionOf(@NonNull PanelResource<Row> resource,
                                                              @NonNull String entry, @Nullable Row record,
                                                              @NonNull AccessContext context) {
-        for (ResourceFieldBinding binding : resource.fieldBindings()) {
+        for (ResourceFieldBinding binding : resource.form().bindings()) {
             if (binding.path().equals(entry)) {
                 return binding.access().decide(context, record);
             }

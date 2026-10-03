@@ -389,10 +389,10 @@ public final class InstanceParts {
             // the exec tab under another name: exec is admin-only and single-shot, this is a delegable tenant verb
             // bounded to a workload that runs as a non-root uid.
             new InstanceShellPage(),
-            new InstanceSnapshotsPage(new InstanceSnapshotResource()),
+            new InstanceSnapshotsPage(InstanceSnapshotParts.SLUG),
             new InstanceBackupsPage(),
             new InstanceSchedulesPage(), new InstanceDevicesPage(),
-            new InstanceVolumesPage(), new InstanceDatabasesPage(),
+            new InstanceVolumesTab(), new InstanceDatabasesPage(),
             // Operator-only: the page hides AND 404s itself for a delegate, and the /manage entry never lists it.
             new InstanceMigratePage());
     }
@@ -410,10 +410,10 @@ public final class InstanceParts {
             new InstanceShellPage(),
             // The artifact tabs read THIS panel's entries: the backup twin places no restore-to-new, which is how it
             // stays operator-only here too.
-            new InstanceSnapshotsPage(new ManageInstanceSnapshotResource()),
+            new InstanceSnapshotsPage(InstanceSnapshotParts.SLUG),
             new InstanceBackupsPage(),
             new InstanceSchedulesPage(), new InstanceDevicesPage(),
-            new InstanceVolumesPage(), new InstanceDatabasesPage());
+            new InstanceVolumesTab(), new InstanceDatabasesPage());
     }
 
     /**

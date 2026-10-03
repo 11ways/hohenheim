@@ -132,7 +132,7 @@ public final class HohenheimPanel extends Panel {
         peers.add(new AdminDashboard());
         // Projects/environments span every product tier (sites, instances, databases
         // through their sites), so they are not gated on any single role.
-        peers.add(new ProjectResource());
+        peers.add(ProjectParts.admin());
         peers.add(EnvironmentParts.admin());
         peers.add(EnvironmentParts.variables());
         addIf(peers, SiteParts.admin(), Role.PROXY);
@@ -151,26 +151,26 @@ public final class HohenheimPanel extends Panel {
         }
         addIf(peers, InstanceParts.admin(), Role.INSTANCES);
         addIf(peers, InstanceTemplateParts.admin(), Role.INSTANCES);
-        addIf(peers, new InstanceTemplateVariableResource(), Role.INSTANCES);
-        addIf(peers, new InstanceTemplateFileResource(), Role.INSTANCES);
-        addIf(peers, new InstanceTemplateVolumeResource(), Role.INSTANCES);
+        addIf(peers, TemplateChildParts.variables(), Role.INSTANCES);
+        addIf(peers, TemplateChildParts.files(), Role.INSTANCES);
+        addIf(peers, TemplateChildParts.volumes(), Role.INSTANCES);
         // A declared database is created through the managed-database tier at
         // instance create, so the declaration form needs both tiers like the attachment.
         if (HohenheimRoles.enabled(Role.DATABASES) && HohenheimRoles.enabled(Role.INSTANCES)) {
-            peers.add(new InstanceTemplateDatabaseResource());
+            peers.add(TemplateChildParts.databases());
         }
         addIf(peers, InstanceFileParts.admin(), Role.INSTANCES);
         addIf(peers, InstanceVariableParts.admin(), Role.INSTANCES);
         addIf(peers, new InstanceFromTemplatePage(), Role.INSTANCES);
         addIf(peers, new InstanceTemplateImportPage(), Role.INSTANCES);
         addIf(peers, InstanceQuotaParts.admin(), Role.INSTANCES);
-        addIf(peers, new InstanceSnapshotResource(), Role.INSTANCES);
+        addIf(peers, InstanceSnapshotParts.admin(), Role.INSTANCES);
         addIf(peers, InstanceBackupParts.admin(), Role.INSTANCES);
         addIf(peers, InstanceScheduleParts.admin(), Role.INSTANCES);
         addIf(peers, InstanceScheduleStepParts.admin(), Role.INSTANCES);
         addIf(peers, new InstanceDeviceResource(), Role.INSTANCES);
-        addIf(peers, new InstanceVolumeResource(), Role.INSTANCES);
-        addIf(peers, new RuntimeImageResource(), Role.INSTANCES);
+        addIf(peers, VolumeParts.admin(), Role.INSTANCES);
+        addIf(peers, RuntimeImageParts.admin(), Role.INSTANCES);
         addIf(peers, InstanceScheduleRunParts.admin(), Role.INSTANCES);
         addIf(peers, GameDomainResource.admin(), Role.INSTANCES);
         addIf(peers, new BackupTargetResource(), Role.INSTANCES);
@@ -181,7 +181,7 @@ public final class HohenheimPanel extends Panel {
         // health gate since the phase-0 re-keying; the proxy role merely exposes them.
         addIf(peers, OperationHistoryParts.releases(), Role.PROXY, Role.INSTANCES);
         addIf(peers, GitProviderParts.admin(), Role.PROXY);
-        addIf(peers, new PreviewDeploymentResource(), Role.PROXY);
+        addIf(peers, PreviewParts.admin(), Role.PROXY);
         addIf(peers, StackParts.stacks(), Role.STACKS);
         addIf(peers, StackParts.services(), Role.STACKS);
         addIf(peers, StackParts.files(), Role.STACKS);
@@ -190,8 +190,8 @@ public final class HohenheimPanel extends Panel {
         // preflight/trust live on this resource -- an instances-only node
         // without it cannot place anything.
         if (HohenheimRoles.hostWorkloadsEnabled()) {
-            peers.add(new ServerResource());
-            peers.add(new ReconcileFindingResource());
+            peers.add(ServerParts.admin());
+            peers.add(ReconcileFindingParts.admin());
         }
         addIf(peers, new DnsZoneResource(), Role.DNS);
         addIf(peers, new DnsRecordResource(), Role.DNS);

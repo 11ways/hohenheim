@@ -156,7 +156,7 @@ public final class AttentionCollector {
         countByServer.forEach((server, count) -> items.add(item(AttentionSeverity.INFO, "cubes",
             copy("docker_foreign", "attention_title", "server", server),
             copy("docker_foreign", "attention_detail",
-                "count", count, "page", ReconcileFindingResource.LABEL),
+                "count", count, "page", ReconcileFindingParts.LABEL),
             foreignFindingsOf(server))));
     }
 

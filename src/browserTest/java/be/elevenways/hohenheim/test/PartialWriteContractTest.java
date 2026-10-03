@@ -13,7 +13,6 @@ import be.elevenways.hohenheim.server.cms.InstanceDeviceResource;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleParts;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleStepParts;
-import be.elevenways.hohenheim.server.cms.ServerResource;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -190,7 +189,7 @@ class PartialWriteContractTest extends HohenheimTestBase {
             gitSiteId, SiteModel.NAME.getName(), PREFIX + "renamed site"));
         cases.add(new Case("manage/sites", patch(HohenheimSlugs.MANAGE, gitSiteId), Models.get(SiteModel.class),
             gitSiteId, SiteModel.DESCRIPTION.getName(), "a note the operator typed"));
-        cases.add(new Case("admin/servers", rows(new ServerResource()), Models.get(ServerModel.class),
+        cases.add(new Case("admin/servers", patch(HohenheimSlugs.ADMIN, "servers", serverId), Models.get(ServerModel.class),
             serverId, ServerModel.NAME.getName(), PREFIX + "renamed-host"));
         cases.add(new Case("admin/auth-providers", patch(HohenheimSlugs.ADMIN, AuthProviderParts.SLUG, providerId),
             Models.get(SiteAuthProviderModel.class), providerId,

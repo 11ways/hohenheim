@@ -3,13 +3,21 @@ package be.elevenways.hohenheim.test.host;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.cms.ServerResource;
+import be.elevenways.hohenheim.server.cms.ServerParts;
+import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
+import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.zenit.server.operation.OperationRequest;
+import be.elevenways.zenit.test.support.TestAccessContexts;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostPostureAcknowledgement;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.ActionContext;
@@ -174,14 +182,18 @@ class HostPostureAcknowledgementTest {
             //    the only lane that exists. All five columns land, and the activity row
             //    beside them carries a real actor.
             Row unacknowledged = servers.findById(hostId);
-            RowAction.Invoke<Row> action = acknowledgeAction();
-            assertThat(action.isVisibleFor(unacknowledged, AccessContext.anonymous()))
+            PanelAction<Row> action = acknowledgeAction();
+            var principal = TestAccessContexts.authenticated(7, "Ada Operator");
+            AccessContext operator = AccessContext.of(TenantConduits.stubFor(principal), principal, TestAccessContexts.allowAll());
+            @SuppressWarnings("unchecked")
+            Operation<Row, Void, Microcopy> operation = (Operation<Row, Void, Microcopy>) action.operation();
+            assertThat(OperationPipeline.offer(operation, operator, unacknowledged))
                 .as("step 4: the action offers itself on a host that needs it")
-                .isTrue();
+                .isInstanceOf(OperationPipeline.Offer.Available.class);
             Accountability.runAs(new Accountability("user:7", null, "Ada Operator",
                     "203.0.113.9", "test-agent", Accountability.ORIGIN_WEB),
-                () -> action.handler().apply(unacknowledged,
-                    ActionContext.of(AccessContext.anonymous())));
+                () -> OperationPipeline.invoke(OperationRequest.of(operation, CmsPlacementSurface.ADMIN_ACTION)
+                    .caller(operator).subjectKeys(List.of(String.valueOf(hostId)))));
 
             Row acknowledged = servers.findById(hostId);
             assertThat(Map.of(
@@ -196,9 +208,9 @@ class HostPostureAcknowledgementTest {
                     "by", "user:7", "label", "Ada Operator"));
             assertThat((Instant) acknowledged.get(ServerModel.ACKNOWLEDGED_AT))
                 .as("step 4: with a timestamp").isNotNull();
-            assertThat(action.isVisibleFor(acknowledged, AccessContext.anonymous()))
+            assertThat(OperationPipeline.offer(operation, operator, acknowledged))
                 .as("step 4: and the action stops offering itself once it is done")
-                .isFalse();
+                .isInstanceOf(OperationPipeline.Offer.Hidden.class);
 
             Row activity = latestAcknowledgementActivity();
             assertThat(activity)
@@ -378,14 +390,13 @@ class HostPostureAcknowledgementTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static RowAction.Invoke<Row> acknowledgeAction() {
-        for (RowAction<Row> action : new ServerResource().rowActions()) {
-            if (action instanceof RowAction.Invoke<Row> invoke
-                    && Identifier.of("hohenheim", "acknowledge_posture").equals(invoke.id())) {
-                return invoke;
+    private static PanelAction<Row> acknowledgeAction() {
+        for (PanelAction<Row> action : ServerParts.admin().actions()) {
+            if (Identifier.of("hohenheim", "acknowledge_posture").equals(action.id())) {
+                return action;
             }
         }
-        throw new AssertionError("acknowledge_posture row action not found on ServerResource");
+        throw new AssertionError("acknowledge_posture placed operation not found on ServerParts");
     }
 
     private static Row latestAcknowledgementActivity() {

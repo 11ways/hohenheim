@@ -13,7 +13,9 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -34,7 +36,7 @@ import java.util.Map;
  * container path, quota, observed usage and exclusivity, linking into the (nav-hidden)
  * volume resource forms -- the InstanceDevicesPage shape over {@link InstanceVolumes}.
  */
-public final class InstanceVolumesPage implements RecordScopedPage<Row> {
+public final class InstanceVolumesTab implements RecordScopedPage<Row> {
 
     public static final String SLUG = "volumes";
 
@@ -54,17 +56,35 @@ public final class InstanceVolumesPage implements RecordScopedPage<Row> {
      * stance, read off the same kind of declaration).
      */
     @Override
+    public boolean visibleFor(@NonNull Row record, @NonNull AccessContext access) {
+        return volumeCapable(record);
+    }
+
+    @Override
     public boolean visibleFor(@NonNull Row record) {
+        return volumeCapable(record);
+    }
+
+    static boolean volumeCapable(@NonNull Row record) {
         InstanceKindHandler handler = InstanceKinds.getHandler(record.get(InstanceModel.KIND));
         return handler != null && handler.supportsVolumes();
     }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
+        return body(request.conduit(), request.access(), instance, request.panelSlug());
+    }
+
+    /** The remaining legacy instance host dispatches here until its own parts conversion. */
+    @Override
+    @Deprecated(forRemoval = true)
+    public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext access, @NonNull Row instance) {
+        return body(conduit, access, instance, CmsSupport.panelSlug(conduit));
+    }
+
+    @NonNull ActionResult<?> body(@NonNull Conduit conduit, @NonNull AccessContext accessContext,
+                                  @NonNull Row instance, @NonNull String panel) {
         Integer instanceId = instance.get(InstanceModel.ID);
-        String panel = CmsSupport.panelSlug(conduit);
 
         List<Map<String, Object>> volumes = new ArrayList<>();
         for (Row volume : InstanceVolumes.declaredFor(instanceId)) {
@@ -82,7 +102,7 @@ public final class InstanceVolumesPage implements RecordScopedPage<Row> {
                 Boolean.TRUE.equals(volume.get(InstanceVolumeModel.EXCLUSIVE)));
             Object observedAt = volume.get(InstanceVolumeModel.OBSERVED_AT);
             entry.put("observedAtIso", observedAt != null ? observedAt.toString() : "");
-            entry.put("editTarget", CmsRoutes.detail(panel, "instance-volumes",
+            entry.put("editTarget", CmsRoutes.detail(panel, VolumeParts.SLUG,
                 volume.get(InstanceVolumeModel.ID)));
             volumes.add(entry);
         }
@@ -109,7 +129,7 @@ public final class InstanceVolumesPage implements RecordScopedPage<Row> {
                                                         @NonNull Integer instanceId) {
         return CmsEndpoints.CREATE_FORM
             .with(CmsEndpoints.PANEL_PARAM, panel)
-            .with(CmsEndpoints.RESOURCE_PARAM, "instance-volumes")
+            .with(CmsEndpoints.RESOURCE_PARAM, VolumeParts.SLUG)
             .with(HohenheimParams.INSTANCE_ID_PREFILL, instanceId);
     }
 }

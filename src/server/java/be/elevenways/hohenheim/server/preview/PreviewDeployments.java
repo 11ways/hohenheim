@@ -141,6 +141,7 @@ public final class PreviewDeployments {
         }
         Datasource datasource = Db.currentOrDefault();
         String pinnedSha = sha;
+        int previewId = preview.get(PreviewDeploymentModel.ID);
         // The build runs with SYSTEM authority whoever queued it: a preview is the application
         // owner's environment, charged to that owner regardless of who clicks (see above), and
         // the instance it writes is operator-shaped -- no tenant could author it field by field.
@@ -149,7 +150,7 @@ public final class PreviewDeployments {
         JobRunner.startVirtualThread(() -> ExecutionIdentity.runAsSystem("preview-deploy", () -> {
             Runnable build = () -> {
                 try {
-                    deploy(applicationId, ref, pinnedSha, prNumber, trigger);
+                    deployClaimed(previewId, pinnedSha, trigger);
                 } catch (Exception e) {
                     // The row already records status failed + last_error.
                     Blast.log("PREVIEW: queued deploy of application", applicationId, "ref", ref,
@@ -179,6 +180,25 @@ public final class PreviewDeployments {
                                       @NonNull DeployTrigger trigger) throws Exception {
         synchronized (lockFor(applicationId, ref)) {
             return deployLocked(applicationId, ref, sha, prNumber, trigger);
+        }
+    }
+
+    /**
+     * Run the queued claim, never minting a replacement after its teardown won the same convergence lock.
+     *
+     * @return the deployed row, or null when the exact queued claim has already been reclaimed
+     */
+    public static @Nullable Row deployClaimed(int previewId, @Nullable String sha,
+                                              @NonNull DeployTrigger trigger) throws Exception {
+        PreviewDeploymentModel model = Models.get(PreviewDeploymentModel.class);
+        Row keyed = model.findById(previewId);
+        if (keyed == null) return null;
+        int applicationId = keyed.get(PreviewDeploymentModel.APPLICATION_ID);
+        String ref = keyed.get(PreviewDeploymentModel.REF);
+        synchronized (lockFor(applicationId, ref)) {
+            // AIDEV-NOTE: queue already charged and armed this exact claim. Reclaiming by ref here resurrected it.
+            Row preview = model.findById(previewId);
+            return preview == null ? null : deployClaimedLocked(applicationId, ref, sha, trigger, preview);
         }
     }
 
@@ -242,6 +262,12 @@ public final class PreviewDeployments {
                                              @Nullable Integer prNumber,
                                              @NonNull DeployTrigger trigger) throws Exception {
         Row preview = claimLocked(applicationId, ref, prNumber);
+        return deployClaimedLocked(applicationId, ref, sha, trigger, preview);
+    }
+
+    private static @NonNull Row deployClaimedLocked(int applicationId, @NonNull String ref,
+                                                    @Nullable String sha, @NonNull DeployTrigger trigger,
+                                                    @NonNull Row preview) throws Exception {
         PreviewDeploymentModel model = Models.get(PreviewDeploymentModel.class);
         Row application = ApplicationReleases.requireApplication(applicationId);
         Row site = exposingSite(applicationId);

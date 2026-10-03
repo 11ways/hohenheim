@@ -9,8 +9,9 @@ import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.ManagePreviewDeploymentResource;
-import be.elevenways.hohenheim.server.cms.PreviewDeploymentResource;
+import be.elevenways.hohenheim.server.cms.PreviewParts;
+import be.elevenways.zenit.cms.common.resource.ResourceVerb;
+import be.elevenways.zenit.cms.common.resource.RowWriteCall;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.preview.PreviewBranches;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
@@ -178,8 +179,8 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
     /**
      * The /manage authority gate: MANAGE on the APPLICATION is the verb (a preview is a
      * projection of the application it is built from; no new capability exists for it),
-     * and the COUNTERFACTUAL proves the gate is load-bearing -- the base admin resource,
-     * which does not carry it, happily creates a preview for the same stranger.
+     * and the COUNTERFACTUAL proves the gate is load-bearing -- the existing operator queue
+     * claims the same application before the /manage authorizer is applied.
      */
     @Test
     void manualCreationFromManageRequiresManageOnTheChosenApplication() throws Exception {
@@ -193,20 +194,25 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
         coerced.put(PreviewDeploymentModel.APPLICATION_ID.getName(), applicationId);
         coerced.put(PreviewDeploymentModel.REF.getName(), "gate-ref");
 
-        // 1. COUNTERFACTUAL: the base ADMIN resource carries no per-record gate (its
-        //    surface is behind the admin panel permission), so the stranger context
-        //    sails through it. This is exactly what /manage must NOT allow.
-        Object ungated = new PreviewDeploymentResource().persistRow(coerced, stranger);
+        // 1. COUNTERFACTUAL: the existing queue under the harness's operator identity accepts this application.
+        //    The /manage writer must ask its own caller's authority before reaching that same queue.
+        Object ungated = PreviewDeployments.queue(applicationId, "gate-ref", null, null,
+            DeployTrigger.MANUAL).get(PreviewDeploymentModel.ID);
         assertThat(ungated)
             .as("step 1: ungated, a stranger creates a preview on a foreign application")
             .isNotNull();
         PreviewDeployments.destroy(((Number) ungated).intValue(), "operator");
+        assertThat(PreviewDeployments.deployClaimed(((Number) ungated).intValue(), null, DeployTrigger.MANUAL))
+            .as("step 1: a delayed queued worker cannot reclaim a destroyed preview").isNull();
+        long beforeRefusal = Models.get(PreviewDeploymentModel.class).find()
+            .where(PreviewDeploymentModel.APPLICATION_ID.eq(applicationId)).count();
 
         // 2. The /manage resource refuses the SAME submission as its FIRST act: no row,
         //    no quota charge, no schedule -- and the refusal does not distinguish
         //    "exists but not yours" from "no such application".
         Throwable refusedForeign = catchThrowable(() ->
-            new ManagePreviewDeploymentResource().persistRow(coerced, stranger));
+            PreviewParts.manage().writes().rowWriter(ResourceVerb.CREATE).write(
+                new RowWriteCall(ResourceVerb.CREATE, null, coerced, stranger)));
         assertThat(refusedForeign)
             .as("step 2: a stranger is refused on /manage")
             .isInstanceOf(Violations.class)
@@ -214,19 +220,25 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
         Map<String, Object> unknownApplication = new LinkedHashMap<>(coerced);
         unknownApplication.put(PreviewDeploymentModel.APPLICATION_ID.getName(), 999999);
         Throwable refusedUnknown = catchThrowable(() ->
-            new ManagePreviewDeploymentResource().persistRow(unknownApplication, stranger));
+            PreviewParts.manage().writes().rowWriter(ResourceVerb.CREATE).write(
+                new RowWriteCall(ResourceVerb.CREATE, null, unknownApplication, stranger)));
         assertThat(refusedUnknown)
             .as("step 2: an unknown application refuses IDENTICALLY (no existence oracle)")
             .isInstanceOf(Violations.class)
             .hasMessageContaining("preview_application_required");
         assertThat(Models.get(PreviewDeploymentModel.class).find()
-                .where(PreviewDeploymentModel.APPLICATION_ID.eq(applicationId))
-                .where(PreviewDeploymentModel.REF.eq("gate-ref"))
-                .where(PreviewDeploymentModel.DELETED_AT.isNull()).first())
-            .as("step 2: the refusal claimed nothing").isNull();
+                .where(PreviewDeploymentModel.APPLICATION_ID.eq(applicationId)).count())
+            .as("step 2: the refusal claimed no new row").isEqualTo(beforeRefusal);
+        Row destroyed = Models.get(PreviewDeploymentModel.class).find().withTrashed()
+            .where(PreviewDeploymentModel.ID.eq(((Number) ungated).intValue())).noCache().first();
+        assertThat(destroyed).as("step 2: the soft-deleted counterfactual is retained as history").isNotNull();
+        assertThat(destroyed.get(PreviewDeploymentModel.STATUS))
+            .as("step 2: the counterfactual remains destroyed history")
+            .isEqualTo(PreviewDeploymentModel.STATUS_DESTROYED);
 
         // 3. The walk-confirmed MANAGE holder creates through the same path.
-        Object created = new ManagePreviewDeploymentResource().persistRow(coerced, manager);
+        Object created = PreviewParts.manage().writes().rowWriter(ResourceVerb.CREATE).write(
+            new RowWriteCall(ResourceVerb.CREATE, null, coerced, manager));
         assertThat(created).as("step 3: a manage holder may create").isNotNull();
         PreviewDeployments.destroy(((Number) created).intValue(), "operator");
     }
@@ -241,13 +253,13 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
         Map<String, Object> coerced = new LinkedHashMap<>();
         coerced.put(PreviewDeploymentModel.APPLICATION_ID.getName(), applicationId);
         coerced.put(PreviewDeploymentModel.REF.getName(), "delete-ref");
-        int previewId = ((Number) new PreviewDeploymentResource()
-            .persistRow(coerced, contextOf(operatorId, "Operator"))).intValue();
+        int previewId = PreviewDeployments.queue(applicationId, "delete-ref", null, null,
+            DeployTrigger.MANUAL).get(PreviewDeploymentModel.ID);
 
         // 1. Neither surface declares the generic delete.
-        assertThat(new PreviewDeploymentResource().deletable())
+        assertThat(PreviewParts.admin().offers(ResourceVerb.DELETE))
             .as("step 1: the admin preview resource offers no generic delete").isFalse();
-        assertThat(new ManagePreviewDeploymentResource().deletable())
+        assertThat(PreviewParts.manage().offers(ResourceVerb.DELETE))
             .as("step 1: nor does the delegated one").isFalse();
 
         // 2. A confirmed delete POST is refused and the preview stays live.
@@ -328,11 +340,11 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
             AccessContext stranger = contextOf(strangerId, "Expire Stranger");
 
             // 1. Both panels place the one operation, and the legacy row action is gone.
-            assertThat(PlacedActionClicks.placed(new PreviewDeploymentResource(), "expire_preview").operation())
+            assertThat(PlacedActionClicks.placed(PreviewParts.admin(), "expire_preview").operation())
                 .as("step 1: the admin places expire_preview").isEqualTo(PreviewOperations.EXPIRE);
-            assertThat(PlacedActionClicks.placed(new ManagePreviewDeploymentResource(), "expire_preview").operation())
+            assertThat(PlacedActionClicks.placed(PreviewParts.manage(), "expire_preview").operation())
                 .as("step 1: and so does /manage").isEqualTo(PreviewOperations.EXPIRE);
-            assertThat(new PreviewDeploymentResource().rowActions())
+            assertThat(PreviewParts.admin().actions())
                 .as("step 1: no legacy destroy_preview row action is left")
                 .noneMatch(action -> action.id().getPath().equals("destroy_preview"));
 

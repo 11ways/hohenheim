@@ -131,7 +131,7 @@ public final class InstanceOverview {
                 .withData(WidgetFact.link(
                     text("host", "instance_overview", locales, resolver),
                     ServerModel.nameOf(serverId),
-                    CmsRoutes.subpage(panelSlug, "servers", serverId, ServerOverviewPage.SLUG)
+                    CmsRoutes.subpage(panelSlug, "servers", serverId, ServerOverviewState.SLUG)
                         .toUrl())));
         }
 
@@ -152,7 +152,7 @@ public final class InstanceOverview {
         InstanceBlockerView blocker = deployBlockerOf(conduit, instance, serverId, delegated);
         if (blocker.blocked()) {
             String hostUrl = blocker.hostLinkable() && !delegated
-                ? CmsRoutes.subpage(panelSlug, "servers", serverId, ServerOverviewPage.SLUG).toUrl()
+                ? CmsRoutes.subpage(panelSlug, "servers", serverId, ServerOverviewState.SLUG).toUrl()
                 : null;
             NoticeData notice = hostUrl == null
                 ? NoticeData.of(text("deploy_blocked", "instance_overview", locales, resolver),
