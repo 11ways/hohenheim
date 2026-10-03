@@ -19,6 +19,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
@@ -90,7 +91,7 @@ class TenantAttributedRedeployGateTest extends HohenheimTestBase {
         withdraw.set(ServerModel.ID, hostId);
         withdraw.set(ServerModel.ACKNOWLEDGED_POSTURE, null);
         withdraw.set(ServerModel.ACKNOWLEDGED_AT, null);
-        withdraw.set(ServerModel.ACKNOWLEDGED_BY, null);
+        ServerModel.ACKNOWLEDGER.write(withdraw, (PrincipalRef) null);
         servers.save(withdraw);
         assertThat(refusalKeys(catchThrowable(() -> new InstanceService().deploy(instanceId))))
             .as("step 3: a tenant-owned workload is refused a redeploy onto a host whose"
@@ -142,7 +143,7 @@ class TenantAttributedRedeployGateTest extends HohenheimTestBase {
         row.set(ServerModel.ACKNOWLEDGED_POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
         row.set(ServerModel.ACKNOWLEDGED_WARNING_VERSION, ServerModel.POSTURE_WARNING_VERSION);
         row.set(ServerModel.ACKNOWLEDGED_AT, Now.instant());
-        row.set(ServerModel.ACKNOWLEDGED_BY, "user:1");
+        ServerModel.ACKNOWLEDGER.write(row, PrincipalRef.account(1));
         row.set(ServerModel.ACKNOWLEDGED_BY_LABEL, "Test Operator");
         row.set(ServerModel.LAST_SEEN_AT, Now.instant());
         servers.save(row);

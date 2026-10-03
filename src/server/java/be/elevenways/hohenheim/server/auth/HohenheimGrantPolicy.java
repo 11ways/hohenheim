@@ -375,6 +375,6 @@ final class HohenheimGrantPolicy {
                 .admin(HohenheimPanel.ACCESS)
                 // The requester IS the owner: the (id, kind) pair renewal re-decides authority
                 // against every sweep.
-                .ownedBy(CertificateModel.REQUESTED_BY_USER_ID, CertificateModel.REQUESTED_BY_KIND));
+                .ownedBy(CertificateModel.REQUESTER));
     }
 }

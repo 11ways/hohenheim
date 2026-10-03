@@ -97,6 +97,7 @@ public final class HostFixtures {
         ServerModel.ACKNOWLEDGED_WARNING_VERSION,
         ServerModel.ACKNOWLEDGED_AT,
         ServerModel.ACKNOWLEDGED_BY,
+        ServerModel.ACKNOWLEDGED_BY_KIND,
         ServerModel.ACKNOWLEDGED_BY_LABEL);
 
     /**
