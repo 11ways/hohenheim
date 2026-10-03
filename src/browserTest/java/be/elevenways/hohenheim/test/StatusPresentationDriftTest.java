@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.schedule.ScheduleRunStatuses;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
+import be.elevenways.plumage.component.StatusDotStatus;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.plumage.component.StatusDotStatus;
 import be.elevenways.zenit.common.orm.field.EnumField;

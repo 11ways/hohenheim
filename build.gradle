@@ -20,7 +20,7 @@ blastApp {
             microcopyKeys: ['command_placeholder': 'hohenheim', 'back_to_list': 'zenit-cms'],
             microcopyScopes: ['dyndns_token': 'hohenheim', 'back_to_list': 'zenit-cms'],
     )
-    // The shell user menu (zn-auth-user-menu, contributed by AuthCmsBridge) and the admin inbox page's
+    // The shell user menu (za-user-menu, contributed by AuthCmsBridge) and the admin inbox page's
     // <zc-inbox> hydrate, so zenit-auth and zenit-comms ride the client bundle too.
     implementation libs.zenit, libs.hawkeye, libs.plumage, libs.zenit.forms, libs.zenit.microcopy, libs.zenit.auth,
             libs.zenit.cms, libs.zenit.comms, libs.zenit.media

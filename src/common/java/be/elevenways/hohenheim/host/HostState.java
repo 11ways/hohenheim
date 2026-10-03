@@ -60,7 +60,7 @@ public enum HostState {
         return this.token;
     }
 
-    /** The typed pl-status-dot state: only OK is online. */
+    /** The typed pl-status-dot look, with only OK claiming an online host. */
     public @NonNull StatusDotStatus dot() {
         return this.dot;
     }

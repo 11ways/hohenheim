@@ -90,7 +90,7 @@ class AuthFlowTest extends HohenheimTestBase {
         // Opening it proves the tag HYDRATED (the dropdown is client-driven).
         // Click the name text: a click landing on the icon SVG has a null
         // event target (protoblast defect) and never toggles the menu.
-        page.click("za-user-menu .zn-user-menu-name");
+        page.click("za-user-menu .za-user-menu-name");
         page.waitForSelector("he-bottom .pl-dropdown-menu-content__popup a[href='/account']");
         assertThat(page.locator("he-bottom .pl-dropdown-menu-content__popup [data-user-menu-signout]").count())
             .isEqualTo(1);
