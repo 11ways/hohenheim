@@ -1,14 +1,22 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.dns.DnsServer;
+import be.elevenways.hohenheim.server.dns.DnsZoneStore;
+import be.elevenways.hohenheim.server.docker.DockerHealth;
+import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.panel.CmsSurfaceAddress;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -19,6 +27,7 @@ import be.elevenways.zenit.common.security.SystemPrincipal;
 import be.elevenways.protoblast.common.time.Now;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -50,6 +59,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * is not this conversion's subject. The one declared difference is the surface
  * address: a legacy peer answered to its slug address, a PanelDashboard only to its id token (P07, no slug alias).
  *
+ * AIDEV-NOTE: the attention widget reads JVM-global inputs other classes of a lane change (decided 2026-10-03: pin
+ * every input the test does not own, never compare host state). {@link #pinAttentionInputs} sets the settings and
+ * servers and restores them after; the DNS zone cache is rebuilt from this class's database; Docker health and the
+ * Spamservice manager change only in a real ServerMain boot, which runs solo, so they are asserted untouched.
+ *
  * @author Jelle De Loecker
  * @since  0.9.0
  */
@@ -74,6 +88,12 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
     private static TestSession tenant;
     private static TestSession outsider;
 
+    private static @Nullable String backupTarget;
+    private static @Nullable Boolean dnsEnabled;
+    private static @Nullable Boolean sshWatch;
+    private static @Nullable ProxyServer proxyServer;
+    private static @Nullable DnsServer dnsServer;
+
     @BeforeAll
     static void seed() throws Exception {
         freshSeededDatabase();
@@ -93,6 +113,36 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
         tenant = sessionFor(tenantId);
         outsider = sessionFor(outsiderId);
         seedRecentActivity();
+        pinAttentionInputs();
+    }
+
+    /** Pin the dashboard attention's JVM-global inputs to the stored capture's: no proxy, no DNS, no SSH watch. */
+    private static void pinAttentionInputs() {
+        backupTarget = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET);
+        dnsEnabled = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Dns.ENABLED);
+        sshWatch = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.SSH_WATCH_ENABLED);
+        proxyServer = ServerMain.getProxyServer();
+        dnsServer = ServerMain.getDnsServer();
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, null);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Dns.ENABLED, false);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.SSH_WATCH_ENABLED, false);
+        ServerMain.adoptProxyServer(null);
+        ServerMain.adoptDnsServer(null);
+        // Earlier classes publish their zones into this cache; it answers this class's database once rebuilt.
+        DnsZoneStore.INSTANCE.reload();
+        assertThat(DockerHealth.instance().status()).as("setup: no boot probed the shared Docker health")
+            .isEqualTo(DockerHealth.Status.UNPROBED);
+        assertThat(SpamserviceManager.get().snapshot().needsAttention())
+            .as("setup: no boot started the shared Spamservice manager").isFalse();
+    }
+
+    @AfterAll
+    static void restoreAttentionInputs() {
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, backupTarget);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Dns.ENABLED, dnsEnabled);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.SSH_WATCH_ENABLED, sshWatch);
+        ServerMain.adoptProxyServer(proxyServer);
+        ServerMain.adoptDnsServer(dnsServer);
     }
 
     /** Seed a fixed mixed-provenance history instead of capturing boot seeders and the host's OS accounts. */
