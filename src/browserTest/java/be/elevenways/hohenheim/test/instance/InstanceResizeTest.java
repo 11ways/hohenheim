@@ -1,8 +1,9 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceResize;
 import be.elevenways.hohenheim.test.HardDeletes;
@@ -109,9 +110,7 @@ class InstanceResizeTest {
             //    redeployed on every save, which is the opposite defect.
             this.recreated.clear();
             Row renamed = Models.get(InstanceModel.class).findById(running);
-            new InstanceResource().updateRow(renamed,
-                Map.of(InstanceModel.NAME.getName(), PREFIX + "running-renamed"),
-                AccessContext.anonymous());
+            write(renamed, Map.of(InstanceModel.NAME.getName(), PREFIX + "running-renamed"));
             assertThat(this.recreated)
                 .as("step 3: a rename is not a resize -- nothing was bounced").isEmpty();
 
@@ -176,10 +175,14 @@ class InstanceResizeTest {
 
     /** The resize as the admin form performs it: the stored row plus the submitted values. */
     private void update(int instanceId, int memoryMb) {
-        Row existing = Models.get(InstanceModel.class).findById(instanceId);
-        new InstanceResource().updateRow(existing,
-            Map.of(InstanceModel.SETTINGS.getName(), limits(memoryMb, null)),
-            AccessContext.anonymous());
+        write(Models.get(InstanceModel.class).findById(instanceId),
+            Map.of(InstanceModel.SETTINGS.getName(), limits(memoryMb, null)));
+    }
+
+    /** The admin entry's update, inside one transaction as the panel's write runs it, so the recreate waits for it. */
+    private static void write(Row existing, Map<String, Object> values) {
+        Models.get(InstanceModel.class).getResolvedDatasource().withTransaction(transaction ->
+            PanelResourceViews.forCaller(InstanceParts.admin()).updateRow(existing, values, AccessContext.anonymous()));
     }
 
     private static Integer memoryOf(int instanceId) {

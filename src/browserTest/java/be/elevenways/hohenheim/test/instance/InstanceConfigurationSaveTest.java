@@ -1,10 +1,12 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.test.PanelEntryViews;
+import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.test.HardDeletes;
-import be.elevenways.hohenheim.server.cms.InstanceResource;
-import be.elevenways.hohenheim.server.cms.ManageInstanceResource;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.cms.server.page.FormConcurrency;
@@ -37,7 +39,8 @@ class InstanceConfigurationSaveTest extends HohenheimTestBase {
     void bothResourceWritersPreserveTheWinningStatusAndFence() {
         int id = instance("configuration-direct");
         try {
-            for (InstanceResource resource : List.of(new InstanceResource(), new ManageInstanceResource())) {
+            for (RowResource resource : List.of(PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceParts.SLUG),
+                    PanelEntryViews.of(HohenheimSlugs.MANAGE, InstanceParts.SLUG))) {
                 outcome(id, InstanceModel.STATUS_RUNNING, 7L);
                 Row stale = Models.get(InstanceModel.class).findById(id);
                 // 1. An existing holder still carries its old operation fields, even if they were explicitly staged.
@@ -45,7 +48,7 @@ class InstanceConfigurationSaveTest extends HohenheimTestBase {
                 stale.set(InstanceModel.CLAIM_FENCE, 7L);
                 outcome(id, InstanceModel.STATUS_STOPPED, 8L);
                 resource.updateRow(stale, Map.of("name", "configuration-renamed"), TestAccessContexts.allAllowed());
-                assertWinner(id, "step 2: " + resource.getClass().getSimpleName());
+                assertWinner(id, "step 2: " + resource.id());
             }
         } finally {
             removeFixture(id);
@@ -57,7 +60,7 @@ class InstanceConfigurationSaveTest extends HohenheimTestBase {
         int id = instance("configuration-request");
         try {
             outcome(id, InstanceModel.STATUS_RUNNING, 7L);
-            ManageInstanceResource resource = new ManageInstanceResource();
+            RowResource resource = PanelEntryViews.of(HohenheimSlugs.MANAGE, InstanceParts.SLUG);
             Row loaded = Models.get(InstanceModel.class).findById(id);
             String snapshot = FormConcurrency.token(resource.formSpec(), resource.valuesFromRow(loaded));
             // 1. The winner advances after the request has loaded its row, before the configuration statement.

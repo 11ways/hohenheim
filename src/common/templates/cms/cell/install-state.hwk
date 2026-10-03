@@ -1,0 +1,7 @@
+{#- The install-state subtext under an instance's status: the enum's own badge for a state that says
+    something, nothing for a quiet one (InstanceModel.isNotableInstallState, the one home of that rule).
+    Presentation only: the column's value, its filter and its sort stay the stored state. -#}
+{% declare value: EnumBadgeState %}
+{% if InstallState.notable(value.key) %}
+{% render "zenitcms:cell/enum-badge" var:value=value %}
+{% /if %}

@@ -131,6 +131,17 @@ public final class InstanceOperationHandlers {
                 new InstanceService().destroyWithData(instanceId(call));
                 return null;
             });
+        // The teardown funnel owns the accountability (the release engine, preview expiry and database teardown
+        // record the same verb); generated rows are destroyed by their owning tier, never from an instance list.
+        OperationHandlers.attach(InstanceOperations.DELETE).source(SUBJECTS)
+            .applies(InstanceOperationHandlers::authored)
+            .availability((instance, access) -> HohenheimAccess.destroyUnavailableReason(access,
+                instance.get(InstanceModel.ID)))
+            .handle(call -> {
+                new InstanceService().destroy(instanceId(call));
+                return 1;
+            });
+        OperationHandlers.attach(InstanceOperations.REFRESH_OVERVIEW).handle(call -> null);
         OperationHandlers.attach(InstanceOperations.MIGRATE).source(SUBJECTS)
             .authorize(InstanceOperationHandlers::operatorOnly)
             .handle(InstanceOperationHandlers::migrate);

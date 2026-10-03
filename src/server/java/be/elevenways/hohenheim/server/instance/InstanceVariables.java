@@ -194,7 +194,7 @@ public final class InstanceVariables {
      * WHAT THE WORKLOAD RUNS at the next deploy -- and view/console/power all reach the
      * same endpoint through InstanceApi's shared visibility resolver, which checks
      * {@code view} alone. Requiring config moves no boundary: a config holder already
-     * rewrites {@code settings.command} through ManageInstanceResource, so this enforces
+     * rewrites {@code settings.command} through the /manage instance entry (InstanceParts.manage), so this enforces
      * the line HohenheimAccess.CONFIG already declares rather than drawing a new one. A
      * separate {@code variables} verb was rejected for exactly that reason -- it would add
      * a grant-matrix column carrying authority config already covers.

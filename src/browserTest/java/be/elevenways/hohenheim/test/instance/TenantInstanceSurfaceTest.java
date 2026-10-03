@@ -811,8 +811,8 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
      * The gate clause is "no server id, no socket/daemon addresses, no host filesystem
      * paths, no raw runtime errors -- field-level, not just the wire path", and everything
      * else in this class checks capability refusals and form-field absence, which the
-     * shared subpages are not covered by at all: {@code ManageInstanceResource} registers
-     * {@code InstanceOverviewPage} and {@code InstanceProvisioningPage} verbatim, so
+     * shared subpages are not covered by at all: {@code InstanceParts.manage()} declares
+     * {@code InstanceOverview} and {@code InstanceProvisioningPage} verbatim, so
      * whatever those pages put in their template vars reaches a tenant unless the pages
      * themselves drop it. Every assertion below therefore names a VALUE in the body, and
      * every one of them is anchored by the same value being present on /admin -- a

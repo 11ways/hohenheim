@@ -210,6 +210,32 @@ public final class InstanceOperations {
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();
 
+    /**
+     * The verified destroy, the instance entry's delete: container removed (or observed absent) and port claims released
+     * before the record is soft-deleted; volumes survive by design, the reconciler surfaces them as orphans.
+     *
+     * AIDEV-NOTE: offered DEAD, never hidden, to a viewer without {@code destroy} on the record: its availability is the
+     * teardown funnel's own refusal, so the button and the POST answer with one decision and one text.
+     */
+    public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_instance"))
+        .label(Microcopy.of("delete").withFilter("scope", "cms"))
+        .icon(Icon.TRASH)
+        .one(INSTANCE)
+        .gate(OperationGate.open())
+        .result(Integer.class)
+        .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
+        .register();
+
+    /** Re-reads one instance's stored evidence: the overview surface's refresh control. */
+    public static final Operation<Row, Void, Void> REFRESH_OVERVIEW =
+        Operation.declare(HohenheimIds.id("refresh_instance_overview"))
+            .label(label("refresh", "instance_overview", "Refresh"))
+            .icon(Icon.REFRESH)
+            .one(INSTANCE)
+            .gate(OperationGate.open())
+            .facts(OperationFact.READ_ONLY, OperationFact.IDEMPOTENT)
+            .register();
+
     /** The host a migration moves the workload to. */
     public static final IntegerField TARGET_SERVER = IntegerField.builder("targetServerId")
         .label(Microcopy.of("host").withFilter("scope", "instance_migrate"))

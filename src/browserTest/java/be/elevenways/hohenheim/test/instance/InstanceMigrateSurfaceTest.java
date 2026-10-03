@@ -1,9 +1,10 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.zenit.cms.common.resource.RecordTab;
+import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.ManageInstanceResource;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.test.ApiSupport;
@@ -13,7 +14,6 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.action.PanelAction;
-import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -278,8 +278,8 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
      * affordance and no migrate ROUTE at all.
      *
      * The counterfactual is structural: put {@code migrate_instance} in
-     * {@link ManageInstanceResource#rowActions()} (or {@code InstanceMigratePage} in its
-     * subpages) and assertions 3 and 4 fail immediately.
+     * {@link InstanceParts#manage()}'s actions (or {@code InstanceMigratePage} in its
+     * tabs) and assertions 3 and 4 fail immediately.
      */
     @Test
     void aDelegatedTenantHasNoMigrateAffordanceAndNoMigrateRoute() throws Exception {
@@ -292,13 +292,16 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
             .as("step 1: and sees the instance they hold manage on")
             .contains("migrate-subject");
 
-        // 2. The delegated resource declares its actions itself; migrate is not among
-        //    them, by construction rather than by a second predicate.
-        assertThat(new ManageInstanceResource().rowActions().stream()
-                .map(RowAction::id).map(Object::toString))
-            .withFailMessage("step 2: the /manage instance resource declares the migrate"
+        // 2. The delegated entry declares its actions and tabs itself; migrate is among
+        //    neither, by construction rather than by a second predicate.
+        assertThat(InstanceParts.manage().actions().stream()
+                .map(PanelAction::id).map(Object::toString))
+            .withFailMessage("step 2: the /manage instance entry declares the migrate"
                 + " action -- placement is an operator authority")
             .noneMatch(id -> id.contains("migrate"));
+        assertThat(InstanceParts.manage().tabs().declared().stream().map(RecordTab::slug))
+            .withFailMessage("step 2: the /manage instance entry declares the migrate tab")
+            .doesNotContain(InstanceMigratePage.SLUG);
 
         // 3. Nothing on the tenant's own record page points at the migrate page.
         HttpResponse<String> record = httpGet("/manage/instances/" + instanceId, tenantSession);
@@ -321,7 +324,7 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
 
         // 5. The tenant is not merely locked out of everything: their own power action is
         //    still declared, so step 2's absence is the migrate decision, not an empty list.
-        assertThat(new ManageInstanceResource().actions().stream()
+        assertThat(InstanceParts.manage().actions().stream()
                 .map(PanelAction::id).map(Object::toString))
             .as("step 5: positive anchor -- the delegated surface still offers power")
             .anyMatch(id -> id.contains("start_instance"));

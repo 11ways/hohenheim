@@ -131,7 +131,7 @@ public final class InstanceTemplateParts {
             .add(InstanceTemplateModel.NAME)
             .add(InstanceTemplateModel.DESCRIPTION)
             // A template of a generated-only kind is the same lying affordance one level removed: every create from it
-            // lands on the OwnedInstances refusal. Same derivation as the instance picker (InstanceResource).
+            // lands on the OwnedInstances refusal. Same derivation as the instance picker (InstanceParts).
             .add(Select.of(InstanceTemplateModel.KIND)
                 .options(OptionSource.supplied(InstanceKinds::authorableOptions))
                 .clearable(!Boolean.TRUE.equals(InstanceTemplateModel.KIND.getAttribute(FieldAttributes.REQUIRED)))

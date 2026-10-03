@@ -134,7 +134,7 @@ public final class DatabaseAttention {
                     copy("instance", "attention_title",
                         "name", instance.get(InstanceModel.NAME)),
                     detail,
-                    InstanceResource.recordRoute(ADMIN, instance, InstanceDatabasesPage.SLUG)));
+                    InstanceParts.recordRoute(ADMIN, instance, InstanceDatabasesPage.SLUG)));
             }
         }
     }

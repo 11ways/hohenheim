@@ -26,10 +26,6 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelRegistry;
-import be.elevenways.zenit.cms.common.resource.PanelResource;
-import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -38,7 +34,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -189,14 +184,6 @@ class PartialWriteContractTest extends HohenheimTestBase {
         return (before, values) -> PanelResourceCalls.patch(panel, entry, id, values, admin());
     }
 
-    /** The registered /admin entry as the panel's own programmatic view. */
-    @SuppressWarnings("unchecked")
-    private static RowResource adminView(String slug) {
-        Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimPanel.SLUG), "the admin panel");
-        return (RowResource) PanelResourceViews.forCaller(
-            (PanelResource<Row>) Objects.requireNonNull(admin.entryBySlug(slug), slug), admin);
-    }
-
     private static List<Case> cases() {
         List<Case> cases = new ArrayList<>();
         cases.add(new Case("admin/sites", patch(HohenheimSlugs.ADMIN, gitSiteId), Models.get(SiteModel.class),
@@ -211,10 +198,12 @@ class PartialWriteContractTest extends HohenheimTestBase {
         cases.add(new Case("admin/certificates", patch(HohenheimSlugs.ADMIN, HohenheimSlugs.CERTIFICATES, certificateId),
             Models.get(CertificateModel.class), certificateId,
             CertificateModel.NICE_NAME.getName(), PREFIX + "renamed cert"));
-        cases.add(new Case("admin/instance-schedules", rows(adminView(InstanceScheduleParts.SLUG)),
+        cases.add(new Case("admin/instance-schedules", rows(PanelEntryViews.of(HohenheimPanel.SLUG,
+            InstanceScheduleParts.SLUG)),
             Models.get(RecordScheduleModel.class), scheduleId,
             RecordScheduleModel.NAME.getName(), PREFIX + "renamed schedule"));
-        cases.add(new Case("admin/instance-schedule-steps", rows(adminView(InstanceScheduleStepParts.SLUG)),
+        cases.add(new Case("admin/instance-schedule-steps", rows(PanelEntryViews.of(HohenheimPanel.SLUG,
+            InstanceScheduleStepParts.SLUG)),
             Models.get(RecordScheduleStepModel.class), stepId,
             RecordScheduleStepModel.OFFSET_SECONDS.getName(), 30));
         return cases;

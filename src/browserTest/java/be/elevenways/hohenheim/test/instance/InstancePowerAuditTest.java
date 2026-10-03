@@ -1,8 +1,12 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.zenit.test.support.TestAccessContexts;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.test.PanelEntryViews;
+import be.elevenways.zenit.cms.common.resource.Resource;
+import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -17,7 +21,6 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -203,7 +206,7 @@ class InstancePowerAuditTest {
             //    so the same operation was audited over /api/v1 and silent from the UI
             //    -- including from /manage, where the delegated tenant lives.
             int panelId = instanceRecord("audit-panel");
-            InstanceResource panel = new InstanceResource();
+            Resource<Row> panel = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceParts.SLUG);
             Row panelRow = Models.get(InstanceModel.class).findById(panelId);
             PanelAction<Row> deployAction = PlacedActionClicks.placed(panel, "start_instance");
             PanelAction<Row> stopAction = PlacedActionClicks.placed(panel, "stop_instance");
@@ -252,7 +255,7 @@ class InstancePowerAuditTest {
             Row toDelete = Models.get(InstanceModel.class).findById(panelDestroyId);
             Accountability.runAs(operator("42"), () -> {
                 service.deploy(panelDestroyId);
-                panel.deleteRow(toDelete, AccessContext.anonymous());
+                panel.deleteRow(toDelete, TestAccessContexts.allAllowed());
             });
             List<Row> panelDestroyed = activityFor(panelDestroyId, ZenitActivityAction.DELETE.id().toString());
             assertThat(panelDestroyed)

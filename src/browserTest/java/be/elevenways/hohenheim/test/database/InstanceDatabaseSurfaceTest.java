@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -7,7 +8,6 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.DatabaseResource;
 import be.elevenways.hohenheim.server.cms.InstanceDatabaseResource;
 import be.elevenways.hohenheim.server.cms.InstanceDatabasesPage;
-import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.host.HostPreflight;
@@ -274,7 +274,7 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
 
     /** The deploy action (the placed start operation), read off the resource rather than rebuilt here. */
     private static PanelAction<Row> deployAction() {
-        return new InstanceResource().actions().stream()
+        return InstanceParts.admin().actions().stream()
             .filter(action -> DEPLOY.equals(action.id()))
             .findFirst()
             .orElseThrow(() -> new AssertionError("the instances resource offers no deploy"));

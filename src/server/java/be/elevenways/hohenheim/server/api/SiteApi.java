@@ -6,11 +6,11 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.cms.DomainParts;
 import be.elevenways.hohenheim.server.cms.SiteParts;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -65,7 +65,7 @@ public final class SiteApi {
             }
             try {
                 Panel panel = ApiConduits.adminPanel();
-                int siteId = (Integer) ResourceWrites.create(panel, entryIn(panel, HohenheimSlugs.SITES),
+                int siteId = (Integer) ResourceWrites.create(panel, CmsSupport.rowEntry(panel, HohenheimSlugs.SITES),
                     FormSubmissionRawValues.fromConduit(conduit), ctx);
                 Row created = Objects.requireNonNull(
                     Models.get(SiteModel.class).findById(siteId));
@@ -97,7 +97,7 @@ public final class SiteApi {
                 // offered-but-dead lockout (the site serving this very panel) is its
                 // availability and refuses here exactly as it did on the row lane.
                 Panel panel = ApiConduits.adminPanel();
-                ResourceWrites.delete(panel, entryIn(panel, HohenheimSlugs.SITES), site, ctx);
+                ResourceWrites.delete(panel, CmsSupport.rowEntry(panel, HohenheimSlugs.SITES), site, ctx);
                 return ApiConduits.json(Map.of("id", site.get(SiteModel.ID), "status", "deleted"));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
@@ -144,7 +144,7 @@ public final class SiteApi {
             raw.put(siteKey, String.valueOf(siteId));
             Panel panel = ApiConduits.adminPanel();
             try {
-                int domainId = (Integer) ResourceWrites.create(panel, entryIn(panel, DomainParts.SLUG), raw, ctx);
+                int domainId = (Integer) ResourceWrites.create(panel, CmsSupport.rowEntry(panel, DomainParts.SLUG), raw, ctx);
                 Row added = Objects.requireNonNull(
                     Models.get(SiteDomainModel.class).findById(domainId));
                 ActivityLog.record(Models.get(SiteModel.class), siteId, HohenheimActivityAction.DOMAIN_ADDED,
@@ -180,7 +180,7 @@ public final class SiteApi {
             }
             Panel panel = ApiConduits.adminPanel();
             try {
-                ResourceWrites.delete(panel, entryIn(panel, DomainParts.SLUG), domain, ctx);
+                ResourceWrites.delete(panel, CmsSupport.rowEntry(panel, DomainParts.SLUG), domain, ctx);
                 ActivityLog.record(Models.get(SiteModel.class), siteId, HohenheimActivityAction.DOMAIN_REMOVED,
                     domain.get(SiteDomainModel.HOSTNAME));
                 return ApiConduits.json(Map.of("id", domainId, "site_id", siteId,
@@ -192,19 +192,6 @@ public final class SiteApi {
                 return null;
             }
         });
-    }
-
-    /**
-     * The admin panel's own entry, whose registered record source its programmatic writes read.
-     *
-     * @throws IllegalStateException when that panel declares no such entry (its proxy role is off)
-     */
-    @SuppressWarnings("unchecked")
-    private static @NonNull PanelResource<Row> entryIn(@NonNull Panel panel, @NonNull String slug) {
-        if (panel.entryBySlug(slug) instanceof PanelResource<?> entry) {
-            return (PanelResource<Row>) entry;
-        }
-        throw new IllegalStateException("panel '" + panel.slug() + "' declares no entry '" + slug + "'");
     }
 
     /**

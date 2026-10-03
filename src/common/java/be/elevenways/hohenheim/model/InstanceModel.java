@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hawkeye.common.annotation.HawkeyeFunction;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
@@ -246,7 +247,7 @@ public class InstanceModel extends Model {
      * Whether an {@link #INSTALL_STATE} member is worth SHOWING as a badge.
      *
      * AIDEV-NOTE: it lives HERE, beside the vocabulary it classifies, because the two
-     * presenters (the fleet list's status subtext and InstanceOverviewPage's state band)
+     * presenters (the fleet list's status subtext and InstanceOverview's state band)
      * must answer identically -- and because adding a member is then ONE edit. The switch
      * has no enum to be exhaustive over (the vocabulary is String constants), so
      * AdminUiSurfaceTest.everyInstallStateMemberIsClassified pins the declared key set for
@@ -259,6 +260,11 @@ public class InstanceModel extends Model {
      * classified is how a stuck install becomes invisible, so the unknown case degrades
      * towards saying too much rather than too little.
      */
+    @HawkeyeFunction(
+        name = "notable",
+        namespace = "InstallState",
+        description = "Whether an instance's install state says something worth a badge"
+    )
     public static boolean isNotableInstallState(@Nullable Object state) {
 
         if (state == null) {

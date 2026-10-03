@@ -75,7 +75,7 @@ public class DatabaseEngineResource extends RowResource {
         .add(DatabaseEngineModel.IMAGE)
         .add(DatabaseEngineModel.MEMORY_LIMIT_MB)
         .add(DatabaseEngineModel.CPU_LIMIT)
-        // See InstanceResource: a host is enrolled deliberately, never inline.
+        // See InstanceParts: a host is enrolled deliberately, never inline.
         .add(RelationPick.of(DatabaseEngineModel.SERVER_ID, ServerModel.MODEL_ID)
             .creatable(false).build())
         .add(DatabaseEngineModel.STATUS)

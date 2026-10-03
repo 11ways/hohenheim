@@ -15,7 +15,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * build's failure_reason, a snapshot's or backup's error) are stamped with the daemon's and
  * transport's OWN text, which names image registries, socket paths, host paths, instance ids and ssh
  * failures. The delegated panel is told THAT it failed, which is the fact a tenant can act on; the
- * operator reads the reason on /admin -- the InstanceOverviewPage install_error shape. The question
+ * operator reads the reason on /admin -- the InstanceOverview install_error shape. The question
  * is about the SURFACE (CmsSupport.isDelegatedPanel), never about the viewer, so an operator opening
  * /manage sees exactly what a tenant sees there. Two shapes of the one rule: a stored reason read at
  * render time (of + shown) and a live exception worded at write time (operatorDetail).
@@ -38,7 +38,7 @@ public final class WithheldFailure {
      *
      * AIDEV-NOTE: an exception message names image registries, socket paths, host paths and
      * peer addresses -- operator inventory. On the delegated panel this answers null and the
-     * caller words a tenant-safe refusal instead (the InstanceOverviewPage install_error rule);
+     * caller words a tenant-safe refusal instead (the InstanceOverview install_error rule);
      * the operator still reads the reason on /admin or in the record's stored failure reason.
      * Off the delegated panel the WORK decides (TenantWrites.actsAsOperator): declared system work
      * or an operator caller reads it; a tenant's API request, a tenant's scheduled job and work

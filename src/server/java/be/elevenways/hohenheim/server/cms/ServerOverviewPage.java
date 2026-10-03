@@ -443,7 +443,7 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
                 instance.get(InstanceModel.CAPACITY_MB),
                 // A release row is not served by the instance list; the route sends it to
                 // its application's Deploys tab instead of a 404.
-                InstanceResource.recordRoute(panel, instance, null)));
+                InstanceParts.recordRoute(panel, instance, null)));
         }
         for (Row stack : Models.get(StackModel.class).find()
                 .where(StackModel.SERVER_ID.eq(serverId)).all()) {

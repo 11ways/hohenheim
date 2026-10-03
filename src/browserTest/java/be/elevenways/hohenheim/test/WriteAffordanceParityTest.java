@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
@@ -13,7 +15,6 @@ import be.elevenways.hohenheim.server.cms.DatabaseResource;
 import be.elevenways.hohenheim.server.cms.DnsRecordResource;
 import be.elevenways.hohenheim.server.cms.DomainParts;
 import be.elevenways.hohenheim.server.cms.InstanceDatabaseResource;
-import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.instance.InstanceScheduleOperations;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleParts;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleStepParts;
@@ -239,7 +240,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     @Test
     void theInstanceEditorFollowsConfig() {
         Row instance = Models.get(InstanceModel.class).findById(instanceId);
-        InstanceResource resource = new InstanceResource();
+        RowResource resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceParts.SLUG);
 
         assertThat(resource.updatableBy(instance, viewer()))
             .as("a view-only delegate is offered no instance editor").isFalse();
@@ -603,7 +604,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         RecordGrants.grant(GrantSubjectType.USER, holderId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.POWER, true);
         try {
-            InstanceResource resource = new InstanceResource();
+            RowResource resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceParts.SLUG);
 
             List<Row> rows = new ArrayList<>();
             rows.add(instances.findById(instanceId));

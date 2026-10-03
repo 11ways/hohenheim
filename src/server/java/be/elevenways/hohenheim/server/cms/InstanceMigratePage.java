@@ -40,7 +40,7 @@ import java.util.Map;
  * OPERATOR-ONLY, twice over and deliberately: {@link #visibleFor} hides the tab AND 404s its route for anyone without
  * the installation-wide admin permission, and the migrate operation's authorizer and
  * {@code InstanceMigrations.migrateTo} refuse everyone else by name. Placement is an operator authority, so the
- * delegated surface never carries this page ({@link ManageInstanceResource} does not list it).
+ * delegated surface never carries this page ({@link InstanceParts#manage()} does not list it).
  */
 public final class InstanceMigratePage implements RecordScopedPage<Row> {
 

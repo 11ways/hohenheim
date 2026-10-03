@@ -1,11 +1,11 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.instance.InstanceBlockerView;
 import be.elevenways.hohenheim.instance.InstanceDiskView;
 import be.elevenways.hohenheim.instance.InstanceEndpointView;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -18,12 +18,13 @@ import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
-import be.elevenways.zenit.cms.common.resource.RecordDashboardPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.cms.common.widget.RecordActionsWidget;
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.zenit.cms.server.render.action.RecordActionBands;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
@@ -33,7 +34,6 @@ import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.text.ByteText;
-import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.ActionButtonWidget;
@@ -49,7 +49,7 @@ import be.elevenways.zenit.widget.common.data.UsageData;
 import be.elevenways.zenit.widget.common.data.WidgetBadge;
 import be.elevenways.zenit.widget.common.data.WidgetFact;
 import be.elevenways.zenit.widget.common.surface.SurfaceActionOutcome;
-import be.elevenways.zenit.widget.common.surface.SurfaceActionRequest;
+import be.elevenways.zenit.widget.common.surface.SurfaceOperation;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -63,35 +63,42 @@ import java.util.Map;
  * place, the STORED disk observation that until this page shipped only the attention
  * collector read, and the public endpoint resolved out of the port ledger.
  *
- * The page IS a widget tree ({@link RecordDashboardPage}), so the action row is the
- * resource's own row actions through {@code zenit:record_actions}, and the bespoke
+ * The tab IS a widget tree (a {@link RecordOverview} without fields), so the action row is
+ * the entry's own row actions through {@code zenit:record_actions}, and the bespoke
  * endpoint table is an app-local widget type rather than a hand-rendered template.
  *
  * AIDEV-NOTE: the delegated projection is applied FIELD BY FIELD in {@link #widgets},
- * not by trusting the resource: this is the SAME page class on both panels
- * ({@link ManageInstanceResource} registers it verbatim), so the omissions are here or
- * nowhere. See the AIDEV-NOTEs at each censored band for what is dropped and why.
+ * not by trusting the entry: this is the SAME tab on both panels (both instance entries
+ * declare it, {@link InstanceParts}), so the omissions are here or nowhere. See the
+ * AIDEV-NOTEs at each censored band for what is dropped and why.
+ *
+ * @author Jelle De Loecker
+ * @since  0.9.0
  */
-public final class InstanceOverviewPage extends RecordDashboardPage<Row> {
+public final class InstanceOverview {
 
-    public static final String SLUG = "overview";
+    public static final String SLUG = RecordOverview.SLUG;
 
-    /** The one widget-native action on this page: re-read the stored evidence. */
+    /** The one widget-native action on this tab: re-read the stored evidence. */
     static final String REFRESH_ACTION = "refresh";
 
-    private final InstanceResource resource;
-
-    InstanceOverviewPage(@NonNull InstanceResource resource) {
-        this.resource = resource;
+    private InstanceOverview() {
     }
 
-    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_overview"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("overview").withFilter("scope", "instance"); }
-    @Override public @NonNull String slug() { return SLUG; }
-    @Override public @NonNull Icon icon() { return Icon.of("gauge"); }
+    /**
+     * The tab both instance entries declare. Its refresh re-renders the tree from the record the surface re-loaded
+     * through the entry's admitted read, so the answer is a new SSR-truth render.
+     */
+    static @NonNull RecordOverview<Row> tab() {
+        return RecordOverview.<Row>fields(SLUG, Microcopy.of("overview").withFilter("scope", "instance"))
+            .withoutFields()
+            .widgets(InstanceOverview::widgets)
+            .surfaceActions(List.of(SurfaceOperation.of(REFRESH_ACTION, InstanceOperations.REFRESH_OVERVIEW,
+                (context, refreshed) -> SurfaceActionOutcome.tree(
+                    widgets(context.subjects().get(0), context.access())))));
+    }
 
-    @Override
-    public @NonNull WidgetTree widgets(@NonNull Row instance, @NonNull AccessContext accessContext) {
+    private static @NonNull WidgetTree widgets(@NonNull Row instance, @NonNull AccessContext accessContext) {
         Conduit conduit = accessContext.conduit();
         Integer instanceId = instance.get(InstanceModel.ID);
         int serverId = ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID));
@@ -161,8 +168,9 @@ public final class InstanceOverviewPage extends RecordDashboardPage<Row> {
         Panel panel = PanelRegistry.getBySlug(panelSlug);
         if (panel != null) {
             state.add(new WidgetInstance(RecordActionsWidget.ID, Map.of())
-                .withData(RecordActionBands.forRecord(panel, this.resource, instance,
-                    accessContext, conduit)));
+                .withData(RecordActionBands.forRecord(panel, PanelResourceViews.of(
+                    CmsSupport.rowEntry(panel, InstanceParts.SLUG),
+                    new PanelRequest(panel, conduit, accessContext, null)), instance, accessContext, conduit)));
         }
         state.add(new WidgetInstance(ActionButtonWidget.ID, Map.of(
             "label", HohenheimWidgetCopy.localized("refresh", "instance_overview"),
@@ -222,7 +230,7 @@ public final class InstanceOverviewPage extends RecordDashboardPage<Row> {
                 new WidgetInstance(RecordsWidget.ID, Map.of(
                     "title", HohenheimWidgetCopy.localized("recent_activity", "instance_overview"),
                     "source", CmsSupport.ACTIVITY_SOURCE,
-                    "rules", ActivityRules.forRecord(this.resource.model(), instanceId),
+                    "rules", ActivityRules.forRecord(Models.get(InstanceModel.class), instanceId),
                     "sort", ActivityModel.CREATED_AT.getName(),
                     "descending", true,
                     "limit", 10))))));
@@ -230,21 +238,6 @@ public final class InstanceOverviewPage extends RecordDashboardPage<Row> {
 
         return new WidgetTree(List.of(new WidgetInstance(SectionWidget.ID,
             Map.of("css_class", "hh-instance-overview"), new WidgetTree(bands))));
-    }
-
-    /**
-     * The one widget-native action: re-render this record's tree from freshly read
-     * evidence. The adapter re-loads the record through the resource's access scope
-     * before this runs, so the tree it answers with is a new SSR-truth render.
-     */
-    @Override
-    public @NonNull SurfaceActionOutcome onSurfaceAction(@NonNull SurfaceActionRequest request,
-                                                         @NonNull Row instance,
-                                                         @NonNull AccessContext accessContext) {
-        if (REFRESH_ACTION.equals(request.action())) {
-            return SurfaceActionOutcome.tree(this.widgets(instance, accessContext));
-        }
-        return super.onSurfaceAction(request, instance, accessContext);
     }
 
     // -- status ----------------------------------------------------------------------

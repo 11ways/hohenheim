@@ -616,7 +616,7 @@ public class HohenheimEndpoints {
     /**
      * Create one instance. TWO lanes behind one URL, discriminated by whether the body
      * carries a {@code template_id}: with one, the tenant's approved-template funnel;
-     * without, the admin form's own pipeline over InstanceResource (the migration lane).
+     * without, the admin form's own pipeline over the admin instance entry (the migration lane).
      *
      * csrfExempt is safe: the handler refuses non-API-key principals.
      */

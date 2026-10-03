@@ -88,7 +88,7 @@ public class DatabaseResource extends RowResource {
         .add(DatabaseModel.EPHEMERAL)
         .add(DatabaseModel.MEMORY_LIMIT_MB)
         .add(DatabaseModel.CPU_LIMIT)
-        // See InstanceResource: a host is enrolled deliberately, never inline.
+        // See InstanceParts: a host is enrolled deliberately, never inline.
         .add(RelationPick.of(DatabaseModel.SERVER_ID, ServerModel.MODEL_ID)
             .creatable(false).build())
         .add(DatabaseModel.STATUS)
@@ -185,7 +185,7 @@ public class DatabaseResource extends RowResource {
      * change them afterwards, so an operator whose database was sized wrong had exactly
      * two options: live with it, or DELETE the record -- which for a database that has
      * data in it is not an option at all. The engine instance is no help either: it is a
-     * {@code generatedOnly()} row that {@code InstanceResource.updatableBy} refuses to
+     * {@code generatedOnly()} row that {@code InstanceParts}' update authority refuses to
      * edit, pointing at "the owning record's own surface", which is this one.
      *
      * The database capability vocabulary deliberately still declares no {@code config}
