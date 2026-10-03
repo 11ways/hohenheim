@@ -6805,6 +6805,10 @@
     "text": "Details",
     "scope": "instance_from_template"
   },
+  "step_variables_lead": {
+    "text": "The values this instance starts with. A secret left blank keeps the value set on the template.",
+    "scope": "instance_from_template"
+  },
   "instance_name": {
     "text": "Instance name",
     "scope": "instance_from_template"

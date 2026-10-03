@@ -69,6 +69,8 @@ class InstanceFromTemplateWizardTest extends HohenheimTestBase {
         assertThat(document.statusCode()).as("step 2: the document renders").isEqualTo(200);
         assertThat(document.body()).as("step 2: the details step and the variables step, in one document")
             .contains("data-zf-step=\"details\"").contains("data-zf-step=\"variables\"");
+        assertThat(document.body()).as("step 2: the variables step leads with what a blank secret keeps")
+            .contains("A secret left blank keeps the value set on the template.");
         assertThat(document.body()).as("step 2: the secret default is never rendered")
             .doesNotContain(SECRET_DEFAULT);
 

@@ -6805,6 +6805,10 @@
     "text": "Gegevens",
     "scope": "instance_from_template"
   },
+  "step_variables_lead": {
+    "text": "De waarden waarmee deze instantie start. Een geheim dat je leeg laat, behoudt de waarde van het sjabloon.",
+    "scope": "instance_from_template"
+  },
   "instance_name": {
     "text": "Instantienaam",
     "scope": "instance_from_template"
