@@ -6,11 +6,11 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.cms.DomainParts;
 import be.elevenways.hohenheim.server.cms.SiteParts;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -63,9 +63,13 @@ public final class SiteApi {
             if (ctx == null) {
                 return null;
             }
+            Panel panel = ApiConduits.adminPanel();
+            PanelResource<Row> sites = ApiConduits.rowEntry(conduit, panel, HohenheimSlugs.SITES);
+            if (sites == null) {
+                return null;
+            }
             try {
-                Panel panel = ApiConduits.adminPanel();
-                int siteId = (Integer) ResourceWrites.create(panel, CmsSupport.rowEntry(panel, HohenheimSlugs.SITES),
+                int siteId = (Integer) ResourceWrites.create(panel, sites,
                     FormSubmissionRawValues.fromConduit(conduit), ctx);
                 Row created = Objects.requireNonNull(
                     Models.get(SiteModel.class).findById(siteId));
@@ -91,13 +95,17 @@ public final class SiteApi {
             if (site == null) {
                 return null;
             }
+            Panel panel = ApiConduits.adminPanel();
+            PanelResource<Row> sites = ApiConduits.rowEntry(conduit, panel, HohenheimSlugs.SITES);
+            if (sites == null) {
+                return null;
+            }
             try {
                 // The delete operation is the soft delete the admin form runs, previews
                 // reclaimed and deleted_at stamped by the site's SoftDeleteBehaviour; the
                 // offered-but-dead lockout (the site serving this very panel) is its
                 // availability and refuses here exactly as it did on the row lane.
-                Panel panel = ApiConduits.adminPanel();
-                ResourceWrites.delete(panel, CmsSupport.rowEntry(panel, HohenheimSlugs.SITES), site, ctx);
+                ResourceWrites.delete(panel, sites, site, ctx);
                 return ApiConduits.json(Map.of("id", site.get(SiteModel.ID), "status", "deleted"));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
@@ -143,8 +151,12 @@ public final class SiteApi {
             }
             raw.put(siteKey, String.valueOf(siteId));
             Panel panel = ApiConduits.adminPanel();
+            PanelResource<Row> domains = ApiConduits.rowEntry(conduit, panel, DomainParts.SLUG);
+            if (domains == null) {
+                return null;
+            }
             try {
-                int domainId = (Integer) ResourceWrites.create(panel, CmsSupport.rowEntry(panel, DomainParts.SLUG), raw, ctx);
+                int domainId = (Integer) ResourceWrites.create(panel, domains, raw, ctx);
                 Row added = Objects.requireNonNull(
                     Models.get(SiteDomainModel.class).findById(domainId));
                 ActivityLog.record(Models.get(SiteModel.class), siteId, HohenheimActivityAction.DOMAIN_ADDED,
@@ -179,8 +191,12 @@ public final class SiteApi {
                 return null;
             }
             Panel panel = ApiConduits.adminPanel();
+            PanelResource<Row> domains = ApiConduits.rowEntry(conduit, panel, DomainParts.SLUG);
+            if (domains == null) {
+                return null;
+            }
             try {
-                ResourceWrites.delete(panel, CmsSupport.rowEntry(panel, DomainParts.SLUG), domain, ctx);
+                ResourceWrites.delete(panel, domains, domain, ctx);
                 ActivityLog.record(Models.get(SiteModel.class), siteId, HohenheimActivityAction.DOMAIN_REMOVED,
                     domain.get(SiteDomainModel.HOSTNAME));
                 return ApiConduits.json(Map.of("id", domainId, "site_id", siteId,

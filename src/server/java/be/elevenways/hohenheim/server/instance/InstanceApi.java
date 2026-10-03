@@ -13,7 +13,6 @@ import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -95,9 +94,13 @@ public final class InstanceApi {
     private InstanceApi() {
     }
 
-    /** The admin panel's instance entry, the create and delete form's own; see createThroughResource. */
-    private static @NonNull PanelResource<Row> instances() {
-        return CmsSupport.rowEntry(ApiConduits.adminPanel(), InstanceParts.SLUG);
+    /**
+     * The admin panel's instance entry, the create and delete form's own; see createThroughResource.
+     *
+     * @return the entry, or null when the response has already been ended (the uniform 404 of an instance-less node)
+     */
+    private static @Nullable PanelResource<Row> instances(@NonNull Conduit conduit) {
+        return ApiConduits.rowEntry(conduit, ApiConduits.adminPanel(), InstanceParts.SLUG);
     }
 
     public static void init() {
@@ -278,6 +281,10 @@ public final class InstanceApi {
             if (row == null) {
                 return null;
             }
+            PanelResource<Row> instances = instances(conduit);
+            if (instances == null) {
+                return null;
+            }
             int instanceId = row.get(InstanceModel.ID);
             String name = row.get(InstanceModel.NAME);
             try {
@@ -286,7 +293,7 @@ public final class InstanceApi {
                 // funnel demands the `destroy` capability -- so seeing an instance
                 // (rule 1's `view`) is not enough to destroy it, and the refusal is the
                 // service's typed one rather than anything decided here.
-                ResourceWrites.delete(ApiConduits.adminPanel(), instances(), row, ctx);
+                ResourceWrites.delete(ApiConduits.adminPanel(), instances, row, ctx);
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             } catch (DomainRefusal refused) {
@@ -533,8 +540,12 @@ public final class InstanceApi {
             conduit.forbidden();
             return null;
         }
+        PanelResource<Row> instances = instances(conduit);
+        if (instances == null) {
+            return null;
+        }
         try {
-            int instanceId = (Integer) ResourceWrites.create(ApiConduits.adminPanel(), instances(), form, ctx);
+            int instanceId = (Integer) ResourceWrites.create(ApiConduits.adminPanel(), instances, form, ctx);
             Row created = reload(instanceId);
             ActivityLog.record(Models.get(InstanceModel.class), instanceId, ZenitActivityAction.CREATE,
                 created.get(InstanceModel.NAME));
