@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -55,9 +56,8 @@ public final class InstanceFramebufferPage implements RecordScopedPage<Row> {
     }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
+        Conduit conduit = request.conduit();
         Integer instanceId = instance.get(InstanceModel.ID);
         String status = instance.get(InstanceModel.STATUS);
 
@@ -75,5 +75,11 @@ public final class InstanceFramebufferPage implements RecordScopedPage<Row> {
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(
             HohenheimTemplateIds.INSTANCE_FRAMEBUFFER, vars);
+    }
+
+    @Override
+    public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext accessContext,
+                                           @NonNull Row instance) {
+        throw new UnsupportedOperationException("The " + this.slug() + " tab renders through its PanelRequest");
     }
 }

@@ -1,18 +1,15 @@
 {#- Exec tab on an instance: run ONE arbitrary command inside the workload and read
     its exit code and output. Separate from the console tab on purpose -- the console
     reaches the workload's own primary process, this starts a new program, and the two
-    answer to different capabilities. -#}
+    answer to different capabilities. The form is the exec operation's PAGE form, posted
+    through the hosting panel's one invoke route. -#}
 {% declare title: String %}
 {% declare instanceName: String %}
 {% declare instanceId: Integer %}
 {% declare running: Boolean = false %}
 {% declare execOutput: String = "" %}
 {% declare execExit: String = "" %}
-{% declare returnUrl: String = "" %}
-{#- ReturnTarget.PARAM, supplied by the page: ReturnTarget lives in zenit's SERVER
-    source set, so a common template cannot reach the constant (nor its
-    Zenit.Params.zenit.return_to identifier). Never spell "_return" here by hand. -#}
-{% declare returnParam: String %}
+{% declare document: PageFormState = null %}
 {% declare recordTabs: List<RecordTabState> %}
 {% extend "zenitcms:shell" var:title=title %}
 
@@ -26,16 +23,10 @@
 
         {% if running %}
             <pl-card>
-                <pl-card-header>
-                    <pl-card-title>{{ t("title", scope: "instance_exec") }}</pl-card-title>
-                    <pl-card-description>{{ t("description", scope: "instance_exec") }}</pl-card-description>
-                </pl-card-header>
                 <pl-card-content>
-                    <form method="POST">
-                        {% csrf() %}<input type="hidden" name={% returnParam %} value={% returnUrl %}>
-                        <pl-input name="command" placeholder={% t("command_placeholder", scope: "instance_exec") %}></pl-input>
-                        <pl-button variant="outline" type={% "submit" %}>{{ t("run", scope: "instance_exec") }}</pl-button>
-                    </form>
+                    {% if document != null %}
+                        {% render "zenitcms:form/page-action" var:page=document %}
+                    {% /if %}
                     {% if execExit != "" %}
                         <p class="instance-exec-exit">{{ t("exit_code", scope: "instance_exec", code: execExit) }}</p>
                         <pl-log-view class="instance-exec-output" text={% execOutput %}

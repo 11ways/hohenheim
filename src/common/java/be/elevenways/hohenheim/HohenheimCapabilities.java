@@ -23,6 +23,9 @@ public final class HohenheimCapabilities {
     /** Send console commands to the workload's primary process. */
     public static final String CONSOLE = "console";
 
+    /** Run one arbitrary program inside the workload and read its output: an ADMIN-sensitivity verb. */
+    public static final String EXEC = "exec";
+
     /** Open an interactive shell inside the workload: arbitrary programs, as the workload's user. */
     public static final String SHELL = "shell";
 

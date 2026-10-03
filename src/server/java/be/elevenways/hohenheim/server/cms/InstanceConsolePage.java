@@ -17,6 +17,7 @@ import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -66,9 +67,8 @@ public final class InstanceConsolePage implements RecordScopedPage<Row> {
     }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
+        Conduit conduit = request.conduit();
         Integer instanceId = instance.get(InstanceModel.ID);
         String status = instance.get(InstanceModel.STATUS);
 
@@ -79,7 +79,7 @@ public final class InstanceConsolePage implements RecordScopedPage<Row> {
             ? template.get(InstanceTemplateModel.STOP_COMMAND) : null;
 
         Map<String, Object> vars = new HashMap<>();
-        this.addStoredLogs(conduit, vars, instanceId);
+        this.addStoredLogs(conduit, request.panelSlug(), vars, instanceId);
         vars.put("title", instance.get(InstanceModel.NAME));
         vars.put("instanceName", instance.get(InstanceModel.NAME));
         vars.put("instanceId", instanceId);
@@ -100,7 +100,7 @@ public final class InstanceConsolePage implements RecordScopedPage<Row> {
         vars.put("returnParam", ReturnTarget.PARAM);
         // The command form is the placed console operation's own invoke, its line asked here instead of in the
         // action's dialog: the form posts the confirmation proof the dialog would, and lands back on this tab.
-        vars.put("commandTarget", CmsRoutes.invoke(CmsSupport.panelSlug(conduit), HohenheimSlugs.INSTANCES,
+        vars.put("commandTarget", CmsRoutes.invoke(request.panelSlug(), HohenheimSlugs.INSTANCES,
                 InstanceOperations.CONSOLE_COMMAND.id())
             .with(CmsEndpoints.SUBJECT_PARAM, String.valueOf(instanceId)));
         vars.put("confirmParam", CmsConfirmation.FIELD);
@@ -124,7 +124,8 @@ public final class InstanceConsolePage implements RecordScopedPage<Row> {
      * selects. Retention without a reader would be storage for nobody, so the history the
      * sweeper prunes is the history this tab renders.
      */
-    private void addStoredLogs(@NonNull Conduit conduit, @NonNull Map<String, Object> vars,
+    private void addStoredLogs(@NonNull Conduit conduit, @NonNull String panel,
+                               @NonNull Map<String, Object> vars,
                                @Nullable Integer instanceId) {
         List<Map<String, Object>> logs = new ArrayList<>();
         InstanceLogModel model = Models.get(InstanceLogModel.class);
@@ -132,7 +133,7 @@ public final class InstanceConsolePage implements RecordScopedPage<Row> {
             for (Row log : model.findByInstanceId(instanceId, 50)) {
                 Map<String, Object> entry = new HashMap<>();
                 entry.put("id", log.get(InstanceLogModel.ID));
-                entry.put("target", logTarget(conduit, instanceId, log.get(InstanceLogModel.ID)));
+                entry.put("target", logTarget(panel, instanceId, log.get(InstanceLogModel.ID)));
                 entry.put("handle", String.valueOf((Object) log.get(InstanceLogModel.HANDLE)));
                 entry.put("lineCount", log.get(InstanceLogModel.LINE_COUNT));
                 entry.put("createdAt", String.valueOf((Object) log.get(InstanceLogModel.CREATED_AT)));
@@ -167,14 +168,20 @@ public final class InstanceConsolePage implements RecordScopedPage<Row> {
      * route PLUS a query parameter cannot be built from CmsRoutes -- its builders return
      * the RouteTarget interface, which has no with(...).
      */
-    private static @NonNull RouteTarget logTarget(@NonNull Conduit conduit,
+    private static @NonNull RouteTarget logTarget(@NonNull String panel,
                                                   @NonNull Integer instanceId,
                                                   @NonNull Integer logId) {
         return CmsEndpoints.RECORD_SUBPAGE
-            .with(CmsEndpoints.PANEL_PARAM, CmsSupport.panelSlug(conduit))
+            .with(CmsEndpoints.PANEL_PARAM, panel)
             .with(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.INSTANCES)
             .with(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf(instanceId))
             .with(CmsEndpoints.SUBPAGE_PARAM, SLUG)
             .with(HohenheimParams.SELECTED_LOG, logId);
+    }
+
+    @Override
+    public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext accessContext,
+                                           @NonNull Row instance) {
+        throw new UnsupportedOperationException("The " + this.slug() + " tab renders through its PanelRequest");
     }
 }
