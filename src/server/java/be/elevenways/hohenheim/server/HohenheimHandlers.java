@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.api.DnsZoneApi;
 import be.elevenways.hohenheim.server.api.HostApi;
 import be.elevenways.hohenheim.server.api.PaasApi;
+import be.elevenways.hohenheim.server.cms.EnvironmentParts;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleOperationHandlers;
 import be.elevenways.hohenheim.server.cms.SiteOperationHandlers;
@@ -78,6 +79,7 @@ public final class HohenheimHandlers {
         GameDomainOperationHandlers.init();
         InstanceBackupOperationHandlers.init();
         InstanceChildDeletes.init();
+        EnvironmentParts.init();
         InstanceScheduleOperationHandlers.init();
         InstanceApi.init();
         PaasApi.init();

@@ -1,0 +1,32 @@
+member GET /api/v1/projects/{project}
+  200 {"created_at":"{created_at}","description":"Baseline project","environments":[{"description":"Live traffic","id":"{environment}","name":"env-api-baseline-production"},{"description":"","id":"{empty_environment}","name":"env-api-baseline-staging"}],"id":"{project}","name":"env-api-baseline-project"}
+member GET /api/v1/projects (own project)
+  200 {"projects":[{"created_at":"{created_at}","description":"Baseline project","environments":[{"description":"Live traffic","id":"{environment}","name":"env-api-baseline-production"},{"description":"","id":"{empty_environment}","name":"env-api-baseline-staging"}],"id":"{project}","name":"env-api-baseline-project"}]}
+admin GET {environment}/variables
+  200 {"id":"{environment}","variables":[{"key":"ENV_API_BASELINE_SEEDED","kind":"plain","value":"seeded-value"}]}
+admin GET {empty_environment}/variables
+  200 {"id":"{empty_environment}","variables":[]}
+admin POST set plain
+  200 {"id":"{environment}","key":"ENV_API_BASELINE_PLAIN","status":"set"}
+admin POST set secret
+  200 {"id":"{environment}","key":"ENV_API_BASELINE_SECRET","status":"set"}
+admin POST overwrite plain
+  200 {"id":"{environment}","key":"ENV_API_BASELINE_PLAIN","status":"set"}
+admin GET after sets
+  200 {"id":"{environment}","variables":[{"key":"ENV_API_BASELINE_PLAIN","kind":"plain","value":"plain-value-2"},{"has_value":true,"key":"ENV_API_BASELINE_SECRET","kind":"secret"},{"key":"ENV_API_BASELINE_SEEDED","kind":"plain","value":"seeded-value"}]}
+admin POST delete secret
+  200 {"id":"{environment}","key":"ENV_API_BASELINE_SECRET","status":"deleted"}
+admin POST delete secret again
+  422 {"code":"variable_not_found","field":"key","message":"No variable exists for this key","status":422,"violations":[{"code":"variable_not_found","field":"key","message":"No variable exists for this key"}]}
+admin POST unknown kind
+  422 {"code":"variable_kind_unknown","field":"kind","message":"Unknown variable kind mystery","status":422,"violations":[{"code":"variable_kind_unknown","field":"kind","message":"Unknown variable kind mystery"}]}
+admin POST missing key
+  422 {"code":"variable_key_required","field":"key","message":"A variable key is required","status":422,"violations":[{"code":"variable_key_required","field":"key","message":"A variable key is required"}]}
+admin GET after deletes
+  200 {"id":"{environment}","variables":[{"key":"ENV_API_BASELINE_PLAIN","kind":"plain","value":"plain-value-2"},{"key":"ENV_API_BASELINE_SEEDED","kind":"plain","value":"seeded-value"}]}
+admin GET missing environment
+  404 {"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+member GET {environment}/variables
+  404 {"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+member POST set
+  404 {"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}

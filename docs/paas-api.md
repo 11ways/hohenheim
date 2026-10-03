@@ -715,7 +715,7 @@ one thing this document's opening promise forbids.
 
 It is now gated on `HohenheimAccess.isAdmin` -- the very permission
 (`hohenheim.admin.access`) that guards `HohenheimPanel`, where the only
-environment-variable UI, `EnvironmentVariableResource`, is registered. That is
+environment-variable UI, `EnvironmentParts.variables()`, is registered. That is
 the promise read literally: `ManagePanel` offers no environment peer at all (its
 project tier is a deliberately read-only tenant projection), so ANY tenant write
 here would be a wider door than the UI by construction. Reads answer to the same

@@ -133,8 +133,8 @@ public final class HohenheimPanel extends Panel {
         // Projects/environments span every product tier (sites, instances, databases
         // through their sites), so they are not gated on any single role.
         peers.add(new ProjectResource());
-        peers.add(new EnvironmentResource());
-        peers.add(new EnvironmentVariableResource());
+        peers.add(EnvironmentParts.admin());
+        peers.add(EnvironmentParts.variables());
         addIf(peers, SiteParts.admin(), Role.PROXY);
         addIf(peers, DomainParts.admin(), Role.PROXY);
         addIf(peers, ReleasedClaimParts.admin(), Role.PROXY);
