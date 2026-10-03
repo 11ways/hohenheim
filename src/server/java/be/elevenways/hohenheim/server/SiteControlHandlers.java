@@ -16,6 +16,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.routing.ReturnPath;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.data.RecordSourceGate;
 import be.elevenways.zenit.server.http.ReturnTarget;
@@ -193,7 +194,7 @@ final class SiteControlHandlers {
      * to the admin page.
      */
     private static String deploymentsPageUrl(Conduit conduit, Integer instanceId) {
-        return ReturnTarget.or(ReturnTarget.read(conduit),
+        return ReturnPath.pathOr(ReturnTarget.readPath(conduit),
             CmsRoutes.subpage(HandlerSupport.ADMIN, HohenheimSlugs.INSTANCES, instanceId,
                 "deployments").toUrl());
     }

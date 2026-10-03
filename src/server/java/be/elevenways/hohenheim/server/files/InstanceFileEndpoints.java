@@ -18,6 +18,7 @@ import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.RouteLocation;
+import be.elevenways.zenit.common.routing.ReturnPath;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.http.ReturnTarget;
@@ -319,7 +320,7 @@ public final class InstanceFileEndpoints {
      * The Files tab URL for a directory, stashing any refusal as a flash toast first.
      *
      * AIDEV-NOTE: the destination is USUALLY the submitted _return, which ReturnTarget
-     * hands back as an already-sanitized String; the FALLBACK is built from the typed
+     * hands back as a typed ReturnPath; the FALLBACK is built from the typed
      * route. Either way the directory is set through {@link RouteLocation#with} on the
      * declared {@link HohenheimParams#FILES_PATH}, which REPLACES a {@code path=} the
      * captured page already carried -- appending used to put the parameter in the URL
@@ -332,7 +333,7 @@ public final class InstanceFileEndpoints {
         if (refused != null) {
             HohenheimFlash.error(conduit, HandlerSupport.violationMessage(refused));
         }
-        String base = ReturnTarget.or(ReturnTarget.read(conduit),
+        String base = ReturnPath.pathOr(ReturnTarget.readPath(conduit),
             CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES, instanceId,
                 InstanceFilesPage.SLUG).toUrl());
         return RouteLocation.with(base, HohenheimParams.FILES_PATH,
