@@ -29,6 +29,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -98,6 +99,10 @@ class HostPostureAcknowledgementTest {
      * Its OWN database: the chooser walks EVERY host row, so a neighbouring class's
      * leftover admitted host would silently change what "refused" means here.
      */
+    /** The accepting operator: an account principal, stored with its kind. */
+    private static final Accountability OPERATOR = new Accountability("7", PrincipalRef.account(7).storedKind(),
+        "Ada Operator", "203.0.113.9", "test-agent", Accountability.ORIGIN_WEB);
+
     @BeforeAll
     static void setUp() throws Exception {
         datasource = TestDatabases.freshDatasource();
@@ -152,7 +157,7 @@ class HostPostureAcknowledgementTest {
                 .isFalse();
             assertThat(Map.of(
                     "posture", String.valueOf((Object) declared.get(ServerModel.ACKNOWLEDGED_POSTURE)),
-                    "by", String.valueOf((Object) declared.get(ServerModel.ACKNOWLEDGED_BY)),
+                    "by", String.valueOf(ServerModel.ACKNOWLEDGER.read(declared)),
                     "at", String.valueOf((Object) declared.get(ServerModel.ACKNOWLEDGED_AT))))
                 .as("step 2: no acknowledgement column was written by the plain save")
                 .isEqualTo(Map.of("posture", "null", "by", "null", "at", "null"));
@@ -189,8 +194,7 @@ class HostPostureAcknowledgementTest {
             assertThat(OperationPipeline.offer(operation, operator, unacknowledged))
                 .as("step 4: the action offers itself on a host that needs it")
                 .isInstanceOf(OperationPipeline.Offer.Available.class);
-            Accountability.runAs(new Accountability("user:7", null, "Ada Operator",
-                    "203.0.113.9", "test-agent", Accountability.ORIGIN_WEB),
+            Accountability.runAs(OPERATOR,
                 () -> OperationPipeline.invoke(OperationRequest.of(operation, CmsPlacementSurface.ADMIN_ACTION)
                     .caller(operator).subjectKeys(List.of(String.valueOf(hostId)))));
 
@@ -198,13 +202,13 @@ class HostPostureAcknowledgementTest {
             assertThat(Map.of(
                     "posture", String.valueOf((Object) acknowledged.get(ServerModel.ACKNOWLEDGED_POSTURE)),
                     "version", String.valueOf((Object) acknowledged.get(ServerModel.ACKNOWLEDGED_WARNING_VERSION)),
-                    "by", String.valueOf((Object) acknowledged.get(ServerModel.ACKNOWLEDGED_BY)),
+                    "by", String.valueOf(ServerModel.ACKNOWLEDGER.read(acknowledged)),
                     "label", String.valueOf((Object) acknowledged.get(ServerModel.ACKNOWLEDGED_BY_LABEL))))
                 .as("step 4: actor, warning version and the posture accepted are all on"
                     + " the RECORD -- the authority a gate can still read in a year")
                 .isEqualTo(Map.of("posture", ServerModel.POSTURE_SHARED_CONTAINER,
                     "version", String.valueOf(ServerModel.POSTURE_WARNING_VERSION),
-                    "by", "user:7", "label", "Ada Operator"));
+                    "by", String.valueOf(PrincipalRef.account(7)), "label", "Ada Operator"));
             assertThat((Instant) acknowledged.get(ServerModel.ACKNOWLEDGED_AT))
                 .as("step 4: with a timestamp").isNotNull();
             assertThat(OperationPipeline.offer(operation, operator, acknowledged))
@@ -217,9 +221,9 @@ class HostPostureAcknowledgementTest {
                     + " activity retention prunes at 90 days, so it can never be the"
                     + " authority a gate reads")
                 .isNotNull();
-            assertThat(String.valueOf((Object) activity.get(ActivityModel.ACTOR)))
+            assertThat(ActivityModel.ACTOR_PRINCIPAL.read(activity))
                 .as("step 4: and it names a real actor, not system work")
-                .isEqualTo("user:7");
+                .isEqualTo(PrincipalRef.account(7));
 
             // 5. Now BOTH hostile-tenant fixtures place, and they CO-LOCATE: this is the
             //    plan's gate step, with the divergence stated in the class docblock -- the
@@ -262,8 +266,7 @@ class HostPostureAcknowledgementTest {
             //     exists for. (The step-6 full-row save masked it -- findById loads every
             //     column.) The gate still refused the mismatched pair, so nothing was ever
             //     wrongly granted; what was open is the away-and-back resurrection.
-            Accountability.runAs(new Accountability("user:7", null, "Ada Operator",
-                    "203.0.113.9", "test-agent", Accountability.ORIGIN_WEB),
+            Accountability.runAs(OPERATOR,
                 () -> HostPostureAcknowledgement.record(servers.findById(hostId)));
             assertThat(ServerModel.postureAcknowledged(servers.findById(hostId)))
                 .as("step 6b precondition: the host is acknowledged again")
@@ -277,7 +280,7 @@ class HostPostureAcknowledgementTest {
                 .as("step 6b: a save staging ONLY the posture must still erase the"
                     + " acknowledgement")
                 .isNull();
-            assertThat((String) servers.findById(hostId).get(ServerModel.ACKNOWLEDGED_BY))
+            assertThat(ServerModel.ACKNOWLEDGER.read(servers.findById(hostId)))
                 .as("step 6b: and erase the whole record of it, not just the posture column")
                 .isNull();
 
@@ -292,8 +295,7 @@ class HostPostureAcknowledgementTest {
 
             // 6c. And the hook does NOT fire on a save that never touches the posture: an
             //     eraser that ran on every write would wipe acknowledgements at random.
-            Accountability.runAs(new Accountability("user:7", null, "Ada Operator",
-                    "203.0.113.9", "test-agent", Accountability.ORIGIN_WEB),
+            Accountability.runAs(OPERATOR,
                 () -> HostPostureAcknowledgement.record(servers.findById(hostId)));
             Row unrelated = servers.createEmptyRow();
             unrelated.set(ServerModel.ID, hostId);
@@ -318,8 +320,7 @@ class HostPostureAcknowledgementTest {
             // 7. INVALIDATOR TWO: a warning-version bump goes stale WITHOUT touching the
             //    row. Simulated by storing an older version -- the arithmetic is the same
             //    one a real bump performs, and it needs no write to invalidate.
-            Accountability.runAs(new Accountability("user:7", null, "Ada Operator",
-                    "203.0.113.9", "test-agent", Accountability.ORIGIN_WEB),
+            Accountability.runAs(OPERATOR,
                 () -> HostPostureAcknowledgement.record(servers.findById(hostId)));
             Row current = servers.findById(hostId);
             assertThat(ServerModel.postureAcknowledged(current))
@@ -333,10 +334,10 @@ class HostPostureAcknowledgementTest {
                 .as("step 7: an acknowledgement of an OLDER warning does not answer for"
                     + " the current one")
                 .isFalse();
-            assertThat((String) stale.get(ServerModel.ACKNOWLEDGED_BY))
+            assertThat(ServerModel.ACKNOWLEDGER.read(stale))
                 .as("step 7: and going stale wrote nothing -- the record of who accepted"
                     + " what is still there to read")
-                .isEqualTo("user:7");
+                .isEqualTo(PrincipalRef.account(7));
             assertThat(keyOf(catchThrowable(() ->
                     HostAdmission.requireInstancePlacement(hostId,
                         WorkloadIsolation.SHARED_KERNEL, BUCKET_A))))

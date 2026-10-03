@@ -13,6 +13,9 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.datasource.context.SaveToDatasource;
 import be.elevenways.zenit.common.orm.field.*;
+import be.elevenways.zenit.common.security.PrincipalField;
+import be.elevenways.zenit.common.security.PrincipalKinds;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
@@ -285,9 +288,16 @@ public class ServerModel extends Model {
     public static final DateTimeField ACKNOWLEDGED_AT = SCHEMA.addField(
         DateTimeField.builder().name("acknowledged_at").build());
 
-    /** The acting principal id ({@code Accountability.current().actor()}), never a name. */
+    /** The accepting operator's principal id beside {@link #ACKNOWLEDGED_BY_KIND}, never a name. */
     public static final StringField ACKNOWLEDGED_BY = SCHEMA.addField(
         StringField.builder().name("acknowledged_by").nullable(true).build());
+
+    /** The kind of {@link #ACKNOWLEDGED_BY}'s principal: always an account for an acknowledgement. */
+    public static final StringField ACKNOWLEDGED_BY_KIND = SCHEMA.addField(
+        PrincipalKinds.kindField("acknowledged_by_kind"));
+
+    /** The accepting operator pair, read and written only through this declaration. */
+    public static final PrincipalField ACKNOWLEDGER = PrincipalField.of(ACKNOWLEDGED_BY_KIND, ACKNOWLEDGED_BY);
 
     /**
      * The actor's display label AS IT READ at acknowledgement time, so the record survives
@@ -509,7 +519,7 @@ public class ServerModel extends Model {
         row.set(ACKNOWLEDGED_POSTURE, null);
         row.set(ACKNOWLEDGED_WARNING_VERSION, null);
         row.set(ACKNOWLEDGED_AT, null);
-        row.set(ACKNOWLEDGED_BY, null);
+        ACKNOWLEDGER.write(row, (PrincipalRef) null);
         row.set(ACKNOWLEDGED_BY_LABEL, null);
     }
 

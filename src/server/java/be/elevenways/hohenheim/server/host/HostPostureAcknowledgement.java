@@ -64,13 +64,12 @@ public final class HostPostureAcknowledgement {
         }
         Accountability who = Accountability.current();
         String actor = who.actor();
-        PrincipalRef principal = PrincipalRef.stored(who.actorKind(), actor);
-        if (actor == null || actor.isBlank() || Accountability.ORIGIN_SYSTEM.equals(who.origin())
-                || who.actorKind() != null && (principal == null || !principal.kind().account())) {
+        PrincipalRef principal = who.actorReference();
+        if (principal == null || !principal.kind().account() || Accountability.ORIGIN_SYSTEM.equals(who.origin())) {
             throw Violations.ofForm(HohenheimViolations.text("posture_acknowledgement_needs_actor")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
-        String label = ActivityText.actorName(who.actorKind(), actor, who.actorLabel(), who.origin())
+        String label = ActivityText.actorName(principal, actor, who.actorLabel(), who.origin())
             .resolve(LocaleChain.empty(), MessageResolvers.getDefault());
         String posture = server.get(ServerModel.POSTURE);
         ActivityLog.withAction(ZenitActivityAction.UPDATE, ACTIVITY_DETAIL, () -> {
@@ -78,7 +77,7 @@ public final class HostPostureAcknowledgement {
             server.set(ServerModel.ACKNOWLEDGED_WARNING_VERSION,
                 ServerModel.POSTURE_WARNING_VERSION);
             server.set(ServerModel.ACKNOWLEDGED_AT, Now.instant());
-            server.set(ServerModel.ACKNOWLEDGED_BY, actor);
+            ServerModel.ACKNOWLEDGER.write(server, principal);
             server.set(ServerModel.ACKNOWLEDGED_BY_LABEL, label);
             Models.get(ServerModel.class).save(server);
         });

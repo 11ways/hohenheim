@@ -12,6 +12,7 @@ import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.security.PrincipalField;
 import be.elevenways.zenit.common.security.PrincipalKinds;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.ui.BadgeVariant;
@@ -171,6 +172,9 @@ public class CertificateModel extends Model {
     /** The kind of {@link #REQUESTED_BY_USER_ID}'s principal; together they are the certificate's owner. */
     public static final StringField REQUESTED_BY_KIND = SCHEMA.addField(PrincipalKinds.kindField("requested_by_kind"));
 
+    /** The requester pair: the certificate's owner, re-decided against every renewal sweep. */
+    public static final PrincipalField REQUESTER = PrincipalField.of(REQUESTED_BY_KIND, REQUESTED_BY_USER_ID);
+
     /** Dedup stamp for the expiring-soon alert; a renewal moves expires_on forward, re-arming it. */
     public static final DateTimeField EXPIRY_NOTIFIED_AT = SCHEMA.addField(DateTimeField.builder().name("expiry_notified_at").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
@@ -209,12 +213,11 @@ public class CertificateModel extends Model {
 
     /** @return the stored requester, or null for an unattended order or a pair naming no known principal */
     public static @Nullable PrincipalRef requesterOf(@NonNull Row certificate) {
-        return PrincipalRef.stored(certificate.get(REQUESTED_BY_KIND), certificate.get(REQUESTED_BY_USER_ID));
+        return REQUESTER.read(certificate);
     }
 
-    /** Stores {@code requester} as the (id, kind) pair, both null for an unattended order. */
+    /** Stores {@code requester} in {@link #REQUESTER}, both columns null for an unattended order. */
     public static void setRequester(@NonNull Row certificate, @Nullable PrincipalRef requester) {
-        certificate.set(REQUESTED_BY_USER_ID, requester == null ? null : Math.toIntExact(requester.id()));
-        certificate.set(REQUESTED_BY_KIND, requester == null ? null : requester.storedKind());
+        REQUESTER.write(certificate, requester);
     }
 }
