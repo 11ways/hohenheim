@@ -11,6 +11,8 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.orm.backup.SnapshotCapableDatasource;
+import be.elevenways.zenit.server.orm.seed.Seeds;
+import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.task.TaskRuntime;
 
 import java.io.File;
@@ -119,8 +121,14 @@ public final class TestDatabases {
 
     /** {@link #freshDatasource()}, then the runtime booted over it. */
     public static synchronized SqlDatasource freshBootedDatasource() throws Exception {
+        boolean alreadyBooted = ServerZenitRuntime.INSTANCE != null;
         SqlDatasource datasource = freshDatasource();
         HohenheimTestRuntime.ensureBooted();
+        if (alreadyBooted) {
+            // Runtime boot is process-wide, but its SEED stage belongs to each new database.
+            TaskRuntime.registerModels(datasource);
+            Seeds.runDiscovered();
+        }
         return datasource;
     }
 

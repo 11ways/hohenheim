@@ -52,7 +52,8 @@ class SystemSurfacesBrowserTest extends HohenheimTestBase {
     private static AccessContext tenant;
 
     @BeforeAll
-    static void seed() {
+    static void seed() throws Exception {
+        freshSeededDatabase();
         int tenantId = ApiSupport.user(PREFIX + "tenant@hohenheim.local", "System Surfaces Tenant");
         channelId = String.valueOf(channel(PREFIX + "channel"));
         targetId = String.valueOf(target(PREFIX + "target"));

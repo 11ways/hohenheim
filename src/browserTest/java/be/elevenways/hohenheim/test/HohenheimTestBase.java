@@ -139,6 +139,13 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         return session.token().secret();
     }
 
+    /** Reset a surface fixture's database and sessions while retaining the shared HTTP server. */
+    protected static void freshSeededDatabase() throws Exception {
+        TestDatabases.freshBootedDatasource();
+        MINTED_SESSIONS.clear();
+        sessionToken = seedAuthenticatedAdmin();
+    }
+
     @Override
     protected void stopServer() {
         // Shared across the JVM (the CmsBrowserTestBase pattern): the first class to

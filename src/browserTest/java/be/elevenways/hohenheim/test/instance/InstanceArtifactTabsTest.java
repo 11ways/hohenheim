@@ -114,9 +114,9 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         // 3. Restore is the RESOURCE's declared action, targeting the resource's own
         //    invoke route -- not a form this page invented.
         assertThat(snapshots.body())
-            .withFailMessage("step 3: the snapshot restore action is not relayed from"
-                + " InstanceSnapshotResource")
-            .contains("/admin/instance-snapshots/" + snapshotId + "/action/restore_snapshot");
+            .withFailMessage("step 3: the snapshot restore operation is not relayed from"
+                + " the panel's snapshot entry")
+            .contains("/admin/instance-snapshots/invoke/hohenheim.restore_snapshot?ids=" + snapshotId);
         assertThat(backups.body())
             .withFailMessage("step 3: the backup restore operation is not relayed from"
                 + " the panel's backup entry")
