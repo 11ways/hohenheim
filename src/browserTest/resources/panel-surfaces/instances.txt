@@ -35,6 +35,7 @@ tab volumes at=13 landing=false view=false
 tab databases at=14 landing=false view=false
 tab migrate at=15 landing=false view=false
 tab history at=16 landing=false view=false
+tab access at=17 landing=false view=false
 control CREATE%20kind at=0 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:application,hohenheim:docker_container,hohenheim:system_container,hohenheim:vm,hohenheim:workspace binding=searchable:false,clearable:true,presentation:CARDS
 control CREATE%20name at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20server_id at=2 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.server,rules:,siblings:kind,resolver:be.elevenways.hohenheim.HohenheimPickRules$KindHostRules#a3da194ad2cf,clearable:true,creatable:false
@@ -212,6 +213,7 @@ tab schedules at=9 landing=false view=false
 tab databases at=10 landing=false view=false
 tab migrate at=11 landing=false view=false
 tab history at=12 landing=false view=false
+tab access at=13 landing=false view=false
 control CREATE%20kind at=0 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:application,hohenheim:docker_container,hohenheim:system_container,hohenheim:vm,hohenheim:workspace binding=searchable:false,clearable:true,presentation:CARDS
 control CREATE%20name at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20server_id at=2 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.server,rules:,siblings:kind,resolver:be.elevenways.hohenheim.HohenheimPickRules$KindHostRules#a3da194ad2cf,clearable:true,creatable:false
@@ -493,6 +495,7 @@ tab schedules at=10 landing=false view=false
 tab devices at=11 landing=false view=false
 tab volumes at=12 landing=false view=false
 tab databases at=13 landing=false view=false
+tab access at=14 landing=false view=false
 
 case manage.instances.tenant.failed-install manage instances tenant v2
 admission - verdict=admitted
@@ -512,6 +515,7 @@ tab provisioning at=2 landing=false view=false
 tab stats at=3 landing=false view=false
 tab schedules at=4 landing=false view=false
 tab databases at=5 landing=false view=false
+tab access at=6 landing=false view=false
 control EDIT%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20crash_policy at=1 kind=zenitforms:form/select input=select required=false readonly=false options=none,restart binding=searchable:false,clearable:true,presentation:DEFAULT
 

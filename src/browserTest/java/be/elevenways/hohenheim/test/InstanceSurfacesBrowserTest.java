@@ -34,6 +34,11 @@ import java.util.Map;
  * AIDEV-NOTE: the stored set ({@code /panel-surfaces/instances.txt}) is the behaviour captured on a template-linked
  * instance whose install failed, so the install, reinstall, expose, migrate and delete-with-data verbs all show. The
  * accepted difference is the moved invokes' route; a failing comparison is a changed surface, never a file to refresh.
+ *
+ * AIDEV-NOTE: intended difference, Access tab added (Jelle 2026-10-03): the stored set carries one added
+ * {@code tab access} fact per record case, re-recorded beside the legacy capture, because zenit-auth's record access
+ * page rides every parts entry over a grantable model (RecordTab#ridesEveryEntry). Every other fact is the legacy
+ * capture as stored.
  */
 class InstanceSurfacesBrowserTest extends HohenheimTestBase {
 
