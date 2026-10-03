@@ -3,18 +3,19 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.activity.ActivityRecordCell;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.cms.AdminActivityResource;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelPeer;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
-import be.elevenways.zenit.cms.common.resource.ActivityResource;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.FilterState;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.auth.test.TestAccounts;
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.zenit.cms.server.resource.ActivityAdmin;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.test.support.TestAccessContexts;
@@ -153,7 +154,7 @@ class AdminActivityListTest extends HohenheimTestBase {
         new ActivityModel().save(row);
 
         // 1. The host preserves the core projection instead of resolving system id 1 as a user.
-        AdminActivityResource resource = adminActivityResource();
+        Resource<Row> resource = adminActivityResource();
         Object cell = resource.cellValue(row, column(resource, ActivityModel.ACTOR.getName()));
         assertThat(cell).as("step 1: the localized core actor name is preserved").isInstanceOf(Microcopy.class);
         assertThat(((Microcopy) cell).resolve(LocaleChain.ofTags("en"), new ShippedCatalogs()))
@@ -176,9 +177,9 @@ class AdminActivityListTest extends HohenheimTestBase {
         // 1. The hohenheim resource still describes the SAME columns the framework
         //    resource does: its spec is a copy (TableSpec has no toBuilder), so a column
         //    added upstream has to fail here rather than silently vanish from the panel.
-        AdminActivityResource resource = adminActivityResource();
+        Resource<Row> resource = adminActivityResource();
         List<String> ours = resource.tableSpec().columns().stream().map(ColumnSpec::name).toList();
-        List<String> framework = new ActivityResource().tableSpec().columns()
+        List<String> framework = ActivityAdmin.table().columns()
             .stream().map(ColumnSpec::name).toList();
         assertThat(ours)
             .as("step 1: the panel's activity columns match the framework's")
@@ -315,19 +316,18 @@ class AdminActivityListTest extends HohenheimTestBase {
             .doesNotContain(UNLINKABLE_TITLE);
     }
 
-    /** The panel's own activity peer -- never a fresh instance, the registered one. */
-    private static AdminActivityResource adminActivityResource() {
+    /** The panel's own activity log, viewed as its caller sees it -- never a fresh one, the registered one. */
+    @SuppressWarnings("unchecked")
+    private static Resource<Row> adminActivityResource() {
         Panel panel = PanelRegistry.getBySlug("admin");
         assertThat(panel).as("the admin panel is registered").isNotNull();
-        for (PanelPeer peer : panel.peers()) {
-            if (peer instanceof AdminActivityResource activity) {
-                return activity;
-            }
+        if (panel.entryBySlug("activity") instanceof PanelResource<?> activity) {
+            return PanelResourceViews.forCaller((PanelResource<Row>) activity, panel);
         }
         throw new AssertionError("the admin panel exposes no activity resource");
     }
 
-    private static ColumnSpec column(AdminActivityResource resource, String name) {
+    private static ColumnSpec column(Resource<Row> resource, String name) {
         ColumnSpec column = resource.tableSpec().column(name);
         assertThat(column).as("the activity table declares a '" + name + "' column").isNotNull();
         return column;

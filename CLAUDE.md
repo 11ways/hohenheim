@@ -86,7 +86,7 @@ silently aborts used to make a run of nothing look green.
 - The admin UI is a zenit-cms panel served at `/admin` (`server/cms/HohenheimPanel`):
   typed `RowResource` peers for sites/domains/certificates/access lists/auth
   providers/databases/servers/notification channels, zenit-cms's readonly
-  `ActivityResource` over the framework activity log, the framework
+  `ActivityAdmin` parts over the framework activity log, the framework
   `SettingsPage` at `/admin/settings` (the `hohenheim` group and the framework
   mount, both editing `settings/local.dry`; DIFF-based save, secrets masked, restartRequired
   metadata drives the restart toast; a group deep-links by its path, e.g.
