@@ -443,8 +443,8 @@ public final class BanService {
      * Lift an active ban: stamps the lift columns on the ban row and removes the kernel
      * element.
      *
-     * AIDEV-NOTE: "audit" here means the BAN ROW ITSELF, which is the trail (BanResource
-     * makes the list unupdatable and undeletable). It is deliberately NOT the framework
+     * AIDEV-NOTE: "audit" here means the BAN ROW ITSELF, which is the trail (BanParts
+     * declares no update or delete writer). It is deliberately NOT the framework
      * activity log: this is an {@code updateAll()}, which fires no per-row write hooks,
      * so no {@code zenit_activity} row is written. {@code lifted_by} carries the actor.
      */

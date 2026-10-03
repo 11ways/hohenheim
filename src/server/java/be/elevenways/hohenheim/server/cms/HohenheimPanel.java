@@ -173,7 +173,7 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, RuntimeImageParts.admin(), Role.INSTANCES);
         addIf(peers, InstanceScheduleRunParts.admin(), Role.INSTANCES);
         addIf(peers, GameDomainResource.admin(), Role.INSTANCES);
-        addIf(peers, new BackupTargetResource(), Role.INSTANCES);
+        addIf(peers, BackupTargetParts.admin(), Role.INSTANCES);
         // Build history serves the two tiers that produce images today (Docker sites
         // through the proxy role, container instances through the instances role).
         addIf(peers, OperationHistoryParts.builds(), Role.PROXY, Role.INSTANCES);
@@ -197,8 +197,8 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, new DnsRecordResource(), Role.DNS);
         addIf(peers, new DnsPeerResource(), Role.DNS);
         addIf(peers, DnsZonePeerParts.admin(), Role.DNS);
-        peers.add(new NotificationChannelResource());
-        addIf(peers, new BanResource(), Role.FIREWALL);
+        peers.add(NotificationChannelParts.admin());
+        addIf(peers, BanParts.admin(), Role.FIREWALL);
         // zenit-auth's generated admin resources, wired into THIS panel (the
         // module's own default panel is disabled via auth.cms.auto_panel).
         // AIDEV-NOTE: zenit-auth grew the description seam (a third constructor argument),

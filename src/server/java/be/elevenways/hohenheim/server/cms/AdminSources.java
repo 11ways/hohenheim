@@ -1,10 +1,15 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.server.page.CmsRecordSources;
 import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
@@ -52,11 +57,23 @@ public final class AdminSources {
     /** The registration body, callable again so a test can replay it against a fresh registry. */
     static void declare() {
         // Bans: feeds the active-bans stat tile (rules on `active`) and any bans-created
-        // chart (sortable doubles as the bucketable whitelist for created_at).
-        RecordSourceRegistry.INSTANCE.register(complete(RecordSource.of(BanModel.class)
+        // chart (sortable doubles as the bucketable whitelist for created_at). BanParts is a
+        // panel resource, so this is the model's own source; no inline create (no pick offers
+        // a ban: the manual ban is the entry's quick-add bar).
+        RecordSourceRegistry.INSTANCE.register(admin(RecordSource.of(BanModel.class)
             .project(BanModel.IP, BanModel.SOURCE, BanModel.ACTIVE,
                 BanModel.EXPIRES_AT, BanModel.CREATED_AT)
-            .sortable(BanModel.CREATED_AT), BanModel.class, new BanResource()));
+            .sortable(BanModel.CREATED_AT), BanModel.class).build());
+
+        // Backup targets, for the instance form's target pick: BackupTargetParts is a panel resource, whose one
+        // source is panel-qualified, so the model's own source is this one, creatable through the admin entry's
+        // own create form exactly as the derived default was. Absent with the instance role.
+        Panel adminPanel = PanelRegistry.getBySlug(HohenheimSlugs.ADMIN);
+        if (adminPanel != null && adminPanel.entryBySlug(BackupTargetParts.SLUG) instanceof PanelResource<?> targets) {
+            RecordSourceRegistry.INSTANCE.register(complete(RecordSource.of(BackupTargetModel.class)
+                .search(BackupTargetModel.NAME), BackupTargetModel.class,
+                (RowResource) PanelResourceViews.forCaller(targets, adminPanel)));
+        }
 
         // Hosts, for the instance form's DEPENDENT host pick: the projection is the rule
         // vocabulary, so runtime and volume_backend MUST be projected -- the resolver
