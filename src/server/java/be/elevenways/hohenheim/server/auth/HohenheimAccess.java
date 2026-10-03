@@ -115,7 +115,7 @@ public final class HohenheimAccess {
      * {@link #MANAGE}'s umbrella. An operator may still grant it deliberately; a tenant
      * holding it can never pass it on.
      */
-    public static final String EXEC = "exec";
+    public static final String EXEC = HohenheimCapabilities.EXEC;
 
     /**
      * Open an INTERACTIVE login shell inside the workload -- the tenant verb the product's

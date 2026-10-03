@@ -11,6 +11,8 @@ import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations.ConsoleCommandInput;
+import be.elevenways.hohenheim.instance.InstanceOperations.ExecInput;
+import be.elevenways.hohenheim.instance.InstanceOperations.ExecRun;
 import be.elevenways.hohenheim.instance.InstanceOperations.PowerResult;
 import be.elevenways.hohenheim.instance.InstanceOperations.SnapshotInput;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -86,6 +88,9 @@ public final class InstanceOperationHandlers {
         OperationHandlers.attach(InstanceOperations.CONSOLE_COMMAND).source(SUBJECTS)
             .applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::consoleCommand);
+        OperationHandlers.attach(InstanceOperations.EXEC).source(SUBJECTS)
+            .applies(InstanceOperationHandlers::authored)
+            .handle(InstanceOperationHandlers::exec);
         OperationHandlers.attach(InstanceOperations.APP_UPDATE).source(SUBJECTS).applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::appUpdate);
         // Sessions, offered and never invoked: their sockets ask offered() (see InstanceOperations.OPEN_SHELL).
@@ -214,6 +219,14 @@ public final class InstanceOperationHandlers {
      * @throws IllegalStateException for a blank line: a schedule step that stores none fails rather than sending
      *                               nothing
      */
+    /** Runs the program through InstanceExec, which asks the exec capability once more on its funnel. */
+    private static @NonNull ExecRun exec(@NonNull OperationCall<Row, ExecInput> call) {
+        ExecInput input = call.input();
+        String command = input == null || input.command() == null ? "" : input.command().strip();
+        InstanceExec.Run run = new InstanceExec().run(instanceId(call), command);
+        return new ExecRun(run.exitCode(), run.output());
+    }
+
     private static @NonNull String consoleCommand(@NonNull OperationCall<Row, ConsoleCommandInput> call) {
         ConsoleCommandInput input = call.input();
         String command = input == null ? null : input.command();

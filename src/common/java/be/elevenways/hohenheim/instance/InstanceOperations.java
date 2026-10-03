@@ -121,6 +121,44 @@ public final class InstanceOperations {
     public record ConsoleCommandInput(@Nullable String command) {
     }
 
+    /** The program the exec tab runs. */
+    public static final StringField EXEC_COMMAND = StringField.builder("command")
+        .label(HohenheimFormCopy.label("exec_command"))
+        .required()
+        .build();
+
+    /**
+     * Run ONE arbitrary program inside the workload and read its exit code and output: what the exec tab offers.
+     *
+     * AIDEV-NOTE: not the console command under another name: the console reaches the workload's own primary process,
+     * this starts a new program, and the two answer to different capabilities. InstanceExec asks EXEC once more on its
+     * funnel, the lane a future API reaches too.
+     */
+    public static final Operation<Row, ExecInput, ExecRun> EXEC =
+        Operation.declare(HohenheimIds.id("exec_instance"))
+            .label(label("run", "instance_exec", "Run"))
+            .icon(Icon.of("code"))
+            .one(INSTANCE)
+            .gate(gate(HohenheimCapabilities.EXEC))
+            .input(OperationInput.of(FormSpec.builder().add(EXEC_COMMAND).build(), ExecInput.class,
+                values -> new ExecInput(values.get(EXEC_COMMAND))))
+            .result(ExecRun.class)
+            .facts(OperationFact.REACHES_OUTSIDE)
+            .register();
+
+    /** The exec tab's input. */
+    public record ExecInput(@Nullable String command) {
+    }
+
+    /**
+     * One exec run's outcome: page CONTENT, never a notification.
+     *
+     * @param exitCode the program's exit code
+     * @param output   its captured output
+     */
+    public record ExecRun(int exitCode, @NonNull String output) {
+    }
+
     /**
      * Open an interactive shell inside one instance: what the shell tab offers and the shell socket admits.
      *

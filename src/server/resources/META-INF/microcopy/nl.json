@@ -6929,10 +6929,6 @@
     {
       "text": "Consolecommando",
       "scope": "instance_console"
-    },
-    {
-      "text": "Uit te voeren opdracht",
-      "scope": "instance_exec"
     }
   ],
   "send": {
@@ -7092,6 +7088,12 @@
     {
       "text": "Stroom",
       "scope": "capability"
+    }
+  ],
+  "exec_command": [
+    {
+      "text": "Uit te voeren commando",
+      "scope": "field"
     }
   ],
   "console_line": [

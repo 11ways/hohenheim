@@ -14,6 +14,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -73,9 +74,9 @@ public final class InstanceFilesPage implements RecordScopedPage<Row> {
     }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
+        Conduit conduit = request.conduit();
+        AccessContext accessContext = request.access();
         Integer instanceId = instance.get(InstanceModel.ID);
         InstanceFiles files = new InstanceFiles();
 
@@ -113,7 +114,7 @@ public final class InstanceFilesPage implements RecordScopedPage<Row> {
                 HohenheimTemplateIds.INSTANCE_FILES, vars);
         }
 
-        String panel = CmsSupport.panelSlug(conduit);
+        String panel = request.panelSlug();
         String requested = conduit.getQueryParam(HohenheimParams.FILES_PATH.getName());
         String editing = conduit.getQueryParam(HohenheimParams.FILES_EDIT.getName());
         try {
@@ -249,5 +250,11 @@ public final class InstanceFilesPage implements RecordScopedPage<Row> {
             }
         }
         return listing.path();
+    }
+
+    @Override
+    public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext accessContext,
+                                           @NonNull Row instance) {
+        throw new UnsupportedOperationException("The " + this.slug() + " tab renders through its PanelRequest");
     }
 }
