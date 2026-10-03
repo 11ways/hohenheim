@@ -33,6 +33,7 @@ import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -99,7 +100,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
         Row preview = newPreviewRow("system-source-ref", "prev-mech--system-source-ref.preview.test", null);
         String key = String.valueOf(preview.get(PreviewDeploymentModel.ID));
         Row loaded = OperationRequest.of(PreviewOperations.EXPIRE, ZenitPlacementSurface.SCHEDULE_STEP)
-            .asSystem(RecordSchedules.systemIdentity(1).reason(), null).subjectKeys(List.of(key)).loadSubjects().getFirst();
+            .asSystem(RecordSchedules.systemIdentity(1), null).subjectKeys(List.of(key)).loadSubjects().getFirst();
         assertThat(loaded.get(PreviewDeploymentModel.ID)).as("1: system loads the expiry subject")
             .isEqualTo(preview.get(PreviewDeploymentModel.ID));
         assertThatThrownBy(() -> OperationRequest.of(PreviewOperations.EXPIRE, ZenitPlacementSurface.SCHEDULE_STEP)
@@ -107,7 +108,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
             .as("1: anonymous cannot load the expiry subject").isInstanceOfSatisfying(DomainRefusal.class,
                 refusal -> assertThat(refusal.reason()).isSameAs(ZenitRefusalReason.NOT_FOUND));
         assertThatThrownBy(() -> OperationRequest.of(PreviewOperations.EXPIRE, ZenitPlacementSurface.SCHEDULE_STEP)
-            .asSystem("unrelated system work", null).subjectKeys(List.of(key)).loadSubjects())
+            .asSystem(ExecutionIdentity.system("record-schedule:1"), null).subjectKeys(List.of(key)).loadSubjects())
             .as("1: a different system purpose cannot load the expiry subject")
             .isInstanceOfSatisfying(DomainRefusal.class,
                 refusal -> assertThat(refusal.reason()).isSameAs(ZenitRefusalReason.NOT_FOUND));
