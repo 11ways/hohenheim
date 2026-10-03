@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
+import be.elevenways.hohenheim.common.cms.StackDeploymentView;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -47,21 +48,16 @@ public final class StackDeploymentsPage implements RecordScopedPage<Row> {
                                            @NonNull Row stack) {
         Integer stackId = stack.get(StackModel.ID);
 
-        List<Map<String, Object>> deployments = new ArrayList<>();
+        List<StackDeploymentView> deployments = new ArrayList<>();
         for (Row row : Models.get(StackDeploymentModel.class).findByStackId(stackId, 50)) {
-            Map<String, Object> entry = new HashMap<>();
-            entry.put("id", row.get(StackDeploymentModel.ID));
-            entry.put("statusLabel", scopedLabel(row.get(StackDeploymentModel.STATUS), "stack_deploy_status"));
-            entry.put("statusVariant", statusVariant(row.get(StackDeploymentModel.STATUS)));
-            entry.put("reasonLabel", scopedLabel(row.get(StackDeploymentModel.REASON), "stack_deploy_reason"));
-            entry.put("duration", durationLabel(row.get(StackDeploymentModel.DURATION_MS)));
-            entry.put("error", orEmpty(row.get(StackDeploymentModel.ERROR)));
             Instant startedAt = row.get(StackDeploymentModel.STARTED_AT);
-            entry.put("startedAtIso", startedAt != null ? startedAt.toString() : "");
             String log = row.get(StackDeploymentModel.LOG);
-            entry.put("log", log != null ? log : "");
-            entry.put("hasLog", log != null && !log.isBlank());
-            deployments.add(entry);
+            deployments.add(new StackDeploymentView(row.get(StackDeploymentModel.ID),
+                scopedLabel(row.get(StackDeploymentModel.STATUS), "stack_deploy_status"),
+                statusVariant(row.get(StackDeploymentModel.STATUS)),
+                scopedLabel(row.get(StackDeploymentModel.REASON), "stack_deploy_reason"),
+                durationLabel(row.get(StackDeploymentModel.DURATION_MS)), orEmpty(row.get(StackDeploymentModel.ERROR)),
+                startedAt != null ? startedAt.toString() : "", log != null ? log : "", log != null && !log.isBlank()));
         }
 
         Map<String, Object> vars = new HashMap<>();
@@ -95,11 +91,12 @@ public final class StackDeploymentsPage implements RecordScopedPage<Row> {
      * own colour everywhere else. Unknown/blank still degrades to secondary, which is the
      * honest answer for a value the vocabulary does not contain.
      */
-    private static String statusVariant(@Nullable Object status) {
+    private static BadgeVariant statusVariant(@Nullable Object status) {
         EnumField.EnumValue value = status == null
             ? null : StackDeploymentModel.STATUS.getValues().get(String.valueOf(status));
         BadgeColor color = value != null ? value.color() : null;
-        return (color != null ? color : BadgeVariant.SECONDARY).token();
+        BadgeVariant variant = color != null ? color.variant() : null;
+        return variant != null ? variant : BadgeVariant.SECONDARY;
     }
 
     private static String durationLabel(@Nullable Object durationMs) {

@@ -11,7 +11,7 @@
 {#- How many columns the history table has, so the detail row spans all of them. -#}
 {% declare columnCount: Integer = 5 %}
 {% declare currentCommit: String = "" %}
-{% declare deployments: List %}
+{% declare deployments: List<InstanceDeploymentView> %}
 {% declare returnUrl: String = "" %}
 {#- ReturnTarget.PARAM, supplied by the page: ReturnTarget lives in zenit's SERVER
     source set, so a common template cannot reach the constant (nor its
@@ -73,21 +73,21 @@
                     {% each deployments as index, deploy %}
                     <pl-table-row>
                         <pl-table-cell>
-                            {% if deploy.get("startedAtIso") != "" %}
-                            <pl-relative-time datetime={% deploy.get("startedAtIso") %} wording={% timeWording %} title={% deploy.get("startedAtIso") %}></pl-relative-time>
+                            {% if deploy.startedAtIso != "" %}
+                            <pl-relative-time datetime={% deploy.startedAtIso %} wording={% timeWording %} title={% deploy.startedAtIso %}></pl-relative-time>
                             {% /if %}
                         </pl-table-cell>
                         <pl-table-cell>
-                            <pl-badge variant={% deploy.get("statusVariant") %}>{{ deploy.get("status") }}</pl-badge>
+                            <pl-badge variant={% deploy.statusVariant %}>{{ deploy.status }}</pl-badge>
                         </pl-table-cell>
                         {% if showTrigger %}
-                        <pl-table-cell>{{ deploy.get("reason") }}</pl-table-cell>
+                        <pl-table-cell>{{ deploy.reason }}</pl-table-cell>
                         {% /if %}
-                        <pl-table-cell><code>{{ deploy.get("commit") }}</code></pl-table-cell>
-                        <pl-table-cell>{{ deploy.get("duration") }}</pl-table-cell>
+                        <pl-table-cell><code>{{ deploy.commit }}</code></pl-table-cell>
+                        <pl-table-cell>{{ deploy.duration }}</pl-table-cell>
                     </pl-table-row>
-                    {% if deploy.get("error") != "" or deploy.get("hasLog") == true %}
-                    {% render "hohenheim:cms/deploy-detail" var:deploy=deploy var:colspan=columnCount var:logLabel=t("build_log", scope: "deployments") %}
+                    {% if deploy.error != "" or deploy.hasLog %}
+                    {% render "hohenheim:cms/deploy-detail" var:error=deploy.error var:hasLog=deploy.hasLog var:log=deploy.log var:colspan=columnCount var:logLabel=t("build_log", scope: "deployments") %}
                     {% /if %}
                     {% /each %}
                 </pl-table-body>

@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.site;
 import be.elevenways.hohenheim.CertCoverage;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -22,7 +23,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 @HawkeyeClass
 public record DomainCertCell(
     @NonNull String status,
-    @NonNull String variant,
+    @NonNull BadgeVariant variant,
     @NonNull Microcopy label,
     @Nullable String name,
     @Nullable String url,

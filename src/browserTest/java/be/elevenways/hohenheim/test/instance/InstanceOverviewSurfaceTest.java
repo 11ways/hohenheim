@@ -52,11 +52,11 @@ class InstanceOverviewSurfaceTest extends HohenheimTestBase {
         try {
             // 1. The front door renders as a widget surface, with the page's own
             //    widget-native button in it. A record dashboard that is not hosted by
-            //    zn-widget-surface can never dispatch anything.
+            //    zw-surface can never dispatch anything.
             navigateToApp("/admin/instances/" + id + "/page/overview");
             waitForHydration();
 
-            assertThat(page.locator("zn-widget-surface").count())
+            assertThat(page.locator("zw-surface").count())
                 .as("step 1: the record's front door is a widget surface host")
                 .isEqualTo(1);
             assertThat(page.locator("[data-surface-action=\"refresh\"]").count())

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.site;
 
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.ui.ColorHue;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -23,7 +24,7 @@ public record SiteUpstreamCell(
     @NonNull String kindKey,
     @NonNull Microcopy kindLabel,
     @Nullable String icon,
-    @Nullable String color,
+    @Nullable ColorHue color,
     @Nullable String summary,
     @Nullable String instanceName,
     @Nullable String instanceUrl

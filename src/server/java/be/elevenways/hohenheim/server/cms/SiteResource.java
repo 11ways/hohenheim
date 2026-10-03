@@ -57,6 +57,7 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.text.Slugs;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.security.SecureTokens;
@@ -322,7 +323,8 @@ public class SiteResource extends RowResource {
             : Microcopy.of("upstream").withFilter("scope", "site");
         String icon = handler != null && handler.getIcon() != null
             ? handler.getIcon().name() : null;
-        String color = handler != null ? BadgeColor.tokenOf(handler.color()) : null;
+        BadgeColor color = handler != null ? handler.color() : null;
+        ColorHue hue = color != null ? color.hue() : null;
 
         String instanceName = null;
         String instanceUrl = null;
@@ -343,7 +345,7 @@ public class SiteResource extends RowResource {
             summary = handler.upstreamSummary(settings);
         }
 
-        return new SiteUpstreamCell(kindKey, label, icon, color, summary,
+        return new SiteUpstreamCell(kindKey, label, icon, hue, summary,
             instanceName, instanceUrl);
     }
 
