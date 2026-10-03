@@ -11,6 +11,11 @@ import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.cms.common.render.action.InvokeActionState;
 import be.elevenways.zenit.cms.common.render.table.TableState;
 import be.elevenways.zenit.cms.server.render.table.TableStateTranslator;
+import be.elevenways.zenit.cms.common.resource.Resource;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
+import be.elevenways.zenit.server.operation.OperationHandlers;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -31,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * AIDEV-NOTE: this exists because the tab used to call a {@code TableStateTranslator}
  * overload that had no {@code deleteUnavailableReason} parameter at all, so the resource's
  * answer was dropped silently while the generated list page honoured it -- a divergence no
- * markup assertion could see, since the shipped {@link DnsRecordResource} declares no
+ * markup assertion could see, since the shipped {@link DnsRecordParts} declares no
  * refusal reason today. The fixture below declares one so the FORWARDING is what is under
  * test, never hohenheim's policy: the day the shipped resource grows a real reason, this
  * test already covers the wire it travels on.
@@ -80,14 +85,24 @@ class DnsZoneRecordsDeleteAffordanceTest extends HohenheimTestBase {
 
         // 1. The shipped resource refuses nobody, so every delete on the tab is live --
         //    the baseline that proves the fixture below is what moves the answer.
-        TableState shipped = tableFor(operator, new DnsRecordResource());
+        TableState shipped = tableFor(operator);
         assertThat(deleteOf(shipped, LOCKED).disabledReason())
             .as("step 1: the shipped resource declares no refusal, so the delete is live")
             .isNull();
 
         // 2. Rendered through a resource that DOES declare a per-record refusal, the same
         //    row's delete is dead and carries that resource's own text.
-        TableState declared = tableFor(operator, new RefusingDnsRecordResource());
+        var before = OperationHandlers.attachments().snapshot();
+        TableState declared;
+        try {
+            OperationHandlers.attachments().remove(DnsOperations.DELETE_RECORD.id());
+            OperationHandlers.attach(DnsOperations.DELETE_RECORD)
+                .availability((row, access) -> LOCKED.equals(row.get(DnsRecordModel.NAME)) ? REASON : null)
+                .handle(call -> 1);
+            declared = tableFor(operator);
+        } finally {
+            OperationHandlers.attachments().restoreSnapshot(before);
+        }
         InvokeActionState locked = deleteOf(declared, LOCKED);
         assertThat(locked.disabled())
             .as("step 2: the refused record's delete renders dead")
@@ -114,17 +129,11 @@ class DnsZoneRecordsDeleteAffordanceTest extends HohenheimTestBase {
     }
 
     /** A resource that refuses exactly one record's delete, so the FORWARDING is the subject. */
-    private static final class RefusingDnsRecordResource extends DnsRecordResource {
-        @Override
-        public @Nullable Microcopy deleteUnavailableReason(@NonNull Row record,
-                                                          @NonNull AccessContext accessContext) {
-            return LOCKED.equals(record.get(DnsRecordModel.NAME)) ? REASON : null;
-        }
-    }
-
     /** The tab's own render, read as the row state it hands the template. */
     @SuppressWarnings("unchecked")
-    private static TableState tableFor(AccessContext accessContext, DnsRecordResource resource) {
+    private static TableState tableFor(AccessContext accessContext) {
+        Resource<Row> resource = PanelResourceViews.of(DnsRecordParts.admin(), new PanelRequest(
+            PanelRegistry.getBySlug("admin"), accessContext.conduit(), accessContext, null));
         Row zone = Models.get(DnsZoneModel.class).findById(zoneId);
         Map<String, Object> vars = (Map<String, Object>) new DnsZoneRecordsPage()
             .renderLocal(accessContext.conduit(), accessContext, zone, resource).get();
@@ -141,7 +150,7 @@ class DnsZoneRecordsDeleteAffordanceTest extends HohenheimTestBase {
             .findFirst()
             .orElseThrow(() -> new AssertionError("the tab listed no row for '" + name + "'"));
         return row.destructiveInvokeActions().stream()
-            .filter(action -> TableStateTranslator.DELETE_ACTION.equals(action.id()))
+            .filter(action -> DnsOperations.DELETE_RECORD.id().equals(action.id()))
             .findFirst()
             .orElseThrow(() -> new AssertionError("row '" + name + "' offers no delete at all"));
     }

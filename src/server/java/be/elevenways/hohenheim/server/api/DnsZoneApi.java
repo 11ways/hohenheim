@@ -4,8 +4,9 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.server.cms.DnsRecordResource;
-import be.elevenways.hohenheim.server.cms.DnsZoneResource;
+import be.elevenways.hohenheim.server.cms.DnsRecordParts;
+import be.elevenways.hohenheim.server.cms.DnsZoneParts;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -35,7 +36,7 @@ import java.util.Objects;
  * through the very pipeline the admin panel runs.
  *
  * AIDEV-NOTE: no model write here either (the {@link SiteApi} stance). A create rides
- * zenit-cms {@code ResourceWrites} over {@link DnsZoneResource}, so validation, the origin
+ * zenit-cms {@code ResourceWrites} over {@link DnsZoneParts}, so validation, the origin
  * canonicalization, the declared-nameserver seeding and the served-snapshot reload are the
  * form's; an import is {@link DnsZoneFiles#importText} exactly as the Zone-file tab posts
  * it, {@code keep_ns} included. Every verb demands the admin permission, because zones are
@@ -43,10 +44,7 @@ import java.util.Objects;
  */
 public final class DnsZoneApi {
 
-    private static final DnsZoneResource ZONES = new DnsZoneResource();
-
-    /** The record resource whose declared parent judges whether an import may write into a zone. */
-    private static final DnsRecordResource RECORDS = new DnsRecordResource();
+    private static final PanelResource<Row> ZONES = DnsZoneParts.admin();
 
     private DnsZoneApi() {
     }
@@ -98,7 +96,7 @@ public final class DnsZoneApi {
             }
             int zoneId = zone.get(DnsZoneModel.ID);
             try {
-                RECORDS.requireImportable(ApiConduits.adminPanel(), zoneId, ctx);
+                DnsRecordParts.requireImportable(ApiConduits.adminPanel(), zoneId, ctx);
             } catch (AccessRefusedException readOnly) {
                 ResourceWrites.answer(conduit, readOnly);
                 return null;

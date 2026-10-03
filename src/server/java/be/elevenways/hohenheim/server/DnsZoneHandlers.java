@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.api.ApiConduits;
-import be.elevenways.hohenheim.server.cms.DnsRecordResource;
+import be.elevenways.hohenheim.server.cms.DnsRecordParts;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
 import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -29,9 +29,6 @@ import java.util.Map;
  */
 final class DnsZoneHandlers {
 
-    /** The record resource whose declared parent judges whether an import may write into a zone. */
-    private static final DnsRecordResource RECORDS = new DnsRecordResource();
-
     private DnsZoneHandlers() {
     }
 
@@ -45,7 +42,7 @@ final class DnsZoneHandlers {
                 return HandlerSupport.redirect(zoneList());
             }
             try {
-                RECORDS.requireImportable(ApiConduits.adminPanel(), zoneId, AccessContext.of(conduit));
+                DnsRecordParts.requireImportable(ApiConduits.adminPanel(), zoneId, AccessContext.of(conduit));
             } catch (AccessRefusedException readOnly) {
                 ResourceWrites.answer(conduit, readOnly);
                 return null;

@@ -3,9 +3,8 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.cms.CertificateParts;
 import be.elevenways.zenit.cms.common.action.PanelAction;
-import be.elevenways.hohenheim.server.cms.DnsRecordResource;
-import be.elevenways.hohenheim.server.cms.DnsZoneResource;
-import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.hohenheim.server.cms.DnsRecordParts;
+import be.elevenways.hohenheim.server.cms.DnsZoneParts;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -26,7 +25,7 @@ class RowActionPlacementTest extends HohenheimTestBase {
     @Test
     void chorePlacementIsPerActionAndRealAffordancesStayInline() {
         // 1. DNS records: minting and revoking a dyndns credential are rare per row.
-        Map<String, RowAction<Row>> records = byPath(new DnsRecordResource().rowActions());
+        Map<String, PanelAction<Row>> records = partsByPath(DnsRecordParts.admin().actions());
         assertThat(records).as("step 1: both dyndns actions are still declared")
             .containsKeys("dyndns_token", "dyndns_revoke");
         assertThat(records.get("dyndns_token").inlineInRow())
@@ -62,7 +61,7 @@ class RowActionPlacementTest extends HohenheimTestBase {
         //    is a per-action declaration and not a blanket demotion. Probing a zone's
         //    delegation is that affordance; the Records link is not (since 1cbc83a1) because
         //    the zone's own title link already opens the records workspace.
-        Map<String, RowAction<Row>> zones = byPath(new DnsZoneResource().rowActions());
+        Map<String, PanelAction<Row>> zones = partsByPath(DnsZoneParts.admin().actions());
         assertThat(zones.get("check_dns_health")).as("step 3: the health probe exists").isNotNull();
         assertThat(zones.get("check_dns_health").inlineInRow())
             .as("step 3: probing a zone's health stays inline").isTrue();
@@ -78,11 +77,10 @@ class RowActionPlacementTest extends HohenheimTestBase {
         return row;
     }
 
-    private static Map<String, RowAction<Row>> byPath(List<RowAction<Row>> actions) {
-        Map<String, RowAction<Row>> map = new LinkedHashMap<>();
-        for (RowAction<Row> action : actions) {
-            map.put(action.id().getPath(), action);
-        }
+    private static Map<String, PanelAction<Row>> partsByPath(List<PanelAction<Row>> actions) {
+        Map<String, PanelAction<Row>> map = new LinkedHashMap<>();
+        for (PanelAction<Row> action : actions) map.put(action.id().getPath(), action);
         return map;
     }
+
 }

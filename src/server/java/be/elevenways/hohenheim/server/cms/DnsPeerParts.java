@@ -11,10 +11,19 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
-import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
-import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.ResourceReads;
+import be.elevenways.zenit.cms.common.resource.ResourceList;
+import be.elevenways.zenit.cms.common.resource.ResourceForm;
+import be.elevenways.zenit.cms.common.resource.ResourceMutations;
+import be.elevenways.zenit.cms.common.resource.ResourceTabs;
+import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
+import be.elevenways.zenit.common.operation.SubjectType;
+import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
@@ -40,7 +49,32 @@ import java.util.Map;
  * channel (TSIG + host) and, for a Hohenheim peer, the HTTPS admin credentials
  * used to forward edits of zones that peer owns.
  */
-public final class DnsPeerResource extends RowResource {
+public final class DnsPeerParts {
+
+    public static @NonNull PanelResource<Row> admin() {
+        DnsOperations.init();
+        DnsPeerParts parts = new DnsPeerParts();
+        return PanelResource.builder(parts.id(), parts.slug(), DnsOperations.PEER)
+            .label(parts.label()).recordLabel(parts.recordLabel()).description(parts.description())
+            .icon(parts.icon()).navGroup(parts.navGroup()).navOrder(parts.navOrder()).showInNav(false)
+            .reads(ResourceReads.rows())
+            .list(ResourceList.rows(parts.tableSpec()).chrome(ListChrome.MINIMAL).facets().ruleFilters()
+                .search(parts.searchFields().toArray(Field<?, ?>[]::new)).build())
+            .form(ResourceForm.<Row>of(parts.formSpec())
+                .inlineEditable(parts.inlineEditableFields().toArray(Field<?, ?>[]::new)).build())
+            .writes(ResourceMutations.rows().create(call -> parts.persistRow(call.values(), call.access()))
+                .update(call -> { parts.updateRow(call.record(), call.values(), call.access()); return null; })
+                .delete(DnsOperations.DELETE_PEER).build())
+            .deleteConfirmation(DeleteConfirmation.<Row>of(parts.deleteConfirmation())
+                .forRow((row, request) -> parts.deleteConfirmationFor(row)))
+            .actions(List.of(PanelAction.<Row, CmsActionResult>places(DnsOperations.NEGOTIATE_KEY,
+                ActionPlacement.ROW, (request, result) -> result.value())
+                .confirmation(ConfirmationSpec.builder()
+                    .title(Microcopy.of("negotiate_key").withFilter("scope", "dns_peer"))
+                    .body(Microcopy.of("negotiate_key_confirm").withFilter("scope", "dns_peer"))
+                    .build()).build()))
+            .tabs(ResourceTabs.<Row>none().withHistory().withContributions()).build();
+    }
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(DnsPeerModel.NAME)
@@ -62,38 +96,35 @@ public final class DnsPeerResource extends RowResource {
         // The key NAME (never the secret) is what the other side's operator must be told.
         .column(ColumnSpec.fromField(DnsPeerModel.TSIG_KEY_NAME).copyable().build())
         .column(ColumnSpec.fromField(DnsPeerModel.ENABLED).filterable().build())
-        .filter(FilterSpec.forField(DnsPeerModel.NAME, FilterSpec.Kind.TEXT)
+        .filter(FilterSpec.leaf(DnsPeerModel.NAME, CoreTypes.CONTAINS)
             .label(FieldLabels.labelFor(DnsPeerModel.NAME)).build())
-        .filter(FilterSpec.forField(DnsPeerModel.ENABLED, FilterSpec.Kind.BOOLEAN)
+        .filter(FilterSpec.leaf(DnsPeerModel.ENABLED, CoreTypes.IS_TRUE, CoreTypes.IS_FALSE)
             .label(FieldLabels.labelFor(DnsPeerModel.ENABLED)).build())
         .build();
 
-    @Override public @NonNull Identifier id() { return HohenheimIds.id("dns_peer"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "dns_peer"); }
-    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "dns_peer"); }
-    @Override public @NonNull String slug() { return "dns-peers"; }
-    @Override public @NonNull Model model() { return Models.get(DnsPeerModel.class); }
-    @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
-    @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
-    @Override public @NonNull ListChrome listChrome() { return ListChrome.MINIMAL; }
+    public @NonNull Identifier id() { return HohenheimIds.id("dns_peer"); }
+    public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "dns_peer"); }
+    public @NonNull Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "dns_peer"); }
+    public @NonNull String slug() { return "dns-peers"; }
+    public @NonNull Model model() { return Models.get(DnsPeerModel.class); }
+    public @NonNull FormSpec formSpec() { return this.formSpec; }
+    public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
 
     /** Name and transfer host; both TSIG secrets are secret columns. */
-    @Override
     public @NonNull List<Field<?, ?>> searchFields() {
         return List.of(DnsPeerModel.NAME, DnsPeerModel.TRANSFER_HOST);
     }
 
-    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.NETWORK_GROUP; }
-    @Override public int navOrder() { return 40; }
+    public @NonNull NavGroup navGroup() { return HohenheimPanel.NETWORK_GROUP; }
+    public int navOrder() { return 40; }
 
     /**
      * Demoted out of the sidebar, so this sentence reaches a reader through the panel
      * index and the related-pages menu of the list that names it.
      */
-    @Override public @Nullable Microcopy description() { return CmsSupport.navHint("dns_peer"); }
+    public @Nullable Microcopy description() { return CmsSupport.navHint("dns_peer"); }
 
-    @Override public boolean showInNav() { return false; }
-    @Override public @NonNull Icon icon() { return Icon.of("handshake"); }
+    public @NonNull Icon icon() { return Icon.of("handshake"); }
 
     /**
      * The name only.
@@ -104,7 +135,6 @@ public final class DnsPeerResource extends RowResource {
      * relationship. ENABLED is excluded because it arms that relationship. The peer's name
      * is the one thing about it that is purely operator wording.
      */
-    @Override
     public @NonNull List<Field<?, ?>> inlineEditableFields() {
         return List.of(DnsPeerModel.NAME);
     }
@@ -124,24 +154,7 @@ public final class DnsPeerResource extends RowResource {
      * key, BOTH ends store this one, so there is no human who has to read it and a
      * one-time disclosure would only be a place for it to leak.
      */
-    @Override
-    public @NonNull List<RowAction<Row>> rowActions() {
-        List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
-        actions.add(RowAction.Invoke.<Row>builder(HohenheimIds.id("negotiate_transfer_key"))
-            .label(Microcopy.of("negotiate_key").withFilter("scope", "dns_peer"))
-            .description(Microcopy.of("negotiate_key_hint").withFilter("scope", "dns_peer"))
-            .icon(Icon.of("key"))
-            .visibleFor((row, ctx) -> DnsPeerModel.isHohenheim(row))
-            .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("negotiate_key").withFilter("scope", "dns_peer"))
-                .body(Microcopy.of("negotiate_key_confirm").withFilter("scope", "dns_peer"))
-                .build())
-            .handler((row, ctx) -> negotiate(row))
-            .build());
-        return actions;
-    }
-
-    private static @NonNull CmsActionResult negotiate(@NonNull Row peer) {
+    static @NonNull CmsActionResult negotiate(@NonNull Row peer) {
         DnsPeerApi api = DnsPeerApi.forPeer(peer);
         if (api == null) {
             // A nameserver peer, or a Hohenheim peer whose credentials were cleared:
@@ -209,7 +222,6 @@ public final class DnsPeerResource extends RowResource {
      * expire window closes. The enforcement for every other writer is
      * {@code DnsPeerCascades}.
      */
-    @Override
     public @Nullable Microcopy deleteUnavailableReason(@NonNull Row record,
                                                        @NonNull AccessContext accessContext) {
         String zones = DeleteImpact.join(
@@ -218,20 +230,18 @@ public final class DnsPeerResource extends RowResource {
             return Microcopy.of("delete_in_use").withFilter("scope", "dns_peer")
                 .withArg("zones", zones);
         }
-        return super.deleteUnavailableReason(record, accessContext);
+        return null;
     }
 
     /** The record-less dialog says what a peer delete takes: the transfer relationship. */
-    @Override
     public @NonNull ConfirmationSpec deleteConfirmation() {
-        return deleteConfirmation(Microcopy.of("delete_confirm").withFilter("scope", "dns_peer"));
+        return DeleteConfirmation.body(Microcopy.of("delete_confirm").withFilter("scope", "dns_peer"));
     }
 
     /**
      * The same warning NAMING the primary zones that stop notifying this peer and stop
      * accepting its transfers -- the links die with the peer, silently otherwise.
      */
-    @Override
     public @NonNull ConfirmationSpec deleteConfirmationFor(@NonNull Row record) {
         String zones = DeleteImpact.join(
             DeleteImpact.zonesLinkedToPeer(record.get(DnsPeerModel.ID)));
@@ -241,23 +251,21 @@ public final class DnsPeerResource extends RowResource {
         if (!zones.isEmpty()) {
             body = body.withArg("zones", zones);
         }
-        return deleteConfirmation(body);
+        return DeleteConfirmation.body(body);
     }
 
-    @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
         Map<String, Object> write = stripCredentialsOfNameserver(coerced, null);
         validate(write, null);
-        return super.persistRow(write, accessContext);
+        return DnsRowWrites.create(this.model(), this.formSpec(), write, accessContext);
     }
 
-    @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
         Map<String, Object> write = stripCredentialsOfNameserver(coerced, existing);
         validate(write, existing);
-        super.updateRow(existing, write, accessContext);
+        DnsRowWrites.update(this.model(), this.formSpec(), existing, write, accessContext);
     }
 
     /**

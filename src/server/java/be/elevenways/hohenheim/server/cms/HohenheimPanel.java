@@ -193,9 +193,9 @@ public final class HohenheimPanel extends Panel {
             peers.add(ServerParts.admin());
             peers.add(ReconcileFindingParts.admin());
         }
-        addIf(peers, new DnsZoneResource(), Role.DNS);
-        addIf(peers, new DnsRecordResource(), Role.DNS);
-        addIf(peers, new DnsPeerResource(), Role.DNS);
+        addIf(peers, DnsZoneParts.admin(), Role.DNS);
+        addIf(peers, DnsRecordParts.admin(), Role.DNS);
+        addIf(peers, DnsPeerParts.admin(), Role.DNS);
         addIf(peers, DnsZonePeerParts.admin(), Role.DNS);
         peers.add(NotificationChannelParts.admin());
         addIf(peers, BanParts.admin(), Role.FIREWALL);

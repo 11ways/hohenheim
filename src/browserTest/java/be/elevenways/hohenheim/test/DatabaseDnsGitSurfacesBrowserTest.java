@@ -25,6 +25,11 @@ import be.elevenways.zenit.cms.common.render.table.SynthesizedRowActions;
 import be.elevenways.zenit.cms.test.support.PanelSurfaceComparer;
 import be.elevenways.zenit.cms.test.support.PanelSurfaces;
 import be.elevenways.zenit.cms.test.support.PlacedOperationMoves;
+import be.elevenways.zenit.cms.test.support.FilterLeafMoves;
+import be.elevenways.zenit.cms.common.schema.FilterSpec;
+import be.elevenways.protoblast.common.typed.CoreTypes;
+import be.elevenways.zenit.common.orm.query.rules.SchemaVocabulary;
+import be.elevenways.hohenheim.server.cms.DnsOperations;
 import be.elevenways.zenit.cms.test.support.SurfaceBaselines;
 import be.elevenways.zenit.cms.test.support.SurfaceCase;
 import be.elevenways.zenit.cms.test.support.TwinCorrespondence;
@@ -157,10 +162,11 @@ class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
         SurfaceBaselines stored = SurfaceBaselines.load(DatabaseDnsGitSurfacesBrowserTest.class,
             "/panel-surfaces/database-dns-git.txt")
             .placedOperations(PlacedOperationMoves.of(GitProviderOperations.TEST_CONNECTION.id(),
-                    DatabaseParts.MOVE_TO_SHARED.id())
+                    DatabaseParts.MOVE_TO_SHARED.id(), DnsOperations.CHECK_HEALTH.id())
                 .synthesized(GAME_DOMAINS, SynthesizedRowActions.DELETE, GameDomainOperations.DELETE.id())
                 .synthesized(DATABASES, SynthesizedRowActions.DELETE, DatabaseParts.DELETE.id())
-                .synthesized(DATABASE_ENGINES, SynthesizedRowActions.DELETE, DatabaseParts.DELETE_ENGINE.id()));
+                .synthesized(DATABASE_ENGINES, SynthesizedRowActions.DELETE, DatabaseParts.DELETE_ENGINE.id())
+                .synthesized(ZONES, SynthesizedRowActions.DELETE, DnsOperations.DELETE_ZONE.id()));
 
         // 1. The admin entries for the operator, record-less and on each record; a tenant is refused the panel.
         for (String entry : List.of(GIT_PROVIDERS, GAME_DOMAINS, ZONE_PEERS)) {
@@ -261,7 +267,14 @@ class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
             .key(HohenheimSlugs.INSTANCES, "backend", backendId).key(HohenheimSlugs.INSTANCES, "proxy", proxyId)
             .key("zone_id", "primary_zone", primaryZoneId)
             .key("parent", "primary_zone", primaryZoneId).key("parent", "replica_zone", replicaZoneId);
-        return PanelSurfaces.capture(keyed);
+        PanelSurfaces capture = PanelSurfaces.capture(keyed);
+        if (!ZONES.equals(capture.entrySlug())) return capture;
+        var vocabulary = SchemaVocabulary.of(Models.get(DnsZoneModel.class));
+        return FilterLeafMoves.of(FilterSpec.Kind.TEXT,
+                FilterSpec.leaf(DnsZoneModel.ORIGIN, CoreTypes.CONTAINS).build(), vocabulary, null)
+            .and(FilterLeafMoves.of(FilterSpec.Kind.BOOLEAN,
+                FilterSpec.leaf(DnsZoneModel.ENABLED, CoreTypes.IS_TRUE, CoreTypes.IS_FALSE).build(), vocabulary, null))
+            .legacyProjection(capture);
     }
 
     private static AccessContext access(UserPrincipal principal) {

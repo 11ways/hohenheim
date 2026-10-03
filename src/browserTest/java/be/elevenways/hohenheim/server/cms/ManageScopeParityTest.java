@@ -119,7 +119,7 @@ class ManageScopeParityTest extends HohenheimTestBase {
         List<Projection> paired = List.of(Projection.of(SiteParts.manage()),
             Projection.of(DomainParts.manage()),
             Projection.of(InstanceParts.manage()), Projection.of(CertificateParts.manage()),
-            Projection.of(ProtectedPathParts.manage()), Projection.of(new ManageDnsRecordResource()),
+            Projection.of(ProtectedPathParts.manage()), Projection.of(ManageDnsRecordParts.manage()),
             Projection.of(InstanceTemplateParts.manage()), Projection.of(InstanceScheduleParts.manage()),
             Projection.of(ProjectParts.manage()), Projection.of(DatabaseParts.manage()),
             Projection.of(InstanceAttachmentParts.devicesManage()), Projection.of(InstanceAttachmentParts.databasesManage()),

@@ -14,7 +14,8 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
-import be.elevenways.hohenheim.server.cms.DnsRecordResource;
+import be.elevenways.hohenheim.server.cms.DnsRecordParts;
+import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.hohenheim.server.cms.DomainParts;
 import be.elevenways.hohenheim.instance.InstanceScheduleOperations;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleParts;
@@ -259,14 +260,14 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         Row database = Models.get(DatabaseModel.class).findById(databaseId);
         // A delegate reaches databases through the /manage twin, whose delete is the same operation.
         Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.MANAGE));
-        Resource<Row> view = PanelResourceViews.forCaller(DatabaseParts.manage(), manage);
+        Resource<Row> resource = PanelResourceViews.forCaller(DatabaseParts.manage(), manage);
 
-        assertThat(ResourceVerbs.removableBy(view, manage, database, viewer()))
+        assertThat(ResourceVerbs.removableBy(manage, resource, database, viewer()))
             .as("a view-only delegate is offered no destroy button").isFalse();
         // MANAGE implies DESTROY on databases, so the holder passes the implied row.
-        assertThat(ResourceVerbs.removableBy(view, manage, database, holder()))
+        assertThat(ResourceVerbs.removableBy(manage, resource, database, holder()))
             .as("a manage holder keeps its destroy button").isTrue();
-        assertThat(ResourceVerbs.removableBy(view, manage, database, operator()))
+        assertThat(ResourceVerbs.removableBy(manage, resource, database, operator()))
             .as("and the operator passes").isTrue();
     }
 
@@ -310,7 +311,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     void theDnsRecordAffordancesFollowTheRecordLanes() {
         Row editable = Models.get(DnsRecordModel.class).findById(recordId);
         Row delegated = Models.get(DnsRecordModel.class).findById(foreignTypeRecordId);
-        DnsRecordResource resource = new DnsRecordResource();
+        var resource = PanelResourceViews.forCaller(DnsRecordParts.admin());
 
         assertThat(resource.updatableBy(editable, viewer()))
             .as("a view-only delegate is offered no record editor").isFalse();
@@ -486,11 +487,12 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         RecordGrants.grant(GrantSubjectType.USER, viewerId, DnsRecordModel.MODEL_ID, recordId,
             HohenheimAccess.DYNDNS, true);
         try {
-            DnsRecordResource resource = new DnsRecordResource();
-            List<BiPredicate<Row, AccessContext>> predicates = resource.rowActions().stream()
-                .filter(action -> action instanceof RowAction.Invoke<Row> invoke
-                    && invoke.id().toString().contains("dyndns"))
-                .map(action -> ((RowAction.Invoke<Row>) action).visibleFor())
+            var resource = DnsRecordParts.admin();
+            List<BiPredicate<Row, AccessContext>> predicates = resource.actions().stream()
+                .filter(action -> action.id().toString().contains("dyndns"))
+                .map(action -> (BiPredicate<Row, AccessContext>) (row, access) ->
+                    !(OperationPipeline.offer((Operation<Row, ?, ?>) action.operation(), access, row)
+                        instanceof OperationPipeline.Offer.Hidden))
                 .toList();
             assertThat(predicates).as("both dyndns actions carry a per-row predicate").hasSize(2);
 
@@ -625,7 +627,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             // Every instance verb is a placed operation now: the list asks them through the render's own batched
             // offer, once for all rows, exactly as the admin list draws them.
             Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN), "the admin panel");
-            Function<Row, List<RowOffer>> offers = PanelActionOffers.rowsForRender(resource, admin, rows, ctx, null);
+            Function<Row, List<RowOffer>> offers = PanelActionOffers.rowsForRender(resource, null, admin, rows, ctx, null);
             for (Row row : rows) {
                 sawAnAffordance |= resource.updatableBy(row, ctx);
                 sawAnAffordance |= !offers.apply(row).isEmpty();
