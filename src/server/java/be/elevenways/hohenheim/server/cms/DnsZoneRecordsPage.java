@@ -273,7 +273,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         vars.put("recordTabs", recordTabs(conduit));
         // Promoted seam: the framework's own quick-add builder. The zone preset it needs
         // is answered by DnsRecordResource.quickCreatePresetValues, which reads THIS route.
-        QuickAddState.putVars(vars, resource, accessContext, refreshUrl,
+        QuickAddState.putVars(vars, panel, resource, accessContext, refreshUrl,
             addRecordTarget == null ? null : addRecordTarget.toUrl());
         return new RenderTemplateResult(TEMPLATE, vars);
     }
