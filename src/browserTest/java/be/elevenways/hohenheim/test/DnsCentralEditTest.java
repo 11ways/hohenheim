@@ -315,6 +315,13 @@ class DnsCentralEditTest extends HohenheimTestBase {
                 assertThat(refusal.getMessage()).isEqualTo("Delete refused");
             });
 
+        // An unknown local action is refused before any request reaches the owner.
+        stub.calls.clear();
+        var unknownAction = adminPostForm(remoteSubmit(zoneId), invocation() + "action=unsupported&record_id=6");
+        assertThat(unknownAction.statusCode()).as("an unknown DNS action is a field refusal").isEqualTo(422);
+        assertThat(unknownAction.body()).as("the DNS-owned refusal resolves locally").contains("Unknown DNS record action");
+        assertThat(stub.calls).as("a refused action never reaches the peer").isEmpty();
+
         // The owner's validation refusal (by microcopy key) resolves locally.
         stub.calls.clear();
         stub.status = 422;

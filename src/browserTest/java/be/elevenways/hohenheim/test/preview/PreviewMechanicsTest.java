@@ -26,6 +26,8 @@ import be.elevenways.hohenheim.server.preview.PreviewQuota;
 import be.elevenways.hohenheim.server.quota.OwnerQuota;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.security.SystemPurpose;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
@@ -67,6 +69,8 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * one-shot record schedule the framework sweeper enforces.
  */
 class PreviewMechanicsTest extends HohenheimTestBase {
+    private static final SystemPurpose OTHER_SYSTEM_WORK = SystemPurpose.declare(
+        Identifier.of("hohenheim_test", "other_preview_work"));
 
     private static Integer siteId;
 
@@ -109,6 +113,12 @@ class PreviewMechanicsTest extends HohenheimTestBase {
                 refusal -> assertThat(refusal.reason()).isSameAs(ZenitRefusalReason.NOT_FOUND));
         assertThatThrownBy(() -> OperationRequest.of(PreviewOperations.EXPIRE, ZenitPlacementSurface.SCHEDULE_STEP)
             .asSystem(ExecutionIdentity.system("record-schedule:1"), null).subjectKeys(List.of(key)).loadSubjects())
+            .as("1: a schedule-shaped label cannot supply its system purpose")
+            .isInstanceOfSatisfying(DomainRefusal.class,
+                refusal -> assertThat(refusal.reason()).isSameAs(ZenitRefusalReason.NOT_FOUND));
+        assertThatThrownBy(() -> OperationRequest.of(PreviewOperations.EXPIRE, ZenitPlacementSurface.SCHEDULE_STEP)
+            .asSystem(ExecutionIdentity.system(OTHER_SYSTEM_WORK, "unrelated system work"), null)
+            .subjectKeys(List.of(key)).loadSubjects())
             .as("1: a different system purpose cannot load the expiry subject")
             .isInstanceOfSatisfying(DomainRefusal.class,
                 refusal -> assertThat(refusal.reason()).isSameAs(ZenitRefusalReason.NOT_FOUND));

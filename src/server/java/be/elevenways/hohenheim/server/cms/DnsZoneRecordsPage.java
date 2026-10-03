@@ -438,7 +438,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         String origin = zone.get(DnsZoneModel.ORIGIN);
         String action = input.action() == null ? "" : input.action();
         if (!action.isEmpty() && !"delete".equals(action)) {
-            throw Violations.ofField("action", action, Microcopy.of("invalid_request").withFilter("scope", "cms"));
+            throw HohenheimViolations.ofField("action", action, "dns_remote_action_invalid");
         }
         String recordText = input.record_id() == null ? "" : input.record_id();
         Integer recordId = HandlerSupport.submittedInteger(Map.of("record_id", recordText), "record_id");

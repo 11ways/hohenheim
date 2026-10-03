@@ -34,8 +34,8 @@ import java.util.function.Predicate;
  * source (SourceOwnership.localSourcesAllowed) reach any address or a controller path, so their target is a trusted
  * fetch. A delegated admin.access holder passes TenantWrites as the operator, so the gate refuses them that target on
  * an operator-owned record (decided 2026-10-02); every other column stays theirs. Declared system work passes; work
- * with no identity is refused, like TenantWrites. A record nobody holds manage on (a create included) is
- * operator-owned, and an unreadable grant set counts as operator-owned: the gate fails closed.
+ * with no identity is refused, like TenantWrites. A record nobody holds manage on is operator-owned; a create reads
+ * the declared creation owner before its grant exists, and an unreadable grant set counts as operator-owned.
  *
  * AIDEV-NOTE: the gate alone cannot decide reach, because ownership changes where no write hook sees it (a revoked
  * grant, a deleted tenant, a cascade): a target a delegate set on a tenant-owned record would be dialled with
@@ -173,9 +173,14 @@ public final class OperatorTrustedWrites {
         return (declaredSystem ? changed : carried) || storedMark;
     }
 
-    /** Whether nobody holds manage on the record; a create, and an unreadable grant set, count as operator-owned. */
+    /** A create uses its prospective owner; existing records and unreadable grants retain the stored ownership gate. */
     private static boolean operatorOwned(@NonNull Guarded guarded, @Nullable Row stored) {
-        Object id = stored != null ? stored.get(guarded.id().getName()) : null;
+        if (stored == null) {
+            ExecutionIdentity identity = ExecutionIdentity.current();
+            return identity == null || identity.kind() != ExecutionIdentity.Kind.CALLER
+                || HohenheimAccess.creationOwnerSubjects(identity.callerContext()).isEmpty();
+        }
+        Object id = stored.get(guarded.id().getName());
         if (id == null) {
             return true;
         }

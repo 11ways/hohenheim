@@ -20,6 +20,7 @@ import be.elevenways.zenit.comms.server.transport.TransportTypes;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.test.support.OutboundFixture;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -52,6 +53,7 @@ class ProxyListenerSupervisionTest {
 
     private static ProxyServer proxy;
     private static HttpServer receiver;
+    private static OutboundFixture outbound;
 
     @BeforeAll
     static void boot() throws Exception {
@@ -68,6 +70,10 @@ class ProxyListenerSupervisionTest {
             proxy = null;
         }
         ServerMain.adoptProxyServer(null);
+        if (outbound != null) {
+            outbound.close();
+            outbound = null;
+        }
         if (receiver != null) {
             receiver.stop(0);
             receiver = null;
@@ -88,6 +94,7 @@ class ProxyListenerSupervisionTest {
             exchange.close();
         });
         receiver.start();
+        outbound = OutboundFixture.route("proxy-listener-alert.fixture", receiver.getAddress().getPort());
         Comms.install(new CommsDispatcher(Map.of(
             CommsChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
         NotificationChannelModel channels = Models.get(NotificationChannelModel.class);
@@ -96,7 +103,7 @@ class ProxyListenerSupervisionTest {
         channel.set(NotificationChannelModel.KIND, NotificationChannelModel.KIND_WEBHOOK);
         channel.set(NotificationChannelModel.FORMAT, NotificationChannelModel.FORMAT_GENERIC);
         channel.set(NotificationChannelModel.URL,
-            "http://127.0.0.1:" + receiver.getAddress().getPort() + "/hook");
+            "http://" + outbound.host() + ":" + receiver.getAddress().getPort() + "/hook");
         channel.set(NotificationChannelModel.EVENTS, List.of(NotificationEvents.PROXY_LISTENER_DOWN.token()));
         channels.save(channel);
 

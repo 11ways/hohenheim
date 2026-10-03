@@ -3543,6 +3543,10 @@
     "text": "That exact record already exists in this zone",
     "scope": "violations"
   },
+  "dns_remote_action_invalid": {
+    "text": "Unknown DNS record action",
+    "scope": "violations"
+  },
   "dns_contact_format": {
     "text": "Enter an email address like hostmaster@example.com",
     "scope": "violations"

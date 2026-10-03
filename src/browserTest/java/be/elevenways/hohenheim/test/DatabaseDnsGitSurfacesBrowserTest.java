@@ -101,6 +101,7 @@ class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
      */
     @AfterAll
     static void removeProviders() {
+        Models.get(GameDomainModel.class).delete(Integer.parseInt(gameDomainId));
         RecordGrants.revoke(GrantSubjectType.USER, gitId, GitProviderModel.MODEL_ID,
             Integer.parseInt(tenantProviderId), HohenheimAccess.MANAGE);
         HardDeletes.byId(Models.get(GitProviderModel.class), Integer.parseInt(tenantProviderId));
