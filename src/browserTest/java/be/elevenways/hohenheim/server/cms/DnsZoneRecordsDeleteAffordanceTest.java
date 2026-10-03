@@ -16,6 +16,7 @@ import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.server.panel.PanelResourceViews;
 import be.elevenways.zenit.server.operation.OperationHandlers;
+import be.elevenways.zenit.server.operation.OperationTestSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -92,16 +93,16 @@ class DnsZoneRecordsDeleteAffordanceTest extends HohenheimTestBase {
 
         // 2. Rendered through a resource that DOES declare a per-record refusal, the same
         //    row's delete is dead and carries that resource's own text.
-        var before = OperationHandlers.attachments().snapshot();
+        var before = OperationTestSupport.registry().snapshot();
         TableState declared;
         try {
-            OperationHandlers.attachments().remove(DnsOperations.DELETE_RECORD.id());
+            OperationTestSupport.registry().remove(DnsOperations.DELETE_RECORD.id());
             OperationHandlers.attach(DnsOperations.DELETE_RECORD)
                 .availability((row, access) -> LOCKED.equals(row.get(DnsRecordModel.NAME)) ? REASON : null)
                 .handle(call -> 1);
             declared = tableFor(operator);
         } finally {
-            OperationHandlers.attachments().restoreSnapshot(before);
+            OperationTestSupport.registry().restoreSnapshot(before);
         }
         InvokeActionState locked = deleteOf(declared, LOCKED);
         assertThat(locked.disabled())

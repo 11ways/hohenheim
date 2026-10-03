@@ -76,6 +76,7 @@ public final class NotificationChannelParts {
         .gate(OperationGate.open())
         .result(NotifyOutcome.class)
         .facts(OperationFact.REACHES_OUTSIDE)
+        .command(CmsCommands.EXTERNAL)
         .register();
 
     static {

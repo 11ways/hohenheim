@@ -161,6 +161,7 @@ public final class SiteWrites {
                 v.get(SiteModel.TRUSTED_UPSTREAM), v.get(SiteModel.ENABLED), v.get(SiteModel.DESCRIPTION),
                 v.get(SiteModel.AUTH_PROVIDER_ID), v.get(SiteModel.ACCESS_LIST_ID))))
             .result(Integer.class)
+            .command(CmsCommands.TRANSACTIONAL)
             .register();
 
     /** The operator's edit, checked against the site's latest revision; patchable for a partial write. */
@@ -175,6 +176,7 @@ public final class SiteWrites {
                 v.get(SiteModel.ENABLED), v.get(SiteModel.DESCRIPTION), v.get(SiteModel.AUTH_PROVIDER_ID),
                 v.get(SiteModel.ACCESS_LIST_ID))))
             .patchable()
+            .command(CmsCommands.TRANSACTIONAL)
             .register();
 
     /** The delegated edit: name, switch and description only, never the admin normalizers. */
@@ -186,6 +188,7 @@ public final class SiteWrites {
             .input(OperationInput.of(MANAGE_FORM, ManageInput.class, v -> new ManageInput(
                 v.get(SiteModel.NAME), v.get(SiteModel.ENABLED), v.get(SiteModel.DESCRIPTION))))
             .patchable()
+            .command(CmsCommands.TRANSACTIONAL)
             .register();
 
     /**
@@ -199,6 +202,7 @@ public final class SiteWrites {
         .gate(OperationGate.open())
         .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
         .result(Integer.class)
+        .command(CmsCommands.EXTERNAL)
         .register();
 
     /**

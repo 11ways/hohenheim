@@ -241,6 +241,7 @@ public final class InstanceOperations {
         .gate(OperationGate.open())
         .result(Integer.class)
         .facts(OperationFact.REACHES_OUTSIDE, OperationFact.DESTRUCTIVE)
+        .command(COMMAND_FACET)
         .register();
 
     /** Re-reads one instance's stored evidence: the overview surface's refresh control. */

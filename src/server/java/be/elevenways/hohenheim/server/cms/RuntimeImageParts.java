@@ -46,7 +46,7 @@ public final class RuntimeImageParts {
         .label(Microcopy.of("delete").withFilter("scope", "cms"))
         .one(SubjectType.record(RuntimeImageModel.MODEL_ID))
         .gate(OperationGate.permission(HohenheimPanel.ACCESS))
-        .result(Integer.class).facts(OperationFact.DESTRUCTIVE).register();
+        .result(Integer.class).facts(OperationFact.DESTRUCTIVE).command(CmsCommands.TRANSACTIONAL).register();
 
     static {
         OperationHandlers.attach(DELETE).applies(RuntimeImageParts::custom)

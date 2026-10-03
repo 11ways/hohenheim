@@ -53,7 +53,7 @@ public final class ReconcileFindingParts {
     public static final Operation<Row, Void, Void> REMOVE = Operation.declare(HohenheimIds.id("remove_orphan"))
         .label(Microcopy.of("remove_orphan").withFilter("scope", "reconcile_finding"))
         .one(SubjectType.record(ReconcileFindingModel.MODEL_ID)).gate(OperationGate.permission(HohenheimPanel.ACCESS))
-        .facts(OperationFact.DESTRUCTIVE, OperationFact.REACHES_OUTSIDE).register();
+        .facts(OperationFact.DESTRUCTIVE, OperationFact.REACHES_OUTSIDE).command(CmsCommands.EXTERNAL).register();
     static {
         OperationHandlers.attach(REMOVE).applies(row -> ReconcileFindingModel.BUCKET_ORPHANED
             .equals(row.get(ReconcileFindingModel.BUCKET))

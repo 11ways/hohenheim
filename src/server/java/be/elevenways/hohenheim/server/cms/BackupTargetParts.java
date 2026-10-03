@@ -57,6 +57,7 @@ public final class BackupTargetParts {
             .gate(OperationGate.open())
             .result(TestOutcome.class)
             .facts(OperationFact.REACHES_OUTSIDE)
+            .command(CmsCommands.EXTERNAL)
             .register();
 
     /**

@@ -178,6 +178,7 @@ public final class DatabaseParts {
         .gate(OperationGate.open())
         .facts(OperationFact.DESTRUCTIVE)
         .result(Integer.class)
+        .command(CmsCommands.EXTERNAL)
         .register();
 
     /** Moves a dedicated database onto its host's shared engine, in the background. */
@@ -188,6 +189,7 @@ public final class DatabaseParts {
             .icon(Icon.of("layer-group"))
             .one(DATABASE)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
+            .command(CmsCommands.EXTERNAL)
             .register();
 
     /** The recorded escape hatch once a normal destroy failed: the record goes, the host may keep orphans. */
@@ -199,6 +201,7 @@ public final class DatabaseParts {
             .one(DATABASE)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .facts(OperationFact.DESTRUCTIVE)
+            .command(CmsCommands.EXTERNAL)
             .register();
 
     /** Destroys an engine: its container and the volume every database sat on; offered dead while one still does. */
@@ -210,6 +213,7 @@ public final class DatabaseParts {
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .facts(OperationFact.DESTRUCTIVE)
             .result(Integer.class)
+            .command(CmsCommands.EXTERNAL)
             .register();
 
     /** The engine's recorded escape hatch once a normal destroy failed. */
@@ -221,6 +225,7 @@ public final class DatabaseParts {
             .one(ENGINE)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .facts(OperationFact.DESTRUCTIVE)
+            .command(CmsCommands.EXTERNAL)
             .register();
 
     static {

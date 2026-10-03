@@ -30,28 +30,35 @@ public final class DnsOperations {
 
     public static final Operation<Row, Void, Integer> DELETE_ZONE = Operation.declare(HohenheimIds.id("delete_dns_zone"))
         .label(Microcopy.of("delete").withFilter("scope", "cms")).icon(Icon.TRASH).one(ZONE)
-        .gate(OperationGate.open()).facts(OperationFact.DESTRUCTIVE).result(Integer.class).register();
+        .gate(OperationGate.open()).facts(OperationFact.DESTRUCTIVE).result(Integer.class)
+        .command(CmsCommands.TRANSACTIONAL).register();
     public static final Operation<Row, Void, Integer> DELETE_RECORD = Operation.declare(HohenheimIds.id("delete_dns_record"))
         .label(Microcopy.of("delete").withFilter("scope", "cms")).icon(Icon.TRASH).one(RECORD)
-        .gate(OperationGate.open()).facts(OperationFact.DESTRUCTIVE).result(Integer.class).register();
+        .gate(OperationGate.open()).facts(OperationFact.DESTRUCTIVE).result(Integer.class)
+        .command(CmsCommands.TRANSACTIONAL).register();
     public static final Operation<Row, Void, Integer> DELETE_PEER = Operation.declare(HohenheimIds.id("delete_dns_peer"))
         .label(Microcopy.of("delete").withFilter("scope", "cms")).icon(Icon.TRASH).one(PEER)
-        .gate(OperationGate.open()).facts(OperationFact.DESTRUCTIVE).result(Integer.class).register();
+        .gate(OperationGate.open()).facts(OperationFact.DESTRUCTIVE).result(Integer.class)
+        .command(CmsCommands.TRANSACTIONAL).register();
     public static final Operation<Row, Void, CmsActionResult> CHECK_HEALTH = Operation.declare(HohenheimIds.id("check_dns_health"))
         .label(Microcopy.of("check_health").withFilter("scope", "dns_zone"))
         .description(Microcopy.of("check_health_hint").withFilter("scope", "dns_zone"))
-        .icon(Icon.of("stethoscope")).one(ZONE).gate(OperationGate.open()).result(CmsActionResult.class).register();
+        .icon(Icon.of("stethoscope")).one(ZONE).gate(OperationGate.open()).result(CmsActionResult.class)
+        .command(CmsCommands.EXTERNAL).register();
     public static final Operation<Row, Void, CmsActionResult> MINT_DYNAMIC_TOKEN = Operation.declare(HohenheimIds.id("dyndns_token"))
         .label(Microcopy.of("dyndns_token").withFilter("scope", "dns_record")).icon(Icon.of("rotate"))
-        .one(RECORD).gate(OperationGate.open()).result(CmsActionResult.class).register();
+        .one(RECORD).gate(OperationGate.open()).result(CmsActionResult.class)
+        .command(CmsCommands.TRANSACTIONAL).register();
     public static final Operation<Row, Void, CmsActionResult> REVOKE_DYNAMIC_TOKEN = Operation.declare(HohenheimIds.id("dyndns_revoke"))
         .label(Microcopy.of("dyndns_revoke").withFilter("scope", "dns_record"))
         .description(Microcopy.of("dyndns_revoke_hint").withFilter("scope", "dns_record"))
-        .icon(Icon.of("ban")).one(RECORD).gate(OperationGate.open()).result(CmsActionResult.class).register();
+        .icon(Icon.of("ban")).one(RECORD).gate(OperationGate.open()).result(CmsActionResult.class)
+        .command(CmsCommands.TRANSACTIONAL).register();
     public static final Operation<Row, Void, CmsActionResult> NEGOTIATE_KEY = Operation.declare(HohenheimIds.id("negotiate_transfer_key"))
         .label(Microcopy.of("negotiate_key").withFilter("scope", "dns_peer"))
         .description(Microcopy.of("negotiate_key_hint").withFilter("scope", "dns_peer"))
-        .icon(Icon.of("key")).one(PEER).gate(OperationGate.open()).result(CmsActionResult.class).register();
+        .icon(Icon.of("key")).one(PEER).gate(OperationGate.open()).result(CmsActionResult.class)
+        .command(CmsCommands.EXTERNAL).register();
 
     public record RemoteInput(String action, String record_id, String name, String type, String ttl, String value,
                               String priority, String weight, String port, String enabled) {
@@ -80,7 +87,7 @@ public final class DnsOperations {
             (String) v.coerced().get("name"), (String) v.coerced().get("type"), (String) v.coerced().get("ttl"),
             (String) v.coerced().get("value"), (String) v.coerced().get("priority"),
             (String) v.coerced().get("weight"), (String) v.coerced().get("port"), (String) v.coerced().get("enabled"))))
-        .result(CmsActionResult.class).register();
+        .result(CmsActionResult.class).command(CmsCommands.EXTERNAL).register();
 
     private DnsOperations() {}
     public static void init() { DnsOperationHandlers.init(); }
