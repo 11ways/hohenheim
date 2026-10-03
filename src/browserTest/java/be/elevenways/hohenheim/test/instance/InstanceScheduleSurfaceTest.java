@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
 import be.elevenways.hohenheim.test.PanelEntryViews;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.schedule.ScheduleRunView;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.InstanceBackupParts;
@@ -211,6 +212,39 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
                 .where(RecordScheduleRunModel.SCHEDULE_ID.eq(scheduleId)).count())
             .as("step 3: no run row was minted by the refused invoke")
             .isEqualTo(runsBefore);
+
+        // 4. Another model's schedule whose record id happens to be this instance's id (a preview's expiry shares
+        //    the table) is no instance schedule: the instance's manager is offered none of its verbs.
+        Model schedules = Models.get(RecordScheduleModel.class);
+        Row foreign = schedules.createEmptyRow();
+        foreign.set(RecordScheduleModel.MODEL, PreviewDeploymentModel.MODEL_ID.toString());
+        foreign.set(RecordScheduleModel.RECORD_ID, String.valueOf(instanceId));
+        foreign.set(RecordScheduleModel.NAME, PREFIX + "foreign");
+        foreign.set(RecordScheduleModel.CRON, "0 5 * * *");
+        foreign.set(RecordScheduleModel.ENABLED, true);
+        schedules.save(foreign);
+        Integer foreignId = foreign.get(RecordScheduleModel.ID);
+        Model steps = Models.get(RecordScheduleStepModel.class);
+        Row foreignStep = steps.createEmptyRow();
+        foreignStep.set(RecordScheduleStepModel.SCHEDULE_ID, foreignId);
+        foreignStep.set(RecordScheduleStepModel.POSITION, 1);
+        foreignStep.set(RecordScheduleStepModel.ACTION, "zenit:power_stop");
+        steps.save(foreignStep);
+        try {
+            AccessContext owner = contextOf(ownerId, "Schedule Owner");
+            assertThat(OperationPipeline.offer(InstanceScheduleOperations.RUN_SCHEDULE, owner, foreign))
+                .as("step 4: another model's schedule is not run as the instance's")
+                .isInstanceOf(OperationPipeline.Offer.Hidden.class);
+            assertThat(OperationPipeline.offer(InstanceScheduleOperations.DELETE_SCHEDULE, owner, foreign))
+                .as("step 4: nor deleted as the instance's")
+                .isInstanceOf(OperationPipeline.Offer.Hidden.class);
+            assertThat(OperationPipeline.offer(InstanceScheduleOperations.DELETE_STEP, owner, foreignStep))
+                .as("step 4: nor is its step removed as the instance's")
+                .isInstanceOf(OperationPipeline.Offer.Hidden.class);
+        } finally {
+            steps.delete(foreignStep.get(RecordScheduleStepModel.ID));
+            schedules.delete(foreignId);
+        }
     }
 
     /**

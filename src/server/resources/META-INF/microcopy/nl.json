@@ -7114,18 +7114,6 @@
     "text": "Je mag de planningen van deze instantie niet beheren",
     "scope": "violations"
   },
-  "schedule_action_unknown_action": {
-    "text": "Onbekende planningsactie",
-    "scope": "violations"
-  },
-  "schedule_action_action_model_mismatch": {
-    "text": "Deze actie is niet van toepassing op instanties",
-    "scope": "violations"
-  },
-  "schedule_action_capability_denied": {
-    "text": "Je mist het recht dat deze actie vereist op de instantie",
-    "scope": "violations"
-  },
   "port_protocol": [
     {
       "text": "Poortprotocol",

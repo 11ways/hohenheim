@@ -256,12 +256,11 @@ public final class TemplatePortability {
             }
         }
         List<Map<String, Object>> files = entryList(body.get("files"));
+        // The template file model's own rule, judged before anything is written: a refusal at save time would leave
+        // the template half imported.
         for (Map<String, Object> file : files) {
-            String path = str(file.get("container_path"));
-            if (!path.startsWith("/") || path.contains("..")) {
-                throw Violations.ofField("container_path", path,
-                    HohenheimViolations.text("file_path_absolute"));
-            }
+            ContainerFileRules.checkedPath("container_path", str(file.get("container_path")));
+            ContainerFileRules.checkMode("mode", file.get("mode"));
         }
         // A declared database is judged by the SAME vocabulary the record column stores:
         // an engine token no engine carries fails closed here, never at create time.

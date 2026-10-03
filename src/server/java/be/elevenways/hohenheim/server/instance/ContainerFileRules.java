@@ -5,6 +5,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -51,18 +52,36 @@ public final class ContainerFileRules {
     /** @throws be.elevenways.zenit.common.validation.Violations anchored on the offending column */
     static void check(@NonNull Row row, @NonNull StringField path, @NonNull StringField mode) {
         if (row.has(path.getName()) && row.get(path) != null) {
-            String trimmed = String.valueOf(row.get(path)).trim();
-            if (!trimmed.startsWith("/") || trimmed.contains("..")) {
-                throw HohenheimViolations.ofField(path.getName(), trimmed, "file_path_absolute");
-            }
-            row.set(path, trimmed);
+            row.set(path, checkedPath(path.getName(), row.get(path)));
         }
-        Object value = row.has(mode.getName()) ? row.get(mode) : null;
-        if (value != null && !String.valueOf(value).isBlank()) {
+        checkMode(mode.getName(), row.has(mode.getName()) ? row.get(mode) : null);
+    }
+
+    /**
+     * The path rule over a value not yet in a row, such as an imported document's file entry.
+     *
+     * @return the path, trimmed
+     * @throws be.elevenways.zenit.common.validation.Violations {@code file_path_absolute}, anchored on {@code field}
+     */
+    static @NonNull String checkedPath(@NonNull String field, @Nullable Object path) {
+        String trimmed = path == null ? "" : String.valueOf(path).trim();
+        if (!trimmed.startsWith("/") || trimmed.contains("..")) {
+            throw HohenheimViolations.ofField(field, trimmed, "file_path_absolute");
+        }
+        return trimmed;
+    }
+
+    /**
+     * The mode rule over a value not yet in a row; a blank mode leaves the default to the writer.
+     *
+     * @throws be.elevenways.zenit.common.validation.Violations {@code file_mode_format}, anchored on {@code field}
+     */
+    static void checkMode(@NonNull String field, @Nullable Object mode) {
+        if (mode != null && !String.valueOf(mode).isBlank()) {
             try {
-                Integer.parseInt(String.valueOf(value).trim(), 8);
+                Integer.parseInt(String.valueOf(mode).trim(), 8);
             } catch (NumberFormatException notOctal) {
-                throw HohenheimViolations.ofField(mode.getName(), value, "file_mode_format");
+                throw HohenheimViolations.ofField(field, mode, "file_mode_format");
             }
         }
     }

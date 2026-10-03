@@ -211,7 +211,7 @@ public final class InstanceScheduleParts {
      * memo deliberately does not see a grant written earlier in the same request.
      */
     public static boolean writableBy(@NonNull Row schedule, @NonNull AccessContext access) {
-        return HohenheimAccess.reachesRecord(access, InstanceModel.MODEL_ID,
+        return isInstanceSchedule(schedule) && HohenheimAccess.reachesRecord(access, InstanceModel.MODEL_ID,
             parseInstanceId(schedule.get(RecordScheduleModel.RECORD_ID)), HohenheimAccess.CONFIG);
     }
 
@@ -236,6 +236,14 @@ public final class InstanceScheduleParts {
             return;
         }
         throw Violations.ofForm(CmsSupport.violationText("schedule_not_allowed"));
+    }
+
+    /**
+     * Whether the schedule is an instance's. The table also holds other models' schedules (a preview's expiry) whose
+     * record id may parse as an instance id; no instance gate may judge those.
+     */
+    static boolean isInstanceSchedule(@Nullable Row schedule) {
+        return schedule != null && InstanceModel.MODEL_ID.toString().equals(schedule.get(RecordScheduleModel.MODEL));
     }
 
     /** @return the instance id a schedule's polymorphic record id names, -1 when it names none */
