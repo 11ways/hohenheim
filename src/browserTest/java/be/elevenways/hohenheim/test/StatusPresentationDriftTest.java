@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.schedule.ScheduleRunStatuses;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.plumage.component.StatusDotStatus;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.RegistryMemberField;
 import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
@@ -126,13 +127,13 @@ class StatusPresentationDriftTest {
     void hostStateNeverDegradesToOnline() {
         // 1. Every state carries a dot, so none can fall through to a default.
         for (HostState state : HostState.values()) {
-            assertThat(state.dot()).as("step 1: %s declares a dot", state).isNotBlank();
+            assertThat(state.dot()).as("step 1: %s declares a typed dot", state).isNotNull();
             assertThat(state.token()).as("step 1: %s declares a token", state).isNotBlank();
         }
 
         // 2. Green belongs to OK alone -- the whole point of the type.
         List<HostState> online = Arrays.stream(HostState.values())
-            .filter(state -> "online".equals(state.dot())).toList();
+            .filter(state -> state.dot() == StatusDotStatus.ONLINE).toList();
         assertThat(online).as("step 2: only OK looks healthy").containsExactly(HostState.OK);
 
         // 3. Every state that is not OK says something; OK shows the daemon label instead.

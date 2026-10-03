@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.host;
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
+import be.elevenways.plumage.component.StatusDotStatus;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -32,7 +33,7 @@ public record HostStatusCell(
 ) {
 
     /**
-     * The pl-status-dot token for this state.
+     * The typed pl-status-dot state.
      *
      * AIDEV-NOTE: deliberately a METHOD, not a record component. Only components cross the
      * DRY wire, so a derived value stored as one would be shipped instead of recomputed
@@ -40,7 +41,7 @@ public record HostStatusCell(
      * ({@code {% value.dot %}}) exactly like a component -- but only in PROPERTY spelling;
      * call syntax on a @HawkeyeClass is a compile error.
      */
-    public @NonNull String dot() {
+    public @NonNull StatusDotStatus dot() {
         return this.state.dot();
     }
 
