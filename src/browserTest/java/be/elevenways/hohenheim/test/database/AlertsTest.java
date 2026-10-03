@@ -37,6 +37,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -52,6 +53,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Platform alerting through zenit-comms: channel-row-to-recipient mapping,
  * event subscriptions, durable delivery rows, and the generic webhook envelope.
  */
+// Solo: private-network host declarations are process-global, sealed at boot and have no reset.
+@Tag("solo")
 class AlertsTest {
 
     @BeforeAll

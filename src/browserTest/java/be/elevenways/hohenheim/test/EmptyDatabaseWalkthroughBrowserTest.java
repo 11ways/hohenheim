@@ -33,6 +33,7 @@ import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Response;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 
 import java.net.URI;
 import java.nio.file.Files;
@@ -52,6 +53,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since 0.1.0
  */
+// Solo: ServerZenitRuntime is process-global and cannot be reset; this journey proves the first production boot.
+@Tag("solo")
 class EmptyDatabaseWalkthroughBrowserTest extends HawkeyeBrowserTestBase {
     private static final String ADMIN_EMAIL = "admin@hohenheim.test";
     private static final String ADMIN_PASSWORD = "correct-horse-battery-staple";
