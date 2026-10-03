@@ -117,7 +117,7 @@ public final class ManagePanel extends Panel {
     public static @NonNull List<PanelEntry> declareEntries() {
         List<PanelEntry> peers = new ArrayList<>();
         // The dashboard FIRST: the panel-index rule redirects /manage to the first
-        // accessible DashboardPanelPeer, so the landing is a real page (what needs
+        // accessible dashboard entry, so the landing is a real page (what needs
         // attention, then the principal's instances), never a contentless card grid.
         peers.add(new ManageDashboard());
         HohenheimPanel.addIf(peers, SiteParts.manage(), Role.PROXY);

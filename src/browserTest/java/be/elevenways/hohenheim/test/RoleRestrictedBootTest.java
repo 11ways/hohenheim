@@ -17,7 +17,7 @@ import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.server.task.UpdateSystemUsers;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelPeer;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.task.TaskCatalog;
@@ -44,11 +44,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * missing route, zero docker constructions), never a false-red FAILED state.
  *
  * Standalone (no shared-server tag) on purpose: it re-points the global
- * database and settings and boots its own runtime, and both the Panel.peers()
+ * database and settings and boots its own runtime, and both the Panel.entries()
  * memoization and the HohenheimRoles snapshot must be clean for this JVM.
  */
 // Solo: it declares a DNS-only role set and runs the real ServerMain.main, so it needs a
-// virgin HohenheimRoles snapshot and virgin Panel.peers() memoization -- neither of which
+// virgin HohenheimRoles snapshot and virgin Panel.entries() memoization -- neither of which
 // any later class in the same JVM could get back.
 @Tag("solo")
 class RoleRestrictedBootTest {
@@ -101,7 +101,8 @@ class RoleRestrictedBootTest {
         // 5. The admin panel carries ONLY the DNS-and-core peers.
         Panel admin = PanelRegistry.getBySlug("admin");
         assertThat(admin).as("step 5: the admin panel is registered").isNotNull();
-        List<String> slugs = admin.peers().stream().map(PanelPeer::slug).toList();
+        // Every entry: Panel.peers() lists legacy peers only, so a parts entry passed both checks unseen.
+        List<String> slugs = admin.entries().stream().map(PanelEntry::slug).toList();
         assertThat(slugs)
             .as("step 5: DNS, settings and the core peers are present")
             .contains("dashboard", "dns-zones", "dns-records", "settings", "activity", "users");

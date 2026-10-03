@@ -447,7 +447,7 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(GrantService.listDirectGrants(GrantSubjectType.USER, operatorId))
             .anyMatch(grant -> "hohenheim.manage.access".equals(grant.get(GrantModel.PERMISSION)));
         // The panel stays reachable, and its landing is the manage DASHBOARD now
-        // (the first accessible DashboardPanelPeer wins the index), so /manage
+        // (the first accessible dashboard entry wins the index), so /manage
         // redirects there rather than rendering a card grid.
         HttpResponse<String> landing = operatorGet("/manage");
         assertThat(landing.statusCode()).isIn(302, 303);
