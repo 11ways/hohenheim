@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.schedule.InstancePowerAction;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
@@ -118,10 +118,9 @@ class InstanceScheduleJourneyTest extends HohenheimTestBase {
         assertThat(nextFire.atZone(ZoneId.of("Europe/Brussels")).getHour())
             .as("step 3: at the cron's hour in the schedule's own zone").isEqualTo(4);
 
-        // 4. Add a power step through its form: the action vocabulary is the registry's.
+        // 4. Add a stop step through its form: the action vocabulary is the operations placed as schedule steps.
         HttpResponse<String> step = httpPostForm("/admin/instance-schedule-steps/new",
-            "schedule_id=" + scheduleId + "&step_order=1&action=" + InstancePowerAction.ID
-                + "&payload.operation=" + InstancePowerAction.OP_STOP
+            "schedule_id=" + scheduleId + "&step_order=1&action=" + InstanceOperations.STOP.id()
                 + "&offset_seconds=0&failure_policy=abort&retry_limit=3",
             sessionToken, csrfToken);
         assertThat(step.statusCode()).as("step 4: the step saves").isEqualTo(302);
@@ -129,7 +128,7 @@ class InstanceScheduleJourneyTest extends HohenheimTestBase {
             .where(RecordScheduleStepModel.SCHEDULE_ID.eq(scheduleId)).first();
         assertThat(stored).as("step 4: the step row exists").isNotNull();
         assertThat(stored.get(RecordScheduleStepModel.ACTION))
-            .as("step 4: it is the power action").isEqualTo(InstancePowerAction.ID.toString());
+            .as("step 4: it is the stop operation").isEqualTo(InstanceOperations.STOP.id().toString());
 
         // 5. The tab lists the schedule with its next run.
         HttpResponse<String> listed = adminGet("/admin/instances/" + instanceId + "/page/schedules");

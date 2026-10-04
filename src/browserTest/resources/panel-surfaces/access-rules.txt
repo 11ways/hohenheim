@@ -1,0 +1,226 @@
+case admin.access-rules.operator admin access-rules operator v2
+admission - verdict=admitted
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column rule at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column access_list_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column enabled at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+tab history at=0 landing=false view=false
+
+case admin.access-rules.tenant admin access-rules tenant v2
+admission - verdict=zenit:forbidden
+
+case admin.access-rules.operator.group admin access-rules operator v2
+admission - verdict=admitted
+record - found=true
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column rule at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column access_list_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column enabled at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:access_rule_move_up at=1 verb=invoke band=inline style=DEFAULT disabled=already_first confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_up
+row hohenheim:access_rule_move_down at=2 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_down
+row hohenheim:access_rule_toggle at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_toggle
+row hohenheim:access_rule_delete at=4 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:delete_confirm%252Cscope%3Daccess_rule,body:destructive_body%252Cscope%3Dcms%25252Ctarget%3Dconfirmation,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/access_rule_delete
+row zenit:delete at=5 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab history at=0 landing=false view=false
+control EDIT%20type at=0 kind=zenitforms:form/select input=select required=false readonly=false options=group,basic_auth,ip_allow,ip_deny,auth_provider binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20data at=1 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:type,sibling:type,variants:group%252Cbasic_auth%252Cip_allow%252Cip_deny%252Cauth_provider
+control EDIT%20enabled at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20data[group]/data.satisfy at=0 kind=zenitforms:form/select input=select required=false readonly=false options=any,all binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20data[basic_auth]/data.username at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data[basic_auth]/data.password at=1 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control EDIT%20data[ip_allow]/data.network at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data[ip_deny]/data.network at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data[auth_provider]/data.provider_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.auth_provider@admin,rules:,siblings:,resolver:,clearable:true,creatable:true
+control EDIT%20data[auth_provider]/data.required_permission at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+
+case admin.access-rules.operator.allow admin access-rules operator v2
+admission - verdict=admitted
+record - found=true
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column rule at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column access_list_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column enabled at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:access_rule_move_up at=1 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_up
+row hohenheim:access_rule_move_down at=2 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_down
+row hohenheim:access_rule_toggle at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_toggle
+row hohenheim:access_rule_delete at=4 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:delete_confirm%252Cscope%3Daccess_rule,body:destructive_body%252Cscope%3Dcms%25252Ctarget%3Dconfirmation,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/access_rule_delete
+row zenit:delete at=5 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab history at=0 landing=false view=false
+control EDIT%20type at=0 kind=zenitforms:form/select input=select required=false readonly=false options=group,basic_auth,ip_allow,ip_deny,auth_provider binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20data at=1 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:type,sibling:type,variants:group%252Cbasic_auth%252Cip_allow%252Cip_deny%252Cauth_provider
+control EDIT%20enabled at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20data[group]/data.satisfy at=0 kind=zenitforms:form/select input=select required=false readonly=false options=any,all binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20data[basic_auth]/data.username at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data[basic_auth]/data.password at=1 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control EDIT%20data[ip_allow]/data.network at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data[ip_deny]/data.network at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data[auth_provider]/data.provider_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.auth_provider@admin,rules:,siblings:,resolver:,clearable:true,creatable:true
+control EDIT%20data[auth_provider]/data.required_permission at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+
+case admin.access-rules.operator.credentials admin access-rules operator v2
+admission - verdict=admitted
+record - found=true
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column rule at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column access_list_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column enabled at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:access_rule_move_up at=1 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_up
+row hohenheim:access_rule_move_down at=2 verb=invoke band=overflow style=DEFAULT disabled=already_last confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_down
+row hohenheim:access_rule_toggle at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_toggle
+row hohenheim:access_rule_delete at=4 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:delete_confirm%252Cscope%3Daccess_rule,body:destructive_body%252Cscope%3Dcms%25252Ctarget%3Dconfirmation,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/access_rule_delete
+row zenit:delete at=5 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab history at=0 landing=false view=false
+control EDIT%20type at=0 kind=zenitforms:form/select input=select required=false readonly=false options=group,basic_auth,ip_allow,ip_deny,auth_provider binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20data at=1 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:type,sibling:type,variants:group%252Cbasic_auth%252Cip_allow%252Cip_deny%252Cauth_provider
+control EDIT%20enabled at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20data[group]/data.satisfy at=0 kind=zenitforms:form/select input=select required=false readonly=false options=any,all binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20data[basic_auth]/data.username at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data[basic_auth]/data.password at=1 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control EDIT%20data[ip_allow]/data.network at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data[ip_deny]/data.network at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data[auth_provider]/data.provider_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.auth_provider@admin,rules:,siblings:,resolver:,clearable:true,creatable:true
+control EDIT%20data[auth_provider]/data.required_permission at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+
+case admin.access-rules.operator.child admin access-rules operator v2
+admission - verdict=admitted
+record - found=true
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column rule at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column access_list_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column enabled at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:access_rule_move_up at=1 verb=invoke band=inline style=DEFAULT disabled=already_first confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_up
+row hohenheim:access_rule_move_down at=2 verb=invoke band=overflow style=DEFAULT disabled=already_last confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_down
+row hohenheim:access_rule_toggle at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_toggle
+row hohenheim:access_rule_delete at=4 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:delete_confirm%252Cscope%3Daccess_rule,body:destructive_body%252Cscope%3Dcms%25252Ctarget%3Dconfirmation,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/access_rule_delete
+row zenit:delete at=5 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab history at=0 landing=false view=false
+control EDIT%20type at=0 kind=zenitforms:form/select input=select required=false readonly=false options=group,basic_auth,ip_allow,ip_deny,auth_provider binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20data at=1 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:type,sibling:type,variants:group%252Cbasic_auth%252Cip_allow%252Cip_deny%252Cauth_provider
+control EDIT%20enabled at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20data[group]/data.satisfy at=0 kind=zenitforms:form/select input=select required=false readonly=false options=any,all binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20data[basic_auth]/data.username at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data[basic_auth]/data.password at=1 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control EDIT%20data[ip_allow]/data.network at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data[ip_deny]/data.network at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data[auth_provider]/data.provider_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.auth_provider@admin,rules:,siblings:,resolver:,clearable:true,creatable:true
+control EDIT%20data[auth_provider]/data.required_permission at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+
+case admin.access-rules.operator.shared admin access-rules operator v2
+admission - verdict=admitted
+record - found=true
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column rule at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column access_list_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column enabled at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:access_rule_move_up at=1 verb=invoke band=inline style=DEFAULT disabled=already_first confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_up
+row hohenheim:access_rule_move_down at=2 verb=invoke band=overflow style=DEFAULT disabled=already_last confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_down
+row hohenheim:access_rule_toggle at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_toggle
+row hohenheim:access_rule_delete at=4 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:delete_confirm%252Cscope%3Daccess_rule,body:destructive_body%252Cscope%3Dcms%25252Ctarget%3Dconfirmation,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/access_rule_delete
+row zenit:delete at=5 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab history at=0 landing=false view=false
+control EDIT%20type at=0 kind=zenitforms:form/select input=select required=false readonly=false options=group,basic_auth,ip_allow,ip_deny,auth_provider binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20data at=1 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:type,sibling:type,variants:group%252Cbasic_auth%252Cip_allow%252Cip_deny%252Cauth_provider
+control EDIT%20enabled at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20data[group]/data.satisfy at=0 kind=zenitforms:form/select input=select required=false readonly=false options=any,all binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20data[basic_auth]/data.username at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data[basic_auth]/data.password at=1 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control EDIT%20data[ip_allow]/data.network at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data[ip_deny]/data.network at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data[auth_provider]/data.provider_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.auth_provider@admin,rules:,siblings:,resolver:,clearable:true,creatable:true
+control EDIT%20data[auth_provider]/data.required_permission at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+
+case admin.access-rules.operator.sel admin access-rules operator v2
+admission - verdict=admitted
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column rule at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column access_list_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column enabled at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+tab history at=0 landing=false view=false
+
+case manage.access-rules.tenant manage access-rules tenant v2
+admission - verdict=admitted
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column rule at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column access_list_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column enabled at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+
+case manage.access-rules.tenant-empty manage access-rules tenant-empty v2
+admission - verdict=zenit:forbidden
+
+case manage.access-rules.tenant.allow manage access-rules tenant v2
+admission - verdict=admitted
+record - found=true
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column rule at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column access_list_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column enabled at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:access_rule_move_up at=1 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_up
+row hohenheim:access_rule_move_down at=2 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_down
+row hohenheim:access_rule_toggle at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_toggle
+row hohenheim:access_rule_delete at=4 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:delete_confirm%252Cscope%3Daccess_rule,body:destructive_body%252Cscope%3Dcms%25252Ctarget%3Dconfirmation,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/access_rule_delete
+row zenit:delete at=5 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+control EDIT%20type at=0 kind=zenitforms:form/select input=select required=false readonly=false options=group,basic_auth,ip_allow,ip_deny,auth_provider binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20data at=1 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:type,sibling:type,variants:group%252Cbasic_auth%252Cip_allow%252Cip_deny%252Cauth_provider
+control EDIT%20enabled at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20data[group]/data.satisfy at=0 kind=zenitforms:form/select input=select required=false readonly=false options=any,all binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20data[basic_auth]/data.username at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data[basic_auth]/data.password at=1 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control EDIT%20data[ip_allow]/data.network at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data[ip_deny]/data.network at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data[auth_provider]/data.provider_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site_auth_provider,rules:,siblings:,resolver:,clearable:true,creatable:false
+control EDIT%20data[auth_provider]/data.required_permission at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+
+case manage.access-rules.tenant.child manage access-rules tenant v2
+admission - verdict=admitted
+record - found=true
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column rule at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column access_list_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column enabled at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:access_rule_move_up at=1 verb=invoke band=inline style=DEFAULT disabled=already_first confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_up
+row hohenheim:access_rule_move_down at=2 verb=invoke band=overflow style=DEFAULT disabled=already_last confirm= target=/{panel}/{entry}/{record}/action/access_rule_move_down
+row hohenheim:access_rule_toggle at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/access_rule_toggle
+row hohenheim:access_rule_delete at=4 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:delete_confirm%252Cscope%3Daccess_rule,body:destructive_body%252Cscope%3Dcms%25252Ctarget%3Dconfirmation,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/access_rule_delete
+row zenit:delete at=5 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+control EDIT%20type at=0 kind=zenitforms:form/select input=select required=false readonly=false options=group,basic_auth,ip_allow,ip_deny,auth_provider binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20data at=1 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:type,sibling:type,variants:group%252Cbasic_auth%252Cip_allow%252Cip_deny%252Cauth_provider
+control EDIT%20enabled at=2 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20data[group]/data.satisfy at=0 kind=zenitforms:form/select input=select required=false readonly=false options=any,all binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20data[basic_auth]/data.username at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data[basic_auth]/data.password at=1 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control EDIT%20data[ip_allow]/data.network at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data[ip_deny]/data.network at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data[auth_provider]/data.provider_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site_auth_provider,rules:,siblings:,resolver:,clearable:true,creatable:false
+control EDIT%20data[auth_provider]/data.required_permission at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+

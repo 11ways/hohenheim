@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.test;
 
-import be.elevenways.zenit.microcopy.MicrocopySeed;
+import be.elevenways.zenit.common.i18n.CopySeed;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
@@ -19,7 +19,7 @@ class DependentPickPlaceholderTest extends HohenheimTestBase {
         assertThat(response.statusCode()).as("step 1: the create form renders").isEqualTo(200);
         // The inline microcopy seed lists every key the render RESOLVED; only the
         // rendered markup can say whether a picker painted one.
-        String html = MicrocopySeed.withoutSeed(response.body());
+        String html = CopySeed.withoutSeed(response.body());
         assertThat(html).as("step 2: no picker paints its raw microcopy key")
             .doesNotContain("relation_unresolved");
         assertThat(html).as("step 3: the narrowed pickers name their sibling")

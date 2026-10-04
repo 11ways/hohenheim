@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimParams;
@@ -11,7 +13,8 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -39,14 +42,14 @@ import java.util.Map;
  * {@code files.write} -- an affordance on top of a gate, never instead of one: the action
  * endpoint asks the service for write authority regardless of what this page drew.
  */
-public final class InstanceFilesPage implements RecordScopedPage<Row> {
+public final class InstanceFilesPage implements RecordTab.Rendered<Row> {
 
     public static final String SLUG = "files";
 
     /** Above this, the inline editor is not offered -- a browser is not a hex editor. */
     private static final long INLINE_EDIT_LIMIT = 512 * 1024;
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_files_browser"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_files_browser"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("files").withFilter("scope", "instance"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("folder-tree"); }
@@ -71,9 +74,9 @@ public final class InstanceFilesPage implements RecordScopedPage<Row> {
     }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
+        Conduit conduit = request.conduit();
+        AccessContext accessContext = request.access();
         Integer instanceId = instance.get(InstanceModel.ID);
         InstanceFiles files = new InstanceFiles();
 
@@ -108,10 +111,10 @@ public final class InstanceFilesPage implements RecordScopedPage<Row> {
         vars.put("supported", supported);
         if (!supported) {
             return new RenderTemplateResult(
-                Identifier.of("hohenheim", "cms/instance-files"), vars);
+                HohenheimTemplateIds.INSTANCE_FILES, vars);
         }
 
-        String panel = CmsSupport.panelSlug(conduit);
+        String panel = request.panelSlug();
         String requested = conduit.getQueryParam(HohenheimParams.FILES_PATH.getName());
         String editing = conduit.getQueryParam(HohenheimParams.FILES_EDIT.getName());
         try {
@@ -155,7 +158,7 @@ public final class InstanceFilesPage implements RecordScopedPage<Row> {
         } catch (Violations refused) {
             vars.put("error", HandlerSupport.messageOf(conduit, refused));
         }
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-files"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_FILES, vars);
     }
 
     /** One crumb per path segment from the volume root down, each a browsable target. */
@@ -248,4 +251,5 @@ public final class InstanceFilesPage implements RecordScopedPage<Row> {
         }
         return listing.path();
     }
+
 }

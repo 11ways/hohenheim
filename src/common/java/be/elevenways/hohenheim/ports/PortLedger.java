@@ -86,7 +86,7 @@ public final class PortLedger {
 
     /**
      * The canonical per-host claim string, VERBATIM the spelling
-     * StackServiceResource.portClaim established: trims both sides, folds a blank bind
+     * StackParts' service port check established: trims both sides, folds a blank bind
      * address and {@code 0.0.0.0} into one whole-host bind, defaults {@code tcp}.
      */
     public static @NonNull String portClaim(@Nullable Object hostIp, int port,
@@ -229,20 +229,7 @@ public final class PortLedger {
     public static void claim(int serverId, @Nullable Object hostIp, int port,
                              @Nullable Object protocol, @Nullable Identifier ownerModel,
                              @Nullable Integer ownerId, @Nullable String note) {
-        claimFenced(serverId, hostIp, port, protocol, ownerModel, ownerId, note, null);
-    }
-
-    /**
-     * {@link #claim} plus the writing controller's host-lease fence in
-     * {@code controller_fence} -- the identity the boot sweep and the fence-guarded
-     * release compare against for record-less managed-process claims.
-     */
-    public static void claimFenced(int serverId, @Nullable Object hostIp, int port,
-                                   @Nullable Object protocol, @Nullable Identifier ownerModel,
-                                   @Nullable Integer ownerId, @Nullable String note,
-                                   @Nullable Long controllerFence) {
-        claimCore(serverId, hostIp, port, protocol, ownerModel, ownerId, note,
-            controllerFence, null);
+        claimCore(serverId, hostIp, port, protocol, ownerModel, ownerId, note, null);
     }
 
     /**
@@ -257,17 +244,17 @@ public final class PortLedger {
                                          @Nullable Object protocol,
                                          @NonNull Identifier ownerModel, int ownerId,
                                          @Nullable String note) {
-        claimCore(serverId, hostIp, port, protocol, ownerModel, ownerId, note, null,
+        claimCore(serverId, hostIp, port, protocol, ownerModel, ownerId, note,
             PortAllocationModel.MODE_PREALLOCATED);
     }
 
     private static void claimCore(int serverId, @Nullable Object hostIp, int port,
                                   @Nullable Object protocol, @Nullable Identifier ownerModel,
                                   @Nullable Integer ownerId, @Nullable String note,
-                                  @Nullable Long controllerFence, @Nullable String mode) {
+                                  @Nullable String mode) {
         String key = claimKeyOf(serverId, hostIp, port, protocol);
         underClaimLease(serverId, port, key, () -> writeClaim(serverId, hostIp, port, protocol,
-            key, ownerModel, ownerId, note, controllerFence, mode));
+            key, ownerModel, ownerId, note, mode));
     }
 
     /**
@@ -282,8 +269,7 @@ public final class PortLedger {
     private static void writeClaim(int serverId, @Nullable Object hostIp, int port,
                                    @Nullable Object protocol, @NonNull String key,
                                    @Nullable Identifier ownerModel, @Nullable Integer ownerId,
-                                   @Nullable String note, @Nullable Long controllerFence,
-                                   @Nullable String mode) {
+                                   @Nullable String note, @Nullable String mode) {
         Row rival = rivalHolder(serverId, hostIp, port, protocol, ownerModel, ownerId);
         if (rival != null) {
             throw new PortConflict(key, describeHolder(rival), null);
@@ -317,7 +303,6 @@ public final class PortLedger {
         row.set(PortAllocationModel.OWNER_MODEL, ownerModel != null ? ownerModel.toString() : null);
         row.set(PortAllocationModel.OWNER_ID, ownerId);
         row.set(PortAllocationModel.NOTE, note);
-        row.set(PortAllocationModel.CONTROLLER_FENCE, controllerFence);
         row.set(PortAllocationModel.STATUS, PortAllocationModel.STATUS_HELD);
         row.set(PortAllocationModel.ALLOCATION_MODE, mode);
         try {

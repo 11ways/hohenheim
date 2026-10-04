@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.database.DatabaseEngines;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
@@ -33,6 +35,11 @@ public class ReconcileEngineIsolation extends ScheduledTask {
 
     /** How this sweep names itself to an operator, in alerts and in the failure it throws. */
     public static final String SWEEP = "Database engine isolation";
+
+    @Override
+    public @NonNull Identifier id() {
+        return HohenheimIds.id("reconcile_engine_isolation");
+    }
 
     @Override
     public @NonNull ReconcileEngineIsolation newTask() {

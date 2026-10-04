@@ -1,16 +1,17 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.runtime.ImageOrigin;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.common.text.Texts;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -99,12 +100,12 @@ public final class InstanceImagePolicy {
     }
 
     private static void check(@NonNull Row row) {
-        Row stored = storedOf(row);
+        Row stored = StoredRows.of(Models.get(InstanceModel.class), row);
 
-        Object templateId = effective(row, stored, InstanceModel.TEMPLATE_ID.getName());
-        Object kind = effective(row, stored, InstanceModel.KIND.getName());
+        Object templateId = row.afterWrite(InstanceModel.TEMPLATE_ID, stored);
+        Object kind = row.afterWrite(InstanceModel.KIND, stored);
         Map<String, String> judged =
-            readJudged(effective(row, stored, InstanceModel.SETTINGS.getName()));
+            readJudged(row.afterWrite(InstanceModel.SETTINGS, stored));
         String image = judged.get("image");
 
         if (stored != null) {
@@ -139,17 +140,8 @@ public final class InstanceImagePolicy {
             return;
         }
         throw Violations.ofField("settings.image", image,
-            Microcopy.of("image_requires_capability").withFilter("scope", "violations")
+            HohenheimViolations.text("image_requires_capability")
                 .withArg("image", image == null ? "" : image));
-    }
-
-    /** The staged value when the write carries the column, else the stored one. */
-    private static @Nullable Object effective(@NonNull Row row, @Nullable Row stored,
-                                              @NonNull String name) {
-        if (row.has(name)) {
-            return row.get(name);
-        }
-        return stored != null ? stored.get(name) : null;
     }
 
     /**
@@ -166,25 +158,14 @@ public final class InstanceImagePolicy {
         return readings;
     }
 
-    private static @Nullable String settingText(@Nullable Object settings, @NonNull String key) {
-        if (settings instanceof Map<?, ?> map && map.get(key) != null) {
-            String value = String.valueOf(map.get(key)).trim();
-            return value.isEmpty() ? null : value;
-        }
-        return null;
+    /** @return one kind setting of a settings value as trimmed text, null when absent or blank */
+    static @Nullable String settingText(@Nullable Object settings, @NonNull String key) {
+        return settings instanceof Map<?, ?> map ? Texts.trimmedOrNull(map.get(key)) : null;
     }
 
     /** The declared {@code image_origin} key, defaulting to catalog like {@link ImageOrigin}. */
     private static @NonNull String originOf(@Nullable Object settings) {
         String key = settingText(settings, "image_origin");
         return key == null ? ImageOrigin.CATALOG.key() : key;
-    }
-
-    private static @Nullable Row storedOf(@NonNull Row row) {
-        if (!row.has(InstanceModel.ID.getName()) || row.get(InstanceModel.ID) == null) {
-            return null;
-        }
-        // Trashed included: a write to a trashed record is an update, never a create.
-        return StoredRows.byId(Models.get(InstanceModel.class), row.get(InstanceModel.ID));
     }
 }

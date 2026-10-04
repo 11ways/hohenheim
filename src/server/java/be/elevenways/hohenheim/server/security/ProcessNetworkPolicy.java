@@ -23,8 +23,8 @@ import java.util.function.BooleanSupplier;
  * reading the chain back out of it.
  *
  * AIDEV-NOTE: this tier needs its own applier because the tenant-NETWORK model cannot
- * reach it. A managed process is a host process ({@code SystemUsers.executionBuilder} ->
- * sudo-as-uid -> ProcessBuilder), so it lives in the host's own network namespace: there
+ * reach it. A managed process is a host process ({@code SystemUsers.execution} ->
+ * sudo-as-uid -> Subprocess), so it lives in the host's own network namespace: there
  * is no subnet to key {@code saddr} on and locally-originated traffic never traverses the
  * forward hook where {@link WorkloadNetworkPolicy}'s rules live. The identity that DOES
  * distinguish one process site from another on that host is its per-site run-as uid, which
@@ -73,9 +73,7 @@ import java.util.function.BooleanSupplier;
  * 127.0.0.0/8 is not in {@link TenantNetworkRanges} for any tier, but only here can a
  * workload use it to reach the host: a managed process CAN still reach a host service bound
  * to 127.0.0.1. It has to be able to -- its own IPC channel is a loopback port
- * ({@code HOHENHEIM_IPC_PORT}), its upstream listener is a loopback port, and attached
- * managed databases are injected into host-process sites as loopback addresses by design
- * ({@code DatabaseEnvInjection}, pinned by EnvInjectionFlowTest). Closing that would mean a
+ * ({@code HOHENHEIM_IPC_PORT}) and its upstream listener is a loopback port. Closing that would mean a
  * per-process netns, which is the other mechanism this slice weighed and rejected as much
  * larger. What IS closed is every host service reachable on the host's own private
  * addresses, the whole rest of the private network, and the metadata service.
@@ -119,7 +117,7 @@ public final class ProcessNetworkPolicy {
      * The applier for the managed-process tier.
      *
      * AIDEV-NOTE: there is no {@code forServer} counterpart and there must not be one.
-     * Managed processes are children of THIS controller ({@code ProcessBuilder}), so the
+     * Managed processes are children of THIS controller ({@code Subprocess}), so the
      * kernel that must carry their rules is always the local one -- the remote-host
      * mis-targeting {@code NftRunner.forServer} exists to prevent cannot arise here.
      */

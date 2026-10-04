@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -26,21 +28,21 @@ import java.util.function.Predicate;
  */
 public enum InstanceStatus {
 
-    CREATED(InstanceModel.STATUS_CREATED, "Created", "circle", "gray"),
-    STARTING(InstanceModel.STATUS_STARTING, "Starting", "hourglass-half", "blue"),
-    RUNNING(InstanceModel.STATUS_RUNNING, "Running", "circle-play", "green"),
-    STOPPED(InstanceModel.STATUS_STOPPED, "Stopped", "circle-stop", "orange"),
-    ERROR(InstanceModel.STATUS_ERROR, "Error", "circle-exclamation", "red"),
-    CAPTURING(InstanceModel.STATUS_CAPTURING, "Capturing", "camera", "blue"),
-    RESTORING(InstanceModel.STATUS_RESTORING, "Restoring", "clock-rotate-left", "blue"),
-    MIGRATING(InstanceModel.STATUS_MIGRATING, "Migrating", "arrow-right-arrow-left", "blue");
+    CREATED(InstanceModel.STATUS_CREATED, "Created", "circle", ColorHue.GRAY),
+    STARTING(InstanceModel.STATUS_STARTING, "Starting", "hourglass-half", ColorHue.BLUE),
+    RUNNING(InstanceModel.STATUS_RUNNING, "Running", "circle-play", ColorHue.GREEN),
+    STOPPED(InstanceModel.STATUS_STOPPED, "Stopped", "circle-stop", ColorHue.ORANGE),
+    ERROR(InstanceModel.STATUS_ERROR, "Error", "circle-exclamation", ColorHue.RED),
+    CAPTURING(InstanceModel.STATUS_CAPTURING, "Capturing", "camera", ColorHue.BLUE),
+    RESTORING(InstanceModel.STATUS_RESTORING, "Restoring", "clock-rotate-left", ColorHue.BLUE),
+    MIGRATING(InstanceModel.STATUS_MIGRATING, "Migrating", "arrow-right-arrow-left", ColorHue.BLUE);
 
     private final String token;
     private final String displayName;
     private final String icon;
-    private final String color;
+    private final BadgeColor color;
 
-    InstanceStatus(String token, String displayName, String icon, String color) {
+    InstanceStatus(String token, String displayName, String icon, BadgeColor color) {
         this.token = token;
         this.displayName = displayName;
         this.icon = icon;
@@ -63,7 +65,7 @@ public enum InstanceStatus {
     }
 
     /** The badge colour token. */
-    public @NonNull String color() {
+    public @NonNull BadgeColor color() {
         return this.color;
     }
 

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.zenit.common.security.Permissions;
+import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
@@ -17,7 +19,6 @@ import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.security.KnownPermissions;
 import be.elevenways.zenit.common.security.RecordCapabilityDecision;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
@@ -108,10 +109,10 @@ class SitesManageAllTest extends HohenheimTestBase {
     void manageAllOpensEverySiteAndNothingElseAndIsHandedOnOnlyByAHolder() throws Exception {
         // 0. The vocabulary really carries it, and carries it as delegable. An
         //    unregistered permission is one no admin can find in the grants editor.
-        assertThat(KnownPermissions.all())
+        assertThat(Permissions.declared().stream().map(Permission::value).toList())
             .as("step 0: the permission is offered by the grants editor")
             .contains(MANAGE_ALL);
-        assertThat(KnownPermissions.isDelegable(MANAGE_ALL))
+        assertThat(Permissions.isDelegable(MANAGE_ALL))
             .as("step 0: and it is DELEGABLE -- a permission is a leaf, so holding one"
                 + " includes handing it on (owner's call, 2026-08-15)")
             .isTrue();

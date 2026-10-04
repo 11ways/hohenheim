@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.server.cms.DnsZoneResource;
+import be.elevenways.hohenheim.server.cms.DnsZoneParts;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.common.edit.FieldAccess;
@@ -38,7 +38,7 @@ class DnsZoneTransferSurfaceTest extends HohenheimTestBase {
 
         // 2. The list cell: a secondary reports its outcome, a primary reports nothing --
         //    a primary transfers from nobody, so the stored word would be noise.
-        DnsZoneResource resource = new DnsZoneResource();
+        DnsZoneParts resource = new DnsZoneParts();
         ColumnSpec statusColumn = null;
         for (ColumnSpec column : resource.tableSpec().columns()) {
             if (DnsZoneModel.TRANSFER_STATUS.getName().equals(column.name())) {

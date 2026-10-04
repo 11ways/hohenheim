@@ -1,22 +1,22 @@
 package be.elevenways.hohenheim.server.api;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.server.auth.AccessRuleNodes;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.AccessListResource;
-import be.elevenways.hohenheim.server.cms.AccessRuleResource;
-import be.elevenways.hohenheim.server.cms.ManageAccessListResource;
+import be.elevenways.hohenheim.server.cms.AccessListParts;
+import be.elevenways.hohenheim.server.cms.AccessRuleParts;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
-import be.elevenways.hohenheim.server.cms.ManageAccessRuleResource;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -41,15 +41,15 @@ import java.util.Objects;
  * AIDEV-NOTE: there is no model write here for anything an operator can type, on purpose.
  * The list is created through zenit-cms {@code ResourceWrites} and a rule is CONFIGURED
  * through it, which is what argon2-hashes a basic-auth password ({@code
- * AccessRuleResource.applyValuesToRow}) -- a raw {@code Model.save} of the same map stores
+ * AccessRuleParts} save hook) -- a raw {@code Model.save} of the same map stores
  * the plaintext, and {@code BasicCredentials.verifyPassword} then fails closed forever.
  * The one direct write left is the rule NODE's birth ({@link AccessRuleNodes}), shared
  * verbatim with the Rules tab, because a rule's place in the tree is not a form field and
- * {@code AccessRuleResource} is deliberately not creatable.
+ * {@code AccessRuleParts} declares no create.
  *
  * Authorization mirrors the panels exactly, and both panels create access lists: an admin
- * key writes through {@link AccessListResource} (the operator form, {@code shared}
- * included), every other key through {@link ManageAccessListResource} -- the /manage form,
+ * key writes through the admin access-list entry (the operator form, {@code shared}
+ * included), every other key through its /manage twin ({@link AccessListParts}) -- the /manage form,
  * which drops {@code shared} and plants the creator's {@code manage} grant, so a tenant
  * owns what it authored. Reads and every write on an EXISTING list ask the same
  * {@code manage} walk the /manage resource scopes by (whose rules already demand the panel
@@ -59,10 +59,6 @@ import java.util.Objects;
  */
 public final class AccessListApi {
 
-    private static final AccessListResource ADMIN_LISTS = new AccessListResource();
-    private static final ManageAccessListResource TENANT_LISTS = new ManageAccessListResource();
-    private static final AccessRuleResource ADMIN_RULES = new AccessRuleResource();
-    private static final ManageAccessRuleResource TENANT_RULES = new ManageAccessRuleResource();
 
     private AccessListApi() {
     }
@@ -97,16 +93,20 @@ public final class AccessListApi {
             // The ONE gate a create needs of its own: there is no record yet, so the
             // capability walk that guards every other verb here has nothing to walk, and
             // the panel permission is what admits an operator to the form.
-            if (!HohenheimAccess.isAdmin(ctx) && !ctx.hasPermission(ManagePanel.ACCESS.value())) {
+            if (!HohenheimAccess.isAdmin(ctx) && !ctx.hasPermission(ManagePanel.ACCESS)) {
                 conduit.forbidden();
                 return null;
             }
+            PanelResource<Row> lists = listResource(conduit, ctx);
+            if (lists == null) {
+                return null;
+            }
             try {
-                int listId = (Integer) ResourceWrites.create(panelFor(ctx), listResource(ctx),
+                int listId = (Integer) ResourceWrites.create(panelFor(ctx), lists,
                     FormSubmissionRawValues.fromConduit(conduit), ctx);
                 Row created = Objects.requireNonNull(
                     Models.get(AccessListModel.class).findById(listId));
-                ActivityLog.record(Models.get(AccessListModel.class), listId, "created",
+                ActivityLog.record(Models.get(AccessListModel.class), listId, ZenitActivityAction.CREATE,
                     created.get(AccessListModel.NAME));
                 return ApiConduits.json(listProjection(created, true));
             } catch (Violations refused) {
@@ -126,11 +126,15 @@ public final class AccessListApi {
             if (list == null) {
                 return null;
             }
+            PanelResource<Row> lists = listResource(conduit, ctx);
+            if (lists == null) {
+                return null;
+            }
             try {
                 // The resource's own delete: the rule rows cascade off the model hook and
                 // whatever the list gated stops being gated -- exactly what the form's
                 // confirmation warns about.
-                ResourceWrites.delete(panelFor(ctx), listResource(ctx), list, ctx);
+                ResourceWrites.delete(panelFor(ctx), lists, list, ctx);
                 return ApiConduits.json(Map.of("id", list.get(AccessListModel.ID),
                     "status", "deleted"));
             } catch (Violations refused) {
@@ -150,7 +154,12 @@ public final class AccessListApi {
             if (list == null) {
                 return null;
             }
-            return addRule(conduit, ctx, list.get(AccessListModel.ID));
+            // Resolved before the node's birth below, so a node without the entry never births an orphan.
+            PanelResource<Row> rules = ruleResource(conduit, ctx);
+            if (rules == null) {
+                return null;
+            }
+            return addRule(conduit, ctx, rules, list.get(AccessListModel.ID));
         });
     }
 
@@ -167,6 +176,7 @@ public final class AccessListApi {
      */
     private static @Nullable ActionResult<Object> addRule(@NonNull Conduit conduit,
                                                           @NonNull AccessContext ctx,
+                                                          @NonNull PanelResource<Row> rules,
                                                           int listId) {
         Map<String, Object> form = FormSubmissionRawValues.fromConduit(conduit);
         String type = stringOf(form.get("type"));
@@ -188,7 +198,7 @@ public final class AccessListApi {
                 form.get(AccessRuleModel.ENABLED.getName()));
         }
         try {
-            ResourceWrites.update(panelFor(ctx), ruleResource(ctx), rule.get(AccessRuleModel.ID), rule,
+            ResourceWrites.update(panelFor(ctx), rules, rule.get(AccessRuleModel.ID), rule,
                 values, ctx);
         } catch (Violations refused) {
             return ApiConduits.refusal(conduit, refused);
@@ -210,12 +220,22 @@ public final class AccessListApi {
         return HohenheimAccess.isAdmin(ctx) ? ApiConduits.adminPanel() : ApiConduits.managePanel();
     }
 
-    private static @NonNull RowResource listResource(@NonNull AccessContext ctx) {
-        return HohenheimAccess.isAdmin(ctx) ? ADMIN_LISTS : TENANT_LISTS;
+    /**
+     * The access-list entry of the caller's panel ({@link AccessListParts}): its admin or its /manage twin.
+     *
+     * @return the entry, or null when the response has already been ended (the uniform 404 of a proxy-less node)
+     */
+    private static @Nullable PanelResource<Row> listResource(@NonNull Conduit conduit, @NonNull AccessContext ctx) {
+        return ApiConduits.rowEntry(conduit, panelFor(ctx), HohenheimSlugs.ACCESS_LISTS);
     }
 
-    private static @NonNull RowResource ruleResource(@NonNull AccessContext ctx) {
-        return HohenheimAccess.isAdmin(ctx) ? ADMIN_RULES : TENANT_RULES;
+    /**
+     * The access-rule entry of the caller's panel ({@link AccessRuleParts}): its admin or its /manage twin.
+     *
+     * @return the entry, or null when the response has already been ended (the uniform 404 of a proxy-less node)
+     */
+    private static @Nullable PanelResource<Row> ruleResource(@NonNull Conduit conduit, @NonNull AccessContext ctx) {
+        return ApiConduits.rowEntry(conduit, panelFor(ctx), AccessRuleParts.SLUG);
     }
 
     /** The lists this context manages; an admin's walk answers ALL, so it sees every one. */

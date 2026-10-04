@@ -78,7 +78,7 @@
                             {% /if %}
                         </pl-table-cell>
                         <pl-table-cell>
-                            <pl-badge variant={% deploy.get("statusVariant") %}>{{ deploy.get("status") }}</pl-badge>
+                            {% if deploy.get("statusKnown") == true %}<pl-badge variant={% deploy.get("statusVariant") %} colorSet={% deploy.get("statusColorSet") %}>{{ deploy.get("status") }}</pl-badge>{% else %}{{ deploy.get("status") }}{% /if %}
                         </pl-table-cell>
                         {% if showTrigger %}
                         <pl-table-cell>{{ deploy.get("reason") }}</pl-table-cell>

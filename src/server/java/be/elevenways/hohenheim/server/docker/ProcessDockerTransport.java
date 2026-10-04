@@ -1,14 +1,17 @@
 package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.server.util.Watchdog;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.RunningProcess;
+import be.elevenways.protoblast.server.process.Subprocess;
+import be.elevenways.protoblast.server.process.Termination;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A {@link DockerTransport} that runs an external command whose stdio bridges to a Docker daemon
@@ -21,8 +24,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class ProcessDockerTransport implements DockerTransport, DockerStreamTransport {
 
-    /** How long to wait for the stderr drain to finish once stdout has hit EOF. */
-    private static final long STDERR_DRAIN_GRACE_MS = 2000;
+    /** Bytes of stderr tail kept for diagnostics. */
+    private static final int STDERR_TAIL_BYTES = 4096;
 
     private final List<String> command;
 
@@ -48,49 +51,28 @@ public class ProcessDockerTransport implements DockerTransport, DockerStreamTran
 
     @Override
     public byte[] roundTrip(byte[] request, long timeoutMs, long maxResponseBytes) throws IOException {
-        Process process = new ProcessBuilder(command).start();   // stdout + stderr kept separate
-
-        // Drain stderr so it can't block the process, and keep it for diagnostics on failure.
-        ByteArrayOutputStream stderr = new ByteArrayOutputStream();
-        Thread drain = new Thread(() -> {
-            try {
-                process.getErrorStream().transferTo(stderr);
-            } catch (IOException ignored) {
-                // process gone
-            }
-        });
-        drain.setDaemon(true);
-        drain.start();
-
-        AtomicBoolean timedOut = new AtomicBoolean(false);
-        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> {
-            timedOut.set(true);
-            process.destroyForcibly();
-        }, timeoutMs);
+        // stdout and stderr kept separate: stderr is the diagnostic HostProbe classifies.
+        RunningProcess process = start(Subprocess.of(command)
+            .timeout(Duration.ofMillis(timeoutMs))
+            .stderrLimit(STDERR_TAIL_BYTES));
+        boolean done = false;
         try {
-            OutputStream stdin = process.getOutputStream();
+            OutputStream stdin = process.stdin();
             stdin.write(request);
             stdin.flush();
             // Keep stdin OPEN while reading: dial-stdio tears down the connection on stdin EOF,
             // which truncates the response. The daemon closes after the response (Connection:
             // close), giving us stdout EOF here.
-            byte[] response = readBounded(process.getInputStream(), maxResponseBytes);
-            // AIDEV-NOTE: a watchdog kill ENDS stdout, so the read above returns NORMALLY
-            // with whatever arrived before the kill. That is a partial response, not a
-            // short one: checked here, after the read, never only in the catch.
-            if (timedOut.get()) {
+            byte[] response = readBounded(process.stdout(), maxResponseBytes);
+            // AIDEV-NOTE: a timeout ENDS stdout, so the read above returns NORMALLY with
+            // whatever arrived before the stop. That is a partial response, not a short one:
+            // checked here, after the read, on the outcome close() waits for.
+            ProcessOutcome outcome = settle(process);
+            done = true;
+            if (outcome.termination() == Termination.TIMED_OUT) {
                 throw new IOException("Docker transport timed out after " + timeoutMs + "ms");
             }
             if (response.length == 0) {
-                // AIDEV-NOTE: JOIN the drain thread before reading its buffer. Reading it
-                // straight after stdout EOF races the drain, so the diagnostic text --
-                // the ONLY evidence HostProbe classifies on -- came back empty at random
-                // and a host-key-verification failure was reported as plain "unreachable".
-                try {
-                    drain.join(STDERR_DRAIN_GRACE_MS);
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                }
                 // AIDEV-NOTE: the ARGV must not appear here. HostProbe classifies this
                 // message, and an argv carrying "ConnectTimeout=10" made every remote
                 // failure -- auth refused, host key changed, docker missing -- classify
@@ -98,26 +80,26 @@ public class ProcessDockerTransport implements DockerTransport, DockerStreamTran
                 // than in any evidence the host gave us. Only the program name and the
                 // real stderr belong in a string something else reads for meaning.
                 throw new IOException("Docker transport produced no response ("
-                    + command.get(0) + "): "
-                    + new String(stderr.toByteArray(), StandardCharsets.UTF_8).trim());
+                    + command.get(0) + "): " + outcome.stderr().text().trim());
             }
             return response;
         } catch (IOException e) {
-            if (timedOut.get()) {
+            if (!done && settle(process).termination() == Termination.TIMED_OUT) {
                 throw new IOException("Docker transport timed out after " + timeoutMs + "ms");
             }
             throw e;
         } finally {
-            watchdog.cancel(false);
-            process.destroyForcibly();
+            if (!done) {
+                settle(process);
+            }
         }
     }
 
     @Override
     public DockerStreamConnection openStream(byte[] request, long connectTimeoutMs)
             throws IOException {
-        Process process = new ProcessBuilder(command).start();
-        ProcessStreamConnection connection = new ProcessStreamConnection(process);
+        ProcessStreamConnection connection = new ProcessStreamConnection(
+            start(Subprocess.of(command).stderrLimit(STDERR_TAIL_BYTES)));
         // Bound only the request write: ssh may take seconds to connect, but once the
         // stream is live its lifetime belongs to the consumer.
         ScheduledFuture<?> watchdog = Watchdog.schedule(connection::close, connectTimeoutMs);
@@ -133,83 +115,61 @@ public class ProcessDockerTransport implements DockerTransport, DockerStreamTran
         return connection;
     }
 
+    /** The bridge process: stdin kept open for the caller, stdout streamed, and a stop that kills at once. */
+    private static RunningProcess start(Subprocess process) throws IOException {
+        try {
+            return process.stdinPipe().streamStdout().stopGrace(Duration.ZERO).start();
+        } catch (RuntimeException refused) {
+            throw new IOException(refused.getMessage(), refused);
+        }
+    }
+
+    /** Close stdin, stop what still runs and wait for the outcome. */
+    private static ProcessOutcome settle(RunningProcess process) {
+        process.close();
+        return process.await();
+    }
+
     /**
      * A stream over one ssh/dial-stdio subprocess. The subprocess IS the connection:
-     * close() destroys it forcibly, and {@link #isReleased()} reports the observed
-     * process/thread state so the leak test counts reality, not a flag.
+     * close() stops it at once, and {@link #isReleased()} reports the observed
+     * process state so the leak test counts reality, not a flag.
      */
     private static final class ProcessStreamConnection implements DockerStreamConnection {
 
-        /** Bytes of stderr tail kept for diagnostics on a long-lived stream. */
-        private static final int STDERR_TAIL_BYTES = 4096;
+        private final RunningProcess process;
 
-        private final Process process;
-        private final Thread drain;
-        private final byte[] stderrTail = new byte[STDERR_TAIL_BYTES];
-        private int stderrTailLength;
-
-        ProcessStreamConnection(Process process) {
+        ProcessStreamConnection(RunningProcess process) {
             this.process = process;
-            this.drain = new Thread(this::drainStderr, "docker-stream-stderr-" + process.pid());
-            this.drain.setDaemon(true);
-            this.drain.start();
-        }
-
-        private void drainStderr() {
-            byte[] buffer = new byte[1024];
-            try (var err = this.process.getErrorStream()) {
-                int n;
-                while ((n = err.read(buffer)) != -1) {
-                    synchronized (this.stderrTail) {
-                        // Keep only the most recent tail: shift when full, never grow.
-                        int keep = Math.min(n, STDERR_TAIL_BYTES);
-                        int from = n - keep;
-                        if (this.stderrTailLength + keep > STDERR_TAIL_BYTES) {
-                            int shift = this.stderrTailLength + keep - STDERR_TAIL_BYTES;
-                            System.arraycopy(this.stderrTail, shift, this.stderrTail, 0,
-                                this.stderrTailLength - shift);
-                            this.stderrTailLength -= shift;
-                        }
-                        System.arraycopy(buffer, from, this.stderrTail, this.stderrTailLength, keep);
-                        this.stderrTailLength += keep;
-                    }
-                }
-            } catch (IOException ignored) {
-                // process gone
-            }
         }
 
         @Override
         public int read(byte[] buffer, int offset, int length) throws IOException {
-            return this.process.getInputStream().read(buffer, offset, length);
+            return this.process.stdout().read(buffer, offset, length);
         }
 
         @Override
         public void write(byte[] data) throws IOException {
-            OutputStream stdin = this.process.getOutputStream();
+            OutputStream stdin = this.process.stdin();
             stdin.write(data);
             stdin.flush();
         }
 
         @Override
         public void close() {
-            this.process.destroyForcibly();
+            this.process.close();
         }
 
         @Override
         public boolean isReleased() {
-            return !this.process.isAlive() && !this.drain.isAlive();
+            return !this.process.isAlive() && this.process.completion().isResolved();
         }
 
         @Override
         public String diagnostics() {
-            String tail;
-            synchronized (this.stderrTail) {
-                tail = new String(this.stderrTail, 0, this.stderrTailLength,
-                    StandardCharsets.UTF_8).trim();
-            }
-            if (!this.process.isAlive()) {
-                return "exit " + this.process.exitValue() + (tail.isEmpty() ? "" : ": " + tail);
+            String tail = this.process.stderrSoFar().text().trim();
+            if (this.process.completion().isResolved()) {
+                return "exit " + this.process.await().exitCode() + (tail.isEmpty() ? "" : ": " + tail);
             }
             return tail;
         }

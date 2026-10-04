@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.SystemUserModel;
@@ -34,6 +36,11 @@ public class UpdateSystemUsers extends ScheduledTask {
 
     /** Record used when parsing /etc/passwd before we hit the DB. */
     private record ParsedUser(String name, int uid, int gid, String home, String gecos) {}
+
+    @Override
+    public @NonNull Identifier id() {
+        return HohenheimIds.id("update_system_users");
+    }
 
     @Override
     public @NonNull UpdateSystemUsers newTask() {

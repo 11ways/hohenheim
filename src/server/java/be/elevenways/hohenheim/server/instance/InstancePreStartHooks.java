@@ -1,14 +1,14 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.registry.Registry;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * The ordered, compile-time-discovered set of {@link InstancePreStartHook}s, and the ONE
@@ -18,7 +18,8 @@ import java.util.Map;
  */
 public final class InstancePreStartHooks {
 
-    private static final Map<Identifier, InstancePreStartHook> HOOKS = new LinkedHashMap<>();
+    private static final Registry<InstancePreStartHook> HOOKS =
+        Registry.create(HohenheimIds.id("instance_pre_start_hook"));
 
     /**
      * Entries arrive via the generated BlastAutoLoadInit; force it so lookups work
@@ -35,20 +36,17 @@ public final class InstancePreStartHooks {
     /**
      * Compile-time discovery hook (BlastAutoLoadInit).
      *
-     * @throws IllegalStateException on a duplicate id -- two hooks answering to one name
-     *         means one of them silently never dispatches
+     * @throws be.elevenways.protoblast.common.registry.RegistryConflictException on a duplicate id
+     *         -- two hooks answering to one name means one of them silently never dispatches
      */
     public static void register(@NonNull InstancePreStartHook hook) {
-        InstancePreStartHook previous = HOOKS.putIfAbsent(hook.id(), hook);
-        if (previous != null && previous.getClass() != hook.getClass()) {
-            throw new IllegalStateException("Duplicate pre-start hook id " + hook.id()
-                + ": " + previous.getClass().getName() + " and " + hook.getClass().getName());
-        }
+        HOOKS.add(hook.id(), hook);
     }
 
     /** Every registered hook in DISPATCH order: ascending weight, ties broken on id. */
     public static @NonNull List<InstancePreStartHook> all() {
-        List<InstancePreStartHook> hooks = new ArrayList<>(HOOKS.values());
+        List<InstancePreStartHook> hooks = new ArrayList<>();
+        HOOKS.forEach(hooks::add);
         hooks.sort(Comparator.comparingInt(InstancePreStartHook::weight)
             .thenComparing(hook -> hook.id().toString()));
         return List.copyOf(hooks);

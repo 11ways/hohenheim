@@ -1,10 +1,12 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
@@ -36,6 +38,11 @@ public class CheckForeignKeys extends ScheduledTask {
 
     /** The last reported summary; null while clean. In memory, so a restart re-announces. */
     private static final AtomicReference<String> LAST_REPORTED = new AtomicReference<>();
+
+    @Override
+    public @NonNull Identifier id() {
+        return HohenheimIds.id("check_foreign_keys");
+    }
 
     @Override
     public @NonNull CheckForeignKeys newTask() {

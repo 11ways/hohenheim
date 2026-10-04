@@ -1,13 +1,21 @@
 package be.elevenways.hohenheim.test.database;
 
+import java.util.Objects;
+import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.hohenheim.test.PanelEntryViews;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.hohenheim.server.cms.CmsSupport;
+import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
+import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.cms.DatabaseResource;
-import be.elevenways.hohenheim.server.cms.InstanceDatabaseResource;
+import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.cms.InstanceDatabasesPage;
-import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.host.HostPreflight;
@@ -21,8 +29,10 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
-import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.server.page.ResourceWrites;
+import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -55,7 +65,7 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
 
     private static final String PREFIX = "dbsurface-";
 
-    private static final Identifier DEPLOY = Identifier.of("hohenheim", "deploy_instance");
+    private static final Identifier DEPLOY = Identifier.of("hohenheim", "start_instance");
 
     private static Integer hostId;
     private static Integer instanceId;
@@ -116,8 +126,8 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
     @Test
     void anAttachmentIsNamedByBothSidesAndTheDatabaseDeleteIsDeadWithTheDetachPage()
             throws Exception {
-        InstanceDatabaseResource attachments = new InstanceDatabaseResource();
-        DatabaseResource databases = new DatabaseResource();
+        var attachments = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES);
+        Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN), "the admin panel");
         Row link = Models.get(InstanceDatabaseModel.class).findById(linkId);
         Row database = Models.get(DatabaseModel.class).findById(databaseId);
         String tabUrl = CmsRoutes.subpage("admin", "instances", instanceId,
@@ -131,7 +141,9 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
             .doesNotStartWith("DB");
 
         // 2. Its delete dialog names both sides and the injected family it takes away.
-        ConfirmationSpec confirmation = attachments.deleteConfirmationFor(link);
+        ConfirmationSpec confirmation = CmsSupport.rowEntry(admin, InstanceAttachmentParts.DATABASES)
+            .deleteConfirmation()
+            .forRow(link, new PanelRequest(admin, TenantConduits.stubFor(null), AccessContext.anonymous(), null));
         Microcopy body = confirmation.body();
         assertThat(body.key()).as("step 2: the attachment-specific warning").isEqualTo("delete_confirm");
         assertThat(String.valueOf(body.args().get("database"))).isEqualTo(PREFIX + "db");
@@ -141,7 +153,8 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
         // 3. The database's delete is OFFERED BUT DEAD while the workload holds it,
         //    naming the workload and the page it is detached on -- the same facts the
         //    submit refuses with, so the dead button is never the gate.
-        Microcopy reason = databases.deleteUnavailableReason(database, AccessContext.anonymous());
+        AccessContext operator = TenantConduits.operator();
+        Microcopy reason = deleteUnavailable(database, operator);
         assertThat(reason).as("step 3: the delete is dead with a reason").isNotNull();
         assertThat(reason.key()).isEqualTo("delete_in_use");
         String workloads = String.valueOf(reason.args().get("workloads"));
@@ -149,11 +162,11 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
             .as("step 3: the reason names the workload AND the detach page")
             .contains(PREFIX + "web")
             .contains(tabUrl);
-        Throwable refused = catchThrowable(() ->
-            databases.deleteRow(database, AccessContext.anonymous()));
+        Throwable refused = catchThrowable(() -> ResourceWrites.delete(admin,
+            DatabaseParts.admin(), database, operator));
         assertThat(refused).isInstanceOfSatisfying(Violations.class, violations ->
             assertThat(violations.all()).anySatisfy(violation -> {
-                assertThat(violation.message().key()).isEqualTo("database_in_use");
+                assertThat(violation.message().key()).isEqualTo("delete_in_use");
                 assertThat(String.valueOf(violation.message().args().get("workloads")))
                     .contains(tabUrl);
             }));
@@ -186,7 +199,7 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
 
         // 6. Detached, the database delete comes alive again.
         Models.get(InstanceDatabaseModel.class).delete(linkId);
-        assertThat(databases.deleteUnavailableReason(database, AccessContext.anonymous()))
+        assertThat(deleteUnavailable(database, operator))
             .as("step 6: no workload holds it, so the delete is available")
             .isNull();
     }
@@ -211,13 +224,11 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
         link.set(InstanceDatabaseModel.DATABASE_ID, waitingDatabaseId);
         link.set(InstanceDatabaseModel.ENV_PREFIX, "WORDPRESS_DB");
         links.save(link);
-        RowAction.Invoke<Row> deploy = deployAction();
+        PanelAction<Row> deploy = deployAction();
         Model databases = Models.get(DatabaseModel.class);
 
         // 1. Still provisioning: the button is DEAD, naming the database and its state.
-        Microcopy provisioning = deploy.unavailableReasonFor(
-            Models.get(InstanceModel.class).findById(waitingInstanceId),
-            AccessContext.anonymous());
+        Microcopy provisioning = deploy.disabledFor(Models.get(InstanceModel.class).findById(waitingInstanceId));
         assertThat(provisioning)
             .as("step 1: deploy is offered dead while the database provisions")
             .isNotNull();
@@ -240,9 +251,7 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
         database.set(DatabaseModel.STATUS, DatabaseModel.STATUS_FAILED);
         database.set(DatabaseModel.FAILURE_REASON, "image pull refused: no such tag");
         databases.save(database);
-        Microcopy failed = deploy.unavailableReasonFor(
-            Models.get(InstanceModel.class).findById(waitingInstanceId),
-            AccessContext.anonymous());
+        Microcopy failed = deploy.disabledFor(Models.get(InstanceModel.class).findById(waitingInstanceId));
         assertThat(failed).as("step 3: a failed database is still a dead deploy").isNotNull();
         assertThat(failed.key()).isEqualTo("database_not_ready");
         assertThat(String.valueOf(failed.args().get("reason")))
@@ -262,9 +271,7 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
         database.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
         database.set(DatabaseModel.FAILURE_REASON, null);
         databases.save(database);
-        assertThat(deploy.unavailableReasonFor(
-                Models.get(InstanceModel.class).findById(waitingInstanceId),
-                AccessContext.anonymous()))
+        assertThat(deploy.disabledFor(Models.get(InstanceModel.class).findById(waitingInstanceId)))
             .as("step 4: an active database refuses nothing")
             .isNull();
         Map<String, String> env = DatabaseEnvInjection.envForInstance(waitingInstanceId,
@@ -278,10 +285,9 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
 
     // -- fixtures -------------------------------------------------------------
 
-    /** The deploy action, read off the resource rather than rebuilt here. */
-    @SuppressWarnings("unchecked")
-    private static RowAction.Invoke<Row> deployAction() {
-        return (RowAction.Invoke<Row>) new InstanceResource().rowActions().stream()
+    /** The deploy action (the placed start operation), read off the resource rather than rebuilt here. */
+    private static PanelAction<Row> deployAction() {
+        return InstanceParts.admin().actions().stream()
             .filter(action -> DEPLOY.equals(action.id()))
             .findFirst()
             .orElseThrow(() -> new AssertionError("the instances resource offers no deploy"));
@@ -343,5 +349,11 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
         Integer id = row.get(DatabaseModel.ID);
         EngineHandles.plant(id, name, "postgres", InstanceModel.STATUS_RUNNING);
         return id;
+    }
+
+    /** @return the words the database delete is offered dead with, null when it is live */
+    private static Microcopy deleteUnavailable(Row database, AccessContext access) {
+        OperationPipeline.Offer offer = OperationPipeline.offer(DatabaseParts.DELETE, access, database);
+        return offer instanceof OperationPipeline.Offer.Unavailable dead ? dead.reason() : null;
     }
 }

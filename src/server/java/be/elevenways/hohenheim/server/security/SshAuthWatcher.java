@@ -3,17 +3,20 @@ package be.elevenways.hohenheim.server.security;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.RunningProcess;
+import be.elevenways.protoblast.server.process.Subprocess;
 import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 
@@ -34,7 +37,7 @@ import java.util.function.BiConsumer;
  * which shows up as an IMMEDIATE non-zero exit, is reported ONCE per distinct message and
  * lands in {@link #snapshot()} for the dashboard; (2) the child dies later (log rotation,
  * systemd restart), which is retried with 1s doubling to 60s, the delay resetting after a
- * run that stayed up a full minute; (3) shutdown, where {@link #stop()} destroys the child
+ * run that stayed up a full minute; (3) shutdown, where {@link #stop()} stops the child
  * so the JVM never leaves an orphan journalctl behind. Everything the watcher can do is
  * OBSERVATION: it never touches nftables or the bans table itself.
  *
@@ -75,7 +78,7 @@ public final class SshAuthWatcher {
 
     /** How the watcher starts its child; injectable so tests never spawn journalctl. */
     public interface Journal {
-        @NonNull Process start() throws IOException;
+        @NonNull RunningProcess start() throws IOException;
     }
 
     /** How the supervisor waits out a backoff; injectable so a test observes it instead of sleeping. */
@@ -90,7 +93,7 @@ public final class SshAuthWatcher {
 
     private volatile boolean running;
     private volatile @Nullable Thread thread;
-    private volatile @Nullable Process child;
+    private volatile @Nullable RunningProcess child;
     private volatile @Nullable String lastError;
     private volatile @Nullable String reportedError;
 
@@ -136,9 +139,9 @@ public final class SshAuthWatcher {
     /** Stop supervising and destroy the child; idempotent. */
     public synchronized void stop() {
         this.running = false;
-        Process current = this.child;
+        RunningProcess current = this.child;
         if (current != null) {
-            current.destroy();
+            current.stop();
         }
         Thread supervisor = this.thread;
         if (supervisor != null) {
@@ -188,7 +191,7 @@ public final class SshAuthWatcher {
      *         run or died reporting an error
      */
     private boolean runOnce() {
-        Process process;
+        RunningProcess process;
         try {
             process = this.journal.start();
         } catch (IOException | RuntimeException e) {
@@ -197,7 +200,7 @@ public final class SshAuthWatcher {
         }
         this.child = process;
         try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                new InputStreamReader(process.stdout(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 consume(line);
@@ -210,19 +213,20 @@ public final class SshAuthWatcher {
         } finally {
             this.child = null;
         }
-        int exit;
+        ProcessOutcome outcome;
         try {
-            exit = process.waitFor();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            process.destroy();
+            outcome = process.await();
+        } catch (CompletionException interrupted) {
+            process.stop();
             return false;
         }
         if (!this.running) {
             return true;
         }
-        if (exit != 0) {
-            reportProblem("journalctl exited " + exit + ": " + readStderr(process));
+        if (outcome.exitCode() != 0) {
+            String stderr = outcome.stderr().text().trim();
+            reportProblem("journalctl exited " + outcome.exitCode() + ": "
+                + (stderr.isEmpty() ? "no error output" : stderr));
             return false;
         }
         clearProblem();
@@ -260,16 +264,7 @@ public final class SshAuthWatcher {
         this.reportedError = null;
     }
 
-    private static @NonNull String readStderr(@NonNull Process process) {
-        try (InputStream stderr = process.getErrorStream()) {
-            String text = new String(stderr.readAllBytes(), StandardCharsets.UTF_8).trim();
-            return text.isEmpty() ? "no error output" : text;
-        } catch (IOException e) {
-            return "no error output";
-        }
-    }
-
-    private static @NonNull Process spawn() throws IOException {
-        return new ProcessBuilder(COMMAND).redirectErrorStream(false).start();
+    private static @NonNull RunningProcess spawn() {
+        return Subprocess.of(COMMAND).streamStdout().start();
     }
 }

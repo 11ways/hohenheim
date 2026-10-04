@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -7,7 +9,6 @@ import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
@@ -51,13 +52,17 @@ import java.util.function.Function;
  * service-side gates, CapabilityScopes for the set-wise walk and its request memo). Callers
  * keep asking HohenheimAccess; a collaborator made public would be a second entry point.
  *
+ * Loaded at boot ({@code @BlastAutoLoad}): it is the declaring home of permissions the grants editor lists
+ * ({@code Permissions.declared()}), so they are declared before anybody reads that table.
+ *
  * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.2.0
  */
+@BlastAutoLoad
 public final class HohenheimAccess {
 
     /** The single v1 capability on a site record. */
-    public static final String MANAGE = "manage";
+    public static final String MANAGE = HohenheimCapabilities.MANAGE;
 
     /** Read a record's own state: DNS record fields, certificate status (never key material). */
     public static final String VIEW = "view";
@@ -84,16 +89,16 @@ public final class HohenheimAccess {
      * classes, and deliberately NOT {@link #EXEC}: a console line reaches the workload's
      * stdin, never an arbitrary program as an arbitrary user.
      */
-    public static final String CONSOLE = "console";
+    public static final String CONSOLE = HohenheimCapabilities.CONSOLE;
 
     /** Start, stop and restart the workload. ORDINARY: it changes runtime state, never content. */
-    public static final String POWER = "power";
+    public static final String POWER = HohenheimCapabilities.POWER;
 
     /**
      * Author what the instance IS: its record fields, its devices, its schedules and an
      * in-place app update. ELEVATED -- editing what runs is one step from running anything.
      */
-    public static final String CONFIG = "config";
+    public static final String CONFIG = HohenheimCapabilities.CONFIG;
 
     /**
      * Tear the workload down and trash the record. ELEVATED: it is irreversible for the
@@ -110,7 +115,7 @@ public final class HohenheimAccess {
      * {@link #MANAGE}'s umbrella. An operator may still grant it deliberately; a tenant
      * holding it can never pass it on.
      */
-    public static final String EXEC = "exec";
+    public static final String EXEC = HohenheimCapabilities.EXEC;
 
     /**
      * Open an INTERACTIVE login shell inside the workload -- the tenant verb the product's
@@ -129,7 +134,7 @@ public final class HohenheimAccess {
      * the file, snapshot and backup verbs out of that umbrella; an operator grants this one
      * deliberately, on the record, or it is not held.
      */
-    public static final String SHELL = "shell";
+    public static final String SHELL = HohenheimCapabilities.SHELL;
 
     /**
      * Read a managed database's CREDENTIALS -- the plaintext {@code db_password} the
@@ -140,10 +145,10 @@ public final class HohenheimAccess {
     public static final String CREDENTIALS = "credentials";
 
     /** Take and restore driver-level snapshots of an instance (data-destructive on restore). */
-    public static final String SNAPSHOTS = "snapshots";
+    public static final String SNAPSHOTS = HohenheimCapabilities.SNAPSHOTS;
 
     /** Export instance backups and restore them to new instances. */
-    public static final String BACKUPS = "backups";
+    public static final String BACKUPS = HohenheimCapabilities.BACKUPS;
 
     /**
      * Browse, read and download the files inside an instance's own volumes. An ORDINARY
@@ -175,7 +180,8 @@ public final class HohenheimAccess {
      * transactional quota (headroom), the image policy (approved templates only) and
      * {@link be.elevenways.hohenheim.server.instance.InstancePlacement} (which host).
      */
-    public static final Permission INSTANCES_CREATE = Permission.of("hohenheim.instances.create");
+    public static final Permission INSTANCES_CREATE = Permission.declare("hohenheim.instances.create",
+        Microcopy.of("hohenheim_instances_create").withFilter("scope", "permission"), Permission.Delegation.DELEGABLE);
 
     /**
      * Type-level authority over EVERY site: {@link #MANAGE} on all of them, WITHOUT
@@ -192,11 +198,11 @@ public final class HohenheimAccess {
      * instances-wide equivalent needs per-capability narrowing in the framework FIRST. Do not
      * copy this declaration onto another model without it.
      *
-     * Registered NON-DELEGABLE (ServerMain.installAuthBaselines), following the
-     * {@code auth.grants.manage} precedent: a holder of every-site authority minting peers is
-     * exactly the spread containment exists to prevent, and admins bypass containment anyway.
+     * Declared DELEGABLE (the owner's call of 2026-08-15, see ServerMain.installAuthBaselines): a
+     * permission is a leaf, and holding it includes handing it on.
      */
-    public static final Permission SITES_MANAGE_ALL = Permission.of("hohenheim.sites.manage_all");
+    public static final Permission SITES_MANAGE_ALL = Permission.declare("hohenheim.sites.manage_all",
+        Microcopy.of("hohenheim_sites_manage_all").withFilter("scope", "permission"), Permission.Delegation.DELEGABLE);
 
     /** How a packed subject set separates its entries; no subject token can contain it. */
     public static final String SUBJECT_SEPARATOR = "\n";
@@ -233,13 +239,11 @@ public final class HohenheimAccess {
     }
 
     /**
-     * Principal-only variant for WebSocket contexts (no conduit at open time):
-     * the installed WebSocket authenticator is the sanctioned principal-only
-     * path, and it rides the SAME precedence walk as the context variant.
+     * Principal-only variant for WebSocket contexts (no conduit at open time): a
+     * detached context rides the SAME precedence walk as the context variant.
      */
     public static boolean canManageSite(@NonNull Principal principal, int siteId) {
-        return Zenit.getWebSocketAuthenticator()
-            .hasCapability(principal, SiteModel.MODEL_ID, siteId, MANAGE);
+        return AccessContext.detached(principal).hasCapability(SiteModel.MODEL_ID, siteId, MANAGE);
     }
 
     /**
@@ -257,7 +261,7 @@ public final class HohenheimAccess {
 
     /**
      * Principal-only variant for WebSocket contexts (no conduit at open time), riding
-     * the installed WebSocket authenticator's precedence walk.
+     * a detached context's precedence walk.
      */
     public static boolean canManageInstance(@NonNull Principal principal, int instanceId) {
         return hasInstanceCapability(principal, instanceId, MANAGE);
@@ -271,8 +275,7 @@ public final class HohenheimAccess {
      */
     public static boolean hasInstanceCapability(@NonNull Principal principal, int instanceId,
                                                 @NonNull String capability) {
-        return Zenit.getWebSocketAuthenticator()
-            .hasCapability(principal, InstanceModel.MODEL_ID, instanceId, capability);
+        return AccessContext.detached(principal).hasCapability(InstanceModel.MODEL_ID, instanceId, capability);
     }
 
     /**

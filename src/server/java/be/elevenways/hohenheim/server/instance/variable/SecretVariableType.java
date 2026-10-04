@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance.variable;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.BooleanField;
@@ -8,6 +9,8 @@ import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -21,7 +24,7 @@ import java.util.Map;
  */
 public final class SecretVariableType implements VariableTypeHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "secret");
+    public static final Identifier ID = HohenheimIds.id("secret");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final BooleanField GENERATE = SETTINGS_SCHEMA.addField(
@@ -52,7 +55,7 @@ public final class SecretVariableType implements VariableTypeHandler {
     public Icon getIcon() { return Icon.of("key"); }
 
     @Override
-    public String getColor() { return "orange"; }
+    public BadgeColor color() { return ColorHue.ORANGE; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }

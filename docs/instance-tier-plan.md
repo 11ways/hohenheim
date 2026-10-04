@@ -3069,7 +3069,7 @@ Driver and infrastructure:
   that `JavaSiteType`/`CommandSiteType` happen to borrow; (2) ephemeral Docker
   publication for Docker sites, read back and never persisted; (3) ephemeral
   Docker publication for managed databases, likewise; (4) operator-declared
-  `StackServiceModel.PORT_HOST` for stacks. `StackServiceResource.validatePorts`
+  `StackServiceModel.PORT_HOST` for stacks. `StackParts.validPorts`
   compares a new claim only against OTHER STACKS -- it is blind to the other
   three authorities, and it runs read-then-save on the CMS form path with no
   transaction and no unique constraint, so two concurrent submits both pass.
@@ -3166,7 +3166,7 @@ Driver and infrastructure:
   `AttentionCollector` + a scheduled task (it will immediately surface the
   `hohenheim-site-{id}-vol-*` orphans nothing has ever named). C3 ledger table +
   canonical host key + FK, with stacks as first consumer, reusing
-  `StackServiceResource.portClaim`'s canonical string VERBATIM. C4 record-after
+  the stack service port check's canonical string VERBATIM. C4 record-after
   for the two Docker cases. C5 `PortAllocator` behind the ledger + boot sweep.
   C6 the `releasing` state and destroy paths that stop lying. C7 `InstanceModel`
   as the FOURTH consumer.
@@ -4757,7 +4757,7 @@ network, quota, ownership, secret and durable-operation mechanisms.
   CORRECTED 2026-08-13: the ENVIRONMENT half of that variable lane shipped
   gated on membership plus an instance scope token, neither of which is
   authority over the instances an environment value reaches; it is now
-  admin-only, matching the admin-only `EnvironmentVariableResource` that is its
+  admin-only, matching the admin-only `EnvironmentParts.variables()` entry that is its
   sole UI. Environments still have no tenant surface (see above). One
   uniform 404 everywhere, including child records of another site. Rollback
   demands no server-side phrase ON PURPOSE (ConfirmationSpec is a client

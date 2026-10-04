@@ -11,8 +11,14 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -109,6 +115,74 @@ class BackendConnectorReachTest {
             } finally {
                 OutboundNetwork.SEAM.install(previous);
             }
+        }
+    }
+
+    @Test
+    @Timeout(20)
+    void aWaiterWokenByAFailedLookupStartsAFreshOne() throws Exception {
+        Map<String, InetAddress> names = new ConcurrentHashMap<>();
+        CountDownLatch watched = new CountDownLatch(1);
+        AtomicBoolean failedOnce = new AtomicBoolean();
+        OutboundNetwork previous = OutboundNetwork.SEAM.require();
+        OutboundNetwork.SEAM.install(new OutboundNetwork(name -> {
+            if (failedOnce.compareAndSet(false, true)) {
+                // Held until the test watches the lookup, so its callback runs on the vetting thread
+                // at the moment the failure is published.
+                try {
+                    watched.await(10, TimeUnit.SECONDS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+                throw new UnknownHostException(name);
+            }
+            InetAddress known = names.get(name);
+            if (known == null) {
+                throw new UnknownHostException(name);
+            }
+            return new InetAddress[] {known};
+        }, OutboundNetwork.DIRECT_ROUTE));
+        try {
+            // 1. The first lookup of a name that does not resolve yet is in flight.
+            CompletableFuture<List<InetAddress>> first = BackendConnector.sharedLookup("retry_backend", false);
+
+            // 2. A waiter woken by its failure makes the name resolvable and asks again at once.
+            AtomicReference<CompletableFuture<List<InetAddress>>> second = new AtomicReference<>();
+            AtomicReference<Throwable> askFailure = new AtomicReference<>();
+            CountDownLatch asked = new CountDownLatch(1);
+            first.whenComplete((answer, failure) -> {
+                try {
+                    names.put("retry_backend",
+                        InetAddress.getByAddress("retry_backend", new byte[] {127, 0, 0, 1}));
+                    second.set(BackendConnector.sharedLookup("retry_backend", false));
+                } catch (Throwable thrown) {
+                    askFailure.set(thrown);
+                } finally {
+                    asked.countDown();
+                }
+            });
+            watched.countDown();
+            // Nothing else waits on the first lookup until the waiter has asked, so the callback runs
+            // on the vetting thread while the failure is being published.
+            assertThat(asked.await(5, TimeUnit.SECONDS)).as("step 2: the waiter was woken").isTrue();
+
+            assertThatThrownBy(() -> first.get(5, TimeUnit.SECONDS))
+                .as("step 1: the first lookup fails")
+                .hasCauseInstanceOf(UnknownHostException.class);
+            assertThat(askFailure.get()).as("step 2: the woken waiter could ask again").isNull();
+            assertThat(second.get())
+                .as("step 2: the woken waiter is handed a FRESH lookup, never the failed one")
+                .isNotNull()
+                .isNotSameAs(first);
+
+            // 3. And that fresh lookup resolves the name.
+            assertThat(second.get().get(5, TimeUnit.SECONDS))
+                .as("step 3: the retry resolves the name now")
+                .extracting(InetAddress::getHostAddress)
+                .containsExactly("127.0.0.1");
+        } finally {
+            watched.countDown();
+            OutboundNetwork.SEAM.install(previous);
         }
     }
 

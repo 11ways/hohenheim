@@ -17,7 +17,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * AIDEV-NOTE: moved out of SiteResource (review finding, 2026-09): a write-pipeline hook is a MODEL
  * concern, and living inside a CMS resource made it look like one resource's check. It stays in this
  * package only because the refusal wording it shares with the domain route invariant
- * ({@code ClaimRefusals}, {@code SiteDomainResource.refuseEnableRouteConflicts}) is package-private
+ * ({@code ClaimRefusals}, {@code SiteDomainRouteInvariant.refuseEnableRouteConflicts}) is package-private
  * here. Installed by HohenheimWriteHooks at the MODULES boot stage, exactly where SiteResource's
  * installer used to be called from.
  *
@@ -45,7 +45,7 @@ public final class SiteEnableInvariant {
      * formerly-enabled revision after another site took the hostname and silently
      * seize the route (SiteDispatcher resolves first-wins). A before-write hook is
      * the one seam every save funnels through. Do NOT move this back into updateRow
-     * / toggleAction as a per-path check -- that is the very bypass this closes.
+     * / the enable operation as a per-path check -- that is the very bypass this closes.
      */
     public static synchronized void install() {
         if (installed) {
@@ -143,6 +143,6 @@ public final class SiteEnableInvariant {
      * @throws Violations when going live would collide with a live site's route
      */
     private static void refuseConflictingEnable(@NonNull Row existing) {
-        SiteDomainResource.refuseEnableRouteConflicts(existing.get(SiteModel.ID), SiteGoLive.of(existing));
+        SiteDomainRouteInvariant.refuseEnableRouteConflicts(existing.get(SiteModel.ID), SiteGoLive.of(existing));
     }
 }

@@ -1,0 +1,250 @@
+case admin.dns-records.operator.address admin dns-records operator v2
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=true search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column value at=2 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
+column ttl at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column enabled at=4 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column managed_by at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column zone_id at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+filter name at=0 kind=TEXT facet=false param=filter.name
+filter type at=1 kind=SELECT facet=true param=filter.type
+filter enabled at=2 kind=BOOLEAN facet=false param=filter.enabled
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:dyndns_token at=1 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/dyndns_token
+row hohenheim:dyndns_revoke at=2 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:dyndns_revoke_confirm%252Cscope%3Ddns_record,body:destructive_body%252Cscope%3Dcms%25252Ctarget%3Dconfirmation,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/dyndns_revoke
+row zenit:delete at=3 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_named%252Cscope%3Ddns_record,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+inline name
+inline value
+inline ttl
+inline enabled
+tab history at=0 landing=false view=false
+control CREATE%20zone_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.dns_zone,rules:,siblings:,resolver:,clearable:true,creatable:true
+control CREATE%20name at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20type at=2 kind=zenitforms:form/select input=select required=false readonly=false options=A,AAAA,CNAME,NS,MX,TXT,CAA,SRV binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20value at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20data at=4 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:type,sibling:type,variants:MX%252CSRV
+control CREATE%20ttl at=5 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20enabled at=6 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20data[MX]/data.priority at=0 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20data[SRV]/data.priority at=0 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20data[SRV]/data.weight at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20data[SRV]/data.port at=2 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20zone_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.dns_zone,rules:,siblings:,resolver:,clearable:true,creatable:true
+control EDIT%20name at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20type at=2 kind=zenitforms:form/select input=select required=false readonly=false options=A,AAAA,CNAME,NS,MX,TXT,CAA,SRV binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20value at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data at=4 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:type,sibling:type,variants:MX%252CSRV
+control EDIT%20ttl at=5 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20enabled at=6 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20data[MX]/data.priority at=0 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20data[SRV]/data.priority at=0 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20data[SRV]/data.weight at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20data[SRV]/data.port at=2 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+
+case manage.dns-records.operator.address manage dns-records operator v2
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=true search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column value at=2 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column enabled at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:dyndns_token at=1 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/dyndns_token
+row hohenheim:dyndns_revoke at=2 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:dyndns_revoke_confirm%252Cscope%3Ddns_record,body:destructive_body%252Cscope%3Dcms%25252Ctarget%3Dconfirmation,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/dyndns_revoke
+row zenit:delete at=3 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_named%252Cscope%3Ddns_record,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+inline name
+inline value
+inline enabled
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=A,AAAA,CNAME,NS,MX,TXT,CAA,SRV binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20value at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20data at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:type,sibling:type,variants:MX%252CSRV
+control CREATE%20ttl at=4 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20enabled at=5 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20data[MX]/data.priority at=0 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20data[SRV]/data.priority at=0 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20data[SRV]/data.weight at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20data[SRV]/data.port at=2 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=A,AAAA,CNAME,NS,MX,TXT,CAA,SRV binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20value at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:type,sibling:type,variants:MX%252CSRV
+control EDIT%20ttl at=4 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20enabled at=5 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20data[MX]/data.priority at=0 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20data[SRV]/data.priority at=0 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20data[SRV]/data.weight at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20data[SRV]/data.port at=2 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+
+case admin.dns-records.operator.text admin dns-records operator v2
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=true search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column value at=2 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
+column ttl at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column enabled at=4 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column managed_by at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column zone_id at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+filter name at=0 kind=TEXT facet=false param=filter.name
+filter type at=1 kind=SELECT facet=true param=filter.type
+filter enabled at=2 kind=BOOLEAN facet=false param=filter.enabled
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_named%252Cscope%3Ddns_record,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+inline name
+inline value
+inline ttl
+inline enabled
+tab history at=0 landing=false view=false
+control CREATE%20zone_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.dns_zone,rules:,siblings:,resolver:,clearable:true,creatable:true
+control CREATE%20name at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20type at=2 kind=zenitforms:form/select input=select required=false readonly=false options=A,AAAA,CNAME,NS,MX,TXT,CAA,SRV binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20value at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20data at=4 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:type,sibling:type,variants:MX%252CSRV
+control CREATE%20ttl at=5 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20enabled at=6 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20data[MX]/data.priority at=0 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20data[SRV]/data.priority at=0 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20data[SRV]/data.weight at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20data[SRV]/data.port at=2 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20zone_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.dns_zone,rules:,siblings:,resolver:,clearable:true,creatable:true
+control EDIT%20name at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20type at=2 kind=zenitforms:form/select input=select required=false readonly=false options=A,AAAA,CNAME,NS,MX,TXT,CAA,SRV binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20value at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data at=4 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:type,sibling:type,variants:MX%252CSRV
+control EDIT%20ttl at=5 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20enabled at=6 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20data[MX]/data.priority at=0 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20data[SRV]/data.priority at=0 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20data[SRV]/data.weight at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20data[SRV]/data.port at=2 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+
+case manage.dns-records.operator.text manage dns-records operator v2
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=true search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column value at=2 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column enabled at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_named%252Cscope%3Ddns_record,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+inline name
+inline value
+inline enabled
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=A,AAAA,CNAME,NS,MX,TXT,CAA,SRV binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20value at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20data at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:type,sibling:type,variants:MX%252CSRV
+control CREATE%20ttl at=4 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20enabled at=5 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20data[MX]/data.priority at=0 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20data[SRV]/data.priority at=0 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20data[SRV]/data.weight at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20data[SRV]/data.port at=2 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=A,AAAA,CNAME,NS,MX,TXT,CAA,SRV binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20value at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20data at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:type,sibling:type,variants:MX%252CSRV
+control EDIT%20ttl at=4 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20enabled at=5 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20data[MX]/data.priority at=0 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20data[SRV]/data.priority at=0 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20data[SRV]/data.weight at=1 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20data[SRV]/data.port at=2 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+
+case admin.dns-peers.operator.remote admin dns-peers operator v2
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=transfer_host relation=false
+column peer_type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column transfer_host at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column tsig_key_name at=3 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column enabled at=4 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+filter name at=0 kind=TEXT facet=false param=filter.name
+filter enabled at=1 kind=BOOLEAN facet=false param=filter.enabled
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:negotiate_transfer_key at=1 verb=invoke band=inline style=DEFAULT disabled= confirm=style:DEFAULT,title:negotiate_key%252Cscope%3Ddns_peer,body:negotiate_key_confirm%252Cscope%3Ddns_peer,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/negotiate_transfer_key
+row zenit:delete at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_named%252Cscope%3Ddns_peer,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+inline name
+tab history at=0 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20peer_type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=nameserver,hohenheim binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20transfer_host at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20transfer_port at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20tsig_key_name at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20tsig_algorithm at=5 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20tsig_secret at=6 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control CREATE%20base_url at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20api_key at=8 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control CREATE%20enabled at=9 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20peer_type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=nameserver,hohenheim binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20transfer_host at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20transfer_port at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20tsig_key_name at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20tsig_algorithm at=5 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20tsig_secret at=6 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control EDIT%20base_url at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20api_key at=8 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control EDIT%20enabled at=9 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+
+case admin.dns-peers.operator.in-use admin dns-peers operator v2
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=transfer_host relation=false
+column peer_type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column transfer_host at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column tsig_key_name at=3 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column enabled at=4 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+filter name at=0 kind=TEXT facet=false param=filter.name
+filter enabled at=1 kind=BOOLEAN facet=false param=filter.enabled
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled=delete_in_use confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_named%252Cscope%3Ddns_peer,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+inline name
+tab history at=0 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20peer_type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=nameserver,hohenheim binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20transfer_host at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20transfer_port at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20tsig_key_name at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20tsig_algorithm at=5 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20tsig_secret at=6 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control CREATE%20base_url at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20api_key at=8 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control CREATE%20enabled at=9 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20peer_type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=nameserver,hohenheim binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20transfer_host at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20transfer_port at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20tsig_key_name at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20tsig_algorithm at=5 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20tsig_secret at=6 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control EDIT%20base_url at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20api_key at=8 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control EDIT%20enabled at=9 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=

@@ -1,10 +1,12 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
@@ -25,7 +27,15 @@ import java.util.List;
  */
 public class BackupControlPlane extends ScheduledTask {
 
+    /** The task's catalog id, also the {@code system_task_history.task_type} its runs are stored under. */
+    public static final Identifier ID = HohenheimIds.id("backup_control_plane");
+
     public static final String STATIC_DESCRIPTION = "Back up the control-plane database and keyring";
+
+    @Override
+    public @NonNull Identifier id() {
+        return ID;
+    }
 
     @Override
     public @NonNull BackupControlPlane newTask() {

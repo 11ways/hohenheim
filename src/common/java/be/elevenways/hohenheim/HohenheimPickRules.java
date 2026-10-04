@@ -2,11 +2,11 @@ package be.elevenways.hohenheim;
 
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.hohenheim.host.VolumeBackend;
+import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.protoblast.common.typed.rule.Condition;
 import be.elevenways.protoblast.common.typed.rule.Operand;
-import be.elevenways.zenit.common.annotation.ZenitAutoLoad;
 import be.elevenways.zenit.common.edit.EmptyNarrowingReason;
 import be.elevenways.zenit.common.edit.SiblingRulesResolver;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -34,7 +34,7 @@ import java.util.Map;
  * constructed server-side is dead code to the browser and its reviver is eliminated
  * (the DrpHostFixture lesson).
  */
-@ZenitAutoLoad
+@BlastAutoLoad
 public final class HohenheimPickRules {
 
     /** Sentinel; constructing each record from common code defeats TeaVM DCE. */

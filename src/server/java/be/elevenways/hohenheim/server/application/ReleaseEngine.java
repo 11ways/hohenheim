@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.application;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
@@ -24,7 +26,6 @@ import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
@@ -81,8 +82,6 @@ import java.util.TreeMap;
  */
 public final class ReleaseEngine {
 
-    /** The activity action a SETTLED application rollback is recorded under. */
-    public static final String ACTIVITY_ROLLBACK_ACTION = "rolled_back";
 
     /** Keys of {@code adjustPaths}-injected checkout paths: per-slot, never source identity. */
     private static final List<String> VOLATILE_SETTINGS =
@@ -300,7 +299,7 @@ public final class ReleaseEngine {
                 (Map<String, Object>) adopting.get(InstanceModel.SETTINGS));
             persisted.put("source_fingerprint", ownerFingerprint);
             adopting.set(InstanceModel.SETTINGS, persisted);
-            Models.get(InstanceModel.class).save(adopting);
+            InstanceModel.saveConfiguration(adopting);
             finish(op, ReleaseOperationModel.STATUS_SUCCEEDED, null,
                 "spec unchanged; fingerprint adopted without a deploy");
             return new ApplicationReleases.Release(servingId, oldLive);
@@ -353,11 +352,11 @@ public final class ReleaseEngine {
         // address off the generation gatedSwap just bumped. Rebuilding every site's handler
         // to move one upstream was the site-keyed shape.
         // AIDEV-NOTE: recorded HERE, in the engine, not on the surfaces. The admin row
-        // action (SiteResource#rollbackAction) recorded nothing while the automation API
+        // action (now the rollback_release operation) recorded nothing while the automation API
         // recorded "rollback_triggered" -- the same one-surface-audited asymmetry the
         // instance power path had. The engine writes its state through role saves and
         // ReleaseOperation rows, neither of which is an activity row about the SITE.
-        ActivityLog.record(Models.get(InstanceModel.class), applicationId, ACTIVITY_ROLLBACK_ACTION,
+        ActivityLog.record(Models.get(InstanceModel.class), applicationId, HohenheimActivityAction.ROLLED_BACK,
             null);
     }
 
@@ -367,12 +366,10 @@ public final class ReleaseEngine {
             Row serving = ApplicationReleases.ownedServing(applicationId);
             Row target = newestRetired(applicationId);
             if (target == null) {
-                throw Violations.ofForm(Microcopy.of("release_no_rollback_target")
-                    .withFilter("scope", "violations"));
+                throw Violations.ofForm(HohenheimViolations.text("release_no_rollback_target"));
             }
             if (serving == null) {
-                throw Violations.ofForm(Microcopy.of("release_no_serving_release")
-                    .withFilter("scope", "violations"));
+                throw Violations.ofForm(HohenheimViolations.text("release_no_serving_release"));
             }
             Map<String, Object> desired = ApplicationReleases.storedSettings(target);
             int serverId = ServerModel.canonicalServerId(target.get(InstanceModel.SERVER_ID));
@@ -383,8 +380,7 @@ public final class ReleaseEngine {
             InstanceStatus oldLive =
                 new InstanceService().liveStatus(serving.get(InstanceModel.ID));
             if (!oldLive.running() || oldLive.publishedPort() == null) {
-                throw Violations.ofForm(Microcopy.of("release_no_serving_release")
-                    .withFilter("scope", "violations"));
+                throw Violations.ofForm(HohenheimViolations.text("release_no_serving_release"));
             }
             Row op = newOperation(ReleaseOperationModel.KIND_ROLLBACK, applicationId,
                 ownerFingerprint, specFingerprint);
@@ -631,7 +627,7 @@ public final class ReleaseEngine {
             Row serving = ApplicationReleases.ownedServing(applicationId);
             if (serving != null) {
                 int serverId = ServerModel.canonicalServerId(serving.get(InstanceModel.SERVER_ID));
-                BuildArtifacts.pruneSuperseded(ApplicationReleases.dockerFor(serverId),
+                BuildArtifacts.pruneSuperseded(new ServerService().clientFor(serverId),
                     InstanceModel.MODEL_ID.toString(), applicationId, servingImage);
             }
         } catch (RuntimeException e) {
@@ -862,8 +858,7 @@ public final class ReleaseEngine {
     static void requireHealthy(@NonNull InstanceStatus status,
                                @NonNull Map<String, Object> desired, int serverId) {
         if (!status.running() || status.workloadDead() || status.publishedPort() == null) {
-            throw Violations.ofForm(Microcopy.of("release_no_published_port")
-                .withFilter("scope", "violations"));
+            throw Violations.ofForm(HohenheimViolations.text("release_no_published_port"));
         }
         probe(status.publishedPort(), healthPathOf(desired), PublishedPortProbe.forServer(serverId));
     }
@@ -907,8 +902,7 @@ public final class ReleaseEngine {
                 lastFailure = notUp.getMessage() != null ? notUp.getMessage() : "connect failed";
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
-                throw Violations.ofForm(Microcopy.of("release_probe_failed")
-                    .withFilter("scope", "violations").withArg("reason", "interrupted"));
+                throw Violations.ofForm(HohenheimViolations.text("release_probe_failed").withArg("reason", "interrupted"));
             }
             try {
                 Thread.sleep(pause);
@@ -917,8 +911,7 @@ public final class ReleaseEngine {
                 break;
             }
         }
-        throw Violations.ofForm(Microcopy.of("release_probe_failed")
-            .withFilter("scope", "violations").withArg("reason", lastFailure));
+        throw Violations.ofForm(HohenheimViolations.text("release_probe_failed").withArg("reason", lastFailure));
     }
 
     /**
@@ -942,15 +935,16 @@ public final class ReleaseEngine {
      * claim_fence would erase a rival controller's authority over the record. Unlike the
      * role flip, a SETTINGS write cannot become a hook-free {@code updateAll}: the
      * image-change hook that clears the fingerprint pin ({@code InstanceImagePin}) lives
-     * in the save pipeline, so the fix here is a reload, not a targeted assign.
+     * in the save pipeline, so the fix here is a reload, not a targeted assign. The reload
+     * narrows the window and InstanceModel.saveConfiguration closes it: the operation-owned
+     * columns never ride the save at all.
      *
      * @throws Violations when the release's own row vanished mid-operation
      */
     private static @NonNull Row reload(int instanceId) {
         Row fresh = Models.get(InstanceModel.class).findById(instanceId);
         if (fresh == null) {
-            throw Violations.ofForm(Microcopy.of("release_no_serving_release")
-                .withFilter("scope", "violations"));
+            throw Violations.ofForm(HohenheimViolations.text("release_no_serving_release"));
         }
         return fresh;
     }

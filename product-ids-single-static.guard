@@ -1,0 +1,3 @@
+Presence of this file opts the project into the protoblast plugin's checkProductIds compile gate
+(a class declaring a Product holds only its PRODUCT field and static methods; see
+CheckProductIdsTask).

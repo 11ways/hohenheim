@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.CertificateModel;
@@ -17,31 +18,37 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
-import be.elevenways.hohenheim.server.cms.AccessListResource;
-import be.elevenways.hohenheim.server.cms.AuthProviderResource;
-import be.elevenways.hohenheim.server.cms.CertificateResource;
-import be.elevenways.hohenheim.server.cms.DnsPeerResource;
-import be.elevenways.hohenheim.server.cms.DnsRecordResource;
-import be.elevenways.hohenheim.server.cms.DnsZoneResource;
-import be.elevenways.hohenheim.server.cms.EnvironmentResource;
-import be.elevenways.hohenheim.server.cms.EnvironmentVariableResource;
-import be.elevenways.hohenheim.server.cms.ManageDnsRecordResource;
-import be.elevenways.hohenheim.server.cms.NotificationChannelResource;
-import be.elevenways.hohenheim.server.cms.ServerResource;
-import be.elevenways.hohenheim.server.cms.SiteResource;
+import be.elevenways.hohenheim.server.cms.AccessListParts;
+import be.elevenways.hohenheim.server.cms.AuthProviderParts;
+import be.elevenways.hohenheim.server.cms.CertificateParts;
+import be.elevenways.hohenheim.server.cms.EnvironmentParts;
+import be.elevenways.hohenheim.server.cms.DnsPeerParts;
+import be.elevenways.hohenheim.server.cms.DnsRecordParts;
+import be.elevenways.hohenheim.server.cms.DnsZoneParts;
+import be.elevenways.hohenheim.server.cms.ManageDnsRecordParts;
+import be.elevenways.hohenheim.server.cms.NotificationChannelParts;
+import be.elevenways.hohenheim.server.cms.ServerParts;
+import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.server.operation.OperationPipeline;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -70,7 +77,7 @@ class DeleteConfirmationTest {
     @Test
     void everyDeleteDialogNamesWhatThisRecordTakesWithIt() {
         Db.run(datasource, () -> {
-            DnsZoneResource zones = new DnsZoneResource();
+            DnsZoneParts zones = new DnsZoneParts();
 
             // 1. A zone nothing depends on yet: the dialog NAMES the origin and how many
             //    stored records go with it, and gates the click behind typing the origin.
@@ -133,10 +140,16 @@ class DeleteConfirmationTest {
                     .as("step 5: an unrelated admin hostname keeps the dependent wording")
                     .isEqualTo("delete_confirm_dependents"));
 
-            // 6. The site dialog names the hostnames that stop answering.
-            SiteResource sites = new SiteResource();
+            // 6. The site dialog names the hostnames that stop answering: the admin site entry's declared row
+            //    confirmation, the one its placed delete draws.
+            Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
+            @SuppressWarnings("unchecked")
+            DeleteConfirmation<Row> sites = ((PanelResource<Row>) Objects.requireNonNull(
+                admin.entryBySlug(HohenheimSlugs.SITES))).deleteConfirmation();
+            PanelRequest request = new PanelRequest(admin, TenantConduits.stubFor(null), AccessContext.anonymous(),
+                null);
             Row shop = Models.get(SiteModel.class).findById(siteId);
-            ConfirmationSpec siteConfirm = sites.deleteConfirmationFor(shop);
+            ConfirmationSpec siteConfirm = sites.forRow(shop, request);
             assertThat(siteConfirm.body().key())
                 .as("step 6: a site with hostnames gets the hostname wording")
                 .isEqualTo("delete_confirm_hostnames");
@@ -149,15 +162,15 @@ class DeleteConfirmationTest {
             // 7. A site with no hostname bound gets the generic body instead of a
             //    sentence naming nothing.
             Row bare = Models.get(SiteModel.class).findById(site("bare", null));
-            assertThat(sites.deleteConfirmationFor(bare).body().key())
+            assertThat(sites.forRow(bare, request).body().key())
                 .as("step 7: a hostname-less site keeps the generic wording")
                 .isEqualTo("delete_confirm");
 
             // 8. The certificate dialog names the domains whose HTTPS stops working.
-            CertificateResource certificates = new CertificateResource();
+            DeleteConfirmation<Row> certificates = CertificateParts.admin().deleteConfirmation();
             Row wildcard = Models.get(CertificateModel.class).find()
                 .where(CertificateModel.NICE_NAME.eq("wildcard")).first();
-            ConfirmationSpec certConfirm = certificates.deleteConfirmationFor(wildcard);
+            ConfirmationSpec certConfirm = certificates.forRow(wildcard, request);
             assertThat(certConfirm.body().key())
                 .as("step 8: a certificate with domains gets the domain wording")
                 .isEqualTo("delete_confirm_domains");
@@ -168,14 +181,14 @@ class DeleteConfirmationTest {
 
             // 9. A certificate with no stored names cannot name any, and says the rest.
             Row nameless = Models.get(CertificateModel.class).findById(certificate("empty", ""));
-            assertThat(certificates.deleteConfirmationFor(nameless).body().key())
+            assertThat(certificates.forRow(nameless, request).body().key())
                 .as("step 9: a nameless certificate keeps the generic wording")
                 .isEqualTo("delete_confirm");
 
             // 10. A DNS record's dialog names the record, its TYPE, its VALUE and the ZONE
             //     it answers in -- the generic dialog names only the owner label, which
             //     tells an operator nothing about what stops resolving.
-            DnsRecordResource records = new DnsRecordResource();
+            DnsRecordParts records = new DnsRecordParts();
             Row visualQa = Models.get(DnsRecordModel.class)
                 .findById(record(zoneId, "visual-qa"));
 
@@ -207,7 +220,7 @@ class DeleteConfirmationTest {
             // 12. The tenant-facing subclass inherits the SAME composing method -- there is
             //     one home for this wording, and the zone's Records tab renders its rows
             //     through this very hook too.
-            assertThat(new ManageDnsRecordResource().deleteConfirmationFor(visualQa).body())
+            assertThat(ManageDnsRecordParts.manage().deleteConfirmation().forRow(visualQa, request).body())
                 .as("step 12: /manage speaks the same sentence as the admin panel")
                 .isEqualTo(recordConfirm.body());
 
@@ -233,7 +246,8 @@ class DeleteConfirmationTest {
     @Test
     void thePreviouslyGenericDialogsNameTheirOwnConsequences() {
         Db.run(datasource, () -> {
-            AccessListResource lists = new AccessListResource();
+            DeleteConfirmation<Row> lists = AccessListParts.admin().deleteConfirmation();
+            PanelRequest request = adminRequest();
 
             // 1. A list nothing uses: the dialog names it and how many rules go with it,
             //    and says in so many words that nothing is gated by it.
@@ -242,7 +256,7 @@ class DeleteConfirmationTest {
             rule(listId);
             Row list = Models.get(AccessListModel.class).findById(listId);
 
-            ConfirmationSpec unused = lists.deleteConfirmationFor(list);
+            ConfirmationSpec unused = lists.forRow(list, request);
             assertThat(unused.body().key())
                 .as("step 1: an unused list gets the named wording")
                 .isEqualTo("delete_confirm_named");
@@ -261,7 +275,7 @@ class DeleteConfirmationTest {
             Models.get(SiteModel.class).save(guarded);
             protectedPath(siteId, listId, "/admin");
 
-            ConfirmationSpec gating = lists.deleteConfirmationFor(list);
+            ConfirmationSpec gating = lists.forRow(list, request);
             assertThat(gating.body().key())
                 .as("step 2: a list in use switches to the gating wording")
                 .isEqualTo("delete_confirm_gating");
@@ -271,21 +285,20 @@ class DeleteConfirmationTest {
                 .contains("/admin");
 
             // 3. The record-LESS dialog can only speak about the type, and does.
-            assertThat(lists.deleteConfirmation().body().filters().get("scope"))
+            assertThat(lists.fallback().body().filters().get("scope"))
                 .as("step 3: the type-level dialog is the access-list one, not the generic")
                 .isEqualTo("access_list");
 
             // 4. A host carrying stored workloads: the delete is OFFERED and dead, with the
             //    count on screen, rather than orphaning every row that names the host.
-            ServerResource servers = new ServerResource();
-            AccessContext operator = AccessContext.of(TenantConduits.stubFor(null));
+            AccessContext operator = TenantConduits.operator();
             int hostId = server("delete-confirm-host");
             Row host = Models.get(ServerModel.class).findById(hostId);
-            assertThat(servers.deleteUnavailableReason(host, operator))
-                .as("step 4: an empty host is deletable").isNull();
+            assertThat(OperationPipeline.offer(ServerParts.DELETE, operator, host))
+                .as("step 4: an empty host is deletable").isInstanceOf(OperationPipeline.Offer.Available.class);
 
             stack("payments", hostId);
-            Microcopy inUse = servers.deleteUnavailableReason(host, operator);
+            Microcopy inUse = ((OperationPipeline.Offer.Unavailable) OperationPipeline.offer(ServerParts.DELETE, operator, host)).reason();
             assertThat(inUse).as("step 4: a host with workloads is not").isNotNull();
             assertThat(inUse.key()).isEqualTo("delete_in_use");
             assertThat(inUse.args().get("workloads"))
@@ -302,17 +315,17 @@ class DeleteConfirmationTest {
             assertThat(local.get(ServerModel.NAME))
                 .as("step 5: and it is the reserved local name")
                 .isEqualTo(ServerService.LOCAL_HOST_NAME);
-            assertThat(servers.deleteUnavailableReason(local, operator))
+            assertThat(((OperationPipeline.Offer.Unavailable) OperationPipeline.offer(ServerParts.DELETE, operator, local)).reason())
                 .as("step 5: the local host explains itself instead of failing on click")
                 .isNotNull()
                 .extracting(Microcopy::key).isEqualTo("delete_local");
 
             // 6. The remaining two speak for themselves rather than through the framework's
             //    "this cannot be undone".
-            assertThat(new EnvironmentResource().deleteConfirmation().body().filters().get("scope"))
+            assertThat(EnvironmentParts.admin().deleteConfirmation().fallback().body().filters().get("scope"))
                 .as("step 6: the environment dialog states the refusal policy it enforces")
                 .isEqualTo("environment");
-            assertThat(new NotificationChannelResource().deleteConfirmation()
+            assertThat(NotificationChannelParts.admin().deleteConfirmation().fallback()
                     .body().filters().get("scope"))
                 .as("step 6: and the channel dialog names the deliveries that stop")
                 .isEqualTo("notification_channel");
@@ -329,7 +342,7 @@ class DeleteConfirmationTest {
     void theCrossReferenceDialogsNameTheirZonesSitesAndEnvironments() {
         Db.run(datasource, () -> {
             AccessContext operator = AccessContext.of(TenantConduits.stubFor(null));
-            DnsPeerResource peers = new DnsPeerResource();
+            DnsPeerParts peers = new DnsPeerParts();
 
             // 1. A peer nothing links to: the dialog names it and says nothing notifies it.
             int peerId = peer("ns2");
@@ -368,17 +381,17 @@ class DeleteConfirmationTest {
 
             // 4. An auth provider nothing names is deletable and its dialog speaks for
             //    itself; one gating a live site is dead naming the site.
-            AuthProviderResource providers = new AuthProviderResource();
+            AccessContext admin = TenantConduits.operator();
             int providerId = authProvider("Office SSO");
             Row provider = Models.get(SiteAuthProviderModel.class).findById(providerId);
-            assertThat(providers.deleteUnavailableReason(provider, operator))
+            assertThat(deleteUnavailable(provider, admin))
                 .as("step 4: an unreferenced provider is deletable").isNull();
-            assertThat(providers.deleteConfirmation().body().filters().get("scope"))
+            assertThat(AuthProviderParts.admin().deleteConfirmation().fallback().body().filters().get("scope"))
                 .as("step 4: the provider dialog is its own, not the generic").isEqualTo("auth_provider");
             Row intranet = Models.get(SiteModel.class).findById(site("intranet", null));
             intranet.set(SiteModel.AUTH_PROVIDER_ID, providerId);
             Models.get(SiteModel.class).save(intranet);
-            Microcopy gating = providers.deleteUnavailableReason(provider, operator);
+            Microcopy gating = deleteUnavailable(provider, admin);
             assertThat(gating).as("step 4: a provider gating a site is dead").isNotNull();
             assertThat(gating.key()).isEqualTo("delete_in_use");
             assertThat(String.valueOf(gating.args().get("sites")))
@@ -388,33 +401,34 @@ class DeleteConfirmationTest {
             //    with the rules-only wording, since there is no site to name.
             intranet.set(SiteModel.DELETED_AT, Now.instant());
             Models.get(SiteModel.class).save(intranet);
-            assertThat(providers.deleteUnavailableReason(provider, operator))
+            assertThat(deleteUnavailable(provider, admin))
                 .as("step 5: a trashed site releases the provider").isNull();
             providerRule(accessList("Staff"), providerId);
-            Microcopy ruled = providers.deleteUnavailableReason(provider, operator);
+            Microcopy ruled = deleteUnavailable(provider, admin);
             assertThat(ruled).as("step 5: a rule naming the provider keeps it dead").isNotNull();
             assertThat(ruled.key()).isEqualTo("delete_in_use_rules");
             assertThat(ruled.args().get("rules")).as("step 5: counting the rules").isEqualTo(1L);
 
             // 6. An environment variable's dialog names the key and the environment it
             //    leaves; the record-less one still says when the removal lands.
-            EnvironmentVariableResource variables = new EnvironmentVariableResource();
+            DeleteConfirmation<Row> variables = EnvironmentParts.variables().deleteConfirmation();
+            PanelRequest request = adminRequest();
             int environmentId = environment("production");
             Row variable = Models.get(InstanceVariableModel.class)
                 .findById(environmentVariable(environmentId, "DATABASE_URL"));
-            ConfirmationSpec named = variables.deleteConfirmationFor(variable);
+            ConfirmationSpec named = variables.forRow(variable, request);
             assertThat(named.body().key()).as("step 6: the named wording").isEqualTo("delete_confirm_named");
             assertThat(named.body().filters().get("scope")).isEqualTo("environment_variable");
             assertThat(named.body().args().get("key")).as("step 6: naming the key").isEqualTo("DATABASE_URL");
             assertThat(named.body().args().get("environment")).as("step 6: and the environment")
                 .isEqualTo("production");
-            assertThat(variables.deleteConfirmation().body().filters().get("scope"))
+            assertThat(variables.fallback().body().filters().get("scope"))
                 .as("step 6: the record-less dialog is the variable's own").isEqualTo("environment_variable");
 
             // 7. A variable whose environment reference dangles cannot name one and keeps
             //    the type-level body rather than a sentence with a hole in it.
             variable.set(InstanceVariableModel.ENVIRONMENT_ID, null);
-            assertThat(variables.deleteConfirmationFor(variable).body().key())
+            assertThat(variables.forRow(variable, request).body().key())
                 .as("step 7: an unresolvable environment falls back to the type-level body")
                 .isEqualTo("delete_confirm");
         });
@@ -568,5 +582,17 @@ class DeleteConfirmationTest {
         row.set(CertificateModel.STATUS, CertificateModel.STATUS_ACTIVE);
         Models.get(CertificateModel.class).save(row);
         return row.get(CertificateModel.ID);
+    }
+
+    /** A request under the admin panel, for the declared row confirmations. */
+    private static PanelRequest adminRequest() {
+        return new PanelRequest(Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN)),
+            TenantConduits.stubFor(null), AccessContext.anonymous(), null);
+    }
+
+    /** @return the words the auth-provider delete is offered dead with, null when it is live */
+    private static Microcopy deleteUnavailable(Row provider, AccessContext access) {
+        OperationPipeline.Offer offer = OperationPipeline.offer(AuthProviderParts.DELETE, access, provider);
+        return offer instanceof OperationPipeline.Offer.Unavailable dead ? dead.reason() : null;
     }
 }

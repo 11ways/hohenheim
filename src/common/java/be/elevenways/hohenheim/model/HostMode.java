@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -25,19 +27,19 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public enum HostMode {
 
     /** The controller's own daemon, over its unix socket. */
-    LOCAL(ServerModel.MODE_LOCAL, false, "Local", "house", "teal"),
+    LOCAL(ServerModel.MODE_LOCAL, false, "Local", "house", ColorHue.TEAL),
 
     /** A remote daemon, over the pinned ssh argv of {@code HostKeys.sshArgv}. */
-    SSH(ServerModel.MODE_SSH, true, "SSH", "terminal", "indigo");
+    SSH(ServerModel.MODE_SSH, true, "SSH", "terminal", ColorHue.INDIGO);
 
     private final @NonNull String token;
     private final boolean remote;
     private final @NonNull String displayName;
     private final @NonNull String icon;
-    private final @NonNull String color;
+    private final @NonNull BadgeColor color;
 
     HostMode(@NonNull String token, boolean remote, @NonNull String displayName,
-             @NonNull String icon, @NonNull String color) {
+             @NonNull String icon, @NonNull BadgeColor color) {
         this.token = token;
         this.remote = remote;
         this.displayName = displayName;
@@ -66,7 +68,7 @@ public enum HostMode {
     }
 
     /** The badge color. */
-    public @NonNull String color() {
+    public @NonNull BadgeColor color() {
         return this.color;
     }
 

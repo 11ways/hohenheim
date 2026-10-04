@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
@@ -12,7 +14,6 @@ import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostShell;
-import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.ImageOrigin;
@@ -36,6 +37,8 @@ import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.StringMapField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -66,7 +69,7 @@ import java.util.Set;
  */
 public final class WorkspaceKind implements InstanceKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "workspace");
+    public static final Identifier ID = HohenheimIds.id("workspace");
     public static final Schema SETTINGS_SCHEMA = GitSourceSchema.addTo(new Schema());
 
     /** The one declared volume of every workspace, named in {@code instance_volumes}. */
@@ -170,7 +173,7 @@ public final class WorkspaceKind implements InstanceKindHandler {
 
     @Override public Icon getIcon() { return Icon.of("code"); }
 
-    @Override public String getColor() { return "violet"; }
+    @Override public BadgeColor color() { return ColorHue.VIOLET; }
 
     @Override public Schema getSchema() { return SETTINGS_SCHEMA; }
 
@@ -407,8 +410,7 @@ public final class WorkspaceKind implements InstanceKindHandler {
     private static @NonNull Row requireInstance(int instanceId) {
         Row instance = Models.get(InstanceModel.class).findById(instanceId);
         if (instance == null) {
-            throw Violations.ofForm(Microcopy.of("instance_not_found")
-                .withFilter("scope", "violations").withArg("id", String.valueOf(instanceId)));
+            throw Violations.ofForm(HohenheimViolations.text("instance_not_found").withArg("id", String.valueOf(instanceId)));
         }
         return instance;
     }

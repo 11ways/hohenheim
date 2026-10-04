@@ -122,7 +122,9 @@ class BrowserTestLaneGuardTest {
                 + "per entry (forkEvery=1 starts and tears down a worker per class). If the "
                 + "new class really cannot share a JVM, raise this bound in the same commit "
                 + "and say why in the class comment.")
-            .hasSizeLessThanOrEqualTo(3);
+            // The fresh-install walkthrough owns the first runtime boot; AlertsTest owns its LAN boot declaration.
+            // Neither process-global boundary has a reset, so both need their own JVM beside the two boot-policy tests.
+            .hasSizeLessThanOrEqualTo(4);
     }
 
     /** Concrete, enforceable test classes: named *Test, not abstract, not a helper. */

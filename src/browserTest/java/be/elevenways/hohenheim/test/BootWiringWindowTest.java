@@ -1,13 +1,13 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.zenit.auth.AuthSettings;
-import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.websocket.WebSocketHandler;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.setting.ServerSettings;
@@ -50,7 +50,6 @@ class BootWiringWindowTest {
         HohenheimTestRuntime.declareAccessModelsOnce();
         TestDatabases.freshDatabase();
 
-        ZenitAuth.init(HohenheimDatabase.datasource());
         Zenit.SETTINGS_VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
         ServerMain.installAuthBaselines();
 
@@ -73,10 +72,18 @@ class BootWiringWindowTest {
         AtomicReference<String> adminPanel = new AtomicReference<>("<probe never ran>");
         AtomicReference<String> devTunnelHandler = new AtomicReference<>("<probe never ran>");
         AtomicReference<String> managePanel = new AtomicReference<>("<probe never ran>");
+        AtomicReference<Long> walkedSources = new AtomicReference<>(-1L);
         AtomicReference<Throwable> probeFailure = new AtomicReference<>();
 
         Zenit.ROOT_STAGE.addChildStage("boot-window-probe", () -> {
             try {
+                // Before any request (a panel dispatch derives sources too): only CmsBoot walking
+                // Hohenheim's panels can have derived a default source for a Hohenheim model.
+                walkedSources.set(RecordSourceRegistry.INSTANCE.registryEntries().stream()
+                    .filter(RecordSourceRegistry.Entry::derivedDefault)
+                    .filter(entry -> HohenheimIds.PRODUCT.namespace()
+                        .equals(entry.source().modelId().getNamespace()))
+                    .count());
                 int port = ServerZenitRuntime.INSTANCE.getHttpServer().getPort();
                 HttpClient client = HttpClient.newBuilder()
                     .followRedirects(HttpClient.Redirect.NEVER)
@@ -141,6 +148,13 @@ class BootWiringWindowTest {
             assertThat(managePanel.get())
                 .as("step 4: the /manage panel must be registered before the listener accepts")
                 .isNotEqualTo("null");
+
+            //    And they were registered BEFORE zenit-cms's CmsBoot walked the panels
+            //    (HohenheimHostWiring declares initializesBefore CmsBoot): the walk derived
+            //    record sources for Hohenheim's own resources.
+            assertThat(walkedSources.get())
+                .as("step 4: CmsBoot must have walked the Hohenheim panels (derived sources for their models)")
+                .isPositive();
 
             // 5. No WebSocket endpoint may still expose its declaration placeholder.
             assertThat(devTunnelHandler.get())

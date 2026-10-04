@@ -80,21 +80,40 @@ final class InstanceMaintenanceWindow {
      */
     static void run(@NonNull InstanceService instances, @NonNull Resolved resolved,
                     @NonNull Plan plan, @NonNull Work work) throws IOException {
+        // The window holds the record's own claim for its whole span (re-entered when the caller already holds it):
+        // an application's backup opens it over the serving RELEASE, a record its own claim does not cover, so it
+        // waits out a reconciler's glance at that release instead of failing the backup.
+        IOException[] failed = new IOException[1];
+        instances.operations().exclusive(resolved.row().get(InstanceModel.ID),
+            InstanceOperationLock.Contention.QUEUE, () -> {
+                try {
+                    window(instances, resolved, plan, work);
+                } catch (IOException failure) {
+                    failed[0] = failure;
+                }
+            });
+        if (failed[0] != null) {
+            throw failed[0];
+        }
+    }
+
+    private static void window(@NonNull InstanceService instances, @NonNull Resolved resolved,
+                               @NonNull Plan plan, @NonNull Work work) throws IOException {
         int instanceId = resolved.row().get(InstanceModel.ID);
         Object name = resolved.row().get(InstanceModel.NAME);
         if (plan.stopFirst()) {
             TenantWrites.inAuthorizedOperation(() -> instances.stop(instanceId));
         }
-        long fence = instances.leases().requireFence(resolved.serverId());
-        InstanceOperationGuard.stamp(instances.leases(), instanceId, resolved.serverId(), fence,
+        instances.leases().requireFence(resolved.serverId());
+        InstanceOperationGuard.stamp(instances.leases(), instanceId, resolved.serverId(),
             plan.protectedStatus(), name);
         try {
             work.run();
         } catch (IOException | RuntimeException | Error failure) {
-            endAfterFailure(instances, resolved, plan, fence, failure);
+            endAfterFailure(instances, resolved, plan, failure);
             throw failure;
         }
-        InstanceOperationGuard.stamp(instances.leases(), instanceId, resolved.serverId(), fence,
+        InstanceOperationGuard.stamp(instances.leases(), instanceId, resolved.serverId(),
             plan.settledStatus(), name);
         if (plan.redeploy()) {
             TenantWrites.inAuthorizedOperation(() -> instances.deploy(instanceId));
@@ -104,15 +123,15 @@ final class InstanceMaintenanceWindow {
     /** Replace the protected status after a failed work; never masks the work's failure. */
     private static void endAfterFailure(@NonNull InstanceService instances,
                                         @NonNull Resolved resolved, @NonNull Plan plan,
-                                        long fence, @NonNull Throwable failure) {
+                                        @NonNull Throwable failure) {
         int instanceId = resolved.row().get(InstanceModel.ID);
         String ended = switch (plan.onFailure()) {
             case HAND_BACK -> plan.settledStatus();
             case HOLD_ERROR -> InstanceModel.STATUS_ERROR;
         };
         try {
-            InstanceOperationGuard.stamp(instances.leases(), instanceId, resolved.serverId(),
-                fence, ended, resolved.row().get(InstanceModel.NAME));
+            InstanceOperationGuard.stamp(instances.leases(), instanceId, resolved.serverId(), ended,
+                resolved.row().get(InstanceModel.NAME));
         } catch (RuntimeException stampFailed) {
             // Fenced out: the record is a rival controller's now and so is its settle.
             failure.addSuppressed(stampFailed);

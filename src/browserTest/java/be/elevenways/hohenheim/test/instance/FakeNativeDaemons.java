@@ -29,6 +29,8 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -191,6 +193,12 @@ final class FakeNativeDaemons {
      */
     static final AtomicReference<Runnable> DURING_RESTORE = new AtomicReference<>();
 
+    /**
+     * Consumed by the next {@code start}: whatever arrives while the daemon starts the workload, on the caller's
+     * thread and inside the operation that started it (a rival asking for the same record).
+     */
+    static final AtomicReference<Runnable> DURING_START = new AtomicReference<>();
+
     // -- the install lane -----------------------------------------------------
 
     /**
@@ -346,6 +354,10 @@ final class FakeNativeDaemons {
 
         @Override
         public void start(@NonNull String handle) throws IOException {
+            Runnable during = DURING_START.getAndSet(null);
+            if (during != null) {
+                during.run();
+            }
             FakeWorkload workload = require(handle);
             workload.running = true;
             workload.oomKilled = false;   // a restart clears the daemon's kill flag
@@ -560,11 +572,9 @@ final class FakeNativeDaemons {
         static final Schema SETTINGS_SCHEMA = new Schema();
         static final StringField IMAGE = SETTINGS_SCHEMA.addField(
             StringField.builder().name("image").build());
-        private static boolean registered;
 
         static void register() {
-            if (!registered) {
-                registered = true;
+            if (InstanceKinds.getHandler(ID.toString()) == null) {
                 InstanceKinds.register(new FakeNativeKind());
                 InstanceKinds.register(new FakeVolumeKind());
                 InstanceKinds.register(new FakeVolumeSnapshotKind());
@@ -591,7 +601,7 @@ final class FakeNativeDaemons {
         public Icon getIcon() { return Icon.of("flask"); }
 
         @Override
-        public String getColor() { return "gray"; }
+        public BadgeColor color() { return ColorHue.GRAY; }
 
         @Override
         public Schema getSchema() { return SETTINGS_SCHEMA; }
@@ -661,7 +671,7 @@ final class FakeNativeDaemons {
         public Icon getIcon() { return Icon.of("flask"); }
 
         @Override
-        public String getColor() { return "gray"; }
+        public BadgeColor color() { return ColorHue.GRAY; }
 
         @Override
         public Schema getSchema() { return FakeNativeKind.SETTINGS_SCHEMA; }
@@ -907,7 +917,7 @@ final class FakeNativeDaemons {
         public Icon getIcon() { return Icon.of("flask"); }
 
         @Override
-        public String getColor() { return "gray"; }
+        public BadgeColor color() { return ColorHue.GRAY; }
 
         @Override
         public Schema getSchema() { return FakeNativeKind.SETTINGS_SCHEMA; }

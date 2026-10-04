@@ -1,9 +1,19 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.auth.model.GrantModel;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.auth.server.ZenitAuth;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.model.UserPrincipal;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.conduit.ConduitAttributes;
+import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.routing.RouteScope;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Principal;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -29,12 +39,52 @@ import java.util.Map;
  */
 public final class TenantConduits {
 
+    /** The test admin's sign-in, which every operator caller of the suite is. */
+    public static final String OPERATOR_EMAIL = "test@hohenheim.local";
+
     private TenantConduits() {
+    }
+
+    /**
+     * The installation operator as a caller: the seeded test admin, for a write that goes through a panel's verb
+     * (its authorizers ask who is acting, so the harness's system identity is no caller there).
+     */
+    public static AccessContext operator() {
+        return AccessContext.of(stubFor(new UserPrincipal(operatorUser().get(UserModel.ID), "Test Admin")));
+    }
+
+    /**
+     * The test admin of the current database, created with the /setup admin's grant-everything shape when absent.
+     *
+     * AIDEV-NOTE: THE one home of the test admin: HohenheimTestBase's seeded session reuses it, so a class on a
+     * fresh database that only needs an operator caller and a class that logs one in never seed a second account.
+     */
+    public static Row operatorUser() {
+        Row existing = AuthModels.users().find().where(UserModel.EMAIL.eq(OPERATOR_EMAIL)).first();
+        if (existing != null) {
+            return existing;
+        }
+        Row user = AuthModels.users().createEmptyRow();
+        user.set(UserModel.EMAIL, OPERATOR_EMAIL);
+        user.set(UserModel.DISPLAY_NAME, "Test Admin");
+        user.set(UserModel.ENABLED, true);
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
+        AuthModels.users().save(user);
+        ZenitAuth.markSeeded();   // a user exists, so the setup gate must not redirect
+        // Grant everything (the /setup admin's shape) so the panels' access checks pass.
+        Row grant = AuthModels.grants().createEmptyRow();
+        grant.set(GrantModel.SUBJECT_TYPE, GrantSubjectType.USER.key());
+        grant.set(GrantModel.SUBJECT_ID, user.get(UserModel.ID));
+        grant.set(GrantModel.PERMISSION, "*");
+        grant.set(GrantModel.VALUE, true);
+        AuthModels.grants().save(grant);
+        return user;
     }
 
     /** Run {@code body} inside a request scope whose principal is {@code principal}. */
     public static void as(@Nullable Principal principal, Runnable body) {
-        RouteScope.run(stub(principal, null), body);
+        RouteScope.run(stub(principal, null, null), body);
     }
 
     /**
@@ -42,7 +92,7 @@ public final class TenantConduits {
      * that reads the hostname the surface is being reached at.
      */
     public static void arrivingAt(String origin, Runnable body) {
-        RouteScope.run(stub(null, origin), body);
+        RouteScope.run(stub(null, origin, null), body);
     }
 
     /**
@@ -50,15 +100,20 @@ public final class TenantConduits {
      * takes an AccessContext rather than a scope ({@code AccessContext.of(conduit)}).
      */
     public static Conduit stubFor(@Nullable Principal principal) {
-        return stub(principal, null);
+        return stub(principal, null, null);
+    }
+
+    /** The same carrier, rendering under one panel: it answers that panel's slug as the routed panel parameter. */
+    public static Conduit stubIn(@Nullable Principal principal, String panelSlug) {
+        return stub(principal, null, panelSlug);
     }
 
     /** The same carrier, answering as a request that ARRIVED at {@code origin}. */
     public static Conduit stubFor(@Nullable Principal principal, @Nullable String origin) {
-        return stub(principal, origin);
+        return stub(principal, origin, null);
     }
 
-    private static Conduit stub(@Nullable Principal principal, @Nullable String origin) {
+    private static Conduit stub(@Nullable Principal principal, @Nullable String origin, @Nullable String panelSlug) {
         Map<IdentifierKey<?>, Object> attributes = new HashMap<>();
         if (principal != null) {
             attributes.put(ConduitAttributes.PRINCIPAL, principal);
@@ -75,6 +130,8 @@ public final class TenantConduits {
                 yield null;
             }
             case "getRequestOrigin" -> origin;
+            case "getParameter" -> args.length == 1 && args[0] == CmsEndpoints.PANEL_PARAM ? panelSlug
+                : defaultValue(method);
             case "getConduit" -> self[0];
             case "equals" -> proxy == args[0];
             case "hashCode" -> System.identityHashCode(proxy);

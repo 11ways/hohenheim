@@ -1,13 +1,13 @@
 package be.elevenways.hohenheim.test.instance;
 
-import be.elevenways.hohenheim.test.TestDatabases;
-import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.backup.FilesystemBackupTarget;
@@ -17,8 +17,8 @@ import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
-import be.elevenways.hohenheim.server.schedule.InstanceSnapshotAction;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -34,10 +34,6 @@ import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -50,7 +46,10 @@ import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -185,11 +184,11 @@ class IncusSnapshotBackupLiveTest {
                 Row step = Models.get(RecordScheduleStepModel.class).createEmptyRow();
                 step.set(RecordScheduleStepModel.SCHEDULE_ID, scheduleId);
                 step.set(RecordScheduleStepModel.POSITION, 1);
-                step.set(RecordScheduleStepModel.ACTION, InstanceSnapshotAction.ID.toString());
+                step.set(RecordScheduleStepModel.ACTION, InstanceOperations.SNAPSHOT.id().toString());
                 step.set(RecordScheduleStepModel.OFFSET_SECONDS, 0);
                 step.set(RecordScheduleStepModel.FAILURE_POLICY,
                     StepFailurePolicy.ABORT.storageKey());
-                step.set(RecordScheduleStepModel.PAYLOAD, Map.of("note", "nightly"));
+                step.set(RecordScheduleStepModel.INPUT, Map.of("note", "nightly"));
                 Models.get(RecordScheduleStepModel.class).save(step);
 
                 Row run = new RecordSchedules(datasource).runNow(scheduleId);

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.stack;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.instance.InstancePreStartHook;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -15,7 +16,7 @@ public class StackServiceLinkHook implements InstancePreStartHook {
 
     @Override
     public @NonNull Identifier id() {
-        return Identifier.of("hohenheim", "stack_service_links");
+        return HohenheimIds.id("stack_service_links");
     }
 
     @Override

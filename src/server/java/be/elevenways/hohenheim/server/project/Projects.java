@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.project;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ProjectModel;
@@ -124,7 +125,7 @@ public final class Projects {
             return true;
         }
         Long principalId = ctx.principalId();
-        if (principalId == null || ctx.isAnonymous()) {
+        if (principalId == null || !ctx.isAccount()) {
             return false;
         }
         String subject = subjectOf(project);
@@ -169,7 +170,7 @@ public final class Projects {
                 .orderBy(ProjectModel.ID, SortOrder.ASC).all();
         }
         Long principalId = ctx.principalId();
-        if (principalId == null || ctx.isAnonymous() || !coversOwnedVocabulary(ctx)) {
+        if (principalId == null || !ctx.isAccount() || !coversOwnedVocabulary(ctx)) {
             return List.of();
         }
         return projectsOf(principalId.intValue());
@@ -432,6 +433,6 @@ public final class Projects {
     }
 
     static Violations refusal(String key) {
-        return Violations.ofForm(Microcopy.of(key).withFilter("scope", "violations"));
+        return Violations.ofForm(HohenheimViolations.text(key));
     }
 }

@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
@@ -21,25 +23,23 @@ import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelPeer;
-import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.server.page.CmsRecordSources;
 import be.elevenways.zenit.common.data.RecordCreateProvider;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Permission;
-import be.elevenways.zenit.common.security.PermissionChecker;
+import be.elevenways.zenit.common.security.PermissionComputation;
+import be.elevenways.zenit.common.security.Permissions;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
-import be.elevenways.zenit.server.data.RecordSourceGate;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Delegated operator panel at /manage: only the sites (and their domains) the
@@ -60,86 +60,44 @@ public final class ManagePanel extends Panel {
     private static volatile boolean sourceRegistered = false;
 
     public ManagePanel() {
-        super(Identifier.of("hohenheim", SLUG), SLUG,
+        super(HohenheimIds.id(SLUG), SLUG,
             Microcopy.of("title").withFilter("scope", "manage"), ACCESS);
     }
 
+    /** The one eligibility computation, held so a JVM that boots twice installs the same instance. */
+    private static final PermissionComputation ELIGIBILITY = ManagePanel::eligible;
+
     /**
-     * Derives panel eligibility from walk-confirmed record grants while preserving
-     * explicit global grants. Installed by {@code HohenheimHostWiring} at the
-     * MODULES stage (never a Panel-constructor side effect): the checker and the
-     * site source must exist the moment the server accepts requests, and boot-seam
-     * installation makes that ordering structural.
+     * Installs the panel's eligibility as the computation of the computed {@link HohenheimSources#MANAGE_ACCESS}:
+     * an explicit decision of the checker wins either way, and an abstain asks {@link #eligible}, on every lane
+     * (request, detached, websocket) alike. Installed by {@code HohenheimHostWiring} at the MODULES stage.
+     *
+     * AIDEV-NOTE: this replaced a private PermissionChecker wrapper that widened only the request face, so a
+     * detached context (a hop, a channel) answered false for a tenant the request lane admitted (review 4, D14). The
+     * computation never runs inside decide(), so an operator's explicit global DENY stays visible to the capability
+     * walk's gate row (CapabilityWalkTest step 3).
      */
-    public static synchronized void installEligibilityPolicy() {
-        PermissionChecker current = Zenit.getPermissionChecker();
-        if (current instanceof ManageEligibilityChecker) {
-            return;
-        }
-        Zenit.setPermissionChecker(new ManageEligibilityChecker(current));
+    public static void installEligibility() {
+        Permissions.compute(HohenheimSources.MANAGE_ACCESS, ELIGIBILITY);
     }
 
     /**
-     * Widens ONLY the boolean face of the panel's ACCESS permission: an explicit
-     * resolver decision (either way) wins, and an abstain falls back to "holds a
-     * walk-confirmed manage grant on at least one site". zenit-cms checks a
-     * panel's access as a plain permission, so this layer is what makes a
-     * grant-holding tenant eligible for /manage without a second global grant.
+     * Whether a principal with no explicit decision is eligible for /manage: it holds a walk-confirmed grant on at
+     * least one record of a model this panel projects. It asks no conduit.
      *
-     * AIDEV-NOTE: decide() MUST pass through to the delegate untouched. The
-     * predecessor (EffectiveManagePermissionChecker) overrode only
-     * hasPermission, so it inherited the interface default decide() -- which
-     * maps false to abstain -- and thereby made an operator's explicit global
-     * DENY invisible to RecordCapabilities row 2 (GATE_DENIED) in every
-     * hohenheim install. Pinned by CapabilityWalkTest step 3.
+     * AIDEV-NOTE: every model this panel projects belongs in this disjunction: keying it on sites alone locked a pure
+     * instance tenant out of the panel built for them, and databases, git providers, projects and access lists joined
+     * for the same reason. Each record-capability term asks reachesAny, never "ids.isEmpty()": an id set cannot express
+     * every-record authority, which 403'd a hohenheim.sites.manage_all holder. The walk consults the checker's
+     * decide() only, never this computation, so there is no recursion.
      */
-    private record ManageEligibilityChecker(PermissionChecker delegate) implements PermissionChecker {
-        @Override
-        public boolean hasPermission(Conduit conduit, Permission permission) {
-            if (!ACCESS.equals(permission) || conduit == null) {
-                return this.delegate.hasPermission(conduit, permission);
-            }
-            Boolean decision = this.delegate.decide(conduit, permission);
-            if (decision != null) {
-                return decision;
-            }
-            // Abstain: eligibility follows the record grants. Each candidate is
-            // confirmed through the precedence walk (no recursion: the walk
-            // consults this checker only for OTHER permissions -- the admin
-            // bypass -- and for decide(), which passes through above).
-            //
-            // AIDEV-NOTE: instances count too, and they had to the moment the panel
-            // grew an instance projection. Keying eligibility on SITES alone locked a
-            // pure instance tenant (a game-server renter who owns no website) out of
-            // the very panel built for them: 403 at /manage with a live manage grant
-            // in hand. Every model this panel projects belongs in this disjunction.
-            //
-            // AIDEV-NOTE: each record-capability term asks reachesAny, never
-            // "ids.isEmpty()". An id set cannot express every-record authority, so the
-            // set spelling answered "reaches nothing" for a hohenheim.sites.manage_all
-            // holder and 403'd them out of the panel their permission exists for.
-            AccessContext ctx = RecordSourceGate.accessContextOf(conduit);
-            return HohenheimAccess.managesAnySite(ctx)
-                || HohenheimAccess.reachesAny(ctx, InstanceModel.MODEL_ID, HohenheimAccess.VIEW)
-                // DATABASES join the disjunction for the same reason instances did: a
-                // tenant who rents only a database holds no site or instance grant and
-                // would be 403'd out of the panel that now projects their database.
-                || HohenheimAccess.reachesAny(ctx, DatabaseModel.MODEL_ID, HohenheimAccess.VIEW)
-                // GIT PROVIDERS join for the same reason: a tenant may hold nothing but a
-                // provider it registered (a forge installation waiting for its first
-                // site), and would be 403'd out of the panel that projects it.
-                || HohenheimAccess.reachesAny(ctx, GitProviderModel.MODEL_ID,
-                    HohenheimAccess.MANAGE)
-                // PROJECTS join the disjunction for the reason stated above: a member of
-                // a project that owns nothing yet holds no site or instance grant, and
-                // would be 403'd out of the panel that now projects their project.
-                || !Projects.visibleTo(ctx).isEmpty();
-        }
-
-        @Override
-        public @Nullable Boolean decide(Conduit conduit, @NonNull Permission permission) {
-            return this.delegate.decide(conduit, permission);
-        }
+    static boolean eligible(@NonNull AccessContext ctx) {
+        return HohenheimAccess.managesAnySite(ctx)
+            || HohenheimAccess.reachesAny(ctx, InstanceModel.MODEL_ID, HohenheimAccess.VIEW)
+            || HohenheimAccess.reachesAny(ctx, DatabaseModel.MODEL_ID, HohenheimAccess.VIEW)
+            || HohenheimAccess.reachesAny(ctx, GitProviderModel.MODEL_ID, HohenheimAccess.MANAGE)
+            || HohenheimAccess.reachesAny(ctx, AccessListModel.MODEL_ID, HohenheimAccess.MANAGE)
+            || !Projects.visibleTo(ctx).isEmpty();
     }
 
     /**
@@ -151,60 +109,61 @@ public final class ManagePanel extends Panel {
      * no ROUTE either (peersBySlug), exactly like the admin panel.
      */
     @Override
-    public @NonNull List<PanelPeer> buildPeers() {
-        return declarePeers();
+    public @NonNull List<PanelEntry> buildEntries() {
+        return declareEntries();
     }
 
     /**
-     * The peer declaration behind {@link #buildPeers}, callable without a panel instance:
+     * The entry declaration behind {@link #buildEntries}, callable without a panel instance:
      * a Panel self-registers in its constructor, so a test that wants to see what THIS role
      * set declares asks here rather than constructing a second /manage panel.
      */
-    public static @NonNull List<PanelPeer> declarePeers() {
-        List<PanelPeer> peers = new ArrayList<>();
+    public static @NonNull List<PanelEntry> declareEntries() {
+        List<PanelEntry> peers = new ArrayList<>();
         // The dashboard FIRST: the panel-index rule redirects /manage to the first
-        // accessible DashboardPanelPeer, so the landing is a real page (what needs
+        // accessible dashboard entry, so the landing is a real page (what needs
         // attention, then the principal's instances), never a contentless card grid.
         peers.add(new ManageDashboard());
-        HohenheimPanel.addIf(peers, new ManageSiteResource(), Role.PROXY);
-        HohenheimPanel.addIf(peers, new ManageDomainResource(), Role.PROXY);
-        HohenheimPanel.addIf(peers, new ManageDnsRecordResource(), Role.DNS);
-        HohenheimPanel.addIf(peers, new ManageCertificateResource(), Role.PROXY);
+        HohenheimPanel.addIf(peers, SiteParts.manage(), Role.PROXY);
+        HohenheimPanel.addIf(peers, DomainParts.manage(), Role.PROXY);
+        HohenheimPanel.addIf(peers, ManageDnsRecordParts.manage(), Role.DNS);
+        HohenheimPanel.addIf(peers, CertificateParts.manage(), Role.PROXY);
         // The instance tier's tenant projection. Every one of these is scoped by a
         // walk-confirmed record capability, and the two schedule peers plus the
         // from-template page are nav-hidden: they are reached THROUGH an instance
         // (or a template) whose own scope already decided the principal may be here.
-        HohenheimPanel.addIf(peers, new ManageInstanceResource(), Role.INSTANCES);
-        HohenheimPanel.addIf(peers, new ManageInstanceScheduleResource(), Role.INSTANCES);
-        HohenheimPanel.addIf(peers, new ManageInstanceScheduleStepResource(), Role.INSTANCES);
-        HohenheimPanel.addIf(peers, new ManageInstanceDeviceResource(), Role.INSTANCES);
-        HohenheimPanel.addIf(peers, new ManageInstanceSnapshotResource(), Role.INSTANCES);
-        HohenheimPanel.addIf(peers, new ManageInstanceBackupResource(), Role.INSTANCES);
-        HohenheimPanel.addIf(peers, new ManageInstanceTemplateResource(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, InstanceParts.manage(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, InstanceScheduleParts.manage(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, InstanceScheduleStepParts.manage(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, InstanceAttachmentParts.devicesManage(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, InstanceVariableParts.manage(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, InstanceSnapshotParts.manage(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, InstanceBackupParts.manage(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, InstanceTemplateParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, new InstanceFromTemplatePage(), Role.INSTANCES);
         // The managed-database tier's tenant projection: allocate, read credentials
         // (its own capability, its own tab), back up and destroy your OWN databases.
-        HohenheimPanel.addIf(peers, new ManageDatabaseResource(), Role.DATABASES);
+        HohenheimPanel.addIf(peers, DatabaseParts.manage(), Role.DATABASES);
         // Needs BOTH tiers to exist: it joins an instance to a managed database.
         if (HohenheimRoles.enabled(Role.DATABASES) && HohenheimRoles.enabled(Role.INSTANCES)) {
-            peers.add(new ManageInstanceDatabaseResource());
+            peers.add(InstanceAttachmentParts.databasesManage());
         }
         // The project tier's tenant projection: which projects the principal is a
         // MEMBER of, and who else is in them. Both read-only -- see
         // ManageProjectResource for why a membership editor here could only refuse.
         // Projects span every product tier, so they are not gated on any single role.
-        peers.add(new ManageProjectResource());
-        peers.add(new ManageProjectMemberResource());
+        peers.add(ProjectParts.manage());
+        peers.add(ProjectMembershipParts.manage());
         // Preview deployments of granted sites: view, create for a chosen ref,
         // destroy. Scoped by the site's manage grant like domains are.
-        HohenheimPanel.addIf(peers, new ManagePreviewDeploymentResource(), Role.PROXY);
+        HohenheimPanel.addIf(peers, PreviewParts.manage(), Role.PROXY);
         // The tenant's OWN forge installations: register one, test it, use it on the
         // tenant's own sites. Shared operator providers are usable but never listed
-        // here -- see ManageGitProviderResource.
-        HohenheimPanel.addIf(peers, new ManageGitProviderResource(), Role.PROXY);
-        HohenheimPanel.addIf(peers, new ManageAccessListResource(), Role.PROXY);
-        HohenheimPanel.addIf(peers, new ManageAccessRuleResource(), Role.PROXY);
-        HohenheimPanel.addIf(peers, new ManageProtectedPathResource(), Role.PROXY);
+        // here -- see GitProviderParts.manage().
+        HohenheimPanel.addIf(peers, GitProviderParts.manage(), Role.PROXY);
+        HohenheimPanel.addIf(peers, AccessListParts.manage(), Role.PROXY);
+        HohenheimPanel.addIf(peers, AccessRuleParts.manage(), Role.PROXY);
+        HohenheimPanel.addIf(peers, ProtectedPathParts.manage(), Role.PROXY);
         return peers;
     }
 
@@ -257,7 +216,7 @@ public final class ManagePanel extends Panel {
      */
     static void declareSources() {
         // The SiteModel default source. zenit-cms derives one from SiteModel.NAME through
-        // both the admin SiteResource and the delegated ManageSiteResource; this server-side
+        // both the admin site entry and its delegated twin (SiteParts); this server-side
         // declaration replaces it deliberately, because its scope reads zenit-auth grants
         // unavailable to the common/browser registration lane.
         RecordSourceRegistry.INSTANCE.override(RecordSource.of(SiteModel.class)
@@ -266,8 +225,8 @@ public final class ManagePanel extends Panel {
             .build());
 
         // The domain source, for the SAME reason and by the same verb -- plus one that is
-        // specific to this model: site_domain is exposed by TWO RowResources (the admin
-        // SiteDomainResource and the delegated ManageDomainResource), so zenit-cms derives
+        // specific to this model: site_domain is exposed by TWO resources (the admin
+        // DomainParts.admin() and the delegated DomainParts.manage()), so zenit-cms derives
         // a default source from BOTH panels and which one wins is decided by panel walk
         // ORDER. That is a shadowing hazard exactly like the deleted "hohenheim.manage_site"
         // one: it decides whether the token is admin-gated-unscoped or manage-gated-scoped
@@ -283,13 +242,17 @@ public final class ManagePanel extends Panel {
             .scopedBy(TenantScopes.DOMAINS)
             .build());
 
-        // Access lists: the pickers (a site's list, a protected path's list) offer shared
-        // rows plus the principal's managed ones -- the git-provider policy verbatim, and
-        // an explicit override for the same two-panel shadowing reason as site_domain
-        // (AccessListResource and ManageAccessListResource both expose the model).
+        // Access lists: the model's REFERENCE policy. The pickers (a site's list, a protected
+        // path's list) offer shared rows plus the principal's managed ones -- the git-provider
+        // policy verbatim -- while the /manage list keeps its OWNED scope
+        // (TenantScopes.MANAGED_ACCESS_LISTS): a picker reads the reference policy ahead of any
+        // panel resource's source, so the tenant list is never widened to offer a shared row.
+        // An explicit override for the same two-panel shadowing reason as site_domain
+        // (the admin access-list entry and its /manage twin, AccessListParts, both expose the model).
         RecordSourceRegistry.INSTANCE.override(RecordSource.of(AccessListModel.class)
             .search(AccessListModel.NAME)
             .scopedBy(TenantScopes.USABLE_ACCESS_LISTS)
+            .referencePolicy()
             .build());
 
         // Protected paths: child rows scoped by their parent SITE, like domains.
@@ -298,19 +261,27 @@ public final class ManagePanel extends Panel {
             .scopedBy(TenantScopes.PROTECTED_PATHS)
             .build());
 
+        // Access rules: child rows scoped by their parent LIST, like protected paths by their site. zenit-cms would
+        // derive the model's source from the admin entry (AccessRuleParts), admin-gated; the API's tenant writes and
+        // the pickers read through the parent list's manage scope instead, so this explicit source replaces it.
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(AccessRuleModel.class)
+            .search(AccessRuleModel.SEARCH_TEXT)
+            .scopedBy(TenantScopes.ACCESS_RULES)
+            .build());
+
         // DNS records: this one scopes child rows by their parent zone, so a tenant reaches
         // names inside a zone it cannot otherwise enumerate -- a deliberate narrowing of the
         // admin-gated default zenit-cms derives from DnsRecordModel.NAME.
         // The create half serves the list pages' quick-add bar. It is ADMIN-gated on top
         // of the source's own read scope, because its form carries zone_id: adding "into
         // an arbitrary zone" is an operator act, while a tenant's create lane is
-        // ManageDnsRecordResource's form, which resolves the zone from the name it typed.
+        // ManageDnsRecordParts' form, which resolves the zone from the name it typed.
         // The write pipeline (TenantWrites) stays the gate either way -- this only decides
         // which surface is OFFERED.
         //
         // AIDEV-NOTE: the provider is the FRAMEWORK's own resource-backed one
         // (CmsRecordSources.createProviderFor), which is what zenit-cms derives for every
-        // creatable RowResource whose source it registers itself. An explicit source
+        // creatable entry whose source it registers itself. An explicit source
         // replaces the derived default WHOLE -- facets never merge -- so the create half
         // has to be declared here or the bar simply never appears. It used to be a
         // hand-written copy of that provider; nothing about the reduction or the
@@ -318,7 +289,10 @@ public final class ManagePanel extends Panel {
         var dnsRecords = RecordSource.of(DnsRecordModel.class)
             .search(DnsRecordModel.NAME, DnsRecordModel.VALUE)
             .scopedBy(TenantScopes.DNS_RECORDS);
-        RecordCreateProvider dnsCreate = CmsRecordSources.createProviderFor(new DnsRecordResource());
+        Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN),
+            "the admin panel is registered before its sources");
+        PanelEntry dnsEntry = admin.entryBySlug(DnsRecordParts.SLUG);
+        RecordCreateProvider dnsCreate = dnsEntry != null ? CmsRecordSources.createProviderFor(admin, dnsEntry) : null;
         if (dnsCreate != null) {
             dnsRecords.creatable(dnsCreate, HohenheimSources.ADMIN_ACCESS);
         }
@@ -334,7 +308,7 @@ public final class ManagePanel extends Panel {
             .build());
 
         // Instances: the SAME two-panel shadowing hazard as sites and domains, now that
-        // ManageInstanceResource exposes the model beside the admin InstanceResource --
+        // InstanceParts.manage() exposes the model beside InstanceParts.admin() --
         // which of the two derived defaults wins (admin-gated-unscoped versus
         // manage-gated-scoped) would otherwise be decided by panel walk ORDER at boot.
         // AIDEV-NOTE: kind IS projected because the site form's dependent instance
@@ -349,8 +323,8 @@ public final class ManagePanel extends Panel {
             .scopedBy(TenantScopes.INSTANCES)
             .build());
 
-        // Templates: exposed by TWO RowResources (admin InstanceTemplateResource and
-        // ManageInstanceTemplateResource), so the derived default is boot-order-decided --
+        // Templates: exposed by TWO entries (InstanceTemplateParts.admin and .manage),
+        // so a derived default would be boot-order-decided --
         // the same shadowing hazard as instances above. The scope is THE catalog policy:
         // operators browse everything, everyone else only APPROVED templates. The
         // instance form's dependent template pick narrows on the projected kind.
@@ -379,8 +353,8 @@ public final class ManagePanel extends Panel {
 
         // Managed databases: the common registration (HohenheimSources) is ADMIN_ACCESS
         // with no accessCriteria, which the browser registry legitimately keeps. Here the
-        // model is exposed by a SECOND RowResource (ManageDatabaseResource beside the
-        // admin DatabaseResource), so without this the widest of the two derived defaults
+        // model is exposed by a SECOND resource (DatabaseParts#manage beside the admin
+        // DatabaseParts#admin), so without this the widest of the two derived defaults
         // decides -- and it would name every tenant's database to whoever a picker
         // rendered for, starting with the site-database attachment picker. override, not
         // register: the manage panel deliberately serves a WIDER audience than the
@@ -407,15 +381,17 @@ public final class ManagePanel extends Panel {
             .build());
 
         // Git providers: the SAME two-derived-defaults hazard (the admin
-        // GitProviderResource and the delegated ManageGitProviderResource both derive one
+        // GitProviderParts.admin() and the delegated GitProviderParts.manage() both derive one
         // from the model's display field), and the widest of the two would name every
         // tenant's forge installation -- host included -- to whoever a picker rendered
         // for. The scope IS the visibility policy (shared rows plus the ones the
         // principal manages), so the site form's provider picker and this source can
-        // never disagree.
+        // never disagree. It is the model's REFERENCE policy, as access lists' is: the
+        // /manage list keeps its owned scope (TenantScopes.MANAGED_GIT_PROVIDERS).
         RecordSourceRegistry.INSTANCE.override(RecordSource.of(GitProviderModel.class)
             .search(GitProviderModel.NAME)
             .scopedBy(TenantScopes.USABLE_GIT_PROVIDERS)
+            .referencePolicy()
             .build());
 
         // Instance-database attachments: the row names both a workload and a credential

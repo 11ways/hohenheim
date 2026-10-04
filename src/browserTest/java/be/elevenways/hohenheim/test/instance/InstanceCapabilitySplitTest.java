@@ -23,6 +23,9 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.KnownCapabilities;
 import be.elevenways.zenit.common.security.RecordCapabilityDecision;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.server.cms.InstanceExecPage;
+import be.elevenways.zenit.server.operation.OperationPipeline;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -467,6 +470,17 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
                 .as("step 1: an admin holds " + capability + " by bypass")
                 .isEqualTo(RecordCapabilityDecision.ADMIN_BYPASS);
         }
+
+        // Step 1b: the exec operation the exec tab places is offered to the operator and never to
+        //          the console-only delegate, and the tab places exactly that operation.
+        Row instance = Models.get(InstanceModel.class).findById(instanceId);
+        assertThat(OperationPipeline.offer(InstanceOperations.EXEC, operator, instance))
+            .as("step 1b: exec is offered to an operator").isInstanceOf(OperationPipeline.Offer.Available.class);
+        assertThat(OperationPipeline.offer(InstanceOperations.EXEC, contextOf(consolePrincipal), instance))
+            .as("step 1b: never to a console-only delegate")
+            .isNotInstanceOf(OperationPipeline.Offer.Available.class);
+        assertThat(new InstanceExecPage().actions()).as("step 1b: the exec tab places the exec operation")
+            .singleElement().matches(action -> action.id().equals(InstanceOperations.EXEC.id()));
 
         // Step 2: and the tenant-write invariant never fires for an operator, so the
         // config edit the delegates were refused genuinely lands.

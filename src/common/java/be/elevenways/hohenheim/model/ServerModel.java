@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.net.IpLiterals;
@@ -11,10 +13,14 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.datasource.context.SaveToDatasource;
 import be.elevenways.zenit.common.orm.field.*;
+import be.elevenways.zenit.common.security.PrincipalField;
+import be.elevenways.zenit.common.security.PrincipalKinds;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -26,7 +32,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public class ServerModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "server");
+    public static final Identifier MODEL_ID = HohenheimIds.id("server");
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #MODE} token of {@link HostMode#LOCAL}: the implicit local Docker daemon. */
@@ -99,9 +105,9 @@ public class ServerModel extends Model {
      */
     public static final EnumField RUNTIME = SCHEMA.addField(EnumField.builder("runtime")
         .value(RUNTIME_DOCKER, v -> v.displayName("Docker").icon("box")
-            .label(Microcopy.of("docker").withFilter("scope", "host_runtime")).color("blue"))
+            .label(Microcopy.of("docker").withFilter("scope", "host_runtime")).color(ColorHue.BLUE))
         .value(RUNTIME_INCUS, v -> v.displayName("Incus").icon("cubes")
-            .label(Microcopy.of("incus").withFilter("scope", "host_runtime")).color("green"))
+            .label(Microcopy.of("incus").withFilter("scope", "host_runtime")).color(ColorHue.GREEN))
         .defaultValue(RUNTIME_DOCKER)
         .build());
 
@@ -145,13 +151,13 @@ public class ServerModel extends Model {
      */
     public static final EnumField POSTURE = SCHEMA.addField(EnumField.builder("posture")
         .value(POSTURE_TRUSTED_ONLY, v -> v.displayName("Trusted only").icon("user-shield")
-            .label(Microcopy.of("trusted_only").withFilter("scope", "host_posture")).color("teal"))
+            .label(Microcopy.of("trusted_only").withFilter("scope", "host_posture")).color(ColorHue.TEAL))
         .value(POSTURE_DEDICATED, v -> v.displayName("Dedicated").icon("user-lock")
-            .label(Microcopy.of("dedicated").withFilter("scope", "host_posture")).color("indigo"))
+            .label(Microcopy.of("dedicated").withFilter("scope", "host_posture")).color(ColorHue.INDIGO))
         .value(POSTURE_SHARED_CONTAINER, v -> v.displayName("Shared containers").icon("cubes")
-            .label(Microcopy.of("shared_container").withFilter("scope", "host_posture")).color("orange"))
+            .label(Microcopy.of("shared_container").withFilter("scope", "host_posture")).color(ColorHue.ORANGE))
         .value(POSTURE_VM_ISOLATED, v -> v.displayName("VM isolated").icon("boxes-stacked")
-            .label(Microcopy.of("vm_isolated").withFilter("scope", "host_posture")).color("green"))
+            .label(Microcopy.of("vm_isolated").withFilter("scope", "host_posture")).color(ColorHue.GREEN))
         .defaultValue(POSTURE_TRUSTED_ONLY)
         .label(HohenheimFormCopy.label("posture")).help(HohenheimFormCopy.help("posture"))
         .build());
@@ -171,11 +177,11 @@ public class ServerModel extends Model {
      */
     public static final EnumField ADMISSION = SCHEMA.addField(EnumField.builder("admission")
         .value(ADMISSION_BLOCKED, v -> v.displayName("Blocked").icon("circle-xmark")
-            .label(Microcopy.of("blocked").withFilter("scope", "host_admission")).color("red"))
+            .label(Microcopy.of("blocked").withFilter("scope", "host_admission")).color(ColorHue.RED))
         .value(ADMISSION_ADMITTED, v -> v.displayName("Admitted").icon("circle-check")
-            .label(Microcopy.of("admitted").withFilter("scope", "host_admission")).color("green"))
+            .label(Microcopy.of("admitted").withFilter("scope", "host_admission")).color(ColorHue.GREEN))
         .value(ADMISSION_CORDONED, v -> v.displayName("Cordoned").icon("circle-pause")
-            .label(Microcopy.of("cordoned").withFilter("scope", "host_admission")).color("orange"))
+            .label(Microcopy.of("cordoned").withFilter("scope", "host_admission")).color(ColorHue.ORANGE))
         .defaultValue(ADMISSION_BLOCKED)
         .label(HohenheimFormCopy.label("admission")).help(HohenheimFormCopy.help("admission"))
         .build());
@@ -282,9 +288,16 @@ public class ServerModel extends Model {
     public static final DateTimeField ACKNOWLEDGED_AT = SCHEMA.addField(
         DateTimeField.builder().name("acknowledged_at").build());
 
-    /** The acting principal id ({@code Accountability.current().actor()}), never a name. */
+    /** The accepting operator's principal id beside {@link #ACKNOWLEDGED_BY_KIND}, never a name. */
     public static final StringField ACKNOWLEDGED_BY = SCHEMA.addField(
         StringField.builder().name("acknowledged_by").nullable(true).build());
+
+    /** The kind of {@link #ACKNOWLEDGED_BY}'s principal: always an account for an acknowledgement. */
+    public static final StringField ACKNOWLEDGED_BY_KIND = SCHEMA.addField(
+        PrincipalKinds.kindField("acknowledged_by_kind"));
+
+    /** The accepting operator pair, read and written only through this declaration. */
+    public static final PrincipalField ACKNOWLEDGER = PrincipalField.of(ACKNOWLEDGED_BY_KIND, ACKNOWLEDGED_BY);
 
     /**
      * The actor's display label AS IT READ at acknowledgement time, so the record survives
@@ -451,13 +464,13 @@ public class ServerModel extends Model {
             String v4 = normalizeAddress(row, PUBLIC_IPV4);
             if (v4 != null && !IpLiterals.isIpv4(v4)) {
                 throw Violations.ofField(PUBLIC_IPV4.getName(), v4,
-                    Microcopy.of("server_address_invalid").withFilter("scope", "violations")
+                    HohenheimViolations.text("server_address_invalid")
                         .withArg("address", v4));
             }
             String v6 = normalizeAddress(row, PUBLIC_IPV6);
             if (v6 != null && !IpLiterals.isIpv6(v6)) {
                 throw Violations.ofField(PUBLIC_IPV6.getName(), v6,
-                    Microcopy.of("server_address_invalid").withFilter("scope", "violations")
+                    HohenheimViolations.text("server_address_invalid")
                         .withArg("address", v6));
             }
         });
@@ -506,7 +519,7 @@ public class ServerModel extends Model {
         row.set(ACKNOWLEDGED_POSTURE, null);
         row.set(ACKNOWLEDGED_WARNING_VERSION, null);
         row.set(ACKNOWLEDGED_AT, null);
-        row.set(ACKNOWLEDGED_BY, null);
+        ACKNOWLEDGER.write(row, (PrincipalRef) null);
         row.set(ACKNOWLEDGED_BY_LABEL, null);
     }
 
@@ -560,15 +573,13 @@ public class ServerModel extends Model {
             }
             Row migrating = migratingOnto(serverId).first();
             if (migrating != null) {
-                throw Violations.ofForm(Microcopy.of("server_migration_target")
-                    .withFilter("scope", "violations")
+                throw Violations.ofForm(HohenheimViolations.text("server_migration_target")
                     .withArg("name", String.valueOf((Object) doomed.get(NAME)))
                     .withArg("instance", String.valueOf((Object) migrating.get(InstanceModel.NAME))));
             }
             References references = referencesOf(serverId);
             if (references.any()) {
-                throw Violations.ofForm(references.describe(Microcopy.of("server_in_use")
-                    .withFilter("scope", "violations")
+                throw Violations.ofForm(references.describe(HohenheimViolations.text("server_in_use")
                     .withArg("name", String.valueOf((Object) doomed.get(NAME)))));
             }
             InstanceModel.detachTrashed(InstanceModel.SERVER_ID,
@@ -778,7 +789,7 @@ public class ServerModel extends Model {
      *
      * AIDEV-NOTE: THE one spelling normalisation. The local daemon used to be spelled
      * both {@code ""} and {@code "local"} across three separate normalisations
-     * (DockerSiteRequestHandler, DatabaseService, StackServiceResource), which would
+     * (DockerSiteRequestHandler, DatabaseService, StackParts), which would
      * have split one machine's port claims into two disjoint sets while every unique
      * constraint held. Every consumer -- runtime resolution ({@link #canonicalServerId})
      * AND the M051 legacy heal -- must route through this method; never re-derive.
@@ -866,9 +877,16 @@ public class ServerModel extends Model {
         return String.valueOf(row.get(NAME));
     }
 
+    /** The name a message shows for a server id: its name, or {@code #<id>} for a row that is gone. */
+    public static @NonNull String labelOf(int serverId) {
+        Row row = Models.get(ServerModel.class).findById(serverId);
+        Object name = row != null ? row.get(NAME) : null;
+        return name != null ? String.valueOf(name) : "#" + serverId;
+    }
+
     /** The registry key a type-settings map stores for a server ({@code hohenheim:<id>}). */
     public static @NonNull String registryKeyOf(int serverId) {
-        return Identifier.of("hohenheim", String.valueOf(serverId)).toString();
+        return HohenheimIds.id(String.valueOf(serverId)).toString();
     }
 
     private static int requireExisting(int serverId) {

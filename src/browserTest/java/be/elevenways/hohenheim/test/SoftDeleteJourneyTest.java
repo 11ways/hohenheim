@@ -1,16 +1,24 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StoredRows;
-import be.elevenways.hohenheim.server.cms.AccessListResource;
-import be.elevenways.hohenheim.server.cms.SiteResource;
+import be.elevenways.hohenheim.server.cms.AccessListParts;
+import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.quota.SiteQuota;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -25,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -60,9 +69,11 @@ class SoftDeleteJourneyTest {
     void aTrashedSiteIsHiddenKeepsItsSlugRestoresAndPurges() {
         Db.run(datasource, () -> {
             SiteModel sites = Models.get(SiteModel.class);
-            SiteResource resource = new SiteResource();
-            AccessListResource lists = new AccessListResource();
-            AccessContext anyone = AccessContext.anonymous();
+            // The admin panel's own site entry, as its record page reads it.
+            @SuppressWarnings("unchecked")
+            Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
+            PanelResource<Row> resource = (PanelResource<Row>) panel.entryBySlug(HohenheimSlugs.SITES);
+            DeleteConfirmation<Row> lists = AccessListParts.admin().deleteConfirmation();
 
             // 1. A live site gated by an access list: charged one site slot, and the list's
             //    delete dialog names it as a site the delete would open.
@@ -79,12 +90,12 @@ class SoftDeleteJourneyTest {
             //    read (find, count, the record page), still stored, the slot handed back and
             //    the delete recorded as the soft delete it is.
             long beforeTrash = Quotas.usedOf(SITE_BUCKET);
-            resource.deleteRow(sites.findById(siteId), anyone);
+            PanelResourceCalls.delete(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, siteId, TenantConduits.operator());
             assertThat(sites.findById(siteId))
                 .as("step 2: a default find no longer sees the trashed site").isNull();
             assertThat(sites.find().where(SiteModel.ID.eq(siteId)).count())
                 .as("step 2: nor does a default count").isZero();
-            Row inTrash = resource.loadRow(siteId, anyone);
+            Row inTrash = PartsReads.loadRow(panel, resource, siteId, TenantConduits.operator());
             assertThat(inTrash).as("step 2: the admin record page opens it from the Trash").isNotNull();
             assertThat(resource.isArchived(inTrash)).as("step 2: as an archived, read-only record").isTrue();
             Row trashed = StoredRows.byId(sites, siteId);
@@ -94,7 +105,7 @@ class SoftDeleteJourneyTest {
             assertThat(Quotas.usedOf(SITE_BUCKET))
                 .as("step 2: the trash transition handed the slot back").isEqualTo(beforeTrash - 1);
             List<Row> deletes = activityFor(SiteModel.MODEL_ID.toString(), siteId,
-                ActivityLog.ACTION_DELETE);
+                ZenitActivityAction.DELETE.id().toString());
             assertThat(deletes).as("step 2: the trash is recorded as one delete").hasSize(1);
             assertThat((String) deletes.get(0).get(ActivityModel.DETAIL))
                 .as("step 2: named as the soft delete it is").isEqualTo("soft-delete");
@@ -118,17 +129,19 @@ class SoftDeleteJourneyTest {
             assertThat(sites.find().withTrashed().where(SiteModel.SLUG.eq(PREFIX + "journey")).count())
                 .as("step 5: and exactly one row carries it").isEqualTo(1);
 
-            // 6. The behaviour's restore brings it back: visible, the slot re-booked, the
-            //    restore on the record's history, and the list gating it again.
+            // 6. The Trash's restore (the admin site entry's placed restore operation, core's archive restore) brings
+            //    it back: visible, the slot re-booked, the restore on the record's history, and the list gating it
+            //    again.
             long beforeRestore = Quotas.usedOf(SITE_BUCKET);
-            SiteModel.SOFT_DELETE.restore(StoredRows.byId(sites, siteId));
+            PanelResourceCalls.invoke(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, SiteWrites.RESTORE.id(), siteId,
+                null, TenantConduits.operator());
             Row restored = sites.findById(siteId);
             assertThat(restored).as("step 6: a default find sees the restored site").isNotNull();
             assertThat((Object) restored.get(SiteModel.DELETED_AT))
                 .as("step 6: no longer stamped").isNull();
             assertThat(Quotas.usedOf(SITE_BUCKET))
                 .as("step 6: the restore re-booked its slot").isEqualTo(beforeRestore + 1);
-            assertThat(activityFor(SiteModel.MODEL_ID.toString(), siteId, ActivityLog.ACTION_RESTORE))
+            assertThat(activityFor(SiteModel.MODEL_ID.toString(), siteId, ZenitActivityAction.RESTORE.id().toString()))
                 .as("step 6: the restore is recorded as one").hasSize(1);
             assertThat(gatingKey(lists, listId))
                 .as("step 6: the restored site is gated by the list again")
@@ -166,13 +179,13 @@ class SoftDeleteJourneyTest {
                 // 2. BUG FIXED: the application lane saved deleted_at bare, recorded as an
                 //    "update"; it now takes the one trash write every destroy shares.
                 List<Row> deletes = activityFor(InstanceModel.MODEL_ID.toString(), applicationId,
-                    ActivityLog.ACTION_DELETE);
+                    ZenitActivityAction.DELETE.id().toString());
                 assertThat(deletes).as("step 2: the destroy is recorded as one delete").hasSize(1);
                 assertThat((String) deletes.get(0).get(ActivityModel.DETAIL))
                     .as("step 2: named as the verified destroy it is")
                     .isEqualTo(InstanceService.ACTIVITY_DESTROY_DETAIL);
                 assertThat(activityFor(InstanceModel.MODEL_ID.toString(), applicationId,
-                        ActivityLog.ACTION_UPDATE))
+                        ZenitActivityAction.UPDATE.id().toString()))
                     .as("step 2: and never as a bare update").isEmpty();
 
                 // 3. Destroying it again refuses (there is no live record) and writes nothing.
@@ -180,7 +193,7 @@ class SoftDeleteJourneyTest {
                     .as("step 3: a trashed record is not destroyed twice")
                     .isInstanceOf(Violations.class);
                 assertThat(activityFor(InstanceModel.MODEL_ID.toString(), applicationId,
-                        ActivityLog.ACTION_DELETE))
+                        ZenitActivityAction.DELETE.id().toString()))
                     .as("step 3: and nothing more is recorded").hasSize(1);
             } finally {
                 HardDeletes.byId(instances, applicationId);
@@ -221,9 +234,10 @@ class SoftDeleteJourneyTest {
         return row.get(InstanceModel.ID);
     }
 
-    private static String gatingKey(AccessListResource lists, int listId) {
-        return lists.deleteConfirmationFor(Models.get(AccessListModel.class).findById(listId))
-            .body().key();
+    private static String gatingKey(DeleteConfirmation<Row> lists, int listId) {
+        PanelRequest request = new PanelRequest(Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN)),
+            TenantConduits.stubFor(null), AccessContext.anonymous(), null);
+        return lists.forRow(Models.get(AccessListModel.class).findById(listId), request).body().key();
     }
 
     private static List<Row> activityFor(String model, int recordId, String action) {

@@ -1,5 +1,9 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.instance.InstanceAttachmentOperations;
+import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
+import be.elevenways.hohenheim.server.cms.InstanceParts;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -8,27 +12,44 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.DatabaseResource;
-import be.elevenways.hohenheim.server.cms.DnsRecordResource;
-import be.elevenways.hohenheim.server.cms.InstanceDatabaseResource;
-import be.elevenways.hohenheim.server.cms.InstanceResource;
-import be.elevenways.hohenheim.server.cms.InstanceScheduleResource;
-import be.elevenways.hohenheim.server.cms.InstanceScheduleStepResource;
-import be.elevenways.hohenheim.server.cms.SiteDomainResource;
-import be.elevenways.hohenheim.server.cms.SiteDomainsPage;
+import be.elevenways.hohenheim.server.cms.DatabaseParts;
+import be.elevenways.hohenheim.server.cms.DnsRecordParts;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
+import be.elevenways.zenit.common.data.RecordSourceRegistry;
+import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.hohenheim.server.cms.DomainParts;
+import be.elevenways.hohenheim.instance.InstanceScheduleOperations;
+import be.elevenways.hohenheim.server.cms.InstanceScheduleParts;
+import be.elevenways.hohenheim.server.cms.InstanceScheduleStepParts;
+import be.elevenways.hohenheim.server.cms.SiteParts;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
-import be.elevenways.zenit.cms.common.action.RowAction;
-import be.elevenways.zenit.common.task.record.RecordScheduleModel;
-import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
+import be.elevenways.zenit.common.result.RenderTemplateResult;
+import be.elevenways.zenit.cms.common.render.panel.ChildListSectionState;
+import be.elevenways.zenit.cms.common.render.table.TableState;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.ResourceVerb;
+import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
+import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.task.record.RecordScheduleModel;
+import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
+import be.elevenways.zenit.test.support.EndpointConduit;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.server.panel.PanelActionOffers;
+import be.elevenways.zenit.cms.server.render.action.RowOffer;
+import be.elevenways.zenit.server.operation.OperationPipeline;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -39,6 +60,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiPredicate;
+import java.util.stream.Stream;
+import java.util.Objects;
+import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -46,7 +70,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Affordance-versus-funnel parity on every resource whose READ scope is wider than its
  * WRITE authority: the synthesized Edit/Delete affordances (and the detail form's Save
  * behind them) are offered exactly where the write pipeline would accept -- the
- * {@code InstanceDeviceResource} lesson, applied to the four remaining surfaces.
+ * {@code InstanceAttachmentParts.devicesAdmin()} lesson, applied to the four remaining surfaces.
  *
  * Enforcement was never broken (TenantWrites refuses every one of these on the model
  * pipeline); what these pin is that the SURFACE now agrees with the funnel instead of
@@ -219,13 +243,14 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     @Test
     void theInstanceEditorFollowsConfig() {
         Row instance = Models.get(InstanceModel.class).findById(instanceId);
-        InstanceResource resource = new InstanceResource();
+        var resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceParts.SLUG);
+        Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
 
-        assertThat(resource.updatableBy(instance, viewer()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, instance, viewer()))
             .as("a view-only delegate is offered no instance editor").isFalse();
-        assertThat(resource.updatableBy(instance, holder()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, instance, holder()))
             .as("a config holder keeps it").isTrue();
-        assertThat(resource.updatableBy(instance, operator()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, instance, operator()))
             .as("and the operator passes through the walk's admin row").isTrue();
     }
 
@@ -233,14 +258,16 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     @Test
     void theDatabaseDeleteFollowsDestroy() {
         Row database = Models.get(DatabaseModel.class).findById(databaseId);
-        DatabaseResource resource = new DatabaseResource();
+        // A delegate reaches databases through the /manage twin, whose delete is the same operation.
+        Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.MANAGE));
+        PanelResource<Row> resource = DatabaseParts.manage();
 
-        assertThat(resource.deletableBy(database, viewer()))
+        assertThat(ResourceVerbs.removableBy(manage, resource, database, viewer()))
             .as("a view-only delegate is offered no destroy button").isFalse();
         // MANAGE implies DESTROY on databases, so the holder passes the implied row.
-        assertThat(resource.deletableBy(database, holder()))
+        assertThat(ResourceVerbs.removableBy(manage, resource, database, holder()))
             .as("a manage holder keeps its destroy button").isTrue();
-        assertThat(resource.deletableBy(database, operator()))
+        assertThat(ResourceVerbs.removableBy(manage, resource, database, operator()))
             .as("and the operator passes").isTrue();
     }
 
@@ -248,15 +275,16 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     @Test
     void theAttachmentAffordancesFollowBothSides() {
         Row link = Models.get(InstanceDatabaseModel.class).findById(linkId);
-        InstanceDatabaseResource resource = new InstanceDatabaseResource();
+        var resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES);
+        Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
 
-        assertThat(resource.updatableBy(link, viewer()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, link, viewer()))
             .as("a view-only delegate is offered no attachment editor").isFalse();
-        assertThat(resource.deletableBy(link, viewer()))
+        assertThat(detachOffered(link, viewer()))
             .as("nor a detach button").isFalse();
-        assertThat(resource.updatableBy(link, holder()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, link, holder()))
             .as("the two-sided holder keeps its editor").isTrue();
-        assertThat(resource.deletableBy(link, holder()))
+        assertThat(detachOffered(link, holder()))
             .as("and its detach button").isTrue();
 
         // ONE-SIDED: revoke the database half and the affordance must fall with it --
@@ -265,9 +293,9 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         RecordGrants.revoke(GrantSubjectType.USER, holderId, DatabaseModel.MODEL_ID, databaseId,
             HohenheimAccess.MANAGE);
         try {
-            assertThat(resource.updatableBy(link, holder()))
+            assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, link, holder()))
                 .as("instance config alone does not earn the attachment editor").isFalse();
-            assertThat(resource.deletableBy(link, holder()))
+            assertThat(detachOffered(link, holder()))
                 .as("nor the detach button").isFalse();
         } finally {
             RecordGrants.grant(GrantSubjectType.USER, holderId, DatabaseModel.MODEL_ID, databaseId,
@@ -284,29 +312,40 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     void theDnsRecordAffordancesFollowTheRecordLanes() {
         Row editable = Models.get(DnsRecordModel.class).findById(recordId);
         Row delegated = Models.get(DnsRecordModel.class).findById(foreignTypeRecordId);
-        DnsRecordResource resource = new DnsRecordResource();
+        PanelResource<Row> resource = DnsRecordParts.admin();
+        Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
 
-        assertThat(resource.updatableBy(editable, viewer()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, editable, viewer()))
             .as("a view-only delegate is offered no record editor").isFalse();
-        assertThat(resource.deletableBy(editable, viewer()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.DELETE, editable, viewer()))
             .as("nor a delete button").isFalse();
-        assertThat(resource.updatableBy(editable, holder()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, editable, holder()))
             .as("an edit-grant holder keeps its editor").isTrue();
-        assertThat(resource.deletableBy(editable, holder()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.DELETE, editable, holder()))
             .as("and its delete button").isTrue();
+        // An edit grant reads its record (DNS VIEW is impliedBy EDIT): the delete offer's subject read loads it, and
+        // the model's declared source lists it for the holder.
+        Integer editableId = editable.get(DnsRecordModel.ID);
+        assertThat(PartsReads.loadRows(panel, resource, List.of(editableId), holder()))
+            .as("the edit-grant holder reads its record").hasSize(1);
+        Criteria listed = RecordSourceRegistry.INSTANCE.requireDefaultFor(DnsRecordModel.MODEL_ID)
+            .scopeCriteria(null, null, null, holder());
+        assertThat(listed == null || Models.get(DnsRecordModel.class).find()
+                .where(DnsRecordModel.ID.eq(editableId)).where(listed).first() != null)
+            .as("and lists it through the model's source").isTrue();
 
         // The TYPE clause: an NS row is a zone-compromise primitive the pipeline refuses
         // for EVERY tenant writer, edit grant or not -- so no affordance either.
-        assertThat(resource.updatableBy(delegated, holder()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, delegated, holder()))
             .as("an NS row offers no tenant editor even to an edit-grant holder")
             .isFalse();
-        assertThat(resource.deletableBy(delegated, holder()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.DELETE, delegated, holder()))
             .as("nor a delete button").isFalse();
 
         // While the operator, whom the tenant lanes never gate, keeps both on both rows.
-        assertThat(resource.updatableBy(delegated, operator()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, delegated, operator()))
             .as("the operator keeps the NS editor").isTrue();
-        assertThat(resource.deletableBy(editable, operator()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.DELETE, editable, operator()))
             .as("and every delete button").isTrue();
     }
 
@@ -320,14 +359,15 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     void theSiteDomainsTabFollowsTheDomainResource() {
         Row domain = Models.get(SiteDomainModel.class).findById(domainId);
         Row site = Models.get(SiteModel.class).findById(siteId);
-        SiteDomainResource resource = new SiteDomainResource();
+        PanelResource<Row> resource = DomainParts.admin();
+        Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
 
         // 1. The resource's own answer: manage on the OWNING SITE, nothing else.
-        assertThat(resource.updatableBy(domain, viewer()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, domain, viewer()))
             .as("a delegate without manage on the site is offered no domain editor").isFalse();
-        assertThat(resource.updatableBy(domain, holder()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, domain, holder()))
             .as("a manage holder keeps its editor").isTrue();
-        assertThat(resource.deletableBy(domain, holder()))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.DELETE, domain, holder()))
             .as("and its detach button").isTrue();
 
         // 2. The TAB answers exactly the same, row by row.
@@ -342,15 +382,104 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             .containsExactly(true, true);
     }
 
-    /** The Domains tab's rendered (edit link, remove form) pair for its one domain row. */
+    /**
+     * A domain create under a site opens with that site's TLS defaults only where the caller may read the site: a
+     * TLS passthrough site the caller cannot reach opens the create exactly as no site does, so the form is no probe
+     * of another tenant's configuration (GPT review 25 D03).
+     */
+    @Test
+    void aDomainCreateUnderAnUnreachableSiteOpensAsUnderNone() {
+        int own = passthroughSite("own");
+        int foreign = passthroughSite("foreign");
+        RecordGrants.grant(GrantSubjectType.USER, holderId, SiteModel.MODEL_ID, own, HohenheimAccess.MANAGE, true);
+        try {
+            Map<String, Object> none = createDefaults(holder(), HohenheimSlugs.MANAGE, null);
+
+            // 1. Under the holder's own passthrough site, the create opens with HTTPS forcing and ACME off.
+            assertThat(createDefaults(holder(), HohenheimSlugs.MANAGE, own))
+                .as("step 1: the holder's own passthrough site sets its TLS defaults")
+                .containsEntry(SiteDomainModel.FORCE_SSL.getName(), false)
+                .containsEntry(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName(), true);
+
+            // 2. Under a passthrough site outside the holder's scope, the create opens exactly as under none.
+            assertThat(createDefaults(holder(), HohenheimSlugs.MANAGE, foreign))
+                .as("step 2: an unreachable site's configuration is never read into the form")
+                .isEqualTo(none);
+
+            // 3. The operator reaches every site, so the same site sets its defaults on /admin.
+            assertThat(createDefaults(operator(), HohenheimSlugs.ADMIN, foreign))
+                .as("step 3: the operator's create under that site reads it")
+                .containsEntry(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName(), true);
+        } finally {
+            RecordGrants.revoke(GrantSubjectType.USER, holderId, SiteModel.MODEL_ID, own, HohenheimAccess.MANAGE);
+            HardDeletes.byId(Models.get(SiteModel.class), own);
+            HardDeletes.byId(Models.get(SiteModel.class), foreign);
+        }
+    }
+
+    /** The defaults a domain create form opens with on {@code panel}, under {@code parent} when given. */
+    private static Map<String, Object> createDefaults(AccessContext ctx, String panel, Integer parent) {
+        EndpointConduit conduit = new EndpointConduit()
+            .withAttribute(ConduitAttributes.PRINCIPAL, ctx.principal())
+            .setParameter(CmsEndpoints.PANEL_PARAM, panel)
+            .setParameter(CmsEndpoints.RESOURCE_PARAM, DomainParts.SLUG);
+        if (parent != null) {
+            conduit.setQueryParam(CmsEndpoints.PARENT_PARAM.getName(), String.valueOf(parent));
+        }
+        AccessContext access = AccessContext.of(conduit);
+        PanelRequest request = new PanelRequest(PanelRegistry.getBySlug(panel), conduit, access, null);
+        PanelResource<Row> resource = HohenheimSlugs.ADMIN.equals(panel) ? DomainParts.admin() : DomainParts.manage();
+        return resource.form().createDefaults(request);
+    }
+
+    private static int passthroughSite(String name) {
+        Row site = Models.get(SiteModel.class).createEmptyRow();
+        site.set(SiteModel.NAME, PREFIX + "passthrough-" + name);
+        site.set(SiteModel.SLUG, PREFIX + "passthrough-" + name);
+        site.set(SiteModel.UPSTREAM_KIND, SiteModel.UPSTREAM_TLS_PASSTHROUGH);
+        site.set(SiteModel.SETTINGS, Map.of("forward_host", "127.0.0.1", "forward_port", 8443));
+        site.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
+        site.set(SiteModel.ENABLED, false);
+        Models.get(SiteModel.class).save(site);
+        return site.get(SiteModel.ID);
+    }
+
+    /** The Domains tab's rendered (edit, remove) pair for its one domain row. */
     @SuppressWarnings("unchecked")
     private static List<Boolean> rowAffordances(Row site, AccessContext ctx) {
-        Map<String, Object> vars = (Map<String, Object>) new SiteDomainsPage()
-            .render(ctx.conduit(), ctx, site).get();
-        List<Map<String, Object>> rows = (List<Map<String, Object>>) vars.get("domains");
+        // The tab renders under the panel the principal reaches: a delegate's is /manage, the operator's /admin.
+        String panel = HohenheimAccess.isAdmin(ctx) ? HohenheimSlugs.ADMIN : HohenheimSlugs.MANAGE;
+        // The tab dispatches through the framework's record subpage route, as a click on it does.
+        EndpointConduit conduit = new EndpointConduit()
+            .withAttribute(ConduitAttributes.PRINCIPAL, ctx.principal())
+            .setParameter(CmsEndpoints.PANEL_PARAM, panel)
+            .setParameter(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.SITES)
+            .setParameter(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf((Object) site.get(SiteModel.ID)))
+            .setParameter(CmsEndpoints.SUBPAGE_PARAM, SiteParts.DOMAINS_TAB);
+        Object tab = CmsEndpoints.RECORD_SUBPAGE.handle(conduit);
+        if (tab == null) {
+            // The panel refused the site itself: a delegate's /manage site entry lists only the sites it manages, so
+            // a view-only delegate never reaches the tab, let alone a row on it.
+            assertThat(conduit.status).as("the tab is refused, not broken").isIn(403, 404);
+            return List.of(false, false);
+        }
+        Map<String, Object> vars = ((RenderTemplateResult) tab).get();
+        List<ChildListSectionState> sections = (List<ChildListSectionState>) vars.get("sections");
+        assertThat(sections).as("the tab embeds the one domains section").hasSize(1);
+        List<TableState.RowState> rows = sections.get(0).table().rows();
+        if (rows.isEmpty()) {
+            // The /manage domain scope lists only the domains of sites the caller manages: a delegate without manage
+            // on the site is not even shown the row, so it is offered nothing on it.
+            return List.of(false, false);
+        }
         assertThat(rows).as("the tab lists its one domain").hasSize(1);
-        return List.of(Boolean.TRUE.equals(rows.get(0).get("canEdit")),
-            Boolean.TRUE.equals(rows.get(0).get("canRemove")));
+        TableState.RowState row = rows.get(0);
+        List<String> offered = new ArrayList<>();
+        Stream.of(row.actions(), row.overflowActions(), row.destructiveActions())
+            .flatMap(List::stream).forEach(action -> offered.add(String.valueOf(action.id())));
+        Stream.of(row.invokeActions(), row.overflowInvokeActions(), row.destructiveInvokeActions())
+            .flatMap(List::stream).forEach(action -> offered.add(String.valueOf(action.id())));
+        return List.of(offered.contains("zenit:edit"), offered.contains("zenit:delete"));
     }
 
     // --- Query budgets: per-row predicates answer off the request memo ---------------
@@ -371,11 +500,12 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         RecordGrants.grant(GrantSubjectType.USER, viewerId, DnsRecordModel.MODEL_ID, recordId,
             HohenheimAccess.DYNDNS, true);
         try {
-            DnsRecordResource resource = new DnsRecordResource();
-            List<BiPredicate<Row, AccessContext>> predicates = resource.rowActions().stream()
-                .filter(action -> action instanceof RowAction.Invoke<Row> invoke
-                    && invoke.id().toString().contains("dyndns"))
-                .map(action -> ((RowAction.Invoke<Row>) action).visibleFor())
+            var resource = DnsRecordParts.admin();
+            List<BiPredicate<Row, AccessContext>> predicates = resource.actions().stream()
+                .filter(action -> action.id().toString().contains("dyndns"))
+                .map(action -> (BiPredicate<Row, AccessContext>) (row, access) ->
+                    !(OperationPipeline.offer((Operation<Row, ?, ?>) action.operation(), access, row)
+                        instanceof OperationPipeline.Offer.Hidden))
                 .toList();
             assertThat(predicates).as("both dyndns actions carry a per-row predicate").hasSize(2);
 
@@ -417,7 +547,8 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
      */
     @Test
     void theAttachmentAffordanceStaysInsideTheGrantQueryBudget() {
-        InstanceDatabaseResource resource = new InstanceDatabaseResource();
+        var resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES);
+        Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
         Row link = Models.get(InstanceDatabaseModel.class).findById(linkId);
 
         AtomicInteger finds = new AtomicInteger();
@@ -425,7 +556,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         finds.set(0);
         AccessContext ctx = holder();
         for (int i = 0; i < 6; i++) {
-            resource.updatableBy(link, ctx);
+            ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, link, ctx);
         }
         // Memoized: one enumeration per DISTINCT set (instance#config, database#manage)
         // for all 6 rows. Un-memoized was 2 walks x 6 rows. Never raise the cap.
@@ -453,7 +584,6 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         schedules.save(schedule);
         Integer scheduleId = schedule.get(RecordScheduleModel.ID);
         try {
-            InstanceScheduleStepResource resource = new InstanceScheduleStepResource();
             Row step = Models.get(RecordScheduleStepModel.class).createEmptyRow();
             step.set(RecordScheduleStepModel.SCHEDULE_ID, scheduleId);
 
@@ -465,7 +595,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             scheduleFinds.set(0);
             AccessContext ctx = holder();
             for (int i = 0; i < 6; i++) {
-                assertThat(resource.writableBy(step, ctx))
+                assertThat(InstanceScheduleStepParts.writableBy(step, ctx))
                     .as("the config holder keeps the step editor").isTrue();
             }
             assertThat(scheduleFinds.get())
@@ -495,8 +625,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         RecordGrants.grant(GrantSubjectType.USER, holderId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.POWER, true);
         try {
-            InstanceResource resource = new InstanceResource();
-            List<RowAction<Row>> actions = resource.rowActions();
+            var resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceParts.SLUG);
 
             List<Row> rows = new ArrayList<>();
             rows.add(instances.findById(instanceId));
@@ -509,11 +638,16 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             finds.set(0);
             AccessContext ctx = holder();
             boolean sawAnAffordance = false;
+            // Every instance verb is a placed operation now: the list asks them through the render's own batched
+            // offer, once for all rows, exactly as the admin list draws them.
+            Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN), "the admin panel");
+            PanelRequest request = new PanelRequest(admin,
+                new EndpointConduit().withAttribute(ConduitAttributes.PRINCIPAL, ctx.principal()), ctx, null);
+            Function<Row, List<RowOffer>> offers = PanelActionOffers.rowsForRender(
+                request, resource, null, rows, ctx, null);
             for (Row row : rows) {
-                sawAnAffordance |= resource.updatableBy(row, ctx);
-                for (RowAction<Row> action : actions) {
-                    sawAnAffordance |= action.isVisibleFor(row, ctx);
-                }
+                sawAnAffordance |= ResourceVerbs.permitsBy(admin, resource, ResourceVerb.UPDATE, row, ctx);
+                sawAnAffordance |= !offers.apply(row).isEmpty();
             }
             assertThat(sawAnAffordance)
                 .as("the granted instance still offers its affordances").isTrue();
@@ -537,7 +671,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
 
     /**
      * The schedule list asks the SAME question twice per row ({@code writableBy} and the
-     * run_now {@code visibleFor}); its {@code requireManage} write gate reads identically
+     * run_now operation's offer); its {@code requireManage} write gate reads identically
      * and deliberately keeps the fresh walk, so this pins which of the two is memoized.
      */
     @Test
@@ -556,8 +690,6 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             ids.add(schedule.get(RecordScheduleModel.ID));
         }
         try {
-            InstanceScheduleResource resource = new InstanceScheduleResource();
-            List<RowAction<Row>> actions = resource.rowActions();
             List<Row> rows = new ArrayList<>();
             for (Integer id : ids) {
                 rows.add(schedules.findById(id));
@@ -568,11 +700,9 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             finds.set(0);
             AccessContext ctx = holder();
             for (Row row : rows) {
-                assertThat(resource.writableBy(row, ctx))
+                assertThat(InstanceScheduleParts.writableBy(row, ctx))
                     .as("the config holder keeps the schedule editor").isTrue();
-                for (RowAction<Row> action : actions) {
-                    action.isVisibleFor(row, ctx);
-                }
+                OperationPipeline.offer(InstanceScheduleOperations.RUN_SCHEDULE, ctx, row);
             }
             // Memoized: ONE instance#config enumeration for all 12 evaluations.
             // Un-memoized was 2 walks x 6 rows. Never raise the cap.
@@ -597,5 +727,11 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
         instances.save(row);
         return row.get(InstanceModel.ID);
+    }
+
+    /** Whether the attachment's detach is offered to this caller: the operation's own offer. */
+    private static boolean detachOffered(Row link, AccessContext access) {
+        return !(OperationPipeline.offer(InstanceAttachmentOperations.DELETE_DATABASE_LINK, access, link)
+            instanceof OperationPipeline.Offer.Hidden);
     }
 }

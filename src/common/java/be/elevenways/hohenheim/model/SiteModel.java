@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -16,6 +18,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,7 +27,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 
 public class SiteModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "site");
+    public static final Identifier MODEL_ID = HohenheimIds.id("site");
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #STATUS} value for an active site. */
@@ -39,9 +42,9 @@ public class SiteModel extends Model {
         .label(HohenheimFormCopy.label("slug"))
         .build());
 
-    // RegistryEnumField: values come from UpstreamKinds at runtime
+    // RegistryMemberField: values come from UpstreamKinds at runtime
     public static final EnumField UPSTREAM_KIND = SCHEMA.addField(
-        RegistryEnumField.builder("upstream_kind")
+        RegistryMemberField.builder("upstream_kind")
             .registry(UpstreamKinds.REGISTRY)
             .label(HohenheimFormCopy.label("upstream_kind"))
             .help(HohenheimFormCopy.help("upstream_kind"))
@@ -78,6 +81,20 @@ public class SiteModel extends Model {
         .build());
 
     /**
+     * Whether the upstream was last set by the system tier ({@code hohenheim.admin.system} or declared system work),
+     * the one fact that lets an operator-owned site dial any address; never written by a form, only by
+     * OperatorTrustedWrites' write hook.
+     *
+     * AIDEV-NOTE: reach is decided by WHO SET the target, not only by ownership at fetch time (decided 2026-10-02):
+     * ownership changes where no write hook sees it (a revoked grant, a deleted tenant, a cascade), so a target a
+     * tenant or delegate set stays unmarked and is never dialled with any-address reach after the record becomes
+     * operator-owned. M011 marked every row stored before the rule.
+     */
+    public static final BooleanField TARGET_TRUSTED = SCHEMA.addField(BooleanField.builder("target_trusted")
+        .defaultValue(false)
+        .build());
+
+    /**
      * The instance this site serves, when {@link #UPSTREAM_KIND} says so.
      *
      * AIDEV-NOTE: a REAL column and not a settings key, deliberately (phase-0 design
@@ -97,7 +114,7 @@ public class SiteModel extends Model {
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_ACTIVE, v -> v.displayName("Active")
             .label(Microcopy.of(STATUS_ACTIVE).withFilter("scope", "site_status"))
-            .icon("circle-check").color("success"))
+            .icon("circle-check").color(BadgeVariant.SUCCESS))
         .build());
     public static final IntegerField ACCESS_LIST_ID = SCHEMA.addField(IntegerField.builder().name("access_list_id")
         .label(HohenheimFormCopy.label("access_list"))
@@ -159,6 +176,14 @@ public class SiteModel extends Model {
         SCHEMA.addBehaviour(RevisionableBehaviour.create(50));
 
     static {
+        // Every site save is ONE write transaction by DECLARATION: the enable scan
+        // (beforeValidate), the route-claim restamp (beforeWrite) and the row write commit
+        // or fail together.
+        //
+        // AIDEV-NOTE: the revisionable behaviour already makes saves atomic, but the route
+        // invariant (see RouteClaims) must not ride that coincidence -- removing REVISIONABLE
+        // would silently reopen the scan-then-claim window.
+        SCHEMA.saveAtomically();
         // AIDEV-NOTE: deleted_at is lifecycle state, declared by SOFT_DELETE (it used to be a
         // hand-rolled soft delete with an explicit addLifecycleField here). Without that
         // declaration the CMS revision-restore endpoint would replay a snapshot taken while
@@ -257,10 +282,10 @@ public class SiteModel extends Model {
         if (info == null) return;
         Object instanceId = effective(row, INSTANCE_ID);
         if (info.requiresInstance() && instanceId == null) {
-            throw violation("instance_id", null, "upstream_instance_required");
+            throw HohenheimViolations.ofField("instance_id", null, "upstream_instance_required");
         }
         if (!info.requiresInstance() && instanceId != null) {
-            throw violation("instance_id", instanceId, "upstream_instance_unexpected");
+            throw HohenheimViolations.ofField("instance_id", instanceId, "upstream_instance_unexpected");
         }
     }
 
@@ -279,11 +304,11 @@ public class SiteModel extends Model {
                 || !UPSTREAM_TLS_PASSTHROUGH.equals(effective(row, UPSTREAM_KIND))) return;
         Object authProvider = effective(row, AUTH_PROVIDER_ID);
         if (authProvider != null) {
-            throw violation("auth_provider_id", authProvider, "tls_passthrough_no_http_auth");
+            throw HohenheimViolations.ofField("auth_provider_id", authProvider, "tls_passthrough_no_http_auth");
         }
         Object accessList = effective(row, ACCESS_LIST_ID);
         if (accessList != null) {
-            throw violation("access_list_id", accessList, "tls_passthrough_no_access_list");
+            throw HohenheimViolations.ofField("access_list_id", accessList, "tls_passthrough_no_access_list");
         }
         Integer id = row.has(ID.getName()) ? row.get(ID) : null;
         if (id != null) {
@@ -300,27 +325,7 @@ public class SiteModel extends Model {
         return stored != null ? stored.get(field.getName()) : null;
     }
 
-    private static Violations violation(String field, Object value, String key) {
-        return Violations.ofField(field, value,
-            Microcopy.of(key).withFilter("scope", "violations"));
-    }
 
-    /**
-     * Every site save is ONE write transaction by DECLARATION: the enable scan
-     * (beforeValidate), the route-claim restamp (beforeWrite) and the row write commit
-     * or fail together.
-     *
-     * AIDEV-NOTE: Model.save already wraps revisionable schemas in a transaction, but
-     * the route invariant (see RouteClaims) must not ride that coincidence -- removing
-     * REVISIONABLE would silently reopen the scan-then-claim window. The nested
-     * transaction joins the outer one, so this costs nothing today.
-     */
-    @Override
-    public Row save(@NonNull Row row) {
-        Row[] result = new Row[1];
-        this.requireDatasource().withTransaction(tx -> result[0] = super.save(row));
-        return result[0];
-    }
 
     public List<Row> findEnabled() {
         return find()

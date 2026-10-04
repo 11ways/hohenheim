@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.schedule.ScheduleRunStatuses;
@@ -8,7 +10,8 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -31,22 +34,22 @@ import java.util.Map;
  * Steps tab on a schedule: the ordered chain plus its recent runs (per-step verdicts
  * inline), linking into the (nav-hidden) step resource forms.
  */
-public final class InstanceScheduleStepsPage implements RecordScopedPage<Row> {
+public final class InstanceScheduleStepsPage implements RecordTab.Rendered<Row> {
 
     /** The schedule's front door: a schedule without steps runs nothing, so creation lands here. */
     public static final String SLUG = "steps";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_schedule_steps"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_schedule_steps"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "schedule_step"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("list-ol"); }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row schedule) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row schedule) {
+        Conduit conduit = request.conduit();
+        AccessContext accessContext = request.access();
         Integer scheduleId = schedule.get(RecordScheduleModel.ID);
-        String panel = CmsSupport.panelSlug(conduit);
+        String panel = request.panelSlug();
 
         List<Map<String, Object>> steps = new ArrayList<>();
         for (Row step : Models.get(RecordScheduleStepModel.class).findChain(scheduleId)) {
@@ -72,11 +75,11 @@ public final class InstanceScheduleStepsPage implements RecordScopedPage<Row> {
                 run.get(RecordScheduleRunModel.ID),
                 ScheduleRunStatuses.badgeFor(run.get(RecordScheduleRunModel.STATUS)),
                 String.valueOf(run.get(RecordScheduleRunModel.STARTED_AT)),
-                InstanceScheduleRunResource.describeSteps(run),
+                InstanceScheduleRunParts.describeSteps(run),
                 error != null ? error : ""));
         }
 
-        int instanceId = InstanceScheduleResource.parseInstanceId(
+        int instanceId = InstanceScheduleParts.parseInstanceId(
             schedule.get(RecordScheduleModel.RECORD_ID));
 
         Map<String, Object> vars = new HashMap<>();
@@ -95,12 +98,12 @@ public final class InstanceScheduleStepsPage implements RecordScopedPage<Row> {
         // AIDEV-NOTE: gated on the SAME boolean the template's {% if %} uses. A declared
         // template variable is serialized into the hydration payload whether or not any
         // element renders it, so an ungated target would publish an editor route to a
-        // viewer who may not edit (the certificates-request leak SiteDomainsPage hit).
+        // viewer who may not edit (the certificates-request leak the site Domains tab hit).
         vars.put("addStepTarget", canEdit ? CmsEndpoints.CREATE_FORM
             .with(CmsEndpoints.PANEL_PARAM, panel)
             .with(CmsEndpoints.RESOURCE_PARAM, "instance-schedule-steps")
             .with(HohenheimParams.SCHEDULE_ID_PREFILL, scheduleId) : null);
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-schedule-steps"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_SCHEDULE_STEPS, vars);
     }
 }

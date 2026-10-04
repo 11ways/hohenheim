@@ -1,11 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.zenit.cms.common.panel.PanelPeer;
-import be.elevenways.zenit.cms.common.resource.ActivityHistoryPage;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
-import be.elevenways.zenit.cms.common.resource.Resource;
-import be.elevenways.zenit.cms.common.resource.RevisionHistoryPage;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -28,38 +25,25 @@ class ManageHistoryHiddenTest extends HohenheimTestBase {
     void noDelegatedResourceOffersTheOperatorHistory() {
         // 1. Counterfactual anchor: the ADMIN bases do offer history in this runtime, so an
         //    empty result below is the override working and not a runtime without history.
-        List<Resource<?>> operatorBases = List.of(new GitProviderResource(),
-            new ProtectedPathResource(), new AccessRuleResource(), new PreviewDeploymentResource());
-        boolean operatorHasHistory = operatorBases.stream()
-            .anyMatch(resource -> !historyPages(resource).isEmpty());
+        boolean operatorHasHistory = ProtectedPathParts.admin().tabs().history()
+            || AccessRuleParts.admin().tabs().history() || PreviewParts.admin().tabs().history();
         assertThat(operatorHasHistory)
             .as("step 1: the operator resources offer a history page, or this proves nothing")
             .isTrue();
 
         // 2. Every resource the /manage panel declares offers none.
         List<String> checked = new ArrayList<>();
-        for (PanelPeer peer : ManagePanel.declarePeers()) {
-            if (!(peer instanceof Resource<?> resource)) {
+        for (PanelEntry peer : ManagePanel.declareEntries()) {
+            if (peer instanceof PanelResource<?> parts) {
+                checked.add(parts.slug());
+                assertThat(parts.tabs().history())
+                    .as("step 2: /manage/%s must not declare the operator's history", parts.slug())
+                    .isFalse();
                 continue;
             }
-            checked.add(resource.slug());
-            assertThat(historyPages(resource))
-                .as("step 2: /manage/%s must not offer the operator's activity or revision"
-                    + " history", resource.slug())
-                .isEmpty();
         }
         assertThat(checked)
             .as("step 2: the walk really visited the delegated resources")
             .hasSizeGreaterThan(10);
-    }
-
-    private static List<String> historyPages(Resource<?> resource) {
-        List<String> found = new ArrayList<>();
-        for (RecordScopedPage<?> page : resource.subpages()) {
-            if (page instanceof ActivityHistoryPage || page instanceof RevisionHistoryPage<?>) {
-                found.add(page.slug());
-            }
-        }
-        return found;
     }
 }

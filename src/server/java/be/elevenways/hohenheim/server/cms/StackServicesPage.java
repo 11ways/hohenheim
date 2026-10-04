@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
@@ -9,14 +11,15 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.routing.RouteTarget;
-import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -29,22 +32,21 @@ import java.util.Map;
  * Services tab on a stack: every service with its live container state, its
  * config files, and links into the (nav-hidden) service and file resource forms.
  */
-public final class StackServicesPage implements RecordScopedPage<Row> {
+public final class StackServicesPage implements RecordTab.Rendered<Row> {
 
     /** The stack's front door: a stack without services runs nothing, so this is where creation lands. */
     public static final String SLUG = "services";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "stack_services"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("stack_services"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("services").withFilter("scope", "stack"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("cubes"); }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row stack) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row stack) {
+        Conduit conduit = request.conduit();
         Integer stackId = stack.get(StackModel.ID);
-        String panel = CmsSupport.panelSlug(conduit);
+        String panel = request.panelSlug();
 
         Map<String, String> liveStates = StackRuntime.get().serviceStates(stackId);
         StackFileModel fileModel = Models.get(StackFileModel.class);
@@ -62,7 +64,7 @@ public final class StackServicesPage implements RecordScopedPage<Row> {
             entry.put("state", state);
             entry.put("stateLabel", stateLabel(state));
             entry.put("stateVariant", stateVariant(state));
-            entry.put("editTarget", CmsRoutes.detail(panel, "stack-services", serviceId));
+            entry.put("editTarget", CmsRoutes.detail(panel, StackParts.SERVICES_SLUG, serviceId));
 
             StringBuilder ports = new StringBuilder();
             for (Row port : service.getRecords(StackServiceModel.PORTS)) {
@@ -80,7 +82,7 @@ public final class StackServicesPage implements RecordScopedPage<Row> {
                 Map<String, Object> fileEntry = new HashMap<>();
                 fileEntry.put("id", file.get(StackFileModel.ID));
                 fileEntry.put("path", file.get(StackFileModel.CONTAINER_PATH));
-                fileEntry.put("editTarget", CmsRoutes.detail(panel, "stack-files",
+                fileEntry.put("editTarget", CmsRoutes.detail(panel, StackParts.FILES_SLUG,
                     file.get(StackFileModel.ID)));
                 files.add(fileEntry);
             }
@@ -89,7 +91,7 @@ public final class StackServicesPage implements RecordScopedPage<Row> {
             // CmsRoutes.create returns the RouteTarget interface (no with(...)).
             entry.put("addFileTarget", CmsEndpoints.CREATE_FORM
                 .with(CmsEndpoints.PANEL_PARAM, panel)
-                .with(CmsEndpoints.RESOURCE_PARAM, "stack-files")
+                .with(CmsEndpoints.RESOURCE_PARAM, StackParts.FILES_SLUG)
                 .with(HohenheimParams.STACK_SERVICE_ID_PREFILL, serviceId));
 
             services.add(entry);
@@ -102,16 +104,16 @@ public final class StackServicesPage implements RecordScopedPage<Row> {
         vars.put("services", services);
         vars.put("addServiceTarget", CmsEndpoints.CREATE_FORM
             .with(CmsEndpoints.PANEL_PARAM, panel)
-            .with(CmsEndpoints.RESOURCE_PARAM, "stack-services")
+            .with(CmsEndpoints.RESOURCE_PARAM, StackParts.SERVICES_SLUG)
             .with(HohenheimParams.STACK_ID_PREFILL, stackId));
         // The front door of a FAILED stack states the reason and links the row that
         // carries it: a status badge alone sent the operator hunting through tabs.
         String failure = StackFailures.reasonOf(stack);
         vars.put("failureReason", failure != null ? failure : "");
         vars.put("deploymentsTarget", failure != null
-            ? CmsRoutes.subpage(panel, StackResource.SLUG, stackId, StackDeploymentsPage.SLUG) : null);
+            ? CmsRoutes.subpage(panel, StackParts.SLUG, stackId, StackDeploymentsPage.SLUG) : null);
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/stack-services"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.STACK_SERVICES, vars);
     }
 
     /** Container states are a closed vocabulary, so they localize as scoped microcopy. */
@@ -127,13 +129,13 @@ public final class StackServicesPage implements RecordScopedPage<Row> {
      * a colour on, so there is no second list here to remove. The default arm is the
      * fail-closed half: an unrecognised daemon state renders neutral, never "success".
      */
-    private static String stateVariant(String state) {
+    private static BadgeVariant stateVariant(String state) {
         return switch (state) {
-            case "healthy", "running" -> "success";
-            case "starting" -> "warning";
-            case "unhealthy" -> "destructive";
-            case "stopped" -> "secondary";
-            default -> "outline";   // missing / unknown
+            case "healthy", "running" -> BadgeVariant.SUCCESS;
+            case "starting" -> BadgeVariant.WARNING;
+            case "unhealthy" -> BadgeVariant.DESTRUCTIVE;
+            case "stopped" -> BadgeVariant.SECONDARY;
+            default -> BadgeVariant.OUTLINE;   // missing / unknown
         };
     }
 }

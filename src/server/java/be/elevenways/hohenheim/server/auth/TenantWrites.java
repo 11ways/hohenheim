@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -22,7 +23,6 @@ import be.elevenways.hohenheim.server.instance.InstanceImagePolicy;
 import be.elevenways.hohenheim.server.upstream.kinds.AddressUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.StaticUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.TlsPassthroughUpstreamKind;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -51,7 +51,7 @@ import java.util.Set;
  * ACME publisher, CLI tools -- runs with no ambient conduit and is system work.
  *
  * AIDEV-NOTE: the resource layer is NOT an option for any of this, for the reason
- * SiteDomainResource.installRouteInvariant spells out at length: the framework's generic
+ * SiteDomainRouteInvariant.installRouteInvariant spells out at length: the framework's generic
  * revision-restore endpoint, the peer API, the zone-file import and any direct model.save
  * all reach the datasource without passing a single resource method. A form that omits a
  * field is a UX affordance, never a gate -- a direct POST carries whatever it likes.
@@ -124,7 +124,7 @@ public final class TenantWrites {
      *
      * AIDEV-NOTE: the allow-list above already fails closed on an unlisted type, so this
      * set changes no behaviour -- it exists so a new record type cannot be UNDECIDED. It
-     * lands as a `TenantWriteVocabularyTest` failure naming itself, instead of being
+     * lands as a `DnsRecordTypeVocabularyTest` failure naming itself, instead of being
      * quietly unauthorable for whoever added it. NS delegates a subtree away, CAA
      * redirects or disables issuance for the whole name, MX repoints a domain's mail.
      */
@@ -331,8 +331,8 @@ public final class TenantWrites {
                 ? Models.get(InstanceDatabaseModel.class).findById(row.get(InstanceDatabaseModel.ID))
                 : null;
             requireInstanceLinkAuthority(
-                effective(row, stored, InstanceDatabaseModel.INSTANCE_ID),
-                effective(row, stored, InstanceDatabaseModel.DATABASE_ID));
+                row.afterWrite(InstanceDatabaseModel.INSTANCE_ID, stored),
+                row.afterWrite(InstanceDatabaseModel.DATABASE_ID, stored));
             if (stored != null) {
                 // Moving a link off a side needs authority over the side being LEFT too,
                 // or "re-point my link at your database" launders into a detach.
@@ -360,7 +360,7 @@ public final class TenantWrites {
                 // Removing a row is authority over the row, so it asks the SAME question a
                 // write does -- minus the claim half, since a delete claims no new name. An
                 // anonymous caller holds none of it: /nic/update updates, it never deletes.
-                boolean authorized = ctx != null && !ctx.isAnonymous()
+                boolean authorized = ctx != null && ctx.isAccount()
                     && (ctx.hasCapability(DnsRecordModel.MODEL_ID, doomed.get(DnsRecordModel.ID),
                             HohenheimAccess.EDIT)
                         || HostnameAuthority.canManage(snapshot, ctx, fqdnOf(doomed, doomed)));
@@ -459,8 +459,9 @@ public final class TenantWrites {
      * like {@code AccessListModel.SHARED}: publishing a credential installation-wide is the
      * operator's declaration.
      *
-     * AIDEV-NOTE: this is THE gate; ManageGitProviderResource.refuseSharedChange and its
-     * managed-rows scope are the surface's own early answers, and neither stops a revision
+     * AIDEV-NOTE: this is THE gate; the twin's form-only writer, its create-only
+     * GitProviderParts.refuseSharedChange and the managed-rows scope are the surface's
+     * own early answers, and none of them stops a revision
      * restore, a peer write or a direct model save. A shared provider a tenant may USE
      * (the picker scope) is still not one it may edit: use is not manage.
      *
@@ -484,7 +485,7 @@ public final class TenantWrites {
     /** @throws Violations when the acting tenant holds no {@code manage} on the provider */
     private static void requireGitProviderAuthority(@Nullable Object providerId) {
         AccessContext ctx = acting();
-        boolean authorized = ctx != null && !ctx.isAnonymous() && providerId != null
+        boolean authorized = ctx != null && ctx.isAccount() && providerId != null
             && ctx.hasCapability(GitProviderModel.MODEL_ID, providerId, HohenheimAccess.MANAGE);
         if (!authorized) {
             throw Violations.ofForm(CmsSupport.violationText("tenant_git_provider_not_managed"));
@@ -529,7 +530,7 @@ public final class TenantWrites {
         Row stored = row.has(AccessRuleModel.ID.getName())
             && row.get(AccessRuleModel.ID) != null
             ? Models.get(AccessRuleModel.class).findById(row.get(AccessRuleModel.ID)) : null;
-        requireAccessListAuthority(effective(row, stored, AccessRuleModel.ACCESS_LIST_ID));
+        requireAccessListAuthority(row.afterWrite(AccessRuleModel.ACCESS_LIST_ID, stored));
         if (stored != null && row.has(AccessRuleModel.ACCESS_LIST_ID.getName())
                 && !Objects.equals(row.get(AccessRuleModel.ACCESS_LIST_ID),
                     stored.get(AccessRuleModel.ACCESS_LIST_ID))) {
@@ -549,14 +550,14 @@ public final class TenantWrites {
         Row stored = row.has(ProtectedPathModel.ID.getName())
             && row.get(ProtectedPathModel.ID) != null
             ? Models.get(ProtectedPathModel.class).findById(row.get(ProtectedPathModel.ID)) : null;
-        requireManagedSite(effective(row, stored, ProtectedPathModel.SITE_ID));
+        requireManagedSite(row.afterWrite(ProtectedPathModel.SITE_ID, stored));
         if (stored != null && row.has(ProtectedPathModel.SITE_ID.getName())
                 && !Objects.equals(row.get(ProtectedPathModel.SITE_ID),
                     stored.get(ProtectedPathModel.SITE_ID))) {
             requireManagedSite(stored.get(ProtectedPathModel.SITE_ID));
         }
         AccessContext ctx = acting();
-        Object listId = effective(row, stored, ProtectedPathModel.ACCESS_LIST_ID);
+        Object listId = row.afterWrite(ProtectedPathModel.ACCESS_LIST_ID, stored);
         if (ctx == null || !HohenheimAccess.canUseAccessList(ctx, listId)) {
             throw Violations.ofField(ProtectedPathModel.ACCESS_LIST_ID.getName(), listId,
                 CmsSupport.violationText("tenant_access_list_not_usable"));
@@ -566,7 +567,7 @@ public final class TenantWrites {
     /** @throws Violations when the acting tenant holds no {@code manage} on the list */
     private static void requireAccessListAuthority(@Nullable Object listId) {
         AccessContext ctx = acting();
-        boolean authorized = ctx != null && !ctx.isAnonymous() && listId != null
+        boolean authorized = ctx != null && ctx.isAccount() && listId != null
             && ctx.hasCapability(AccessListModel.MODEL_ID, listId, HohenheimAccess.MANAGE);
         if (!authorized) {
             throw Violations.ofField(AccessRuleModel.ACCESS_LIST_ID.getName(), listId,
@@ -599,7 +600,7 @@ public final class TenantWrites {
         // The site the row will belong to must be one the tenant actually manages. The
         // resource's AccessFunction scopes what a tenant may READ; it says nothing about
         // the site_id a CREATE submits, and a MOVE to another site is the same question.
-        Object siteIdValue = effective(row, stored, SiteDomainModel.SITE_ID);
+        Object siteIdValue = row.afterWrite(SiteDomainModel.SITE_ID, stored);
         AccessContext ctx = acting();
         if (!(siteIdValue instanceof Integer siteId) || ctx == null
                 || !HohenheimAccess.canManageSite(ctx, siteId)) {
@@ -624,10 +625,10 @@ public final class TenantWrites {
         // hostname's shape) while HostnameAuthority.covers read it as the sole covering row
         // for every name under victim.test -- which requireRecordAuthority below turns into
         // permission to write DNS inside the victim's zone. Neither the conflict scan nor
-        // the quarantine caught it, because "*." is one-or-more labels and so does not
-        // intersect the apex the victim actually holds.
-        Object matchType = effective(row, stored, SiteDomainModel.MATCH_TYPE);
-        Object hostnameValue = effective(row, stored, SiteDomainModel.HOSTNAME);
+        // the quarantine caught it, because a leading wildcard never matches the apex and so
+        // does not intersect the apex the victim actually holds.
+        Object matchType = row.afterWrite(SiteDomainModel.MATCH_TYPE, stored);
+        Object hostnameValue = row.afterWrite(SiteDomainModel.HOSTNAME, stored);
         String tier = SiteDomainModel.effectiveMatchType(
             hostnameValue != null ? String.valueOf(hostnameValue) : null,
             matchType != null ? String.valueOf(matchType) : null);
@@ -639,9 +640,9 @@ public final class TenantWrites {
         // A listener restriction makes the row DISJOINT from every other row's listener set,
         // and refuseRouteConflicts exempts disjoint sets by design -- so a tenant listener
         // walks straight past the hostname-overlap refusal.
-        if (isPresent(effective(row, stored, SiteDomainModel.LISTEN_ON))) {
+        if (isPresent(row.afterWrite(SiteDomainModel.LISTEN_ON, stored))) {
             throw Violations.ofField(SiteDomainModel.LISTEN_ON.getName(),
-                effective(row, stored, SiteDomainModel.LISTEN_ON),
+                row.afterWrite(SiteDomainModel.LISTEN_ON, stored),
                 CmsSupport.violationText("tenant_listen_on_frozen"));
         }
 
@@ -651,9 +652,9 @@ public final class TenantWrites {
         // accepted. Freezing PATH empty for tenants is what keeps every tenant-vs-tenant
         // pair comparable. Admin-authored path carve-outs are unaffected (and are the
         // legitimate case the exemption exists for).
-        if (isPresent(effective(row, stored, SiteDomainModel.PATH))) {
+        if (isPresent(row.afterWrite(SiteDomainModel.PATH, stored))) {
             throw Violations.ofField(SiteDomainModel.PATH.getName(),
-                effective(row, stored, SiteDomainModel.PATH),
+                row.afterWrite(SiteDomainModel.PATH, stored),
                 CmsSupport.violationText("tenant_path_frozen"));
         }
 
@@ -709,7 +710,7 @@ public final class TenantWrites {
 
     /**
      * The only columns a delegated tenant may author on a site: exactly what
-     * {@code ManageSiteResource} offers (its form, its field bindings, its updateRow and the
+     * the /manage site twin offers ({@code SiteParts.manage()}: its form, its bindings, its update and the
      * enable toggle). The upstream kind, the settings (every dial target: forward_host,
      * socket, root_path, ...), instance_id, slug, the access list, the auth provider, the
      * status and the quota bucket are all operator decisions -- authoring one is authoring
@@ -762,8 +763,8 @@ public final class TenantWrites {
         // frozen column), never a create that skips the frozen-column rule.
         Row stored = StoredRows.byId(model, idValue);
 
-        Object kind = effective(row, stored, SiteModel.UPSTREAM_KIND);
-        Object settings = effective(row, stored, SiteModel.SETTINGS);
+        Object kind = row.afterWrite(SiteModel.UPSTREAM_KIND, stored);
+        Object settings = row.afterWrite(SiteModel.SETTINGS, stored);
         boolean upstreamMoves = stored == null
             || !Objects.equals(kind, stored.get(SiteModel.UPSTREAM_KIND))
             || !Objects.equals(settings, stored.get(SiteModel.SETTINGS));
@@ -928,7 +929,7 @@ public final class TenantWrites {
 
     /**
      * The only columns a delegated tenant may author on an instance: exactly what
-     * {@code ManageInstanceResource}'s form offers. Kind, settings (image, command,
+     * {@code InstanceParts.manage()}'s form offers. Kind, settings (image, command,
      * environment), the host pick and every lifecycle column are execution and placement
      * decisions -- authoring one is authoring what runs and where.
      */
@@ -998,10 +999,9 @@ public final class TenantWrites {
         }
 
         AccessContext ctx = acting();
-        if (ctx == null || ctx.isAnonymous()
+        if (ctx == null || !ctx.isAccount()
                 || !ctx.hasCapability(InstanceModel.MODEL_ID, idValue, HohenheimAccess.CONFIG)) {
-            throw Violations.ofForm(Microcopy.of("instance_not_permitted")
-                .withFilter("scope", "violations"));
+            throw Violations.ofForm(HohenheimViolations.text("instance_not_permitted"));
         }
 
         refuseFrozenColumns(model, row, stored, INSTANCE_TENANT_WRITABLE, INSTANCE_DERIVED);
@@ -1051,8 +1051,9 @@ public final class TenantWrites {
 
     /**
      * The only columns a delegated tenant may author on a managed database: NONE. A
-     * database record DESCRIBES a provisioned container, is immutable after create
-     * ({@code DatabaseResource.updatable() == false}), and every column on it is either a
+     * database record DESCRIBES a provisioned container, is immutable after create to a
+     * tenant (the /manage twin, {@code DatabaseParts#manage}, offers no update; only the
+     * operator resizes), and every column on it is either a
      * placement/execution decision or a credential the runtime must agree with.
      *
      * Why each of the load-bearing ones is frozen, so a future reader does not "helpfully"
@@ -1145,7 +1146,7 @@ public final class TenantWrites {
      * network the attach creates does. Widening exposure is a manage-level act, and
      * DatabaseModel has no {@code config} verb by deliberate declaration.
      *
-     * PUBLIC because {@code InstanceDatabaseResource.validate} must ask the SAME question
+     * PUBLIC because {@code InstanceAttachmentParts.requireLinkReachable} must ask the SAME question
      * BEFORE its reachability lookups: those lookups are unscoped, so run first they were
      * an existence/name/host oracle for a probing tenant (absent, wrong-host-with-name,
      * and not-yours each answered differently). One derivation, asked early for the
@@ -1157,7 +1158,7 @@ public final class TenantWrites {
     public static void requireInstanceLinkAuthority(@Nullable Object instanceIdValue,
                                                     @Nullable Object databaseIdValue) {
         AccessContext ctx = acting();
-        if (!(instanceIdValue instanceof Integer instanceId) || ctx == null || ctx.isAnonymous()
+        if (!(instanceIdValue instanceof Integer instanceId) || ctx == null || !ctx.isAccount()
                 || !HohenheimAccess.hasInstanceCapability(ctx, instanceId,
                     HohenheimAccess.CONFIG)) {
             throw Violations.ofField(InstanceDatabaseModel.INSTANCE_ID.getName(), instanceIdValue,
@@ -1202,7 +1203,7 @@ public final class TenantWrites {
      * AIDEV-NOTE: ENVIRONMENT-owned rows (a null instance owner) pass here. They belong to
      * a project, hold no instance capability to ask about, and are gated by
      * PaasApi.visibleEnvironment -- which is now ADMIN-ONLY, the same permission
-     * EnvironmentVariableResource's panel demands, so both surfaces finally agree. Do not
+     * EnvironmentParts.variables()'s panel demands, so both surfaces finally agree. Do not
      * "helpfully" refuse them -- that would break the shipped project env lane while
      * protecting nothing this hook can decide.
      *
@@ -1214,11 +1215,10 @@ public final class TenantWrites {
             return;
         }
         AccessContext ctx = acting();
-        if (ctx == null || ctx.isAnonymous()
+        if (ctx == null || !ctx.isAccount()
                 || !ctx.hasCapability(InstanceModel.MODEL_ID, instanceId,
                     HohenheimAccess.CONFIG)) {
-            throw Violations.ofForm(Microcopy.of("instance_not_permitted")
-                .withFilter("scope", "violations"));
+            throw Violations.ofForm(HohenheimViolations.text("instance_not_permitted"));
         }
     }
 
@@ -1236,7 +1236,7 @@ public final class TenantWrites {
             ? model.findById(row.get(DnsRecordModel.ID)) : null;
 
         requireRecordAuthority(row, stored);
-        refuseForeignRecordType(effective(row, stored, DnsRecordModel.TYPE));
+        refuseForeignRecordType(row.afterWrite(DnsRecordModel.TYPE, stored));
         // A record being EDITED must have been allow-listed before the edit too, otherwise
         // "change the type of the NS row to A" launders it in.
         if (stored != null) {
@@ -1289,10 +1289,10 @@ public final class TenantWrites {
         // hold. It is bounded instead: a stored row holding a dyndns CREDENTIAL, and
         // VALUE the only column that may move. Without that bound the exemption would be
         // the bypass shape it looks like.
-        if (ctx.isAnonymous()) {
+        if (!ctx.isAccount()) {
             if (stored == null
                     || DynamicDnsService.credentialFor(stored.get(DnsRecordModel.ID)) == null) {
-                throw refusal(DnsRecordModel.NAME.getName(), effective(row, stored, DnsRecordModel.NAME));
+                throw refusal(DnsRecordModel.NAME.getName(), row.afterWrite(DnsRecordModel.NAME, stored));
             }
             refuseChangesOutside(row, stored, Set.of(DnsRecordModel.VALUE.getName()));
             return;
@@ -1310,7 +1310,7 @@ public final class TenantWrites {
         // alone. (A dyndns grant is authority over the CREDENTIAL table only -- see
         // checkCredentialWrite -- never over any column of the record itself.)
         if (stored != null && !holdsEdit && !ownsStoredName) {
-            throw refusal(DnsRecordModel.NAME.getName(), effective(row, stored, DnsRecordModel.NAME));
+            throw refusal(DnsRecordModel.NAME.getName(), row.afterWrite(DnsRecordModel.NAME, stored));
         }
 
         String claimed = fqdnOf(row, stored);
@@ -1323,8 +1323,8 @@ public final class TenantWrites {
 
     /** @return the fully qualified name the write ends up with, or "" when its zone is gone */
     private static @NonNull String fqdnOf(@NonNull Row row, @Nullable Row stored) {
-        Object zoneId = effective(row, stored, DnsRecordModel.ZONE_ID);
-        Object name = effective(row, stored, DnsRecordModel.NAME);
+        Object zoneId = row.afterWrite(DnsRecordModel.ZONE_ID, stored);
+        Object name = row.afterWrite(DnsRecordModel.NAME, stored);
         if (zoneId == null || name == null) {
             return "";
         }
@@ -1358,7 +1358,7 @@ public final class TenantWrites {
      */
     private static void checkCredentialWrite(@Nullable Object recordId) {
         AccessContext ctx = acting();
-        boolean authorized = ctx != null && !ctx.isAnonymous() && recordId != null
+        boolean authorized = ctx != null && ctx.isAccount() && recordId != null
             && ctx.hasCapability(DnsRecordModel.MODEL_ID, recordId, HohenheimAccess.DYNDNS);
         if (!authorized) {
             throw refusal(DnsDyndnsCredentialModel.RECORD_ID.getName(), recordId);
@@ -1383,7 +1383,7 @@ public final class TenantWrites {
         if (HohenheimAccess.isAdmin(ctx)) {
             return true;
         }
-        if (ctx.isAnonymous()) {
+        if (!ctx.isAccount()) {
             return false;
         }
         if (!RECORD_TYPES.contains(String.valueOf(stored.get(DnsRecordModel.TYPE)))) {
@@ -1406,15 +1406,6 @@ public final class TenantWrites {
             throw Violations.ofField(DnsRecordModel.TYPE.getName(), text,
                 CmsSupport.violationText("tenant_record_type"));
         }
-    }
-
-    /** The value the write will END UP with, reading the already-loaded stored row. */
-    private static @Nullable Object effective(@NonNull Row row, @Nullable Row stored,
-                                              @NonNull Field<?, ?> field) {
-        if (row.has(field.getName())) {
-            return row.get(field.getName());
-        }
-        return stored != null ? stored.get(field.getName()) : field.getDefaultValue();
     }
 
     private static boolean isPresent(@Nullable Object value) {

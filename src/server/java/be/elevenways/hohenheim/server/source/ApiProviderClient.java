@@ -7,8 +7,10 @@ import be.elevenways.zenit.server.net.FetchRequest;
 import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import be.elevenways.zenit.server.net.PinnedFetcher;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import be.elevenways.hohenheim.server.util.Json;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -131,6 +133,36 @@ abstract class ApiProviderClient implements GitProviderClient {
     private static @NonNull String pathOf(@NonNull String url) {
         int query = url.indexOf('?');
         return query < 0 ? url : url.substring(0, query);
+    }
+
+    /** @return the branch names a provider's JSON branch list carries, in its order */
+    protected static @NonNull List<String> branchNames(@Nullable Object parsed) {
+        List<String> branches = new ArrayList<>();
+        if (parsed instanceof List<?> list) {
+            for (Object entry : list) {
+                if (entry instanceof Map<?, ?> branch && branch.get("name") != null) {
+                    branches.add(String.valueOf(branch.get("name")));
+                }
+            }
+        }
+        return branches;
+    }
+
+    /**
+     * POSTs one commit status in the shape every supported provider takes: its state token, the context, the
+     * description cut to 140 characters and the target URL when there is one.
+     */
+    protected final void postStatus(@NonNull String url, @NonNull String token, @NonNull String state,
+                                    @NonNull String context, @NonNull String description, @Nullable String targetUrl)
+            throws IOException {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("state", state);
+        body.put("context", context);
+        body.put("description", truncate(description, 140));
+        if (targetUrl != null && !targetUrl.isBlank()) {
+            body.put("target_url", targetUrl);
+        }
+        postJson(url, token, Json.stringify(body));
     }
 
     /**

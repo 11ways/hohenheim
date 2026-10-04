@@ -9,8 +9,11 @@ import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.ManagePreviewDeploymentResource;
-import be.elevenways.hohenheim.server.cms.PreviewDeploymentResource;
+import be.elevenways.hohenheim.server.cms.PreviewParts;
+import be.elevenways.zenit.cms.common.access.AccessRefusedException;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
+import be.elevenways.zenit.cms.common.resource.ResourceVerb;
+import be.elevenways.zenit.cms.common.resource.RowWriteCall;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.preview.PreviewBranches;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
@@ -24,6 +27,17 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.hohenheim.preview.PreviewOperations;
+import be.elevenways.hohenheim.test.PlacedActionClicks;
+import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
+import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.task.record.RecordScheduleModel;
+import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.zenit.server.operation.OperationRequest;
+import be.elevenways.zenit.server.task.record.RecordSchedules;
+import be.elevenways.zenit.test.support.TestAccessContexts;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -167,8 +181,8 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
     /**
      * The /manage authority gate: MANAGE on the APPLICATION is the verb (a preview is a
      * projection of the application it is built from; no new capability exists for it),
-     * and the COUNTERFACTUAL proves the gate is load-bearing -- the base admin resource,
-     * which does not carry it, happily creates a preview for the same stranger.
+     * and the COUNTERFACTUAL proves the gate is load-bearing -- the existing operator queue
+     * writer claims the same application before the /manage authorizer is applied.
      */
     @Test
     void manualCreationFromManageRequiresManageOnTheChosenApplication() throws Exception {
@@ -182,20 +196,28 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
         coerced.put(PreviewDeploymentModel.APPLICATION_ID.getName(), applicationId);
         coerced.put(PreviewDeploymentModel.REF.getName(), "gate-ref");
 
-        // 1. COUNTERFACTUAL: the base ADMIN resource carries no per-record gate (its
-        //    surface is behind the admin panel permission), so the stranger context
-        //    sails through it. This is exactly what /manage must NOT allow.
-        Object ungated = new PreviewDeploymentResource().persistRow(coerced, stranger);
+        // 1. COUNTERFACTUAL: the admin's domain writer, bypassing its operator permission, accepts the SAME stranger
+        //    and submission. The delegated writer must add the application gate before reaching that domain write.
+        Object ungated = PreviewParts.admin().writes().rowWriter(ResourceVerb.CREATE).write(
+            new RowWriteCall(ResourceVerb.CREATE, null, coerced, stranger));
         assertThat(ungated)
             .as("step 1: ungated, a stranger creates a preview on a foreign application")
             .isNotNull();
+        assertThat(catchThrowable(() -> PanelResourceCalls.create("admin", PreviewParts.SLUG, coerced, stranger)))
+            .as("step 1: the admin parts' operator permission protects their actual create lane")
+            .isInstanceOf(AccessRefusedException.class);
         PreviewDeployments.destroy(((Number) ungated).intValue(), "operator");
+        assertThat(PreviewDeployments.deployClaimed(((Number) ungated).intValue(), null, DeployTrigger.MANUAL))
+            .as("step 1: a delayed queued worker cannot reclaim a destroyed preview").isNull();
+        long beforeRefusal = Models.get(PreviewDeploymentModel.class).find()
+            .where(PreviewDeploymentModel.APPLICATION_ID.eq(applicationId)).count();
 
         // 2. The /manage resource refuses the SAME submission as its FIRST act: no row,
         //    no quota charge, no schedule -- and the refusal does not distinguish
         //    "exists but not yours" from "no such application".
         Throwable refusedForeign = catchThrowable(() ->
-            new ManagePreviewDeploymentResource().persistRow(coerced, stranger));
+            PreviewParts.manage().writes().rowWriter(ResourceVerb.CREATE).write(
+                new RowWriteCall(ResourceVerb.CREATE, null, coerced, stranger)));
         assertThat(refusedForeign)
             .as("step 2: a stranger is refused on /manage")
             .isInstanceOf(Violations.class)
@@ -203,25 +225,40 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
         Map<String, Object> unknownApplication = new LinkedHashMap<>(coerced);
         unknownApplication.put(PreviewDeploymentModel.APPLICATION_ID.getName(), 999999);
         Throwable refusedUnknown = catchThrowable(() ->
-            new ManagePreviewDeploymentResource().persistRow(unknownApplication, stranger));
+            PreviewParts.manage().writes().rowWriter(ResourceVerb.CREATE).write(
+                new RowWriteCall(ResourceVerb.CREATE, null, unknownApplication, stranger)));
         assertThat(refusedUnknown)
             .as("step 2: an unknown application refuses IDENTICALLY (no existence oracle)")
             .isInstanceOf(Violations.class)
             .hasMessageContaining("preview_application_required");
         assertThat(Models.get(PreviewDeploymentModel.class).find()
-                .where(PreviewDeploymentModel.APPLICATION_ID.eq(applicationId))
-                .where(PreviewDeploymentModel.REF.eq("gate-ref"))
-                .where(PreviewDeploymentModel.DELETED_AT.isNull()).first())
-            .as("step 2: the refusal claimed nothing").isNull();
+                .where(PreviewDeploymentModel.APPLICATION_ID.eq(applicationId)).count())
+            .as("step 2: the refusal claimed no new row").isEqualTo(beforeRefusal);
+        Row destroyed = Models.get(PreviewDeploymentModel.class).find().withTrashed()
+            .where(PreviewDeploymentModel.ID.eq(((Number) ungated).intValue())).noCache().first();
+        assertThat(destroyed).as("step 2: the soft-deleted counterfactual is retained as history").isNotNull();
+        assertThat(destroyed.get(PreviewDeploymentModel.STATUS))
+            .as("step 2: the counterfactual remains destroyed history")
+            .isEqualTo(PreviewDeploymentModel.STATUS_DESTROYED);
 
         // 3. The walk-confirmed MANAGE holder creates through the same path.
-        Object created = new ManagePreviewDeploymentResource().persistRow(coerced, manager);
+        Object created = PreviewParts.manage().writes().rowWriter(ResourceVerb.CREATE).write(
+            new RowWriteCall(ResourceVerb.CREATE, null, coerced, manager));
         assertThat(created).as("step 3: a manage holder may create").isNotNull();
         PreviewDeployments.destroy(((Number) created).intValue(), "operator");
+
+        // 4. Revoking MANAGE removes that same writer's authority again; neither a successful earlier create nor
+        //    the retained destroyed rows are a permit to create the next preview.
+        RecordGrants.revoke(GrantSubjectType.USER, managerId, InstanceModel.MODEL_ID,
+            applicationId, HohenheimAccess.MANAGE);
+        assertThat(catchThrowable(() -> PreviewParts.manage().writes().rowWriter(ResourceVerb.CREATE).write(
+                new RowWriteCall(ResourceVerb.CREATE, null, coerced, manager))))
+            .as("step 4: the delegated writer rechecks the revoked application grant")
+            .isInstanceOf(Violations.class).hasMessageContaining("preview_application_required");
     }
 
     /**
-     * A preview leaves only through destroy_preview: the generic resource delete would drop
+     * A preview leaves only through expire_preview: the generic resource delete would drop
      * the row and strand its container, generated domain and DNS rows.
      */
     @Test
@@ -230,13 +267,13 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
         Map<String, Object> coerced = new LinkedHashMap<>();
         coerced.put(PreviewDeploymentModel.APPLICATION_ID.getName(), applicationId);
         coerced.put(PreviewDeploymentModel.REF.getName(), "delete-ref");
-        int previewId = ((Number) new PreviewDeploymentResource()
-            .persistRow(coerced, contextOf(operatorId, "Operator"))).intValue();
+        int previewId = PreviewDeployments.queue(applicationId, "delete-ref", null, null,
+            DeployTrigger.MANUAL).get(PreviewDeploymentModel.ID);
 
         // 1. Neither surface declares the generic delete.
-        assertThat(new PreviewDeploymentResource().deletable())
+        assertThat(PreviewParts.admin().offers(ResourceVerb.DELETE))
             .as("step 1: the admin preview resource offers no generic delete").isFalse();
-        assertThat(new ManagePreviewDeploymentResource().deletable())
+        assertThat(PreviewParts.manage().offers(ResourceVerb.DELETE))
             .as("step 1: nor does the delegated one").isFalse();
 
         // 2. A confirmed delete POST is refused and the preview stays live.
@@ -249,7 +286,7 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
         // 3. The destroy lane is the one way out.
         PreviewDeployments.destroy(previewId, "operator");
         assertThat(Models.get(PreviewDeploymentModel.class).findById(previewId))
-            .as("step 3: destroy_preview takes it").isNull();
+            .as("step 3: the destroy lane takes it").isNull();
     }
 
     /**
@@ -297,6 +334,81 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
             .as("step 2: and the hostname is derived from the LENDING site's slug")
             .startsWith("prev-orphan--").endsWith(".preview.test");
         PreviewDeployments.destroy(claimed.get(PreviewDeploymentModel.ID), "operator");
+    }
+
+    /**
+     * Destroy now is the placed expire_preview operation on both panels, offered to exactly whom the legacy row action
+     * was: an operator on every preview and the preview's application's manager on its previews, never a stranger. A
+     * click reclaims the preview as destroyed; the deadline's armed step, the same operation, as expired.
+     */
+    @Test
+    void destroyNowIsThePlacedExpireOperationForTheApplicationsManagers() throws Exception {
+        Integer savedCap = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Previews.MAX_PER_OWNER);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Previews.MAX_PER_OWNER, 10);
+        try {
+            int managerId = ApiSupport.user("preview-expire-manager@test");
+            int strangerId = ApiSupport.user("preview-expire-stranger@test");
+            RecordGrants.grant(GrantSubjectType.USER, managerId, InstanceModel.MODEL_ID, applicationId,
+                HohenheimAccess.MANAGE, true);
+            AccessContext manager = contextOf(managerId, "Expire Manager");
+            AccessContext stranger = contextOf(strangerId, "Expire Stranger");
+
+            // 1. Both panels place the one operation, and the legacy row action is gone.
+            assertThat(PlacedActionClicks.placed(PreviewParts.admin(), "expire_preview").operation())
+                .as("step 1: the admin places expire_preview").isEqualTo(PreviewOperations.EXPIRE);
+            assertThat(PlacedActionClicks.placed(PreviewParts.manage(), "expire_preview").operation())
+                .as("step 1: and so does /manage").isEqualTo(PreviewOperations.EXPIRE);
+            assertThat(PreviewParts.admin().actions())
+                .as("step 1: no legacy destroy_preview row action is left")
+                .noneMatch(action -> action.id().getPath().equals("destroy_preview"));
+
+            // 2. Offered to an operator and to the application's manager, never to a stranger, whose invoke is
+            //    refused and leaves the preview live.
+            int clicked = PreviewDeployments.queue(applicationId, "expire-click", null, null, DeployTrigger.MANUAL)
+                .get(PreviewDeploymentModel.ID);
+            Row preview = Models.get(PreviewDeploymentModel.class).findById(clicked);
+            assertThat(OperationPipeline.offer(PreviewOperations.EXPIRE, TestAccessContexts.allAllowed(), preview))
+                .as("step 2: offered to an operator").isInstanceOf(OperationPipeline.Offer.Available.class);
+            assertThat(OperationPipeline.offer(PreviewOperations.EXPIRE, manager, preview))
+                .as("step 2: and to the application's manager").isInstanceOf(OperationPipeline.Offer.Available.class);
+            assertThat(OperationPipeline.offer(PreviewOperations.EXPIRE, stranger, preview))
+                .as("step 2: never to a stranger").isNotInstanceOf(OperationPipeline.Offer.Available.class);
+            assertThat(catchThrowable(() -> click(stranger, preview)))
+                .as("step 2: whose invoke is refused").isInstanceOf(DomainRefusal.class);
+            assertThat(Models.get(PreviewDeploymentModel.class).findById(clicked))
+                .as("step 2: and the preview stays live").isNotNull();
+
+            // 3. The manager's click reclaims it as destroyed.
+            click(manager, preview);
+            assertThat(statusOf(clicked)).as("step 3: a click destroys the preview")
+                .isEqualTo(PreviewDeploymentModel.STATUS_DESTROYED);
+
+            // 4. The deadline's armed step runs the same operation as the system and reclaims as expired.
+            int expiring = PreviewDeployments.queue(applicationId, "expire-deadline", null, null,
+                DeployTrigger.MANUAL).get(PreviewDeploymentModel.ID);
+            PreviewDeployments.armExpiry(expiring, Now.instant());
+            Row schedule = Models.get(RecordScheduleModel.class).find().noCache()
+                .where(RecordScheduleModel.MODEL.eq(PreviewDeploymentModel.MODEL_ID.toString()))
+                .where(RecordScheduleModel.RECORD_ID.eq(String.valueOf(expiring))).first();
+            assertThat(schedule).as("step 4: the expiry is armed").isNotNull();
+            new RecordSchedules(Datasources.getDefault()).runNow(schedule.get(RecordScheduleModel.ID));
+            assertThat(statusOf(expiring)).as("step 4: the deadline expires the preview")
+                .isEqualTo(PreviewDeploymentModel.STATUS_EXPIRED);
+        } finally {
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Previews.MAX_PER_OWNER, savedCap);
+        }
+    }
+
+    /** The placed action's invoke, on the admin action surface both panels post through. */
+    private static void click(AccessContext caller, Row preview) {
+        OperationPipeline.invoke(OperationRequest.of(PreviewOperations.EXPIRE, CmsPlacementSurface.ADMIN_ACTION)
+            .caller(caller)
+            .subjects(List.of(preview)));
+    }
+
+    private static String statusOf(int previewId) {
+        return Models.get(PreviewDeploymentModel.class).find().noCache().withTrashed()
+            .where(PreviewDeploymentModel.ID.eq(previewId)).first().get(PreviewDeploymentModel.STATUS);
     }
 
     // -- helpers --------------------------------------------------------------

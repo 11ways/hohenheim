@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.zenit.common.annotation.ZenitAutoLoad;
+import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.zenit.comms.CommsSettings;
 import be.elevenways.zenit.server.setting.RetiredConfiguration;
 import be.elevenways.zenit.server.setting.RetiredName;
@@ -19,7 +19,7 @@ import java.util.List;
  * @author Jelle De Loecker
  * @since  0.1.0
  */
-@ZenitAutoLoad
+@BlastAutoLoad
 public final class HohenheimRetiredNames {
 
     /**

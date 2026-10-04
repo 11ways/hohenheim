@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.zenit.test.support.OutboundFixture;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
@@ -57,6 +58,7 @@ class IsolationVisibilityTest {
     private static final String LIVE_TAP = "tapc97b9701";
 
     private static HttpServer receiver;
+    private static OutboundFixture destination;
     private static SystemTaskHistoryModel registeredHistory;
     private static final AtomicInteger DELIVERIES = new AtomicInteger();
 
@@ -72,6 +74,9 @@ class IsolationVisibilityTest {
             exchange.close();
         });
         receiver.start();
+        // Webhooks refuse loopback destinations under every policy: the fixture resolves a public-looking host to the
+        // stub, as a real destination would be reached.
+        destination = OutboundFixture.route("isolation-watch.example.test", receiver.getAddress().getPort());
 
         // Inline delivery, the CertExpiryAlertTest shape: the receiver's count is settled
         // by the time publish() returns, so no polling and no sleeping.
@@ -84,7 +89,7 @@ class IsolationVisibilityTest {
         channel.set(NotificationChannelModel.KIND, NotificationChannelModel.KIND_WEBHOOK);
         channel.set(NotificationChannelModel.FORMAT, NotificationChannelModel.FORMAT_GENERIC);
         channel.set(NotificationChannelModel.URL,
-            "http://127.0.0.1:" + receiver.getAddress().getPort() + "/hook");
+            "http://" + destination.host() + ":" + receiver.getAddress().getPort() + "/hook");
         // Subscribed to the isolation event ONLY: a channel that receives this because it
         // subscribes to everything would prove nothing about the event's existence.
         channel.set(NotificationChannelModel.EVENTS,
@@ -95,6 +100,9 @@ class IsolationVisibilityTest {
     @AfterAll
     static void tearDown() throws Exception {
         Comms.install(null);
+        if (destination != null) {
+            destination.close();
+        }
         if (receiver != null) {
             receiver.stop(0);
         }
@@ -179,13 +187,13 @@ class IsolationVisibilityTest {
         //    This is the projection the executor's throw is FOR -- before it, the task
         //    always recorded success, so this collector could never see it.
         registerTaskHistoryIfAbsent();
-        recordFailedRun(VerifyWorkloadIsolation.class.getName());
+        recordFailedRun(VerifyWorkloadIsolation.ID.toString());
         List<AttentionItem> items = new ArrayList<>();
         AttentionCollector.failedTasks(items);
         assertThat(items)
             .as("step 6: the failed isolation sweep must reach the dashboard")
             .anySatisfy(item -> assertThat(item.title().args().get("name"))
-                .isEqualTo(VerifyWorkloadIsolation.class.getName()));
+                .isEqualTo(VerifyWorkloadIsolation.ID.toString()));
     }
 
     /**

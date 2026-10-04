@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -13,7 +14,9 @@ import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.TextField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
-import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.orm.query.QueryBuilder;
+import be.elevenways.zenit.common.ui.BadgeVariant;
+import be.elevenways.zenit.common.ui.ColorHue;
 
 import java.util.List;
 
@@ -36,7 +39,7 @@ import java.util.List;
  */
 public class BuildOperationModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "build_operation");
+    public static final Identifier MODEL_ID = HohenheimIds.id("build_operation");
     public static final Schema SCHEMA = new Schema();
 
     /** A Dockerfile build inside the sandbox (the shipped builder). */
@@ -85,11 +88,11 @@ public class BuildOperationModel extends Model {
 
     public static final EnumField BUILDER_KIND = SCHEMA.addField(EnumField.builder("builder_kind")
         .value(KIND_DOCKERFILE, v -> v.displayName("Dockerfile")
-            .label(kindLabel(KIND_DOCKERFILE)).icon("file-code").color("info"))
+            .label(kindLabel(KIND_DOCKERFILE)).icon("file-code").color(BadgeVariant.INFO))
         .value(KIND_NIXPACKS, v -> v.displayName("Nixpacks")
-            .label(kindLabel(KIND_NIXPACKS)).icon("box").color("secondary"))
+            .label(kindLabel(KIND_NIXPACKS)).icon("box").color(BadgeVariant.SECONDARY))
         .value(KIND_WORKSPACE, v -> v.displayName("Workspace")
-            .label(kindLabel(KIND_WORKSPACE)).icon("code").color("violet"))
+            .label(kindLabel(KIND_WORKSPACE)).icon("code").color(ColorHue.VIOLET))
         .build());
 
     /** The translation token for a builder kind; the key IS the stored value. */
@@ -105,17 +108,17 @@ public class BuildOperationModel extends Model {
 
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_RUNNING, v -> v.displayName("Running")
-            .label(statusLabel(STATUS_RUNNING)).icon("rotate").color("info"))
+            .label(statusLabel(STATUS_RUNNING)).icon("rotate").color(BadgeVariant.INFO))
         .value(STATUS_SUCCEEDED, v -> v.displayName("Succeeded")
-            .label(statusLabel(STATUS_SUCCEEDED)).icon("check").color("success"))
+            .label(statusLabel(STATUS_SUCCEEDED)).icon("check").color(BadgeVariant.SUCCESS))
         .value(STATUS_FAILED, v -> v.displayName("Failed")
-            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color("destructive"))
+            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color(BadgeVariant.DESTRUCTIVE))
         .value(STATUS_TIMED_OUT, v -> v.displayName("Timed out")
-            .label(statusLabel(STATUS_TIMED_OUT)).icon("clock").color("warning"))
+            .label(statusLabel(STATUS_TIMED_OUT)).icon("clock").color(BadgeVariant.WARNING))
         .value(STATUS_QUOTA_EXCEEDED, v -> v.displayName("Quota exceeded")
-            .label(statusLabel(STATUS_QUOTA_EXCEEDED)).icon("gauge-high").color("warning"))
+            .label(statusLabel(STATUS_QUOTA_EXCEEDED)).icon("gauge-high").color(BadgeVariant.WARNING))
         .value(STATUS_REFUSED, v -> v.displayName("Refused")
-            .label(statusLabel(STATUS_REFUSED)).icon("ban").color("destructive"))
+            .label(statusLabel(STATUS_REFUSED)).icon("ban").color(BadgeVariant.DESTRUCTIVE))
         .build());
 
     /** The translation token for a build status; the key IS the stored value. */
@@ -183,14 +186,14 @@ public class BuildOperationModel extends Model {
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("updated_at").build());
 
+    /** One owning record's operations, newest first. */
+    private QueryBuilder<Row> history(String forModel, int forId) {
+        return OwnedOperations.newestFirst(this, FOR_MODEL, FOR_ID, ID, forModel, forId);
+    }
+
     /** Newest-first build history of one owning record. */
     public List<Row> findForOwner(String forModel, int forId, int limit) {
-        return find()
-            .where(FOR_MODEL.eq(forModel))
-            .where(FOR_ID.eq(forId))
-            .orderBy(ID, SortOrder.DESC)
-            .limit(limit)
-            .all();
+        return this.history(forModel, forId).limit(limit).all();
     }
 
     /**
@@ -200,13 +203,7 @@ public class BuildOperationModel extends Model {
      */
     public void pruneHistory(String forModel, int forId, int keep) {
         int limit = keep > 0 ? keep : 50;
-        List<Row> stale = find()
-            .where(FOR_MODEL.eq(forModel))
-            .where(FOR_ID.eq(forId))
-            .orderBy(ID, SortOrder.DESC)
-            .offset(limit)
-            .limit(1000)
-            .all();
+        List<Row> stale = this.history(forModel, forId).offset(limit).limit(1000).all();
         for (Row old : stale) {
             delete(old.get(ID));
         }
@@ -214,12 +211,7 @@ public class BuildOperationModel extends Model {
 
     /** The newest SUCCEEDED build of one owning record, or null. */
     public Row latestSuccess(String forModel, int forId) {
-        return find()
-            .where(FOR_MODEL.eq(forModel))
-            .where(FOR_ID.eq(forId))
-            .where(STATUS.eq(STATUS_SUCCEEDED))
-            .orderBy(ID, SortOrder.DESC)
-            .first();
+        return this.history(forModel, forId).where(STATUS.eq(STATUS_SUCCEEDED)).first();
     }
 
     static {

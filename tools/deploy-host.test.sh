@@ -177,19 +177,8 @@ export HEALTH_SCRIPT="$WORK/health.sh"
 export FAKE_JAR_SHA="$JAR_SHA"
 export ZENIT_DEV_CONFIG="$CONFIG"
 
-PASSED=0
-FAILED=0
-ok() { PASSED=$((PASSED + 1)); printf 'ok   %s\n' "$1"; }
-no() { FAILED=$((FAILED + 1)); printf 'FAIL %s\n' "$1"; }
-
-expect() {
-    local label="$1" haystack="$2" needle="$3" mode="${4:-yes}"
-    if printf '%s' "$haystack" | /usr/bin/grep -qF -- "$needle"; then
-        [ "$mode" = "yes" ] && ok "$label" || no "$label (unexpected: $needle)"
-    else
-        [ "$mode" = "yes" ] && no "$label (missing: $needle)" || ok "$label"
-    fi
-}
+# shellcheck source=test-assert.sh
+. "$HERE/test-assert.sh"
 
 reset_logs() { : > "$SSH_LOG"; : > "$DEPLOYED_CALLS"; : > "$REMOTE_SCRIPTS"; }
 
@@ -440,5 +429,4 @@ else
     no "one-second health budget bounds a hanging request"
 fi
 
-printf '\n%s passed, %s failed\n' "$PASSED" "$FAILED"
-[ "$FAILED" -eq 0 ]
+report

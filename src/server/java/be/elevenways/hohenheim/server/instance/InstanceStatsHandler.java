@@ -5,10 +5,10 @@ import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.channel.ChannelException;
 import be.elevenways.zenit.common.channel.ChannelHandler;
 import be.elevenways.zenit.common.channel.ChannelLink;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.websocket.WebSocketSession;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -85,7 +85,7 @@ public final class InstanceStatsHandler implements ChannelHandler<Object, Object
             // the client's ready future fails and the page renders the empty state.
             // AIDEV-NOTE: the reason is the DAEMON's or transport's own text (socket
             // paths, host names, ssh failures), which is operator inventory -- the
-            // InstanceOverviewPage install_error rule. A delegated viewer is told there
+            // InstanceOverview install_error rule. A delegated viewer is told there
             // is nothing to stream; the operator gets the reason, and the log keeps it.
             Blast.log("STATS: no live stats for instance", instanceId, "-", noStream.getMessage());
             throw new ChannelException(this.isOperator()
@@ -97,8 +97,7 @@ public final class InstanceStatsHandler implements ChannelHandler<Object, Object
     /** Whether the viewer is an operator, who may read the daemon's own failure text. */
     private boolean isOperator() {
         Principal principal = this.link.getPrincipal();
-        return principal != null && Zenit.getWebSocketAuthenticator()
-            .hasPermission(principal, HohenheimSources.ADMIN_ACCESS);
+        return principal != null && AccessContext.detached(principal).hasPermission(HohenheimSources.ADMIN_ACCESS);
     }
 
     @Override

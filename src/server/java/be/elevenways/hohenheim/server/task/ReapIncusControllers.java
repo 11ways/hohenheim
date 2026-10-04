@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
@@ -10,6 +12,7 @@ import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusClients;
 import be.elevenways.hohenheim.server.incus.IncusReaper;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -50,14 +53,17 @@ public class ReapIncusControllers extends ScheduledTask {
     public static final String STATIC_DESCRIPTION =
         "Refresh this controller's Incus presence and reap departed controllers' shared objects";
 
-    /** The activity action one removal is recorded under, on the host record. */
-    public static final String ACTIVITY_ACTION = "reaped_controller_objects";
 
     /** One host's outcome; every list names objects, never a bare count. */
     public record HostOutcome(@NonNull String server, boolean reachable,
                               @NonNull List<IncusReaper.Candidate> plan,
                               @NonNull List<String> removed, @NonNull List<String> refused,
                               @NonNull List<String> errors) {
+    }
+
+    @Override
+    public @NonNull Identifier id() {
+        return HohenheimIds.id("reap_incus_controllers");
     }
 
     @Override
@@ -152,7 +158,7 @@ public class ReapIncusControllers extends ScheduledTask {
         IncusReaper.Reaped reaped = IncusReaper.reap(incus, plan, false);
         for (String removed : reaped.removed()) {
             ActivityLog.record(Models.get(ServerModel.class), server.get(ServerModel.ID),
-                ACTIVITY_ACTION, removed);
+                HohenheimActivityAction.REAPED_CONTROLLER_OBJECTS, removed);
         }
         return new HostOutcome(name, true, plan, reaped.removed(), reaped.refused(), List.of());
     }
@@ -180,7 +186,7 @@ public class ReapIncusControllers extends ScheduledTask {
             IncusReaper.Reaped reaped = IncusReaper.reap(incus, plan, true);
             for (String removed : reaped.removed()) {
                 ActivityLog.record(Models.get(ServerModel.class), server.get(ServerModel.ID),
-                    ACTIVITY_ACTION, removed);
+                    HohenheimActivityAction.REAPED_CONTROLLER_OBJECTS, removed);
             }
             return reaped;
         } catch (Exception failed) {

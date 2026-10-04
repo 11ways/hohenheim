@@ -25,11 +25,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * Pinned defects (QA 2026-09-01), both fixed: (a) the hawkeye {@code {% let %}} lane
  * unwrapped a returned live ref into a dead snapshot (fixed in the compiler,
- * {@code LetBoundLiveReferenceTest}); (b) the channel subscription lived inside a render
+ * {@code ReactiveReadJourneyTest.aLetBoundReturnedReferenceStaysLive}); (b) the channel subscription lived inside
+ * a render
  * expression, and hydration revives values without re-running {@code {% let %}} calls, so
  * after a hard load no browser ever opened the socket at all. The subscription now belongs
- * to the mounted {@code hh-instance-stats} element ({@code @mount} + {@code Cleanup.on},
- * the QQChatFunctions shape), which step 4 proves end to end: a sample pushed AFTER the
+ * to the mounted {@code hh-instance-stats} element (zenit's {@code ChannelLinks}, released by
+ * the element's disconnect), which step 4 proves end to end: a sample pushed AFTER the
  * page rendered repaints the chart, which is only possible through a live channel link.
  */
 class InstanceStatsChartPlotTest extends HohenheimTestBase {
@@ -120,6 +121,37 @@ class InstanceStatsChartPlotTest extends HohenheimTestBase {
         } finally {
             viewer.close();
         }
+    }
+
+    /**
+     * The link belongs to the mounted element: leaving the page in place releases it at the server, and coming back
+     * opens exactly one again -- no subscription outlives the element that owned it.
+     */
+    @Test
+    void leavingTheStatsTabReleasesItsLinkAndComingBackOpensOne() throws Exception {
+        // 1. The tab mounts the chart element, whose link is the hub's one viewer.
+        navigateToApp("/admin/instances/" + instanceId + "/page/stats");
+        waitForHydration();
+        Poll.until("step 1: the mounted element's link reached the hub", WAIT,
+            () -> InstanceStats.viewers(instanceId) == 1);
+        page.evaluate("() => { window.__statsJourney = 'same document'; }");
+
+        // 2. A soft navigation away disconnects the element, and that alone releases the link.
+        page.locator("pl-app-sidebar a[href='/admin/sites']").click();
+        page.waitForCondition(() -> page.url().endsWith("/admin/sites"));
+        assertThat(page.evaluate("() => window.__statsJourney"))
+            .as("step 2: an in-place navigation, so no page unload closed the socket").isEqualTo("same document");
+        Poll.until("step 2: the departed element's link was released", WAIT,
+            () -> InstanceStats.viewers(instanceId) == 0);
+
+        // 3. Coming back mounts a new element with one new link, never a second one beside a leaked first.
+        page.goBack();
+        page.waitForCondition(() -> page.locator("pl-sparkline").count() == 4);
+        Poll.until("step 3: the returning element opened its link", WAIT,
+            () -> InstanceStats.viewers(instanceId) == 1);
+        assertThat(page.evaluate("() => window.__statsJourney"))
+            .as("step 3: still the same document").isEqualTo("same document");
+        assertThat(InstanceStats.viewers(instanceId)).as("step 3: exactly one viewer").isEqualTo(1);
     }
 
     // -- plumbing -------------------------------------------------------------

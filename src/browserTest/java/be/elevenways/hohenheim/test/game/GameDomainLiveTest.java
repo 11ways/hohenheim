@@ -143,6 +143,9 @@ class GameDomainLiveTest {
                 "gamelive-proxy", null, Map.of(), null);
             int backendId = templates.createFromTemplate(approve(standInBackendTemplate()),
                 "gamelive-backend", null, Map.of(), null);
+            assertThat(new InstanceVariables().valuesFor(backendId))
+                .as("step 1: the backend's optional forwarding secret is absent until a mapping supplies it")
+                .doesNotContainKey(GameDomains.BACKEND_SECRET_KEY);
             int strangerId = strangerInstance();
             String proxyHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, proxyId);
             String backendHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, backendId);

@@ -8,7 +8,7 @@ import be.elevenways.protoblast.guard.ScanRoot;
 import be.elevenways.protoblast.guard.SourceRule;
 import be.elevenways.protoblast.guard.SourceRuleScanner;
 import be.elevenways.protoblast.guard.Violation;
-import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -98,7 +98,7 @@ class PageTitleLocalizationTest {
      */
     @Test
     void everyPageTitleScopeResolvesInBothLocales() {
-        DefaultCatalogLoader catalogs = new DefaultCatalogLoader();
+        ShippedCatalogs catalogs = new ShippedCatalogs();
         List<String> broken = new ArrayList<>();
 
         for (String scope : List.of("instance_device", "instance_schedule", "schedule_step",

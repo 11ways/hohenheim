@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -10,6 +12,8 @@ import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
+import be.elevenways.zenit.common.ui.BadgeVariant;
+import be.elevenways.zenit.common.ui.ColorHue;
 
 import java.util.Map;
 
@@ -25,7 +29,7 @@ import java.util.Map;
  */
 public class DatabaseModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "database");
+    public static final Identifier MODEL_ID = HohenheimIds.id("database");
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #STATUS} value while the container is being provisioned. */
@@ -74,13 +78,13 @@ public class DatabaseModel extends Model {
     public static EnumField.Builder engineFieldBuilder(String name) {
         return EnumField.builder(name)
             .value(ENGINE_POSTGRES, v -> v.displayName("PostgreSQL")
-                .label(engineLabel(ENGINE_POSTGRES)).icon("database").color("blue"))
+                .label(engineLabel(ENGINE_POSTGRES)).icon("database").color(ColorHue.BLUE))
             .value(ENGINE_MYSQL, v -> v.displayName("MySQL")
-                .label(engineLabel(ENGINE_MYSQL)).icon("database").color("orange"))
+                .label(engineLabel(ENGINE_MYSQL)).icon("database").color(ColorHue.ORANGE))
             .value(ENGINE_REDIS, v -> v.displayName("Redis")
-                .label(engineLabel(ENGINE_REDIS)).icon("bolt").color("red"))
+                .label(engineLabel(ENGINE_REDIS)).icon("bolt").color(ColorHue.RED))
             .value(ENGINE_MONGO, v -> v.displayName("MongoDB")
-                .label(engineLabel(ENGINE_MONGO)).icon("leaf").color("green"));
+                .label(engineLabel(ENGINE_MONGO)).icon("leaf").color(ColorHue.GREEN));
     }
 
     /** The translation token for a database engine; the key IS the stored value. */
@@ -139,14 +143,14 @@ public class DatabaseModel extends Model {
     public static EnumField.Builder statusFieldBuilder(String name) {
         return EnumField.builder(name)
             .value(STATUS_PROVISIONING, v -> v.displayName("Provisioning")
-                .label(statusLabel(STATUS_PROVISIONING)).icon("rotate").color("warning"))
+                .label(statusLabel(STATUS_PROVISIONING)).icon("rotate").color(BadgeVariant.WARNING))
             .value(STATUS_ACTIVE, v -> v.displayName("Active")
-                .label(statusLabel(STATUS_ACTIVE)).icon("circle-check").color("success"))
+                .label(statusLabel(STATUS_ACTIVE)).icon("circle-check").color(BadgeVariant.SUCCESS))
             .value(STATUS_FAILED, v -> v.displayName("Failed")
-                .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color("destructive"))
+                .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color(BadgeVariant.DESTRUCTIVE))
             .value(STATUS_DESTROY_FAILED, v -> v.displayName("Destroy failed")
                 .label(statusLabel(STATUS_DESTROY_FAILED)).icon("triangle-exclamation")
-                .color("destructive"));
+                .color(BadgeVariant.DESTRUCTIVE));
     }
 
     /** The translation token for a status; the key IS the stored value. */
@@ -209,9 +213,9 @@ public class DatabaseModel extends Model {
      */
     public static final EnumField PLACEMENT = SCHEMA.addField(EnumField.builder("placement")
         .value(PLACEMENT_DEDICATED, v -> v.displayName("Dedicated")
-            .label(placementLabel(PLACEMENT_DEDICATED)).icon("box").color("secondary"))
+            .label(placementLabel(PLACEMENT_DEDICATED)).icon("box").color(BadgeVariant.SECONDARY))
         .value(PLACEMENT_SHARED, v -> v.displayName("Shared")
-            .label(placementLabel(PLACEMENT_SHARED)).icon("layer-group").color("blue"))
+            .label(placementLabel(PLACEMENT_SHARED)).icon("layer-group").color(ColorHue.BLUE))
         .label(HohenheimFormCopy.label("placement"))
         .help(HohenheimFormCopy.help("database_placement"))
         .build());
@@ -285,7 +289,7 @@ public class DatabaseModel extends Model {
      * spelled, and the name stays usable as a container handle.
      *
      * AIDEV-NOTE: SUPERSEDED 2026-08-08, second half. The two earlier notes both rested on
-     * "admin-reachable only" -- that premise is GONE: ManageDatabaseResource lets a
+     * "admin-reachable only" -- that premise is GONE: the /manage databases let a
      * delegated tenant allocate, so this validator is now a tenant boundary and not merely
      * a containment fix. Nothing about the RULE had to change (it already refuses every
      * separator, so no traversal can be spelled by anyone), but two things around it did.
@@ -342,7 +346,7 @@ public class DatabaseModel extends Model {
             Object name = row.get(NAME.getName());
             if (name != null && !isValidName(String.valueOf(name))) {
                 throw Violations.ofField(NAME.getName(), name,
-                    Microcopy.of("database_name_invalid").withFilter("scope", "violations"));
+                    HohenheimViolations.text("database_name_invalid"));
             }
         });
         // A managed database always has a concrete host; default the FK at create time

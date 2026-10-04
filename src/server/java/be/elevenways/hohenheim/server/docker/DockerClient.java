@@ -730,7 +730,43 @@ public class DockerClient {
     @SuppressWarnings("unchecked")
     public ExecResult exec(String containerId, List<String> command, List<String> env,
                            String user, String workdir) throws IOException {
+        String execId = this.createExec(containerId, command, env, false, user, workdir);
+
+        // Detach=false streams the (multiplexed, non-TTY) output until the process exits and
+        // the daemon closes the connection; LONG_OP_TIMEOUT covers slow ops like a dump.
+        RawResponse stream = exchange("POST", DockerPaths.exec(execId) + "/start", execStartBody(),
+            "application/json", LONG_OP_TIMEOUT_MS);
+
+        ByteArrayOutputStream stdout = new ByteArrayOutputStream();
+        ByteArrayOutputStream stderr = new ByteArrayOutputStream();
+        walkFrames(stream.body(), (type, buffer, offset, length) ->
+            (type == 2 ? stderr : stdout).write(buffer, offset, length));
+
+        int exitCode = this.execExitCode(execId);
+        return new ExecResult(exitCode,
+            new String(stdout.toByteArray(), StandardCharsets.UTF_8),
+            new String(stderr.toByteArray(), StandardCharsets.UTF_8));
+    }
+
+    /** @return the start of a non-TTY exec that streams its multiplexed output until the process exits */
+    private static byte[] execStartBody() {
+        return toJson(Map.of("Detach", false, "Tty", false)).getBytes(StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Creates a non-TTY exec of {@code command}, stdout and stderr attached.
+     *
+     * @param user    the uid or user name it runs as, null or blank for the container's own
+     * @param workdir its working directory, null or blank for the image's
+     * @return the exec's id
+     */
+    @SuppressWarnings("unchecked")
+    private String createExec(String containerId, List<String> command, List<String> env, boolean attachStdin,
+                              @Nullable String user, @Nullable String workdir) throws IOException {
         Map<String, Object> createSpec = new LinkedHashMap<>();
+        if (attachStdin) {
+            createSpec.put("AttachStdin", true);
+        }
         createSpec.put("AttachStdout", true);
         createSpec.put("AttachStderr", true);
         createSpec.put("Cmd", command);
@@ -745,25 +781,19 @@ public class DockerClient {
         }
         Map<String, Object> created = (Map<String, Object>) parseJson(request("POST",
             DockerPaths.container(containerId) + "/exec", toJson(createSpec)).body());
-        String execId = (String) created.get("Id");
+        return (String) created.get("Id");
+    }
 
-        // Detach=false streams the (multiplexed, non-TTY) output until the process exits and
-        // the daemon closes the connection; LONG_OP_TIMEOUT covers slow ops like a dump.
-        RawResponse stream = exchange("POST", DockerPaths.exec(execId) + "/start",
-            toJson(Map.of("Detach", false, "Tty", false)).getBytes(StandardCharsets.UTF_8),
-            "application/json", LONG_OP_TIMEOUT_MS);
+    /** @return the raw request that starts an exec on a stream connection */
+    private static byte[] execStartRequest(String execId) {
+        return buildRequest("POST", DockerPaths.exec(execId) + "/start", execStartBody(), "application/json", null);
+    }
 
-        ByteArrayOutputStream stdout = new ByteArrayOutputStream();
-        ByteArrayOutputStream stderr = new ByteArrayOutputStream();
-        walkFrames(stream.body(), (type, buffer, offset, length) ->
-            (type == 2 ? stderr : stdout).write(buffer, offset, length));
-
-        Map<String, Object> info = (Map<String, Object>) parseJson(
-            get(DockerPaths.exec(execId) + "/json").body());
-        int exitCode = info.get("ExitCode") instanceof Number n ? n.intValue() : -1;
-        return new ExecResult(exitCode,
-            new String(stdout.toByteArray(), StandardCharsets.UTF_8),
-            new String(stderr.toByteArray(), StandardCharsets.UTF_8));
+    /** @return the exit code a finished exec recorded, -1 when the daemon names none */
+    @SuppressWarnings("unchecked")
+    private int execExitCode(String execId) throws IOException {
+        Map<String, Object> info = (Map<String, Object>) parseJson(get(DockerPaths.exec(execId) + "/json").body());
+        return info.get("ExitCode") instanceof Number n ? n.intValue() : -1;
     }
 
     /** Result of a {@link #execStreamed} run: stdout went to the caller's stream, not the heap. */
@@ -781,21 +811,8 @@ public class DockerClient {
     public ExecStreamResult execStreamed(String containerId, List<String> command,
                                          List<String> env, OutputStream out,
                                          long maxStdoutBytes) throws IOException {
-        Map<String, Object> createSpec = new LinkedHashMap<>();
-        createSpec.put("AttachStdout", true);
-        createSpec.put("AttachStderr", true);
-        createSpec.put("Cmd", command);
-        if (!env.isEmpty()) {
-            createSpec.put("Env", env);
-        }
-        Map<String, Object> created = (Map<String, Object>) parseJson(request("POST",
-            DockerPaths.container(containerId) + "/exec", toJson(createSpec)).body());
-        String execId = (String) created.get("Id");
-
-        byte[] startBody = toJson(Map.of("Detach", false, "Tty", false))
-            .getBytes(StandardCharsets.UTF_8);
-        byte[] request = buildRequest("POST", DockerPaths.exec(execId) + "/start",
-            startBody, "application/json", null);
+        String execId = this.createExec(containerId, command, env, false, null, null);
+        byte[] request = execStartRequest(execId);
         DockerStreamConnection connection = streamTransport().openStream(request, timeoutMillis);
         ScheduledFuture<?> watchdog = Watchdog.schedule(connection::close, LONG_OP_TIMEOUT_MS);
         DockerWire.FrameDemuxStream demux = new DockerWire.FrameDemuxStream(out, maxStdoutBytes);
@@ -817,9 +834,7 @@ public class DockerClient {
             connection.close();
         }
 
-        Map<String, Object> info = (Map<String, Object>) parseJson(
-            get(DockerPaths.exec(execId) + "/json").body());
-        int exitCode = info.get("ExitCode") instanceof Number n ? n.intValue() : -1;
+        int exitCode = this.execExitCode(execId);
         return new ExecStreamResult(exitCode, demux.stderrText(), demux.stdoutBytes());
     }
 
@@ -842,22 +857,8 @@ public class DockerClient {
     @SuppressWarnings("unchecked")
     public ExecResult execWithStdin(String containerId, List<String> command, List<String> env,
                                     InputStream in) throws IOException {
-        Map<String, Object> createSpec = new LinkedHashMap<>();
-        createSpec.put("AttachStdin", true);
-        createSpec.put("AttachStdout", true);
-        createSpec.put("AttachStderr", true);
-        createSpec.put("Cmd", command);
-        if (!env.isEmpty()) {
-            createSpec.put("Env", env);
-        }
-        Map<String, Object> created = (Map<String, Object>) parseJson(request("POST",
-            DockerPaths.container(containerId) + "/exec", toJson(createSpec)).body());
-        String execId = (String) created.get("Id");
-
-        byte[] startBody = toJson(Map.of("Detach", false, "Tty", false))
-            .getBytes(StandardCharsets.UTF_8);
-        byte[] request = buildRequest("POST", DockerPaths.exec(execId) + "/start",
-            startBody, "application/json", null);
+        String execId = this.createExec(containerId, command, env, true, null, null);
+        byte[] request = execStartRequest(execId);
         ByteArrayOutputStream stdout = new ByteArrayOutputStream();
         ByteArrayOutputStream stderr = new ByteArrayOutputStream();
         IOException[] feedFailure = new IOException[1];
@@ -901,9 +902,7 @@ public class DockerClient {
             }
         }
 
-        Map<String, Object> info = (Map<String, Object>) parseJson(
-            get(DockerPaths.exec(execId) + "/json").body());
-        int exitCode = info.get("ExitCode") instanceof Number n ? n.intValue() : -1;
+        int exitCode = this.execExitCode(execId);
         if (exitCode == 0 && feedFailure[0] != null) {
             // The process claims success while the input never fully arrived: a truncated
             // restore that exited 0 is the one shape this lane must never report as done.

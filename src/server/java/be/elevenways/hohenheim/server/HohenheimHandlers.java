@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server;
 
+import be.elevenways.hohenheim.server.instance.InstanceAttachmentOperationHandlers;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimPaths;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -7,13 +8,23 @@ import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.api.DnsZoneApi;
 import be.elevenways.hohenheim.server.api.HostApi;
 import be.elevenways.hohenheim.server.api.PaasApi;
+import be.elevenways.hohenheim.server.cms.EnvironmentParts;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
+import be.elevenways.hohenheim.server.cms.InstanceScheduleOperationHandlers;
+import be.elevenways.hohenheim.server.cms.SiteOperationHandlers;
+import be.elevenways.hohenheim.server.cms.StackOperations;
 import be.elevenways.hohenheim.server.database.DatabaseApi;
 import be.elevenways.hohenheim.server.files.InstanceFileEndpoints;
+import be.elevenways.hohenheim.server.game.GameDomainOperationHandlers;
 import be.elevenways.hohenheim.server.instance.InstanceApi;
+import be.elevenways.hohenheim.server.instance.InstanceBackupOperationHandlers;
+import be.elevenways.hohenheim.server.instance.InstanceChildDeletes;
+import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.server.instance.InstanceStatsHandler;
 import be.elevenways.hohenheim.server.instance.InstanceTemplateHandlers;
+import be.elevenways.hohenheim.server.preview.PreviewOperationHandlers;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
+import be.elevenways.hohenheim.server.source.GitProviderOperationHandlers;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -33,12 +44,21 @@ import java.util.Map;
  */
 public final class HohenheimHandlers {
 
+    /**
+     * The server-files browser source.
+     *
+     * AIDEV-NOTE: one instance per JVM on purpose: the filesystem-source registry refuses a second, different source
+     * under a taken id, and a JVM that boots twice (test hosts) runs {@link #init} twice; re-adding the same instance
+     * is the registry's no-op.
+     */
+    private static final FilesystemBrowserSource SERVER_FILES = FilesystemBrowserSource.of(
+        HohenheimPaths.SERVER_FILES, HohenheimPanel.ACCESS, Path.of("/"));
+
     private HohenheimHandlers() {
     }
 
     public static void init() {
-        FilesystemBrowserRegistry.INSTANCE.register(FilesystemBrowserSource.of(
-            HohenheimPaths.SERVER_FILES, HohenheimPanel.ACCESS, Path.of("/")));
+        FilesystemBrowserRegistry.INSTANCE.register(SERVER_FILES);
         initHealth();
         InstanceTemplateHandlers.init();
         CertificateHandlers.init();
@@ -54,6 +74,17 @@ public final class HohenheimHandlers {
         SiteControlHandlers.initInstanceConsole();
         SiteControlHandlers.initDevTunnel();
         initApi();
+        InstanceOperationHandlers.init();
+        PreviewOperationHandlers.init();
+        SiteOperationHandlers.init();
+        GitProviderOperationHandlers.init();
+        GameDomainOperationHandlers.init();
+        InstanceBackupOperationHandlers.init();
+        InstanceChildDeletes.init();
+        InstanceAttachmentOperationHandlers.init();
+        EnvironmentParts.init();
+        InstanceScheduleOperationHandlers.init();
+        StackOperations.init();
         InstanceApi.init();
         PaasApi.init();
         DatabaseApi.init();

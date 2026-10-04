@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -20,7 +21,7 @@ import java.util.List;
  */
 public class StackServiceModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "stack_service");
+    public static final Identifier MODEL_ID = HohenheimIds.id("stack_service");
     public static final Schema SCHEMA = new Schema();
 
     /** {@code depends_on} condition: the dependency's container is running. */

@@ -123,7 +123,8 @@ final class BackendConnector {
         }
     }
 
-    private static CompletableFuture<List<InetAddress>> sharedLookup(String host, boolean publicOnly)
+    /** The one lookup in flight for {@code host}, joined by every connection that asks while it runs. */
+    static CompletableFuture<List<InetAddress>> sharedLookup(String host, boolean publicOnly)
             throws IOException {
         String key = (publicOnly ? "public|" : "any|") + host;
         CompletableFuture<List<InetAddress>> created = new CompletableFuture<>();
@@ -131,12 +132,22 @@ final class BackendConnector {
         if (existing != null) return existing;
         try {
             VETTING.execute(() -> {
+                List<InetAddress> answer = null;
+                Throwable failure = null;
                 try {
-                    created.complete(addresses(host, publicOnly));
-                } catch (Throwable failure) {
+                    answer = addresses(host, publicOnly);
+                } catch (Throwable thrown) {
+                    failure = thrown;
+                }
+                // AIDEV-NOTE: the lookup leaves IN_FLIGHT BEFORE its answer is published. A waiter
+                // woken by the answer (a dependent stage runs on this very thread) must start a fresh
+                // lookup when it asks again; removing after completion handed it this finished,
+                // failed future back, so a failed operator lookup WAS remembered for that retry.
+                IN_FLIGHT.remove(key, created);
+                if (failure == null) {
+                    created.complete(answer);
+                } else {
                     created.completeExceptionally(failure);
-                } finally {
-                    IN_FLIGHT.remove(key, created);
                 }
             });
         } catch (RejectedExecutionException e) {

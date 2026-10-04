@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.host;
 
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.field.EnumField;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -35,16 +37,16 @@ import java.util.List;
 public enum VolumeBackend {
 
     /** Subvolume per volume, qgroup quota, read-only snapshots -- the implemented one. */
-    BTRFS("btrfs", "Btrfs", true, true, true, "layer-group", "success"),
+    BTRFS("btrfs", "Btrfs", true, true, true, "layer-group", BadgeVariant.SUCCESS),
 
     /** Dataset per volume, {@code quota=} property, native snapshots -- NOT implemented. */
-    ZFS("zfs", "ZFS", false, true, true, "database", "warning"),
+    ZFS("zfs", "ZFS", false, true, true, "database", BadgeVariant.WARNING),
 
     /** XFS with project quota ENABLED on the mount: quota yes, snapshot no -- NOT implemented. */
-    XFS_PRJQUOTA("xfs_prjquota", "XFS project quota", false, true, false, "hard-drive", "warning"),
+    XFS_PRJQUOTA("xfs_prjquota", "XFS project quota", false, true, false, "hard-drive", BadgeVariant.WARNING),
 
     /** A plain filesystem: no quota, no snapshot, and therefore no workspace or application. */
-    NONE("none", "None", false, false, false, "circle-xmark", "destructive");
+    NONE("none", "None", false, false, false, "circle-xmark", BadgeVariant.DESTRUCTIVE);
 
     private final String token;
     private final String displayName;
@@ -52,10 +54,10 @@ public enum VolumeBackend {
     private final boolean quota;
     private final boolean snapshot;
     private final String icon;
-    private final String color;
+    private final BadgeColor color;
 
     VolumeBackend(String token, String displayName, boolean implemented, boolean quota,
-                  boolean snapshot, String icon, String color) {
+                  boolean snapshot, String icon, BadgeColor color) {
         this.token = token;
         this.displayName = displayName;
         this.implemented = implemented;
@@ -118,7 +120,7 @@ public enum VolumeBackend {
         return this.icon;
     }
 
-    public @NonNull String color() {
+    public @NonNull BadgeColor color() {
         return this.color;
     }
 

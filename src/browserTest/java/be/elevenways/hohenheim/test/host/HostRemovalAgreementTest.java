@@ -4,7 +4,8 @@ import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
-import be.elevenways.hohenheim.server.cms.ServerResource;
+import be.elevenways.hohenheim.server.cms.ServerParts;
+import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.TestDatabases;
@@ -54,15 +55,14 @@ class HostRemovalAgreementTest {
     @Test
     void theDeleteButtonIsDeadExactlyWhenTheRemovalRefuses() {
         Db.run(datasource, () -> {
-            ServerResource servers = new ServerResource();
-            AccessContext operator = AccessContext.of(TenantConduits.stubFor(null));
+            AccessContext operator = TenantConduits.operator();
             Row host = Models.get(ServerModel.class).createEmptyRow();
             host.set(ServerModel.NAME, "agree-host");
             Models.get(ServerModel.class).save(host);
             int hostId = host.get(ServerModel.ID);
 
             // 1. POSITIVE ANCHOR: an unreferenced host is offered alive.
-            assertThat(servers.deleteUnavailableReason(host, operator))
+            assertThat(deleteReason(host, operator))
                 .as("step 1: an empty host's delete is available").isNull();
 
             // 2. A shared database engine on the host: dead, WITH the engine counted, and the
@@ -76,7 +76,7 @@ class HostRemovalAgreementTest {
             engine.set(DatabaseEngineModel.ROOT_PASSWORD, "agree-root-pw");
             engine.set(DatabaseEngineModel.STATUS, DatabaseModel.STATUS_ACTIVE);
             Models.get(DatabaseEngineModel.class).save(engine);
-            Microcopy byEngine = servers.deleteUnavailableReason(host, operator);
+            Microcopy byEngine = deleteReason(host, operator);
             assertThat(byEngine).as("step 2: a host carrying a shared engine is not deletable")
                 .isNotNull();
             assertThat(byEngine.key()).as("step 2: with the in-use reason").isEqualTo("delete_in_use");
@@ -90,7 +90,7 @@ class HostRemovalAgreementTest {
 
             // 3. A port claim on the host: the same agreement.
             PortLedger.claim(hostId, "", 47811, "tcp", null, null, "agreement probe");
-            Microcopy byPort = servers.deleteUnavailableReason(host, operator);
+            Microcopy byPort = deleteReason(host, operator);
             assertThat(byPort).as("step 3: a host holding a port claim is not deletable").isNotNull();
             assertThat(byPort.args().get("ports")).as("step 3: naming the claim").isEqualTo(1L);
             assertThat(violationKeyOf(catchThrowable(() ->
@@ -99,12 +99,20 @@ class HostRemovalAgreementTest {
 
             // 4. Released, the host is offered alive again and really goes.
             PortLedger.releaseKey(PortLedger.claimKeyOf(hostId, "", 47811, "tcp"));
-            assertThat(servers.deleteUnavailableReason(host, operator))
+            assertThat(deleteReason(host, operator))
                 .as("step 4: with nothing left the delete is available again").isNull();
             Models.get(ServerModel.class).delete((Object) hostId);
             assertThat(Models.get(ServerModel.class).findById(hostId))
                 .as("step 4: and the removal the button promised goes through").isNull();
         });
+    }
+
+    private static Microcopy deleteReason(Row row, AccessContext access) {
+        OperationPipeline.Offer offer = OperationPipeline.offer(ServerParts.DELETE, access, row);
+        if (offer instanceof OperationPipeline.Offer.Unavailable unavailable) return unavailable.reason();
+        assertThat(offer).as("an available delete is admitted, not silently hidden")
+            .isInstanceOf(OperationPipeline.Offer.Available.class);
+        return null;
     }
 
     /** Racing first calls used to insert the local host twice; the loser hit the unique name. */

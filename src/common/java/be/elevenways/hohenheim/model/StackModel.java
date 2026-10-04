@@ -1,13 +1,14 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
-import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 
 /**
  * A managed multi-container Docker stack: one private policied bridge network, named volumes,
@@ -19,7 +20,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
  */
 public class StackModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "stack");
+    public static final Identifier MODEL_ID = HohenheimIds.id("stack");
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #STATUS} value before the first deploy. */
@@ -80,17 +81,17 @@ public class StackModel extends Model {
 
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_INACTIVE, v -> v.displayName("Inactive")
-            .label(statusLabel(STATUS_INACTIVE)).icon("circle-pause").color("secondary"))
+            .label(statusLabel(STATUS_INACTIVE)).icon("circle-pause").color(BadgeVariant.SECONDARY))
         .value(STATUS_DEPLOYING, v -> v.displayName("Deploying")
-            .label(statusLabel(STATUS_DEPLOYING)).icon("rotate").color("warning"))
+            .label(statusLabel(STATUS_DEPLOYING)).icon("rotate").color(BadgeVariant.WARNING))
         .value(STATUS_ACTIVE, v -> v.displayName("Active")
-            .label(statusLabel(STATUS_ACTIVE)).icon("circle-check").color("success"))
+            .label(statusLabel(STATUS_ACTIVE)).icon("circle-check").color(BadgeVariant.SUCCESS))
         .value(STATUS_DEGRADED, v -> v.displayName("Degraded")
-            .label(statusLabel(STATUS_DEGRADED)).icon("triangle-exclamation").color("warning"))
+            .label(statusLabel(STATUS_DEGRADED)).icon("triangle-exclamation").color(BadgeVariant.WARNING))
         .value(STATUS_FAILED, v -> v.displayName("Failed")
-            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color("destructive"))
+            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color(BadgeVariant.DESTRUCTIVE))
         .value(STATUS_STOPPED, v -> v.displayName("Stopped")
-            .label(statusLabel(STATUS_STOPPED)).icon("circle-stop").color("secondary"))
+            .label(statusLabel(STATUS_STOPPED)).icon("circle-stop").color(BadgeVariant.SECONDARY))
         .defaultValue(STATUS_INACTIVE)
         .build());
 
@@ -103,6 +104,9 @@ public class StackModel extends Model {
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
     static {
+        // Every stack save is ONE write transaction: the row write and whatever a save hook
+        // derives from it commit or fail together -- the SiteDomainModel/RouteClaims shape.
+        SCHEMA.saveAtomically();
         // A stack always has a concrete host: defaulting the FK at create time keeps
         // the port ledger's claim keys total (a null host would split the claim set).
         SCHEMA.addBeforeValidateHook(context -> {
@@ -119,16 +123,6 @@ public class StackModel extends Model {
         // no container runs on yet.
     }
 
-    /**
-     * Every stack save is ONE write transaction: the row write and whatever a save hook
-     * derives from it commit or fail together -- the SiteDomainModel/RouteClaims shape.
-     */
-    @Override
-    public Row save(Row row) {
-        Row[] result = new Row[1];
-        this.requireDatasource().withTransaction(tx -> result[0] = super.save(row));
-        return result[0];
-    }
 
     /** The stack with this unique name, or null if none. */
     public Row findByName(String name) {

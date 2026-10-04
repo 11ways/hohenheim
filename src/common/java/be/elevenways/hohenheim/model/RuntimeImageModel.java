@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -8,6 +9,7 @@ import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 
 import java.util.List;
 
@@ -31,7 +33,7 @@ import java.util.List;
  */
 public class RuntimeImageModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "runtime_image");
+    public static final Identifier MODEL_ID = HohenheimIds.id("runtime_image");
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #UID_MODE}: the workload runs as the instance's mapped host uid. */
@@ -112,7 +114,7 @@ public class RuntimeImageModel extends Model {
 
     public static final EnumField UID_MODE = SCHEMA.addField(EnumField.builder("uid_mode")
         .value(UID_MAPPED, v -> v.displayName("Mapped uid").icon("user-shield")
-            .label(Microcopy.of(UID_MAPPED).withFilter("scope", "uid_mode")).color("secondary"))
+            .label(Microcopy.of(UID_MAPPED).withFilter("scope", "uid_mode")).color(BadgeVariant.SECONDARY))
         .defaultValue(UID_MAPPED)
         .label(HohenheimFormCopy.label("uid_mode"))
         .help(HohenheimFormCopy.help("uid_mode"))

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.host;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -67,7 +68,7 @@ public final class HostAdmission {
             // an admin reading /manage is not a tenant, and the PAGE makes that projection
             // separately by surface. Same withholding as InstanceBackups.backupNow.
             if (TenantWrites.isTenantOriginated()) {
-                throw Violations.ofForm(violation("instance_placement_blocked"));
+                throw Violations.ofForm(HohenheimViolations.text("instance_placement_blocked"));
             }
             throw refused;
         }
@@ -78,17 +79,17 @@ public final class HostAdmission {
                                         @Nullable String ownerBucket) {
         Row server = Models.get(ServerModel.class).findById(serverId);
         if (server == null) {
-            throw Violations.ofForm(violation("host_not_admitted")
+            throw Violations.ofForm(HohenheimViolations.text("host_not_admitted")
                 .withArg("name", String.valueOf(serverId)));
         }
         String admission = server.get(ServerModel.ADMISSION);
         if (!ServerModel.ADMISSION_ADMITTED.equals(admission)) {
-            throw Violations.ofForm(violation("host_not_admitted")
+            throw Violations.ofForm(HohenheimViolations.text("host_not_admitted")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
         requireVerifiedIdentity(server);
         if (!ServerModel.acceptsTenantWorkloads(server)) {
-            throw Violations.ofForm(violation("host_posture_refuses")
+            throw Violations.ofForm(HohenheimViolations.text("host_posture_refuses")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
         requirePostureSatisfies(server, isolation);
@@ -119,7 +120,7 @@ public final class HostAdmission {
     public static void requirePreflightVerdictForPosture(@NonNull Row server) {
         String failed = HostPreflight.failedRequirementNow(server);
         if (failed != null) {
-            throw Violations.ofForm(violation("host_preflight_check_now_required")
+            throw Violations.ofForm(HohenheimViolations.text("host_preflight_check_now_required")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME)))
                 .withArg("check", failed));
         }
@@ -150,12 +151,12 @@ public final class HostAdmission {
                                                @NonNull WorkloadIsolation isolation) {
         String name = String.valueOf((Object) server.get(ServerModel.NAME));
         if (ServerModel.postureRequiresVirtualMachine(server, isolation)) {
-            throw Violations.ofForm(violation("host_posture_requires_vm").withArg("name", name));
+            throw Violations.ofForm(HohenheimViolations.text("host_posture_requires_vm").withArg("name", name));
         }
         if (isolation == WorkloadIsolation.SHARED_KERNEL
                 && !ServerModel.postureAcknowledged(server)) {
             throw Violations.ofForm(
-                violation("host_posture_unacknowledged").withArg("name", name));
+                HohenheimViolations.text("host_posture_unacknowledged").withArg("name", name));
         }
     }
 
@@ -189,7 +190,7 @@ public final class HostAdmission {
                 .all()) {
             String charged = instance.get(InstanceModel.QUOTA_BUCKET);
             if (charged == null || !charged.equals(ownerBucket)) {
-                throw Violations.ofForm(violation("host_dedicated_to_other")
+                throw Violations.ofForm(HohenheimViolations.text("host_dedicated_to_other")
                     .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
             }
         }
@@ -233,7 +234,7 @@ public final class HostAdmission {
                 || lastSeen.isAfter(Now.instant().minus(Duration.ofMinutes(minutes)))) {
             return;
         }
-        throw Violations.ofForm(violation("host_contact_lapsed")
+        throw Violations.ofForm(HohenheimViolations.text("host_contact_lapsed")
             .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME)))
             .withArg("minutes", Duration.between(lastSeen, Now.instant()).toMinutes()));
     }
@@ -274,11 +275,11 @@ public final class HostAdmission {
         }
         String name = String.valueOf((Object) server.get(ServerModel.NAME));
         if (!IncusKernelIsolation.laneAvailable(server)) {
-            throw Violations.ofForm(violation("host_kernel_lane_missing").withArg("name", name));
+            throw Violations.ofForm(HohenheimViolations.text("host_kernel_lane_missing").withArg("name", name));
         }
         if (!HostPreflight.STATUS_PASS.equals(
                 HostPreflight.storedCheckStatus(server, IncusPreflight.KERNEL_LANE_CHECK))) {
-            throw Violations.ofForm(violation("host_kernel_lane_unproven").withArg("name", name));
+            throw Violations.ofForm(HohenheimViolations.text("host_kernel_lane_unproven").withArg("name", name));
         }
     }
 
@@ -309,14 +310,14 @@ public final class HostAdmission {
      */
     public static void requireTrustedSlot(@NonNull Row server, @NonNull HostTrustSlot slot) {
         if (!slot.isConfirmed(server)) {
-            throw Violations.ofForm(violation("host_key_unverified")
+            throw Violations.ofForm(HohenheimViolations.text("host_key_unverified")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
         // A confirmed pin the machine has since CONTRADICTED is not a verified identity.
         // The ssh client would refuse the connection anyway; refusing here means the
         // refusal is ours, named, and arrives before any work is spent on it.
         if (HostPins.isQuarantined(server, slot)) {
-            throw Violations.ofForm(violation("host_quarantined")
+            throw Violations.ofForm(HohenheimViolations.text("host_quarantined")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
     }
@@ -352,7 +353,7 @@ public final class HostAdmission {
             // The local daemon has no wire identity to pin at all: a directory on the
             // controller is the FILESYSTEM kind, which says out loud that it shares the
             // controller's failure domain instead of pretending to be off-host.
-            throw Violations.ofForm(violation("host_not_ssh")
+            throw Violations.ofForm(HohenheimViolations.text("host_not_ssh")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
         requireTrustedSlot(server, HostTrustSlot.SSH);
@@ -379,7 +380,7 @@ public final class HostAdmission {
         // for an operator whose preflight ran and passed under the old posture.
         requirePreflightVerdictForPosture(server);
         if (!Boolean.TRUE.equals(server.get(ServerModel.PREFLIGHT_OK))) {
-            throw Violations.ofForm(violation("admit_needs_preflight")
+            throw Violations.ofForm(HohenheimViolations.text("admit_needs_preflight")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
     }
@@ -405,12 +406,9 @@ public final class HostAdmission {
         } catch (Violations refused) {
             List<Violation> all = refused.all();
             return all.isEmpty()
-                ? violation("host_not_admitted").withArg("name", String.valueOf(serverId))
+                ? HohenheimViolations.text("host_not_admitted").withArg("name", String.valueOf(serverId))
                 : all.get(0).message();
         }
     }
 
-    private static Microcopy violation(String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
-    }
 }

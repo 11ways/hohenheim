@@ -1,11 +1,14 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.plumage.component.Pager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.PanelPage;
 import be.elevenways.zenit.comms.inbox.CommsInboxItemView;
 import be.elevenways.zenit.comms.server.CommsInbox;
@@ -41,7 +44,7 @@ import java.util.Set;
  */
 public final class AdminInboxPage extends PanelPage {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "inbox"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("inbox"); }
     @Override public @NonNull String slug() { return "inbox"; }
     @Override public @NonNull Icon icon() { return Icon.of("envelope"); }
     @Override public @NonNull NavGroup navGroup() { return NavGroup.SYSTEM; }
@@ -77,7 +80,8 @@ public final class AdminInboxPage extends PanelPage {
     }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext accessContext) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request) {
+        Conduit conduit = request.conduit();
         long total = CommsInbox.itemCount(conduit);
         PageWindow window = PageWindow.of(requestedPage(conduit), total,
             CommsInbox.DEFAULT_LIMIT, PageWindow.OutOfRange.CLAMP);
@@ -89,7 +93,7 @@ public final class AdminInboxPage extends PanelPage {
         vars.put("items", items);
         vars.put("markAllTarget", CommsInbox.markAllTarget(conduit));
         vars.put("pager", Pager.of(window, total, page -> pageUrl(page).toUrl()));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/inbox"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INBOX, vars);
     }
 
     /**

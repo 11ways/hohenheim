@@ -19,6 +19,7 @@ import be.elevenways.protoblast.common.dry.Dry;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
 import be.elevenways.zenit.common.ui.Icon;
 import com.sun.net.httpserver.HttpServer;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -363,11 +364,12 @@ public final class FakeDockerDaemon implements DockerTransport {
 
     /**
      * Point {@code hohenheim:release} and the local daemon at this fake, and
-     * return the restore hook. The kind registry maps identifier to handler, so a
-     * re-register REPLACES -- and {@link #restore()} puts the production pair back.
+     * return the restore hook. The kind registry maps identifier to handler, so this is a
+     * deliberate replace (a plain register of a held id is a conflict) -- and
+     * {@link #restore()} puts the production pair back.
      */
     public void install() {
-        InstanceKinds.register(new FakeReleaseKind(this));
+        InstanceKinds.replace(new FakeReleaseKind(this));
         DockerClient.overrideLocalTransportForTest(() -> this);
     }
 
@@ -383,13 +385,13 @@ public final class FakeDockerDaemon implements DockerTransport {
      * points at DIRECTLY, whose host port really moves when the workload restarts.
      */
     public void installContainerKind() {
-        InstanceKinds.register(new FakeContainerKind(this));
+        InstanceKinds.replace(new FakeContainerKind(this));
     }
 
     /** Undo {@link #install()} and {@link #installContainerKind()}; safe either way. */
     public static void restore() {
-        InstanceKinds.register(new ReleaseKind());
-        InstanceKinds.register(new DockerContainerKind());
+        InstanceKinds.replace(new ReleaseKind());
+        InstanceKinds.replace(new DockerContainerKind());
         DockerClient.overrideLocalTransportForTest(null);
     }
 
@@ -422,7 +424,7 @@ public final class FakeDockerDaemon implements DockerTransport {
         public Icon getIcon() { return this.real.getIcon(); }
 
         @Override
-        public String getColor() { return this.real.getColor(); }
+        public BadgeColor color() { return this.real.color(); }
 
         @Override
         public Schema getSchema() { return this.real.getSchema(); }
@@ -489,7 +491,7 @@ public final class FakeDockerDaemon implements DockerTransport {
         public Icon getIcon() { return this.real.getIcon(); }
 
         @Override
-        public String getColor() { return this.real.getColor(); }
+        public BadgeColor color() { return this.real.color(); }
 
         @Override
         public Schema getSchema() { return this.real.getSchema(); }
@@ -660,11 +662,14 @@ public final class FakeDockerDaemon implements DockerTransport {
 
         // -- networks --------------------------------------------------------
         // The fake RUNTIME owns deploys, so nothing here creates a network; the sweeps
-        // that merely LOOK are answered honestly with "no such network".
+        // that LOOK and the teardowns that REMOVE are answered honestly with "no such network".
         if ("GET".equals(method) && "/networks".equals(path)) {
             return json(200, List.of());
         }
         if ("GET".equals(method) && path.startsWith("/networks/")) {
+            return json(404, Map.of("message", "network not found"));
+        }
+        if ("DELETE".equals(method) && path.startsWith("/networks/")) {
             return json(404, Map.of("message", "network not found"));
         }
 

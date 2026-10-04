@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.dns;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.field.EnumField;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -24,48 +26,48 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public enum DelegationVerdict {
 
     /** The parent delegates to exactly the NS names we list and every one serves our serial. */
-    MATCHES("matches", null, "circle-check", "green"),
+    MATCHES("matches", null, "circle-check", ColorHue.GREEN),
 
     /**
      * The apex NS set we serve disagrees with the controller's declared nameserver set
      * ({@code dns.nameservers}): a local configuration fact, judged before the parent is.
      */
-    APEX_UNDECLARED("apex_undeclared", AttentionSeverity.WARNING, "code-branch", "orange"),
+    APEX_UNDECLARED("apex_undeclared", AttentionSeverity.WARNING, "code-branch", ColorHue.ORANGE),
 
     /**
      * The SOA MNAME we serve is not one of the apex NS names: the zone names a primary
      * nobody delegates to, and often one with no address at all. A local configuration
      * fact like {@link #APEX_UNDECLARED}, judged before the parent is.
      */
-    SOA_MNAME_UNLISTED("soa_mname_unlisted", AttentionSeverity.WARNING, "code-branch", "orange"),
+    SOA_MNAME_UNLISTED("soa_mname_unlisted", AttentionSeverity.WARNING, "code-branch", ColorHue.ORANGE),
 
     /** The parent's nameservers could not be reached, so nothing could be judged. */
-    PARENT_UNREACHABLE("parent_unreachable", AttentionSeverity.WARNING, "question", "gray"),
+    PARENT_UNREACHABLE("parent_unreachable", AttentionSeverity.WARNING, "question", ColorHue.GRAY),
 
     /** The parent holds no delegation for the zone at all (the registrar step is pending). */
-    NOT_DELEGATED("not_delegated", AttentionSeverity.WARNING, "link-slash", "orange"),
+    NOT_DELEGATED("not_delegated", AttentionSeverity.WARNING, "link-slash", ColorHue.ORANGE),
 
     /** We list an apex NS the parent does not delegate to. */
-    LISTED_NOT_DELEGATED("listed_not_delegated", AttentionSeverity.WARNING, "code-branch", "orange"),
+    LISTED_NOT_DELEGATED("listed_not_delegated", AttentionSeverity.WARNING, "code-branch", ColorHue.ORANGE),
 
     /** The parent delegates to a nameserver our apex NS RRset does not list. */
-    DELEGATED_NOT_LISTED("delegated_not_listed", AttentionSeverity.WARNING, "code-branch", "orange"),
+    DELEGATED_NOT_LISTED("delegated_not_listed", AttentionSeverity.WARNING, "code-branch", ColorHue.ORANGE),
 
     /** A delegated server answers, but with a serial behind the one this primary serves. */
-    NS_STALE_SERIAL("ns_stale_serial", AttentionSeverity.WARNING, "hourglass-half", "orange"),
+    NS_STALE_SERIAL("ns_stale_serial", AttentionSeverity.WARNING, "hourglass-half", ColorHue.ORANGE),
 
     /** An in-bailiwick nameserver is delegated without a glue address at the parent. */
-    MISSING_GLUE("missing_glue", AttentionSeverity.ERROR, "unlink", "red"),
+    MISSING_GLUE("missing_glue", AttentionSeverity.ERROR, "unlink", ColorHue.RED),
 
     /** A delegated nameserver does not answer authoritatively for the zone: a lame delegation. */
-    NS_UNREACHABLE("ns_unreachable", AttentionSeverity.ERROR, "triangle-exclamation", "red");
+    NS_UNREACHABLE("ns_unreachable", AttentionSeverity.ERROR, "triangle-exclamation", ColorHue.RED);
 
     private final String token;
     private final @Nullable AttentionSeverity severity;
     private final String icon;
-    private final String color;
+    private final BadgeColor color;
 
-    DelegationVerdict(String token, @Nullable AttentionSeverity severity, String icon, String color) {
+    DelegationVerdict(String token, @Nullable AttentionSeverity severity, String icon, BadgeColor color) {
         this.token = token;
         this.severity = severity;
         this.icon = icon;
@@ -86,7 +88,7 @@ public enum DelegationVerdict {
         return this.icon;
     }
 
-    public @NonNull String color() {
+    public @NonNull BadgeColor color() {
         return this.color;
     }
 

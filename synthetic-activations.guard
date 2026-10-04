@@ -1,0 +1,4 @@
+Presence of this file opts the project into the protoblast plugin's checkSyntheticActivations
+compile gate (a raw click() or dispatchEvent(...) in browser-reachable code runs the default
+action and every native listener before any template listener body that cancels it; activate
+through hawkeye's SyntheticActivation.activate(element) instead. See CheckSyntheticActivationsTask).

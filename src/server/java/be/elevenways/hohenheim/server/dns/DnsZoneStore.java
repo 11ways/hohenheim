@@ -33,29 +33,45 @@ import java.util.concurrent.ConcurrentHashMap;
  * zones are rebuilt from the database; secondary zones are supplied as compiled
  * snapshots by the transfer layer. The serving view is the merge of both, so a
  * primary edit or an incoming AXFR each just rebuild their half.
+ *
+ * AIDEV-NOTE: the serving singleton's view is DERIVED from the datasource DnsZoneModel resolves to, so it belongs to
+ * that datasource instance, never to the JVM: every read and write first follows the resolved datasource and
+ * rebuilds when it is another one than the view was read from (the per-instance binding of zenit's TableAvailability
+ * and VectorIndex). Before this, a suite that swaps the default datasource per class kept serving -- and raising
+ * attention items for -- the zones of whichever class reloaded last. A detached store reads no database and
+ * follows nothing.
  */
 public final class DnsZoneStore {
 
-    public static final DnsZoneStore INSTANCE = new DnsZoneStore();
+    public static final DnsZoneStore INSTANCE = new DnsZoneStore(true);
 
     private volatile Map<String, DnsZoneSnapshot> primaryByOrigin = Map.of();
     private final Map<String, DnsZoneSnapshot> secondaryByOrigin = new ConcurrentHashMap<>();
     private volatile Map<String, DnsZoneSnapshot> serving = Map.of();
     private volatile @Nullable ZonePublishListener onZoneChanged;
 
+    /** Whether this store's view is derived from the resolved datasource (the serving singleton) or injected. */
+    private final boolean followsDatasource;
+
+    /** The datasource instance the primary half was last read from (identity, never equality). */
+    private volatile @Nullable Datasource derivedFrom;
+
     /** Datasources whose current transaction already has this store's reload queued. */
     private final ThreadLocal<Set<Datasource>> pendingReload = ThreadLocal.withInitial(
         () -> Collections.newSetFromMap(new IdentityHashMap<>()));
 
-    private DnsZoneStore() {}
+    private DnsZoneStore(boolean followsDatasource) {
+        this.followsDatasource = followsDatasource;
+    }
 
     /** A detached store (not the serving singleton) for tests that stand up a second nameserver. */
     public static @NonNull DnsZoneStore createDetached() {
-        return new DnsZoneStore();
+        return new DnsZoneStore(false);
     }
 
     /** For tests: install a primary snapshot directly, bypassing the database. */
     public synchronized void injectPrimarySnapshot(@NonNull DnsZoneSnapshot snapshot) {
+        this.followDatasource();
         Map<String, DnsZoneSnapshot> next = new HashMap<>(this.primaryByOrigin);
         next.put(snapshot.getOriginString(), snapshot);
         this.primaryByOrigin = Map.copyOf(next);
@@ -120,6 +136,7 @@ public final class DnsZoneStore {
         java.util.Set<String> activeSecondaryOrigins = new java.util.HashSet<>();
         DnsZoneModel zoneModel = Models.get(DnsZoneModel.class);
         DnsRecordModel recordModel = Models.get(DnsRecordModel.class);
+        Datasource source = zoneModel.getResolvedDatasource();
 
         for (Row zone : zoneModel.findEnabled()) {
             if (DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
@@ -140,7 +157,38 @@ public final class DnsZoneStore {
 
         this.primaryByOrigin = Map.copyOf(rebuilt);
         this.secondaryByOrigin.keySet().retainAll(activeSecondaryOrigins);
+        this.derivedFrom = source;
         rebuildServing();
+    }
+
+    /**
+     * Rebuilds the view when DnsZoneModel now resolves to another datasource than the one it was read from.
+     *
+     * AIDEV-NOTE: a rebuild inside a transaction reads through its connection (uncommitted rows included, which is
+     * what that transaction's own writers must see), so it is read again once the transaction ends, committed or
+     * rolled back; see reload() for why a published view must never outlive a rollback.
+     */
+    private void followDatasource() {
+        if (!this.followsDatasource) {
+            return;
+        }
+        DnsZoneModel zoneModel = Models.get(DnsZoneModel.class);
+        if (!zoneModel.resolvesDatasource()) {
+            return;
+        }
+        Datasource current = zoneModel.getResolvedDatasource();
+        if (current == this.derivedFrom) {
+            return;
+        }
+        synchronized (this) {
+            if (current == this.derivedFrom) {
+                return;
+            }
+            this.reloadNow();
+        }
+        if (current.hasActiveTransaction()) {
+            current.afterTransaction(this::reloadNow);
+        }
     }
 
     /**
@@ -177,6 +225,7 @@ public final class DnsZoneStore {
 
     /** @return the serial the serving view publishes for the primary zone, or 0 when it serves none */
     public long publishedSerial(int zoneId) {
+        this.followDatasource();
         for (DnsZoneSnapshot zone : this.primaryByOrigin.values()) {
             if (zone.getZoneId() == zoneId) {
                 return zone.getSerial();
@@ -187,12 +236,14 @@ public final class DnsZoneStore {
 
     /** Installs (or replaces) a secondary zone's compiled snapshot in the serving view. */
     public synchronized void putSecondarySnapshot(@NonNull DnsZoneSnapshot snapshot) {
+        this.followDatasource();
         this.secondaryByOrigin.put(snapshot.getOriginString(), snapshot);
         rebuildServing();
     }
 
     /** Removes a secondary zone from the serving view (expired or deleted). */
     public synchronized void removeSecondarySnapshot(@NonNull String origin) {
+        this.followDatasource();
         if (this.secondaryByOrigin.remove(origin) != null) {
             rebuildServing();
         }
@@ -205,15 +256,18 @@ public final class DnsZoneStore {
     }
 
     public @NonNull Collection<DnsZoneSnapshot> zones() {
+        this.followDatasource();
         return this.serving.values();
     }
 
     public @Nullable DnsZoneSnapshot getZone(@NonNull String origin) {
+        this.followDatasource();
         return this.serving.get(origin);
     }
 
     /** @return the most specific enabled zone containing the name, or null */
     public @Nullable DnsZoneSnapshot findZoneFor(@NonNull Name qname) {
+        this.followDatasource();
         DnsZoneSnapshot best = null;
         for (DnsZoneSnapshot zone : this.serving.values()) {
             if (!qname.subdomain(zone.getOrigin())) {
@@ -240,6 +294,7 @@ public final class DnsZoneStore {
      * model itself now refuses a row in a secondary zone (DnsZoneCascades).
      */
     public @Nullable DnsZoneSnapshot findServingZoneFor(@NonNull String fqdn) {
+        this.followDatasource();
         return mostSpecific(this.serving, fqdn);
     }
 
@@ -248,11 +303,13 @@ public final class DnsZoneStore {
      * for containing the fqdn, or null. Every writer of a record row finds its zone here.
      */
     public @Nullable DnsZoneSnapshot findPrimaryZoneFor(@NonNull String fqdn) {
+        this.followDatasource();
         return mostSpecific(this.primaryByOrigin, fqdn);
     }
 
     /** @return true when this controller owns the origin, rather than replicating it */
     public boolean isPrimary(@NonNull String origin) {
+        this.followDatasource();
         return this.primaryByOrigin.containsKey(origin);
     }
 

@@ -94,7 +94,7 @@ public final class GeneratedDnsRecords {
      * Install the attribution invariant on the DnsRecordModel write pipeline.
      *
      * AIDEV-NOTE: the write pipeline, not the resource or the API handler, for the same
-     * reason SiteDomainResource.installRouteInvariant gives: the CMS form, the peer API, the
+     * reason SiteDomainRouteInvariant.installRouteInvariant gives: the CMS form, the peer API, the
      * zone-file import and any direct model.save all pass here and nothing else does. A
      * caller-supplied marker is REFUSED rather than silently stripped -- a write that claims
      * system ownership must never look like it succeeded.

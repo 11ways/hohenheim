@@ -71,6 +71,8 @@ final class InstanceConsoleSession {
     private final List<Consumer<String>> listeners = new CopyOnWriteArrayList<>();
     private final CountDownLatch ended = new CountDownLatch(1);
 
+    private final long generation;
+
     private volatile boolean stopObserved;
     private volatile boolean closedByHub;
 
@@ -87,9 +89,11 @@ final class InstanceConsoleSession {
                            @Nullable String stopCommand,
                            ConsoleRedaction.@NonNull Redactor redactor,
                            InstanceConsoleLogs.@Nullable Sink logSink,
+                           long generation,
                            @NonNull ExitListener exitListener) {
         this.instanceId = instanceId;
         this.handle = handle;
+        this.generation = generation;
         this.console = console;
         this.resizer = resizer;
         this.stopCommand = stopCommand == null || stopCommand.isBlank()
@@ -315,6 +319,11 @@ final class InstanceConsoleSession {
         if (fire != null) {
             fire.run();
         }
+    }
+
+    /** The instance's console generation this session was opened in (see InstanceConsoles#isCurrent). */
+    long generation() {
+        return this.generation;
     }
 
     synchronized boolean readinessMatched() {

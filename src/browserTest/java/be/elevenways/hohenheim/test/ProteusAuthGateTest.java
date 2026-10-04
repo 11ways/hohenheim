@@ -13,6 +13,7 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.http.RateLimitMiddleware;
+import be.elevenways.zenit.test.support.OutboundFixture;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -58,6 +59,12 @@ class ProteusAuthGateTest {
     private static ProxyServer proxy;
     private static int httpPort;
     private static HttpServer proteus;
+    /**
+     * A provider's realm rides the public-internet guard, so the fake realm on the loopback is reached through a
+     * public-looking host the fixture routes to it.
+     */
+    private static final String REALM_HOST = "realm.proteus.example";
+    private static OutboundFixture realmRoute;
     private static HttpServer upstream;
 
     /** The permissions the fake realm grants the next identity it returns. */
@@ -91,6 +98,10 @@ class ProteusAuthGateTest {
         if (proxy != null) {
             proxy.stop();
             proxy = null;
+        }
+        if (realmRoute != null) {
+            realmRoute.close();
+            realmRoute = null;
         }
         if (proteus != null) {
             proteus.stop(0);
@@ -166,7 +177,7 @@ class ProteusAuthGateTest {
 
     private static Map<String, Object> proteusConfig(String realmClient) {
         Map<String, Object> config = new LinkedHashMap<>();
-        config.put("endpoint", "http://127.0.0.1:" + proteus.getAddress().getPort() + "/");
+        config.put("endpoint", "http://" + REALM_HOST + "/");
         config.put("realm_client", realmClient);
         config.put("access_key", "key");
         config.put("authenticator", "password");
@@ -215,7 +226,6 @@ class ProteusAuthGateTest {
         rule.set(AccessRuleModel.TYPE, AccessRuleModel.TYPE_AUTH_PROVIDER);
         rule.set(AccessRuleModel.DATA, data);
         rule.set(AccessRuleModel.ENABLED, true);
-        rule.set(AccessRuleModel.SORT, 0);
         rules.save(rule);
 
         var guarded = Models.get(ProtectedPathModel.class);
@@ -237,6 +247,7 @@ class ProteusAuthGateTest {
         });
         upstream.start();
         proteus = startFakeProteus();
+        realmRoute = OutboundFixture.route(REALM_HOST, proteus.getAddress().getPort());
 
         int gatedProvider = provider("Proteus gated", "rc", GATED);
         int gatedSite = gatedSite("gated.test", gatedProvider);

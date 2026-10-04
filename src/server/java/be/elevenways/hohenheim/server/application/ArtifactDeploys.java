@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.application;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.ArtifactOperationModel;
 import be.elevenways.hohenheim.model.ArtifactSourceModel;
 import be.elevenways.hohenheim.model.BuildOperationModel;
@@ -136,7 +138,7 @@ public final class ArtifactDeploys {
                 });
                 completed = true;
                 ActivityLog.record(Models.get(InstanceModel.class), applicationId,
-                    InstanceService.ACTIVITY_DEPLOY_ACTION, trigger.word());
+                    HohenheimActivityAction.DEPLOYED, trigger.word());
             } catch (IOException invalid) {
                 finish(operation, ArtifactOperationModel.FAILED, "artifact_unreadable");
             } catch (RuntimeException failed) {
@@ -334,7 +336,7 @@ public final class ArtifactDeploys {
         try {
             return SecureTokens.sha256Hex(artifact);
         } catch (Exception failed) {
-            throw Violations.ofForm(Microcopy.of("artifact_unreadable").withFilter("scope", "violations"));
+            throw Violations.ofForm(HohenheimViolations.text("artifact_unreadable"));
         }
     }
 

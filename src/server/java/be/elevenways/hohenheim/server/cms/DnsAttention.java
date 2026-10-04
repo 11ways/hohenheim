@@ -57,7 +57,7 @@ public final class DnsAttention {
                 items.add(item(AttentionSeverity.WARNING, "sitemap",
                     copy("dns_zone_no_ns", "attention_title", "origin", zone.getOriginString()),
                     copy("dns_zone_no_ns", "attention_detail"),
-                    CmsRoutes.subpage(ADMIN, DnsZoneResource.SLUG, zone.getZoneId(),
+                    CmsRoutes.subpage(ADMIN, DnsZoneParts.SLUG, zone.getZoneId(),
                         DnsZoneRecordsPage.SLUG)));
             }
         }
@@ -95,7 +95,7 @@ public final class DnsAttention {
                     "peer", peer != null ? String.valueOf(peer.get(DnsPeerModel.NAME)) : "#" + peerId,
                     "origin", String.valueOf(zone.get(DnsZoneModel.ORIGIN))),
                 detail,
-                CmsRoutes.subpage(ADMIN, DnsZoneResource.SLUG, zoneId, "secondaries")));
+                CmsRoutes.subpage(ADMIN, DnsZoneParts.SLUG, zoneId, "secondaries")));
         }
     }
 
@@ -113,7 +113,7 @@ public final class DnsAttention {
                 copy("dns_delegation_broken", "attention_title",
                     "origin", String.valueOf(zone.get(DnsZoneModel.ORIGIN))),
                 verdict.label(),
-                CmsRoutes.detail(ADMIN, DnsZoneResource.SLUG, zone.get(DnsZoneModel.ID))));
+                CmsRoutes.detail(ADMIN, DnsZoneParts.SLUG, zone.get(DnsZoneModel.ID))));
         }
     }
 }

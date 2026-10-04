@@ -1,12 +1,15 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.validation.Violations;
 
 /**
@@ -19,7 +22,7 @@ import be.elevenways.zenit.common.validation.Violations;
  */
 public class AccessListModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "access_list");
+    public static final Identifier MODEL_ID = HohenheimIds.id("access_list");
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #SATISFY} value: any matching rule grants access. */
@@ -38,10 +41,10 @@ public class AccessListModel extends Model {
     public static final EnumField SATISFY = SCHEMA.addField(EnumField.builder("satisfy")
         .value(SATISFY_ANY, v -> v.displayName("Any")
             .label(Microcopy.of("any").withFilter("scope", "access_satisfy"))
-            .icon("check").color("blue"))
+            .icon("check").color(ColorHue.BLUE))
         .value(SATISFY_ALL, v -> v.displayName("All")
             .label(Microcopy.of("all").withFilter("scope", "access_satisfy"))
-            .icon("list-check").color("orange"))
+            .icon("list-check").color(ColorHue.ORANGE))
         .defaultValue(SATISFY_ANY)
         .label(HohenheimFormCopy.label("satisfy"))
         .build());
@@ -78,7 +81,7 @@ public class AccessListModel extends Model {
             // has exactly one declaring home (the SATISFY EnumField above).
             if (!SATISFY.isValidValue(satisfy)) {
                 throw Violations.ofField(SATISFY.getName(), satisfy,
-                    Microcopy.of("access_satisfy_invalid").withFilter("scope", "violations"));
+                    HohenheimViolations.text("access_satisfy_invalid"));
             }
         });
     }

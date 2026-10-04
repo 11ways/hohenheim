@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
+import be.elevenways.zenit.common.security.SystemPrincipal;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -36,21 +37,21 @@ class DatabaseProvisionPoolTest {
         TenantConduits.as(tenant, () -> DatabaseService.submit(() -> tenantTask.complete(observed())));
         assertThat(tenantTask.get(10, TimeUnit.SECONDS))
             .as("step 1: system authority, the tenant's attribution")
-            .containsExactly(true, "4242");
+            .containsExactly(true, tenant.reference());
 
-        // 2. A thread with no caller submits: the task is the system's, attributed to nobody.
+        // 2. A thread with no caller submits: the task is attributed to the typed system principal.
         CompletableFuture<List<Object>> systemTask = new CompletableFuture<>();
         ExecutionIdentity.runDetachedAsSystem("pool-test",
             () -> DatabaseService.submit(() -> systemTask.complete(observed())));
         assertThat(systemTask.get(10, TimeUnit.SECONDS))
             .as("step 2: system authority, system attribution")
-            .containsExactly(true, Accountability.ORIGIN_SYSTEM);
+            .containsExactly(true, SystemPrincipal.INSTANCE.reference());
     }
 
-    /** Whether the pool thread is system work, and its attribution's actor (else its origin). */
+    /** Whether the pool thread is system work, and its typed attribution. */
     private static List<Object> observed() {
         Accountability attribution = Accountability.current();
         return List.of(ExecutionIdentity.isSystem(),
-            attribution.actor() != null ? attribution.actor() : attribution.origin());
+            attribution.actorReference());
     }
 }

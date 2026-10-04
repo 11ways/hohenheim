@@ -84,7 +84,7 @@ public final class DatabaseAttention {
                     ? copy("provisioning_failed", "attention_detail")
                     : copy("engine_provisioning_failed_reason", "attention_detail",
                         "reason", reason),
-                CmsRoutes.detail(ADMIN, DatabaseEngineResource.SLUG,
+                CmsRoutes.detail(ADMIN, DatabaseParts.ENGINES_SLUG,
                     row.get(DatabaseEngineModel.ID))));
         }
     }
@@ -134,7 +134,7 @@ public final class DatabaseAttention {
                     copy("instance", "attention_title",
                         "name", instance.get(InstanceModel.NAME)),
                     detail,
-                    InstanceResource.recordRoute(ADMIN, instance, InstanceDatabasesPage.SLUG)));
+                    InstanceParts.recordRoute(ADMIN, instance, InstanceDatabasesPage.SLUG)));
             }
         }
     }
@@ -198,7 +198,7 @@ public final class DatabaseAttention {
         if (server == null) {
             return true;
         }
-        HostState state = ServerResource.statusCellOf(server).state();
+        HostState state = ServerParts.statusCellOf(server).state();
         return switch (state) {
             case ERROR -> true;
             case QUARANTINED, SILENT, NEVER_PROBED, OK -> false;

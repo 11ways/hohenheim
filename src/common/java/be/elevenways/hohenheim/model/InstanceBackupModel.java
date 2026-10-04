@@ -1,11 +1,13 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.ColorHue;
 
 /**
  * One portable, encrypted instance export written to a {@link BackupTargetModel}:
@@ -20,7 +22,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
  */
 public class InstanceBackupModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "instance_backup");
+    public static final Identifier MODEL_ID = HohenheimIds.id("instance_backup");
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #STATUS}: the archive is being built or uploaded; not restorable. */
@@ -51,11 +53,11 @@ public class InstanceBackupModel extends Model {
 
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_UPLOADING, v -> v.displayName("Uploading").icon("cloud-arrow-up")
-            .label(Microcopy.of("uploading").withFilter("scope", "backup_status")).color("blue"))
+            .label(Microcopy.of("uploading").withFilter("scope", "backup_status")).color(ColorHue.BLUE))
         .value(STATUS_COMPLETE, v -> v.displayName("Complete").icon("circle-check")
-            .label(Microcopy.of("complete").withFilter("scope", "backup_status")).color("green"))
+            .label(Microcopy.of("complete").withFilter("scope", "backup_status")).color(ColorHue.GREEN))
         .value(STATUS_FAILED, v -> v.displayName("Failed").icon("circle-exclamation")
-            .label(Microcopy.of("failed").withFilter("scope", "backup_status")).color("red"))
+            .label(Microcopy.of("failed").withFilter("scope", "backup_status")).color(ColorHue.RED))
         .defaultValue(STATUS_FAILED)
         .build());
 

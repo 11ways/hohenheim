@@ -4,7 +4,10 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVolumeModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
-import be.elevenways.hohenheim.server.cms.InstanceTemplateVolumeResource;
+import be.elevenways.hohenheim.server.cms.TemplateChildParts;
+import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
@@ -12,13 +15,10 @@ import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelPeer;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
-import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -44,8 +44,6 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
 
     private static final String PREFIX = "tpl-vol-ui-";
 
-    private static final AccessContext ADMIN = AccessContext.anonymous();
-
     @AfterAll
     static void cleanUp() {
         Model instances = Models.get(InstanceModel.class);
@@ -70,22 +68,22 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
 
         // 1. The peer exists in the admin panel and every declaration it makes about its
         //    own list is one the framework can honour.
-        Resource<?> resource = registeredResource("instance-template-volumes");
+        PanelResource<?> resource = registeredResource(TemplateChildParts.VOLUMES);
         assertThat(resource).as("step 1: the panel offers the template volumes resource")
             .isNotNull();
-        resource.validateDeclarations();
+        resource.validateIn(PanelRegistry.getBySlug("admin"));
         assertThat(resource.showInNav())
             .as("step 1: it is reached through the template, not the sidebar").isFalse();
 
         // 2. An operator declares a volume on a template through the resource -- the only
         //    thing that used to require writing the row by hand.
         int templateId = template(PREFIX + "carrier", ApplicationKind.ID.toString());
-        new InstanceTemplateVolumeResource().persistRow(Map.of(
+        PanelResourceCalls.create("admin", TemplateChildParts.VOLUMES, Map.of(
             "template_id", templateId,
             "name", "data",
             "container_path", "/var/lib/app",
             "quota_bytes", 256L * 1024L * 1024L,
-            "exclusive", true), ADMIN);
+             "exclusive", true), TenantConduits.operator());
         List<Row> declared = Models.get(InstanceTemplateVolumeModel.class)
             .findByTemplateId(templateId);
         assertThat(declared).as("step 2: the declaration was stored").hasSize(1);
@@ -115,72 +113,66 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
      */
     @Test
     void theResourceRefusesADeclarationTheCreateCouldNeverHonour() {
-        InstanceTemplateVolumeResource resource = new InstanceTemplateVolumeResource();
         int templateId = template(PREFIX + "refusing", ApplicationKind.ID.toString());
-        resource.persistRow(Map.of("template_id", templateId, "name", "data",
-            "container_path", "/var/lib/app", "exclusive", false), ADMIN);
+        PanelResourceCalls.create("admin", TemplateChildParts.VOLUMES, Map.of("template_id", templateId, "name", "data",
+            "container_path", "/var/lib/app", "exclusive", false), TenantConduits.operator());
 
         // 1. A second declaration of one NAME would become a single volume on every
         //    instance (the copy re-declares that one name), so one of the two would be
         //    silently lost.
-        assertThat(violationKeys(catchThrowable(() -> resource.persistRow(
+        assertThat(violationKeys(catchThrowable(() -> PanelResourceCalls.create("admin", TemplateChildParts.VOLUMES,
                 Map.of("template_id", templateId, "name", "data",
-                    "container_path", "/var/other", "exclusive", false), ADMIN))))
+                     "container_path", "/var/other", "exclusive", false), TenantConduits.operator()))))
             .as("step 1: a duplicate volume name is refused, named")
             .contains("template_volume_name_taken");
 
         // 2. Two volumes at one container path would hand the daemon two binds at one
         //    path -- the volume tier's own collision rule, asked at authoring time.
-        assertThat(violationKeys(catchThrowable(() -> resource.persistRow(
+        assertThat(violationKeys(catchThrowable(() -> PanelResourceCalls.create("admin", TemplateChildParts.VOLUMES,
                 Map.of("template_id", templateId, "name", "cache",
-                    "container_path", "/var/lib/app", "exclusive", false), ADMIN))))
+                     "container_path", "/var/lib/app", "exclusive", false), TenantConduits.operator()))))
             .as("step 2: a colliding container path is refused, named")
             .contains("volume_container_path_conflict");
 
         // 3. A name that is not a plain directory name is the containment guarantee.
-        assertThat(violationKeys(catchThrowable(() -> resource.persistRow(
+        assertThat(violationKeys(catchThrowable(() -> PanelResourceCalls.create("admin", TemplateChildParts.VOLUMES,
                 Map.of("template_id", templateId, "name", "../etc",
-                    "container_path", "/var/cache/app", "exclusive", false), ADMIN))))
+                     "container_path", "/var/cache/app", "exclusive", false), TenantConduits.operator()))))
             .as("step 3: a traversing volume name is refused, named")
             .contains("volume_name_invalid");
 
         // 4. A quota no backend could apply would be stored, shown as a limit and never
         //    enforced.
-        assertThat(violationKeys(catchThrowable(() -> resource.persistRow(
+        assertThat(violationKeys(catchThrowable(() -> PanelResourceCalls.create("admin", TemplateChildParts.VOLUMES,
                 Map.of("template_id", templateId, "name", "cache",
                     "container_path", "/var/cache/app", "quota_bytes", 0L,
-                    "exclusive", false), ADMIN))))
+                     "exclusive", false), TenantConduits.operator()))))
             .as("step 4: a non-positive quota is refused, named")
             .contains("volume_quota_invalid");
 
         // 5. And a template whose kind mounts no volumes at all cannot be given one here,
         //    rather than being given one that refuses every create it is used for.
         int wrongKind = template(PREFIX + "wrong-kind", "hohenheim:docker_container");
-        assertThat(violationKeys(catchThrowable(() -> resource.persistRow(
+        assertThat(violationKeys(catchThrowable(() -> PanelResourceCalls.create("admin", TemplateChildParts.VOLUMES,
                 Map.of("template_id", wrongKind, "name", "data",
-                    "container_path", "/var/lib/app", "exclusive", false), ADMIN))))
+                     "container_path", "/var/lib/app", "exclusive", false), TenantConduits.operator()))))
             .as("step 5: a kind that mounts none is refused, named")
             .contains("template_volume_kind_unsupported");
 
         // 6. FALSIFIED: a free name at a free path on the same template is accepted, so
         //    every refusal above discriminates rather than forbidding a second volume.
-        resource.persistRow(Map.of("template_id", templateId, "name", "cache",
-            "container_path", "/var/cache/app", "exclusive", false), ADMIN);
+        PanelResourceCalls.create("admin", TemplateChildParts.VOLUMES, Map.of("template_id", templateId, "name", "cache",
+            "container_path", "/var/cache/app", "exclusive", false), TenantConduits.operator());
         assertThat(Models.get(InstanceTemplateVolumeModel.class).findByTemplateId(templateId))
             .as("step 6: the template carries both volumes").hasSize(2);
     }
 
     // -- fixtures ---------------------------------------------------------------
 
-    private static Resource<?> registeredResource(String slug) {
+    private static PanelResource<?> registeredResource(String slug) {
         Panel panel = PanelRegistry.getBySlug("admin");
         assertThat(panel).as("the admin panel is registered").isNotNull();
-        for (PanelPeer peer : panel.peers()) {
-            if (peer instanceof Resource<?> resource && slug.equals(resource.slug())) {
-                return resource;
-            }
-        }
-        return null;
+        return panel.entryBySlug(slug) instanceof PanelResource<?> resource ? resource : null;
     }
 
     private static int template(String name, String kind) {

@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.docker.DockerReconciler;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
@@ -21,6 +23,11 @@ public class ReconcileDockerResources extends ScheduledTask {
 
     public static final String STATIC_DESCRIPTION =
         "Reconcile Docker resources against record ownership";
+
+    @Override
+    public @NonNull Identifier id() {
+        return HohenheimIds.id("reconcile_docker_resources");
+    }
 
     @Override
     public @NonNull ReconcileDockerResources newTask() {

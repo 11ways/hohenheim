@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
 import java.io.File;
+import java.net.ServerSocket;
 
 /**
  * Tests the ProxyServer lifecycle state machine.
@@ -42,16 +43,16 @@ class ProxyServerStateTest {
     }
 
     @Test
-    void startOnPrivilegedPortTransitionsToFailed() {
-        // Port 80 requires root -- will fail in non-root test environment
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 80);
-
+    void startOnOccupiedPortTransitionsToFailed() throws Exception {
         ProxyServer proxy = new ProxyServer();
-        proxy.start();
-
-        assertThat(proxy.getState()).isEqualTo(ProxyServer.State.FAILED);
-        assertThat(proxy.getFailureReason()).isNotNull();
-        assertThat(proxy.getFailureReason()).isNotEmpty();
+        try (ServerSocket blocker = new ServerSocket(0)) {
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, blocker.getLocalPort());
+            proxy.start();
+            assertThat(proxy.getState()).isEqualTo(ProxyServer.State.FAILED);
+            assertThat(proxy.getFailureReason()).isNotBlank();
+        } finally {
+            proxy.stop();
+        }
     }
 
     @Test
@@ -81,11 +82,12 @@ class ProxyServerStateTest {
     }
 
     @Test
-    void reloadOnFailedStateAttemptsRestart() {
-        // Start on port 80 (fails)
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 80);
+    void reloadOnFailedStateAttemptsRestart() throws Exception {
         ProxyServer proxy = new ProxyServer();
-        proxy.start();
+        try (ServerSocket blocker = new ServerSocket(0)) {
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, blocker.getLocalPort());
+            proxy.start();
+        }
         assertThat(proxy.getState()).isEqualTo(ProxyServer.State.FAILED);
 
         // Change to available port and reload -- should attempt restart
@@ -97,14 +99,15 @@ class ProxyServerStateTest {
     }
 
     @Test
-    void failureReasonIsDescriptive() {
-        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 80);
-
+    void failureReasonIsDescriptive() throws Exception {
         ProxyServer proxy = new ProxyServer();
-        proxy.start();
-
-        assertThat(proxy.getState()).isEqualTo(ProxyServer.State.FAILED);
-        // Should contain something about permission or address already in use
-        assertThat(proxy.getFailureReason()).isNotBlank();
+        try (ServerSocket blocker = new ServerSocket(0)) {
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, blocker.getLocalPort());
+            proxy.start();
+            assertThat(proxy.getState()).isEqualTo(ProxyServer.State.FAILED);
+            assertThat(proxy.getFailureReason()).isNotBlank();
+        } finally {
+            proxy.stop();
+        }
     }
 }

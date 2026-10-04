@@ -4,11 +4,15 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostPostureAcknowledgement;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.IncusPreflight;
+import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.AccountabilityOrigin;
+import be.elevenways.zenit.common.security.CallerChannel;
+import be.elevenways.zenit.common.security.Principal;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.LinkedHashMap;
@@ -22,10 +26,6 @@ import java.util.Map;
  * test that deploys must first do what an operator would.
  */
 public final class HostFixtures {
-
-    /** The attribution a fixture acknowledges under; a real one is required, never null. */
-    private static final Accountability OPERATOR =
-        new Accountability("user:1", "Test operator", null, null, "test");
 
     private HostFixtures() {
     }
@@ -97,6 +97,7 @@ public final class HostFixtures {
         ServerModel.ACKNOWLEDGED_WARNING_VERSION,
         ServerModel.ACKNOWLEDGED_AT,
         ServerModel.ACKNOWLEDGED_BY,
+        ServerModel.ACKNOWLEDGED_BY_KIND,
         ServerModel.ACKNOWLEDGED_BY_LABEL);
 
     /**
@@ -182,6 +183,11 @@ public final class HostFixtures {
                 || ServerModel.postureAcknowledged(server)) {
             return;
         }
-        Accountability.runAs(OPERATOR, () -> HostPostureAcknowledgement.record(server));
+        // AIDEV-NOTE: resolve the shared fixture's real account in the CURRENT datasource, not a fabricated actor
+        // token or a cached id from another test database. Risk acceptance records an ACCOUNT principal.
+        Principal operator = TenantConduits.operator().principal();
+        Accountability attribution = Accountability.of(operator.reference(), operator.attributionLabel(),
+            new CallerChannel(AccountabilityOrigin.OFFLINE, null, null));
+        Accountability.runAs(attribution, () -> HostPostureAcknowledgement.record(server));
     }
 }

@@ -12,7 +12,7 @@
 <section class="cms-resource-list-page">
     <header class="cms-resource-list-header"><h1>{{ title }}</h1></header>
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
-    <pl-alert variant={% summary.spam ? "destructive" : "success" %}>
+    <pl-alert variant={% summary.spam ? AccentVariant.DESTRUCTIVE : AccentVariant.SUCCESS %}>
         <strong>{% if summary.spam %}{{ t("verdict_spam", scope: "spamservice_sample") }}{% else %}{{ t("verdict_ham", scope: "spamservice_sample") }}{% /if %}</strong>
         {{ t("score_threshold", scope: "spamservice_sample", score: summary.score, threshold: summary.threshold) }}
         {% if summary.confirmed %}<pl-badge variant="info">{{ t("confirmed", scope: "spamservice_sample") }}</pl-badge>{% /if %}

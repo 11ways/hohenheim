@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.hohenheim.server.security.NeverBanHostnames;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
@@ -19,6 +21,11 @@ import java.util.List;
 public class SecuritySweep extends ScheduledTask {
 
     public static final String STATIC_DESCRIPTION = "Expire bans";
+
+    @Override
+    public @NonNull Identifier id() {
+        return HohenheimIds.id("security_sweep");
+    }
 
     @Override
     public @NonNull SecuritySweep newTask() {

@@ -1,12 +1,17 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.server.cms.InstanceFromTemplatePage;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.orm.datasource.Row;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -70,5 +75,22 @@ public final class ApiSupport {
     /** An enabled user row whose display name is its email; returns its id. */
     public static int user(String email) {
         return user(email, email);
+    }
+
+    /**
+     * The from-template wizard's no-script final submit: its invoke route in the panel, over the template, with the
+     * transport fields a document posts once (a fresh invocation and the opened-document confirmation).
+     *
+     * @return the path, with the template as the selected subject
+     */
+    public static String fromTemplateTarget(String panel, Object templateId) {
+        return CmsRoutes.invoke(panel, InstanceFromTemplatePage.SLUG, InstanceFromTemplatePage.CREATE.id())
+            .with(CmsEndpoints.SUBJECT_PARAM, String.valueOf(templateId)).toUrl();
+    }
+
+    /** @return the transport fields the wizard's document posts beside its input */
+    public static String fromTemplateTransport() {
+        return form(CmsEndpoints.INVOCATION_PARAM.getName(), UUID.randomUUID().toString(),
+            CmsConfirmation.FIELD, CmsConfirmation.PLAIN_PROOF);
     }
 }

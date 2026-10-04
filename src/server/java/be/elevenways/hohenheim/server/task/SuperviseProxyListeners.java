@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
@@ -18,6 +20,11 @@ import java.util.List;
 public class SuperviseProxyListeners extends ScheduledTask {
 
     public static final String STATIC_DESCRIPTION = "Supervise proxy listeners";
+
+    @Override
+    public @NonNull Identifier id() {
+        return HohenheimIds.id("supervise_proxy_listeners");
+    }
 
     @Override
     public @NonNull SuperviseProxyListeners newTask() {

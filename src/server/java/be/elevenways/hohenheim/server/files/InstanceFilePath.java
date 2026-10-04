@@ -1,7 +1,8 @@
 package be.elevenways.hohenheim.server.files;
 
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.content.FilePaths;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.ArrayList;
@@ -110,17 +111,11 @@ public record InstanceFilePath(@NonNull String volumeRoot, @NonNull String absol
         return null;
     }
 
-    /** Split on '/', refusing empty, "." and ".." segments outright. */
+    /** Split on '/', skipping empty segments and refusing "." and ".." outright (FilePaths.segments). */
     private static @NonNull List<String> segmentsOf(@NonNull String path) {
-        List<String> segments = new ArrayList<>();
-        for (String segment : path.split("/", -1)) {
-            if (segment.isEmpty()) {
-                continue;
-            }
-            if (".".equals(segment) || "..".equals(segment)) {
-                throw refused();
-            }
-            segments.add(segment);
+        List<String> segments = FilePaths.segments(path);
+        if (segments == null) {
+            throw refused();
         }
         return segments;
     }
@@ -169,6 +164,6 @@ public record InstanceFilePath(@NonNull String volumeRoot, @NonNull String absol
 
     /** THE one refusal: identical for every rejected shape, so it names no structure. */
     public static @NonNull Violations refused() {
-        return Violations.ofForm(Microcopy.of("files_path_refused").withFilter("scope", "violations"));
+        return Violations.ofForm(HohenheimViolations.text("files_path_refused"));
     }
 }

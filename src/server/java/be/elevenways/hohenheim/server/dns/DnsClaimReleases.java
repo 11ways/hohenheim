@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.dns;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -66,8 +67,6 @@ import java.util.Set;
  */
 public final class DnsClaimReleases {
 
-    /** Activity-log verb stamped on every record this class disables. */
-    public static final String ACTIVITY_RELEASED = "released_hostname_disabled";
 
     private static volatile boolean installed;
 
@@ -195,7 +194,7 @@ public final class DnsClaimReleases {
             // (the tenant releasing a name rarely holds dyndns on the record).
             TenantWrites.inAuthorizedOperation(() ->
                 DynamicDnsService.revokeFor(record.get(DnsRecordModel.ID)));
-            ActivityLog.record(model, record.get(DnsRecordModel.ID), ACTIVITY_RELEASED, fqdn);
+            ActivityLog.record(model, record.get(DnsRecordModel.ID), HohenheimActivityAction.RELEASED_HOSTNAME_DISABLED, fqdn);
             RecordGrants.revokeAllForRecord(DnsRecordModel.MODEL_ID,
                 record.get(DnsRecordModel.ID));
             touchedZones.add(record.get(DnsRecordModel.ZONE_ID));

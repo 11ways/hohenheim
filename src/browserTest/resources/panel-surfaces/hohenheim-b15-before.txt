@@ -1,0 +1,586 @@
+case admin.servers.operator admin servers operator
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=public_ipv4 relation=false
+column public_ipv4 at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column runtime at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column ssh_target at=3 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
+column admission at=4 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column posture at=5 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column host_status at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+filter name at=0 kind=TEXT facet=false param=filter.name
+filter runtime at=1 kind=SELECT facet=true param=filter.runtime
+filter admission at=2 kind=SELECT facet=true param=filter.admission
+filter ssh_target at=3 kind=TEXT facet=false param=filter.ssh_target
+link hohenheim:reconcile_finding at=0 lead=false target=/{panel}/reconcile-findings
+tab overview at=0 landing=true view=false
+tab install-media at=1 landing=false view=false
+tab history at=2 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20runtime at=1 kind=zenitforms:form/select input=select required=false readonly=false options=docker,incus binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20ssh_target at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20incus_url at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20incus_trust_token at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20posture at=5 kind=zenitforms:form/select input=select required=false readonly=false options=trusted_only,dedicated,shared_container,vm_isolated binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20public_ipv4 at=6 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20public_ipv6 at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20trust_notice at=8 kind=zenitforms:form/computed input=text required=false readonly=true options= binding=
+
+case admin.servers.tenant admin servers tenant
+admission - verdict=zenit:forbidden
+
+case admin.projects.operator admin projects operator
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=description relation=false
+column description at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column members at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column owned_sites at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column owned_instances at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column instance_quota at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+link hohenheim:environment at=0 lead=false target=/{panel}/environments
+tab history at=0 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20description at=1 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+
+case admin.projects.tenant admin projects tenant
+admission - verdict=zenit:forbidden
+
+case admin.instance-volumes.operator admin instance-volumes operator
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column instance_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column container_path at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column quota_bytes at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column used_bytes at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column exclusive at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+tab history at=0 landing=false view=false
+control CREATE%20instance_id at=0 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20name at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20container_path at=2 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20quota_mb at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20exclusive at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+
+case admin.instance-volumes.tenant admin instance-volumes tenant
+admission - verdict=zenit:forbidden
+
+case admin.runtime-images.operator admin runtime-images operator
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=description relation=false
+column description at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column docker_image at=2 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column incus_image at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column default_port at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column builtin at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column enabled at=6 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+filter name at=0 kind=TEXT facet=false param=filter.name
+tab history at=0 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20description at=1 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control CREATE%20docker_image at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20incus_image at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20default_command at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20default_port at=5 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20default_build_command at=6 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20workdir at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20shell at=8 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20enabled at=9 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+
+case admin.runtime-images.tenant admin runtime-images tenant
+admission - verdict=zenit:forbidden
+
+case admin.previews.operator admin previews operator
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=ref relation=false
+column ref at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column status at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column expires_at at=3 shown=true hidden=false sortable=true filterable=false copyable=false subtext= relation=false
+column created_at at=4 shown=true hidden=false sortable=true filterable=false copyable=false subtext= relation=false
+tab history at=0 landing=false view=false
+control CREATE%20application_id at=0 kind=zenitforms:form/relation-pick input=number required=true readonly=false options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:false,creatable:false
+control CREATE%20ref at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+
+case admin.previews.tenant admin previews tenant
+admission - verdict=zenit:forbidden
+
+case admin.reconcile-findings.operator admin reconcile-findings operator
+admission - verdict=admitted
+chrome - views=false advanced=true search=true columns=false rail=true selection=false export=true trash=false tree=false searchable=true
+column server_name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column kind at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column resource_name at=2 shown=true hidden=false sortable=false filterable=true copyable=true subtext=detail relation=false
+column detail at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column bucket at=4 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+filter server_name at=0 kind=TEXT facet=false param=filter.server_name
+filter bucket at=1 kind=MULTI_SELECT facet=true param=filter.bucket
+filter kind at=2 kind=MULTI_SELECT facet=true param=filter.kind
+
+case admin.reconcile-findings.tenant admin reconcile-findings tenant
+admission - verdict=zenit:forbidden
+
+case admin.builds.operator admin builds operator
+admission - verdict=admitted
+chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
+column id at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column status at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column builder_kind at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column for_model at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column for_id at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column source_ref at=5 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column image_id at=6 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column duration_ms at=7 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column started_at at=8 shown=true hidden=false sortable=true filterable=false copyable=false subtext= relation=false
+tab history at=0 landing=false view=false
+
+case admin.builds.tenant admin builds tenant
+admission - verdict=zenit:forbidden
+
+case admin.servers.operator.local admin servers operator
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=public_ipv4 relation=false
+column public_ipv4 at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column runtime at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column ssh_target at=3 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
+column admission at=4 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column posture at=5 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column host_status at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+filter name at=0 kind=TEXT facet=false param=filter.name
+filter runtime at=1 kind=SELECT facet=true param=filter.runtime
+filter admission at=2 kind=SELECT facet=true param=filter.admission
+filter ssh_target at=3 kind=TEXT facet=false param=filter.ssh_target
+link hohenheim:reconcile_finding at=0 lead=false target=/{panel}/reconcile-findings
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:admit_server at=1 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/admit_server
+row hohenheim:probe_server at=2 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/probe_server
+row hohenheim:preflight_server at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/preflight_server
+row zenit:delete at=4 verb=invoke band=destructive style=DESTRUCTIVE disabled=delete_local confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dserver,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab overview at=0 landing=true view=false
+tab history at=1 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20runtime at=1 kind=zenitforms:form/select input=select required=false readonly=false options=docker,incus binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20ssh_target at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20incus_url at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20incus_trust_token at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20posture at=5 kind=zenitforms:form/select input=select required=false readonly=false options=trusted_only,dedicated,shared_container,vm_isolated binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20public_ipv4 at=6 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20public_ipv6 at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20trust_notice at=8 kind=zenitforms:form/computed input=text required=false readonly=true options= binding=
+control EDIT%20name at=0 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20runtime at=1 kind=zenitforms:form/select input=select required=false readonly=true options=docker,incus binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20ssh_target at=2 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20incus_url at=3 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20posture at=4 kind=zenitforms:form/select input=select required=false readonly=false options=trusted_only,dedicated,shared_container,vm_isolated binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20public_ipv4 at=5 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20public_ipv6 at=6 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+
+case admin.servers.operator.docker admin servers operator
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=public_ipv4 relation=false
+column public_ipv4 at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column runtime at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column ssh_target at=3 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
+column admission at=4 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column posture at=5 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column host_status at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+filter name at=0 kind=TEXT facet=false param=filter.name
+filter runtime at=1 kind=SELECT facet=true param=filter.runtime
+filter admission at=2 kind=SELECT facet=true param=filter.admission
+filter ssh_target at=3 kind=TEXT facet=false param=filter.ssh_target
+link hohenheim:reconcile_finding at=0 lead=false target=/{panel}/reconcile-findings
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:admit_server at=1 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/admit_server
+row hohenheim:scan_host_key at=2 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/scan_host_key
+row hohenheim:probe_server at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/probe_server
+row hohenheim:preflight_server at=4 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/preflight_server
+row hohenheim:rotate_host_key at=5 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:rotate_identity%252Cscope%3Dserver,body:rotate_identity_body%252Cscope%3Dserver,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:%3Db15-before-docker,input:false target=/{panel}/{entry}/{record}/action/rotate_host_key
+row hohenheim:acknowledge_posture at=6 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:acknowledge%252Cscope%3Dserver,body:acknowledge_body%252Cscope%3Dserver,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:%3Db15-before-docker,input:false target=/{panel}/{entry}/{record}/action/acknowledge_posture
+row zenit:delete at=7 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dserver,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab overview at=0 landing=true view=false
+tab history at=1 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20runtime at=1 kind=zenitforms:form/select input=select required=false readonly=false options=docker,incus binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20ssh_target at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20incus_url at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20incus_trust_token at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20posture at=5 kind=zenitforms:form/select input=select required=false readonly=false options=trusted_only,dedicated,shared_container,vm_isolated binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20public_ipv4 at=6 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20public_ipv6 at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20trust_notice at=8 kind=zenitforms:form/computed input=text required=false readonly=true options= binding=
+control EDIT%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20runtime at=1 kind=zenitforms:form/select input=select required=false readonly=false options=docker,incus binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20ssh_target at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20incus_url at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20incus_trust_token at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20posture at=5 kind=zenitforms:form/select input=select required=false readonly=false options=trusted_only,dedicated,shared_container,vm_isolated binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20public_ipv4 at=6 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20public_ipv6 at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+
+case admin.servers.operator.incus admin servers operator
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=public_ipv4 relation=false
+column public_ipv4 at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column runtime at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column ssh_target at=3 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
+column admission at=4 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column posture at=5 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column host_status at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+filter name at=0 kind=TEXT facet=false param=filter.name
+filter runtime at=1 kind=SELECT facet=true param=filter.runtime
+filter admission at=2 kind=SELECT facet=true param=filter.admission
+filter ssh_target at=3 kind=TEXT facet=false param=filter.ssh_target
+link hohenheim:reconcile_finding at=0 lead=false target=/{panel}/reconcile-findings
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:admit_server at=1 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/admit_server
+row hohenheim:scan_incus_cert at=2 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/scan_incus_cert
+row hohenheim:scan_host_key at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/scan_host_key
+row hohenheim:probe_server at=4 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/probe_server
+row hohenheim:preflight_server at=5 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/preflight_server
+row hohenheim:rotate_incus_cert at=6 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:rotate_incus_identity%252Cscope%3Dserver,body:rotate_incus_identity_body%252Cscope%3Dserver,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:%3Db15-before-incus,input:false target=/{panel}/{entry}/{record}/action/rotate_incus_cert
+row hohenheim:rotate_host_key at=7 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:rotate_identity%252Cscope%3Dserver,body:rotate_identity_body%252Cscope%3Dserver,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:%3Db15-before-incus,input:false target=/{panel}/{entry}/{record}/action/rotate_host_key
+row hohenheim:acknowledge_posture at=8 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:acknowledge%252Cscope%3Dserver,body:acknowledge_body%252Cscope%3Dserver,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:%3Db15-before-incus,input:false target=/{panel}/{entry}/{record}/action/acknowledge_posture
+row hohenheim:reap_controller_objects at=9 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:reap_controller_objects%252Cscope%3Dserver,body:reap_controller_objects_confirm%252Cscope%3Dserver,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/reap_controller_objects
+row zenit:delete at=10 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dserver,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab overview at=0 landing=true view=false
+tab install-media at=1 landing=false view=false
+tab history at=2 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20runtime at=1 kind=zenitforms:form/select input=select required=false readonly=false options=docker,incus binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20ssh_target at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20incus_url at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20incus_trust_token at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20posture at=5 kind=zenitforms:form/select input=select required=false readonly=false options=trusted_only,dedicated,shared_container,vm_isolated binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20public_ipv4 at=6 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20public_ipv6 at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20trust_notice at=8 kind=zenitforms:form/computed input=text required=false readonly=true options= binding=
+control EDIT%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20runtime at=1 kind=zenitforms:form/select input=select required=false readonly=false options=docker,incus binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20ssh_target at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20incus_url at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20incus_trust_token at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20posture at=5 kind=zenitforms:form/select input=select required=false readonly=false options=trusted_only,dedicated,shared_container,vm_isolated binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20public_ipv4 at=6 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20public_ipv6 at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+
+case admin.servers.operator.in-use admin servers operator
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=public_ipv4 relation=false
+column public_ipv4 at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column runtime at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column ssh_target at=3 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
+column admission at=4 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column posture at=5 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column host_status at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+filter name at=0 kind=TEXT facet=false param=filter.name
+filter runtime at=1 kind=SELECT facet=true param=filter.runtime
+filter admission at=2 kind=SELECT facet=true param=filter.admission
+filter ssh_target at=3 kind=TEXT facet=false param=filter.ssh_target
+link hohenheim:reconcile_finding at=0 lead=false target=/{panel}/reconcile-findings
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:admit_server at=1 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/admit_server
+row hohenheim:scan_host_key at=2 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/scan_host_key
+row hohenheim:probe_server at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/probe_server
+row hohenheim:preflight_server at=4 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/preflight_server
+row hohenheim:rotate_host_key at=5 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:rotate_identity%252Cscope%3Dserver,body:rotate_identity_body%252Cscope%3Dserver,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:%3Db15-before-in-use,input:false target=/{panel}/{entry}/{record}/action/rotate_host_key
+row hohenheim:acknowledge_posture at=6 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:acknowledge%252Cscope%3Dserver,body:acknowledge_body%252Cscope%3Dserver,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:%3Db15-before-in-use,input:false target=/{panel}/{entry}/{record}/action/acknowledge_posture
+row zenit:delete at=7 verb=invoke band=destructive style=DESTRUCTIVE disabled=delete_in_use confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dserver,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab overview at=0 landing=true view=false
+tab history at=1 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20runtime at=1 kind=zenitforms:form/select input=select required=false readonly=false options=docker,incus binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20ssh_target at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20incus_url at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20incus_trust_token at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20posture at=5 kind=zenitforms:form/select input=select required=false readonly=false options=trusted_only,dedicated,shared_container,vm_isolated binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20public_ipv4 at=6 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20public_ipv6 at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20trust_notice at=8 kind=zenitforms:form/computed input=text required=false readonly=true options= binding=
+control EDIT%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20runtime at=1 kind=zenitforms:form/select input=select required=false readonly=false options=docker,incus binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20ssh_target at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20incus_url at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20incus_trust_token at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20posture at=5 kind=zenitforms:form/select input=select required=false readonly=false options=trusted_only,dedicated,shared_container,vm_isolated binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20public_ipv4 at=6 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20public_ipv6 at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+
+case admin.projects.operator.project admin projects operator
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=description relation=false
+column description at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column members at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column owned_sites at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column owned_instances at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column instance_quota at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+link hohenheim:environment at=0 lead=false target=/{panel}/environments
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dproject,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+inline name
+tab history at=0 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20description at=1 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control EDIT%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20description at=1 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+
+case admin.instance-volumes.operator.volume admin instance-volumes operator
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column instance_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column container_path at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column quota_bytes at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column used_bytes at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column exclusive at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:destroy_volume at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:destroy%252Cscope%3Dinstance_volume,body:destroy_confirm_named%252Cscope%3Dinstance_volume,confirm:destroy%252Cscope%3Dinstance_volume,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:%3Db15-before-data,input:false target=/{panel}/{entry}/{record}/action/destroy_volume
+tab history at=0 landing=false view=false
+control CREATE%20instance_id at=0 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20name at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20container_path at=2 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20quota_mb at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20exclusive at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20instance_id at=0 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20name at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20container_path at=2 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20quota_mb at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20exclusive at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+
+case admin.runtime-images.operator.custom admin runtime-images operator
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=description relation=false
+column description at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column docker_image at=2 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column incus_image at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column default_port at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column builtin at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column enabled at=6 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+filter name at=0 kind=TEXT facet=false param=filter.name
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab history at=0 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20description at=1 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control CREATE%20docker_image at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20incus_image at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20default_command at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20default_port at=5 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20default_build_command at=6 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20workdir at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20shell at=8 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20enabled at=9 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20description at=1 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control EDIT%20docker_image at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20incus_image at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20default_command at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20default_port at=5 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20default_build_command at=6 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20workdir at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20shell at=8 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20enabled at=9 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+
+case admin.runtime-images.operator.builtin admin runtime-images operator
+admission - verdict=admitted
+record - found=true
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=description relation=false
+column description at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column docker_image at=2 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column incus_image at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column default_port at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column builtin at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column enabled at=6 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+filter name at=0 kind=TEXT facet=false param=filter.name
+tab history at=0 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20description at=1 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control CREATE%20docker_image at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20incus_image at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20default_command at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20default_port at=5 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20default_build_command at=6 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20workdir at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20shell at=8 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20enabled at=9 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20name at=0 kind=zenitforms:control/string input=text required=true readonly=true options= binding=
+control EDIT%20description at=1 kind=zenitforms:control/text input=multiline required=false readonly=true options= binding=
+control EDIT%20docker_image at=2 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20incus_image at=3 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20default_command at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20default_port at=5 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
+control EDIT%20default_build_command at=6 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20workdir at=7 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20shell at=8 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20enabled at=9 kind=zenitforms:control/boolean input=checkbox required=false readonly=true options= binding=
+
+case admin.previews.operator.preview admin previews operator
+admission - verdict=admitted
+record - found=true
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=ref relation=false
+column ref at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column status at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column expires_at at=3 shown=true hidden=false sortable=true filterable=false copyable=false subtext= relation=false
+column created_at at=4 shown=true hidden=false sortable=true filterable=false copyable=false subtext= relation=false
+row hohenheim:expire_preview at=0 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:destroy_now%252Cscope%3Dpreview_deployment,body:destroy_confirm%252Cscope%3Dpreview_deployment,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/invoke/hohenheim.expire_preview?ids%3D{record}
+tab history at=0 landing=false view=false
+control CREATE%20application_id at=0 kind=zenitforms:form/relation-pick input=number required=true readonly=false options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:false,creatable:false
+control CREATE%20ref at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20application_id at=0 kind=zenitforms:form/relation-pick input=number required=true readonly=true options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:false,creatable:false
+control EDIT%20ref at=1 kind=zenitforms:control/string input=text required=true readonly=true options= binding=
+control EDIT%20pr_number at=2 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
+control EDIT%20head_sha at=3 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20hostname at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20status at=5 kind=zenitforms:form/select input=select required=false readonly=true options=deploying,running,failed,expired,destroyed binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20expires_at at=6 kind=zenitforms:control/datetime input=datetime required=false readonly=true options= binding=
+control EDIT%20instance_id at=7 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
+control EDIT%20last_error at=8 kind=zenitforms:control/text input=multiline required=false readonly=true options= binding=
+
+case manage.projects.operator manage projects operator
+admission - verdict=admitted
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=description relation=false
+column description at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column members at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column owned_sites at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column owned_instances at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column instance_quota at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+
+case manage.projects.member manage projects member
+admission - verdict=admitted
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=description relation=false
+column description at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column members at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column owned_sites at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column owned_instances at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column instance_quota at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+
+case manage.projects.outsider manage projects outsider
+admission - verdict=zenit:forbidden
+
+case manage.project-members.operator manage project-members operator
+admission - verdict=admitted
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column project at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column member at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column kind at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+filter project at=0 kind=TEXT facet=false param=filter.project
+filter member at=1 kind=TEXT facet=false param=filter.member
+
+case manage.project-members.member manage project-members member
+admission - verdict=admitted
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column project at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column member at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column kind at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+filter project at=0 kind=TEXT facet=false param=filter.project
+filter member at=1 kind=TEXT facet=false param=filter.member
+
+case manage.project-members.outsider manage project-members outsider
+admission - verdict=zenit:forbidden
+
+case manage.previews.operator manage previews operator
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=ref relation=false
+column ref at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column status at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column expires_at at=3 shown=true hidden=false sortable=true filterable=false copyable=false subtext= relation=false
+column created_at at=4 shown=true hidden=false sortable=true filterable=false copyable=false subtext= relation=false
+control CREATE%20application_id at=0 kind=zenitforms:form/relation-pick input=number required=true readonly=false options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:false,creatable:false
+control CREATE%20ref at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+
+case manage.previews.member manage previews member
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=ref relation=false
+column ref at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column status at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column expires_at at=3 shown=true hidden=false sortable=true filterable=false copyable=false subtext= relation=false
+column created_at at=4 shown=true hidden=false sortable=true filterable=false copyable=false subtext= relation=false
+control CREATE%20application_id at=0 kind=zenitforms:form/relation-pick input=number required=true readonly=false options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:false,creatable:false
+control CREATE%20ref at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+
+case manage.previews.outsider manage previews outsider
+admission - verdict=zenit:forbidden
+
+case manage.projects.member.project manage projects member
+admission - verdict=admitted
+record - found=true
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=description relation=false
+column description at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column members at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column owned_sites at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column owned_instances at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column instance_quota at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+control EDIT%20name at=0 kind=zenitforms:control/string input=text required=true readonly=true options= binding=
+control EDIT%20description at=1 kind=zenitforms:control/text input=multiline required=false readonly=true options= binding=
+
+case manage.previews.member.preview manage previews member
+admission - verdict=admitted
+record - found=true
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=ref relation=false
+column ref at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column status at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column expires_at at=3 shown=true hidden=false sortable=true filterable=false copyable=false subtext= relation=false
+column created_at at=4 shown=true hidden=false sortable=true filterable=false copyable=false subtext= relation=false
+row hohenheim:expire_preview at=0 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:destroy_now%252Cscope%3Dpreview_deployment,body:destroy_confirm%252Cscope%3Dpreview_deployment,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/invoke/hohenheim.expire_preview?ids%3D{record}
+control CREATE%20application_id at=0 kind=zenitforms:form/relation-pick input=number required=true readonly=false options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:false,creatable:false
+control CREATE%20ref at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20application_id at=0 kind=zenitforms:form/relation-pick input=number required=true readonly=true options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:false,creatable:false
+control EDIT%20ref at=1 kind=zenitforms:control/string input=text required=true readonly=true options= binding=
+control EDIT%20pr_number at=2 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
+control EDIT%20head_sha at=3 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20hostname at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20status at=5 kind=zenitforms:form/select input=select required=false readonly=true options=deploying,running,failed,expired,destroyed binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20expires_at at=6 kind=zenitforms:control/datetime input=datetime required=false readonly=true options= binding=
+control EDIT%20instance_id at=7 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
+control EDIT%20last_error at=8 kind=zenitforms:control/text input=multiline required=false readonly=true options= binding=

@@ -7,6 +7,8 @@ import be.elevenways.hohenheim.server.source.GitProviders;
 import be.elevenways.protoblast.common.dry.Dry;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.test.support.OutboundFixture;
+import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -32,6 +34,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class GiteaProviderClientTest {
 
     private static HttpServer server;
+    private static OutboundFixture outbound;
     private static String base;
 
     private static volatile String lastAuth;
@@ -43,7 +46,7 @@ class GiteaProviderClientTest {
 
     @BeforeAll
     static void startFakeGitea() throws Exception {
-        be.elevenways.hohenheim.test.HohenheimTestRuntime.ensureBooted();
+        HohenheimTestRuntime.ensureBooted();
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
             String rawPath = exchange.getRequestURI().getRawPath();
@@ -80,11 +83,13 @@ class GiteaProviderClientTest {
             }
         });
         server.start();
-        base = "http://127.0.0.1:" + server.getAddress().getPort();
+        outbound = OutboundFixture.route("gitea-provider.example.test", server.getAddress().getPort());
+        base = "http://" + outbound.host() + ":" + server.getAddress().getPort();
     }
 
     @AfterAll
     static void stopFakeGitea() {
+        if (outbound != null) outbound.close();
         if (server != null) {
             server.stop(0);
         }
@@ -216,7 +221,7 @@ class GiteaProviderClientTest {
         GitProviderClient client = GitProviders.clientFor(giteaProvider(9204, base));
         assertThat(catchThrowable(() -> client.listBranches("redir/repo")))
             .as("a 302 from the provider is a refusal, not a hop")
-            .isInstanceOf(java.io.IOException.class);
+            .isInstanceOf(java.io.IOException.class).hasMessageContaining("redirects are never followed");
         assertThat(REDIRECT_TARGET_HITS.get())
             .as("the Authorization header never walked to the redirect target")
             .isZero();

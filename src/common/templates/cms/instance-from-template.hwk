@@ -1,26 +1,19 @@
-{#- Create an instance from a template: name + host + the template's typed
-    variables rendered as an ordinary zenit form (FormState entries). -#}
+{#- Create an instance from a template: without a selected template, the chooser of the templates the viewer may
+    create from; with one, its fixed summary and the wizard document (details, then the template's variables) the
+    framework draws for the PAGE action, submitted once through the hosting panel's invoke route. -#}
 {% declare title: String %}
-{% declare templateId: Integer %}
-{% declare templateName: String %}
+{% declare document: PageFormState = null %}
+{% declare templateName: String = "" %}
 {% declare templateDescription: String = "" %}
 {% declare approved: Boolean = false %}
 {% declare hasInstall: Boolean = false %}
-{% declare instanceName: String = "" %}
-{% declare serverId: String = "" %}
-{% declare servers: List %}
-{% declare chooseHost: Boolean = false %}
-{% declare projects: List %}
-{% declare chooseProject: Boolean = false %}
-{% declare projectId: String = "" %}
-{% declare formTarget: RouteTarget %}
+{% declare choices: List = null %}
 {% declare cancelTarget: RouteTarget %}
-{% declare formError: String = "" %}
-{% declare variableForm: FormState %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
 <section class="cms-resource-form-page">
+    {% if document != null %}
     <header class="cms-resource-list-header">
         <h1>{{ t("create_from", scope: "instance_from_template") }} {{ templateName }}</h1>
     </header>
@@ -29,51 +22,23 @@
     {% if !approved %}
     <pl-alert variant="warning">{{ t("unapproved_note", scope: "instance_from_template") }}</pl-alert>
     {% /if %}
-    {% if formError != "" %}<pl-alert variant="destructive">{{ formError }}</pl-alert>{% /if %}
+    {% if hasInstall %}
+    <pl-alert variant="info">{{ t("install_note", scope: "instance_from_template") }}</pl-alert>
+    {% /if %}
 
-    <form use:Zenit.form={% formTarget %}>
-        <input type="hidden" name="template_id" value={% templateId %}>
-        <pl-card><pl-card-content><zf-form-scope><div class="zf-entries">
-            <pl-field>
-                <pl-label target="name">{{ t("instance_name", scope: "instance_from_template") }}</pl-label>
-                <pl-input inputId="name" type="text" name="name" value={% instanceName %}></pl-input>
-            </pl-field>
-            {#- The project pick: the new instance's OWNER becomes the chosen project
-                (quota bucket, placement and the manage grant follow); empty = personal.
-                Absent when the actor has no project to offer. -#}
-            {% if chooseProject %}
-            <pl-field>
-                <pl-label>{{ t("project", scope: "instance_from_template") }}</pl-label>
-                <pl-select name="project_id" value={% projectId %} submitEmpty={% true %} clearable={% true %}>
-                    {% each projects as index, project %}
-                    <pl-select-item value={% project.get("id") %}>{{ project.get("name") }}</pl-select-item>
-                    {% /each %}
-                </pl-select>
-            </pl-field>
-            {% /if %}
-            {#- The host pick is operator-only: placement ignores a tenant-submitted
-                server_id, so the control is absent rather than inert. -#}
-            {% if chooseHost %}
-            <pl-field>
-                <pl-label>{{ t("host", scope: "instance_from_template") }}</pl-label>
-                <pl-select name="server_id" value={% serverId %} submitEmpty={% true %}>
-                    {% each servers as index, server %}
-                    <pl-select-item value={% server.get("id") %}>{{ server.get("name") }}</pl-select-item>
-                    {% /each %}
-                </pl-select>
-            </pl-field>
-            {% /if %}
-            {% each variableForm.entries as entry %}
-            {% render entry.templateId var:entry=entry %}
+    {% render "zenitcms:form/page-action" var:page=document %}
+    {% else %}
+    <header class="cms-resource-list-header">
+        <h1>{{ title }}</h1>
+    </header>
+    <pl-card><pl-card-content>
+        <ul class="hh-template-choices" data-hh-template-choices>
+            {% each choices as index, choice %}
+            <li><a use:Zenit.route={% choice.get("target") %}>{{ choice.get("name") }}</a></li>
             {% /each %}
-        </div></zf-form-scope></pl-card-content></pl-card>
-        {% if hasInstall %}
-        <pl-alert variant="default">{{ t("install_note", scope: "instance_from_template") }}</pl-alert>
-        {% /if %}
-        <div class="cms-form-actions">
-            <pl-button variant="primary" type="submit">{{ t("create", scope: "instance_from_template") }}</pl-button>
-            <a use:Zenit.route={% cancelTarget %}>{{ t("cancel", scope: "instance_from_template") }}</a>
-        </div>
-    </form>
+        </ul>
+    </pl-card-content></pl-card>
+    {% /if %}
+    <pl-button variant="ghost" use:Zenit.route={% cancelTarget %}>{{ t("cancel", scope: "instance_from_template") }}</pl-button>
 </section>
 {% /block %}

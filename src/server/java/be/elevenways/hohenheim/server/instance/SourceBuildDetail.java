@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.hohenheim.source.GitSourceSchema;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -54,7 +54,7 @@ public final class SourceBuildDetail {
         }
         if (resolved == null || !resolved.startsWith(root)) {
             throw Violations.ofField(GitSourceSchema.BUILD_DIRECTORY, declared,
-                Microcopy.of("source_build_directory_invalid").withFilter("scope", "violations"));
+                HohenheimViolations.text("source_build_directory_invalid"));
         }
         return resolved.toString();
     }

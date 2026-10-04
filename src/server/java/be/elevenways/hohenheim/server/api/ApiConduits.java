@@ -1,15 +1,23 @@
 package be.elevenways.hohenheim.server.api;
 
+import be.elevenways.hohenheim.HohenheimRefusalReason;
+import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.conduit.ConduitAttributes;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violation;
@@ -114,6 +122,60 @@ public final class ApiConduits {
         return json(body);
     }
 
+    /**
+     * THE wire adapter of {@code /api/v1} for a refusal of the operation pipeline: every reason it can receive answers
+     * the status and body this API answered before the pipeline existed.
+     *
+     * AIDEV-NOTE: a frozen external wire keeps its shape (stage 2 contract 6.10, S3), so this maps reasons where every
+     * new API lets core's edge render them. Hohenheim's instance-tier reasons answer the 422 envelope a form-level
+     * {@code Violations} of the same key writes, byte-identical to the service gates' refusal; a core NOT_FOUND is the
+     * route's own 404, a core FORBIDDEN or PERMISSION_DENIED the key gate's 403, and a core OPERATION_UNAVAILABLE the
+     * form-level 422 of its shown reason (the words the row lane's unavailable reason wrote). Both switches are
+     * exhaustive with no default, so a new member is a compile error here; any other reason, and any other module's, is
+     * rethrown to core's edge, the answer an unexpected refusal escaping a handler always got.
+     *
+     * @return the answer, or null when the response has already been ended
+     * @throws DomainRefusal a refusal this wire has no answer of its own for
+     */
+    public static @Nullable ActionResult<Object> refusal(@NonNull Conduit conduit, @NonNull DomainRefusal refusal) {
+        return refusal(conduit, refusal, null);
+    }
+
+    /** The same frozen mapping with the instance the route already admitted, for shared-lock contention. */
+    public static @Nullable ActionResult<Object> refusal(@NonNull Conduit conduit, @NonNull DomainRefusal refusal,
+                                                        @Nullable Row instance) {
+        DomainRefusal.Reason reason = refusal.reason();
+        if (reason instanceof HohenheimRefusalReason hohenheim) {
+            return switch (hohenheim) {
+                case INSTANCE_NOT_PERMITTED, DATABASE_NOT_READY -> refusal(conduit, Violations.ofForm(refusal.shown()));
+            };
+        }
+        if (reason instanceof ZenitRefusalReason zenit) {
+            return switch (zenit) {
+                case NOT_FOUND -> {
+                    conduit.notFound();
+                    yield null;
+                }
+                case FORBIDDEN, PERMISSION_DENIED -> {
+                    conduit.forbidden();
+                    yield null;
+                }
+                // An offered-but-dead verb (an operation's availability) is the form-level 422 the
+                // row lane's unavailable reason wrote before the pipeline, same words.
+                case OPERATION_UNAVAILABLE -> refusal(conduit, Violations.ofForm(refusal.shown()));
+                case IN_PROGRESS -> {
+                    if (instance == null) throw refusal;
+                    yield refusal(conduit, Violations.ofForm(HohenheimViolations.text("instance_operation_in_progress")
+                        .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)))));
+                }
+                case BAD_REQUEST, METHOD_NOT_ALLOWED, LOGIN_REQUIRED, INTERACTIVE_LOGIN_REQUIRED, RATE_LIMITED,
+                     CSRF_ORIGIN, CSRF_TOKEN_MISSING, CSRF_TOKEN_INVALID, STALE, RETRY_MISMATCH, INVALID,
+                     ARCHIVED, CYCLE, IN_USE, STORE_BUSY, OUTCOME_UNKNOWN, SECRET_ALREADY_DISCLOSED -> throw refusal;
+            };
+        }
+        throw refusal;
+    }
+
     /** One violation on the wire: its path (absent when form-level), machine key and sentence. */
     private static @NonNull Map<String, Object> violationMap(@NonNull Conduit conduit,
                                                              @NonNull Violation violation) {
@@ -145,6 +207,25 @@ public final class ApiConduits {
         return registeredPanel(ManagePanel.SLUG);
     }
 
+    /**
+     * The row entry an API write goes through, ending the response with the uniform 404 when the panel declares none
+     * under that slug: on a node without the entry's role the panel's own route for it is gone
+     * ({@code HohenheimPanel.addIf}), so the API answers what that route answers instead of failing on the lookup.
+     *
+     * AIDEV-NOTE: the role fact is read where it is declared, the panel's registration, never re-asked here; a second
+     * slug-to-role list would drift from addIf the day an entry changes role.
+     *
+     * @return the entry, or null when the response has already been ended
+     */
+    public static @Nullable PanelResource<Row> rowEntry(@NonNull Conduit conduit, @NonNull Panel panel,
+                                                        @NonNull String slug) {
+        PanelResource<Row> entry = CmsSupport.declaredRowEntry(panel, slug);
+        if (entry == null) {
+            conduit.notFound();
+        }
+        return entry;
+    }
+
     private static @NonNull Panel registeredPanel(@NonNull String slug) {
         Panel panel = PanelRegistry.getBySlug(slug);
         if (panel == null) {
@@ -158,7 +239,7 @@ public final class ApiConduits {
     }
 
     public static @NonNull Microcopy violationText(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
+        return HohenheimViolations.text(key);
     }
 
     /** One submitted form value as a string, first-of-list folded, empty when absent. */

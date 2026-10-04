@@ -1,11 +1,12 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.DnsRecordModel;
-import be.elevenways.hohenheim.server.cms.DnsRecordResource;
+import be.elevenways.hohenheim.server.cms.DnsRecordParts;
+import be.elevenways.hohenheim.server.cms.DnsOperations;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
-import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -55,46 +56,37 @@ class DnsRecordTypeSurfaceTest extends HohenheimTestBase {
             new UserPrincipal(((Integer) admin.get(UserModel.ID)).longValue(),
                 "Test Admin")));
 
-        RowAction.Invoke<Row> mint = null;
-        RowAction.Invoke<Row> revoke = null;
-        for (RowAction<Row> action : new DnsRecordResource().rowActions()) {
-            if ("dyndns_token".equals(action.id().getPath())
-                    && action instanceof RowAction.Invoke<Row> invoke) {
-                mint = invoke;
-            }
-            if ("dyndns_revoke".equals(action.id().getPath())
-                    && action instanceof RowAction.Invoke<Row> invoke) {
-                revoke = invoke;
-            }
-        }
+        var mint = DnsOperations.MINT_DYNAMIC_TOKEN;
+        var revoke = DnsOperations.REVOKE_DYNAMIC_TOKEN;
+        DnsRecordParts.admin();
         assertThat(mint).as("2. the dyndns mint action exists on the resource").isNotNull();
-        assertThat(mint.isVisibleFor(a, operator))
+        assertThat(!(OperationPipeline.offer(mint, operator, a) instanceof OperationPipeline.Offer.Hidden))
             .as("2. an A record offers the dyndns token action").isTrue();
-        assertThat(mint.isVisibleFor(txt, operator))
+        assertThat(!(OperationPipeline.offer(mint, operator, txt) instanceof OperationPipeline.Offer.Hidden))
             .as("2. a TXT record must NOT offer the dyndns token action").isFalse();
         assertThat(revoke).as("2. the dyndns revoke action exists on the resource").isNotNull();
-        assertThat(revoke.isVisibleFor(a, operator))
+        assertThat(!(OperationPipeline.offer(revoke, operator, a) instanceof OperationPipeline.Offer.Hidden))
             .as("2. an UNARMED A record does not offer revoke (nothing to revoke)").isFalse();
-        assertThat(revoke.isVisibleFor(txt, operator))
+        assertThat(!(OperationPipeline.offer(revoke, operator, txt) instanceof OperationPipeline.Offer.Hidden))
             .as("2. a TXT record never offers revoke").isFalse();
 
         // 3. Invoke-time enforcement is the same predicate: a direct POST against the
         //    TXT record answers 404, never a minted credential or an error toast.
         HttpResponse<String> refused = adminPostForm(
-            "/admin/dns-records/" + txt.get(DnsRecordModel.ID) + "/action/dyndns_token", "");
+            "/admin/dns-records/invoke/hohenheim.dyndns_token?ids=" + txt.get(DnsRecordModel.ID), "");
         assertThat(refused.statusCode())
             .as("3. minting a dyndns token on a TXT record is not-found, not an error toast")
             .isEqualTo(404);
 
         // 4. The A record's invoke still works end to end and stays type-scoped.
         HttpResponse<String> minted = adminPostForm(
-            "/admin/dns-records/" + a.get(DnsRecordModel.ID) + "/action/dyndns_token", "");
+            "/admin/dns-records/invoke/hohenheim.dyndns_token?ids=" + a.get(DnsRecordModel.ID), "");
         assertThat(minted.statusCode())
             .as("4. minting on an A record still succeeds (redirect back to the list)")
             .isIn(302, 303);
 
         // 5. An ARMED record now offers revoke too -- the action follows the credential.
-        assertThat(revoke.isVisibleFor(a, operator))
+        assertThat(!(OperationPipeline.offer(revoke, operator, a) instanceof OperationPipeline.Offer.Hidden))
             .as("5. the armed A record offers the revoke action").isTrue();
     }
 }

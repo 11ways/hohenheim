@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -13,6 +15,7 @@ import be.elevenways.hohenheim.server.tls.CommandDnsTxtPublisher;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.PanelPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -35,14 +38,16 @@ import java.util.Map;
  */
 public final class CertificateRequestPage extends PanelPage {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "certificates_request"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("certificates_request"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("request_le").withFilter("scope", "certificate"); }
     @Override public @NonNull String slug() { return HohenheimSlugs.CERTIFICATES_REQUEST; }
     @Override public @NonNull Icon icon() { return Icon.of("lock"); }
     @Override public boolean showInNav() { return false; }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext accessContext) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request) {
+        Conduit conduit = request.conduit();
+        AccessContext accessContext = request.access();
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", Microcopy.of("request_certificate")
             .withFilter("scope", "certificate_request")
@@ -84,7 +89,7 @@ public final class CertificateRequestPage extends PanelPage {
         List<String> reissued = prefillFromCertificate(conduit, accessContext, vars);
         vars.put("domainForm", CertificateRequestForm.state(accessContext,
             reissued.isEmpty() ? domains : reissued));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/certificate-request"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.CERTIFICATE_REQUEST, vars);
     }
 
     /**

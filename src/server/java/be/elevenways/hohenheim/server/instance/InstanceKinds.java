@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -21,19 +22,19 @@ import java.util.function.Predicate;
 
 /**
  * Registration hook for the compile-time-discovered instance kinds plus the
- * server-side handler map (the UpstreamKindHandlers shape). Concrete InstanceKindHandler
+ * server-side handler lookup (the UpstreamKindHandlers shape). Concrete InstanceKindHandler
  * implementations arrive via the generated BlastAutoLoadInit; nothing is
  * registered manually.
+ *
+ * AIDEV-NOTE: a handler is read out of THE registry, never a private handler map beside it;
+ * an entry that is not a server handler fails closed as "unknown kind".
  */
 public final class InstanceKinds {
-
-    private static final Map<Identifier, InstanceKindHandler> HANDLERS = new HashMap<>();
 
     /**
      * Entries arrive via the generated BlastAutoLoadInit; force it so lookups
      * work regardless of which class the JVM touched first. MUST be the LAST
-     * static field: the loader re-enters register() while this class is mid
-     * init and needs HANDLERS assigned.
+     * static field.
      */
     @SuppressWarnings("unused")
     private static final Object AUTO_LOAD_TRIGGER =
@@ -43,9 +44,12 @@ public final class InstanceKinds {
 
     /** Compile-time discovery hook (BlastAutoLoadInit). */
     public static void register(InstanceKindHandler handler) {
-        Identifier id = handler.typeId();
-        InstanceKindRegistry.REGISTRY.add(id, handler);
-        HANDLERS.put(id, handler);
+        InstanceKindRegistry.REGISTRY.add(handler.typeId(), handler);
+    }
+
+    /** Deliberately points a kind's id at another handler (a test standing a fake in for a production kind). */
+    public static void replace(InstanceKindHandler handler) {
+        InstanceKindRegistry.REGISTRY.replace(handler.typeId(), handler);
     }
 
     public static InstanceKindHandler getHandler(String typeIdentifier) {
@@ -53,7 +57,12 @@ public final class InstanceKinds {
             return null;
         }
         Identifier id = Identifier.tryParse(typeIdentifier);
-        return id != null ? HANDLERS.get(id) : null;
+        return handlerFor(id);
+    }
+
+    private static @Nullable InstanceKindHandler handlerFor(@Nullable Identifier id) {
+        return id != null && InstanceKindRegistry.REGISTRY.get(id) instanceof InstanceKindHandler handler
+            ? handler : null;
     }
 
     /**
@@ -105,8 +114,7 @@ public final class InstanceKinds {
         // this sentence is translated, so the raw name would render a half-Dutch refusal.
         // A Microcopy ARGUMENT resolves in the reader's locale (protoblast MessageEvaluator).
         throw Violations.ofField(InstanceModel.KIND.getName(), kind,
-            Microcopy.of("instance_kind_owner_managed")
-                .withFilter("scope", "violations")
+            HohenheimViolations.text("instance_kind_owner_managed")
                 .withArg("kind", handler.getLabel()));
     }
 
@@ -126,8 +134,7 @@ public final class InstanceKinds {
         if (supportedRuntimes.contains(hostRuntime)) {
             return null;
         }
-        return Microcopy.of("host_runtime_mismatch")
-            .withFilter("scope", "violations")
+        return HohenheimViolations.text("host_runtime_mismatch")
             .withArg("name", hostName)
             .withArg("runtime", hostRuntime)
             .withArg("required", String.join(", ", new TreeSet<>(supportedRuntimes)));
@@ -146,9 +153,9 @@ public final class InstanceKinds {
      * The kinds a human may actually create, as select options.
      *
      * AIDEV-NOTE: derived by SKIPPING what requireAuthorable refuses, never by a hand-kept
-     * list -- a seventh kind answers for itself. Iteration is over the REGISTRY rather than
-     * the HANDLERS map because registry order is the display order EnumBadgeState derives
-     * its badge colours from, so the picker and the badges must agree. This narrows the
+     * list -- a seventh kind answers for itself. Iteration follows REGISTRY order because
+     * registry order is the display order EnumBadgeState derives its badge colours from,
+     * so the picker and the badges must agree. This narrows the
      * OFFER only: every label-rendering path reads EnumField.getValues() and still
      * enumerates the whole registry, so an existing generated-only row keeps its label.
      */
@@ -158,15 +165,14 @@ public final class InstanceKinds {
 
         for (InstanceKindInfo entry : InstanceKindRegistry.REGISTRY) {
 
-            Identifier id = InstanceKindRegistry.REGISTRY.getId(entry);
+            Identifier id = InstanceKindRegistry.REGISTRY.idOf(entry);
 
             if (id == null) {
                 continue;
             }
 
-            // generatedOnly() is a SERVER declaration, so the skip goes through the handler
-            // map rather than the common registry entry.
-            InstanceKindHandler handler = HANDLERS.get(id);
+            // generatedOnly() is a SERVER declaration, so the skip asks the entry as a handler.
+            InstanceKindHandler handler = handlerFor(id);
 
             if (handler != null && handler.generatedOnly()) {
                 continue;
@@ -189,9 +195,11 @@ public final class InstanceKinds {
      */
     public static @NonNull Map<String, List<String>> runtimesByKind() {
         Map<String, List<String>> runtimes = new HashMap<>();
-        for (Map.Entry<Identifier, InstanceKindHandler> entry : HANDLERS.entrySet()) {
-            runtimes.put(entry.getKey().toString(),
-                List.copyOf(new TreeSet<>(entry.getValue().supportedRuntimes())));
+        for (Identifier id : InstanceKindRegistry.REGISTRY.ids()) {
+            InstanceKindHandler handler = handlerFor(id);
+            if (handler != null) {
+                runtimes.put(id.toString(), List.copyOf(new TreeSet<>(handler.supportedRuntimes())));
+            }
         }
         return runtimes;
     }
@@ -200,8 +208,8 @@ public final class InstanceKinds {
     public static @NonNull List<String> kindsWhere(@NonNull Predicate<InstanceKindHandler> predicate) {
         List<String> kinds = new ArrayList<>();
         for (InstanceKindInfo entry : InstanceKindRegistry.REGISTRY) {
-            Identifier id = InstanceKindRegistry.REGISTRY.getId(entry);
-            InstanceKindHandler handler = id != null ? HANDLERS.get(id) : null;
+            Identifier id = InstanceKindRegistry.REGISTRY.idOf(entry);
+            InstanceKindHandler handler = handlerFor(id);
             if (handler != null && predicate.test(handler)) {
                 kinds.add(id.toString());
             }

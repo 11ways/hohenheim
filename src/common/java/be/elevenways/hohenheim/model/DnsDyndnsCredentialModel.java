@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -21,7 +22,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
  */
 public class DnsDyndnsCredentialModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "dns_dyndns_credential");
+    public static final Identifier MODEL_ID = HohenheimIds.id("dns_dyndns_credential");
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());

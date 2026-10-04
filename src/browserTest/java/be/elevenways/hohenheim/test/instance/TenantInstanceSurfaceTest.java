@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -79,7 +80,9 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
      * A's manage grant re-asserts it first.
      */
     @BeforeAll
-    static void seed() {
+    static void seed() throws Exception {
+        // Both list twins must contain the fixture row regardless of earlier classes' inventory.
+        freshSeededDatabase();
         localBefore = HostFixtures.captureLocal();
         HostFixtures.blockLocal();
 
@@ -433,7 +436,8 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
     @Test
     void creationNeedsAuthorityAndPlacementAndChargesTheTenantsOwnQuota() throws Exception {
         ensureManageGrant();
-        String createUrl = "/instances/from-template";
+        String createUrl = ApiSupport.fromTemplateTarget(HohenheimSlugs.MANAGE, approvedTemplateId);
+        // Each permission/placement transition opens a new logical create, never reuses a refused command envelope.
         Row createGrant = null;
         try {
             // 1. The catalog offers only APPROVED templates, and only those.
@@ -446,8 +450,8 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
 
             // 2. Without hohenheim.instances.create the submit is refused BY NAME, and
             //    nothing persists.
-            HttpResponse<String> unauthorized = tenantPost(createUrl,
-                "template_id=" + approvedTemplateId + "&name=" + PREFIX + "created");
+            HttpResponse<String> unauthorized = tenantPost(createUrl, "name=" + PREFIX + "created"
+                + "&" + ApiSupport.fromTemplateTransport());
             assertThat(unauthorized.body())
                 .as("step 2: a tenant without create authority is refused, named")
                 .contains("You are not allowed to create instances");
@@ -459,8 +463,8 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             //    falls back to the local daemon, which is the whole point of the decision.
             createGrant = GrantService.createDirectGrant(GrantSubjectType.USER, tenantAId,
                 HohenheimAccess.INSTANCES_CREATE.value(), true);
-            HttpResponse<String> nowhere = tenantPost(createUrl,
-                "template_id=" + approvedTemplateId + "&name=" + PREFIX + "created");
+            HttpResponse<String> nowhere = tenantPost(createUrl, "name=" + PREFIX + "created"
+                + "&" + ApiSupport.fromTemplateTransport());
             assertThat(nowhere.body())
                 .as("step 3: no admitted host means a NAMED placement refusal")
                 .contains("No admitted host currently accepts this workload");
@@ -468,12 +472,17 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
                     .where(InstanceModel.NAME.eq(PREFIX + "created")).count())
                 .as("step 3: still nothing persisted").isZero();
 
-            // 4. An operator admits a host with a posture that accepts hostile containers.
-            //    The tenant NAMES A DIFFERENT HOST in the submit; placement ignores it.
+            // 4. An operator admits a host with a posture that accepts hostile containers. A tenant is never
+            //    asked the host: one it NAMES ANYWAY is refused and nothing lands; without it, placement decides.
             admittedHostId = admittedHost();
-            HttpResponse<String> created = tenantPost(createUrl,
-                "template_id=" + approvedTemplateId + "&name=" + PREFIX + "created"
-                    + "&server_id=" + ServerModel.localServerId());
+            HttpResponse<String> named = tenantPost(createUrl, "name=" + PREFIX + "created"
+                + "&serverId=" + ServerModel.localServerId() + "&" + ApiSupport.fromTemplateTransport());
+            assertThat(named.statusCode()).as("step 4: a tenant-named host is refused").isEqualTo(422);
+            assertThat(Models.get(InstanceModel.class).find()
+                    .where(InstanceModel.NAME.eq(PREFIX + "created")).count())
+                .as("step 4: the refused create persisted NOTHING").isZero();
+            HttpResponse<String> created = tenantPost(createUrl, "name=" + PREFIX + "created"
+                + "&" + ApiSupport.fromTemplateTransport());
             assertThat(created.statusCode()).as("step 4: the create lands").isIn(302, 303);
             Row instance = Models.get(InstanceModel.class).find()
                 .where(InstanceModel.NAME.eq(PREFIX + "created")).first();
@@ -509,8 +518,8 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER,
                 (int) InstanceQuota.usedBy(HohenheimAccess.packSubjects(
                     java.util.Set.of("user:" + tenantAId))));
-            HttpResponse<String> capped = tenantPost(createUrl,
-                "template_id=" + approvedTemplateId + "&name=" + PREFIX + "over-cap");
+            HttpResponse<String> capped = tenantPost(createUrl, "name=" + PREFIX + "over-cap"
+                + "&" + ApiSupport.fromTemplateTransport());
             assertThat(capped.body())
                 .as("step 7: the per-owner cap refuses the next create, named")
                 .contains("Instance quota reached");
@@ -519,27 +528,22 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
                 .as("step 7: and nothing landed").isZero();
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER, 0);
 
-            // 8. An UNAPPROVED template stays unusable even by direct id: the catalog's
-            //    omission is UX, the funnel is the gate. The refusal is answered exactly
-            //    like a missing template (back to the catalog), BEFORE any form renders:
-            //    a re-rendered form would hand a guessed id the template's name,
-            //    description, variable keys and defaults.
-            HttpResponse<String> unapproved = tenantPost(createUrl,
-                "template_id=" + unapprovedTemplateId + "&name=" + PREFIX + "sneaky");
-            assertThat(unapproved.statusCode())
-                .as("step 8: an unapproved template redirects back to the catalog")
-                .isIn(302, 303);
-            assertThat(unapproved.headers().firstValue("Location").orElse(""))
-                .as("step 8: the redirect lands on the tenant's own template catalog")
-                .contains("/manage/instance-templates");
+            // 8. An UNAPPROVED template stays unusable even by direct id: the catalog's omission is UX, the
+            //    template's scope is the gate. It is concealed exactly like a missing template, BEFORE any input is
+            //    read: nothing about it is rendered, so a guessed id learns nothing.
+            HttpResponse<String> unapproved = tenantPost(
+                ApiSupport.fromTemplateTarget(HohenheimSlugs.MANAGE, unapprovedTemplateId),
+                "name=" + PREFIX + "sneaky" + "&" + ApiSupport.fromTemplateTransport());
+            assertThat(unapproved.statusCode()).as("step 8: an unapproved template answers as missing")
+                .isEqualTo(404);
             assertThat(unapproved.body())
                 .as("step 8: and nothing about the unapproved template is rendered")
                 .doesNotContain(PREFIX + "unapproved");
-            HttpResponse<String> missing = tenantPost(createUrl,
-                "template_id=999999999&name=" + PREFIX + "sneaky");
-            assertThat(missing.headers().firstValue("Location").orElse(""))
+            HttpResponse<String> missing = tenantPost(ApiSupport.fromTemplateTarget(HohenheimSlugs.MANAGE, 999999999),
+                "name=" + PREFIX + "sneaky" + "&" + ApiSupport.fromTemplateTransport());
+            assertThat(missing.statusCode())
                 .as("step 8: an unapproved id answers exactly like an id that does not exist")
-                .isEqualTo(unapproved.headers().firstValue("Location").orElse(""));
+                .isEqualTo(unapproved.statusCode());
             assertThat(Models.get(InstanceModel.class).find()
                     .where(InstanceModel.NAME.eq(PREFIX + "sneaky")).count())
                 .as("step 8: nothing landed").isZero();
@@ -676,7 +680,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
      * it stashed none. The refusal rides the session flash, never the redirect URL.
      */
     private static String refusalKeyOf(HttpResponse<String> response) {
-        var flash = popFlash(sessionA);
+        var flash = popFlash(response, sessionA);
         return flash == null ? "" : flash.message().key();
     }
     /**
@@ -813,8 +817,8 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
      * The gate clause is "no server id, no socket/daemon addresses, no host filesystem
      * paths, no raw runtime errors -- field-level, not just the wire path", and everything
      * else in this class checks capability refusals and form-field absence, which the
-     * shared subpages are not covered by at all: {@code ManageInstanceResource} registers
-     * {@code InstanceOverviewPage} and {@code InstanceProvisioningPage} verbatim, so
+     * shared subpages are not covered by at all: {@code InstanceParts.manage()} declares
+     * {@code InstanceOverview} and {@code InstanceProvisioningPage} verbatim, so
      * whatever those pages put in their template vars reaches a tenant unless the pages
      * themselves drop it. Every assertion below therefore names a VALUE in the body, and
      * every one of them is anchored by the same value being present on /admin -- a

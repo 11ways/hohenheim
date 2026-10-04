@@ -1,10 +1,11 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.ExecSupport;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -72,7 +73,7 @@ public final class InstanceExec {
         List<String> argv = splitCommand(command);
         if (argv.isEmpty()) {
             throw Violations.ofField("command", command,
-                Microcopy.of("exec_command_required").withFilter("scope", "violations"));
+                HohenheimViolations.text("exec_command_required"));
         }
 
         Resolved resolved = this.instances.resolve(instanceId);
@@ -90,7 +91,7 @@ public final class InstanceExec {
 
         // Recorded on the record, never only in a log line: an arbitrary command inside a
         // tenant workload is exactly the act an audit trail exists for.
-        ActivityLog.record(Models.get(InstanceModel.class), instanceId, "exec", command);
+        ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.EXEC, command);
 
         String output = outcome.outputTail();
         if (output.length() > OUTPUT_TAIL_LIMIT) {
@@ -139,7 +140,7 @@ public final class InstanceExec {
 
     private static @NonNull Violations refusal(@NonNull String key, @NonNull Row instance,
                                                IOException cause) {
-        return Violations.ofForm(Microcopy.of(key).withFilter("scope", "violations")
+        return Violations.ofForm(HohenheimViolations.text(key)
             .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)))
             .withArg("reason", cause == null ? "" : String.valueOf(cause.getMessage())));
     }

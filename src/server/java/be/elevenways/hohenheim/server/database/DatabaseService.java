@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -105,12 +106,9 @@ public class DatabaseService extends DatasourceScoped {
 
     /** The engine-operations client for a host's server. */
     private ManagedDatabase managedFor(int serverId) {
-        return new ManagedDatabase(dockerFor(serverId));
+        return new ManagedDatabase(new ServerService().clientFor(serverId));
     }
 
-    private DockerClient dockerFor(int serverId) {
-        return new ServerService().clientFor(query(() -> ServerModel.nameOf(serverId)));
-    }
 
     /**
      * THE container handle serving a record, or a named failure: every exec-driven
@@ -258,7 +256,7 @@ public class DatabaseService extends DatasourceScoped {
     /** Run one logical-database command on an engine host and refuse a non-zero exit by name. */
     private void runLogical(EngineHost host, String handle, List<String> command,
                             List<String> env, String what) throws IOException {
-        DockerClient.ExecResult result = dockerFor(host.serverId()).exec(handle, command, env);
+        DockerClient.ExecResult result = new ServerService().clientFor(host.serverId()).exec(handle, command, env);
         if (result.exitCode() != 0) {
             throw new IOException("Could not " + what + " on engine '" + host.name() + "' (exit "
                 + result.exitCode() + "): " + (result.stderr() + " " + result.stdout()).trim());
@@ -420,7 +418,7 @@ public class DatabaseService extends DatasourceScoped {
         DatabaseModel model = model();
         if (model.findByName(name) != null) {
             throw Violations.ofField(DatabaseModel.NAME.getName(), name,
-                Microcopy.of("database_name_taken").withFilter("scope", "violations")
+                HohenheimViolations.text("database_name_taken")
                     .withArg("name", name));
         }
         String resolvedPlacement = placement == null || placement.isBlank()
@@ -530,7 +528,7 @@ public class DatabaseService extends DatasourceScoped {
                 // TERMINAL and visible: the status is what the list badge, the detail
                 // page and DatabaseAttention.failedDatabases read; the reason rides the
                 // record so the operator learns WHY without the journal.
-                String reason = e.getMessage() != null ? e.getMessage() : e.toString();
+                String reason = HohenheimViolations.reasonOf(e);
                 setStatus(recordId, DatabaseModel.STATUS_FAILED, reason);
                 Blast.log("DB: provisioning failed for", name, "-", reason);
             }
@@ -1132,7 +1130,7 @@ public class DatabaseService extends DatasourceScoped {
             // a 5.3 GB archive) skipped this block entirely and left the record
             // "provisioning" and its workload stopped, with no line in any log. The
             // compensation runs for every failure; the Error is rethrown as itself.
-            String reason = failed.getMessage() != null ? failed.getMessage() : failed.toString();
+            String reason = HohenheimViolations.reasonOf(failed);
             Blast.log("DB-MOVE: moving", name, "failed -", reason);
             // The record goes back to ACTIVE before its consumers are redeployed: a deploy
             // resolves the injected credentials off the record and REFUSES a database that
@@ -1287,7 +1285,7 @@ public class DatabaseService extends DatasourceScoped {
 
     /** One database's content fingerprint on one host, trimmed for comparison. */
     private String fingerprint(EngineHost host, String handle, String database) throws IOException {
-        DockerClient.ExecResult result = dockerFor(host.serverId()).exec(handle,
+        DockerClient.ExecResult result = new ServerService().clientFor(host.serverId()).exec(handle,
             host.engine().fingerprintCommand(host.rootUser(), database),
             host.engine().logicalEnv(host.rootPassword(), null));
         if (result.exitCode() != 0) {
@@ -1314,7 +1312,7 @@ public class DatabaseService extends DatasourceScoped {
         if (command == null) {
             return;
         }
-        DockerClient.ExecResult result = dockerFor(host.serverId()).exec(handle, command,
+        DockerClient.ExecResult result = new ServerService().clientFor(host.serverId()).exec(handle, command,
             host.engine().logicalEnv(host.rootPassword(), null));
         String answer = result.stdout().trim();
         if (result.exitCode() != 0 || !"0".equals(answer)) {

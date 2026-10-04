@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.host.VolumeBackend;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -91,8 +91,7 @@ public interface VolumeOperations {
         }
 
         private Violations refuse() {
-            return Violations.ofForm(Microcopy.of("volume_backend_unimplemented")
-                .withFilter("scope", "violations")
+            return Violations.ofForm(HohenheimViolations.text("volume_backend_unimplemented")
                 .withArg("backend", this.backend.label()));
         }
 

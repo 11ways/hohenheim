@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.dns;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -269,7 +270,7 @@ public final class DnsZoneFiles {
 
     /** An import refusal, keyed in the violations scope so the API and the panel name it alike. */
     private static @NonNull Microcopy importText(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
+        return HohenheimViolations.text(key);
     }
 
     private static @NonNull String rowToLine(@NonNull Name originName, int zoneTtl, @NonNull Row row) {

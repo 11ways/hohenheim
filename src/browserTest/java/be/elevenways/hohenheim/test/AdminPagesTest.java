@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.InstanceQuotaResource;
+import be.elevenways.hohenheim.server.cms.InstanceQuotaParts;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -19,13 +19,15 @@ import be.elevenways.hohenheim.server.cms.AdminActivityResource;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.server.ServerZenitRuntime;
-import be.elevenways.zenit.server.http.RateLimitMiddleware;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
+import be.elevenways.zenit.test.support.RateLimitExemption;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
 import com.microsoft.playwright.Locator;
 import org.junit.jupiter.api.*;
 
@@ -44,6 +46,12 @@ import static org.assertj.core.api.Assertions.*;
  * zenit-cms admin.
  */
 class AdminPagesTest extends HohenheimTestBase {
+
+    @BeforeAll
+    static void seed() throws Exception {
+        // Collector cardinality and the dashboard must read this class's fleet, not earlier fixtures.
+        freshSeededDatabase();
+    }
 
     // -----------------------------------------------------------------------
     // Settings
@@ -100,33 +108,68 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(page.locator(
             ".cms-setting:has([data-path='app.auth_proteus.authenticator']) .cms-setting-note-restart").count()).isEqualTo(1);
 
+        // AIDEV-NOTE: a non-secret string-list setting edits as CHIPS (pl-select's tags mode)
+        // since zenit 8487f7f5 (SettingsForms.chips), never the zf-array rows editor: there is
+        // no add button and no move controls, so the rows editor's directives are proven by
+        // zenit-cms's ArrayAndKeyValueEditorBrowserTest, not here.
+        String neverBan = "pl-field[data-path='app.security.never_ban']";
+        assertThat(page.locator(neverBan + " pl-select").count())
+            .as("the never-ban list is a chip input").isEqualTo(1);
+        assertThat(page.locator(neverBan + " zf-array").count())
+            .as("and never the rows editor").isZero();
+        // 1. Judge the label/help the operator actually reads, in BOTH languages: English alone can pass on a
+        //    humanized/code fallback. SettingsGroupCoverageTest pins the source tokens before render translation.
+        //    The caption's private microcopy-wrapper shape is not the association or localization contract.
+        ShippedCatalogs catalogs = new ShippedCatalogs();
+        try {
+            for (String language : new String[] {"en", "nl"}) {
+                page.setExtraHTTPHeaders(Map.of("Accept-Language", language));
+                navigateToApp("/admin/settings?section=setting-app-security");
+                waitForHydration();
+                var field = page.locator(neverBan);
+                String fieldMarkup = (String) field.evaluate("el => el.outerHTML");
+                assertThat(field.locator("pl-label").count())
+                    .as("step 1: the never-ban field has its associated label in %s: %s", language, fieldMarkup)
+                    .isEqualTo(1);
+                assertThat(field.locator("pl-label").innerText().trim())
+                    .as("step 1: the never-ban label resolves from the %s catalog", language)
+                    .isEqualTo(Microcopy.of("settings.hohenheim.security.never_ban.label")
+                        .resolve(LocaleChain.ofTags(language), catalogs));
+                assertThat(field.locator("pl-field-description").innerText().trim())
+                    .as("step 1: the never-ban help resolves from the %s catalog", language)
+                    .isEqualTo(Microcopy.of("settings.hohenheim.security.never_ban.help")
+                        .resolve(LocaleChain.ofTags(language), catalogs));
+                assertThat(page.locator("#setting-app-security .cms-settings-section-description").innerText().trim())
+                    .as("step 1: the declared security-group description renders in %s", language)
+                    .isEqualTo(HohenheimSettings.Security.GROUP.displayDescription()
+                        .resolve(LocaleChain.ofTags(language), catalogs));
+                assertThat(field.locator("[data-unresolved]").count())
+                    .as("step 1: no unresolved never-ban copy in %s", language).isZero();
+            }
+        } finally {
+            page.setExtraHTTPHeaders(Map.of());
+        }
+        navigateToApp("/admin/settings?section=setting-app-proxy,setting-app-security,"
+            + "setting-app-ssl,setting-app-storage,setting-app-auth_proteus,"
+            + "setting-framework-network,setting-framework-compression");
+        waitForHydration();
         var fallback = page.locator("[data-path='app.proxy.fallback_address'] input");
         fallback.fill("http://127.0.0.1:9999");
         var threshold = page.locator("[data-path='app.security.domain_miss_threshold'] input");
         threshold.fill("7");
-        String neverBan = "zf-array pl-field[data-path='app.security.never_ban']";
-        page.click(neverBan + " [data-array-add]");
+        page.click(neverBan + " .pl-select-field");
+        String chipInput = "he-bottom .pl-select-popup[data-open] .pl-select-search input";
+        for (String entry : new String[] {"203.0.113.7", "198.51.100.0/24", "remove.example"}) {
+            page.locator(chipInput).pressSequentially(entry);
+            page.locator(chipInput).press("Enter");
+            waitForReactiveIdle();
+        }
+        String chips = neverBan + " pl-select-chip .chip";
+        assertThat(page.locator(chips).count()).as("each Enter took one chip").isEqualTo(3);
+        page.keyboard().press("Escape");
+        page.click(neverBan + " pl-select-chip .chip[data-value='remove.example'] button");
         waitForReactiveIdle();
-        page.locator(neverBan + " .zf-array-row:nth-child(1) input").fill("203.0.113.7");
-        page.click(neverBan + " [data-array-add]");
-        waitForReactiveIdle();
-        page.locator(neverBan + " .zf-array-row:nth-child(2) input").fill("198.51.100.0/24");
-        page.click(neverBan + " [data-array-add]");
-        waitForReactiveIdle();
-        page.locator(neverBan + " .zf-array-row:nth-child(3) input").fill("remove.example");
-        // The row controls are use:List.moveUp/moveDown/remove now, so the boundary
-        // disabled guard and the default aria-label are the DIRECTIVE's -- assert them
-        // here rather than only swapping the marker selector.
-        assertThat(page.locator(neverBan + " .zf-array-row:nth-child(1) [data-list-move-up][disabled]")
-            .count()).as("the first row cannot move up").isEqualTo(1);
-        assertThat(page.locator(neverBan + " .zf-array-row:nth-child(3) [data-list-move-down][disabled]")
-            .count()).as("the last row cannot move down").isEqualTo(1);
-        assertThat(page.locator(neverBan + " .zf-array-row:nth-child(3) [data-list-remove]")
-            .getAttribute("aria-label")).as("the remove control is still labelled").isEqualTo("Remove");
-        page.click(neverBan + " .zf-array-row:nth-child(3) [data-list-remove]");
-        waitForReactiveIdle();
-        page.click(neverBan + " .zf-array-row:nth-child(1) [data-list-move-down]");
-        waitForReactiveIdle();
+        assertThat(page.locator(chips).count()).as("the removed chip is gone").isEqualTo(2);
 
         page.click(".cms-settings-actions pl-button");
         page.waitForCondition(() -> page.locator("pl-toast").count() > 0);
@@ -141,13 +184,13 @@ class AdminPagesTest extends HohenheimTestBase {
         Map<?, ?> security = (Map<?, ?>) parsed.get("security");
         assertThat(((Number) security.get("domain_miss_threshold")).intValue()).isEqualTo(7);
         assertThat(security.get("never_ban"))
-            .isEqualTo(List.of("198.51.100.0/24", "203.0.113.7"));
+            .isEqualTo(List.of("203.0.113.7", "198.51.100.0/24"));
 
         // The live context applied the change without a restart.
         assertThat(Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Security.DOMAIN_MISS_THRESHOLD)).isEqualTo(7);
         assertThat(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.NEVER_BAN))
-            .isEqualTo(List.of("198.51.100.0/24", "203.0.113.7"));
+            .isEqualTo(List.of("203.0.113.7", "198.51.100.0/24"));
 
         // Settings edits are accountable: the touched keys land in the activity log.
         Row entry = Models.get(ActivityModel.class).find()
@@ -166,7 +209,7 @@ class AdminPagesTest extends HohenheimTestBase {
         waitForReactiveIdle();
         assertThat(page.locator(resetControl + " pl-checkbox button").getAttribute("aria-checked"))
             .as("the reset control is armed").isEqualTo("true");
-        assertThat(page.locator(neverBan + " .zf-array-row").count())
+        assertThat(page.locator(chips).count())
             .as("an armed reset leaves the editor untouched until save").isEqualTo(2);
         page.click(".cms-settings-actions pl-button");
         page.waitForCondition(() -> Zenit.SETTINGS_VALUES
@@ -180,7 +223,7 @@ class AdminPagesTest extends HohenheimTestBase {
         // on the RELOADED document before waiting for hydration -- the cleared never_ban
         // editor only exists after the reload, whereas the still-hydrated pre-reload page
         // satisfies waitForHydration() on its own, before the navigation even starts.
-        page.waitForCondition(() -> page.locator(neverBan + " .zf-array-row").count() == 0);
+        page.waitForCondition(() -> page.locator(chips).count() == 0);
         waitForHydration();
 
         // The filesystem-path browser picks a server directory; the pick is
@@ -259,7 +302,7 @@ class AdminPagesTest extends HohenheimTestBase {
     @Test
     void activityLogDashboardFeedAndActivityDetailReflectACreation() throws Exception {
         var createResponse = adminPostForm("/admin/sites/new",
-            "name=Audit+Test+Site&upstream_kind=hohenheim%3Astatic");
+            "name=Audit+Test+Site&upstream_kind=hohenheim%3Astatic&" + siteCreateEnvelope());
         assertThat(createResponse.statusCode()).isIn(200, 302, 303);
 
         Row site = Models.get(SiteModel.class).find()
@@ -269,7 +312,7 @@ class AdminPagesTest extends HohenheimTestBase {
         // AIDEV-NOTE: read over HTTP, not through a hydrated page load. The activity LIST is
         // server-rendered and nothing here asserts a client re-render, so the browser round
         // trip bought only latency (~1.6s). What the list proves for hohenheim is that the
-        // zenit-cms ActivityResource is MOUNTED here; the row's content is asserted straight
+        // zenit-cms activity log (ActivityAdmin) is MOUNTED here; the row's content is asserted straight
         // off the model, which is stronger than a substring of the whole body.
         // AIDEV-NOTE: the list is narrowed to this site's history and asserted to carry the
         // logged ENTRY's own detail link. It used to assert the raw "hohenheim:site" token,
@@ -283,7 +326,7 @@ class AdminPagesTest extends HohenheimTestBase {
             .orderBy(ActivityModel.ID, SortOrder.DESC)
             .first();
         assertThat(logged).as("the site creation was logged").isNotNull();
-        assertThat((String) logged.get(ActivityModel.ACTION)).isEqualTo("create");
+        assertThat((String) logged.get(ActivityModel.ACTION)).isEqualTo(ZenitActivityAction.CREATE.id().toString());
         assertThat(adminGet("/admin/activity?filter.record_id=" + siteId).body())
             .as("the activity resource is mounted in the hohenheim panel and lists the creation")
             .contains("/admin/activity/" + logged.get(ActivityModel.ID));
@@ -371,7 +414,7 @@ class AdminPagesTest extends HohenheimTestBase {
         var response = adminPostForm("/admin/certificates-request",
             "nice_name=wildcard&domains=*.example.test&challenge_type=http&dns_mode=manual");
         assertThat(response.statusCode()).isIn(302, 303);
-        var wildcardRefusal = popFlash();
+        var wildcardRefusal = popFlash(response);
         assertThat(wildcardRefusal).describedAs("the refusal rides the session flash").isNotNull();
         assertThat(wildcardRefusal.message().key()).isEqualTo("wildcard_requires_dns");
 
@@ -380,7 +423,7 @@ class AdminPagesTest extends HohenheimTestBase {
             "nice_name=wildcard&domains=&domains=example.test&domains=*.example.test"
                 + "&challenge_type=http&dns_mode=manual");
         assertThat(response.statusCode()).isIn(302, 303);
-        var repeatedRefusal = popFlash();
+        var repeatedRefusal = popFlash(response);
         assertThat(repeatedRefusal).describedAs("the refusal rides the session flash").isNotNull();
         assertThat(repeatedRefusal.message().key()).isEqualTo("wildcard_requires_dns");
 
@@ -659,11 +702,11 @@ class AdminPagesTest extends HohenheimTestBase {
             Object toggleId = toggleSite.get(SiteModel.ID);
             navigateToApp("/admin/sites/" + toggleId);
             waitForHydration();
-            var toggleAction = page.locator("[data-action-id='hohenheim:toggle_site']");
+            var toggleAction = page.locator("[data-action-id='hohenheim:disable_site']");
             assertThat(toggleAction.count()).isEqualTo(1);
             assertThat(toggleAction.first().locator("[data-cms-action-label]").textContent().trim())
                 .isEqualTo("Disable");
-            assertThat(page.locator(".cms-record-toolbar pl-button[data-action-id='hohenheim:toggle_site']").count())
+            assertThat(page.locator(".cms-record-toolbar pl-button[data-action-id='hohenheim:disable_site']").count())
                 .as("a destructive-confirmed action is never an inline record button").isZero();
 
             toggleSite.set(SiteModel.ENABLED, false);
@@ -672,7 +715,7 @@ class AdminPagesTest extends HohenheimTestBase {
             navigateToApp("/admin/sites/" + toggleId);
             waitForHydration();
             assertThat(page.locator(
-                ".cms-record-toolbar pl-button[data-action-id='hohenheim:toggle_site']").innerText().trim())
+                ".cms-record-toolbar pl-button[data-action-id='hohenheim:enable_site']").innerText().trim())
                 .isEqualTo("Enable");
         } finally {
             HardDeletes.row(siteModel, suffixSite);
@@ -681,7 +724,7 @@ class AdminPagesTest extends HohenheimTestBase {
 
         // A site of this test's own, created through the form like an operator's.
         assertThat(adminPostForm("/admin/sites/new",
-            "name=Record+Tabs+Site&upstream_kind=hohenheim%3Astatic").statusCode())
+            "name=Record+Tabs+Site&upstream_kind=hohenheim%3Astatic&" + siteCreateEnvelope()).statusCode())
             .as("the tab fixture site is created").isIn(200, 302, 303);
         Row site = Models.get(SiteModel.class).find()
             .where(SiteModel.NAME.eq("Record Tabs Site")).first();
@@ -699,7 +742,7 @@ class AdminPagesTest extends HohenheimTestBase {
         // page that way. The POPULATED tab below stays a hydrated load -- that is where the
         // client render actually has something to get wrong.
         assertThat(adminGet("/admin/sites/" + siteId + "/page/domains").body())
-            .contains("No domains configured");
+            .contains("Add a hostname so traffic routes to this site");
 
         var domainModel = Models.get(SiteDomainModel.class);
         Row covered = domainModel.createEmptyRow();
@@ -729,11 +772,11 @@ class AdminPagesTest extends HohenheimTestBase {
                 + cert.get(CertificateModel.ID) + "']").count()).isEqualTo(1);
             assertThat(page.locator("[data-cert-status='none']").count()).isEqualTo(1);
 
-            // The add-domain link preselects this site on the CREATE form.
-            assertThat(page.locator("#add-domain-link").getAttribute("href"))
-                .startsWith("/admin/domains/new?site_id=" + siteId)
+            // The section's add link creates under this site, which the CREATE form preselects.
+            assertThat(page.locator("[data-cms-child-create='domains']").getAttribute("href"))
+                .startsWith("/admin/domains/new?parent=" + siteId)
                 .contains("_return=");
-            navigateToApp("/admin/domains/new?site_id=" + siteId);
+            navigateToApp("/admin/domains/new?parent=" + siteId);
             waitForHydration();
             // The pick's value is a Java-side property; the SSR-resolved display
             // title in the field is the observable prefill.
@@ -753,9 +796,9 @@ class AdminPagesTest extends HohenheimTestBase {
             domainModel.delete(bare);
         }
 
-        // The base installs a disable-all resolver (suite-wide buckets would
-        // trip across classes); unset it so the DECLARED policies apply.
-        RateLimitMiddleware.setPolicyResolver(null);
+        // The base exempts every endpoint (suite-wide buckets would trip
+        // across classes); lift the exemption so the DECLARED policies apply.
+        RateLimitExemption.restore();
         try {
             boolean limited = false;
             for (int i = 0; i < 40 && !limited; i++) {
@@ -765,7 +808,7 @@ class AdminPagesTest extends HohenheimTestBase {
                 .as("the declared download policy (30/min) must answer 429 under a hammer")
                 .isTrue();
         } finally {
-            RateLimitMiddleware.setPolicyResolver((conduit, endpoint, declared) -> null);
+            RateLimitExemption.exemptAll();
         }
     }
 
@@ -867,7 +910,7 @@ class AdminPagesTest extends HohenheimTestBase {
             assertThat(notice)
                 .as("step 1: the activity resource declares a recording-off notice")
                 .isNotNull();
-            String sentence = notice.resolve(LocaleChain.ofTags("en"), new DefaultCatalogLoader());
+            String sentence = notice.resolve(LocaleChain.ofTags("en"), new ShippedCatalogs());
 
             // 2. The dashboard band carries it, above the list it explains.
             navigateToApp("/admin/dashboard");
@@ -940,7 +983,7 @@ class AdminPagesTest extends HohenheimTestBase {
 
             // 4. The record's own TITLE is the same name, so the delete confirmation asks
             //    about a person rather than about a storage key.
-            assertThat(new InstanceQuotaResource().recordTitle(quota))
+            assertThat(PartsReads.recordTitle(InstanceQuotaParts.admin(), quota))
                 .as("step 4: the record title names the owner too")
                 .isEqualTo("Quota Label Owner");
         } finally {

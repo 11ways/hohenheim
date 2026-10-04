@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -9,6 +10,7 @@ import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.ColorHue;
 
 /**
  * One persisted Docker-reconciler finding: how a container, volume or network on one
@@ -18,7 +20,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
  */
 public class ReconcileFindingModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "reconcile_finding");
+    public static final Identifier MODEL_ID = HohenheimIds.id("reconcile_finding");
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #BUCKET}: owner resolves to a live record. */
@@ -41,11 +43,11 @@ public class ReconcileFindingModel extends Model {
         StringField.builder().name("server_name").build());
     public static final EnumField KIND = SCHEMA.addField(EnumField.builder("kind")
         .value("container", v -> v.displayName("Container")
-            .label(kindLabel("container")).icon("cube").color("blue"))
+            .label(kindLabel("container")).icon("cube").color(ColorHue.BLUE))
         .value("volume", v -> v.displayName("Volume")
-            .label(kindLabel("volume")).icon("database").color("purple"))
+            .label(kindLabel("volume")).icon("database").color(ColorHue.PURPLE))
         .value("network", v -> v.displayName("Network")
-            .label(kindLabel("network")).icon("diagram-project").color("teal"))
+            .label(kindLabel("network")).icon("diagram-project").color(ColorHue.TEAL))
         .build());
 
     /** The translation token for a found resource kind; the key IS the stored value. */
@@ -56,15 +58,15 @@ public class ReconcileFindingModel extends Model {
         StringField.builder().name("resource_name").build());
     public static final EnumField BUCKET = SCHEMA.addField(EnumField.builder("bucket")
         .value(BUCKET_OWNED, v -> v.displayName("Owned")
-            .label(bucketLabel(BUCKET_OWNED)).icon("circle-check").color("green"))
+            .label(bucketLabel(BUCKET_OWNED)).icon("circle-check").color(ColorHue.GREEN))
         .value(BUCKET_ORPHANED, v -> v.displayName("Orphaned")
-            .label(bucketLabel(BUCKET_ORPHANED)).icon("circle-exclamation").color("red"))
+            .label(bucketLabel(BUCKET_ORPHANED)).icon("circle-exclamation").color(ColorHue.RED))
         .value(BUCKET_FOREIGN_KNOWN, v -> v.displayName("Foreign (known)")
-            .label(bucketLabel(BUCKET_FOREIGN_KNOWN)).icon("circle-info").color("gray"))
+            .label(bucketLabel(BUCKET_FOREIGN_KNOWN)).icon("circle-info").color(ColorHue.GRAY))
         .value(BUCKET_FOREIGN_COLLIDING, v -> v.displayName("Foreign (colliding)")
-            .label(bucketLabel(BUCKET_FOREIGN_COLLIDING)).icon("triangle-exclamation").color("orange"))
+            .label(bucketLabel(BUCKET_FOREIGN_COLLIDING)).icon("triangle-exclamation").color(ColorHue.ORANGE))
         .value(BUCKET_FOREIGN_UNRELATED, v -> v.displayName("Foreign (unrelated)")
-            .label(bucketLabel(BUCKET_FOREIGN_UNRELATED)).icon("circle").color("gray"))
+            .label(bucketLabel(BUCKET_FOREIGN_UNRELATED)).icon("circle").color(ColorHue.GRAY))
         .build());
 
     /** The translation token for an ownership bucket; the key IS the stored value. */

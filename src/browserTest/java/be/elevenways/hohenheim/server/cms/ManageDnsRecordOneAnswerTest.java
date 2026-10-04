@@ -94,7 +94,7 @@ class ManageDnsRecordOneAnswerTest extends HohenheimTestBase {
         values.put(DnsRecordModel.ENABLED.getName(), true);
         Throwable[] thrown = new Throwable[1];
         TenantConduits.as(principal, () -> thrown[0] = catchThrowable(() ->
-            new ManageDnsRecordResource().persistRow(values,
+            new ManageDnsRecordParts().persistRow(values,
                 AccessContext.of(TenantConduits.stubFor(principal)))));
         assertThat(thrown[0])
             .as("the create of %s as %s is refused", name, principal.displayName())

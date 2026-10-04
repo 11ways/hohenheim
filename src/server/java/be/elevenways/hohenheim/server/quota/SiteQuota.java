@@ -16,7 +16,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * all. This dimension counts the RECORD, which is the thing an owner actually gets.
  *
  * AIDEV-NOTE: today the only lane that creates a site is the ADMIN panel --
- * {@code ManageSiteResource.creatable()} is false and the PaaS API has no site create --
+ * the /manage site twin creates nothing and the site create operation is admin-only ({@code SiteWrites.CREATE}) --
  * so in practice this charges the operator bucket. That is not a reason to enforce it at a
  * surface instead: the gate lives on the WRITE FUNNEL precisely so the tenant lane that
  * arrives later inherits it without a second copy of the rule, and the derivation

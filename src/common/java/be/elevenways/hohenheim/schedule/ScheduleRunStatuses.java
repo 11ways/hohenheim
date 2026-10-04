@@ -4,6 +4,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.task.record.RunStatus;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -54,13 +55,13 @@ public final class ScheduleRunStatuses {
     }
 
     /** Only a clean completion is green; a partial one warns instead of claiming success. */
-    private static @NonNull String colorFor(@NonNull RunStatus status) {
+    private static @NonNull BadgeVariant colorFor(@NonNull RunStatus status) {
         return switch (status) {
-            case RUNNING -> "info";
-            case COMPLETED -> "success";
-            case COMPLETED_WITH_FAILURES -> "warning";
-            case ABORTED -> "secondary";
-            case FAILED, ABANDONED -> "destructive";
+            case RUNNING -> BadgeVariant.INFO;
+            case COMPLETED -> BadgeVariant.SUCCESS;
+            case COMPLETED_WITH_FAILURES -> BadgeVariant.WARNING;
+            case ABORTED -> BadgeVariant.SECONDARY;
+            case FAILED, ABANDONED -> BadgeVariant.DESTRUCTIVE;
         };
     }
 

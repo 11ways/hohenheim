@@ -1,0 +1,501 @@
+package be.elevenways.hohenheim.server.cms;
+
+import be.elevenways.hohenheim.HostTrustLane;
+import be.elevenways.hohenheim.WorkloadTier;
+import be.elevenways.hohenheim.HohenheimWidgets;
+import be.elevenways.hohenheim.host.HostCapacityView;
+import be.elevenways.hohenheim.host.HostFactView;
+import be.elevenways.hohenheim.host.HostPreflightReportView;
+import be.elevenways.hohenheim.host.KernelIsolationView;
+import be.elevenways.hohenheim.host.PostureAcknowledgementView;
+import be.elevenways.hohenheim.host.PreflightCheckView;
+import be.elevenways.hohenheim.host.TrustLaneView;
+import be.elevenways.hohenheim.host.VolumeBackend;
+import be.elevenways.hohenheim.host.WorkloadView;
+import be.elevenways.hohenheim.model.DatabaseEngineModel;
+import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.HostTrustSlot;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.server.host.HostKeys;
+import be.elevenways.hohenheim.server.host.HostPins;
+import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.host.IncusPreflight;
+import be.elevenways.hohenheim.server.incus.IncusEndpoint;
+import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
+import be.elevenways.hohenheim.server.incus.IncusTrust;
+import be.elevenways.hohenheim.server.instance.InstanceCapacity;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.MessageResolver;
+import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.widget.RecordActionsWidget;
+import be.elevenways.zenit.cms.server.render.action.RecordActionBands;
+import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.activity.ActivityRules;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.EnumField;
+import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.ui.BadgeVariant;
+import be.elevenways.zenit.widget.common.WidgetInstance;
+import be.elevenways.zenit.widget.common.WidgetTree;
+import be.elevenways.zenit.widget.common.builtin.AlertVariant;
+import be.elevenways.zenit.widget.common.builtin.AlertWidget;
+import be.elevenways.zenit.widget.common.builtin.FactListWidget;
+import be.elevenways.zenit.widget.common.builtin.RecordsWidget;
+import be.elevenways.zenit.widget.common.builtin.SectionWidget;
+import be.elevenways.zenit.widget.common.builtin.StatusWidget;
+import be.elevenways.zenit.widget.common.builtin.UsageBarWidget;
+import be.elevenways.zenit.widget.common.data.NoticeData;
+import be.elevenways.zenit.widget.common.data.UsageData;
+import be.elevenways.zenit.widget.common.data.WidgetBadge;
+import be.elevenways.zenit.widget.common.data.WidgetFact;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
+
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.function.UnaryOperator;
+
+/**
+ * Overview tab on a host record, and the record's own front door: the STORED evidence
+ * the machinery already keeps -- admission and quarantine, per-lane trust state, the
+ * full preflight report with per-check timestamps, capacity bookings and the workloads
+ * that hold the host -- rendered structured instead of flattened into form-field
+ * sentences.
+ *
+ * The RecordOverview mounts this widget tree and stays read-only: every
+ * mutation on it is one of the resource's own placed operations, projected through
+ * {@code zenit:record_actions} so confirmations, permissions and per-row visibility
+ * stay single-sourced.
+ *
+ * @author Jelle De Loecker
+ * @since 0.1.0
+ */
+public final class ServerOverviewState {
+
+    public static final String SLUG = "overview";
+
+    private ServerOverviewState() {}
+
+    @SuppressWarnings("unchecked")
+    public static @NonNull WidgetTree widgets(@NonNull Row server, @NonNull AccessContext accessContext) {
+        Conduit conduit = accessContext.conduit();
+        Integer serverId = server.get(ServerModel.ID);
+        String panelSlug = CmsSupport.panelSlug(conduit);
+        LocaleChain locales = conduit.getLocales();
+        MessageResolver resolver = conduit.getMessageResolver();
+
+        List<WidgetInstance> bands = new ArrayList<>();
+
+        // Quarantine is LOUD and leads: the repin ceremony that clears it renders in the
+        // action band below, as the resource's own confirmed row action.
+        Instant quarantinedAt = server.get(ServerModel.QUARANTINED_AT);
+        if (quarantinedAt != null) {
+            String reason = blankable(server.get(ServerModel.QUARANTINE_REASON));
+            String body = reason.isBlank()
+                ? text("quarantine_clears_by_repin", locales, resolver)
+                : reason + " " + text("quarantine_clears_by_repin", locales, resolver);
+            bands.add(band(new WidgetTree(List.of(
+                alert(AlertVariant.DESTRUCTIVE,
+                    NoticeData.of(text("quarantined_title", locales, resolver), body))))));
+        }
+
+        List<WidgetInstance> state = new ArrayList<>();
+        state.add(new WidgetInstance(StatusWidget.ID,
+            Map.of("label", HohenheimWidgetCopy.localized("state", "server_overview")))
+            .withData(stateBadges(server, locales, resolver)));
+        state.add(new WidgetInstance(HohenheimWidgets.HOST_STATE.id(), Map.of())
+            .withData(ServerParts.statusCellOf(server)));
+
+        String lastError = blankable(server.get(ServerModel.LAST_ERROR));
+        if (!lastError.isBlank()) {
+            state.add(alert(AlertVariant.DESTRUCTIVE,
+                NoticeData.of(text("last_error", locales, resolver), lastError)));
+        }
+
+        // The volume-backend FINDING and its consequence, beside admission and posture:
+        // what the preflight probe measured on the data root, and -- when it measured
+        // nothing usable -- what that refuses and how to fix it, in the operator's words.
+        VolumeBackend volumeBackend = ServerModel.volumeBackendOf(server);
+        state.add(new WidgetInstance(FactListWidget.ID, Map.of())
+            .withData(List.of(WidgetFact.badge(
+                text("volume_backend", locales, resolver),
+                WidgetBadge.of(volumeBackend.label().resolve(locales, resolver),
+                    volumeBackend.color(), volumeBackend.icon())))));
+        if (!volumeBackend.supportsQuota() && volumeBackend.filesystemEnforcesQuota()) {
+            // The filesystem COULD enforce a quota; this build has no operations for it.
+            // Telling the operator to mount something else here would be a lie in the
+            // other direction -- they already mounted a quota-capable filesystem.
+            state.add(alert(AlertVariant.WARNING, NoticeData.of(
+                text("volume_backend_unsupported_title", locales, resolver),
+                Microcopy.of("volume_backend_unsupported_body")
+                    .withFilter("scope", "server_overview")
+                    .withArg("backend", volumeBackend.label())
+                    .resolve(locales, resolver))));
+        } else if (!volumeBackend.supportsQuota()) {
+            state.add(alert(AlertVariant.WARNING, NoticeData.of(
+                text("volume_backend_none_title", locales, resolver),
+                text("volume_backend_none_body", locales, resolver))));
+        } else if (!volumeBackend.supportsSnapshot()) {
+            state.add(alert(AlertVariant.WARNING, NoticeData.of(
+                text("volume_backend_no_snapshot_title", locales, resolver),
+                text("volume_backend_no_snapshot_body", locales, resolver))));
+        }
+
+        PostureAcknowledgementView acknowledgement = acknowledgementViewOf(server);
+        if (acknowledgement.needed()) {
+            state.add(new WidgetInstance(FactListWidget.ID, Map.of())
+                .withData(List.of(WidgetFact.badge(
+                    text("acknowledgement", locales, resolver),
+                    acknowledgementBadge(acknowledgement, locales, resolver)))));
+        }
+
+        Panel panel = PanelRegistry.getBySlug(panelSlug);
+        if (panel != null && panel.entryBySlug(ServerParts.SLUG) instanceof PanelResource<?> resource) {
+            state.add(new WidgetInstance(RecordActionsWidget.ID, Map.of())
+                .withData(RecordActionBands.forRecord(new PanelRequest(panel, conduit, accessContext, null),
+                    (PanelResource<Row>) resource, server)));
+        }
+        bands.add(band(new WidgetTree(state)));
+
+        List<TrustLaneView> lanes = trustLanes(server);
+        if (!lanes.isEmpty()) {
+            bands.add(band(new WidgetTree(List.of(
+                new WidgetInstance(HohenheimWidgets.HOST_TRUST.id(), Map.of()).withData(lanes)))));
+        }
+
+        bands.add(band(new WidgetTree(List.of(
+            new WidgetInstance(HohenheimWidgets.HOST_PREFLIGHT.id(), Map.of()).withData(preflightReport(server))))));
+
+        HostCapacityView capacity = capacityOf(server, serverId);
+        bands.add(band(new WidgetTree(List.of(
+            new WidgetInstance(UsageBarWidget.ID,
+                Map.of("label", HohenheimWidgetCopy.localized("capacity", "server_overview")))
+                .withData(capacityUsage(capacity, locales, resolver)),
+            new WidgetInstance(FactListWidget.ID, Map.of())
+                .withData(capacityFacts(capacity, locales, resolver))))));
+
+        bands.add(band(new WidgetTree(List.of(
+            new WidgetInstance(HohenheimWidgets.HOST_WORKLOADS.id(), Map.of())
+                .withData(workloadsOf(panelSlug, serverId))))));
+
+        // AIDEV-NOTE: the per-record RECENT ACTIVITY band -- what an operator did to THIS
+        // host, in the order it happened. Unconditional here, unlike the instance page's
+        // copy: no delegated resource registers this page (ManagePanel projects no host
+        // inventory at all), so there is no tenant audience to censor for. If one ever
+        // appears it must take the instance page's !delegated branch, because the shared
+        // `zenit.activity` source is gated on ADMIN_ACCESS and would render empty.
+        bands.add(band(new WidgetTree(List.of(
+            new WidgetInstance(RecordsWidget.ID, Map.of(
+                "title", HohenheimWidgetCopy.localized("recent_activity", "server_overview"),
+                "source", CmsSupport.ACTIVITY_SOURCE,
+                "rules", ActivityRules.forRecord(Models.get(ServerModel.class), serverId),
+                "sort", ActivityModel.CREATED_AT.getName(),
+                "descending", true,
+                "limit", 10))))));
+
+        return new WidgetTree(List.of(new WidgetInstance(SectionWidget.ID,
+            Map.of("css_class", "hh-server-overview"), new WidgetTree(bands))));
+    }
+
+    // -- state ---------------------------------------------------------------------
+
+    private static @NonNull List<WidgetBadge> stateBadges(@NonNull Row server,
+                                                          @NonNull LocaleChain locales,
+                                                          @Nullable MessageResolver resolver) {
+        List<WidgetBadge> badges = new ArrayList<>();
+        badges.add(WidgetBadge.of(ServerModel.RUNTIME, ServerModel.runtimeOf(server),
+            locales, resolver));
+        addBadge(badges, ServerModel.ADMISSION, server.get(ServerModel.ADMISSION), locales, resolver);
+        addBadge(badges, ServerModel.POSTURE, server.get(ServerModel.POSTURE), locales, resolver);
+        return badges;
+    }
+
+    private static void addBadge(@NonNull List<WidgetBadge> badges, @NonNull EnumField field,
+                                 @Nullable Object raw, @NonNull LocaleChain locales,
+                                 @Nullable MessageResolver resolver) {
+        if (raw != null) {
+            badges.add(WidgetBadge.of(field, raw, locales, resolver));
+        }
+    }
+
+    /** The acknowledgement state as ONE pill: current, out of date, or never given. */
+    private static @NonNull WidgetBadge acknowledgementBadge(
+            @NonNull PostureAcknowledgementView acknowledgement,
+            @NonNull LocaleChain locales, @Nullable MessageResolver resolver) {
+        if (acknowledgement.current()) {
+            return WidgetBadge.of(Microcopy.of("ack_current").withFilter("scope", "server_overview")
+                .withArg("actor", acknowledgement.actorLabel())
+                .withArg("version", String.valueOf(acknowledgement.version()))
+                .resolve(locales, resolver), BadgeVariant.SUCCESS, null);
+        }
+        if (acknowledgement.stale()) {
+            return WidgetBadge.of(Microcopy.of("ack_stale").withFilter("scope", "server_overview")
+                .withArg("version", String.valueOf(acknowledgement.requiredVersion()))
+                .resolve(locales, resolver), BadgeVariant.DESTRUCTIVE, null);
+        }
+        return WidgetBadge.of(text("ack_missing", locales, resolver), BadgeVariant.DESTRUCTIVE, null);
+    }
+
+    // -- trust ---------------------------------------------------------------------
+
+    /** The lanes this record declares, in transport-first order. */
+    private static @NonNull List<TrustLaneView> trustLanes(@NonNull Row server) {
+        List<TrustLaneView> lanes = new ArrayList<>();
+        if (ServerModel.isIncusHttps(server)) {
+            lanes.add(laneView(server, HostTrustLane.INCUS, HostTrustSlot.INCUS_TLS,
+                IncusTrust::fingerprintOf));
+        }
+        if (ServerModel.hasSshLane(server)) {
+            lanes.add(laneView(server, HostTrustLane.SSH, HostTrustSlot.SSH,
+                HostKeys::fingerprintOf));
+        }
+        return lanes;
+    }
+
+    private static @NonNull TrustLaneView laneView(@NonNull Row server, @NonNull HostTrustLane lane,
+                                                   @NonNull HostTrustSlot slot,
+                                                   @NonNull UnaryOperator<String> digest) {
+        String fingerprint = server.get(slot.fingerprint());
+        String offered = slot.offeredOf(server);
+        String client = server.get(slot.clientPublic());
+        Instant pinnedAt = server.get(slot.pinnedAt());
+        return new TrustLaneView(
+            lane,
+            slot.isPinned(server),
+            fingerprint != null ? fingerprint : "",
+            Boolean.TRUE.equals(server.get(slot.verified())),
+            pinnedAt != null ? pinnedAt.toString() : null,
+            offered.isBlank() ? "" : digest.apply(offered),
+            HostPins.isQuarantined(server, slot),
+            client != null ? client : "");
+    }
+
+    /**
+     * The posture acknowledgement as data: what is stored, and whether it still answers.
+     * Rendered for every host, including ones whose posture needs none -- "not required"
+     * is a state an operator has to be able to read too.
+     */
+    public static @NonNull PostureAcknowledgementView acknowledgementViewOf(@NonNull Row server) {
+        Instant at = server.get(ServerModel.ACKNOWLEDGED_AT);
+        String label = server.get(ServerModel.ACKNOWLEDGED_BY_LABEL);
+        return new PostureAcknowledgementView(
+            ServerModel.postureNeedsAcknowledgement(server),
+            ServerModel.postureAcknowledged(server),
+            server.get(ServerModel.ACKNOWLEDGED_POSTURE),
+            server.get(ServerModel.ACKNOWLEDGED_WARNING_VERSION),
+            ServerModel.POSTURE_WARNING_VERSION,
+            at != null ? at.toString() : null,
+            label != null ? label : "");
+    }
+
+    /**
+     * Kernel-truth isolation as data, or null for a non-Incus host. Names the ENDPOINT
+     * the verdict is about: a blank {@code incus_url} means the controller's own socket,
+     * so a record named after a remote machine cannot silently green-light the wrong host.
+     */
+    public static @Nullable KernelIsolationView kernelIsolationViewOf(@NonNull Row server) {
+        if (!ServerModel.isIncus(server)) {
+            return null;
+        }
+        Instant checkedAt = HostPreflight.storedCheckAt(server, IncusPreflight.KERNEL_LANE_CHECK);
+        return new KernelIsolationView(
+            ServerModel.acceptsTenantWorkloads(server),
+            IncusKernelIsolation.laneAvailable(server),
+            HostPreflight.storedCheckStatus(server, IncusPreflight.KERNEL_LANE_CHECK),
+            checkedAt != null ? checkedAt.toString() : null,
+            ServerModel.isIncusHttps(server) ? "" : IncusEndpoint.of(server).describe());
+    }
+
+    // -- preflight -----------------------------------------------------------------
+
+    /** The whole stored report as one payload: kernel verdict, checks, facts and stamp. */
+    private static @NonNull HostPreflightReportView preflightReport(@NonNull Row server) {
+        Instant probedAt = server.get(ServerModel.PROBED_AT);
+        return new HostPreflightReportView(
+            kernelIsolationViewOf(server),
+            preflightChecks(server),
+            preflightFacts(server),
+            probedAt != null ? probedAt.toString() : null,
+            Boolean.TRUE.equals(server.get(ServerModel.PREFLIGHT_OK)));
+    }
+
+    /** Every stored check with its own status/required/detail/timestamp. */
+    private static @NonNull List<PreflightCheckView> preflightChecks(@NonNull Row server) {
+        List<PreflightCheckView> checks = new ArrayList<>();
+        if (!(server.get(ServerModel.CAPABILITIES) instanceof Map<?, ?> capabilities)
+                || !(capabilities.get(HostPreflight.CHECKS_KEY) instanceof Map<?, ?> stored)) {
+            return checks;
+        }
+        for (Map.Entry<?, ?> entry : stored.entrySet()) {
+            if (!(entry.getValue() instanceof Map<?, ?> check)) {
+                continue;
+            }
+            checks.add(PreflightCheckView.of(
+                String.valueOf(entry.getKey()),
+                String.valueOf(check.get("status")),
+                Boolean.TRUE.equals(check.get("required")),
+                check.get("detail") != null ? String.valueOf(check.get("detail")) : "",
+                check.get("at") != null ? String.valueOf(check.get("at")) : null));
+        }
+        return checks;
+    }
+
+    /** Every stored fact with its own measurement stamp. */
+    private static @NonNull List<HostFactView> preflightFacts(@NonNull Row server) {
+        List<HostFactView> facts = new ArrayList<>();
+        if (!(server.get(ServerModel.CAPABILITIES) instanceof Map<?, ?> capabilities)) {
+            return facts;
+        }
+        for (Map.Entry<?, ?> entry : capabilities.entrySet()) {
+            String key = String.valueOf(entry.getKey());
+            if (HostPreflight.CHECKS_KEY.equals(key) || HostPreflight.FACTS_AT_KEY.equals(key)) {
+                continue;
+            }
+            Instant measuredAt = HostPreflight.factMeasuredAt(server, key);
+            facts.add(new HostFactView(key, String.valueOf(entry.getValue()),
+                measuredAt != null ? measuredAt.toString() : null));
+        }
+        return facts;
+    }
+
+    // -- capacity ------------------------------------------------------------------
+
+    /** The ledger itself lives with the booking; this page and the hosts API read the same one. */
+    private static @NonNull HostCapacityView capacityOf(@NonNull Row server, int serverId) {
+        return InstanceCapacity.viewOf(server, serverId);
+    }
+
+    /**
+     * The booking bar, with UNMEASURED as a first-class answer: no usable memory reading
+     * means this host has no placement budget at all, and a zero bar there would read as
+     * an empty host.
+     */
+    private static @NonNull UsageData capacityUsage(@NonNull HostCapacityView capacity,
+                                                    @NonNull LocaleChain locales,
+                                                    @Nullable MessageResolver resolver) {
+        if (!capacity.measured()) {
+            String reason = capacity.stale()
+                ? Microcopy.of("evidence_stale").withFilter("scope", "server_overview")
+                    .withArg("hours", String.valueOf(capacity.maxAgeHours()))
+                    .resolve(locales, resolver)
+                : text("unmeasured_body", locales, resolver);
+            return UsageData.unmeasured(reason);
+        }
+        return UsageData.measured(capacity.bookedMb(), capacity.budgetMb(),
+            megabytes(capacity.bookedMb()), megabytes(capacity.budgetMb()),
+            capacity.measuredAtIso());
+    }
+
+    /** The numbers the bar itself cannot show: what is still bookable, and by whom. */
+    private static @NonNull List<WidgetFact> capacityFacts(@NonNull HostCapacityView capacity,
+                                                           @NonNull LocaleChain locales,
+                                                           @Nullable MessageResolver resolver) {
+        List<WidgetFact> facts = new ArrayList<>();
+        if (!capacity.measured()) {
+            return facts;
+        }
+        facts.add(WidgetFact.of(text("booked", locales, resolver), megabytes(capacity.bookedMb())));
+        facts.add(WidgetFact.of(text("budget", locales, resolver), megabytes(capacity.budgetMb())));
+        facts.add(WidgetFact.of(text("bookable", locales, resolver),
+            megabytes(capacity.bookableMb())));
+        return facts;
+    }
+
+    private static @NonNull String megabytes(int value) {
+        return value + " MB";
+    }
+
+    // -- workloads -----------------------------------------------------------------
+
+    /**
+     * The SAME three populations {@link ServerModel#refuseRemovalWhileOwned} counts:
+     * live instances, stacks and managed databases referencing this host.
+     */
+    private static @NonNull List<WorkloadView> workloadsOf(@NonNull String panel,
+                                                           int serverId) {
+        List<WorkloadView> workloads = new ArrayList<>();
+        for (Row instance : Models.get(InstanceModel.class).find()
+                .where(InstanceModel.SERVER_ID.eq(serverId))
+                .all()) {
+            workloads.add(new WorkloadView(
+                String.valueOf((Object) instance.get(InstanceModel.NAME)),
+                WorkloadTier.INSTANCE,
+                badgeOf(InstanceModel.STATUS, instance.get(InstanceModel.STATUS)),
+                instance.get(InstanceModel.CAPACITY_MB),
+                // A release row is not served by the instance list; the route sends it to
+                // its application's Deploys tab instead of a 404.
+                InstanceParts.recordRoute(panel, instance, null)));
+        }
+        for (Row stack : Models.get(StackModel.class).find()
+                .where(StackModel.SERVER_ID.eq(serverId)).all()) {
+            workloads.add(new WorkloadView(
+                String.valueOf((Object) stack.get(StackModel.NAME)),
+                WorkloadTier.STACK,
+                badgeOf(StackModel.STATUS, stack.get(StackModel.STATUS)),
+                null,
+                CmsRoutes.detail(panel, "stacks", stack.get(StackModel.ID))));
+        }
+        for (Row database : Models.get(DatabaseModel.class).find()
+                .where(DatabaseModel.SERVER_ID.eq(serverId)).all()) {
+            workloads.add(new WorkloadView(
+                String.valueOf((Object) database.get(DatabaseModel.NAME)),
+                WorkloadTier.DATABASE,
+                badgeOf(DatabaseModel.STATUS, database.get(DatabaseModel.STATUS)),
+                database.get(DatabaseModel.MEMORY_LIMIT_MB),
+                CmsRoutes.detail(panel, "databases", database.get(DatabaseModel.ID))));
+        }
+        // A shared engine holds the host's memory the same way a database used to: it owns
+        // its own instance and is booked once, so a host page that listed only the records
+        // would under-report exactly the container that carries them all.
+        for (Row engine : Models.get(DatabaseEngineModel.class).find()
+                .where(DatabaseEngineModel.SERVER_ID.eq(serverId)).all()) {
+            workloads.add(new WorkloadView(
+                String.valueOf((Object) engine.get(DatabaseEngineModel.NAME)),
+                WorkloadTier.DATABASE_ENGINE,
+                badgeOf(DatabaseEngineModel.STATUS, engine.get(DatabaseEngineModel.STATUS)),
+                engine.get(DatabaseEngineModel.MEMORY_LIMIT_MB),
+                CmsRoutes.detail(panel, DatabaseParts.ENGINES_SLUG,
+                    engine.get(DatabaseEngineModel.ID))));
+        }
+        return workloads;
+    }
+
+    // -- helpers -------------------------------------------------------------------
+
+    private static @Nullable EnumBadgeState badgeOf(@NonNull EnumField field,
+                                                    @Nullable Object raw) {
+        return raw == null ? null : EnumBadgeState.of(field, raw);
+    }
+
+    private static @NonNull WidgetInstance alert(@NonNull AlertVariant variant,
+                                                 @NonNull NoticeData notice) {
+        return new WidgetInstance(AlertWidget.ID, Map.of("variant", variant.token()))
+            .withData(notice);
+    }
+
+    private static @NonNull WidgetInstance band(@NonNull WidgetTree children) {
+        return new WidgetInstance(SectionWidget.ID,
+            Map.of("css_class", "hh-overview-band"), children);
+    }
+
+    private static @NonNull String text(@NonNull String key, @NonNull LocaleChain locales,
+                                        @Nullable MessageResolver resolver) {
+        return Microcopy.of(key).withFilter("scope", "server_overview").resolve(locales, resolver);
+    }
+
+    private static @NonNull String blankable(@Nullable String value) {
+        return value != null ? value : "";
+    }
+}

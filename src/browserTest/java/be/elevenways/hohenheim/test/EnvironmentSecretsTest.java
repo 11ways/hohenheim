@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.revision.RevisionModel;
@@ -45,7 +46,7 @@ class EnvironmentSecretsTest extends HohenheimTestBase {
         var created = adminPostForm("/admin/sites/new",
             "name=Env+Secret+Site&upstream_kind=hohenheim%3Adev_namespace"
             + "&settings.registration_token=" + TOKEN_V1
-            + "&description=production-mode");
+            + "&description=production-mode&" + siteCreateEnvelope());
         assertThat(created.statusCode())
             .as("1. the create submit must be accepted").isIn(200, 302, 303);
         Row site = sites.find().where(SiteModel.NAME.eq("Env Secret Site")).first();
@@ -59,7 +60,7 @@ class EnvironmentSecretsTest extends HohenheimTestBase {
         var updated = adminPostForm("/admin/sites/" + siteId,
             "name=Env+Secret+Site+Renamed&upstream_kind=hohenheim%3Adev_namespace"
             + "&settings.registration_token=" + TOKEN_V2
-            + "&description=staging-mode");
+            + "&description=staging-mode&" + siteEditEnvelope(siteId));
         assertThat(updated.statusCode())
             .as("2. the update submit must be accepted").isIn(200, 302, 303);
         assertThat(tokenOf(siteId))
@@ -105,7 +106,7 @@ class EnvironmentSecretsTest extends HohenheimTestBase {
                 .doesNotContain(TOKEN_V2);
         }
         Row updateEntry = activity.stream()
-            .filter(entry -> "update".equals(entry.get(ActivityModel.ACTION)))
+            .filter(entry -> ZenitActivityAction.UPDATE.id().toString().equals(entry.get(ActivityModel.ACTION)))
             .reduce((first, second) -> second).orElse(null);
         assertThat(updateEntry).as("4. the update activity entry must exist").isNotNull();
         Map<?, ?> delta = (Map<?, ?>) Zenit.DRY.parse(updateEntry.get(ActivityModel.DELTA));
@@ -140,7 +141,7 @@ class EnvironmentSecretsTest extends HohenheimTestBase {
         var blankResubmit = adminPostForm("/admin/sites/" + siteId,
             "name=Env+Secret+Site+Renamed&upstream_kind=hohenheim%3Adev_namespace"
             + "&description=staging-mode"
-            + "&settings.registration_token=");
+            + "&settings.registration_token=&" + siteEditEnvelope(siteId));
         assertThat(blankResubmit.statusCode())
             .as("5. the blank-value submit must be accepted").isIn(200, 302, 303);
         assertThat(tokenOf(siteId))

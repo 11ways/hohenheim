@@ -103,6 +103,12 @@ public final class InstanceStats {
         return session == null ? List.of() : session.history();
     }
 
+    /** @return how many viewers follow the instance's stream right now; a released link is no viewer */
+    public static int viewers(int instanceId) {
+        Session session = SESSIONS.get(instanceId);
+        return session == null ? 0 : session.viewers.size();
+    }
+
     /**
      * The most recent working set (MB) of an instance, or null when this hub holds no
      * sample for it.

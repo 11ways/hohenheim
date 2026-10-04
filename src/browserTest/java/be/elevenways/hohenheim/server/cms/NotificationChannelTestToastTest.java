@@ -81,7 +81,7 @@ class NotificationChannelTestToastTest {
             .as("a relay handoff is recorded as accepted").isEqualTo("accepted");
 
         // 3. So the toast names a handoff instead of claiming the test was delivered.
-        assertThat(NotificationChannelResource.testSucceeded(handoff).key())
+        assertThat(NotificationChannelParts.testSucceeded(handoff).key())
             .as("a handoff must not be toasted as a delivery").isEqualTo("test_accepted");
 
         // 4. A transport that owns the outcome still gets the plain delivered toast.
@@ -91,7 +91,7 @@ class NotificationChannelTestToastTest {
         assertThat(delivered.delivered()).as("a provider transport proves delivery").isTrue();
         assertThat(Models.get(CommsDeliveryModel.class).find().first().get(CommsDeliveryModel.STATUS))
             .as("a real delivery is recorded as sent").isEqualTo("sent");
-        assertThat(NotificationChannelResource.testSucceeded(delivered).key())
+        assertThat(NotificationChannelParts.testSucceeded(delivered).key())
             .as("a delivery keeps the plain success toast").isEqualTo("test_ok");
     }
 }

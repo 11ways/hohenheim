@@ -18,8 +18,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.Map;
 import java.util.Objects;
 
-import static be.elevenways.hohenheim.server.cms.ServerResource.hostCopy;
-import static be.elevenways.hohenheim.server.cms.ServerResource.serverCopy;
+import static be.elevenways.hohenheim.server.cms.ServerWords.hostCopy;
+import static be.elevenways.hohenheim.server.cms.ServerWords.serverCopy;
 
 /**
  * The second phase of enrolling a host: minting its client identities, pinning its Incus certificate

@@ -1,0 +1,93 @@
+case admin.instance-schedules.operator admin instance-schedules operator v2
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=next_fire_at relation=false
+column next_fire_at at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column record_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column cron at=3 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column enabled at=4 shown=true hidden=false sortable=false filterable=true copyable=false subtext=disabled_reason relation=false
+column disabled_reason at=5 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+tab steps at=0 landing=true view=false
+tab history at=1 landing=false view=false
+control CREATE%20record_id at=0 kind=zenitforms:form/relation-pick input=text required=false readonly=false options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:false,creatable:false
+control CREATE%20name at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20cron at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20timezone at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20enabled at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+
+case admin.instance-schedules.tenant-backups admin instance-schedules tenant-backups v2
+admission - verdict=zenit:forbidden
+
+case admin.instance-schedules.operator.schedule admin instance-schedules operator v2
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=next_fire_at relation=false
+column next_fire_at at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column record_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column cron at=3 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column enabled at=4 shown=true hidden=false sortable=false filterable=true copyable=false subtext=disabled_reason relation=false
+column disabled_reason at=5 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab steps at=0 landing=true view=false
+tab history at=1 landing=false view=false
+control CREATE%20record_id at=0 kind=zenitforms:form/relation-pick input=text required=false readonly=false options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:false,creatable:false
+control CREATE%20name at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20cron at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20timezone at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20enabled at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20record_id at=0 kind=zenitforms:form/relation-pick input=text required=false readonly=true options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:false,creatable:false
+control EDIT%20name at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20cron at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20timezone at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20enabled at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+
+case manage.instance-schedules.tenant-schedules manage instance-schedules tenant-schedules v2
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=next_fire_at relation=false
+column next_fire_at at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column record_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column cron at=3 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column enabled at=4 shown=true hidden=false sortable=false filterable=true copyable=false subtext=disabled_reason relation=false
+column disabled_reason at=5 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+tab steps at=0 landing=true view=false
+control CREATE%20record_id at=0 kind=zenitforms:form/relation-pick input=text required=false readonly=false options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:false,creatable:false
+control CREATE%20name at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20cron at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20timezone at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20enabled at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+
+case manage.instance-schedules.tenant-schedules.schedule manage instance-schedules tenant-schedules v2
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=next_fire_at relation=false
+column next_fire_at at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column record_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column cron at=3 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column enabled at=4 shown=true hidden=false sortable=false filterable=true copyable=false subtext=disabled_reason relation=false
+column disabled_reason at=5 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab steps at=0 landing=true view=false
+control CREATE%20record_id at=0 kind=zenitforms:form/relation-pick input=text required=false readonly=false options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:false,creatable:false
+control CREATE%20name at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20cron at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20timezone at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20enabled at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20record_id at=0 kind=zenitforms:form/relation-pick input=text required=false readonly=true options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:false,creatable:false
+control EDIT%20name at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20cron at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20timezone at=3 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20enabled at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+

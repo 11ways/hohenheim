@@ -1,12 +1,16 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceShell;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -23,16 +27,16 @@ import java.util.Map;
  * own non-root uid. The admin CSP (zenit's STRICT_ADMIN) carries ghostty's wasm concessions
  * panel-wide, so this tab is reached by soft navigation like every other.
  *
- * The page makes NO authorization decision beyond hiding itself: {@code InstanceShell}
- * asks the {@code shell} capability again on its own funnel, which is what the WebSocket
- * handshake reaches. Hide AND enforce -- zenit-cms 404s an unoffered slug, so
- * {@link #visibleFor} gates the route as well as the nav.
+ * The page makes NO authorization decision of its own: it shows exactly where the open-shell
+ * operation is offered, the offer the WebSocket handshake admits through, and {@code InstanceShell}
+ * asks the {@code shell} capability again on its own funnel. Hide AND enforce -- zenit-cms 404s an
+ * unoffered slug, so {@link #visibleFor} gates the route as well as the nav.
  */
-public final class InstanceShellPage implements RecordScopedPage<Row> {
+public final class InstanceShellPage implements RecordTab.Rendered<Row> {
 
     public static final String SLUG = "shell";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_shell"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_shell"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("shell").withFilter("scope", "instance"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("terminal"); }
@@ -48,14 +52,12 @@ public final class InstanceShellPage implements RecordScopedPage<Row> {
      */
     @Override
     public boolean visibleFor(@NonNull Row record, @NonNull AccessContext accessContext) {
-        return HohenheimAccess.hasInstanceCapability(
-            accessContext, record.get(InstanceModel.ID), HohenheimAccess.SHELL);
+        return InstanceOperationHandlers.offered(InstanceOperations.OPEN_SHELL, accessContext, record);
     }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
+        Conduit conduit = request.conduit();
         Integer instanceId = instance.get(InstanceModel.ID);
         String status = instance.get(InstanceModel.STATUS);
 
@@ -83,6 +85,6 @@ public final class InstanceShellPage implements RecordScopedPage<Row> {
             availability == InstanceShell.Availability.NO_RUNTIME_LANE);
         vars.put("runsAsRoot", availability == InstanceShell.Availability.RUNS_AS_ROOT);
 
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-shell"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_SHELL, vars);
     }
 }

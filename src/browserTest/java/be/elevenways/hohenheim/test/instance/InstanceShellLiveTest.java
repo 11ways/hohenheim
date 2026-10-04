@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.server.ControllerScope;
@@ -42,6 +43,8 @@ import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.security.Principal;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
@@ -233,7 +236,7 @@ class InstanceShellLiveTest {
 
                 // 5. Opening the session was audited, attributed to the tenant.
                 mark("step5-activity");
-                List<Row> opened = activityFor(id, InstanceShell.ACTIVITY_OPEN);
+                List<Row> opened = activityFor(id, HohenheimActivityAction.SHELL_OPEN.id().toString());
                 assertThat(opened)
                     .as("step 5: opening a shell writes EXACTLY ONE activity row")
                     .hasSize(1);
@@ -252,7 +255,7 @@ class InstanceShellLiveTest {
                 session.close(InstanceShell.EndReason.CLIENT);
                 assertThat(session.isOpen()).as("step 6: a closed session reports closed")
                     .isFalse();
-                assertThat(activityFor(id, InstanceShell.ACTIVITY_CLOSE))
+                assertThat(activityFor(id, HohenheimActivityAction.SHELL_CLOSE.id().toString()))
                     .as("step 6: closing writes exactly one activity row")
                     .hasSize(1);
                 assertThat(ended.get())
@@ -269,7 +272,7 @@ class InstanceShellLiveTest {
                 session.close(InstanceShell.EndReason.EXITED);
                 session.write("echo after-close\n");
                 session.resize(80, 24);
-                assertThat(activityFor(id, InstanceShell.ACTIVITY_CLOSE))
+                assertThat(activityFor(id, HohenheimActivityAction.SHELL_CLOSE.id().toString()))
                     .withFailMessage("step 7: a second close wrote a SECOND close entry --"
                         + " teardown must be exactly-once whichever end fires it")
                     .hasSize(1);
@@ -390,7 +393,7 @@ class InstanceShellLiveTest {
                     assertThat(session.isOpen())
                         .as("step 2: the session opened despite the declared shell missing")
                         .isTrue();
-                    List<Row> opened = activityFor(id, InstanceShell.ACTIVITY_OPEN);
+                    List<Row> opened = activityFor(id, HohenheimActivityAction.SHELL_OPEN.id().toString());
                     assertThat(opened).as("step 2: and it was audited").hasSize(1);
                     assertThat((String) opened.get(0).get(ActivityModel.DETAIL))
                         .withFailMessage("step 2: the audit names the shell that was NOT"
@@ -504,11 +507,9 @@ class InstanceShellLiveTest {
 
         static final Identifier ID = Identifier.of("hohenheim", "live_shell_workload");
         static final Schema SETTINGS_SCHEMA = new Schema();
-        private static boolean registered;
 
         static void register() {
-            if (!registered) {
-                registered = true;
+            if (InstanceKinds.getHandler(ID.toString()) == null) {
                 InstanceKinds.register(new LiveShellKind());
             }
         }
@@ -528,7 +529,7 @@ class InstanceShellLiveTest {
 
         @Override public Icon getIcon() { return Icon.of("flask"); }
 
-        @Override public String getColor() { return "gray"; }
+        @Override public BadgeColor color() { return ColorHue.GRAY; }
 
         @Override public Schema getSchema() { return SETTINGS_SCHEMA; }
 

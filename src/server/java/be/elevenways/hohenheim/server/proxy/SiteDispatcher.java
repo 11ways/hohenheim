@@ -70,7 +70,7 @@ public class SiteDispatcher implements HttpHandler {
      * root/empty collapsed to null (= catch-all).
      *
      * AIDEV-NOTE: THE single definition of route-path identity. Domain uniqueness in
-     * SiteDomainResource must compare with this exact function, or the editor can accept two
+     * SiteDomainRouteInvariant must compare with this exact function, or the editor can accept two
      * rows ("api" and "/api") that collapse to one route here and lose one to first-wins.
      */
     public static @Nullable String normalizeRoutePath(@Nullable String raw) {

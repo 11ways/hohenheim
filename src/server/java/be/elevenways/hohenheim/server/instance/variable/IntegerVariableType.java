@@ -1,11 +1,14 @@
 package be.elevenways.hohenheim.server.instance.variable;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.validator.Max;
 import be.elevenways.zenit.common.validation.validator.Min;
@@ -16,7 +19,7 @@ import java.util.Map;
 /** Whole-number variable with optional min/max bounds. */
 public final class IntegerVariableType implements VariableTypeHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "integer");
+    public static final Identifier ID = HohenheimIds.id("integer");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final IntegerField MIN = SETTINGS_SCHEMA.addField(
@@ -44,7 +47,7 @@ public final class IntegerVariableType implements VariableTypeHandler {
     public Icon getIcon() { return Icon.of("hashtag"); }
 
     @Override
-    public String getColor() { return "blue"; }
+    public BadgeColor color() { return ColorHue.BLUE; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }

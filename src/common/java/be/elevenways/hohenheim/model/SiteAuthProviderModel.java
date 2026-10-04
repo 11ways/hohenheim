@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.auth.SiteAuthProviderTypeRegistry;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -17,20 +18,20 @@ import java.util.List;
  */
 public class SiteAuthProviderModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "site_auth_provider");
+    public static final Identifier MODEL_ID = HohenheimIds.id("site_auth_provider");
     public static final Schema SCHEMA = new Schema();
 
     /** PermissionSuggestionSources key: the assigned Proteus realm's vocabulary (registered server-side). */
-    public static final String PROTEUS_SUGGESTION_SOURCE = "hohenheim:proteus_realm";
+    public static final Identifier PROTEUS_SUGGESTION_SOURCE = HohenheimIds.id("proteus_realm");
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .label(HohenheimFormCopy.label("auth_provider_name"))
         .help(HohenheimFormCopy.help("auth_provider_name")).build());
 
-    // RegistryEnumField: values come from SiteAuthProviderTypeRegistry at runtime.
+    // RegistryMemberField: values come from SiteAuthProviderTypeRegistry at runtime.
     public static final EnumField PROVIDER_TYPE = SCHEMA.addField(
-        RegistryEnumField.builder("provider_type")
+        RegistryMemberField.builder("provider_type")
             .registry(SiteAuthProviderTypeRegistry.REGISTRY)
             .label(HohenheimFormCopy.label("auth_provider_type"))
             .help(HohenheimFormCopy.help("auth_provider_type"))
@@ -45,7 +46,7 @@ public class SiteAuthProviderModel extends Model {
             .build());
 
     // Provider-agnostic required permission for claims-based providers (null = any identity).
-    // PermissionField: edits with the KnownPermissions vocabulary as autocomplete, plus
+    // PermissionField: edits with the declared permissions as autocomplete, plus
     // the assigned Proteus realm's fetched vocabulary on top.
     public static final StringField REQUIRED_PERMISSION = SCHEMA.addField(
         PermissionField.builder("required_permission")

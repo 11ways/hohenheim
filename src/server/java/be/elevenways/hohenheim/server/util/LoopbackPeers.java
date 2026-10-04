@@ -1,15 +1,19 @@
 package be.elevenways.hohenheim.server.util;
 
+import be.elevenways.protoblast.common.Blast;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.BinaryOperator;
 
 /**
  * Who owns the other end of a loopback TCP connection, read from the kernel's socket tables.
@@ -61,6 +65,33 @@ public final class LoopbackPeers {
             owner = found;
         }
         return owner;
+    }
+
+    /**
+     * Whether an accepted loopback connection was opened by a socket owned by {@code selfUid}; a refusal is logged.
+     *
+     * @param peerOwner (peer port, bridge port) to the uid owning the connecting socket, null when unknown
+     * @param selfUid   the uid a peer must own its socket as; null refuses every peer
+     * @param bridge    the bridge's name and what it guards, for the refusal's log line
+     */
+    public static boolean admits(@NonNull SocketChannel connection, int bridgePort,
+                                 @NonNull BinaryOperator<Integer> peerOwner, @Nullable Integer selfUid,
+                                 @NonNull String bridge) {
+        Integer owner;
+        try {
+            if (!(connection.getRemoteAddress() instanceof InetSocketAddress peer)) {
+                return false;
+            }
+            owner = selfUid == null ? null : peerOwner.apply(peer.getPort(), bridgePort);
+        } catch (IOException | RuntimeException unknown) {
+            owner = null;
+        }
+        if (owner != null && owner.equals(selfUid)) {
+            return true;
+        }
+        Blast.log(bridge + ": refused a loopback peer on port", bridgePort, "owned by uid", owner,
+            "- only this process's uid may use it");
+        return false;
     }
 
     /**

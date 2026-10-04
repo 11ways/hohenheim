@@ -1,7 +1,10 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.instance.DeviceType;
+import be.elevenways.hohenheim.instance.InstanceOperations.PowerResult;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -10,19 +13,26 @@ import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.InstanceResource;
+import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.result.ActionResult;
+import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.http.body.FormSubmissionRawValues;
+import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.zenit.server.operation.OperationRequest;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -48,13 +58,13 @@ import java.util.Map;
  *
  *    AIDEV-NOTE: the resource-pipeline create (no {@code template_id} in the body) is the
  *    ONE place this file names a permission itself, and it is the SiteApi argument
- *    verbatim: {@code ManageInstanceResource} is not creatable, so the only panel with an
+ *    verbatim: the /manage instance entry is not creatable, so the only panel with an
  *    instance create form is the admin one, and mirroring it means demanding the admin
  *    permission as narrowed by the key's scopes. Everything the create then decides --
  *    placement, declarations, image policy, quota, project grouping -- is the resource's
  *    and the model hooks', not this file's. The delete lane names nothing: it reaches
- *    {@code InstanceService.destroy} through the resource, and THAT funnel demands the
- *    {@code destroy} capability.
+ *    {@code InstanceService.destroy} through the entry's delete operation, and THAT funnel
+ *    demands the {@code destroy} capability.
  *
  *    AIDEV-NOTE: {@link #visibleInstance} checks {@code view} and NOTHING ELSE, by design
  *    -- it answers "may you see this record", never "may you do this to it". Every
@@ -75,10 +85,23 @@ import java.util.Map;
  */
 public final class InstanceApi {
 
-    /** The admin create/delete form's own resource; see createThroughResource. */
-    private static final InstanceResource INSTANCES = new InstanceResource();
+    /** The power operation each {@code action} value of the power route names; the route's own vocabulary. */
+    private static final Map<String, Operation<Row, Void, PowerResult>> POWER_ACTIONS = Map.of(
+        "start", InstanceOperations.START,
+        "stop", InstanceOperations.STOP,
+        "restart", InstanceOperations.RESTART);
 
     private InstanceApi() {
+    }
+
+    /**
+     * The admin panel's instance entry, the create and delete form's own; every create lane, template or not,
+     * asks it first.
+     *
+     * @return the entry, or null when the response has already been ended (the uniform 404 of an instance-less node)
+     */
+    private static @Nullable PanelResource<Row> instances(@NonNull Conduit conduit) {
+        return ApiConduits.rowEntry(conduit, ApiConduits.adminPanel(), InstanceParts.SLUG);
     }
 
     public static void init() {
@@ -117,27 +140,22 @@ public final class InstanceApi {
             }
             int instanceId = row.get(InstanceModel.ID);
             String action = ApiConduits.formValue(conduit, "action");
-            InstanceService service = new InstanceService();
+            Operation<Row, Void, PowerResult> operation = POWER_ACTIONS.get(action);
+            if (operation == null) {
+                return ApiConduits.refusal(conduit, Violations.ofField("action", action,
+                    ApiConduits.violationText("unknown_power_action")));
+            }
             try {
-                switch (action) {
-                    case "start" -> service.deploy(instanceId, DeployTrigger.MANUAL);
-                    case "stop" -> service.stop(instanceId);
-                    case "restart" -> {
-                        service.stop(instanceId);
-                        service.deploy(instanceId, DeployTrigger.MANUAL);
-                    }
-                    default -> {
-                        return ApiConduits.refusal(conduit, Violations.ofField("action", action,
-                            ApiConduits.violationText("unknown_power_action")));
-                    }
-                }
+                OperationPipeline.invoke(OperationRequest.of(operation, ZenitPlacementSurface.HTTP_API)
+                    .caller(ctx)
+                    .subjects(List.of(row)));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
+            } catch (DomainRefusal refused) {
+                return ApiConduits.refusal(conduit, refused, row);
             }
-            // No record call here: InstanceService.deploy/stop record every settled power
-            // operation themselves, and the row's own origin column already says "api".
-            // A restart therefore lands as the TWO rows it actually is -- a stop and a
-            // deploy, separately fenced, with a window between them.
+            // No record call here: the service records every settled power operation itself, a restart as the
+            // stop and deploy halves it is, under ONE operation lock.
             return ApiConduits.json(Map.of("id", instanceId, "action", action,
                 "status", String.valueOf((Object) reload(instanceId).get(InstanceModel.STATUS))));
         });
@@ -158,15 +176,19 @@ public final class InstanceApi {
                     ApiConduits.violationText("console_command_required")));
             }
             try {
-                // InstanceConsoles.sendCommand IS the console gate now (it asks
-                // requireOperationCapability for CONSOLE itself), so this lane must not
-                // carry a second, drifting copy of it.
-                InstanceConsoles.sendCommand(instanceId, command);
+                // The operation's gate and InstanceConsoles' own funnel ask the console capability; this lane
+                // carries no copy of either.
+                OperationPipeline.invoke(OperationRequest.of(InstanceOperations.CONSOLE_COMMAND,
+                        ZenitPlacementSurface.HTTP_API)
+                    .caller(ctx)
+                    .subjects(List.of(row))
+                    .form(Map.of(InstanceOperations.COMMAND.getName(), command)));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
+            } catch (DomainRefusal refused) {
+                return ApiConduits.refusal(conduit, refused, row);
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "console_command",
-                command);
+            // The operation records the line on the instance, from every surface.
             return ApiConduits.json(Map.of("id", instanceId, "status", "sent"));
         });
 
@@ -181,12 +203,16 @@ public final class InstanceApi {
             }
             int instanceId = row.get(InstanceModel.ID);
             try {
-                int backupId = new InstanceBackups().backupNow(instanceId);
-                ActivityLog.record(Models.get(InstanceModel.class), instanceId, "backup",
-                    "backup #" + backupId);
+                // The service records the backup on the instance; no surface writes an activity row.
+                Integer backupId = OperationPipeline.invoke(
+                    OperationRequest.of(InstanceOperations.BACKUP, ZenitPlacementSurface.HTTP_API)
+                        .caller(ctx)
+                        .subjects(List.of(row))).value();
                 return ApiConduits.json(Map.of("id", instanceId, "backup", backupId));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
+            } catch (DomainRefusal refused) {
+                return ApiConduits.refusal(conduit, refused, row);
             }
         });
 
@@ -201,13 +227,17 @@ public final class InstanceApi {
             }
             int instanceId = row.get(InstanceModel.ID);
             try {
-                int snapshotId = new InstanceSnapshots().create(instanceId,
-                    emptyToNull(ApiConduits.formValue(conduit, "note")));
-                ActivityLog.record(Models.get(InstanceModel.class), instanceId, "snapshot",
-                    "snapshot #" + snapshotId);
+                Integer snapshotId = OperationPipeline.invoke(
+                    OperationRequest.of(InstanceOperations.SNAPSHOT, ZenitPlacementSurface.HTTP_API)
+                        .caller(ctx)
+                        .subjects(List.of(row))
+                        .form(Map.of(InstanceOperations.NOTE.getName(),
+                            ApiConduits.formValue(conduit, InstanceOperations.NOTE.getName())))).value();
                 return ApiConduits.json(Map.of("id", instanceId, "snapshot", snapshotId));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
+            } catch (DomainRefusal refused) {
+                return ApiConduits.refusal(conduit, refused, row);
             }
         });
 
@@ -222,6 +252,11 @@ public final class InstanceApi {
                 // pipeline decides everything instead.
                 return createThroughResource(conduit, ctx, form);
             }
+            // The template funnel never touches the entry, but a node that declares none (no
+            // INSTANCES role) has no instance create at all: answer its 404 before anything.
+            if (instances(conduit) == null) {
+                return null;
+            }
             Row template = InstanceTemplates.templateFrom(form);
             if (template == null) {
                 return ApiConduits.refusal(conduit,
@@ -235,7 +270,7 @@ public final class InstanceApi {
                     HandlerSupport.submittedString(form, "name"),
                     HandlerSupport.submittedInteger(form, "server_id"), form, ctx);
                 Row created = reload(instanceId);
-                ActivityLog.record(Models.get(InstanceModel.class), instanceId, "created",
+                ActivityLog.record(Models.get(InstanceModel.class), instanceId, ZenitActivityAction.CREATE,
                     created.get(InstanceModel.NAME));
                 return ApiConduits.json(projection(created));
             } catch (Violations refused) {
@@ -252,22 +287,28 @@ public final class InstanceApi {
             if (row == null) {
                 return null;
             }
+            PanelResource<Row> instances = instances(conduit);
+            if (instances == null) {
+                return null;
+            }
             int instanceId = row.get(InstanceModel.ID);
             String name = row.get(InstanceModel.NAME);
             try {
-                // InstanceResource.deleteRow IS InstanceService.destroy: the workload is
+                // The entry's delete IS InstanceService.destroy: the workload is
                 // torn down for real and the row soft-deleted, and the service's own
                 // funnel demands the `destroy` capability -- so seeing an instance
                 // (rule 1's `view`) is not enough to destroy it, and the refusal is the
                 // service's typed one rather than anything decided here.
-                ResourceWrites.delete(ApiConduits.adminPanel(), INSTANCES, row, ctx);
+                ResourceWrites.delete(ApiConduits.adminPanel(), instances, row, ctx);
             } catch (Violations refused) {
+                return ApiConduits.refusal(conduit, refused);
+            } catch (DomainRefusal refused) {
                 return ApiConduits.refusal(conduit, refused);
             } catch (AccessRefusedException refused) {
                 conduit.forbidden();
                 return null;
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "deleted", name);
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, ZenitActivityAction.DELETE, name);
             return ApiConduits.json(Map.of("id", instanceId, "status", "deleted"));
         });
 
@@ -321,7 +362,7 @@ public final class InstanceApi {
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "variable_set", key);
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.VARIABLE_SET, key);
             return ApiConduits.json(Map.of("id", instanceId, "status", "set", "key", key));
         });
 
@@ -351,7 +392,7 @@ public final class InstanceApi {
                 return ApiConduits.refusal(conduit, Violations.ofField("key", key,
                     ApiConduits.violationText("variable_not_found")));
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "variable_deleted",
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.VARIABLE_DELETED,
                 key);
             return ApiConduits.json(Map.of("id", instanceId, "status", "deleted", "key", key));
         });
@@ -416,7 +457,7 @@ public final class InstanceApi {
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "device_attached",
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.DEVICE_ATTACHED,
                 type + " " + name);
             return ApiConduits.json(Map.of("id", instanceId, "status", "attached",
                 "device", name, "type", type));
@@ -441,7 +482,7 @@ public final class InstanceApi {
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "device_resized",
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.DEVICE_RESIZED,
                 name);
             return ApiConduits.json(Map.of("id", instanceId, "status", "resized",
                 "device", name, "size_gb", sizeGb != null ? sizeGb : 0));
@@ -463,7 +504,7 @@ public final class InstanceApi {
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "device_detached",
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.DEVICE_DETACHED,
                 name);
             return ApiConduits.json(Map.of("id", instanceId, "status", "detached",
                 "device", name));
@@ -486,7 +527,7 @@ public final class InstanceApi {
     /**
      * Create one instance through the admin form's own pipeline: kind, name, host,
      * runtime image, environment and the kind's own settings schema, coerced and
-     * validated by {@link InstanceResource} and refused by every model hook that guards
+     * validated by the admin instance entry ({@link InstanceParts#admin()}) and refused by every model hook that guards
      * a form save (placement, declarations, image policy, quota, capacity, project
      * grouping).
      *
@@ -505,10 +546,14 @@ public final class InstanceApi {
             conduit.forbidden();
             return null;
         }
+        PanelResource<Row> instances = instances(conduit);
+        if (instances == null) {
+            return null;
+        }
         try {
-            int instanceId = (Integer) ResourceWrites.create(ApiConduits.adminPanel(), INSTANCES, form, ctx);
+            int instanceId = (Integer) ResourceWrites.create(ApiConduits.adminPanel(), instances, form, ctx);
             Row created = reload(instanceId);
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "created",
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, ZenitActivityAction.CREATE,
                 created.get(InstanceModel.NAME));
             return ApiConduits.json(projection(created));
         } catch (Violations refused) {
@@ -656,7 +701,4 @@ public final class InstanceApi {
         return row;
     }
 
-    private static @Nullable String emptyToNull(@NonNull String value) {
-        return value.isEmpty() ? null : value;
-    }
 }

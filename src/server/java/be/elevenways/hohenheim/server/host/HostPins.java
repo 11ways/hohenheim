@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -83,7 +84,7 @@ public final class HostPins {
         String name = String.valueOf((Object) server.get(ServerModel.NAME));
 
         if (pinned == null || pinned.isBlank()) {
-            ActivityLog.withAction(ActivityLog.ACTION_UPDATE, "host_key_pinned", () -> {
+            ActivityLog.withAction(ZenitActivityAction.UPDATE, "host_key_pinned", () -> {
                 server.set(slot.material(), offeredMaterial);
                 server.set(slot.fingerprint(), offeredFingerprint);
                 server.set(slot.pinnedAt(), Now.instant());
@@ -126,7 +127,7 @@ public final class HostPins {
         if (!slot.isPinned(server)) {
             throw Violations.ofForm(HostKeys.violation("host_key_not_pinned"));
         }
-        ActivityLog.withAction(ActivityLog.ACTION_UPDATE, "host_key_verified", () -> {
+        ActivityLog.withAction(ZenitActivityAction.UPDATE, "host_key_verified", () -> {
             server.set(slot.verified(), true);
             Models.get(ServerModel.class).save(server);
         });
@@ -151,7 +152,7 @@ public final class HostPins {
         }
         String previous = server.get(slot.fingerprint());
         String fingerprint = fingerprintOf.apply(offered);
-        ActivityLog.withAction(ActivityLog.ACTION_UPDATE, "host_key_repinned", () -> {
+        ActivityLog.withAction(ZenitActivityAction.UPDATE, "host_key_repinned", () -> {
             server.set(slot.material(), offered);
             server.set(slot.fingerprint(), fingerprint);
             server.set(slot.pinnedAt(), Now.instant());

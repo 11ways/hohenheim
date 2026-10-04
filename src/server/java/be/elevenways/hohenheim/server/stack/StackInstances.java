@@ -218,7 +218,7 @@ public final class StackInstances {
                         "no".equals(service.restartPolicy())
                             ? InstanceModel.CRASH_NONE : InstanceModel.CRASH_RESTART);
                     instance.set(InstanceModel.SETTINGS, settings);
-                    Models.get(InstanceModel.class).save(instance);
+                    InstanceModel.saveConfiguration(instance);
                     int savedId = instance.get(InstanceModel.ID);
                     new InstanceVariables().storeSecretEnvironment(savedId, environment);
                     return savedId;

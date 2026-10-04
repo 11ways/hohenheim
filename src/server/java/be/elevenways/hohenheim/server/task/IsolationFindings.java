@@ -80,6 +80,34 @@ public final class IsolationFindings {
             : subject + ": isolation UNCONFIRMED: " + String.join("; ", detail));
     }
 
+    /**
+     * One host's sweep outcome. An unverifiable host is UNCONFIRMED; on a verifiable one the sweep DID read the kernel,
+     * so every workload it cut off and every error left is the security-consequential half and escalates every run.
+     *
+     * @param tag             the sweep's log prefix
+     * @param unverifiableWhy why a host of this sweep cannot be verified, for the log
+     * @param cutLabel        how the log names the workloads the sweep cut off (STOPPED, CONTAINED)
+     */
+    public void host(@NonNull String tag, @NonNull String unverifiableWhy, @NonNull String server, boolean verifiable,
+                     @NonNull List<String> enforced, @NonNull List<String> repaired, @NonNull String cutLabel,
+                     @NonNull List<String> cut, @NonNull List<String> errors) {
+        if (!verifiable) {
+            Blast.log(tag, server, "cannot be kernel-verified" + unverifiableWhy
+                + "; its workloads' isolation is UNCONFIRMED:", errors);
+            this.unconfirmed(server, errors);
+            return;
+        }
+        if (!repaired.isEmpty() || !cut.isEmpty() || !errors.isEmpty()) {
+            Blast.log(tag, server, "- enforced", enforced.size(), ", repaired", repaired, ", " + cutLabel, cut,
+                ", errors", errors);
+        }
+        List<String> escalations = new ArrayList<>(cut);
+        escalations.addAll(errors);
+        if (!escalations.isEmpty()) {
+            this.escalated(server, escalations);
+        }
+    }
+
     /** @return whether the sweep found nothing an operator needs to know about */
     public boolean isClean() {
         return this.escalations.isEmpty() && this.unconfirmed.isEmpty();

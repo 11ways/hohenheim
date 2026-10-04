@@ -3,22 +3,40 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.activity.ActivityRecordCell;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.cms.AdminActivityResource;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelPeer;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
-import be.elevenways.zenit.cms.common.resource.ActivityResource;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
+import be.elevenways.zenit.cms.common.schema.FilterState;
+import be.elevenways.zenit.cms.common.schema.SortSpec;
+import be.elevenways.zenit.auth.test.TestAccounts;
+import be.elevenways.zenit.cms.server.panel.PanelGate;
+import be.elevenways.zenit.cms.server.panel.PartsLists;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
+import be.elevenways.zenit.cms.server.resource.ActivityAdmin;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.test.support.TestAccessContexts;
+import be.elevenways.zenit.common.security.PrincipalRef;
+import be.elevenways.zenit.common.orm.activity.ActivityActions;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.ZenitPrincipalKind;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -31,6 +49,57 @@ import static org.assertj.core.api.Assertions.assertThat;
  * each row have to be chosen, and ActivityLog derives all three from whatever lane calls it.
  */
 class AdminActivityListTest extends HohenheimTestBase {
+
+    @Test
+    void actorFilterReadsDisplayedNamesRatherThanNumericFragments() throws Exception {
+        String first = "hh-actor-name-zelda";
+        String second = "hh-actor-name-alpha";
+        int zeldaId = TestAccounts.create("zelda-" + UUID.randomUUID() + "@example.com", "Zelda Actor", true, false);
+        int alphaId = TestAccounts.create("alpha-" + UUID.randomUUID() + "@example.com", "Alpha Actor", true, true);
+        write(ServerModel.MODEL_ID.toString(), first, first, "updated", Accountability.ORIGIN_WEB,
+            Instant.parse("2998-01-01T00:00:00Z"));
+        write(ServerModel.MODEL_ID.toString(), second, second, "updated", Accountability.ORIGIN_WEB,
+            Instant.parse("2998-01-02T00:00:00Z"));
+        Row zelda = rowFor(first);
+        zelda.set(ActivityModel.ACTOR, Integer.toString(zeldaId));
+        zelda.set(ActivityModel.ACTOR_KIND, ZenitPrincipalKind.ACCOUNT.id().toString());
+        zelda.set(ActivityModel.ACTOR_LABEL, null);
+        new ActivityModel().save(zelda);
+        Row alpha = rowFor(second);
+        alpha.set(ActivityModel.ACTOR, Integer.toString(alphaId));
+        alpha.set(ActivityModel.ACTOR_KIND, ZenitPrincipalKind.ACCOUNT.id().toString());
+        alpha.set(ActivityModel.ACTOR_LABEL, null);
+        new ActivityModel().save(alpha);
+        HttpResponse<String> response = adminGet("/admin/activity?filter.actor="
+            + URLEncoder.encode(PrincipalRef.account(zeldaId).key(), StandardCharsets.UTF_8));
+        assertThat(response.statusCode()).as("step 1: the actor-name filter renders").isEqualTo(200);
+        assertThat(response.body()).as("step 1: the filter matches the displayed name, not every numeric actor")
+            .contains(first).doesNotContain(second);
+        assertThat(response.body()).as("step 2: disabled accounts retain their display names").contains("Zelda Actor");
+
+        HttpResponse<String> searched = adminGet("/admin/activity?text=Alpha");
+        assertThat(searched.body()).as("step 3: relation search reads the account display name")
+            .contains(second).doesNotContain(first);
+
+        var access = TestAccessContexts.allAllowed();
+        var resource = adminActivityResource();
+        var applied = PartsLists.tableView(resource, access).apply(PartsLists.<Row>tableSpec(resource))
+            .withFilter(FilterState.of(Map.of("record_id", "hh-actor-name"))).withSort(SortSpec.asc("actor"));
+        assertThat(PartsReads.listRows(PanelGate.request(PanelRegistry.getBySlug("admin"), access), resource, null,
+            applied, access).stream().map(row -> row.get(ActivityModel.RECORD_ID)).toList())
+            .as("step 4: account names sort Alpha before Zelda, not by their ids").containsExactly(second, first);
+
+        Row user = AuthModels.users().findById(zeldaId);
+        user.set(UserModel.DISPLAY_NAME, null);
+        AuthModels.users().save(user);
+        Microcopy email = (Microcopy) PartsReads.cellValue(null, resource, null, zelda, column(resource, "actor"));
+        assertThat(email.resolve(LocaleChain.ofTags("en"), new ShippedCatalogs()))
+            .as("step 5: missing display name falls back to the stored email").isEqualTo(user.get(UserModel.EMAIL));
+        AuthModels.users().find().where(UserModel.ID.eq(zeldaId)).delete();
+        Microcopy deleted = (Microcopy) PartsReads.cellValue(null, resource, null, zelda, column(resource, "actor"));
+        assertThat(deleted.resolve(LocaleChain.ofTags("en"), new ShippedCatalogs()))
+            .as("step 6: a deleted author is named as unknown, never by its id").isEqualTo("Account no longer known");
+    }
 
     private static final String OPERATOR_TITLE = "hh-activity-operator-subject";
     private static final String BACKGROUND_TITLE = "hh-activity-background-subject";
@@ -48,14 +117,71 @@ class AdminActivityListTest extends HohenheimTestBase {
     private static final String SITE_RECORD_ID = "4246";
 
     @Test
+    void principalPickerDoesNotMatchNumericFragmentsOrAnotherKind() throws Exception {
+        Map<String, String[]> actors = Map.of(
+            "hh-principal-fragment-one", new String[]{"zenit:account", "1"},
+            "hh-principal-fragment-ten", new String[]{"zenit:account", "10"},
+            "hh-principal-fragment-twenty-one", new String[]{"zenit:account", "21"},
+            "hh-principal-fragment-system", new String[]{"zenit:system", "1"});
+        for (var actor : actors.entrySet()) {
+            write(ServerModel.MODEL_ID.toString(), actor.getKey(), actor.getKey(), "updated", Accountability.ORIGIN_WEB,
+                Instant.parse("2997-01-01T00:00:00Z"));
+            Row row = rowFor(actor.getKey());
+            row.set(ActivityModel.ACTOR_KIND, actor.getValue()[0]);
+            row.set(ActivityModel.ACTOR, actor.getValue()[1]);
+            row.set(ActivityModel.ACTOR_LABEL, null);
+            new ActivityModel().save(row);
+        }
+        var one = adminGet("/admin/activity?filter.record_id=hh-principal-fragment&filter.actor="
+            + URLEncoder.encode("zenit:account#1", StandardCharsets.UTF_8));
+        assertThat(one.body()).as("step 1: account 1 is not account 10, account 21 or system 1")
+            .contains("hh-principal-fragment-one").doesNotContain("hh-principal-fragment-ten",
+                "hh-principal-fragment-twenty-one", "hh-principal-fragment-system");
+        var system = adminGet("/admin/activity?filter.record_id=hh-principal-fragment&filter.actor="
+            + URLEncoder.encode("zenit:system#1", StandardCharsets.UTF_8));
+        assertThat(system.body()).as("step 2: the system's complete reference selects only its rows")
+            .contains("hh-principal-fragment-system").doesNotContain("hh-principal-fragment-one",
+                "hh-principal-fragment-ten", "hh-principal-fragment-twenty-one");
+    }
+
+    @Test
+    void systemActivityNamesTheSystemRatherThanAccountOne() throws Exception {
+        String record = "hh-system-actor-no-account-one";
+        write(ServerModel.MODEL_ID.toString(), record, record, "updated", Accountability.ORIGIN_SYSTEM,
+            Instant.parse("2999-01-02T00:00:00Z"));
+        Row row = rowFor(record);
+        row.set(ActivityModel.ACTOR, "1");
+        row.set(ActivityModel.ACTOR_KIND, ZenitPrincipalKind.SYSTEM.id().toString());
+        row.set(ActivityModel.ACTOR_LABEL, "work wait sweep");
+        new ActivityModel().save(row);
+
+        // 1. The host preserves the core projection instead of resolving system id 1 as a user.
+        PanelResource<Row> resource = adminActivityResource();
+        Object cell = PartsReads.cellValue(null, resource, null, row, column(resource, ActivityModel.ACTOR.getName()));
+        assertThat(cell).as("step 1: the localized core actor name is preserved").isInstanceOf(Microcopy.class);
+        assertThat(((Microcopy) cell).resolve(LocaleChain.ofTags("en"), new ShippedCatalogs()))
+            .as("step 1: system work is not account #1").isEqualTo("System");
+
+        // 2. The live admin list carries that name and never the internal reason.
+        HttpResponse<String> response = adminGet("/admin/activity?filter.origin=system&filter.record_id=" + record);
+        assertThat(response.statusCode()).as("step 2: system activity renders").isEqualTo(200);
+        assertThat(response.body()).as("step 2: the system row has its public name")
+            .contains(record, "System").doesNotContain("work wait sweep");
+        HttpResponse<String> selected = adminGet("/admin/activity?filter.origin.__cleared=1&filter.actor="
+            + URLEncoder.encode("zenit:system#1", StandardCharsets.UTF_8));
+        assertThat(selected.body()).as("step 3: the principal picker selects the declared system identity")
+            .contains(record).doesNotContain("work wait sweep");
+    }
+
+    @Test
     void activityListJourney() throws Exception {
 
         // 1. The hohenheim resource still describes the SAME columns the framework
         //    resource does: its spec is a copy (TableSpec has no toBuilder), so a column
         //    added upstream has to fail here rather than silently vanish from the panel.
-        AdminActivityResource resource = adminActivityResource();
-        List<String> ours = resource.tableSpec().columns().stream().map(ColumnSpec::name).toList();
-        List<String> framework = new ActivityResource().tableSpec().columns()
+        PanelResource<Row> resource = adminActivityResource();
+        List<String> ours = PartsLists.tableSpec(resource).columns().stream().map(ColumnSpec::name).toList();
+        List<String> framework = ActivityAdmin.table().columns()
             .stream().map(ColumnSpec::name).toList();
         assertThat(ours)
             .as("step 1: the panel's activity columns match the framework's")
@@ -63,7 +189,7 @@ class AdminActivityListTest extends HohenheimTestBase {
 
         // 2. Every filter an operator needs to reach ONE record is declared: the model,
         //    the record id, and the origin that flips the default scope.
-        List<String> filters = resource.tableSpec().filters().stream()
+        List<String> filters = PartsLists.tableSpec(resource).filters().stream()
             .map(FilterSpec::name).toList();
         assertThat(filters)
             .as("step 2: model, record and origin are all filterable")
@@ -121,31 +247,31 @@ class AdminActivityListTest extends HohenheimTestBase {
             .as("step 4: the origin filter narrows to that origin")
             .doesNotContain(OPERATOR_TITLE);
 
-        // 5. A verb leaves the resource as the SHARED localized label, not as the raw
-        //    snake_case token the column used to print.
-        Object verbCell = resource.cellValue(rowFor(OPERATOR_RECORD_ID),
+        // 5. A verb leaves the resource as its member's localized label, not as the raw
+        //    snake_case token the column used to print; the legacy "created" reads as the core verb (F6).
+        Object verbCell = PartsReads.cellValue(null, resource, null, rowFor(OPERATOR_RECORD_ID),
             column(resource, ActivityModel.ACTION.getName()));
         assertThat(verbCell)
             .as("step 5: the verb cell is the localized label")
             .isInstanceOf(Microcopy.class);
         assertThat(((Microcopy) verbCell).key())
-            .as("step 5: the label is keyed by the stored verb")
-            .isEqualTo("created");
+            .as("step 5: the label is the core create verb's")
+            .isEqualTo(ZenitActivityAction.CREATE.label().key());
 
-        // 6. An unregistered verb still says what happened: the shared label falls open to
-        //    the raw verb, so a new hohenheim action is never a blank cell.
-        Object unknownCell = resource.cellValue(rowFor(UNLINKABLE_RECORD_ID),
+        // 6. An undeclared verb reads as the one unknown label, never as its raw text and
+        //    never as a blank cell.
+        Object unknownCell = PartsReads.cellValue(null, resource, null, rowFor(UNLINKABLE_RECORD_ID),
             column(resource, ActivityModel.ACTION.getName()));
         assertThat(((Microcopy) unknownCell).key())
-            .as("step 6: an unregistered verb keeps its own text")
-            .isEqualTo(UNREGISTERED_VERB);
+            .as("step 6: an undeclared verb reads as the unknown label")
+            .isEqualTo(ActivityActions.unknownLabel().key());
         assertThat(defaultList.body())
-            .as("step 6: and that text is what the list prints")
-            .contains(UNREGISTERED_VERB);
+            .as("step 6: and that label is what the list prints")
+            .contains("Unknown action");
 
         // 7. A record a registered resource serves is a LINK to that record; the label is
         //    the title the row stored, never a fresh lookup.
-        Object linked = resource.cellValue(rowFor(OPERATOR_RECORD_ID),
+        Object linked = PartsReads.cellValue(null, resource, null, rowFor(OPERATOR_RECORD_ID),
             column(resource, ActivityModel.RECORD_ID.getName()));
         assertThat(linked).as("step 7: the record cell is structured").isInstanceOf(ActivityRecordCell.class);
         ActivityRecordCell linkedCell = (ActivityRecordCell) linked;
@@ -159,7 +285,7 @@ class AdminActivityListTest extends HohenheimTestBase {
         // 7b. A model BOTH panels mount (sites: the admin resource and its /manage narrowing)
         //     still links into THIS panel: the admin activity list never sends an operator to
         //     /manage, whatever order the framework's panel registry iterates in.
-        ActivityRecordCell siteCell = (ActivityRecordCell) resource.cellValue(
+        ActivityRecordCell siteCell = (ActivityRecordCell) PartsReads.cellValue(null, resource, null,
             rowFor(SITE_RECORD_ID), column(resource, ActivityModel.RECORD_ID.getName()));
         assertThat(siteCell.url())
             .as("step 7b: a site row links to the admin site page")
@@ -170,7 +296,7 @@ class AdminActivityListTest extends HohenheimTestBase {
             .doesNotContain("/manage/sites/" + SITE_RECORD_ID);
 
         // 8. A record no resource serves stays plain text -- named, but not linked.
-        ActivityRecordCell orphan = (ActivityRecordCell) resource.cellValue(
+        ActivityRecordCell orphan = (ActivityRecordCell) PartsReads.cellValue(null, resource, null,
             rowFor(UNLINKABLE_RECORD_ID), column(resource, ActivityModel.RECORD_ID.getName()));
         assertThat(orphan.label())
             .as("step 8: an unlinkable record is still named")
@@ -192,20 +318,19 @@ class AdminActivityListTest extends HohenheimTestBase {
             .doesNotContain(UNLINKABLE_TITLE);
     }
 
-    /** The panel's own activity peer -- never a fresh instance, the registered one. */
-    private static AdminActivityResource adminActivityResource() {
+    /** The panel's own activity log, viewed as its caller sees it -- never a fresh one, the registered one. */
+    @SuppressWarnings("unchecked")
+    private static PanelResource<Row> adminActivityResource() {
         Panel panel = PanelRegistry.getBySlug("admin");
         assertThat(panel).as("the admin panel is registered").isNotNull();
-        for (PanelPeer peer : panel.peers()) {
-            if (peer instanceof AdminActivityResource activity) {
-                return activity;
-            }
+        if (panel.entryBySlug("activity") instanceof PanelResource<?> activity) {
+            return (PanelResource<Row>) activity;
         }
         throw new AssertionError("the admin panel exposes no activity resource");
     }
 
-    private static ColumnSpec column(AdminActivityResource resource, String name) {
-        ColumnSpec column = resource.tableSpec().column(name);
+    private static ColumnSpec column(PanelResource<Row> resource, String name) {
+        ColumnSpec column = PartsLists.tableSpec(resource).column(name);
         assertThat(column).as("the activity table declares a '" + name + "' column").isNotNull();
         return column;
     }

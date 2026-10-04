@@ -1,7 +1,10 @@
 package be.elevenways.hohenheim.server.stack;
 
+import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
@@ -29,6 +32,8 @@ import be.elevenways.zenit.common.orm.field.SchemaField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.StringMapField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -62,7 +67,7 @@ import java.util.Map;
  */
 public final class StackServiceKind implements InstanceKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "stack_service");
+    public static final Identifier ID = HohenheimIds.id("stack_service");
 
     /**
      * The BASELINE isolation profile every stack service container starts from.
@@ -204,7 +209,7 @@ public final class StackServiceKind implements InstanceKindHandler {
      * teardown path already refuses to fall into for nftables. Degrading is safe because
      * it can only ever NARROW: the container is created from this profile, so the worst
      * case is the baseline. The REFUSAL is not lost, it moved to the two places that are
-     * about authoring a declaration -- {@code StackServiceResource} (the form) and
+     * about authoring a declaration -- {@code StackParts.services()} (the form) and
      * {@link StackInstances#deploy} (the runtime funnel) -- both calling
      * {@link #hardeningFor}, so there is one definition and no second copy of the rule.
      */
@@ -257,7 +262,7 @@ public final class StackServiceKind implements InstanceKindHandler {
     public Icon getIcon() { return Icon.of("layer-group"); }
 
     @Override
-    public String getColor() { return "purple"; }
+    public BadgeColor color() { return ColorHue.PURPLE; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }
@@ -280,8 +285,8 @@ public final class StackServiceKind implements InstanceKindHandler {
         String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
         String name = str(settings.get(SERVICE_NAME.getName()));
 
-        List<String> command = stringList(settings.get(COMMAND.getName()));
-        List<String> capabilities = stringList(settings.get(CAPABILITIES.getName()));
+        List<String> command = PrimitiveCoercion.toTextList(settings.get(COMMAND.getName()));
+        List<String> capabilities = PrimitiveCoercion.toTextList(settings.get(CAPABILITIES.getName()));
 
         Map<String, String> volumes = new LinkedHashMap<>();
         EnvVars.toMap(settings.get(VOLUMES.getName())).forEach((volume, path) -> {
@@ -291,7 +296,7 @@ public final class StackServiceKind implements InstanceKindHandler {
         });
 
         Map<String, Long> tmpfs = new LinkedHashMap<>();
-        for (String path : stringList(settings.get(TMPFS_PATHS.getName()))) {
+        for (String path : PrimitiveCoercion.toTextList(settings.get(TMPFS_PATHS.getName()))) {
             if (!path.isBlank()) {
                 tmpfs.put(path, TMPFS_SIZE_BYTES);
             }
@@ -351,7 +356,7 @@ public final class StackServiceKind implements InstanceKindHandler {
                 publicExposure = false;
             } else {
                 throw Violations.ofField("settings.ports", hostIp,
-                    Microcopy.of("stack_port_bind_unsupported").withFilter("scope", "violations")
+                    HohenheimViolations.text("stack_port_bind_unsupported")
                         .withArg("service", service).withArg("address", hostIp));
             }
             String protocol = str(port.get(PORT_PROTOCOL.getName()));
@@ -360,16 +365,6 @@ public final class StackServiceKind implements InstanceKindHandler {
                 publicExposure, hostPort, null));
         }
         return List.copyOf(publications);
-    }
-
-    private static @NonNull List<String> stringList(@Nullable Object value) {
-        List<String> values = new ArrayList<>();
-        for (Object entry : listOf(value)) {
-            if (entry != null) {
-                values.add(String.valueOf(entry));
-            }
-        }
-        return values;
     }
 
     private static @NonNull List<?> listOf(@Nullable Object value) {

@@ -63,10 +63,10 @@ class ManageSourceRegistrationTest extends HohenheimTestBase {
             deriveFrameworkDefaults();
             RecordSource<?> derived = RecordSourceRegistry.INSTANCE
                 .requireDefaultFor(SiteModel.MODEL_ID);
-            assertThat(derived.permission())
+            assertThat(derived.requiredPermissions())
                 .as("step 2: zenit-cms must really derive a gated default for site,"
                     + " or this test proves nothing")
-                .isNotNull();
+                .isNotEmpty();
 
             assertThatCode(ManagePanel::declareSources)
                 .as("step 2: declaring the manage sources over the derived defaults"
@@ -93,10 +93,10 @@ class ManageSourceRegistrationTest extends HohenheimTestBase {
             assertThat(siteSource.hasAccessCriteria())
                 .as("step 4: the manage scope must survive the deliberate replacement")
                 .isTrue();
-            assertThat(siteSource.permission())
+            assertThat(siteSource.requiredPermissions())
                 .as("step 4: the site source is gated by its scope, never by a"
                     + " blanket permission")
-                .isNull();
+                .isEmpty();
 
             // 5. And the scope still BITES: a site exists, yet an anonymous audience
             //    reaches none of it through the source.

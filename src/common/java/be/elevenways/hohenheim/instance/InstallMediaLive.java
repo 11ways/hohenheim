@@ -4,6 +4,7 @@ import be.elevenways.hawkeye.common.annotation.Arg;
 import be.elevenways.hawkeye.common.annotation.HawkeyeFunction;
 import be.elevenways.hawkeye.common.render.RenderContext;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Identifier;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -28,7 +29,7 @@ import java.util.Map;
 public final class InstallMediaLive {
 
     /** THE feed id; the server registers it over the fetch model, gated by the tab's own permission. */
-    public static final @NonNull Identifier FEED = Identifier.of("hohenheim", "install_media_fetches");
+    public static final @NonNull Identifier FEED = HohenheimIds.id("install_media_fetches");
 
     private InstallMediaLive() {
     }

@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.server.http.HostPattern;
 import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -209,7 +210,7 @@ public class AcmeService {
         // certificate row exists, so a refused request leaves no trace of an order that was
         // never placed. It lives here rather than in the HTTP handler on purpose: several
         // entry points reach the CA (this one, the manual DNS lane, the renewal sweep), and
-        // a handler-layer check is the exact bypass shape SiteDomainResource's route
+        // a handler-layer check is the exact bypass shape SiteDomainRouteInvariant's route
         // invariant documents. Do NOT move it up into HohenheimHandlers.
         Map<String, Integer> declaring = CertificateAuthority.authorize(requester, hostnames);
 
@@ -242,7 +243,7 @@ public class AcmeService {
         certRow.set(CertificateModel.DOMAIN_NAMES_TEXT, String.join(",", hostnames));
         certRow.set(CertificateModel.CHALLENGE_TYPE, challengeType);
         certRow.set(CertificateModel.DNS_PUBLISHER, dnsPublisher);
-        certRow.set(CertificateModel.REQUESTED_BY_USER_ID, requester.subjectId());
+        CertificateModel.setRequester(certRow, requester.subject());
         if (email != null && !email.isBlank()) {
             certRow.set(CertificateModel.LETSENCRYPT_EMAIL, email.trim());
         }
@@ -282,7 +283,7 @@ public class AcmeService {
      * the alternative (stamping the new names first) would point every later renewal at a
      * set no certificate was ever issued for.
      *
-     * AIDEV-NOTE: REQUESTED_BY_USER_ID moves to the re-issuing actor, which is what renewal
+     * AIDEV-NOTE: the stored requester moves to the re-issuing actor, which is what renewal
      * re-authorizes as from here on. That is the correct accountability -- the names on the
      * certificate are now the ones THIS actor asked for -- but it does mean an operator
      * re-issuing a tenant's certificate takes over its renewal authority.
@@ -336,7 +337,7 @@ public class AcmeService {
             certRow.set(CertificateModel.DNS_PUBLISHER, dnsPublisher);
             certRow.set(CertificateModel.LETSENCRYPT_EMAIL,
                 email != null && !email.isBlank() ? email.trim() : null);
-            certRow.set(CertificateModel.REQUESTED_BY_USER_ID, requester.subjectId());
+            CertificateModel.setRequester(certRow, requester.subject());
             certModel.save(certRow);
 
             certificateStore.loadFromDatabase();
@@ -474,7 +475,7 @@ public class AcmeService {
             certRow.set(CertificateModel.CHALLENGE_TYPE, CertificateModel.CHALLENGE_DNS);
             certRow.set(CertificateModel.DNS_PUBLISHER, CertificateModel.DNS_PUBLISHER_MANUAL);
             certRow.set(CertificateModel.AUTO_RENEW, false);
-            certRow.set(CertificateModel.REQUESTED_BY_USER_ID, requester.subjectId());
+            CertificateModel.setRequester(certRow, requester.subject());
             if (email != null && !email.isBlank()) {
                 certRow.set(CertificateModel.LETSENCRYPT_EMAIL, email.trim());
             }
@@ -590,13 +591,25 @@ public class AcmeService {
         return invalidHostnames(hostnames, false);
     }
 
+    /**
+     * The domain a wildcard SAN names its hosts under: ACME's wildcard is exactly one leading
+     * label over a literal domain, which is HostPattern's one-label {@code *.}.
+     *
+     * @return the domain, null for an exact name or anything that is not such a wildcard
+     */
+    public static @Nullable String wildcardSanBase(@Nullable String san) {
+        HostPattern pattern = HostPattern.tryParse(san);
+        return pattern == null || pattern.port() != null || pattern.spansManyLabels() ? null : pattern.base();
+    }
+
     /** @return invalid names, optionally accepting one leading wildcard label for DNS-01 */
     public static List<String> invalidHostnames(List<String> hostnames, boolean allowWildcard) {
         List<String> invalid = new ArrayList<>();
         for (String hostname : hostnames) {
             String candidate = hostname != null ? hostname.trim().toLowerCase(Locale.ROOT) : null;
-            if (allowWildcard && candidate != null && candidate.startsWith("*.")) {
-                candidate = candidate.substring(2);
+            String base = allowWildcard ? wildcardSanBase(candidate) : null;
+            if (base != null) {
+                candidate = base;
             }
             if (!isValidHostname(candidate)) {
                 invalid.add(hostname);
@@ -710,10 +723,11 @@ public class AcmeService {
         List<String> hostnames = Arrays.asList(domainsText.split(","));
 
         try {
-            Integer requestedBy = certRow.get(CertificateModel.REQUESTED_BY_USER_ID);
-            Map<String, Integer> declaring = CertificateAuthority.authorize(requestedBy != null
-                ? CertificateAuthority.Requester.ofSubject(requestedBy)
-                : CertificateAuthority.Requester.SYSTEM, hostnames);
+            // No stored requester is an unattended order; a stored one is re-decided as the pair it is.
+            boolean unattended = certRow.get(CertificateModel.REQUESTED_BY_USER_ID) == null;
+            Map<String, Integer> declaring = CertificateAuthority.authorize(unattended
+                ? CertificateAuthority.Requester.SYSTEM
+                : CertificateAuthority.Requester.ofSubject(CertificateModel.requesterOf(certRow)), hostnames);
 
             String challengeType = certRow.get(CertificateModel.CHALLENGE_TYPE);
             if (challengeType == null || challengeType.isBlank()) {
@@ -923,9 +937,9 @@ public class AcmeService {
     /**
      * The declaring domain row for one authorization.
      *
-     * AIDEV-NOTE: the ACME identifier of a wildcard SAN drops the leading label, so
-     * "*.example.com" is authorized under identifier "example.com" -- both spellings must be
-     * looked up or a wildcard challenge lands unattributed.
+     * AIDEV-NOTE: the ACME identifier of a wildcard SAN drops the leading wildcard label, so
+     * the wildcard over example.com is authorized under identifier example.com -- both
+     * spellings must be looked up or a wildcard challenge lands unattributed.
      */
     private static GeneratedDnsRecords.Attribution attributionFor(DnsOrderContext context,
                                                                   DnsAuthorization authorization) {
@@ -933,7 +947,12 @@ public class AcmeService {
             ? authorization.identifier().toLowerCase(Locale.ROOT) : "";
         Integer domainId = context.declaring().get(identifier);
         if (domainId == null) {
-            domainId = context.declaring().get("*." + identifier);
+            for (Map.Entry<String, Integer> declared : context.declaring().entrySet()) {
+                if (identifier.equals(wildcardSanBase(declared.getKey()))) {
+                    domainId = declared.getValue();
+                    break;
+                }
+            }
         }
         return new GeneratedDnsRecords.Attribution(GeneratedDnsRecords.SOURCE_ACME,
             SiteDomainModel.MODEL_ID.toString(), domainId);

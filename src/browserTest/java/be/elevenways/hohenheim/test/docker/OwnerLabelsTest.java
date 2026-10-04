@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.test.docker;
 
 import be.elevenways.hohenheim.server.ControllerIdentity;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.TestDatabases;
 import org.junit.jupiter.api.BeforeAll;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
@@ -21,8 +21,8 @@ class OwnerLabelsTest {
 
     /** Names and labels are controller-namespaced, so this needs a real identity. */
     @BeforeAll
-    static void controllerIdentity() {
-        HohenheimTestRuntime.ensureDatasource();
+    static void controllerIdentity() throws Exception {
+        TestDatabases.freshDatabase();
     }
 
 

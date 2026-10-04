@@ -1,11 +1,12 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.InstanceResource;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -54,9 +55,14 @@ class InstanceApiTest extends HohenheimTestBase {
 
     /** A Docker host the application kind's picker rules accept. */
     private static Integer hostId;
+    private static FakeDockerDaemon daemon;
 
     @BeforeAll
     static void seed() {
+        // The granted destroy reaches the runtime; this API journey uses the shared daemon, never a host socket.
+        daemon = new FakeDockerDaemon();
+        daemon.install();
+        daemon.installContainerKind();
         hostId = host(PREFIX + "docker-host");
         tenantId = user("instance-api-tenant@surface.test", "Instance Api Tenant");
 
@@ -81,9 +87,14 @@ class InstanceApiTest extends HohenheimTestBase {
 
     @AfterAll
     static void cleanUp() {
-        InstanceModel instances = Models.get(InstanceModel.class);
-        for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
-            HardDeletes.byId(instances, row.get(InstanceModel.ID));
+        try {
+            InstanceModel instances = Models.get(InstanceModel.class);
+            for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
+                HardDeletes.byId(instances, row.get(InstanceModel.ID));
+            }
+        } finally {
+            FakeDockerDaemon.restore();
+            if (daemon != null) daemon.close();
         }
     }
 
@@ -258,7 +269,7 @@ class InstanceApiTest extends HohenheimTestBase {
         int viewOnlyId = viewOnlyInstance(PREFIX + "doors-view-only");
         int foreignId = instance(PREFIX + "doors-foreign");
 
-        // 1. No tenant create lane exists at all (ManageInstanceResource is not creatable),
+        // 1. No tenant create lane exists at all (the /manage instance entry is not creatable),
         //    and a key narrowed away from the admin permission is refused the same way.
         assertThat(keyPost(keyTenant, "/api/v1/instances", form(
             "name", PREFIX + "nope", "kind", "hohenheim:application")).statusCode())
@@ -335,18 +346,16 @@ class InstanceApiTest extends HohenheimTestBase {
     @Test
     void oneResolverAnswersTheDeleteAffordanceAndThePost() throws Exception {
         int viewOnlyId = viewOnlyInstance(PREFIX + "resolver-view-only");
-        InstanceResource resource = new InstanceResource();
         Row viewOnly = Models.get(InstanceModel.class).findById(viewOnlyId);
         AccessContext tenant = AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(tenantId, "Instance Api Tenant")));
 
         // 1. The affordance is OFFERED (the record is theirs to see) and DEAD, naming the
         //    tier's uniform refusal -- the very key the POST answers with.
-        assertThat(resource.deletableBy(viewOnly, tenant))
-            .as("step 1: the delete is offered rather than hidden").isTrue();
-        Microcopy reason = resource.deleteUnavailableReason(viewOnly, tenant);
-        assertThat(reason).as("step 1: and it is known to be refused").isNotNull();
-        assertThat(reason.key())
+        OperationPipeline.Offer offer = OperationPipeline.offer(InstanceOperations.DELETE, tenant, viewOnly);
+        assertThat(offer).as("step 1: the delete is offered rather than hidden, and dead")
+            .isInstanceOf(OperationPipeline.Offer.Unavailable.class);
+        assertThat(((OperationPipeline.Offer.Unavailable) offer).reason().key())
             .as("step 1: with the service gate's own refusal, never a second wording")
             .isEqualTo("instance_not_permitted");
 
@@ -370,8 +379,9 @@ class InstanceApiTest extends HohenheimTestBase {
         // written inside a request is deliberately not seen by that request's render.
         AccessContext granted = AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(tenantId, "Instance Api Tenant")));
-        assertThat(resource.deleteUnavailableReason(viewOnly, granted))
-            .as("step 3: a destroy holder is offered a live delete").isNull();
+        assertThat(OperationPipeline.offer(InstanceOperations.DELETE, granted, viewOnly))
+            .as("step 3: a destroy holder is offered a live delete")
+            .isInstanceOf(OperationPipeline.Offer.Available.class);
         HttpResponse<String> deleted = keyPost(keyTenantDestroy,
             "/api/v1/instances/" + viewOnlyId + "/delete", "");
         assertThat(deleted.statusCode())

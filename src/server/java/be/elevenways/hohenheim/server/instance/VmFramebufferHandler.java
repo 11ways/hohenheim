@@ -1,15 +1,14 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.websocket.WebSocketHandler;
 import be.elevenways.zenit.common.websocket.WebSocketSession;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -80,19 +79,14 @@ public final class VmFramebufferHandler implements WebSocketHandler {
 
     @Override
     public void onOpen() {
-        Principal principal = this.session.getPrincipal();
-        if (principal == null || this.instanceId == null
-                || !HohenheimAccess.hasInstanceCapability(
-                    principal, this.instanceId, HohenheimAccess.CONSOLE)) {
+        // The framebuffer operation's offer: its gate (CONSOLE), its applicability (an authored VM) and the
+        // caller's authorization. A container or a generated VM is refused exactly like a missing grant.
+        if (!InstanceOperationHandlers.offered(InstanceOperations.OPEN_FRAMEBUFFER, this.session.getPrincipal(),
+                this.instanceId)) {
             this.session.close(1008, "forbidden");
             return;
         }
         Row instance = Models.get(InstanceModel.class).findById(this.instanceId);
-        if (instance == null || !VmKind.ID.toString().equals(instance.get(InstanceModel.KIND))) {
-            this.session.sendText("not a VM instance");
-            this.session.close(1008, "not a vm");
-            return;
-        }
         String statusValue = instance.get(InstanceModel.STATUS);
         if (!InstanceModel.STATUS_RUNNING.equals(statusValue)
                 && !InstanceModel.STATUS_STARTING.equals(statusValue)) {
@@ -195,10 +189,8 @@ public final class VmFramebufferHandler implements WebSocketHandler {
     /** Mid-session re-check of CONSOLE; a false return makes core close the socket 1008. */
     @Override
     public boolean revalidate() {
-        Principal principal = this.session.getPrincipal();
-        return principal != null && this.instanceId != null
-            && HohenheimAccess.hasInstanceCapability(
-                principal, this.instanceId, HohenheimAccess.CONSOLE);
+        return InstanceOperationHandlers.offered(InstanceOperations.OPEN_FRAMEBUFFER, this.session.getPrincipal(),
+            this.instanceId);
     }
 
     @Override

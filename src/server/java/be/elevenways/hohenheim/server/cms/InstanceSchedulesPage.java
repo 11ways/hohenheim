@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.HohenheimParams;
@@ -8,7 +10,8 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -30,9 +33,9 @@ import java.util.Map;
  * Schedules tab on an instance: its record schedules, linking into the (nav-hidden)
  * schedule resource forms.
  */
-public final class InstanceSchedulesPage implements RecordScopedPage<Row> {
+public final class InstanceSchedulesPage implements RecordTab.Rendered<Row> {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_schedules"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_schedules"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_schedule"); }
     /**
      * Housekeeping, not an everyday destination: the tab lives in the strip's "More"
@@ -43,11 +46,11 @@ public final class InstanceSchedulesPage implements RecordScopedPage<Row> {
     @Override public @NonNull Icon icon() { return Icon.of("clock"); }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
+        Conduit conduit = request.conduit();
+        AccessContext accessContext = request.access();
         Integer instanceId = instance.get(InstanceModel.ID);
-        String panel = CmsSupport.panelSlug(conduit);
+        String panel = request.panelSlug();
 
         List<Map<String, Object>> schedules = new ArrayList<>();
         for (Row schedule : Models.get(RecordScheduleModel.class)
@@ -63,9 +66,9 @@ public final class InstanceSchedulesPage implements RecordScopedPage<Row> {
             // saving; a null next fire is the framework's "at the next sweep".
             Instant nextFireAt = schedule.get(RecordScheduleModel.NEXT_FIRE_AT);
             entry.put("nextFireAtIso", nextFireAt != null ? nextFireAt.toString() : "");
-            entry.put("editTarget", CmsRoutes.detail(panel, InstanceScheduleResource.SLUG,
+            entry.put("editTarget", CmsRoutes.detail(panel, InstanceScheduleParts.SLUG,
                 schedule.get(RecordScheduleModel.ID)));
-            entry.put("stepsTarget", CmsRoutes.subpage(panel, InstanceScheduleResource.SLUG,
+            entry.put("stepsTarget", CmsRoutes.subpage(panel, InstanceScheduleParts.SLUG,
                 schedule.get(RecordScheduleModel.ID), "steps"));
             schedules.add(entry);
         }
@@ -85,14 +88,14 @@ public final class InstanceSchedulesPage implements RecordScopedPage<Row> {
         // AIDEV-NOTE: gated on the SAME boolean the template's {% if %} uses. A declared
         // template variable is serialized into the hydration payload whether or not any
         // element renders it, so an ungated target would publish an editor route to a
-        // viewer who may not edit (the certificates-request leak SiteDomainsPage hit).
+        // viewer who may not edit (the certificates-request leak the site Domains tab hit).
         vars.put("addScheduleTarget", canEdit ? CmsEndpoints.CREATE_FORM
             .with(CmsEndpoints.PANEL_PARAM, panel)
-            .with(CmsEndpoints.RESOURCE_PARAM, InstanceScheduleResource.SLUG)
+            .with(CmsEndpoints.RESOURCE_PARAM, InstanceScheduleParts.SLUG)
             .with(HohenheimParams.RECORD_ID_PREFILL, instanceId) : null);
         vars.put("recordTabs", recordTabs(conduit));
         vars.put("timeWording", RelativeTimeWording.resolve(
             conduit.getLocales(), conduit.getMessageResolver()));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-schedules"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_SCHEDULES, vars);
     }
 }

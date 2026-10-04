@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
@@ -160,7 +161,7 @@ public final class HandlerSupport {
      */
     public static @NonNull Microcopy violationMessage(@NonNull Violations violations) {
         return violations.all().isEmpty()
-            ? Microcopy.of("refused").withFilter("scope", "violations")
+            ? HohenheimViolations.text("refused")
             : violations.all().get(0).message();
     }
 

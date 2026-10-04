@@ -4,10 +4,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -39,28 +36,17 @@ public final class InstanceImagePin {
             if (stored == null || stored.get(InstanceModel.IMAGE_FINGERPRINT) == null) {
                 return;
             }
-            Object kind = effective(row, stored, InstanceModel.KIND.getName());
-            String image = imageOf(effective(row, stored, InstanceModel.SETTINGS.getName()), "image");
-            String tag = imageOf(effective(row, stored, InstanceModel.SETTINGS.getName()), "tag");
+            Object kind = row.afterWrite(InstanceModel.KIND, stored);
+            Object settings = row.afterWrite(InstanceModel.SETTINGS, stored);
+            Object storedSettings = stored.get(InstanceModel.SETTINGS);
             boolean unchanged = Objects.equals(kind, stored.get(InstanceModel.KIND))
-                && Objects.equals(image, imageOf(stored.get(InstanceModel.SETTINGS), "image"))
-                && Objects.equals(tag, imageOf(stored.get(InstanceModel.SETTINGS), "tag"));
+                && Objects.equals(InstanceImagePolicy.settingText(settings, "image"),
+                    InstanceImagePolicy.settingText(storedSettings, "image"))
+                && Objects.equals(InstanceImagePolicy.settingText(settings, "tag"),
+                    InstanceImagePolicy.settingText(storedSettings, "tag"));
             if (!unchanged) {
                 row.set(InstanceModel.IMAGE_FINGERPRINT, null);
             }
         });
-    }
-
-    private static @Nullable Object effective(@NonNull Row row, @NonNull Row stored,
-                                              @NonNull String name) {
-        return row.has(name) ? row.get(name) : stored.get(name);
-    }
-
-    private static @Nullable String imageOf(@Nullable Object settings, @NonNull String key) {
-        if (settings instanceof Map<?, ?> map && map.get(key) != null) {
-            String value = String.valueOf(map.get(key)).trim();
-            return value.isEmpty() ? null : value;
-        }
-        return null;
     }
 }

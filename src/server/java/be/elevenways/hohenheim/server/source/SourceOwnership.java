@@ -17,6 +17,10 @@ import java.util.Set;
  * THE reach of a source or provider record: an OPERATOR-owned one may name the controller's
  * own filesystem and private networks, a TENANT-owned one only remote, public places.
  *
+ * AIDEV-NOTE: the wider reach also needs the record's TARGET_TRUSTED mark: its source or base URL was last set by the
+ * system tier (OperatorTrustedWrites). Ownership alone changes where no write hook sees it, so a target a tenant or a
+ * delegate set never gains the reach when the record later becomes operator-owned.
+ *
  * AIDEV-NOTE: "operator-owned" is {@link HohenheimAccess#manageSubjectsOf} answering an EMPTY
  * set -- the one ownership derivation of every tier (there is no owner column). An
  * unreadable grant set answers null and fails CLOSED to tenant reach. It is asked at USE
@@ -41,7 +45,12 @@ public final class SourceOwnership {
      */
     public static boolean localSourcesAllowed(@NonNull Identifier ownerModel, int ownerId) {
         Integer instanceId = sourceInstanceOf(ownerModel, ownerId);
-        return instanceId != null && operatorOwned(InstanceModel.MODEL_ID, instanceId);
+        if (instanceId == null) {
+            return false;
+        }
+        Row instance = Models.get(InstanceModel.class).findById(instanceId);
+        return instance != null && Boolean.TRUE.equals(instance.get(InstanceModel.TARGET_TRUSTED))
+            && isOperatorOwned(InstanceModel.MODEL_ID, instanceId);
     }
 
     /**
@@ -51,12 +60,13 @@ public final class SourceOwnership {
      */
     public static @NonNull OutboundUrlGuard providerGuard(@NonNull Row provider) {
         Integer providerId = provider.get(GitProviderModel.ID);
-        return providerId != null && operatorOwned(GitProviderModel.MODEL_ID, providerId)
+        return providerId != null && Boolean.TRUE.equals(provider.get(GitProviderModel.TARGET_TRUSTED))
+            && isOperatorOwned(GitProviderModel.MODEL_ID, providerId)
             ? OutboundUrlGuard.ANY_ADDRESS : OutboundUrlGuard.PUBLIC_INTERNET;
     }
 
     /** Whether nobody holds a manage grant on the record; unreadable grants answer false. */
-    private static boolean operatorOwned(@NonNull Identifier model, int recordId) {
+    public static boolean isOperatorOwned(@NonNull Identifier model, int recordId) {
         Set<String> subjects = HohenheimAccess.manageSubjectsOf(model, recordId);
         return subjects != null && subjects.isEmpty();
     }

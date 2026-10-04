@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -50,8 +51,6 @@ import java.util.List;
  */
 public final class InstanceStatusReconciler {
 
-    /** The activity action a correction is recorded under. */
-    public static final String ACTIVITY_RECONCILE_ACTION = "reconciled";
 
     /** What one record's reconciliation decided. */
     public enum Verdict {
@@ -229,10 +228,9 @@ public final class InstanceStatusReconciler {
         }
         Instant storedKill = fresh.get(InstanceModel.WORKLOAD_KILLED_AT);
         Instant killedAt = workloadKilledAt(live, storedKill);
-        long fence = this.instances.leases().requireFence(serverId);
+        this.instances.leases().requireFence(serverId);
         InstanceOperationGuard.stampObserved(this.instances.leases(), instanceId, serverId,
-            fence, settled, changed, killedAt,
-            String.valueOf((Object) fresh.get(InstanceModel.NAME)));
+            settled, changed, killedAt, String.valueOf((Object) fresh.get(InstanceModel.NAME)));
         if (storedKill == null && killedAt != null) {
             Blast.log("INSTANCE RECONCILE:", fresh.get(InstanceModel.NAME),
                 "runs, but the daemon reports its workload killed for out-of-memory");
@@ -260,7 +258,7 @@ public final class InstanceStatusReconciler {
         // A correction is accountability, not decoration: the record just contradicted
         // itself and the operator must be able to see when, and on whose evidence.
         ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-            ACTIVITY_RECONCILE_ACTION,
+            HohenheimActivityAction.RECONCILED,
             stored + " -> " + settled + " (died without an observed stop; the daemon"
                 + " reports the workload "
                 + (state == ContainerState.ABSENT ? "absent" : "stopped")
@@ -292,7 +290,10 @@ public final class InstanceStatusReconciler {
         // new thread; a raw virtual thread started the redeploy with no identity at all.
         JobRunner.startVirtualThread(() -> Db.run(datasource, () -> {
             try {
-                this.instances.deploy(instanceId);
+                // AIDEV-NOTE: the correction still holds this record's claim when it queues the restart. The new
+                // thread must wait for that claim to leave, then deploy re-entrantly under its own queued claim.
+                this.instances.operations().exclusive(instanceId, InstanceOperationLock.Contention.QUEUE,
+                    () -> this.instances.deploy(instanceId));
             } catch (RuntimeException refused) {
                 Blast.log("INSTANCE RECONCILE: crash restart of instance", name,
                     "refused:", refused.getMessage());

@@ -41,7 +41,7 @@ unified NetBird deployment (netbird-server + dashboard + netbird-proxy).
   (`StackInstances.java:38-46`).
 - **Records are desired state; deploys are explicit.** Saving a stack, service
   or file record never touches Docker. The Deploy row action
-  (`StackResource.java:234`) resolves the records into an immutable `StackSpec`
+  (`StackRuntime`) resolves the records into an immutable `StackSpec`
   and executes it. This is the Dokploy stance, not Coolify's
   save-triggers-deploy magic.
 - **Stack services do NOT auto-become proxy targets.** A normal
@@ -160,7 +160,7 @@ unified NetBird deployment (netbird-server + dashboard + netbird-proxy).
 | `StackRuntime` | per-stack worker queue, dependency ordering and condition gating, deployment records, status aggregation + `stack_health` alerts, rollback, volume purge, image reclaim wiring |
 | `StackDeploymentRecords` | deploy history writes (keeps the newest 50 per stack; a failed write degrades to a log line rather than taking the deploy down) |
 | `MonitorStacks` | scheduled status refresh (fallback `*/5 * * * *`, `STACKS` role) |
-| `StackResource` + `StackServicesPage` + `StackDeploymentsPage` (+ nav-hidden `StackServiceResource`, `StackFileResource`) | admin surface |
+| `StackParts.stacks()` + `StackServicesPage` + `StackDeploymentsPage` (+ nav-hidden `StackParts.services()`, `StackParts.files()`; verbs in `StackOperations`) | admin surface |
 
 ## Semantics worth knowing
 
@@ -205,7 +205,7 @@ unified NetBird deployment (netbird-server + dashboard + netbird-proxy).
   rows (and the deployment-history rows the worker saves) are unattributed
   system work. Deleting a stack is recorded by the ordinary delete hook.
 - Renaming a stack is refused while it still owns live workloads
-  (`StackResource.java:150`, `StackRuntime.java:277-291`): the name is embedded
+  (`StackParts.validStack`, `StackRuntime.java:277-291`): the name is embedded
   in the link network and every volume name, so a rename would orphan them. The
   gate is a live count decided on the stack's worker (a status string alone both
   misses orphans and locks out failed-first-deploy stacks); when the host cannot
@@ -276,7 +276,7 @@ an external build's leftover -- so it is kept unless
 
 The nightly `ReclaimDockerImages` task runs the sweep on every server hosting a
 stack (`stacks.reclaim_images`, default on); the `reclaim_images` header action
-on the stack list (`StackResource.java:317`) starts the identical sweep in the
+on the stack list (the `reclaim_images` operation, `StackOperations`) starts the identical sweep in the
 background and logs what it freed. Reclaim is per DAEMON, not per stack, so it
 deliberately does not run on a stack's worker lane -- there is no stack whose
 queue it belongs in.
@@ -290,5 +290,5 @@ survive. The teardown is required, not polite: Docker refuses to remove a volume
 attached to any container, stopped ones included, so a stop-only purge would
 fail on every mounted volume. The next deploy rebuilds the stack from the
 records, minus the data. The `purge_stack_volumes` row action
-(`StackResource.java:270`) guards it with a typed confirmation demanding the
+(`StackParts`' purge placement) guards it with a typed confirmation demanding the
 stack's own name.

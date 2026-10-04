@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim;
 
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.channel.Channel;
 
 /**
@@ -19,7 +18,7 @@ public final class HohenheimChannels {
      * hand them every instance.
      */
     public static final Channel<Object, Object> INSTANCE_STATS = Channel.builder()
-        .identifier(Identifier.of("hohenheim", "instance_stats"))
+        .identifier(HohenheimIds.id("instance_stats"))
         .requiresLogin()
         .build();
 

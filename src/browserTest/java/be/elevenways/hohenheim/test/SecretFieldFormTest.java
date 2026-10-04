@@ -72,10 +72,12 @@ class SecretFieldFormTest extends HohenheimTestBase {
         //    toast, while the credential table stores only its digest.
         int recordId = seedRecord();
         String recordPath = "/admin/dns-records/" + recordId;
-        HttpResponse<String> mint = adminPostForm(recordPath + "/action/dyndns_token", "");
-        assertThat(mint.statusCode()).as("5. the mint row action must be accepted").isIn(200, 302, 303);
+        HttpResponse<String> mint = adminPostForm("/admin/dns-records/invoke/hohenheim.dyndns_token?ids=" + recordId, "");
+        assertThat(mint.statusCode()).as("5. the mint row action must be accepted").isIn(302, 303);
+        assertThat(landingOf(mint)).as("5. and lands back on the record").isEqualTo(recordPath);
 
-        HttpResponse<String> afterMint = adminGet(recordPath);
+        // The toast is handed off to the load of the redirect's own Location.
+        HttpResponse<String> afterMint = adminGet(mint.headers().firstValue("Location").orElseThrow());
         java.util.regex.Matcher m = java.util.regex.Pattern.compile("hdyn_[A-Za-z0-9._-]+")
             .matcher(afterMint.body());
         assertThat(m.find()).as("5. the mint toast must disclose the plaintext token once").isTrue();

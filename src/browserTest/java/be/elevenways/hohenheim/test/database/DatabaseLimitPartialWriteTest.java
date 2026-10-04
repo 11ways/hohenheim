@@ -5,10 +5,8 @@ import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.cms.WithheldFailure;
-import be.elevenways.hohenheim.server.cms.DatabaseEngineResource;
-import be.elevenways.hohenheim.server.cms.DatabaseResource;
+import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
@@ -18,6 +16,8 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.server.panel.PartsWrites;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
@@ -86,13 +86,13 @@ class DatabaseLimitPartialWriteTest extends HohenheimTestBase {
 
     @Test
     void aWriteThatCarriesNoCeilingNeverUncapsOrRecreatesTheContainer() {
-        DatabaseResource databases = new DatabaseResource();
+        PanelResource<Row> databases = DatabaseParts.admin();
         Model model = Models.get(DatabaseModel.class);
         Object engineSettingsBefore = engineSettings(databaseId);
 
         // 1. A write carrying NOTHING (every entry stripped, a reduced spec) is a no-op: the
         //    stored 1024 MB / 1.5 CPU ceiling stays and no recreate is scheduled.
-        databases.updateRow(model.findById(databaseId), Map.of(), AccessContext.anonymous());
+        PartsWrites.updateRow(databases, model.findById(databaseId), Map.of(), AccessContext.anonymous());
         Row afterEmpty = model.findById(databaseId);
         assertThat((Integer) afterEmpty.get(DatabaseModel.MEMORY_LIMIT_MB))
             .as("step 1: an empty write keeps the memory ceiling").isEqualTo(1024);
@@ -102,7 +102,7 @@ class DatabaseLimitPartialWriteTest extends HohenheimTestBase {
         // 2. A write carrying ONLY the unchanged cpu ceiling (the inline cell lane's one entry)
         //    is still a no-op. Before the fix the absent memory read as null != 1024, which
         //    booked an uncapped engine and recreated it.
-        databases.updateRow(model.findById(databaseId), Map.of("cpu_limit", 1.5),
+        PartsWrites.updateRow(databases, model.findById(databaseId), Map.of("cpu_limit", 1.5),
             AccessContext.anonymous());
         Row afterCpu = model.findById(databaseId);
         assertThat((Integer) afterCpu.get(DatabaseModel.MEMORY_LIMIT_MB))
@@ -113,7 +113,7 @@ class DatabaseLimitPartialWriteTest extends HohenheimTestBase {
             .as("step 2: the engine instance is untouched").isEqualTo(engineSettingsBefore);
 
         // 3. A write carrying ONLY a new memory ceiling resizes memory and keeps the cpu one.
-        databases.updateRow(model.findById(databaseId), Map.of("memory_limit_mb", 2048),
+        PartsWrites.updateRow(databases, model.findById(databaseId), Map.of("memory_limit_mb", 2048),
             AccessContext.anonymous());
         Row resized = model.findById(databaseId);
         assertThat((Integer) resized.get(DatabaseModel.MEMORY_LIMIT_MB))
@@ -123,10 +123,10 @@ class DatabaseLimitPartialWriteTest extends HohenheimTestBase {
 
         // 4. A shared engine follows the same lane: an empty write and an unchanged
         //    one-entry write leave its ceilings and status alone.
-        DatabaseEngineResource engines = new DatabaseEngineResource();
+        PanelResource<Row> engines = DatabaseParts.engines();
         Model engineModel = Models.get(DatabaseEngineModel.class);
-        engines.updateRow(engineModel.findById(engineId), Map.of(), AccessContext.anonymous());
-        engines.updateRow(engineModel.findById(engineId), Map.of("cpu_limit", 2.0),
+        PartsWrites.updateRow(engines, engineModel.findById(engineId), Map.of(), AccessContext.anonymous());
+        PartsWrites.updateRow(engines, engineModel.findById(engineId), Map.of("cpu_limit", 2.0),
             AccessContext.anonymous());
         Row engine = engineModel.findById(engineId);
         assertThat((Integer) engine.get(DatabaseEngineModel.MEMORY_LIMIT_MB))

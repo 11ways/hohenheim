@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.preview;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -9,7 +10,7 @@ import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.model.StoredRows;
+import be.elevenways.hohenheim.preview.PreviewOperations;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.build.BuildQuota;
@@ -22,6 +23,7 @@ import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ConvergenceLocks;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.game.GameDomains;
+import be.elevenways.hohenheim.server.instance.PlaintextEnvironments;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
@@ -32,11 +34,8 @@ import be.elevenways.hohenheim.server.source.DeployStatuses;
 import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.server.source.GitProviderClient;
 import be.elevenways.hohenheim.server.source.GitCheckout;
-import be.elevenways.hohenheim.server.source.GitProviders;
-import be.elevenways.hohenheim.server.source.GitRepository;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
@@ -142,6 +141,7 @@ public final class PreviewDeployments {
         }
         Datasource datasource = Db.currentOrDefault();
         String pinnedSha = sha;
+        int previewId = preview.get(PreviewDeploymentModel.ID);
         // The build runs with SYSTEM authority whoever queued it: a preview is the application
         // owner's environment, charged to that owner regardless of who clicks (see above), and
         // the instance it writes is operator-shaped -- no tenant could author it field by field.
@@ -150,7 +150,7 @@ public final class PreviewDeployments {
         JobRunner.startVirtualThread(() -> ExecutionIdentity.runAsSystem("preview-deploy", () -> {
             Runnable build = () -> {
                 try {
-                    deploy(applicationId, ref, pinnedSha, prNumber, trigger);
+                    deployClaimed(previewId, pinnedSha, trigger);
                 } catch (Exception e) {
                     // The row already records status failed + last_error.
                     Blast.log("PREVIEW: queued deploy of application", applicationId, "ref", ref,
@@ -184,6 +184,25 @@ public final class PreviewDeployments {
     }
 
     /**
+     * Run the queued claim, never minting a replacement after its teardown won the same convergence lock.
+     *
+     * @return the deployed row, or null when the exact queued claim has already been reclaimed
+     */
+    public static @Nullable Row deployClaimed(int previewId, @Nullable String sha,
+                                              @NonNull DeployTrigger trigger) throws Exception {
+        PreviewDeploymentModel model = Models.get(PreviewDeploymentModel.class);
+        Row keyed = model.findById(previewId);
+        if (keyed == null) return null;
+        int applicationId = keyed.get(PreviewDeploymentModel.APPLICATION_ID);
+        String ref = keyed.get(PreviewDeploymentModel.REF);
+        synchronized (lockFor(applicationId, ref)) {
+            // AIDEV-NOTE: queue already charged and armed this exact claim. Reclaiming by ref here resurrected it.
+            Row preview = model.findById(previewId);
+            return preview == null ? null : deployClaimedLocked(applicationId, ref, sha, trigger, preview);
+        }
+    }
+
+    /**
      * The synchronous half of a deploy: validate the application, mint/refresh the
      * quota-charged row (status deploying) and arm the expiry. Callers hold the
      * per-(application, ref) lock.
@@ -193,12 +212,12 @@ public final class PreviewDeployments {
         Row application = ApplicationReleases.requireApplication(applicationId);
         if (!SiteSources.hasRepository(ApplicationReleases.storedSettings(application))) {
             throw Violations.ofField("application_id", applicationId,
-                violation("preview_unsupported_type"));
+                HohenheimViolations.text("preview_unsupported_type"));
         }
         String baseDomain = str(Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Previews.BASE_DOMAIN));
         if (baseDomain.isEmpty()) {
-            throw Violations.ofForm(violation("preview_no_base_domain"));
+            throw Violations.ofForm(HohenheimViolations.text("preview_no_base_domain"));
         }
         // A preview is built from the APPLICATION but must be REACHABLE, and a hostname
         // only routes when it sits in some site's domain table. Refusing here beats
@@ -206,22 +225,18 @@ public final class PreviewDeployments {
         Row site = exposingSite(applicationId);
         if (site == null) {
             throw Violations.ofField("application_id", applicationId,
-                violation("preview_no_exposing_site"));
+                HohenheimViolations.text("preview_no_exposing_site"));
         }
-        String hostname = hostnameFor(str(site.get(SiteModel.SLUG)), ref, baseDomain);
-
         PreviewDeploymentModel model = Models.get(PreviewDeploymentModel.class);
         Row preview = model.find()
             .where(PreviewDeploymentModel.APPLICATION_ID.eq(applicationId))
             .where(PreviewDeploymentModel.REF.eq(ref))
             .first();
-        if (preview != null) {
-            // A live preview minted under the legacy label keeps it (see legacyHostnameFor).
-            String legacy = legacyHostnameFor(str(site.get(SiteModel.SLUG)), ref, baseDomain);
-            if (legacy.equals(str(preview.get(PreviewDeploymentModel.HOSTNAME)))) {
-                hostname = legacy;
-            }
-        }
+        // AIDEV-NOTE: an existing preview keeps the hostname it was minted with, whatever slug fold minted it: a
+        // redeploy recomputing it would move a live preview's hostname, its generated domain row and its DNS rows
+        // under whoever is reviewing it. Only a new preview derives one.
+        String stored = preview == null ? "" : str(preview.get(PreviewDeploymentModel.HOSTNAME));
+        String hostname = stored.isEmpty() ? hostnameFor(str(site.get(SiteModel.SLUG)), ref, baseDomain) : stored;
         if (preview == null) {
             // The quota hook charges the application's owner bucket on this save and refuses
             // over-cap creates atomically -- no separate count-then-create window.
@@ -247,6 +262,12 @@ public final class PreviewDeployments {
                                              @Nullable Integer prNumber,
                                              @NonNull DeployTrigger trigger) throws Exception {
         Row preview = claimLocked(applicationId, ref, prNumber);
+        return deployClaimedLocked(applicationId, ref, sha, trigger, preview);
+    }
+
+    private static @NonNull Row deployClaimedLocked(int applicationId, @NonNull String ref,
+                                                    @Nullable String sha, @NonNull DeployTrigger trigger,
+                                                    @NonNull Row preview) throws Exception {
         PreviewDeploymentModel model = Models.get(PreviewDeploymentModel.class);
         Row application = ApplicationReleases.requireApplication(applicationId);
         Row site = exposingSite(applicationId);
@@ -281,7 +302,7 @@ public final class PreviewDeployments {
                     EnvVars.toMap(siteSettings.get("build_arguments")),
                     commitSha, null, BuildQuota.fromSettings()));
             if (!build.succeeded() || build.imageId() == null) {
-                throw Violations.ofForm(violation("preview_build_failed")
+                throw Violations.ofForm(HohenheimViolations.text("preview_build_failed")
                     .withArg("reason", build.failureReason() != null
                         ? build.failureReason() : build.status()));
             }
@@ -292,7 +313,7 @@ public final class PreviewDeployments {
             InstanceStatus status = converge(preview, site, desired, hostname, trigger);
             Integer port = status.publishedPort();
             if (port == null) {
-                throw Violations.ofForm(violation("preview_no_published_port"));
+                throw Violations.ofForm(HohenheimViolations.text("preview_no_published_port"));
             }
             ReleaseEngine.probe(port, ReleaseEngine.healthPathOf(siteSettings));
 
@@ -476,7 +497,7 @@ public final class PreviewDeployments {
 
     /**
      * Arm (or EXTEND) the preview's bounded lifetime as a one-shot record schedule:
-     * the framework sweeper fires {@link PreviewExpireAction} once at the deadline --
+     * the framework sweeper runs {@link PreviewOperations#EXPIRE} once at the deadline --
      * stored in the database, so a controller that was down past it still enforces it
      * at its next sweep, delayed but never voided. The {@code expires_at} column is
      * DISPLAY data only; this schedule is the enforcement.
@@ -484,7 +505,7 @@ public final class PreviewDeployments {
     public static void armExpiry(int previewId, @NonNull Instant expiresAt) {
         new RecordSchedules(Datasources.getDefault()).armOnce(
             PreviewDeploymentModel.MODEL_ID, previewId, "expire",
-            expiresAt, PreviewExpireAction.ID, null, null);
+            expiresAt, PreviewOperations.EXPIRE.id(), null, null);
     }
 
     /**
@@ -501,42 +522,9 @@ public final class PreviewDeployments {
      * @return how many preview instances were sealed in this pass
      */
     public static int sealPlaintextEnvironments() {
-        int sealed = 0;
-        for (Row instance : Models.get(InstanceModel.class).find().withTrashed()
-                .where(InstanceModel.GENERATED_FOR_MODEL.eq(
-                    PreviewDeploymentModel.MODEL_ID.toString()))
-                .all()) {
-            Map<String, Object> settings = new LinkedHashMap<>(
-                castMap(instance.get(InstanceModel.SETTINGS)));
-            Integer instanceId = instance.get(InstanceModel.ID);
-            Integer previewId = instance.get(InstanceModel.GENERATED_FOR_ID);
-            if (!settings.containsKey("environment_variables") || instanceId == null
-                    || previewId == null) {
-                continue;
-            }
-            try {
-                inScope(previewId, () -> {
-                    Map<String, String> environment = InstanceVariables.detachEnvironment(settings);
-                    new InstanceVariables().storeSecretEnvironment(instanceId, environment);
-                    // Re-read right before the whole-row save: a save writes every column.
-                    Row fresh = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
-                    if (fresh != null) {
-                        fresh.set(InstanceModel.SETTINGS, settings);
-                        Models.get(InstanceModel.class).save(fresh);
-                    }
-                });
-                sealed++;
-            } catch (Exception failed) {
-                Blast.log("PREVIEW: could not move the plaintext environment of instance",
-                    instanceId, "into secret variables; retried at the next boot -",
-                    reasonOf(failed));
-            }
-        }
-        if (sealed > 0) {
-            Blast.log("PREVIEW: moved the plaintext environment of", sealed,
-                "preview instance(s) into encrypted secret variables");
-        }
-        return sealed;
+        return PlaintextEnvironments.seal("PREVIEW", "preview instance(s)",
+            InstanceModel.GENERATED_FOR_MODEL.eq(PreviewDeploymentModel.MODEL_ID.toString()), PreviewDomains.SOURCE,
+            PreviewDeploymentModel.MODEL_ID, false);
     }
 
     // -- routing support -------------------------------------------------------
@@ -654,7 +642,7 @@ public final class PreviewDeployments {
         Map<String, Object> persisted = new LinkedHashMap<>(desired);
         Map<String, String> environment = InstanceVariables.detachEnvironment(persisted);
         instance.set(InstanceModel.SETTINGS, persisted);
-        Models.get(InstanceModel.class).save(instance);
+        InstanceModel.saveConfiguration(instance);
         int instanceId = instance.get(InstanceModel.ID);
         new InstanceVariables().storeSecretEnvironment(instanceId, environment);
         return instanceId;
@@ -793,21 +781,6 @@ public final class PreviewDeployments {
         return composeHostname(labelOf(siteSlug) + "--" + labelOf(ref), baseDomain);
     }
 
-    /**
-     * The hostname a preview row created before the shared slugifier was adopted derives:
-     * the same composition over the regex label, which does not fold diacritics.
-     *
-     * AIDEV-NOTE: kept ONLY so an existing preview keeps its hostname across a refresh
-     * ({@link #claimLocked}). The two derivations agree on every ASCII ref; they differ
-     * where a ref or slug carries a letter Slugs.slugify folds ("cafe" vs "caf"), and a
-     * refresh recomputing a different name would move a live preview's hostname, its
-     * generated domain row and its DNS rows under whoever is reviewing it.
-     */
-    static @NonNull String legacyHostnameFor(@NonNull String siteSlug, @NonNull String ref,
-                                             @NonNull String baseDomain) {
-        return composeHostname(legacyLabelOf(siteSlug) + "--" + legacyLabelOf(ref), baseDomain);
-    }
-
     private static @NonNull String composeHostname(@NonNull String composed,
                                                    @NonNull String baseDomain) {
         String label = composed;
@@ -825,14 +798,6 @@ public final class PreviewDeployments {
     /** One DNS-safe label: THE shared slugifier, with a placeholder for an empty result. */
     private static @NonNull String labelOf(@NonNull String value) {
         String label = Slugs.slugify(value);
-        return label.isEmpty() ? "x" : label;
-    }
-
-    /** The pre-Slugs label; see {@link #legacyHostnameFor}. */
-    private static @NonNull String legacyLabelOf(@NonNull String value) {
-        String label = value.toLowerCase(Locale.ROOT)
-            .replaceAll("[^a-z0-9]+", "-")
-            .replaceAll("^-+|-+$", "");
         return label.isEmpty() ? "x" : label;
     }
 
@@ -868,9 +833,6 @@ public final class PreviewDeployments {
         return ConvergenceLocks.forPreview(applicationId, ref);
     }
 
-    private static @NonNull Microcopy violation(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
-    }
 
     @SuppressWarnings("unchecked")
     private static @NonNull Map<String, Object> castMap(@Nullable Object value) {

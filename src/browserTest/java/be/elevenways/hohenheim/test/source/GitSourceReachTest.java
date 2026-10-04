@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.source;
 
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -11,11 +12,17 @@ import be.elevenways.hohenheim.server.source.GiteaProviderKind;
 import be.elevenways.hohenheim.source.GitRefNames;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.model.UserPrincipal;
+import be.elevenways.zenit.auth.server.GrantService;
+import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.protoblast.server.process.Subprocess;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 
@@ -29,7 +36,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -198,6 +205,115 @@ class GitSourceReachTest extends HohenheimTestBase {
         }
     }
 
+    /**
+     * Reach follows WHO SET the target: a provider base URL and an instance source a tenant set stay public-only and
+     * remote-only after the tenant's grant is revoked and the record becomes operator-owned, until the operator saves
+     * them again.
+     */
+    @Test
+    void aTargetATenantSetNeverGainsReachWhenTheRecordBecomesOperatorOwnedJourney() throws Exception {
+        AtomicInteger hits = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            hits.incrementAndGet();
+            byte[] body = "[]".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            try (OutputStream out = exchange.getResponseBody()) {
+                out.write(body);
+            }
+        });
+        server.start();
+        int tenantId = ApiSupport.user("provenance-forge@hohenheim.local");
+        UserPrincipal tenant = new UserPrincipal(tenantId, "Provenance Forge");
+        var providers = Models.get(GitProviderModel.class);
+        var instances = Models.get(InstanceModel.class);
+        try {
+            String base = "http://127.0.0.1:" + server.getAddress().getPort();
+            int providerId = provider("Provenance Forge", base);
+
+            // 1. The tenant, owning the provider, sets a private base URL (a tenant-owned provider never reaches it).
+            RecordGrants.grant(GrantSubjectType.USER, tenantId, GitProviderModel.MODEL_ID, providerId,
+                HohenheimAccess.MANAGE, true);
+            TenantConduits.as(tenant, () -> {
+                Row row = providers.findById(providerId);
+                row.set(GitProviderModel.BASE_URL, base + "/");
+                providers.save(row);
+            });
+
+            // 2. The grant goes and the provider is operator-owned, yet the tenant's base URL is refused before any
+            //    connect: only the public internet.
+            RecordGrants.revoke(GrantSubjectType.USER, tenantId, GitProviderModel.MODEL_ID, providerId,
+                HohenheimAccess.MANAGE);
+            assertThat(catchThrowable(() -> GitProviders.clientFor(providerId).listRepositories()))
+                .as("step 2: a tenant-set base URL stays public-only on an operator-owned provider")
+                .isInstanceOf(IOException.class).hasMessageContaining("refused");
+            assertThat(hits.get()).as("step 2: nothing connected").isZero();
+
+            // 3. The operator re-saves the provider (as a request caller; the test body is system work, which vouches
+            //    only for a target it changes): its base URL is the operator's and the forge answers.
+            TenantConduits.as(operator(), () -> {
+                Row provider = providers.findById(providerId);
+                provider.set(GitProviderModel.NAME, "Provenance Forge (reviewed)");
+                provider.set(GitProviderModel.BASE_URL, provider.get(GitProviderModel.BASE_URL));
+                providers.save(provider);
+            });
+            assertThat(GitProviders.clientFor(providerId).listRepositories())
+                .as("step 3: the operator-set base URL reaches the forge").isEmpty();
+            assertThat(hits.get()).as("step 3: through a real request").isEqualTo(1);
+
+            // 4. The same for an instance source: the operator's local path clones; while a tenant owns the record a
+            //    delegated admin moves its source (a tenant's own settings are frozen), which clears the mark; after
+            //    the grant goes the operator-owned record still clones no controller path.
+            Path upstream = Files.createTempDirectory("hohenheim-provenance-upstream");
+            git(upstream, "init", "-q", "-b", "main");
+            git(upstream, "config", "user.email", "test@example.com");
+            git(upstream, "config", "user.name", "Test");
+            Files.writeString(upstream.resolve("index.html"), "provenance");
+            git(upstream, "add", ".");
+            git(upstream, "commit", "-q", "-m", "provenance");
+            Map<String, Object> local = new LinkedHashMap<>();
+            local.put("repository_url", upstream.toString());
+            local.put("branch", "main");
+            int applicationId = application("provenance-app", local);
+            Path checkouts = Files.createTempDirectory("hohenheim-provenance-checkouts");
+            assertThat(GitCheckout.materialize(InstanceModel.MODEL_ID, applicationId, "main", local,
+                    checkouts.resolve("operator").toFile()))
+                .as("step 4: the operator's local source clones").matches("[0-9a-f]{40}");
+            RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, applicationId,
+                HohenheimAccess.MANAGE, true);
+            int delegateId = ApiSupport.user("provenance-delegate@hohenheim.local");
+            GrantService.createDirectGrant(GrantSubjectType.USER, delegateId, HohenheimSources.ADMIN_ACCESS.value(),
+                true);
+            TenantConduits.as(new UserPrincipal(delegateId, "Provenance Delegate"), () -> {
+                Row row = instances.findById(applicationId);
+                Map<String, Object> settings = new LinkedHashMap<>(InstanceModel.settingsOf(row));
+                settings.put("repository_url", "https://git.example.test/tenant/app.git");
+                row.set(InstanceModel.SETTINGS, settings);
+                instances.save(row);
+            });
+            RecordGrants.revoke(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, applicationId,
+                HohenheimAccess.MANAGE);
+            File refusedCheckout = checkouts.resolve("unmarked").toFile();
+            assertThat(catchThrowable(() -> GitCheckout.materialize(InstanceModel.MODEL_ID, applicationId, "main",
+                    local, refusedCheckout)))
+                .as("step 4: an operator-owned record whose source a tenant set clones no controller path")
+                .isInstanceOf(Violations.class).hasMessageContaining("source_repository_local_refused");
+            assertThat(refusedCheckout).as("step 4: nothing was cloned").doesNotExist();
+
+            // 5. The operator sets the local path again: it is the operator's, and it clones.
+            TenantConduits.as(operator(), () -> {
+                Row application = instances.findById(applicationId);
+                application.set(InstanceModel.SETTINGS, new LinkedHashMap<>(local));
+                instances.save(application);
+            });
+            assertThat(GitCheckout.materialize(InstanceModel.MODEL_ID, applicationId, "main", local,
+                    checkouts.resolve("remarked").toFile()))
+                .as("step 5: the operator's re-save restores the local clone").matches("[0-9a-f]{40}");
+        } finally {
+            server.stop(0);
+        }
+    }
+
     // -- fixtures -------------------------------------------------------------
 
     private static int application(String name, Map<String, Object> settings) {
@@ -223,14 +339,14 @@ class GitSourceReachTest extends HohenheimTestBase {
     }
 
     private static void git(Path repo, String... args) throws Exception {
-        String[] command = new String[args.length + 1];
-        command[0] = "git";
-        System.arraycopy(args, 0, command, 1, args.length);
-        Process process = new ProcessBuilder(command).directory(repo.toFile())
-            .redirectErrorStream(true).start();
-        String output = new String(process.getInputStream().readAllBytes());
-        if (!process.waitFor(30, TimeUnit.SECONDS) || process.exitValue() != 0) {
-            throw new AssertionError("git " + String.join(" ", args) + " failed: " + output);
-        }
+        var outcome = Subprocess.of("git", args).directory(repo).timeout(Duration.ofSeconds(30)).mergeStderr().run();
+        assertThat(outcome.succeeded()).as("fixture git command: %s", outcome.describe()).isTrue();
+    }
+
+    /** The seeded operator account (it holds "*"), as a request caller rather than the test body's system work. */
+    private static UserPrincipal operator() {
+        int id = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first()
+            .get(UserModel.ID);
+        return new UserPrincipal(id, "Test Admin");
     }
 }

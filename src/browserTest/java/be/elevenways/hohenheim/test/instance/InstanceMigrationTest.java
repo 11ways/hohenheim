@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -419,7 +420,7 @@ class InstanceMigrationTest {
                 Row moveRow = Models.get(ActivityModel.class).find()
                     .where(ActivityModel.MODEL.eq(InstanceModel.MODEL_ID.toString()))
                     .where(ActivityModel.RECORD_ID.eq(String.valueOf(id)))
-                    .where(ActivityModel.ACTION.eq(InstanceMigrations.ACTIVITY_MIGRATE_ACTION))
+                    .where(ActivityModel.ACTION.eq(HohenheimActivityAction.MIGRATED.id().toString()))
                     .orderBy(ActivityModel.ID, SortOrder.DESC).first();
                 assertThat(moveRow)
                     .as("step 2b: the move of instance %s is recorded on its own record", id)
@@ -432,7 +433,7 @@ class InstanceMigrationTest {
             Row drainRow = Models.get(ActivityModel.class).find()
                 .where(ActivityModel.MODEL.eq(ServerModel.MODEL_ID.toString()))
                 .where(ActivityModel.RECORD_ID.eq(String.valueOf(gammaId)))
-                .where(ActivityModel.ACTION.eq(InstanceMigrations.ACTIVITY_DRAIN_ACTION))
+                .where(ActivityModel.ACTION.eq(HohenheimActivityAction.DRAINED.id().toString()))
                 .orderBy(ActivityModel.ID, SortOrder.DESC).first();
             assertThat(drainRow)
                 .as("step 2b: the drain itself is recorded on the host record").isNotNull();

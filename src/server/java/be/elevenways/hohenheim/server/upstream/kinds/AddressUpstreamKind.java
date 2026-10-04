@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.upstream.kinds;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
@@ -19,6 +20,8 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import be.elevenways.zenit.server.net.PinnedUpstreamDial;
 import io.undertow.server.HttpServerExchange;
@@ -40,7 +43,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  */
 public class AddressUpstreamKind implements UpstreamKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "address");
+    public static final Identifier ID = HohenheimIds.id("address");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final EnumField FORWARD_SCHEME = SETTINGS_SCHEMA.addField(
@@ -116,7 +119,7 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
     public Icon getIcon() { return Icon.of("arrow-right"); }
 
     @Override
-    public String getColor() { return "violet"; }
+    public BadgeColor color() { return ColorHue.VIOLET; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }

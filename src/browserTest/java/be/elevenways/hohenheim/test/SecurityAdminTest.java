@@ -1,8 +1,12 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.BanModel;
+import be.elevenways.hohenheim.server.cms.BanParts;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -69,7 +73,9 @@ class SecurityAdminTest extends HohenheimTestBase {
         String rowText = page.locator("pl-table-row[data-row-key='" + ban.get(BanModel.ID) + "']")
             .textContent();
         assertThat(rowText).contains("Manual");
-        var lift = adminPostForm("/admin/bans/" + ban.get(BanModel.ID) + "/action/lift_ban", confirmed(""));
+        // The lift is the placed operation, posted to the one invoke route with the ban as its subject.
+        var lift = adminPostForm(CmsRoutes.invoke(HohenheimSlugs.ADMIN, "bans", BanParts.LIFT.id())
+            .with(CmsEndpoints.SUBJECT_PARAM, String.valueOf((Object) ban.get(BanModel.ID))).toUrl(), confirmed(""));
         assertThat(lift.statusCode()).isIn(200, 302, 303);
 
         Row lifted = Models.get(BanModel.class).findById(ban.get(BanModel.ID));

@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.server.quota;
 
-import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -127,8 +126,7 @@ public final class OwnerQuota {
         try {
             Quotas.reserve(bucket, amount, limit == null ? Long.MAX_VALUE : limit);
         } catch (QuotaExceeded full) {
-            throw Violations.ofForm(Microcopy.of(violationKey)
-                .withFilter("scope", "violations")
+            throw Violations.ofForm(HohenheimViolations.text(violationKey)
                 .withArg("used", full.getUsed())
                 .withArg("limit", full.getLimit()));
         }

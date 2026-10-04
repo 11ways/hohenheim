@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
@@ -154,7 +155,7 @@ public final class InstanceReadiness {
     private static @NonNull Microcopy refusal(@NonNull String key, @NonNull Row instance,
                                               @NonNull ReadinessKind kind,
                                               @NonNull String reason) {
-        return Microcopy.of(key).withFilter("scope", "violations")
+        return HohenheimViolations.text(key)
             .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)))
             .withArg("kind", kind.label())
             .withArg("reason", reason);

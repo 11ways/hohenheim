@@ -1,0 +1,2 @@
+case manage.project-members.member.membership
+expected legacy failure: IllegalStateException: Model-independent Resource hohenheim:manage_project_member must override parsePrimaryKey(...)

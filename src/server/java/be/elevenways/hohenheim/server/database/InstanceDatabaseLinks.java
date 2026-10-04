@@ -126,7 +126,7 @@ public final class InstanceDatabaseLinks {
      * its failure reason); null when every attached database can serve the workload.
      *
      * AIDEV-NOTE: THE one resolver behind both halves of the dead-button-plus-refusal
-     * shape -- {@code InstanceResource.deployAction}'s unavailableWhen and
+     * shape -- {@code InstanceActions.deployAction}'s unavailableWhen and
      * {@code InstanceOperationGuard.requireDatabasesReady} -- so the button and the POST
      * can never disagree. It exists because {@link DatabaseEnvInjection} FAIL-SOFTS: a
      * database that is still provisioning contributes NO variables, the workload boots

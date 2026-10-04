@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.source;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
@@ -372,7 +373,7 @@ public class GitWebhookHandler {
                         pushedSha.isEmpty() ? null : pushedSha, null,
                         DeployTrigger.WEBHOOK)));
             ActivityLog.record(Models.get(InstanceModel.class), applicationId,
-                "preview_triggered", "webhook:" + branch);
+                HohenheimActivityAction.PREVIEW_TRIGGERED, "webhook:" + branch);
             WebhookDeliveries.stampAction(claimed, "preview_queued");
             sendJson(exchange, 200, "{\"status\":\"preview_queued\"}");
             return;
@@ -508,7 +509,7 @@ public class GitWebhookHandler {
                             previewEvent.number(), DeployTrigger.WEBHOOK)));
                 WebhookDeliveries.stampAction(claimed, "preview_queued");
                 ActivityLog.record(Models.get(InstanceModel.class), applicationId,
-                    "preview_triggered", "webhook:" + ref);
+                    HohenheimActivityAction.PREVIEW_TRIGGERED, "webhook:" + ref);
                 sendJson(exchange, 200, "{\"status\":\"preview_queued\"}");
             }
             case TEARDOWN -> {

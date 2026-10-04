@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.dns.DelegationVerdict;
 import be.elevenways.hohenheim.host.HostState;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.plumage.component.StatusDotStatus;
 import be.elevenways.zenit.widget.common.WidgetRegistry;
 import org.junit.jupiter.api.Test;
 
@@ -110,7 +111,7 @@ class DashboardVocabularyDriftTest {
             assertThat(state.loud()).as("step 2: %s loud", state).isEqualTo(state == HostState.QUARANTINED);
             assertThat(state.namesDaemon()).as("step 2: %s names its daemon", state)
                 .isEqualTo(state == HostState.SILENT);
-            assertThat(state.dot().equals("online")).as("step 2: %s green", state).isEqualTo(state == HostState.OK);
+            assertThat(state.dot() == StatusDotStatus.ONLINE).as("step 2: %s green", state).isEqualTo(state == HostState.OK);
         }
     }
 

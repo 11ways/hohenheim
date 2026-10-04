@@ -2,14 +2,9 @@ package be.elevenways.hohenheim.server.stack;
 
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
-import be.elevenways.hohenheim.model.StoredRows;
+import be.elevenways.hohenheim.server.instance.PlaintextEnvironments;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
-import be.elevenways.hohenheim.server.instance.OwnedInstances;
-import be.elevenways.protoblast.common.Blast;
-import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.model.Models;
 
-import java.util.Map;
 
 /**
  * The backfill half of a stack service's SECRET environment: the deploy lane
@@ -53,48 +48,8 @@ final class StackServiceSecrets {
      * @return how many instances were sealed in this pass
      */
     static int sealPlaintext() {
-        int sealed = 0;
-        for (Row instance : Models.get(InstanceModel.class).find().withTrashed()
-                .where(InstanceModel.KIND.eq(StackServiceKind.ID.toString()))
-                .all()) {
-            Map<String, Object> settings = StackInstances.settingsOf(instance);
-            if (!settings.containsKey(StackServiceKind.ENVIRONMENT_VARIABLES.getName())) {
-                continue;
-            }
-            Integer instanceId = instance.get(InstanceModel.ID);
-            Integer serviceId = instance.get(InstanceModel.GENERATED_FOR_ID);
-            if (instanceId == null || serviceId == null || !StackServiceModel.MODEL_ID.toString()
-                    .equals(instance.get(InstanceModel.GENERATED_FOR_MODEL))) {
-                Blast.log("STACK: instance", instanceId, "carries a plaintext environment but"
-                    + " names no owning stack service; left for an operator");
-                continue;
-            }
-            try {
-                OwnedInstances.inScope(StackInstances.SOURCE, StackServiceModel.MODEL_ID, serviceId,
-                    () -> {
-                        Map<String, String> environment =
-                            InstanceVariables.detachEnvironment(settings);
-                        new InstanceVariables().storeSecretEnvironment(instanceId, environment);
-                        // Re-read right before the whole-row save: the row above may be
-                        // stale by now, and a save writes every column it carries.
-                        Row fresh = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
-                        if (fresh != null) {
-                            fresh.set(InstanceModel.SETTINGS, settings);
-                            Models.get(InstanceModel.class).save(fresh);
-                        }
-                        return null;
-                    });
-                sealed++;
-            } catch (Exception failed) {
-                Blast.log("STACK: could not move the plaintext environment of instance",
-                    instanceId, "into secret variables; retried at the next boot -",
-                    failed.getMessage());
-            }
-        }
-        if (sealed > 0) {
-            Blast.log("STACK: moved the plaintext environment of", sealed,
-                "stack service instance(s) into encrypted secret variables");
-        }
-        return sealed;
+        return PlaintextEnvironments.seal("STACK", "stack service instance(s)",
+            InstanceModel.KIND.eq(StackServiceKind.ID.toString()), StackInstances.SOURCE, StackServiceModel.MODEL_ID,
+            false);
     }
 }

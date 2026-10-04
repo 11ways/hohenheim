@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.server.security.ReputationScore;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -12,11 +14,11 @@ import be.elevenways.spamservice.client.SpamserviceClient;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.PanelPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -41,7 +43,7 @@ public final class SpamserviceReputationPage extends PanelPage {
         this.clientSupplier = clientSupplier;
     }
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "spamservice_reputation"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("spamservice_reputation"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("reputation").withFilter("scope", "spamservice"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.SECURITY_GROUP; }
@@ -51,7 +53,8 @@ public final class SpamserviceReputationPage extends PanelPage {
     @Override public @NonNull Icon icon() { return Icon.of("magnifying-glass"); }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext context) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request) {
+        Conduit conduit = request.conduit();
         String ip = Texts.trimmedOrNull(conduit.getQueryParam("ip"));
         Map<String, Object> vars = new LinkedHashMap<>();
         vars.put("title", Microcopy.of("reputation").withFilter("scope", "spamservice")
@@ -88,7 +91,7 @@ public final class SpamserviceReputationPage extends PanelPage {
                 }
             }
         }
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/spamservice-reputation"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.SPAMSERVICE_REPUTATION, vars);
     }
 
     private static ReputationScore weighted(ReputationDiagnostic diagnostic,

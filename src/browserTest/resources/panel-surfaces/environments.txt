@@ -1,0 +1,146 @@
+case admin.environments.operator admin environments operator v2
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=description relation=false
+column description at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column project_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+link hohenheim:environment_variable at=0 lead=false target=/{panel}/environment-variables
+tab history at=0 landing=false view=false
+control CREATE%20project_id at=0 kind=zenitforms:form/relation-pick input=number required=true readonly=false options= binding=source:hohenheim.project,rules:,siblings:,resolver:,clearable:false,creatable:false
+control CREATE%20name at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20description at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+
+case admin.environments.tenant admin environments tenant v2
+admission - verdict=zenit:forbidden
+
+case admin.environment-variables.operator admin environment-variables operator v2
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column key at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=kind relation=false
+column kind at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column environment_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+tab history at=0 landing=false view=false
+control CREATE%20environment_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.environment,rules:,siblings:,resolver:,clearable:true,creatable:true
+control CREATE%20key at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20kind at=2 kind=zenitforms:form/select input=select required=false readonly=false options=plain,secret binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20plain_value at=3 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+
+case admin.environment-variables.tenant admin environment-variables tenant v2
+admission - verdict=zenit:forbidden
+
+case admin.environments.operator.empty admin environments operator v2
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=description relation=false
+column description at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column project_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+link hohenheim:environment_variable at=0 lead=false target=/{panel}/environment-variables
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Denvironment,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+inline name
+tab history at=0 landing=false view=false
+control CREATE%20project_id at=0 kind=zenitforms:form/relation-pick input=number required=true readonly=false options= binding=source:hohenheim.project,rules:,siblings:,resolver:,clearable:false,creatable:false
+control CREATE%20name at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20description at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control EDIT%20project_id at=0 kind=zenitforms:form/relation-pick input=number required=true readonly=false options= binding=source:hohenheim.project,rules:,siblings:,resolver:,clearable:false,creatable:false
+control EDIT%20name at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20description at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+
+case admin.environments.operator.used admin environments operator v2
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=description relation=false
+column description at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column project_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+link hohenheim:environment_variable at=0 lead=false target=/{panel}/environment-variables
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled=environment_in_use confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Denvironment,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+inline name
+tab history at=0 landing=false view=false
+control CREATE%20project_id at=0 kind=zenitforms:form/relation-pick input=number required=true readonly=false options= binding=source:hohenheim.project,rules:,siblings:,resolver:,clearable:false,creatable:false
+control CREATE%20name at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20description at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control EDIT%20project_id at=0 kind=zenitforms:form/relation-pick input=number required=true readonly=false options= binding=source:hohenheim.project,rules:,siblings:,resolver:,clearable:false,creatable:false
+control EDIT%20name at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20description at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+
+case admin.environments.operator.selection admin environments operator v2
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=description relation=false
+column description at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column project_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+link hohenheim:environment_variable at=0 lead=false target=/{panel}/environment-variables
+tab history at=0 landing=false view=false
+control CREATE%20project_id at=0 kind=zenitforms:form/relation-pick input=number required=true readonly=false options= binding=source:hohenheim.project,rules:,siblings:,resolver:,clearable:false,creatable:false
+control CREATE%20name at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20description at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+
+case admin.environment-variables.operator.plain admin environment-variables operator v2
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column key at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=kind relation=false
+column kind at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column environment_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_named%252Cscope%3Denvironment_variable,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab history at=0 landing=false view=false
+control CREATE%20environment_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.environment,rules:,siblings:,resolver:,clearable:true,creatable:true
+control CREATE%20key at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20kind at=2 kind=zenitforms:form/select input=select required=false readonly=false options=plain,secret binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20plain_value at=3 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control EDIT%20environment_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.environment,rules:,siblings:,resolver:,clearable:true,creatable:true
+control EDIT%20key at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20kind at=2 kind=zenitforms:form/select input=select required=false readonly=false options=plain,secret binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20plain_value at=3 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+
+case admin.environment-variables.operator.secret admin environment-variables operator v2
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column key at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=kind relation=false
+column kind at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column environment_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_named%252Cscope%3Denvironment_variable,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab history at=0 landing=false view=false
+control CREATE%20environment_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.environment,rules:,siblings:,resolver:,clearable:true,creatable:true
+control CREATE%20key at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20kind at=2 kind=zenitforms:form/select input=select required=false readonly=false options=plain,secret binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20plain_value at=3 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+control EDIT%20environment_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.environment,rules:,siblings:,resolver:,clearable:true,creatable:true
+control EDIT%20key at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20kind at=2 kind=zenitforms:form/select input=select required=false readonly=false options=plain,secret binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20secret_value at=3 kind=zenitforms:control/text input=secret required=false readonly=false options= binding=
+
+case admin.environment-variables.operator.selection admin environment-variables operator v2
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column key at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=kind relation=false
+column kind at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column environment_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+tab history at=0 landing=false view=false
+control CREATE%20environment_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.environment,rules:,siblings:,resolver:,clearable:true,creatable:true
+control CREATE%20key at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20kind at=2 kind=zenitforms:form/select input=select required=false readonly=false options=plain,secret binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20plain_value at=3 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
+

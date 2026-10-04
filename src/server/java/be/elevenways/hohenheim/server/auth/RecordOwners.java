@@ -8,6 +8,7 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.GrantAdministration;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.AccessContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -96,7 +97,9 @@ final class RecordOwners {
      * ledger while the walk had already stopped honouring it.
      *
      * AIDEV-NOTE: "zenit-auth is not installed" is asked through its presence fact
-     * ({@link AuthModels#datasourceOrNull}), never inferred from an exception. The previous
+     * ({@link ZenitAuth#isInitialized}), never inferred from an exception or from a missing
+     * datasource: zenit-auth falls back to the "default" datasource, which a process has
+     * whether or not the auth module ever installed. The previous
      * {@code catch (IllegalStateException)} read ANY IllegalStateException from the grant
      * read as "no auth, operator-owned" and answered the empty set -- so an unrelated
      * failure made two tenants' records compare as the same owner (fail OPEN).
@@ -106,9 +109,9 @@ final class RecordOwners {
     static @Nullable Set<String> manageSubjectsOf(@NonNull Identifier model,
                                                   @NonNull Object recordId) {
         Set<String> subjects = new HashSet<>();
-        if (AuthModels.datasourceOrNull() == null) {
-            // ZenitAuth.init never ran (tools, minimal tests): no grant can exist, so every
-            // record is operator-owned and the sets are legitimately equal.
+        if (!ZenitAuth.isInitialized()) {
+            // The auth module never installed (tools, minimal tests): no grant can exist, so
+            // every record is operator-owned and the sets are legitimately equal.
             return subjects;
         }
         try {
@@ -238,7 +241,7 @@ final class RecordOwners {
         if (pinned != null) {
             return pinned;
         }
-        if (ctx == null || HohenheimAccess.isAdmin(ctx) || ctx.isAnonymous()) {
+        if (ctx == null || HohenheimAccess.isAdmin(ctx) || !ctx.isAccount()) {
             return Set.of();
         }
         Long principalId = ctx.principalId();

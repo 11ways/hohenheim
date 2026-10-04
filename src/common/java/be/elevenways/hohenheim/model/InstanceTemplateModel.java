@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.instance.StopKind;
@@ -13,6 +15,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.validation.Violations;
 
 import java.util.List;
@@ -40,7 +43,7 @@ import java.util.List;
  */
 public class InstanceTemplateModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "instance_template");
+    public static final Identifier MODEL_ID = HohenheimIds.id("instance_template");
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #REINSTALL_POLICY}: a reinstall keeps the instance's volumes and their data. */
@@ -65,7 +68,7 @@ public class InstanceTemplateModel extends Model {
 
     // Same ONE discriminator as InstanceModel: the kind implies the runtime.
     public static final EnumField KIND = SCHEMA.addField(
-        RegistryEnumField.builder("kind")
+        RegistryMemberField.builder("kind")
             .registry(InstanceKindRegistry.REGISTRY)
             .label(HohenheimFormCopy.label("kind"))
             .help(HohenheimFormCopy.help("template_kind"))
@@ -116,9 +119,9 @@ public class InstanceTemplateModel extends Model {
     /** The EXPLICIT reinstall data policy (the plan's requirement: never an implicit wipe). */
     public static final EnumField REINSTALL_POLICY = SCHEMA.addField(EnumField.builder("reinstall_policy")
         .value(REINSTALL_PRESERVE, v -> v.displayName("Preserve data").icon("shield")
-            .label(Microcopy.of("preserve").withFilter("scope", "reinstall_policy")).color("green"))
+            .label(Microcopy.of("preserve").withFilter("scope", "reinstall_policy")).color(ColorHue.GREEN))
         .value(REINSTALL_CLEAR, v -> v.displayName("Clear data").icon("eraser")
-            .label(Microcopy.of("clear").withFilter("scope", "reinstall_policy")).color("red"))
+            .label(Microcopy.of("clear").withFilter("scope", "reinstall_policy")).color(ColorHue.RED))
         .defaultValue(REINSTALL_PRESERVE)
         .label(HohenheimFormCopy.label("reinstall_policy"))
         .help(HohenheimFormCopy.help("reinstall_policy"))
@@ -245,8 +248,7 @@ public class InstanceTemplateModel extends Model {
             if (ReadinessKind.forToken(kind == null ? null : kind.toString())
                     != ReadinessKind.CONSOLE_LINE) {
                 throw Violations.ofField(READINESS_KIND.getName(), kind,
-                    Microcopy.of("readiness_line_needs_console_line")
-                        .withFilter("scope", "violations"));
+                    HohenheimViolations.text("readiness_line_needs_console_line"));
             }
         });
     }

@@ -4,7 +4,9 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.test.QueryConduits;
 import be.elevenways.spamservice.client.ManagedClientKey;
 import be.elevenways.spamservice.client.SpamserviceClient;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.schema.TableView;
+import be.elevenways.zenit.common.data.RecordPage;
 import be.elevenways.zenit.common.security.AccessContext;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -44,37 +46,33 @@ class SpamserviceRequestStateTest {
         String clientId = UUID.randomUUID().toString();
         String keyId = UUID.randomUUID().toString();
         AtomicReference<SpamserviceClient> current = new AtomicReference<>();
-        SpamserviceClientKeysResource keys = new SpamserviceClientKeysResource(current::get);
+        PanelResource<ManagedClientKey> keys = SpamserviceClientKeysResource.create(current::get);
         TableView.Applied<ManagedClientKey> applied =
-            TableView.forPrincipal(0, keys.id()).build().apply(keys.tableSpec());
-        Map<String, String> scope = Map.of("client_id", clientId);
+            TableView.forPrincipal(0L, keys.id()).build().apply(keys.list().table());
+        Map<String, String> scope = Map.of();
 
         // 1. Request A lists while the service is unreachable -- and, like a lane that lists
         //    without rendering the notice, never reads what it learned.
         AccessContext requestA = QueryConduits.accessOf(QueryConduits.request(HohenheimSlugs.ADMIN, scope));
-        assertThat(keys.listRows(applied, requestA)).as("step 1: an unreachable service lists nothing").isEmpty();
+        assertThat(keys.list().childStorePages().page(clientId, applied, requestA).rows())
+            .as("step 1: an unreachable service lists nothing").isEmpty();
 
         // 2. The service comes back. Request B, served next on this SAME thread, asks for its
-        //    notice and its total BEFORE listing: it learned nothing yet, so the notice says
-        //    nothing, and the total is read from the service for B itself -- never A's.
+        //    notice BEFORE listing: it learned nothing yet, so the notice says nothing -- never A's.
         current.set(this.serveOneKey(clientId, keyId));
         AccessContext requestB = QueryConduits.accessOf(QueryConduits.request(HohenheimSlugs.ADMIN, scope));
-        assertThat(keys.listNotice(requestB))
+        assertThat(keys.list().notice(requestB))
             .as("step 2: request A's outage never reaches request B's page").isNull();
-        assertThat(keys.countRows(applied, requestB))
-            .as("step 2: nor does its empty total; B reads its own").isEqualTo(1L);
 
         // 3. B lists, and reads its OWN outcome: the rows, the total, no notice.
-        assertThat(keys.listRows(applied, requestB)).as("step 3: request B lists the key").hasSize(1);
-        assertThat(keys.countRows(applied, requestB)).as("step 3: with its own total").isEqualTo(1L);
-        assertThat(keys.listNotice(requestB)).as("step 3: and no disconnected notice").isNull();
+        RecordPage<ManagedClientKey> page = keys.list().childStorePages().page(clientId, applied, requestB);
+        assertThat(page.rows()).as("step 3: request B lists the key").hasSize(1);
+        assertThat(page.total()).as("step 3: with its own total").isEqualTo(1L);
+        assertThat(keys.list().notice(requestB)).as("step 3: and no disconnected notice").isNull();
 
         // 4. Request A still reads what IT learned, however often it asks.
-        assertThat(keys.listNotice(requestA)).as("step 4: request A keeps its own notice").isNotNull();
-        assertThat(keys.listNotice(requestA)).as("step 4: reading it does not consume it").isNotNull();
-        // A negative total is refused by zenit-cms's RecordPage (a 500 on the list), so an
-        // unreachable service's total is the nothing it listed.
-        assertThat(keys.countRows(applied, requestA)).as("step 4: and its empty total").isZero();
+        assertThat(keys.list().notice(requestA)).as("step 4: request A keeps its own notice").isNotNull();
+        assertThat(keys.list().notice(requestA)).as("step 4: reading it does not consume it").isNotNull();
     }
 
     private SpamserviceClient serveOneKey(String clientId, String keyId) throws IOException {

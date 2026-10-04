@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.game;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.instance.InstancePreStartHook;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -12,7 +13,7 @@ public class GameDomainLinkHook implements InstancePreStartHook {
 
     @Override
     public @NonNull Identifier id() {
-        return Identifier.of("hohenheim", "game_domain_links");
+        return HohenheimIds.id("game_domain_links");
     }
 
     @Override

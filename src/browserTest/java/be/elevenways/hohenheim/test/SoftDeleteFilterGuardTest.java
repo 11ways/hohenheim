@@ -50,11 +50,7 @@ class SoftDeleteFilterGuardTest {
         "\\.set\\(\\s*(?:SiteModel|InstanceModel|PreviewDeploymentModel)\\.DELETED_AT\\b");
 
     /** Files allowed to match, each with its reason; the reason is the whole justification. */
-    private static final Map<String, String> EXEMPTIONS = Map.of(
-        "src/server/java/be/elevenways/hohenheim/server/cms/InstanceResource.java",
-        "its accessFunction still spells deleted_at IS NULL beside the release-kind filter; the"
-            + " file carried another session's uncommitted work when the behaviour landed, so the"
-            + " redundant half stays until that work is in -- remove both together");
+    private static final Map<String, String> EXEMPTIONS = Map.of();
 
     @Test
     @DisplayName("no production file spells a trash filter or stamps deleted_at by hand")

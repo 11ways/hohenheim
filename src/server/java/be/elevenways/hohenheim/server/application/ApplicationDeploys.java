@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.application;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.DeployStartPolicy;
@@ -144,8 +146,7 @@ public final class ApplicationDeploys {
                 throw refused;
             } catch (Exception failed) {
                 reportFailure(settings, null, String.valueOf(failed.getMessage()));
-                throw Violations.ofForm(Microcopy.of("source_checkout_failed")
-                    .withFilter("scope", "violations")
+                throw Violations.ofForm(HohenheimViolations.text("source_checkout_failed")
                     .withArg("reason", String.valueOf(failed.getMessage())));
             }
             overrides.put("build_context", checkout.getAbsolutePath());
@@ -158,7 +159,7 @@ public final class ApplicationDeploys {
             // The SAME action word every other instance deploy is recorded under -- a
             // second spelling would split one verb across two vocabularies.
             ActivityLog.record(Models.get(InstanceModel.class), applicationId,
-                InstanceService.ACTIVITY_DEPLOY_ACTION, trigger.word());
+                HohenheimActivityAction.DEPLOYED, trigger.word());
             if (commitSha != null) {
                 DeployStatuses.report(settings, commitSha,
                     GitProviderClient.StatusState.SUCCESS, DeployStatuses.CONTEXT_DEPLOY,

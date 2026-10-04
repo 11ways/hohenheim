@@ -107,16 +107,16 @@ class CertificateDateColumnTest extends HohenheimTestBase {
             .as("step 4: the default sort leads with the soonest-expiring certificate")
             .isLessThan(list.body().indexOf(LATE_NAME));
 
-        // 5. ?sort=expires_on&dir=desc is HONOURED and reverses that order -- a crafted sort
+        // 5. ?sort=-expires_on is HONOURED and reverses that order -- a crafted sort
         //    on a date column used to be dropped, because no date column was sortable.
-        String descending = journeyList("&sort=expires_on&dir=desc").body();
+        String descending = journeyList("&sort=-expires_on").body();
         assertThat(descending).as("step 5: both rows are listed").contains(EARLY_NAME, LATE_NAME);
         assertThat(descending.indexOf(LATE_NAME))
             .as("step 5: descending expiry puts the furthest certificate first")
             .isLessThan(descending.indexOf(EARLY_NAME));
 
         // 6. Another date column's sort is honoured too: newest created first.
-        String newest = journeyList("&sort=created_at&dir=desc").body();
+        String newest = journeyList("&sort=-created_at").body();
         assertThat(newest).as("step 6: both rows are listed").contains(EARLY_NAME, LATE_NAME);
         assertThat(newest.indexOf(LATE_NAME))
             .as("step 6: created_at descending puts the last-created certificate first")

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.stack;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
@@ -7,7 +8,6 @@ import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -221,8 +221,7 @@ public final class StackVolumes {
 
     private static @NonNull Violations taken(@NonNull String field, @NonNull String volume,
                                              @NonNull String otherStack) {
-        return Violations.ofField(field, volume, Microcopy.of("stack_volume_name_taken")
-            .withFilter("scope", "violations")
+        return Violations.ofField(field, volume, HohenheimViolations.text("stack_volume_name_taken")
             .withArg("volume", volume)
             .withArg("stack", otherStack));
     }

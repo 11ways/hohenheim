@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
@@ -24,6 +26,8 @@ import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.StringMapField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -56,7 +60,7 @@ import java.util.Map;
  */
 public final class DatabaseContainerKind implements InstanceKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "database_container");
+    public static final Identifier ID = HohenheimIds.id("database_container");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     /** Lowercase {@link ManagedDatabase.Engine} token; decides port, data path and hardening. */
@@ -139,7 +143,7 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
     public Icon getIcon() { return Icon.of("database"); }
 
     @Override
-    public String getColor() { return "blue"; }
+    public BadgeColor color() { return ColorHue.BLUE; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }
@@ -249,7 +253,7 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
         ManagedDatabase.Engine engine = ManagedDatabase.Engine.forToken(token);
         if (engine == null) {
             throw Violations.ofField("settings.engine", token,
-                Microcopy.of("database_engine_unknown").withFilter("scope", "violations")
+                HohenheimViolations.text("database_engine_unknown")
                     .withArg("engine", token));
         }
         return engine;

@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
+import be.elevenways.zenit.common.security.SystemPrincipal;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -38,20 +39,20 @@ class BanWriterIdentityTest {
         TenantConduits.as(tenant, () -> writer.execute(() -> tripped.complete(observed())));
         assertThat(tripped.get(10, TimeUnit.SECONDS))
             .as("step 1: system authority, no caller, system attribution")
-            .containsExactly(true, true, Accountability.ORIGIN_SYSTEM);
+            .containsExactly(true, true, SystemPrincipal.INSTANCE.reference());
 
         // 2. Work queued with no caller at all is the system's too.
         CompletableFuture<List<Object>> unattended = new CompletableFuture<>();
         writer.execute(() -> unattended.complete(observed()));
         assertThat(unattended.get(10, TimeUnit.SECONDS))
             .as("step 2: work with no submitter is the system's")
-            .containsExactly(true, true, Accountability.ORIGIN_SYSTEM);
+            .containsExactly(true, true, SystemPrincipal.INSTANCE.reference());
     }
 
-    /** Whether the writer thread is system work, whether it has no caller, and its attribution's actor or origin. */
+    /** Whether the writer thread is system work, whether it has no caller, and its typed attribution. */
     private static List<Object> observed() {
         Accountability attribution = Accountability.current();
         return List.of(ExecutionIdentity.isSystem(), ExecutionIdentity.currentCaller() == null,
-            attribution.actor() != null ? attribution.actor() : attribution.origin());
+            attribution.actorReference());
     }
 }

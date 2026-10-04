@@ -1,15 +1,15 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.cms.SiteResource;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.AccessContext;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -130,8 +130,8 @@ class ReleasedClaimRegexShadowTest {
 
         // 2. The victim abandons the site. Nothing claims the hostname any more -- but the
         //    CNAME pointing here from a zone we do not host is still live.
-        new SiteResource().deleteRow(Models.get(SiteModel.class).findById(victim.get(SiteModel.ID)),
-            AccessContext.anonymous());
+        PanelResourceCalls.delete(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, victim.get(SiteModel.ID),
+            TenantConduits.operator());
         assertThat(liveClaimsOn(VICTIM_HOST))
             .as("step 2: the released hostname is claimed by nobody").isEqualTo(0);
 

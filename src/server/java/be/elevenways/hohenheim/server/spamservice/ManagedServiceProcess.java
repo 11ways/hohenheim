@@ -1,95 +1,77 @@
 package be.elevenways.hohenheim.server.spamservice;
 
-import be.elevenways.hohenheim.server.SystemUsers;
-import be.elevenways.hohenheim.server.process.ProcessGroupSupport;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.RunningProcess;
+import be.elevenways.protoblast.server.process.Subprocess;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Arrays;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.TimeoutException;
 import java.util.function.UnaryOperator;
 
-/** Owns one process group and drains its output on dedicated platform threads. */
+/**
+ * Owns one long-lived service process and keeps the redacted tail of what it writes.
+ *
+ * AIDEV-NOTE: the process is a {@link Subprocess} the caller describes (its session, stop operator and stop grace
+ * come from {@code SystemUsers.execution}); this class only adds the merged output, which a platform thread reads
+ * into a bounded tail, and the one stdin line, written through a pipe so its bytes can be cleared afterwards.
+ *
+ * @author Jelle De Loecker
+ * @since 0.1.0
+ */
 public final class ManagedServiceProcess {
 
     private static final int MAX_OUTPUT_CHARS = 256 * 1024;
     private static final int REDACTION_OVERLAP_CHARS = 1_024;
 
-    private final Process process;
-    private final SystemUsers.@Nullable RunAsUser runAs;
-    private final ProcessGroupSupport.@Nullable Operator processGroupOperator;
+    private final RunningProcess process;
     private final UnaryOperator<String> redactor;
     private final StringBuilder output = new StringBuilder();
-    private final List<InputStream> outputInputs;
-    private final List<Thread> outputPumps;
+    private final Thread outputPump;
 
-    private ManagedServiceProcess(@NonNull Process process,
-                                  SystemUsers.@Nullable RunAsUser runAs,
-                                  @NonNull UnaryOperator<String> redactor,
-                                  ProcessGroupSupport.@Nullable Operator processGroupOperator,
+    private ManagedServiceProcess(@NonNull RunningProcess process, @NonNull UnaryOperator<String> redactor,
                                   @Nullable String stdinLine) throws IOException {
         this.process = process;
-        this.runAs = runAs;
         this.redactor = redactor;
-        this.processGroupOperator = processGroupOperator;
-        this.outputInputs = List.of(process.getInputStream(), process.getErrorStream());
-        this.outputPumps = List.of(
-            startPump(this.outputInputs.get(0), "managed-service-" + process.pid() + "-stdout"),
-            startPump(this.outputInputs.get(1), "managed-service-" + process.pid() + "-stderr"));
+        this.outputPump = Thread.ofPlatform().daemon().name("managed-service-" + process.pid() + "-output")
+            .start(() -> pump(process.stdout()));
         try {
             writeStdin(stdinLine);
         } catch (IOException e) {
-            if (this.processGroupOperator == null) {
-                ProcessGroupSupport.terminate(this.process, this.runAs, 100);
-            } else {
-                ProcessGroupSupport.terminate(this.process, this.runAs, 100, this.processGroupOperator);
-            }
-            awaitPumps();
+            this.process.stopTree();
+            awaitPump();
             throw e;
         }
     }
 
-    /** Starts a process whose builder already has an explicit environment and working directory. */
-    public static @NonNull ManagedServiceProcess start(@NonNull ProcessBuilder builder,
-                                                        SystemUsers.@Nullable RunAsUser runAs,
-                                                        @NonNull UnaryOperator<String> redactor)
-            throws IOException {
-        builder.redirectErrorStream(false);
-        return new ManagedServiceProcess(builder.start(), runAs, redactor, null, null);
+    /** Starts a process that reads no stdin. */
+    public static @NonNull ManagedServiceProcess start(@NonNull Subprocess process,
+                                                        @NonNull UnaryOperator<String> redactor) throws IOException {
+        return start(process, redactor, null);
     }
 
-    /** Starts a process and writes one line to its stdin before closing the pipe. */
-    public static @NonNull ManagedServiceProcess start(@NonNull ProcessBuilder builder,
-                                                        SystemUsers.@Nullable RunAsUser runAs,
+    /**
+     * Starts a process and writes one line to its stdin before closing the pipe.
+     *
+     * @throws IOException when the process cannot be started or does not take its line
+     */
+    public static @NonNull ManagedServiceProcess start(@NonNull Subprocess process,
                                                         @NonNull UnaryOperator<String> redactor,
-                                                        @Nullable String stdinLine)
-            throws IOException {
-        builder.redirectErrorStream(false);
-        return new ManagedServiceProcess(builder.start(), runAs, redactor, null, stdinLine);
-    }
-
-    /** Test seam for process-group signaling. */
-    static @NonNull ManagedServiceProcess start(@NonNull ProcessBuilder builder,
-                                                 SystemUsers.@Nullable RunAsUser runAs,
-                                                 @NonNull UnaryOperator<String> redactor,
-                                                 ProcessGroupSupport.@NonNull Operator operator)
-            throws IOException {
-        return start(builder, runAs, redactor, operator, null);
-    }
-
-    /** Test seam for process-group signaling plus one-line stdin delivery. */
-    static @NonNull ManagedServiceProcess start(@NonNull ProcessBuilder builder,
-                                                 SystemUsers.@Nullable RunAsUser runAs,
-                                                 @NonNull UnaryOperator<String> redactor,
-                                                 ProcessGroupSupport.@NonNull Operator operator,
-                                                 @Nullable String stdinLine)
-            throws IOException {
-        builder.redirectErrorStream(false);
-        return new ManagedServiceProcess(builder.start(), runAs, redactor, operator, stdinLine);
+                                                        @Nullable String stdinLine) throws IOException {
+        RunningProcess running;
+        try {
+            running = process.mergeStderr().streamStdout().stdinPipe().start();
+        } catch (RuntimeException refused) {
+            throw new IOException("Could not start " + process.command().get(0), refused);
+        }
+        return new ManagedServiceProcess(running, redactor, stdinLine);
     }
 
     public long pid() {
@@ -100,26 +82,46 @@ public final class ManagedServiceProcess {
         return this.process.isAlive();
     }
 
-    public @NonNull Process process() {
-        return this.process;
+    /** Runs {@code action} once the process ended and its output was drained. */
+    public void onExit(@NonNull Runnable action) {
+        this.process.completion().whenDone((outcome, failure) -> action.run());
     }
 
+    /** Asks the whole session to end and returns at once; {@link #stop()} waits for it. */
+    public void terminate() {
+        this.process.stop();
+    }
+
+    /** @return true when the process ended within the wait */
     public boolean waitFor(long timeoutMs) throws InterruptedException {
-        return this.process.waitFor(timeoutMs, TimeUnit.MILLISECONDS);
+        try {
+            this.process.await(Duration.ofMillis(timeoutMs));
+            return true;
+        } catch (TimeoutException stillRunning) {
+            return false;
+        } catch (CompletionException failed) {
+            if (failed.getCause() instanceof InterruptedException interrupted) {
+                throw interrupted;
+            }
+            throw failed;
+        }
     }
 
+    /** @return the exit code of a process that ended */
     public int exitValue() {
-        return this.process.exitValue();
+        ProcessOutcome outcome = this.process.await();
+        return outcome.exitCode();
     }
 
-    /** Terminates the complete setsid process group and drains both output pipes. */
-    public synchronized boolean stop(long gracefulWaitMs) {
-        ProcessGroupSupport.TerminationResult result = this.processGroupOperator == null
-            ? ProcessGroupSupport.terminate(this.process, this.runAs, gracefulWaitMs)
-            : ProcessGroupSupport.terminate(this.process, this.runAs, gracefulWaitMs,
-                this.processGroupOperator);
-        awaitPumps();
-        return result.successful();
+    /**
+     * Stops the complete session, also what it holds after its leader exited, and drains the output.
+     *
+     * @return true when nothing of the session is known to run afterwards
+     */
+    public synchronized boolean stop() {
+        boolean ended = this.process.stopTree();
+        awaitPump();
+        return ended;
     }
 
     public @NonNull String output() {
@@ -132,7 +134,7 @@ public final class ManagedServiceProcess {
 
     private void writeStdin(@Nullable String line) throws IOException {
         byte[] bytes = line == null ? new byte[0] : (line + "\n").getBytes(StandardCharsets.UTF_8);
-        try (var input = this.process.getOutputStream()) {
+        try (OutputStream input = this.process.stdin()) {
             if (bytes.length > 0) {
                 input.write(bytes);
                 input.flush();
@@ -140,10 +142,6 @@ public final class ManagedServiceProcess {
         } finally {
             Arrays.fill(bytes, (byte) 0);
         }
-    }
-
-    private Thread startPump(InputStream input, String name) {
-        return Thread.ofPlatform().daemon().name(name).start(() -> pump(input));
     }
 
     private void pump(InputStream input) {
@@ -154,7 +152,7 @@ public final class ManagedServiceProcess {
                 append(new String(buffer, 0, count, StandardCharsets.UTF_8));
             }
         } catch (IOException ignored) {
-            // Pipe closure during process-group cleanup is normal.
+            // The stream closing during session cleanup is normal.
         }
     }
 
@@ -171,24 +169,12 @@ public final class ManagedServiceProcess {
         }
     }
 
-    private void awaitPumps() {
+    private void awaitPump() {
         boolean interrupted = Thread.interrupted();
-        for (int i = 0; i < this.outputPumps.size(); i++) {
-            Thread pump = this.outputPumps.get(i);
-            try {
-                pump.join(2_000);
-            } catch (InterruptedException e) {
-                interrupted = true;
-            }
-            if (pump.isAlive()) {
-                try {
-                    this.outputInputs.get(i).close();
-                    pump.join(500);
-                } catch (IOException ignored) {
-                } catch (InterruptedException e) {
-                    interrupted = true;
-                }
-            }
+        try {
+            this.outputPump.join(2_000);
+        } catch (InterruptedException e) {
+            interrupted = true;
         }
         if (interrupted) {
             Thread.currentThread().interrupt();

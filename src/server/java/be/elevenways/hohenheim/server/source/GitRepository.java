@@ -4,12 +4,18 @@ import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.process.ProcessGroupSupport;
 
 import be.elevenways.hohenheim.source.GitRefNames;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
+import be.elevenways.protoblast.server.process.SubprocessException;
+import be.elevenways.protoblast.server.process.Termination;
 
 import java.io.File;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -244,40 +250,45 @@ public class GitRepository {
                 // Set AFTER the caller's environment so nothing can widen it.
                 environment.put("GIT_ALLOW_PROTOCOL", REMOTE_PROTOCOLS);
             }
-            ProcessBuilder pb = SystemUsers.executionBuilder(runAs, environment, command, true);
+            // The session's stop operator ends the whole process group on a timeout or an interrupt,
+            // whatever uid its members run as (a credential helper, an ssh a hook started).
+            Subprocess git = SystemUsers.execution(runAs, environment, command, true)
+                .mergeStderr()
+                .collectStdout(OUTPUT_CAP)
+                .timeout(Duration.ofMillis(timeoutMillis))
+                .stopGrace(Duration.ofMillis(ProcessGroupSupport.GRACEFUL_TERM_MS));
             if (workDir != null && workDir.isDirectory()) {
-                pb.directory(workDir);
+                git.directory(workDir.toPath());
             }
-            pb.redirectErrorStream(true);
 
-            Process process = pb.start();
-            ProcessGroupSupport.OutputCapture output = ProcessGroupSupport.drain(
-                process.getInputStream(), "git-output-" + process.pid(), OUTPUT_CAP);
-            boolean finished;
+            ProcessOutcome outcome;
             try {
-                finished = process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                ProcessGroupSupport.terminate(process, runAs, ProcessGroupSupport.GRACEFUL_TERM_MS);
-                output.finish();
-                throw e;
+                outcome = git.run();
+            } catch (SubprocessException refused) {
+                // The start failure's own words, never the whole argv the refusal names.
+                return new GitResult(false,
+                    sanitizeOutput("Failed to execute git: " + refused.getCause().getMessage()), -1);
+            } catch (CompletionException failed) {
+                if (failed.getCause() instanceof InterruptedException interrupted) {
+                    // The run already asked the session to stop; the interrupt travels as the exception.
+                    Thread.interrupted();
+                    throw interrupted;
+                }
+                throw failed;
             }
-            if (!finished) {
-                ProcessGroupSupport.TerminationResult termination =
-                    ProcessGroupSupport.terminate(process, runAs, ProcessGroupSupport.GRACEFUL_TERM_MS);
-                output.finish();
+            if (outcome.termination() == Termination.TIMED_OUT) {
                 String message = "Git command timed out after "
                     + TimeUnit.MILLISECONDS.toSeconds(timeoutMillis) + " seconds";
-                if (!termination.successful()) {
-                    message += "; process group survived cleanup (" + termination.finalGroupState() + ")";
+                if (outcome.treeSurvived()) {
+                    message += "; process group survived cleanup";
                 }
                 return new GitResult(false, message, -1);
             }
 
-            output.finish();
-            int exitCode = process.exitValue();
+            int exitCode = outcome.exitCode();
             // Success output is sanitized too: a repo's own insteadOf/submodule
             // config can echo a credentialed URL even when the command succeeds.
-            return new GitResult(exitCode == 0, sanitizeOutput(output.output()), exitCode);
+            return new GitResult(exitCode == 0, sanitizeOutput(outcome.stdout().text()), exitCode);
         } catch (InterruptedException e) {
             throw e;
         } catch (Exception e) {

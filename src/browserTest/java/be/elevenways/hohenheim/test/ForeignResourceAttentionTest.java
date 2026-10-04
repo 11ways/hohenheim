@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
-import be.elevenways.hohenheim.server.cms.ReconcileFindingResource;
+import be.elevenways.hohenheim.server.cms.ReconcileFindingParts;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -85,7 +85,7 @@ class ForeignResourceAttentionTest extends HohenheimTestBase {
             //    one declaring home, resolved in the reader's own locale.
             assertThat(row.detail().args().get("page"))
                 .as("step 3: the detail names the target page by its own declared label")
-                .isEqualTo(ReconcileFindingResource.LABEL);
+                .isEqualTo(ReconcileFindingParts.LABEL);
 
             // 4. The link is narrowed, and readably so: the expression names the host and
             //    both counted buckets rather than being an opaque blob.

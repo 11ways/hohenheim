@@ -75,9 +75,16 @@ public final class TenantUpstreams {
      * tenant-owned site, so a site the operator pointed at a LAN backend keeps being served. A
      * row that does not carry the column (a partial read) counts as untrusted: fail closed.
      *
-     * @return true for a tenant-owned site the operator has not marked trusted
+     * AIDEV-NOTE: neither ownership nor the flag widens reach unless the upstream was last set by the system tier
+     * ({@link SiteModel#TARGET_TRUSTED}, stamped by OperatorTrustedWrites): a delegate's upstream on a tenant-owned
+     * site stays public-only after the tenant's grant is revoked and the site becomes operator-owned.
+     *
+     * @return true unless the system tier set the upstream and the site is operator-owned or marked trusted
      */
     public static boolean publicOnly(@Nullable Row site) {
+        if (site == null || !Boolean.TRUE.equals(site.get(SiteModel.TARGET_TRUSTED))) {
+            return true;
+        }
         return isTenantOwned(site) && !Boolean.TRUE.equals(site.get(SiteModel.TRUSTED_UPSTREAM));
     }
 

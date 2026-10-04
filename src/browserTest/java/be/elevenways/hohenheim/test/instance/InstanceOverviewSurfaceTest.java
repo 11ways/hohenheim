@@ -13,10 +13,11 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The record dashboard's surface-action round trip, in a REAL browser: a widget-native
- * button on an instance's front door dispatches to {@code cms:{panel}/{resource}/{id}},
- * the page's own {@code onSurfaceAction} answers with a freshly built tree, and the host
- * element swaps its rendering in place.
+ * The record overview's surface-action round trip, in a REAL browser: a widget-native
+ * button on an instance's front door dispatches to the overview's widget surface
+ * (CmsDashboardSurfaces, addressed by CmsSurfaceAddress), the overview's declared refresh
+ * SurfaceOperation answers with a freshly built tree, and the host element swaps its
+ * rendering in place.
  *
  * AIDEV-NOTE: the proof is a value that CHANGED between the first render and the click.
  * Asserting "the button exists and nothing exploded" would pass against a handler that
@@ -84,8 +85,8 @@ class InstanceOverviewSurfaceTest extends HohenheimTestBase {
             executeScript("window.__hhSurfaceMarker = 'kept'");
             click("[data-surface-action=\"refresh\"]");
 
-            // 4. THE ROUND TRIP: the click dispatched to the record surface, the page's
-            //    onSurfaceAction rebuilt the tree from the re-loaded record, and the host
+            // 4. THE ROUND TRIP: the click dispatched to the record surface, the overview's
+            //    refresh SurfaceOperation rebuilt the tree from the re-loaded record, and the host
             //    swapped its rendering -- so the bar the first render refused now exists.
             waitForSelector("pl-usage-bar");
             assertThat(page.locator(".widget-usage-unmeasured").count())

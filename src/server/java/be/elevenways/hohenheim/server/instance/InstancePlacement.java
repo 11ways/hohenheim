@@ -1,10 +1,11 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.host.HostAdmission;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -104,7 +105,7 @@ public final class InstancePlacement {
         /** The workload an EXISTING record describes (the migration/drain lane). */
         public static @NonNull Workload of(@Nullable InstanceKindHandler handler,
                                            @NonNull Row instance) {
-            return of(handler, InstanceCapacity.settingsOf(instance));
+            return of(handler, InstanceModel.settingsOf(instance));
         }
 
         /**
@@ -273,15 +274,15 @@ public final class InstancePlacement {
                 throw kindRefusal;
             }
             if (somethingWasFull) {
-                throw Violations.ofForm(violation("no_placement_capacity")
+                throw Violations.ofForm(HohenheimViolations.text("no_placement_capacity")
                     .withArg("needed", footprint)
                     .withArg("free", Math.max(0, largestFreeMb)));
             }
             if (unmeasured != null) {
-                throw Violations.ofForm(violation("host_capacity_unproven")
-                    .withArg("name", InstanceCapacity.hostLabel(unmeasured)));
+                throw Violations.ofForm(HohenheimViolations.text("host_capacity_unproven")
+                    .withArg("name", ServerModel.labelOf(unmeasured)));
             }
-            throw Violations.ofForm(violation("no_placement_available"));
+            throw Violations.ofForm(HohenheimViolations.text("no_placement_available"));
         }
         return chosen;
     }
@@ -340,7 +341,4 @@ public final class InstancePlacement {
         }
     }
 
-    private static Microcopy violation(String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
-    }
 }

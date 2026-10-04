@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.auth.AuthSettings;
-import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.server.ServerZenitRuntime;
@@ -50,14 +49,12 @@ public final class HohenheimTestRuntime {
         }
         declareAccessModelsOnce();
         ensureDatasource();
-        // AIDEV-NOTE: auth is installed BEFORE the boot stages, exactly where
-        // ServerMain installs it, because the MODULES stage now builds both CMS
-        // panels and their resources are zenit-auth's. init() is idempotent, so a
-        // test that already installed auth itself is unaffected. Auth BASELINES
-        // stay the caller's choice: they are policy, not wiring.
-        ZenitAuth.init(Datasources.getDefault());
-        // The users/roles resources live in HohenheimPanel; zenit-auth's own
-        // default panel would be a second registration for the same slug.
+        // AIDEV-NOTE: zenit-auth installs itself at the MODULES stage (the discovered
+        // ZenitAuthModule, over the default datasource ensured above), exactly as in
+        // production, and HohenheimHostWiring runs after it. Auth BASELINES stay the
+        // caller's choice: they are policy, not wiring. The users/roles resources live in
+        // HohenheimPanel, so zenit-auth's own default panel is switched off BEFORE boot:
+        // the module's drain reads the setting.
         Zenit.SETTINGS_VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
         ServerSettings.VALUES.setValue(ServerSettings.Network.AUTO_START_HTTP, false);
         // The suite opts OUT explicitly: its sites have no system user of their own

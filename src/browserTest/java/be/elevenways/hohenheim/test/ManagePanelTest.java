@@ -1,5 +1,12 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
+import be.elevenways.zenit.cms.server.panel.PartsLists;
+import be.elevenways.zenit.cms.server.panel.PanelGate;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -7,7 +14,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.ManageDomainResource;
+import be.elevenways.hohenheim.server.cms.DomainParts;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
@@ -28,9 +35,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
+import java.util.Objects;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -111,6 +120,14 @@ class ManagePanelTest extends HohenheimTestBase {
         return httpGet(path, session);
     }
 
+    /** What the Access tab's Save posts beside its rows: the tab and the confirmation proof. */
+    private static final String SAVE_ACCESS_FIELDS = "_tab=access&_confirmed=1&";
+
+    /** The one invoke route the Access tab's form posts to, over site A. */
+    private String saveAccessPath() {
+        return "/admin/sites/invoke/zenit.save_record_sharing?ids=" + siteAId;
+    }
+
     private HttpResponse<String> operatorGet(String path) throws Exception {
         return httpGet(path, operatorSession);
     }
@@ -145,19 +162,18 @@ class ManagePanelTest extends HohenheimTestBase {
         // (403), it never redirects -- a redirect could only loop.
         assertThat(operatorGet("/").statusCode()).isEqualTo(403);
 
-        // The GENERIC record-access matrix (zenit-auth's contributed subpage)
-        // is the grant surface -- the hand-written SiteAccessPage is deleted.
-        HttpResponse<String> add = adminPostForm(
-            "/admin/sites/" + siteAId + "/page/access",
-            "access.0.type=user&access.0.id=" + operatorId
+        // The GENERIC record-access tab (zenit-auth's contributed tab, saving through its PAGE placement of
+        // zenit:save_record_sharing on the one invoke route) is the grant surface.
+        HttpResponse<String> add = adminPostForm(saveAccessPath(),
+            SAVE_ACCESS_FIELDS + "access.0.type=user&access.0.id=" + operatorId
                 + "&access.0.caps.0.key=manage&access.0.caps.0.value=allow");
         assertThat(add.statusCode()).isIn(302, 303);
 
-        // The Access tab IS the generic page: only it renders the
-        // pl-capability-matrix, with the new grant as a subject row.
+        // The Access tab IS the generic page: it renders the sharing
+        // control, with the new grant as a subject row.
         HttpResponse<String> pageView = adminGet("/admin/sites/" + siteAId + "/page/access");
         assertThat(pageView.statusCode()).isEqualTo(200);
-        assertThat(pageView.body()).contains("<pl-capability-matrix");
+        assertThat(pageView.body()).contains("<za-record-sharing");
         assertThat(pageView.body()).contains("data-subject=\"user:" + operatorId + "\"");
         assertThat(pageView.body()).contains("Site Operator");
 
@@ -184,8 +200,8 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(list.body()).contains("Manage Site A");
         assertThat(list.body()).doesNotContain("Manage Site B");
         assertThat(list.body()).doesNotContain("data-column=\"upstream_kind\"");
-        // Safe row actions only.
-        assertThat(list.body()).contains("toggle_site");
+        // Safe row actions only: the switch (enable or disable, whichever the site's state offers), never a clone.
+        assertThat(list.body()).containsAnyOf("hohenheim:enable_site", "hohenheim:disable_site");
         assertThat(list.body()).doesNotContain("clone_site");
 
         // The delegated surface offers the SAME generic access tab (a manage
@@ -193,7 +209,7 @@ class ManagePanelTest extends HohenheimTestBase {
         HttpResponse<String> manageAccess = operatorGet(
             "/manage/sites/" + siteAId + "/page/access");
         assertThat(manageAccess.statusCode()).isEqualTo(200);
-        assertThat(manageAccess.body()).contains("<pl-capability-matrix");
+        assertThat(manageAccess.body()).contains("<za-record-sharing");
 
         // The tenant's subject picker is an EXACT lookup, never the directory: the
         // administrator's address (a fact of the installation, not of site A) is in the
@@ -244,7 +260,7 @@ class ManagePanelTest extends HohenheimTestBase {
                 + "&settings.system_user_id=hohenheim%3Aroot"
                 + "&settings.environment_variables.DAEMON_SECRET=stolen"
                 + "&source_settings.repository_url=ssh%3A%2F%2Fattacker%2Frepo.git"
-                + "&source_settings.build_command=malicious");
+                + "&source_settings.build_command=malicious&" + siteEditEnvelope(siteAId));
         assertThat(response.statusCode()).isIn(302, 303);
 
         Row site = Models.get(SiteModel.class).findById(siteAId);
@@ -289,15 +305,15 @@ class ManagePanelTest extends HohenheimTestBase {
         HttpResponse<String> fromManage = operatorPost("/instances/" + appAId + "/deploy",
             "_return=" + java.net.URLEncoder.encode(manageTarget, java.nio.charset.StandardCharsets.UTF_8));
         assertThat(fromManage.statusCode()).isIn(302, 303);
-        assertThat(fromManage.headers().firstValue("Location")).hasValue(manageTarget);
+        assertThat(landingOf(fromManage)).isEqualTo(manageTarget);
 
         // A forged _return can never open-redirect: unsafe values fall back
         // to the admin page.
         HttpResponse<String> forged = operatorPost("/instances/" + appAId + "/deploy",
             "_return=" + java.net.URLEncoder.encode("https://evil.example/", java.nio.charset.StandardCharsets.UTF_8));
         assertThat(forged.statusCode()).isIn(302, 303);
-        assertThat(forged.headers().firstValue("Location"))
-            .hasValue("/admin/instances/" + appAId + "/page/deployments");
+        assertThat(landingOf(forged))
+            .isEqualTo("/admin/instances/" + appAId + "/page/deployments");
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, operatorId, InstanceModel.MODEL_ID,
                 appAId, HohenheimAccess.MANAGE);
@@ -307,7 +323,7 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(subpage.statusCode()).isEqualTo(200);
         // Binding a hostname to a managed site is delegated; REQUESTING a certificate for it
         // stays installation administration (an issued certificate is authority over a name).
-        assertThat(subpage.body()).contains(managedHost).contains("add-domain-link")
+        assertThat(subpage.body()).contains(managedHost).contains("data-cms-child-create=\"domains\"")
             .doesNotContain("certificates-request");
 
         // The delegated record form is WRITABLE now, but offers only the delegated columns.
@@ -363,7 +379,9 @@ class ManagePanelTest extends HohenheimTestBase {
         Integer foreignId = foreign.get(SiteDomainModel.ID);
         AccessContext tenant = AccessContext.of(
             TenantConduits.stubFor(new UserPrincipal(operatorId, "Site Operator")));
-        ManageDomainResource domains = new ManageDomainResource();
+        Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.MANAGE));
+        @SuppressWarnings("unchecked")
+        PanelResource<Row> domains = (PanelResource<Row>) Objects.requireNonNull(manage.entryBySlug(DomainParts.SLUG));
 
         // 1. The list shows site A's domain and never site B's.
         HttpResponse<String> list = operatorGet("/manage/domains");
@@ -372,7 +390,8 @@ class ManagePanelTest extends HohenheimTestBase {
             .contains(managedHost).doesNotContain(foreignHost);
 
         // 2. The count behind the pager counts the scope, not the table.
-        assertThat(domains.countRows(domains.tableView(tenant).apply(domains.tableSpec()), tenant))
+        assertThat(PartsReads.countRows(PanelGate.request(manage, tenant), domains, null,
+            PartsLists.tableView(domains, tenant).apply(PartsLists.<Row>tableSpec(domains)), tenant))
             .as("2. the tenant's domain count is its one domain").isEqualTo(1L);
 
         // 3. Site B's domain by direct id is not found on read, update and delete, and survives untouched.
@@ -407,16 +426,16 @@ class ManagePanelTest extends HohenheimTestBase {
     @Test
     void recordAndGlobalGrantsDrivePanelEligibility() throws Exception {
         // The operator holds site A through the Access tab, where the grant journey leaves it.
-        assertThat(adminPostForm("/admin/sites/" + siteAId + "/page/access",
-            "access.0.type=user&access.0.id=" + operatorId
+        assertThat(adminPostForm(saveAccessPath(),
+            SAVE_ACCESS_FIELDS + "access.0.type=user&access.0.id=" + operatorId
                 + "&access.0.caps.0.key=manage&access.0.caps.0.value=allow").statusCode())
             .as("fixture: the Access tab grants site A").isIn(302, 303);
         assertThat(HohenheimAccess.managedSiteIds(new UserPrincipal(operatorId, "Site Operator")))
             .as("fixture: the operator manages exactly site A").containsExactly(siteAId);
 
         GrantService.createDirectGrant(GrantSubjectType.USER, operatorId, "hohenheim.manage.access", true);
-        HttpResponse<String> remove = adminPostForm("/admin/sites/" + siteAId + "/page/access",
-            "access.__removed=" + java.net.URLEncoder.encode("user:" + operatorId,
+        HttpResponse<String> remove = adminPostForm(saveAccessPath(),
+            SAVE_ACCESS_FIELDS + "access.__removed=" + java.net.URLEncoder.encode("user:" + operatorId,
                 java.nio.charset.StandardCharsets.UTF_8));
         assertThat(remove.statusCode()).isIn(302, 303);
 
@@ -429,7 +448,7 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(GrantService.listDirectGrants(GrantSubjectType.USER, operatorId))
             .anyMatch(grant -> "hohenheim.manage.access".equals(grant.get(GrantModel.PERMISSION)));
         // The panel stays reachable, and its landing is the manage DASHBOARD now
-        // (the first accessible DashboardPanelPeer wins the index), so /manage
+        // (the first accessible dashboard entry wins the index), so /manage
         // redirects there rather than rendering a card grid.
         HttpResponse<String> landing = operatorGet("/manage");
         assertThat(landing.statusCode()).isIn(302, 303);
@@ -725,41 +744,42 @@ class ManagePanelTest extends HohenheimTestBase {
             HohenheimAccess.MANAGE, true);
 
         try {
-            // 1. The toggle action refuses to seize the victim's hostname. Toggling is a
+            // 1. The enable operation refuses to seize the victim's hostname. Switching is a
             //    CONFIRMED action, so every POST here carries the proof the client dialog
             //    would stamp -- without it the server answers the confirmation
             //    interstitial (200) and the refusal under test never runs.
-            assertThat(operatorPost("/manage/sites/" + stagedId + "/action/toggle_site",
+            assertThat(operatorPost("/manage/sites/invoke/hohenheim.enable_site?ids=" + stagedId,
                 confirmed("")).statusCode()).isIn(302, 303);
             assertThat(siteModel.findById(stagedId).get(SiteModel.ENABLED))
                 .as("toggle must not enable a route-conflicting site").isEqualTo(false);
 
             // 2. Neither does the delegated form's enabled checkbox.
             assertThat(operatorPost("/manage/sites/" + stagedId,
-                "name=Staged+Takeover&enabled=true&description=").statusCode())
+                "name=Staged+Takeover&enabled=true&description=&" + siteEditEnvelope(stagedId)).statusCode())
                 .isIn(200, 302, 303, 422);
             assertThat(siteModel.findById(stagedId).get(SiteModel.ENABLED))
                 .as("the delegated form must not enable a route-conflicting site")
                 .isEqualTo(false);
 
             // 3. A site with no conflict still toggles live.
-            assertThat(operatorPost("/manage/sites/" + innocentId + "/action/toggle_site",
+            assertThat(operatorPost("/manage/sites/invoke/hohenheim.enable_site?ids=" + innocentId,
                 confirmed("")).statusCode()).isIn(302, 303);
             assertThat(siteModel.findById(innocentId).get(SiteModel.ENABLED))
                 .as("a non-conflicting site still enables").isEqualTo(true);
 
             // 4. Disabling is never blocked -- not even for the site that now owns a
             //    hostname somebody else also staged.
-            assertThat(operatorPost("/manage/sites/" + innocentId + "/action/toggle_site",
+            assertThat(operatorPost("/manage/sites/invoke/hohenheim.disable_site?ids=" + innocentId,
                 confirmed("")).statusCode()).isIn(302, 303);
             assertThat(siteModel.findById(innocentId).get(SiteModel.ENABLED))
                 .as("disabling is never refused").isEqualTo(false);
 
             // 5. The admin form path refuses the same takeover (the invariant is shared,
             //    not per-panel).
-            String adminEnableBody = "name=Staged+Takeover&upstream_kind=hohenheim%3Astatic"
-                + "&enabled=true&settings.root_path=%2Ftmp&description=";
-            assertThat(adminPostForm("/admin/sites/" + stagedId, adminEnableBody).statusCode())
+            // Each submit carries the envelope of the version it reviewed, read at the post.
+            Supplier<String> adminEnableBody = () -> "name=Staged+Takeover&upstream_kind=hohenheim%3Astatic"
+                + "&enabled=true&settings.root_path=%2Ftmp&description=&" + siteEditEnvelope(stagedId);
+            assertThat(adminPostForm("/admin/sites/" + stagedId, adminEnableBody.get()).statusCode())
                 .isIn(200, 302, 303, 422);
             assertThat(siteModel.findById(stagedId).get(SiteModel.ENABLED))
                 .as("the admin form must not enable a route-conflicting site either")
@@ -776,14 +796,14 @@ class ManagePanelTest extends HohenheimTestBase {
             //     this is still a cross-owner takeover and is still refused -- on the real
             //     admin HTTP path. Lift it the way an administrator does, so step 6 keeps
             //     proving what it claims.
-            assertThat(adminPostForm("/admin/sites/" + stagedId, adminEnableBody).statusCode())
+            assertThat(adminPostForm("/admin/sites/" + stagedId, adminEnableBody.get()).statusCode())
                 .isIn(200, 422);
             assertThat(siteModel.findById(stagedId).get(SiteModel.ENABLED))
                 .as("a just-released hostname stays quarantined against a different owner")
                 .isEqualTo(false);
             Models.get(ReleasedRouteClaimModel.class).find().delete();
 
-            assertThat(adminPostForm("/admin/sites/" + stagedId, adminEnableBody).statusCode())
+            assertThat(adminPostForm("/admin/sites/" + stagedId, adminEnableBody.get()).statusCode())
                 .isIn(302, 303);
             assertThat(siteModel.findById(stagedId).get(SiteModel.ENABLED))
                 .as("with the conflict gone the same submit enables the site")

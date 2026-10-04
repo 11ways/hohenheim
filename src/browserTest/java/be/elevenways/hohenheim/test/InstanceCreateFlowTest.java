@@ -1,10 +1,12 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.zenit.cms.server.panel.PartsWrites;
+import be.elevenways.hohenheim.server.cms.InstanceParts;
 import com.microsoft.playwright.Locator;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -122,7 +124,7 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         page.waitForCondition(() -> page.locator(HOST_SELECT + "[disabled]").count() == 0);
         openPlSelect(HOST_SELECT);
         page.waitForSelector(hostOption(dockerHostId));
-        assertCount(hostOption(incusHostId), 0);
+        assertCount(hostOption(incusHostId), 0, "step 3: a Docker-only kind never offers the Incus host");
         closeOpenPopup();
 
         // ...and the runtime image picker is no longer held by the missing kind: it opens
@@ -146,7 +148,7 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         page.waitForCondition(() -> page.locator(HOST_SELECT + "[disabled]").count() == 0);
         openPlSelect(HOST_SELECT);
         page.waitForSelector(hostOption(incusHostId));
-        assertCount(hostOption(dockerHostId), 0);
+        assertCount(hostOption(dockerHostId), 0, "step 4: an Incus-only kind never offers the Docker host");
         closeOpenPopup();
 
         // 5. A workspace runs on both runtimes but DEMANDS a quota-capable volume
@@ -156,7 +158,8 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         page.waitForCondition(() -> page.locator(HOST_SELECT + "[disabled]").count() == 0);
         openPlSelect(HOST_SELECT);
         page.waitForSelector(hostOption(dockerHostId));
-        assertCount(hostOption(incusHostId), 0);
+        assertCount(hostOption(incusHostId), 0,
+            "step 5: a workspace never offers the Incus host, whose volume backend has no quota");
 
         // 6. A workspace runs inside a runtime image: the pick resolves, and the seeded
         //    catalog answers (RuntimeImageSeeder ships node-22 and friends).
@@ -294,7 +297,7 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         for (String section : List.of("build", "deployment", "runtime")) {
             waitForSelector(SETTINGS + " pl-card[data-section='" + section + "']");
             assertCount(SETTINGS + " pl-card[data-section='" + section
-                + "'][data-collapsed='true']", 1);
+                + "'][data-collapsed='true']", 1, "step 1: the " + section + " fold is collapsed on first paint");
         }
 
         // 2. The decisions stay OUTSIDE every fold: the seven fields a person answers.
@@ -398,8 +401,11 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
             clickKindCard("workspace");
             page.waitForCondition(() -> page.locator(HOST_SELECT + "[disabled]").count() == 0);
             openPlSelect(HOST_SELECT);
+            // AIDEV-NOTE: zero options is also true while the provider request is still loading. Wait for the
+            // empty row presentation before asserting the declared explanation.
             page.waitForCondition(() -> page.locator(
-                OPEN_SELECT_POPUP + " div[role='option']").count() == 0);
+                OPEN_SELECT_POPUP + " div[role='option']").count() == 0
+                && page.locator(OPEN_SELECT_POPUP + " .pl-select-empty").isVisible());
             assertThat(page.locator(OPEN_SELECT_POPUP + " .pl-select-empty").isVisible())
                 .as("step 3: nothing qualifies, so the empty row is what the operator sees")
                 .isTrue();
@@ -524,7 +530,8 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
 
             // 2. And the refusal is PATHED ONTO THE HOST ENTRY, which is what puts the
             //    sentence beside the empty pick instead of in the form's generic error box.
-            Throwable refused = catchThrowable(() -> new InstanceResource().persistRow(
+            Throwable refused = catchThrowable(() -> PartsWrites.persistRow(
+                PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceParts.SLUG),
                 Map.of("name", "cf-nowhere-direct", "kind", "hohenheim:docker_container"),
                 adminAccessContext()));
             assertThat(refused).as("step 2: the persist lane refuses").isInstanceOf(Violations.class);

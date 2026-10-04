@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.proxy;
 
+import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.auth.SiteAuthDecision;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
@@ -229,7 +230,7 @@ public final class AccessRuleTree {
             case AccessRuleModel.TYPE_GROUP -> {
                 List<Row> children = childrenByParent.getOrDefault(row.get(AccessRuleModel.ID), List.of());
                 boolean all = AccessListModel.SATISFY_ALL.equals(
-                    AccessRuleModel.text(data.get(AccessRuleModel.GROUP_SATISFY.getName())));
+                    Texts.trimmedOrNull(data.get(AccessRuleModel.GROUP_SATISFY.getName())));
                 return new GroupNode(all,
                     build(children, childrenByParent, context, gates, facts));
             }
@@ -237,7 +238,7 @@ public final class AccessRuleTree {
                 // AIDEV-NOTE: an unparseable network is a refusing leaf in BOTH directions. It
                 // used to match nothing, which made an ip_deny leaf PASS everyone: a deny rule
                 // whose stored spelling a newer parser rejects silently stopped blocking.
-                String network = AccessRuleModel.text(data.get(AccessRuleModel.NETWORK.getName()));
+                String network = Texts.trimmedOrNull(data.get(AccessRuleModel.NETWORK.getName()));
                 IpRanges.Range range = AccessRuleModel.parseNetwork(network);
                 if (range == null) {
                     return facts.unusable(type + " " + network);
@@ -248,8 +249,8 @@ public final class AccessRuleTree {
                 facts.blocking = true;
                 facts.basicLeaf = true;
                 return new BasicAuthNode(
-                    AccessRuleModel.text(data.get(AccessRuleModel.BASIC_AUTH_USERNAME.getName())),
-                    AccessRuleModel.text(data.get(AccessRuleModel.BASIC_AUTH_PASSWORD.getName())),
+                    Texts.trimmedOrNull(data.get(AccessRuleModel.BASIC_AUTH_USERNAME.getName())),
+                    Texts.trimmedOrNull(data.get(AccessRuleModel.BASIC_AUTH_PASSWORD.getName())),
                     context.realm(), context.siteId());
             }
             case AccessRuleModel.TYPE_AUTH_PROVIDER -> {
@@ -257,7 +258,7 @@ public final class AccessRuleTree {
                 Integer providerId = data.get(AccessRuleModel.PROVIDER_ID.getName())
                     instanceof Number number ? number.intValue() : null;
                 SiteAuthGate gate = providerId == null ? null : context.gateFor(providerId,
-                    AccessRuleModel.text(data.get(
+                    Texts.trimmedOrNull(data.get(
                         AccessRuleModel.PROVIDER_REQUIRED_PERMISSION.getName())));
                 if (gate == null) {
                     // A provider rule whose provider is gone or misconfigured denies; it

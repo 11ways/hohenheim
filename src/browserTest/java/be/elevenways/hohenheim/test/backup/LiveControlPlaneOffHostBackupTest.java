@@ -66,6 +66,7 @@ class LiveControlPlaneOffHostBackupTest {
     private static SqliteDatasource controlPlane;
     /** The JVM's default registration before this class replaced it, handed back in tearDown. */
     private static Datasource previousDefault;
+    private static String previousBackupTarget;
     private static Path dbFile;
     private static Path keyringFile;
 
@@ -82,6 +83,7 @@ class LiveControlPlaneOffHostBackupTest {
         datasource = new SqliteDatasource("jdbc:sqlite:" + dbFile.toAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
         previousDefault = Datasources.getDefault();
+        previousBackupTarget = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET);
         Datasources.register(Datasources.DEFAULT, datasource);
         controlPlane = datasource;
 
@@ -152,6 +154,9 @@ class LiveControlPlaneOffHostBackupTest {
                 Datasources.unregister(Datasources.DEFAULT);
             }
             FieldEncryption.installKeyring(null);
+            // The destination setting is JVM-global: left set, it changes every later class's attention items.
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET,
+                previousBackupTarget);
             deleteTree(workspace);
         }
     }

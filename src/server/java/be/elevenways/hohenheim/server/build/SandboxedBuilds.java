@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.build;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.orm.RecordStamp;
@@ -106,7 +107,7 @@ public final class SandboxedBuilds {
                 loaded.imageId(), 0, null, log, outcome.peakDiskBytes(), loaded.bytes(),
                 startedAt);
         } catch (IOException refused) {
-            String reason = refused.getMessage() != null ? refused.getMessage() : refused.toString();
+            String reason = HohenheimViolations.reasonOf(refused);
             log.line("[hohenheim] " + reason);
             // A refused detection still records what the detector SAW -- "why was this
             // refused" must never be log archaeology.
@@ -114,8 +115,7 @@ public final class SandboxedBuilds {
             return finish(buildId, request, BuildOperationModel.STATUS_REFUSED, null, -1,
                 reason, log, 0, 0, startedAt);
         } catch (RuntimeException unexpected) {
-            String reason = unexpected.getMessage() != null
-                ? unexpected.getMessage() : unexpected.toString();
+            String reason = HohenheimViolations.reasonOf(unexpected);
             log.line("[hohenheim] build aborted: " + reason);
             finish(buildId, request, BuildOperationModel.STATUS_FAILED, null, -1, reason, log,
                 0, 0, startedAt);

@@ -1,10 +1,19 @@
 package be.elevenways.hohenheim.test.instance;
 
+import java.util.Objects;
+import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.hohenheim.server.cms.CmsSupport;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.server.instance.InstanceExposure;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
@@ -65,15 +74,18 @@ class InstanceExposureTest {
 
             // 2. The dialog an operator sees BEFORE clicking names every site that will
             //    be disabled -- the fact that only exists per record.
-            InstanceResource resource = new InstanceResource();
+            Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN), "the admin panel");
+            DeleteConfirmation<Row> confirmation = CmsSupport.rowEntry(admin, InstanceParts.SLUG).deleteConfirmation();
             Row record = Models.get(InstanceModel.class).findById(instanceId);
-            assertThat(resource.deleteConfirmationFor(record).body().key())
+            PanelRequest request = new PanelRequest(admin, TenantConduits.stubFor(null), AccessContext.anonymous(),
+                null);
+            assertThat(confirmation.forRow(record, request).body().key())
                 .as("step 2: the per-record confirmation switches to the stranding wording")
                 .isEqualTo("delete_confirm_stranding");
             assertThat(InstanceExposure.liveSiteNamesExposing(instanceId))
                 .as("step 2: and it names BOTH exposing sites, not just one")
                 .containsExactly("Blog", "Shop");
-            assertThat(resource.deleteConfirmation().body().key())
+            assertThat(confirmation.fallback().body().key())
                 .as("step 2: while the record-LESS confirmation can only speak about the"
                     + " type, which is why the record-aware hook exists")
                 .isEqualTo("delete_confirm");
@@ -82,7 +94,7 @@ class InstanceExposureTest {
             //    never bolted onto a destroy that strands nobody.
             Row unexposed = Models.get(InstanceModel.class)
                 .findById(instanceRecord("unexposed-workload"));
-            assertThat(resource.deleteConfirmationFor(unexposed).body().key())
+            assertThat(confirmation.forRow(unexposed, request).body().key())
                 .as("step 3: an unexposed workload gets no stranding sentence")
                 .isEqualTo("delete_confirm");
 

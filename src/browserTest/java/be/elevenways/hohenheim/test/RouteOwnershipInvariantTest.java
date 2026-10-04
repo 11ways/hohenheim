@@ -1,34 +1,36 @@
 package be.elevenways.hohenheim.test;
 
-import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.ReleasedClaimResource;
-import be.elevenways.hohenheim.server.cms.SiteResource;
+import be.elevenways.hohenheim.server.cms.ReleasedClaimParts;
 import be.elevenways.hohenheim.server.proxy.ReleasedClaims;
 import be.elevenways.hohenheim.server.proxy.RouteClaims;
-import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.cms.common.action.ActionContext;
-import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.zenit.server.operation.OperationRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,7 +50,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * The three route-ownership invariants that the CMS read-then-write checks cannot hold on
  * their own: a simultaneous enable must leave exactly one owner and TELL the loser, a
  * deleted site must own nothing, and the domain refusal must fire for writers that never
- * touch SiteDomainResource.
+ * touch a domain resource.
  */
 class RouteOwnershipInvariantTest extends HohenheimTestBase {
 
@@ -277,8 +279,8 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
 
         // 2. The tenant deletes the site through the real CMS delete path -- a SOFT delete
         //    that stamps deleted_at and deliberately leaves enabled=true.
-        new SiteResource().deleteRow(siteModel.findById(original.get(SiteModel.ID)),
-            AccessContext.anonymous());
+        PanelResourceCalls.delete(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, original.get(SiteModel.ID),
+            TenantConduits.operator());
         Row deleted = StoredRows.byId(siteModel, original.get(SiteModel.ID));
         assertThat((Instant) deleted.get(SiteModel.DELETED_AT))
             .as("step 2: the delete stamped deleted_at").isNotNull();
@@ -323,7 +325,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         // 2. A second live site tries to take it with a DIRECT model save -- no CMS
         //    resource, no form, no coerced value map. That is the write shape a seeder, an
         //    import, an API writeback or a revision restore uses, and it is exactly what a
-        //    refusal living in SiteDomainResource.persistRow could never see.
+        //    refusal living in a resource's row write could never see.
         Row challenger = site("Direct Challenger", "direct-challenger", true);
         Row stolen = domainModel.createEmptyRow();
         stolen.set(SiteDomainModel.SITE_ID, challenger.get(SiteModel.ID));
@@ -461,8 +463,8 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
 
         // 3. The incumbent is soft-deleted; its claim is released and a successor takes
         //    the hostname live.
-        new SiteResource().deleteRow(siteModel.findById(incumbent.get(SiteModel.ID)),
-            AccessContext.anonymous());
+        PanelResourceCalls.delete(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, incumbent.get(SiteModel.ID),
+            TenantConduits.operator());
         assertThat(storedClaimsOn(hostname)).as("step 3: the deleted site's claim is gone").isEqualTo(0);
         Row successor = site("Identity Successor", "identity-successor", true);
         domain(successor, hostname);
@@ -484,8 +486,8 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
             .as("step 4: the successor is still the single claimant").isEqualTo(1);
 
         // 5. Once the successor is deleted, the SAME restore succeeds and re-claims.
-        new SiteResource().deleteRow(siteModel.findById(successor.get(SiteModel.ID)),
-            AccessContext.anonymous());
+        PanelResourceCalls.delete(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, successor.get(SiteModel.ID),
+            TenantConduits.operator());
         Row restorable = StoredRows.byId(siteModel, incumbent.get(SiteModel.ID));
         restorable.set(SiteModel.DELETED_AT, (Instant) null);
         siteModel.save(restorable);
@@ -570,8 +572,8 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         //    is only knowable before zenit-auth's afterSave grant cleanup runs, so asserting
         //    the stored set (not merely a later refusal) is what proves the capture happened
         //    on the beforeWrite tier.
-        new SiteResource().deleteRow(siteModel.findById(tenantSiteA.get(SiteModel.ID)),
-            AccessContext.anonymous());
+        PanelResourceCalls.delete(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, tenantSiteA.get(SiteModel.ID),
+            TenantConduits.operator());
         assertThat(storedClaimsOn(hostname))
             .as("step 2: the deleted tenant site holds no claim").isEqualTo(0);
         Row quarantine = quarantineOn(hostname);
@@ -637,8 +639,8 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         String operatorHost = "released.operator.example.com";
         Row operatorFirst = site("Quarantine Operator First", "quarantine-op-first", true);
         domain(operatorFirst, operatorHost);
-        new SiteResource().deleteRow(siteModel.findById(operatorFirst.get(SiteModel.ID)),
-            AccessContext.anonymous());
+        PanelResourceCalls.delete(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, operatorFirst.get(SiteModel.ID),
+            TenantConduits.operator());
         Row operatorQuarantine = quarantineOn(operatorHost);
         assertThat(operatorQuarantine)
             .as("step 6: an operator release is ledgered too").isNotNull();
@@ -669,8 +671,8 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         Row tenantSite = site("Override Tenant", "override-tenant", true);
         tenantOf(tenantSite, "override-tenant@test");
         domain(tenantSite, hostname);
-        new SiteResource().deleteRow(siteModel.findById(tenantSite.get(SiteModel.ID)),
-            AccessContext.anonymous());
+        PanelResourceCalls.delete(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, tenantSite.get(SiteModel.ID),
+            TenantConduits.operator());
         Row quarantine = quarantineOn(hostname);
         assertThat(quarantine).as("step 1: the release is quarantined").isNotNull();
 
@@ -691,27 +693,23 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         assertThat(list.body()).as("step 3: and shows the quarantined hostname")
             .contains(hostname);
 
-        // 4. Visibility is NOT authorization: invoking the action's handler directly with a
-        //    non-admin context must refuse and leave the row standing. (The button is hidden
-        //    for that context too, but a hidden button is not a guard.)
-        RowAction<Row> lift = null;
-        for (RowAction<Row> action : new ReleasedClaimResource().rowActions()) {
-            if (Identifier.of("hohenheim", "lift_quarantine").equals(action.id())) {
-                lift = action;
-            }
-        }
-        assertThat(lift).as("step 4: the resource offers the lift action").isNotNull();
-        assertThat(lift.isVisibleFor(quarantine, AccessContext.anonymous()))
-            .as("step 4: the button is hidden for a non-admin").isFalse();
-        ((RowAction.Invoke<Row>) lift).invoke(quarantine,
-            ActionContext.of(AccessContext.anonymous()));
+        // 4. Visibility is NOT authorization: the lift is an operation whose authorizer is installation
+        //    administration, so a non-admin is neither offered it nor able to run it straight through the
+        //    pipeline, and the row stands. (A hidden button is not a guard.)
+        AccessContext stranger = AccessContext.of(TenantConduits.stubFor(null));
+        assertThat(OperationPipeline.offer(ReleasedClaimParts.LIFT, stranger, quarantine))
+            .as("step 4: the lift is not offered to a non-admin")
+            .isNotInstanceOf(OperationPipeline.Offer.Available.class);
+        assertThatThrownBy(() -> OperationPipeline.invoke(OperationRequest.of(ReleasedClaimParts.LIFT,
+                CmsPlacementSurface.ADMIN_ACTION).caller(stranger).subjects(List.of(quarantine))))
+            .as("step 4: a non-admin invoke is refused").isInstanceOf(DomainRefusal.class);
         assertThat(Models.get(ReleasedRouteClaimModel.class)
                 .findById(quarantine.get(ReleasedRouteClaimModel.ID)))
             .as("step 4: a non-admin invoke lifted NOTHING").isNotNull();
 
         // 5. The admin lifts it through the real invoke route, and the row is gone.
-        HttpResponse<String> lifted = adminPostForm("/admin/released-claims/"
-            + quarantine.get(ReleasedRouteClaimModel.ID) + "/action/lift_quarantine",
+        HttpResponse<String> lifted = adminPostForm("/admin/released-claims/invoke/hohenheim.lift_quarantine?ids="
+            + quarantine.get(ReleasedRouteClaimModel.ID),
             confirmed("", hostname));
         assertThat(lifted.statusCode()).as("step 5: the admin lift is accepted")
             .isIn(200, 302, 303);
@@ -720,7 +718,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         // 5b. An override nobody can attribute is not an override: the lift must be in the
         //     activity log, naming the hostname AND the administrator who freed it.
         Row entry = Models.get(ActivityModel.class).find()
-            .where(ActivityModel.ACTION.eq("quarantine_lifted"))
+            .where(ActivityModel.ACTION.eq("hohenheim:quarantine_lifted"))
             .and(ActivityModel.DETAIL.eq(hostname))
             .orderBy(ActivityModel.ID, SortOrder.DESC).first();
         assertThat(entry).as("step 5b: the lift is recorded as its own action").isNotNull();
@@ -856,7 +854,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         //    TENANT site: a subject other than the operator holds manage on it.
         Row tenantA = site("Overlap Tenant A", "overlap-tenant-a", true);
         tenantOf(tenantA, "overlap-tenant-a@test");
-        domain(tenantA, "*.tenant-a.example.com", SiteDomainModel.MATCH_WILDCARD, null);
+        domain(tenantA, "**.tenant-a.example.com", SiteDomainModel.MATCH_WILDCARD, null);
         assertThat(domainModel.find().where(SiteDomainModel.SITE_ID.eq(tenantA.get(SiteModel.ID)))
                 .count())
             .as("step 1: tenant A holds its wildcard row").isEqualTo(1);
@@ -964,8 +962,8 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         Row tenantSite = site("Window Tenant", "window-tenant", true);
         tenantOf(tenantSite, "window-tenant@test");
         domain(tenantSite, hostname);
-        new SiteResource().deleteRow(siteModel.findById(tenantSite.get(SiteModel.ID)),
-            AccessContext.anonymous());
+        PanelResourceCalls.delete(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, tenantSite.get(SiteModel.ID),
+            TenantConduits.operator());
         Row quarantine = quarantineOn(hostname);
         assertThat(quarantine).as("step 1: the release is ledgered").isNotNull();
 
@@ -1001,8 +999,8 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         domain(offTenant, offHost);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS, 0);
         try {
-            new SiteResource().deleteRow(siteModel.findById(offTenant.get(SiteModel.ID)),
-                AccessContext.anonymous());
+            PanelResourceCalls.delete(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, offTenant.get(SiteModel.ID),
+                TenantConduits.operator());
             assertThat(quarantineOn(offHost))
                 .as("step 4: a release with the window disabled ledgers nothing").isNull();
             Row taker = site("Window Off Taker", "window-off-taker", true);
@@ -1103,8 +1101,8 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         Row tenantSiteA = site("Actor Lane Tenant", "actor-lane-tenant", true);
         int tenantA = tenantOf(tenantSiteA, "actor-lane-tenant@test");
         domain(tenantSiteA, hostname);
-        new SiteResource().deleteRow(siteModel.findById(tenantSiteA.get(SiteModel.ID)),
-            AccessContext.anonymous());
+        PanelResourceCalls.delete(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, tenantSiteA.get(SiteModel.ID),
+            TenantConduits.operator());
         assertThat((String) quarantineOn(hostname).get(ReleasedRouteClaimModel.FORMER_SUBJECTS))
             .as("step 1: the ledger remembers tenant A").isEqualTo("user:" + tenantA);
 
@@ -1163,10 +1161,10 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         Row wildcardSite = site("Wildzone Wildcard", "wildzone-wild", true);
         grantManage(wildcardSite, tenantA);
         domain(wildcardSite, wildcardHost, SiteDomainModel.MATCH_WILDCARD, null);
-        new SiteResource().deleteRow(siteModel.findById(exactSite.get(SiteModel.ID)),
-            AccessContext.anonymous());
-        new SiteResource().deleteRow(siteModel.findById(wildcardSite.get(SiteModel.ID)),
-            AccessContext.anonymous());
+        PanelResourceCalls.delete(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, exactSite.get(SiteModel.ID),
+            TenantConduits.operator());
+        PanelResourceCalls.delete(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, wildcardSite.get(SiteModel.ID),
+            TenantConduits.operator());
         assertThat(quarantineOn(exactHost)).as("step 1: the exact release is ledgered").isNotNull();
 
         // 2. A different tenant claims the PARENT wildcard. Its claim key differs from the
@@ -1249,10 +1247,10 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         Row regexSite = site("Regexzone Regex", "regexzone-regex", true);
         grantManage(regexSite, tenantA);
         domain(regexSite, regexSpace, SiteDomainModel.MATCH_REGEX, null);
-        new SiteResource().deleteRow(siteModel.findById(exactSite.get(SiteModel.ID)),
-            AccessContext.anonymous());
-        new SiteResource().deleteRow(siteModel.findById(regexSite.get(SiteModel.ID)),
-            AccessContext.anonymous());
+        PanelResourceCalls.delete(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, exactSite.get(SiteModel.ID),
+            TenantConduits.operator());
+        PanelResourceCalls.delete(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, regexSite.get(SiteModel.ID),
+            TenantConduits.operator());
         Row exactLedger = quarantineOn(exactHost);
         assertThat(exactLedger).as("step 1: the exact release is ledgered").isNotNull();
         assertThat((String) exactLedger.get(ReleasedRouteClaimModel.FORMER_SUBJECTS))

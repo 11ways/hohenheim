@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -50,10 +51,10 @@ final class OperationGates {
             return;
         }
         AccessContext ctx = TenantWrites.acting();
-        // ctx.isAnonymous() aligns this with requireDatabaseCapability. The walk already
+        // !ctx.isAccount() aligns this with requireDatabaseCapability. The walk already
         // returns false for an anonymous principal before any lookup, so this is an explicit
         // fail-closed spelling for readability, not a behaviour change.
-        if (ctx == null || ctx.isAnonymous()
+        if (ctx == null || !ctx.isAccount()
                 || !HohenheimAccess.hasInstanceCapability(ctx, instanceId, capability)) {
             throw Violations.ofForm(instanceNotPermitted());
         }
@@ -101,7 +102,7 @@ final class OperationGates {
      */
     private static @Nullable Microcopy destroyRefusal(@NonNull AccessContext ctx, int instanceId,
                                                       boolean memoized) {
-        if (ctx.isAnonymous()) {
+        if (!ctx.isAccount()) {
             return instanceNotPermitted();
         }
         boolean holds = memoized
@@ -116,7 +117,7 @@ final class OperationGates {
      * to a POST, so neither surface is a capability oracle the other is not.
      */
     private static @NonNull Microcopy instanceNotPermitted() {
-        return Microcopy.of("instance_not_permitted").withFilter("scope", "violations");
+        return HohenheimViolations.text("instance_not_permitted");
     }
 
     /**
@@ -134,7 +135,7 @@ final class OperationGates {
             return;
         }
         AccessContext ctx = TenantWrites.acting();
-        if (ctx == null || ctx.isAnonymous() || !HohenheimAccess.isAdmin(ctx)) {
+        if (ctx == null || !ctx.isAccount() || !HohenheimAccess.isAdmin(ctx)) {
             throw Violations.ofForm(instanceNotPermitted());
         }
     }
@@ -158,7 +159,7 @@ final class OperationGates {
             return;
         }
         AccessContext ctx = TenantWrites.acting();
-        if (ctx == null || ctx.isAnonymous()
+        if (ctx == null || !ctx.isAccount()
                 || !HohenheimAccess.hasDatabaseCapability(ctx, databaseId, capability)) {
             throw databaseRefusal();
         }
@@ -166,7 +167,6 @@ final class OperationGates {
 
     /** THE uniform managed-database refusal; visibility, absence and denial are one answer. */
     static @NonNull Violations databaseRefusal() {
-        return Violations.ofForm(Microcopy.of("database_not_permitted")
-            .withFilter("scope", "violations"));
+        return Violations.ofForm(HohenheimViolations.text("database_not_permitted"));
     }
 }

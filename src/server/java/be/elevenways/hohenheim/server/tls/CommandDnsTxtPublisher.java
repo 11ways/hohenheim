@@ -2,11 +2,13 @@ package be.elevenways.hohenheim.server.tls;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
-import be.elevenways.hohenheim.server.process.BoundedProcess;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
+import be.elevenways.protoblast.server.process.Termination;
 import be.elevenways.zenit.common.Zenit;
+import java.time.Duration;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import java.util.concurrent.TimeUnit;
 
 /** DNS-01 publisher backed by an operator-owned executable hook. */
 public final class CommandDnsTxtPublisher implements DnsTxtPublisher {
@@ -38,14 +40,16 @@ public final class CommandDnsTxtPublisher implements DnsTxtPublisher {
         if (command == null || command.isBlank()) {
             throw new IllegalStateException("DNS hook command is not configured");
         }
-        BoundedProcess.Result result = BoundedProcess.run(
-            new ProcessBuilder(command.trim(), action, record.name(), record.value())
-                .redirectErrorStream(true),
-            TimeUnit.SECONDS.toMillis(TIMEOUT_SECONDS), OUTPUT_CAP_CHARS);
-        if (result.timedOut()) {
+        ProcessOutcome result = Subprocess.of(command.trim(), action, record.name(), record.value())
+            .mergeStderr()
+            .collectStdout(OUTPUT_CAP_CHARS)
+            .timeout(Duration.ofSeconds(TIMEOUT_SECONDS))
+            .stopGrace(Duration.ZERO)
+            .runChecked();
+        if (result.termination() == Termination.TIMED_OUT) {
             throw new IllegalStateException("DNS hook timed out during " + action);
         }
-        String output = result.stdout().trim();
+        String output = result.stdout().text().trim();
         if (!result.succeeded()) {
             throw new IllegalStateException("DNS hook " + action + " failed (exit "
                 + result.exitCode() + ")" + (output.isEmpty() ? "" : ": " + output));

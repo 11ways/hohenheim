@@ -1,12 +1,15 @@
 package be.elevenways.hohenheim.server.instance.variable;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.validator.MaxLength;
 import be.elevenways.zenit.common.validation.validator.Regex;
@@ -17,7 +20,7 @@ import java.util.Map;
 /** Free-text variable with optional regex pattern and length cap. */
 public final class StringVariableType implements VariableTypeHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "string");
+    public static final Identifier ID = HohenheimIds.id("string");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final StringField PATTERN = SETTINGS_SCHEMA.addField(
@@ -46,7 +49,7 @@ public final class StringVariableType implements VariableTypeHandler {
     public Icon getIcon() { return Icon.of("font"); }
 
     @Override
-    public String getColor() { return "gray"; }
+    public BadgeColor color() { return ColorHue.GRAY; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }

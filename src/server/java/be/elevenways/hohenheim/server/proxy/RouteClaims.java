@@ -97,7 +97,7 @@ public final class RouteClaims {
      * AIDEV-NOTE: this key spells the LITERAL hostname, so it can only ever arbitrate
      * IDENTICAL routes. Rows whose hostname sets merely INTERSECT (foo.example.com under
      * *.example.com) spell different keys on purpose -- they are refused by the serialized
-     * conflict scan in SiteDomainResource, never by this key or its unique index.
+     * conflict scan in SiteDomainRouteInvariant, never by this key or its unique index.
      *
      * AIDEV-NOTE: a REGEX source folds to lowercase HERE (only here -- the stored pattern
      * keeps its case, see HostnameRegex): matching is case-insensitive, so "^App\." and
@@ -153,7 +153,7 @@ public final class RouteClaims {
     public static void restamp(int siteId, boolean live) {
         Model domains = Models.get(SiteDomainModel.class);
         if (!live) {
-            // RELEASE PATH 1 of 3 (the other two are in SiteDomainResource): the site stops
+            // RELEASE PATH 1 of 3 (the other two are in SiteDomainRouteInvariant): the site stops
             // routing -- soft delete, disable, or a hard delete cascading through.
             // AIDEV-NOTE: the ledger write rides THIS hook (beforeWrite) and may never move
             // to afterSave: zenit-auth's RecordGrantCleanup revokes the deleted site's

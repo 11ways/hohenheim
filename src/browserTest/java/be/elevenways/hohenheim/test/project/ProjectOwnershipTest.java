@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.project;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
@@ -37,6 +38,7 @@ import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -76,7 +78,9 @@ class ProjectOwnershipTest extends HohenheimTestBase {
     private static Integer admittedHostId;
 
     @BeforeAll
-    static void seed() {
+    static void seed() throws Exception {
+        // The roles and instance first pages belong to this journey's project inventory.
+        freshSeededDatabase();
         memberAId = ApiSupport.user("member-a@project.test", "Member A");
         memberBId = ApiSupport.user("member-b@project.test", "Member B");
         principalA = new UserPrincipal(memberAId, "Member A");
@@ -309,9 +313,8 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         GrantService.createDirectGrant(GrantSubjectType.USER, memberAId,
             HohenheimAccess.INSTANCES_CREATE.value(), true);
         admittedHostId = admittedHost();
-        HttpResponse<String> created = memberPost("/instances/from-template",
-            "template_id=" + templateId + "&name=" + PREFIX + "created"
-                + "&project_id=" + projectOneId);
+        HttpResponse<String> created = memberPost(ApiSupport.fromTemplateTarget(HohenheimSlugs.MANAGE, templateId),
+            "name=" + PREFIX + "created" + "&projectId=" + projectOneId + "&" + ApiSupport.fromTemplateTransport());
         assertThat(created.statusCode()).as("step 2: the project create lands").isIn(302, 303);
         Row instance = Models.get(InstanceModel.class).find()
             .where(InstanceModel.NAME.eq(PREFIX + "created")).first();
@@ -356,9 +359,8 @@ class ProjectOwnershipTest extends HohenheimTestBase {
 
         // 1. Project one is full: the next create into it is refused BY NAME and
         //    persists nothing.
-        HttpResponse<String> refused = memberPost("/instances/from-template",
-            "template_id=" + templateId + "&name=" + PREFIX + "over-cap"
-                + "&project_id=" + projectOneId);
+        HttpResponse<String> refused = memberPost(ApiSupport.fromTemplateTarget(HohenheimSlugs.MANAGE, templateId),
+            "name=" + PREFIX + "over-cap" + "&projectId=" + projectOneId + "&" + ApiSupport.fromTemplateTransport());
         assertThat(refused.body())
             .as("step 1: the project cap refuses the create, named")
             .contains("Instance quota reached");
@@ -369,9 +371,8 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         // 2. A DIFFERENT project is unaffected by project one's exhaustion: the same
         //    member (joining project two) creates there immediately.
         Projects.addMember(projectTwo, memberAId);
-        HttpResponse<String> other = memberPost("/instances/from-template",
-            "template_id=" + templateId + "&name=" + PREFIX + "in-two"
-                + "&project_id=" + projectTwoId);
+        HttpResponse<String> other = memberPost(ApiSupport.fromTemplateTarget(HohenheimSlugs.MANAGE, templateId),
+            "name=" + PREFIX + "in-two" + "&projectId=" + projectTwoId + "&" + ApiSupport.fromTemplateTransport());
         assertThat(other.statusCode())
             .as("step 2: project two accepts while project one is full").isIn(302, 303);
         Row landed = Models.get(InstanceModel.class).find()
@@ -549,14 +550,14 @@ class ProjectOwnershipTest extends HohenheimTestBase {
             .as("step 1: and the owning project is named on the page")
             .contains("Managed by project " + PREFIX + "surface");
 
-        // 2. The delete affordance is GONE for the owned role -- the row's own delete
-        //    URL never renders -- while the hand-made role still offers its own.
+        // 2. The delete affordance is GONE for the owned role -- the row's delete
+        //    operation never renders for it -- while the hand-made role still offers its own.
         assertThat(list.body())
             .as("step 2: no delete affordance for the project-owned role")
-            .doesNotContain("/admin/roles/" + ownedGroupId + "/delete");
+            .doesNotContainPattern(roleDelete(ownedGroupId));
         assertThat(list.body())
             .as("step 2: and the counterfactual proves the assertion can see one")
-            .contains("/admin/roles/" + plainGroupId + "/delete");
+            .containsPattern(roleDelete(plainGroupId));
 
         // 3. The record page says WHY, and drops its Delete for the same reason.
         HttpResponse<String> detail = adminGet("/admin/roles/" + ownedGroupId);
@@ -566,10 +567,10 @@ class ProjectOwnershipTest extends HohenheimTestBase {
             .contains("maintained automatically");
         assertThat(detail.body())
             .as("step 3: and offers no delete")
-            .doesNotContain("/admin/roles/" + ownedGroupId + "/delete");
+            .doesNotContainPattern(roleDelete(ownedGroupId));
         assertThat(adminGet("/admin/roles/" + plainGroupId).body())
             .as("step 3: while the hand-made role's page still does")
-            .contains("/admin/roles/" + plainGroupId + "/delete");
+            .containsPattern(roleDelete(plainGroupId));
 
         // 4. The refusal is not cosmetic: the submit is refused too, and the row stays.
         HttpResponse<String> deleted = httpPostForm(
@@ -582,6 +583,11 @@ class ProjectOwnershipTest extends HohenheimTestBase {
 
         AuthModels.permissionGroups().delete(plainGroupId);
         Models.get(ProjectModel.class).delete(ownedProjectId);
+    }
+
+    /** The roles resource's delete: zenit-auth's delete_role operation placed on the record, invoked by its id. */
+    private static Pattern roleDelete(int roleId) {
+        return Pattern.compile(Pattern.quote("/admin/roles/invoke/zenit.delete_role?ids=" + roleId) + "(?!\\d)");
     }
 
     private static void variable(Integer instanceId, Integer envId, String key, String value) {

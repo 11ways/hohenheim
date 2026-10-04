@@ -1,11 +1,12 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.cms.SiteResource;
+import be.elevenways.hohenheim.server.cms.SiteParts;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -29,7 +30,7 @@ class SiteInstancePickerReachableTest {
 
     @Test
     void theInstancePickerIsNeverHiddenByTheStoredUpstreamKind() {
-        List<ResourceFieldBinding> bindings = new SiteResource().fieldBindings();
+        List<ResourceFieldBinding> bindings = Objects.requireNonNull(SiteParts.admin().form()).bindings();
 
         assertThat(bindings)
             .as("no field binding may gate the instance picker on the stored kind: that is the"

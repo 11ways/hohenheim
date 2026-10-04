@@ -59,7 +59,7 @@ class HostModeVocabularyDriftTest {
             EnumField.EnumValue value = ServerModel.MODE.getValues().get(mode.token());
             assertThat(value.getDisplayName()).as("step 5: " + mode + " display name")
                 .isEqualTo(mode.displayName());
-            assertThat(value.getColor()).as("step 5: " + mode + " color").isEqualTo(mode.color());
+            assertThat(value.color()).as("step 5: " + mode + " color").isEqualTo(mode.color());
             assertThat(value.getLabel()).as("step 5: " + mode + " label")
                 .isEqualTo(mode.label());
         }

@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.server.backup;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.backup.BackupTargetRegistry;
 import be.elevenways.hohenheim.model.BackupTargetModel;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -59,7 +59,7 @@ public final class BackupTargetKinds {
         Row row = targetId == null ? null
             : Models.get(BackupTargetModel.class).findById(targetId);
         if (row == null) {
-            throw Violations.ofForm(violation("backup_target_missing"));
+            throw Violations.ofForm(HohenheimViolations.text("backup_target_missing"));
         }
         return targetOf(row);
     }
@@ -69,7 +69,7 @@ public final class BackupTargetKinds {
         BackupTargetKindHandler handler = getHandler(row.get(BackupTargetModel.KIND));
         if (handler == null) {
             throw Violations.ofField("kind", row.get(BackupTargetModel.KIND),
-                violation("backup_target_kind_unknown")
+                HohenheimViolations.text("backup_target_kind_unknown")
                     .withArg("kind", String.valueOf((Object) row.get(BackupTargetModel.KIND))));
         }
         Map<String, Object> settings = row.get(BackupTargetModel.SETTINGS) instanceof Map<?, ?> map
@@ -77,9 +77,9 @@ public final class BackupTargetKinds {
         try {
             return handler.targetFor(settings);
         } catch (IOException bad) {
-            throw Violations.ofForm(violation("backup_target_invalid")
+            throw Violations.ofForm(HohenheimViolations.text("backup_target_invalid")
                 .withArg("name", String.valueOf((Object) row.get(BackupTargetModel.NAME)))
-                .withArg("reason", bad.getMessage() != null ? bad.getMessage() : bad.toString()));
+                .withArg("reason", HohenheimViolations.reasonOf(bad)));
         }
     }
 
@@ -88,7 +88,4 @@ public final class BackupTargetKinds {
         return (Map<String, Object>) map;
     }
 
-    private static Microcopy violation(String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
-    }
 }

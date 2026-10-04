@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.server.cli.OfflineBoot;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
-import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.hohenheim.server.database.TenantDatabases;
 import be.elevenways.hohenheim.server.dns.DnsNotifier;
 import be.elevenways.hohenheim.server.dns.DnsServer;
@@ -16,9 +15,11 @@ import be.elevenways.hohenheim.server.dns.SecondaryZoneService;
 import be.elevenways.hohenheim.server.proxy.ProxyReloadHooks;
 import be.elevenways.hohenheim.server.quota.QuotaReconciler;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.hohenheim.server.auth.types.ProteusRealmOptInTargets;
+import be.elevenways.hohenheim.model.SiteAuthProviderModel;
+import be.elevenways.zenit.server.net.OptInWatch;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.ProteusRealmSuggestions;
-import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
 import be.elevenways.hohenheim.server.application.ArtifactDeploys;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
@@ -35,14 +36,10 @@ import be.elevenways.hohenheim.server.security.SshAuthWatcher;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
-import be.elevenways.zenit.common.security.KnownPermission;
-import be.elevenways.zenit.common.security.KnownPermissions;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.server.AuthRegistry;
 import be.elevenways.zenit.auth.server.AuthRequirement;
-import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.auth.server.identity.AutoProvisioningSink;
 import be.elevenways.zenit.auth.server.identity.IdentityProviderRegistry;
 import be.elevenways.zenit.auth.server.identity.proteus.ProteusClient;
@@ -51,6 +48,7 @@ import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.cli.HostConsole;
 import be.elevenways.zenit.server.cli.ServerCli;
+import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import be.elevenways.zenit.server.task.TaskRuntime;
 import be.elevenways.zenit.server.task.TaskService;
 
@@ -96,11 +94,12 @@ public class ServerMain {
         HohenheimAccess.declareGrantableModels();
         HohenheimDatabase.init();   // also registers the SQLite datasource as the framework default
 
-        // Install zenit-auth (session store, CSRF, middleware, /login + /setup + /account + /admin).
-        // Password login is native; Proteus SSO is added below when configured.
-        ZenitAuth.init(HohenheimDatabase.datasource());
-        // The users/roles resources live in HohenheimPanel's security group;
-        // zenit-auth's own default panel would be a second UI over the same records.
+        // zenit-auth (session store, CSRF, middleware, /login + /setup + /account + /admin) is the
+        // discovered ZenitAuthModule, installed at the MODULES stage over the default datasource
+        // HohenheimDatabase.init just registered. Password login is native; Proteus SSO is added
+        // below when configured. The users/roles resources live in HohenheimPanel's security
+        // group, so zenit-auth's own default panel would be a second UI over the same records:
+        // the module's drain reads this setting, so it is set BEFORE boot.
         Zenit.SETTINGS_VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
         installAuthBaselines();
         registerProteusIfConfigured();
@@ -220,6 +219,9 @@ public class ServerMain {
             proxyServer = new ProxyServer();
             proxyServer.start();
             ProxyReloadHooks.install();
+            // Site auth gates live on the proxy: name each Proteus realm a live upgrade left failing closed.
+            OptInWatch.install(HohenheimSettings.ProxyAuth.PROTEUS_ALLOW_PRIVATE_NETWORKS,
+                SiteAuthProviderModel.SCHEMA, ProteusRealmOptInTargets::targetsOf);
         } else {
             // ABSENT, not FAILED: getProxyServer() stays null, so status surfaces
             // show "not part of this install" instead of a false-red bind failure.
@@ -385,47 +387,11 @@ public class ServerMain {
     public static void installAuthBaselines() {
         AuthRegistry.baseline("/", AuthRequirement.requiresLogin());
         // declareGrantableModels() already ran, before the migrations -- see main().
-        KnownPermissions.register("hohenheim",
-            // AIDEV-NOTE: DELEGABLE, deliberately (owner's call, 2026-08-15). Both of these
-            // used to be declared nonDelegable so that a holder could not grant their own
-            // authority onward. That is not the model this product wants: a permission is a
-            // leaf, and holding it means holding it -- including the ability to grant it,
-            // which is what an admin being an admin means. Whoever may administer grants may
-            // therefore mint a peer admin. Do not reintroduce the asymmetry without the
-            // owner saying so; the mechanism still exists upstream (auth.grants.manage) for
-            // permissions that genuinely need it.
-            KnownPermission.of(
-                HohenheimPanel.ACCESS.value(),
-                Microcopy.of("hohenheim_admin_access").withFilter("scope", "permission")),
-            KnownPermission.of(
-                ManagePanel.ACCESS.value(),
-                Microcopy.of("hohenheim_manage_access").withFilter("scope", "permission")),
-            // Every-site authority WITHOUT the admin permission (the walk's type-level row on
-            // SiteModel). Delegable for the reason above, and it could not be otherwise once
-            // admin.access is: guarding the lesser authority while the greater one flows
-            // freely protects nothing.
-            KnownPermission.of(
-                HohenheimAccess.SITES_MANAGE_ALL.value(),
-                Microcopy.of("hohenheim_sites_manage_all").withFilter("scope", "permission")),
-            // Install media on a host: publishing ISOs onto its storage and removing them.
-            // Its own permission on purpose (HohenheimSources.MEDIA_MANAGE says why), which
-            // is exactly why it must appear HERE -- an enforced permission missing from this
-            // corpus is a permission no admin can find to grant.
-            KnownPermission.of(
-                HohenheimSources.MEDIA_MANAGE.value(),
-                Microcopy.of("hohenheim_media_manage").withFilter("scope", "permission")),
-            // Tenant self-service creation: eligibility only. It provisions a workload on
-            // an operator's iron, and the per-owner quota is what bounds how many.
-            KnownPermission.of(
-                HohenheimAccess.INSTANCES_CREATE.value(),
-                Microcopy.of("hohenheim_instances_create").withFilter("scope", "permission")),
-            // The managed-database sibling of INSTANCES_CREATE, and registered for the
-            // same reason: this block IS the grants editor's autocomplete corpus
-            // (KnownPermissions.all()), so an enforced permission missing from it is a
-            // permission no admin can find. PermissionVocabularyTest is the guard.
-            KnownPermission.of(
-                TenantDatabases.DATABASES_CREATE.value(),
-                Microcopy.of("hohenheim_databases_create").withFilter("scope", "permission")));
+        // AIDEV-NOTE: Hohenheim's permissions are declared at their homes (Permission.declare: HohenheimSources,
+        // HohenheimAccess, TenantDatabases), each loaded at boot, and the grants editor lists Permissions.declared().
+        // Every one of them is DELEGABLE except hohenheim.admin.system (HohenheimSources says why); the owner's call
+        // of 2026-08-15 stands: holding a permission includes granting it, so an admin may mint a peer admin. Do not
+        // reintroduce the asymmetry without the owner saying so. PermissionVocabularyTest is the guard.
         ProteusRealmSuggestions.register();
     }
 
@@ -444,7 +410,9 @@ public class ServerMain {
         String authenticator = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.AuthProteus.AUTHENTICATOR);
         IdentityProviderRegistry.register(
             new ProteusIdentityProvider("proteus", "Proteus",
-                new ProteusClient(endpoint, realmClient, accessKey), authenticator, false),
+                // The operator's own setting: any address (a realm on this host or the LAN), still pinned.
+                new ProteusClient(endpoint, realmClient, accessKey, OutboundUrlGuard.ANY_ADDRESS), authenticator,
+                false),
             AutoProvisioningSink.builder().build());
     }
 

@@ -1,12 +1,17 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -24,7 +29,7 @@ import java.util.Map;
 
 /**
  * Shared helpers for the CMS resources: proxy reload and coerced-map copies.
- * Record-tab strips come from the framework (RecordScopedPage.recordTabs);
+ * Record-tab strips come from the framework (RecordTab.recordTabs);
  * mutation-driven reloads ride {@code ProxyReloadHooks}.
  *
  * AIDEV-NOTE: this used to state "audit writes ride the framework activity log" as an
@@ -172,7 +177,7 @@ public final class CmsSupport {
 
     /** A violation-scoped microcopy message (catalog entries carry {@code scope=violations}). */
     public static @NonNull Microcopy violationText(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
+        return HohenheimViolations.text(key);
     }
 
     /**
@@ -285,7 +290,7 @@ public final class CmsSupport {
      * projection is untestable by anyone who can also reach /admin -- which is everyone
      * who would notice a leak. Never rewrite this as an isAdmin check.
      *
-     * AIDEV-NOTE: shared subpages ({@code InstanceOverviewPage},
+     * AIDEV-NOTE: shared subpages ({@code InstanceOverview},
      * {@code InstanceProvisioningPage}) render under BOTH panels, so "the delegated
      * resource omits it" only covers the FORM. Anything a subpage puts in its template
      * vars -- a host name, a server id inside a route target, a daemon's own error text
@@ -293,5 +298,36 @@ public final class CmsSupport {
      */
     public static boolean isDelegatedPanel(@NonNull Conduit conduit) {
         return ManagePanel.SLUG.equals(panelSlug(conduit));
+    }
+
+    /**
+     * The row entry a panel registers under one slug: the panel's own declaration, never a second instance beside it.
+     *
+     * @throws IllegalStateException when the panel registers no row entry under that slug
+     */
+    public static @NonNull PanelResource<Row> rowEntry(@NonNull Panel panel, @NonNull String slug) {
+        PanelResource<Row> entry = declaredRowEntry(panel, slug);
+        if (entry == null) {
+            throw new IllegalStateException("panel '" + panel.slug() + "' declares no row entry '" + slug + "'");
+        }
+        return entry;
+    }
+
+    /**
+     * {@link #rowEntry}, answering null when the panel declares nothing under that slug, which is what a role this
+     * node runs without leaves behind ({@link HohenheimPanel#addIf}).
+     *
+     * @throws IllegalStateException when the slug names an entry that is not a row entry
+     */
+    @SuppressWarnings("unchecked")
+    public static @Nullable PanelResource<Row> declaredRowEntry(@NonNull Panel panel, @NonNull String slug) {
+        PanelEntry declared = panel.entryBySlug(slug);
+        if (declared == null) {
+            return null;
+        }
+        if (declared instanceof PanelResource<?> entry && entry.subject().modelId() != null) {
+            return (PanelResource<Row>) entry;
+        }
+        throw new IllegalStateException("panel '" + panel.slug() + "' declares no row entry '" + slug + "'");
     }
 }

@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.BeforeAll;
@@ -15,9 +15,9 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The instance list's two shared parts: {@link InstanceResource#recordRoute}, the one way a
+ * The instance list's two shared parts: {@link InstanceParts#recordRoute}, the one way a
  * surface links an instance row (a release row, which the list does not serve, goes to its
- * application's Deploys tab instead of a 404), and {@link InstanceRowActions}, the one set of
+ * application's Deploys tab instead of a 404), and {@link InstanceActions}, the one set of
  * action builders both panels offer.
  */
 class InstanceRecordRouteTest {
@@ -31,9 +31,9 @@ class InstanceRecordRouteTest {
     void anInstanceLinkNeverLandsOnARowTheListDoesNotServe() {
         // 1. An authored instance links to itself, or to the subpage asked for.
         Row authored = row(5, "hohenheim:docker_container", null, null);
-        assertThat(InstanceResource.recordRoute("admin", authored, null).toUrl())
+        assertThat(InstanceParts.recordRoute("admin", authored, null).toUrl())
             .as("step 1: an instance links to its own record").isEqualTo("/admin/instances/5");
-        assertThat(InstanceResource.recordRoute("admin", authored, InstanceConsolePage.SLUG).toUrl())
+        assertThat(InstanceParts.recordRoute("admin", authored, InstanceConsolePage.SLUG).toUrl())
             .as("step 1: or to the subpage the caller names")
             .isEqualTo("/admin/instances/5/page/console");
 
@@ -41,26 +41,26 @@ class InstanceRecordRouteTest {
         //    links to the Deploys tab of the application that owns it, whatever subpage
         //    the caller asked for.
         Row release = row(9, ReleaseKind.ID.toString(), InstanceModel.MODEL_ID.toString(), 3);
-        assertThat(InstanceResource.recordRoute("admin", release, InstanceConsolePage.SLUG).toUrl())
+        assertThat(InstanceParts.recordRoute("admin", release, InstanceConsolePage.SLUG).toUrl())
             .as("step 2: a release links to its application's Deploys tab")
             .isEqualTo("/admin/instances/3/page/" + InstanceDeploymentsPage.SLUG);
 
         // 3. A release no application owns links to the list, never to itself.
         Row orphan = row(11, ReleaseKind.ID.toString(), null, null);
-        assertThat(InstanceResource.recordRoute("admin", orphan, null).toUrl())
+        assertThat(InstanceParts.recordRoute("admin", orphan, null).toUrl())
             .as("step 3: an unowned release links to the list, not to a 404")
             .isEqualTo("/admin/instances");
     }
 
     @Test
     void bothPanelsOfferTheSameBuildersAndTheDelegatedSetIsTheirSubset() {
-        List<String> operator = ids(new InstanceResource().rowActions());
-        List<String> delegated = ids(new ManageInstanceResource().rowActions());
+        List<String> operator = ids(InstanceParts.admin().actions());
+        List<String> delegated = ids(InstanceParts.manage().actions());
 
-        // 1. The delegated panel offers exactly power, the two artifacts and the app update.
+        // 1. The delegated panel offers exactly power, the two artifacts, the app update and the console line.
         assertThat(delegated).as("step 1: the delegated instance verbs")
-            .containsExactly("deploy_instance", "stop_instance", "snapshot_instance",
-                "backup_instance", "app_update_instance");
+            .containsExactly("start_instance", "stop_instance", "snapshot_instance",
+                "backup_instance", "app_update_instance", "console_command_instance");
 
         // 2. Every one of them is an operator verb too: one builder, two panels.
         assertThat(operator).as("step 2: the operator list holds every delegated verb")
@@ -84,7 +84,8 @@ class InstanceRecordRouteTest {
         return row;
     }
 
-    private static List<String> ids(List<RowAction<Row>> actions) {
-        return actions.stream().map(RowAction::id).map(Identifier::getPath).toList();
+    /** The placed operations' ids, in the order the bands draw them. */
+    private static List<String> ids(List<PanelAction<Row>> placed) {
+        return placed.stream().map(PanelAction::id).map(Identifier::getPath).toList();
     }
 }

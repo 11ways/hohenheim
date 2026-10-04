@@ -125,21 +125,8 @@ public final class UnixSocketBridge {
 
     /** Whether the connecting socket belongs to this process's own uid. */
     private boolean admits(SocketChannel tcp) {
-        Integer owner;
-        try {
-            if (!(tcp.getRemoteAddress() instanceof InetSocketAddress peer)) {
-                return false;
-            }
-            owner = this.selfUid == null ? null : this.peerOwner.apply(peer.getPort(), this.port);
-        } catch (IOException | RuntimeException unknown) {
-            owner = null;
-        }
-        if (owner != null && owner.equals(this.selfUid)) {
-            return true;
-        }
-        Blast.log("UnixSocketBridge: refused a loopback peer on port", this.port,
-            "owned by uid", owner, "- only this process's uid may use the bridge to", upstream.getPath());
-        return false;
+        return LoopbackPeers.admits(tcp, this.port, this.peerOwner, this.selfUid,
+            "UnixSocketBridge (to " + this.upstream.getPath() + ")");
     }
 
     private void spliceToUpstream(SocketChannel tcp) {

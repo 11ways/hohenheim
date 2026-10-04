@@ -13,6 +13,11 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.migration.FrozenModel;
+import be.elevenways.zenit.common.orm.field.IntegerField;
+import be.elevenways.zenit.common.orm.field.StringField;
+import be.elevenways.zenit.common.orm.field.LongField;
+import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -133,7 +138,10 @@ class InstanceTemplateVolumeCopyTest extends HohenheimTestBase {
         //    every instance ever created from this template, so the create refuses by name
         //    rather than dropping it.
         int wrongKind = template(PREFIX + "wrong-kind", "hohenheim:docker_container");
-        volume(wrongKind, "data", "/var/lib/app", null, false);
+        assertThat(violationKeys(catchThrowable(() -> volume(wrongKind, "data", "/var/lib/app", null, false))))
+            .as("step 1: authoring also refuses a volume beside an unsupported kind")
+            .contains("template_volume_kind_unsupported");
+        legacyVolume(wrongKind, "data", "/var/lib/app", null, false);
         assertThat(violationKeys(refusedCreate(wrongKind, PREFIX + "wrong-kind-instance")))
             .as("step 1: a volume beside a kind that mounts none is refused, named")
             .contains("template_volume_kind_unsupported");
@@ -149,13 +157,20 @@ class InstanceTemplateVolumeCopyTest extends HohenheimTestBase {
         assertThat(catchThrowable(() -> volume(noPath, "data", "   ", null, false)))
             .as("step 2: a template volume with no container path cannot be authored")
             .isInstanceOf(Violations.class);
+        legacyVolume(noPath, "data", "   ", null, false);
+        assertThat(violationKeys(refusedCreate(noPath, PREFIX + "no-path-instance")))
+            .as("step 2: an older invalid path is refused before creating an instance")
+            .contains("template_volume_container_path_required");
+        assertNothingPersisted(PREFIX + "no-path-instance");
 
         // 3. Two template volumes at one container path would hand the daemon two binds at
         //    one path. The refusal is the volume tier's OWN collision rule, asked before
         //    the instance row exists rather than at the first deploy.
         int clash = template(PREFIX + "clash", ApplicationKind.ID.toString());
         volume(clash, "data", "/var/lib/app", null, false);
-        volume(clash, "cache", "/var/lib/app", null, false);
+        assertThat(violationKeys(catchThrowable(() -> volume(clash, "cache", "/var/lib/app", null, false))))
+            .as("step 3: authoring refuses duplicate mount paths").contains("volume_container_path_conflict");
+        legacyVolume(clash, "cache", "/var/lib/app", null, false);
         Throwable collision = refusedCreate(clash, PREFIX + "clash-instance");
         assertThat(violationKeys(collision))
             .as("step 3: two volumes at one path are refused, named")
@@ -169,7 +184,9 @@ class InstanceTemplateVolumeCopyTest extends HohenheimTestBase {
         //    it is the volume tier's rule here too -- a template must not be a way to
         //    declare a path that climbs out of the volume root.
         int escaping = template(PREFIX + "escape", ApplicationKind.ID.toString());
-        volume(escaping, "../etc", "/var/lib/app", null, false);
+        assertThat(violationKeys(catchThrowable(() -> volume(escaping, "../etc", "/var/lib/app", null, false))))
+            .as("step 4: authoring refuses traversing names").contains("volume_name_invalid");
+        legacyVolume(escaping, "../etc", "/var/lib/app", null, false);
         assertThat(violationKeys(refusedCreate(escaping, PREFIX + "escape-instance")))
             .as("step 4: a traversing volume name is refused, named")
             .contains("volume_name_invalid");
@@ -178,7 +195,9 @@ class InstanceTemplateVolumeCopyTest extends HohenheimTestBase {
         // 5. A quota no backend could apply is refused too: zero would be stored, shown as
         //    a limit and never applied (mountsFor only sets a positive one).
         int badQuota = template(PREFIX + "bad-quota", ApplicationKind.ID.toString());
-        volume(badQuota, "data", "/var/lib/app", 0L, false);
+        assertThat(violationKeys(catchThrowable(() -> volume(badQuota, "data", "/var/lib/app", 0L, false))))
+            .as("step 5: authoring refuses a non-positive quota").contains("volume_quota_invalid");
+        legacyVolume(badQuota, "data", "/var/lib/app", 0L, false);
         assertThat(violationKeys(refusedCreate(badQuota, PREFIX + "bad-quota-instance")))
             .as("step 5: a non-positive quota is refused, named")
             .contains("volume_quota_invalid");
@@ -212,8 +231,26 @@ class InstanceTemplateVolumeCopyTest extends HohenheimTestBase {
     }
 
     private static void volume(int templateId, String name, String containerPath,
-                               Long quotaBytes, boolean exclusive) {
-        Model volumes = Models.get(InstanceTemplateVolumeModel.class);
+                                Long quotaBytes, boolean exclusive) {
+        saveVolume(Models.get(InstanceTemplateVolumeModel.class), templateId, name, containerPath, quotaBytes, exclusive);
+    }
+
+    /** Seeds the declaration shape stored before authoring guards existed, without invoking today's live hooks. */
+    private static void legacyVolume(int templateId, String name, String containerPath,
+                                     Long quotaBytes, boolean exclusive) {
+        Model live = Models.get(InstanceTemplateVolumeModel.class);
+        FrozenModel legacy = new FrozenModel(live.getTableName(),
+            IntegerField.builder(InstanceTemplateVolumeModel.ID.getName()).build(),
+            IntegerField.builder(InstanceTemplateVolumeModel.TEMPLATE_ID.getName()).build(),
+            StringField.builder(InstanceTemplateVolumeModel.NAME.getName()).build(),
+            StringField.builder(InstanceTemplateVolumeModel.CONTAINER_PATH.getName()).build(),
+            LongField.builder(InstanceTemplateVolumeModel.QUOTA_BYTES.getName()).build(),
+            BooleanField.builder(InstanceTemplateVolumeModel.EXCLUSIVE.getName()).build());
+        saveVolume(legacy, templateId, name, containerPath, quotaBytes, exclusive);
+    }
+
+    private static void saveVolume(Model volumes, int templateId, String name, String containerPath,
+                                   Long quotaBytes, boolean exclusive) {
         Row row = volumes.createEmptyRow();
         row.set(InstanceTemplateVolumeModel.TEMPLATE_ID, templateId);
         row.set(InstanceTemplateVolumeModel.NAME, name);

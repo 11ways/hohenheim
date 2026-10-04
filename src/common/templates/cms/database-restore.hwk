@@ -20,47 +20,8 @@
 
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
 
-    <pl-card>
-        <pl-card-header>
-            <pl-card-title>{{ t("connection", scope: "database_tab") }}</pl-card-title>
-            <pl-card-description>{{ t("status", scope: "database_tab", status: status) }}</pl-card-description>
-        </pl-card-header>
-        <pl-card-content>
-            <pl-table>
-                <pl-table-body>
-                    <pl-table-row>
-                        <pl-table-cell>{{ t("engine", scope: "database_tab") }}</pl-table-cell>
-                        <pl-table-cell>{{ engine }}</pl-table-cell>
-                    </pl-table-row>
-                    <pl-table-row>
-                        <pl-table-cell>{{ t("database", scope: "database_tab") }}</pl-table-cell>
-                        <pl-table-cell>{{ dbName }}</pl-table-cell>
-                    </pl-table-row>
-                    <pl-table-row>
-                        <pl-table-cell>{{ t("user", scope: "database_tab") }}</pl-table-cell>
-                        <pl-table-cell>{{ dbUser }}</pl-table-cell>
-                    </pl-table-row>
-                    <pl-table-row>
-                        <pl-table-cell>{{ t("password", scope: "database_tab") }}</pl-table-cell>
-                        <pl-table-cell>
-                            <code>{{ dbPassword }}</code>
-                            <pl-copy-button value={% dbPassword %} ariaLabel={% t("copy_password", scope: "database_tab") %}></pl-copy-button>
-                        </pl-table-cell>
-                    </pl-table-row>
-                    {% if usedBy %}
-                    <pl-table-row>
-                        <pl-table-cell>{{ t("used_by", scope: "database_tab") }}</pl-table-cell>
-                        <pl-table-cell>
-                            {% each usedBy as index, site %}
-                            <a use:Zenit.route={% site.get("target") %}><pl-badge variant={% "secondary" %}>{{ site.get("name") }}</pl-badge></a>
-                            {% /each %}
-                        </pl-table-cell>
-                    </pl-table-row>
-                    {% /if %}
-                </pl-table-body>
-            </pl-table>
-        </pl-card-content>
-    </pl-card>
+    {% render "hohenheim:cms/database-connection" var:engine=engine var:status=status var:dbName=dbName var:dbUser=dbUser
+        var:dbPassword=dbPassword var:usedBy=usedBy %}
 
     <pl-card>
         <pl-card-header>

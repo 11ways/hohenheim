@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.notification.Alerts;
@@ -7,6 +8,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
@@ -35,6 +37,11 @@ public class BackupDatabases extends ScheduledTask {
 
     private static final DateTimeFormatter STAMP =
         DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
+
+    @Override
+    public @NonNull Identifier id() {
+        return HohenheimIds.id("backup_databases");
+    }
 
     @Override
     public @NonNull BackupDatabases newTask() {

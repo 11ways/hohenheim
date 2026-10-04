@@ -2,13 +2,12 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.ConsoleKind;
-import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.ContainerSettings;
-import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
@@ -24,6 +23,8 @@ import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.StringMapField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -41,7 +42,7 @@ import java.util.Map;
  */
 public final class DockerContainerKind implements InstanceKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "docker_container");
+    public static final Identifier ID = HohenheimIds.id("docker_container");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     /**
@@ -110,10 +111,10 @@ public final class DockerContainerKind implements InstanceKindHandler {
         EnumField.builder("port_exposure")
             .value(EXPOSURE_LOOPBACK, v -> v.displayName("Loopback only").icon("house-lock")
                 .label(Microcopy.of("loopback").withFilter("scope", "port_exposure"))
-                .color("teal"))
+                .color(ColorHue.TEAL))
             .value(EXPOSURE_PUBLIC, v -> v.displayName("Public").icon("globe")
                 .label(Microcopy.of("public").withFilter("scope", "port_exposure"))
-                .color("orange"))
+                .color(ColorHue.ORANGE))
             .defaultValue(EXPOSURE_LOOPBACK)
             .label(HohenheimFormCopy.label("port_exposure"))
             .help(HohenheimFormCopy.help("port_exposure"))
@@ -185,7 +186,7 @@ public final class DockerContainerKind implements InstanceKindHandler {
     public Icon getIcon() { return Icon.of("box"); }
 
     @Override
-    public String getColor() { return "blue"; }
+    public BadgeColor color() { return ColorHue.BLUE; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }
@@ -202,9 +203,6 @@ public final class DockerContainerKind implements InstanceKindHandler {
     @Override
     public @NonNull InstanceSpec specFor(int instanceId, @NonNull Map<String, Object> settings) {
         String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
-        String imageRef = ContainerSettings.imageReference(settings);
-        List<String> cmd = ContainerSettings.commandLine(settings);
-
         Map<String, String> volumes = new LinkedHashMap<>();
         EnvVars.toMap(settings.get("volumes")).forEach((name, path) -> {
             if (path != null && !path.isBlank()) {
@@ -212,14 +210,9 @@ public final class DockerContainerKind implements InstanceKindHandler {
             }
         });
 
-        return InstanceSpec.builder(handle, imageRef,
-                ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)), HARDENING,
-                OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
-            .command(cmd)
-            .env(EnvVars.toMap(settings.get("environment_variables")))
+        return ContainerSettings.spec(instanceId, settings, defaultFootprintMb(settings), HARDENING)
             .volumes(volumes)
             .publication(publicationOf(settings))
-            .tty(ConsoleKind.requireDeclared(settings).interactive())
             .build();
     }
 
@@ -250,7 +243,7 @@ public final class DockerContainerKind implements InstanceKindHandler {
                 || EXPOSURE_PUBLIC.equals(exposure) || hostPort != null;
             if (declaresShape) {
                 throw Violations.ofField("settings.container_port", null,
-                    Microcopy.of("port_shape_without_port").withFilter("scope", "violations"));
+                    HohenheimViolations.text("port_shape_without_port"));
             }
             return null;
         }

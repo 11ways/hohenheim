@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -11,12 +12,10 @@ import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -37,7 +36,7 @@ import java.util.Map;
  * credit a typed confirmation. Both understated it. The {@code clear} branch DESTROYS
  * THE WORKLOAD and then removes its volumes (see the inline comments at the branch),
  * and the typed confirmation is a property of the CALLER
- * ({@code InstanceResource#reinstallAction}), not of this class -- nothing here checks
+ * ({@code InstanceActions#reinstallAction}), not of this class -- nothing here checks
  * for one, which is why every future caller must supply its own interlock.
  *
  * AIDEV-NOTE: 2026-08-09 -- the AUTHORIZATION was missing entirely until now. Every other
@@ -78,19 +77,25 @@ public final class InstanceInstalls {
      */
     public void install(int instanceId) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
+        // Under the record's claim, like every other verb on it (re-entered from a funnel that already holds it).
+        this.instances.operations().exclusive(instanceId, InstanceOperationLock.Contention.REFUSE,
+            () -> this.installHeld(instanceId));
+    }
+
+    private void installHeld(int instanceId) {
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
         Row template = requireTemplate(resolved.row());
 
         String script = template.get(InstanceTemplateModel.INSTALL_SCRIPT);
-        long fence = this.instances.leases().requireFence(resolved.serverId());
+        this.instances.leases().requireFence(resolved.serverId());
         if (script == null || script.isBlank()) {
             InstanceOperationGuard.stampInstall(this.instances.leases(), instanceId,
-                resolved.serverId(), fence, InstanceModel.INSTALL_NONE, null,
+                resolved.serverId(), InstanceModel.INSTALL_NONE, null,
                 resolved.row().get(InstanceModel.NAME));
             return;
         }
-        runInstallStep(resolved, template, fence);
+        runInstallStep(resolved, template);
     }
 
     /**
@@ -102,21 +107,26 @@ public final class InstanceInstalls {
      */
     public void reinstall(int instanceId) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
+        this.instances.operations().exclusive(instanceId, InstanceOperationLock.Contention.REFUSE,
+            () -> this.reinstallHeld(instanceId));
+    }
+
+    private void reinstallHeld(int instanceId) {
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
         Row template = requireTemplate(resolved.row());
         String script = template.get(InstanceTemplateModel.INSTALL_SCRIPT);
         if (script == null || script.isBlank()) {
-            throw refusal("reinstall_no_step", resolved.row(), null);
+            throw HohenheimViolations.instanceRefusal("reinstall_no_step", resolved.row(), null);
         }
         requireNotRunning(resolved);
         // The honest refusal for a driver that cannot run install steps at all comes
         // FIRST: without this, a reinstall with a clear policy on such a driver would
         // name missing VOLUME support instead of the install capability it lacks.
         if (!(resolved.runtime() instanceof InstallSupport)) {
-            throw refusal("install_unsupported", resolved.row(), null);
+            throw HohenheimViolations.instanceRefusal("install_unsupported", resolved.row(), null);
         }
-        long fence = this.instances.leases().requireFence(resolved.serverId());
+        this.instances.leases().requireFence(resolved.serverId());
 
         if (InstanceTemplateModel.REINSTALL_CLEAR
                 .equals(template.get(InstanceTemplateModel.REINSTALL_POLICY))) {
@@ -131,7 +141,7 @@ public final class InstanceInstalls {
             Map<String, String> logical = logicalVolumes(resolved);
             if (!logical.isEmpty()
                     && !(resolved.runtime() instanceof VolumeSnapshotSupport)) {
-                throw refusal("snapshots_unsupported", resolved.row(), null);
+                throw HohenheimViolations.instanceRefusal("snapshots_unsupported", resolved.row(), null);
             }
             try {
                 // Remove the workload first so no container holds the volumes, then the
@@ -144,17 +154,17 @@ public final class InstanceInstalls {
                 }
             } catch (IOException error) {
                 InstanceOperationGuard.stampInstall(this.instances.leases(), instanceId,
-                    resolved.serverId(), fence, InstanceModel.INSTALL_FAILED, describe(error),
+                    resolved.serverId(), InstanceModel.INSTALL_FAILED, describe(error),
                     resolved.row().get(InstanceModel.NAME));
-                throw refusal("reinstall_clear_failed", resolved.row(), error);
+                throw HohenheimViolations.instanceRefusal("reinstall_clear_failed", resolved.row(), error);
             }
         }
-        runInstallStep(resolved, template, fence);
+        runInstallStep(resolved, template);
     }
 
     // -- the one install runner -----------------------------------------------
 
-    private void runInstallStep(@NonNull Resolved resolved, @NonNull Row template, long fence) {
+    private void runInstallStep(@NonNull Resolved resolved, @NonNull Row template) {
         int instanceId = resolved.row().get(InstanceModel.ID);
         // The vocabulary gate's install-time lane, BEFORE any daemon contact: a script
         // that sources the community function library and calls a helper the library
@@ -163,7 +173,7 @@ public final class InstanceInstalls {
             template.get(InstanceTemplateModel.INSTALL_SCRIPT), "install script");
         requireNotRunning(resolved);
         if (!(resolved.runtime() instanceof InstallSupport support)) {
-            throw refusal("install_unsupported", resolved.row(), null);
+            throw HohenheimViolations.instanceRefusal("install_unsupported", resolved.row(), null);
         }
         HostAdmission.requireInstancePlacement(resolved.serverId(),
             resolved.handler().isolation(),
@@ -179,7 +189,7 @@ public final class InstanceInstalls {
         // The durable "in flight" mark lands BEFORE any daemon work (fenced): a crash
         // anywhere after leaves visible evidence, never a clean-looking record.
         InstanceOperationGuard.stampInstall(this.instances.leases(), instanceId,
-            resolved.serverId(), fence, InstanceModel.INSTALL_INSTALLING, null,
+            resolved.serverId(), InstanceModel.INSTALL_INSTALLING, null,
             resolved.row().get(InstanceModel.NAME));
         this.beforeInstallRun.run();
 
@@ -197,21 +207,21 @@ public final class InstanceInstalls {
                 installImage.trim(), script, env, INSTALL_TIMEOUT_MS);
             if (outcome.succeeded()) {
                 InstanceOperationGuard.stampInstall(this.instances.leases(), instanceId,
-                    resolved.serverId(), fence, InstanceModel.INSTALL_INSTALLED, null,
+                    resolved.serverId(), InstanceModel.INSTALL_INSTALLED, null,
                     resolved.row().get(InstanceModel.NAME));
                 Blast.log("INSTANCE: install completed for", resolved.spec().handle());
                 return;
             }
             InstanceOperationGuard.stampInstall(this.instances.leases(), instanceId,
-                resolved.serverId(), fence, InstanceModel.INSTALL_FAILED,
+                resolved.serverId(), InstanceModel.INSTALL_FAILED,
                 "exit " + outcome.exitCode() + "\n" + outcome.outputTail(),
                 resolved.row().get(InstanceModel.NAME));
-            throw refusal("install_failed", resolved.row(), null);
+            throw HohenheimViolations.instanceRefusal("install_failed", resolved.row(), null);
         } catch (IOException error) {
             InstanceOperationGuard.stampInstall(this.instances.leases(), instanceId,
-                resolved.serverId(), fence, InstanceModel.INSTALL_FAILED, describe(error),
+                resolved.serverId(), InstanceModel.INSTALL_FAILED, describe(error),
                 resolved.row().get(InstanceModel.NAME));
-            throw refusal("install_failed", resolved.row(), error);
+            throw HohenheimViolations.instanceRefusal("install_failed", resolved.row(), error);
         }
     }
 
@@ -225,7 +235,7 @@ public final class InstanceInstalls {
         Row template = templateId instanceof Integer id
             ? Models.get(InstanceTemplateModel.class).findById(id) : null;
         if (template == null) {
-            throw refusal("install_needs_template", instance, null);
+            throw HohenheimViolations.instanceRefusal("install_needs_template", instance, null);
         }
         return template;
     }
@@ -236,10 +246,10 @@ public final class InstanceInstalls {
     private static void requireNotRunning(@NonNull Resolved resolved) {
         InstanceStatus live = resolved.runtime().status(resolved.spec().handle());
         if (live.state() == ContainerState.RUNNING) {
-            throw refusal("install_requires_stopped", resolved.row(), null);
+            throw HohenheimViolations.instanceRefusal("install_requires_stopped", resolved.row(), null);
         }
         if (live.state() == ContainerState.UNREACHABLE) {
-            throw refusal("instance_unreachable", resolved.row(), null);
+            throw HohenheimViolations.instanceRefusal("instance_unreachable", resolved.row(), null);
         }
     }
 
@@ -257,16 +267,7 @@ public final class InstanceInstalls {
     }
 
     private static @NonNull String describe(@NonNull IOException error) {
-        return error.getMessage() != null ? error.getMessage() : error.toString();
+        return HohenheimViolations.reasonOf(error);
     }
 
-    private static Violations refusal(String key, Row row, @Nullable IOException cause) {
-        Microcopy text = Microcopy.of(key).withFilter("scope", "violations")
-            .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME)));
-        if (cause != null) {
-            text = text.withArg("reason",
-                cause.getMessage() != null ? cause.getMessage() : cause.toString());
-        }
-        return Violations.ofForm(text);
-    }
 }

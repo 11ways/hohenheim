@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
@@ -53,7 +54,7 @@ final class CertificateHandlers {
                 if (certId < 0) {
                     return requestError(conduit, certificateError("dns_validation_failed"));
                 }
-                ActivityLog.record(certModel, certId, "requested", "manual DNS-01");
+                ActivityLog.record(certModel, certId, HohenheimActivityAction.REQUESTED, "manual DNS-01");
                 return HandlerSupport.redirect(CmsRoutes.list(HandlerSupport.ADMIN, HohenheimSlugs.CERTIFICATES));
             }
 
@@ -80,7 +81,7 @@ final class CertificateHandlers {
                 return requestError(conduit, certificateError("unknown_validation")
                     .withArg("method", challengeType));
             }
-            if (!dns && hostnames.stream().anyMatch(name -> name.startsWith("*."))) {
+            if (!dns && hostnames.stream().anyMatch(name -> AcmeService.wildcardSanBase(name) != null)) {
                 return requestError(conduit, certificateError("wildcard_requires_dns"));
             }
             List<String> invalid = AcmeService.invalidHostnames(hostnames, dns);
@@ -141,7 +142,8 @@ final class CertificateHandlers {
                 List<String> replicated = new ArrayList<>();
                 String owningPeer = null;
                 for (String hostname : hostnames) {
-                    String base = hostname.startsWith("*.") ? hostname.substring(2) : hostname;
+                    String wildcardBase = AcmeService.wildcardSanBase(hostname);
+                    String base = wildcardBase != null ? wildcardBase : hostname;
                     InternalDnsTxtPublisher.Refusal refusal =
                         internal.refusalFor("_acme-challenge." + base);
                     if (refusal == null) {
@@ -191,7 +193,7 @@ final class CertificateHandlers {
                         .withArg("reason", String.valueOf(outcome.failureReason())));
                 }
                 // The names are the point of the entry; no key material is ever logged.
-                ActivityLog.record(certModel, reissueCertId, "reissued",
+                ActivityLog.record(certModel, reissueCertId, HohenheimActivityAction.REISSUED,
                     previousDomains + " -> " + String.join(",", hostnames));
                 return HandlerSupport.redirect(CmsRoutes.list(HandlerSupport.ADMIN, HohenheimSlugs.CERTIFICATES));
             }
@@ -218,7 +220,7 @@ final class CertificateHandlers {
                     .withArg("reason", reason));
             }
 
-            ActivityLog.record(certModel, certId, "requested", niceName);
+            ActivityLog.record(certModel, certId, HohenheimActivityAction.REQUESTED, niceName);
             return HandlerSupport.redirect(CmsRoutes.list(HandlerSupport.ADMIN, HohenheimSlugs.CERTIFICATES));
         });
 
