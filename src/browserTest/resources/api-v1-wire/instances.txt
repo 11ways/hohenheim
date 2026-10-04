@@ -1,0 +1,159 @@
+## list instances
+> GET /api/v1/instances
+< 200 application/json; charset=utf-8
+{"instances":[{"crash_policy":"none","created_at":"2026-01-02T03:04:05Z","id":1,"install_state":"none","kind":"hohenheim:fake_native","name":"wire-instance","status":"created","template":""},{"crash_policy":"none","created_at":"2026-01-02T03:04:05Z","id":3,"install_state":"none","kind":"hohenheim:fake_device_capable","name":"wire-devices","status":"created","template":""}]}
+
+## list instances as a browser session
+> GET /api/v1/instances
+< 403 application/json; charset=utf-8
+{"code":"FORBIDDEN","message":"You are not allowed to do that","status":403}
+
+## read an instance
+> GET /api/v1/instances/1
+< 200 application/json; charset=utf-8
+{"crash_policy":"none","created_at":"2026-01-02T03:04:05Z","id":1,"install_state":"none","kind":"hohenheim:fake_native","name":"wire-instance","status":"created","template":""}
+
+## read an invisible instance
+> GET /api/v1/instances/2
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## read the console tail
+> GET /api/v1/instances/1/logs?lines=50
+< 200 application/json; charset=utf-8
+{"id":1,"lines":"wire log line 1\nwire log line 2\n"}
+
+## read an invisible instance's console tail
+> GET /api/v1/instances/2/logs
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## list variables
+> GET /api/v1/instances/1/variables
+< 200 application/json; charset=utf-8
+{"id":1,"variables":[{"key":"WIRE_SEEDED","kind":"plain","value":"seeded-value"}]}
+
+## list an invisible instance's variables
+> GET /api/v1/instances/2/variables
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## set a variable
+> POST /api/v1/instances/1/variables (application/x-www-form-urlencoded, 32 bytes)
+< 200 application/json; charset=utf-8
+{"id":1,"key":"WIRE_PLAIN","status":"set"}
+
+## set a variable of an unknown kind
+> POST /api/v1/instances/1/variables (application/x-www-form-urlencoded, 33 bytes)
+< 422 application/json; charset=utf-8
+{"code":"variable_kind_unknown","field":"kind","message":"Unknown variable kind mystery","status":422,"violations":[{"code":"variable_kind_unknown","field":"kind","message":"Unknown variable kind mystery"}]}
+
+## delete a variable
+> POST /api/v1/instances/1/variables/delete (application/x-www-form-urlencoded, 14 bytes)
+< 200 application/json; charset=utf-8
+{"id":1,"key":"WIRE_PLAIN","status":"deleted"}
+
+## delete an absent variable
+> POST /api/v1/instances/1/variables/delete (application/x-www-form-urlencoded, 14 bytes)
+< 422 application/json; charset=utf-8
+{"code":"variable_not_found","field":"key","message":"No variable exists for this key","status":422,"violations":[{"code":"variable_not_found","field":"key","message":"No variable exists for this key"}]}
+
+## start
+> POST /api/v1/instances/1/power (application/x-www-form-urlencoded, 12 bytes)
+< 200 application/json; charset=utf-8
+{"action":"start","id":1,"status":"running"}
+
+## an unknown power action
+> POST /api/v1/instances/1/power (application/x-www-form-urlencoded, 19 bytes)
+< 422 application/json; charset=utf-8
+{"code":"unknown_power_action","field":"action","message":"Unknown power action","status":422,"violations":[{"code":"unknown_power_action","field":"action","message":"Unknown power action"}]}
+
+## send a console command
+> POST /api/v1/instances/1/command (application/x-www-form-urlencoded, 17 bytes)
+< 200 application/json; charset=utf-8
+{"id":1,"status":"sent"}
+
+## send an empty console command
+> POST /api/v1/instances/1/command (application/x-www-form-urlencoded, 8 bytes)
+< 422 application/json; charset=utf-8
+{"code":"console_command_required","field":"command","message":"A console command is required","status":422,"violations":[{"code":"console_command_required","field":"command","message":"A console command is required"}]}
+
+## take a snapshot
+> POST /api/v1/instances/1/snapshot (application/x-www-form-urlencoded, 9 bytes)
+< 200 application/json; charset=utf-8
+{"id":1,"snapshot":1}
+
+## take a snapshot with a view grant
+> POST /api/v1/instances/1/snapshot (application/x-www-form-urlencoded, 9 bytes)
+< 422 application/json; charset=utf-8
+{"code":"instance_not_permitted","message":"You are not allowed to perform this action on this instance","status":422,"violations":[{"code":"instance_not_permitted","message":"You are not allowed to perform this action on this instance"}]}
+
+## take a backup
+> POST /api/v1/instances/1/backup (application/x-www-form-urlencoded, 0 bytes)
+< 200 application/json; charset=utf-8
+{"backup":1,"id":1}
+
+## take a backup with a view grant
+> POST /api/v1/instances/1/backup (application/x-www-form-urlencoded, 0 bytes)
+< 422 application/json; charset=utf-8
+{"code":"instance_not_permitted","message":"You are not allowed to perform this action on this instance","status":422,"violations":[{"code":"instance_not_permitted","message":"You are not allowed to perform this action on this instance"}]}
+
+## list devices
+> GET /api/v1/instances/3/devices
+< 200 application/json; charset=utf-8
+{"devices":[],"id":3}
+
+## list an invisible instance's devices
+> GET /api/v1/instances/2/devices
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## attach a disk
+> POST /api/v1/instances/3/devices (application/x-www-form-urlencoded, 34 bytes)
+< 200 application/json; charset=utf-8
+{"device":"wire-data","id":3,"status":"attached","type":"disk"}
+
+## attach a device of an unknown type
+> POST /api/v1/instances/3/devices (application/x-www-form-urlencoded, 25 bytes)
+< 422 application/json; charset=utf-8
+{"code":"device_type_unknown","field":"type","message":"'floppy' is not a device type (disk, nic or cdrom)","status":422,"violations":[{"code":"device_type_unknown","field":"type","message":"'floppy' is not a device type (disk, nic or cdrom)"}]}
+
+## resize a disk
+> POST /api/v1/instances/3/devices/resize (application/x-www-form-urlencoded, 24 bytes)
+< 200 application/json; charset=utf-8
+{"device":"wire-data","id":3,"size_gb":4,"status":"resized"}
+
+## resize an absent disk
+> POST /api/v1/instances/3/devices/resize (application/x-www-form-urlencoded, 24 bytes)
+< 422 application/json; charset=utf-8
+{"code":"device_not_found","field":"name","message":"Device 'wire-none' does not exist on this instance","status":422,"violations":[{"code":"device_not_found","field":"name","message":"Device 'wire-none' does not exist on this instance"}]}
+
+## detach a disk
+> POST /api/v1/instances/3/devices/detach (application/x-www-form-urlencoded, 14 bytes)
+< 200 application/json; charset=utf-8
+{"device":"wire-data","id":3,"status":"detached"}
+
+## detach an absent device
+> POST /api/v1/instances/3/devices/detach (application/x-www-form-urlencoded, 14 bytes)
+< 422 application/json; charset=utf-8
+{"code":"device_not_found","field":"name","message":"Device 'wire-none' does not exist on this instance","status":422,"violations":[{"code":"device_not_found","field":"name","message":"Device 'wire-none' does not exist on this instance"}]}
+
+## create an instance
+> POST /api/v1/instances (application/x-www-form-urlencoded, 178 bytes)
+< 200 application/json; charset=utf-8
+{"crash_policy":"none","created_at":"(per-run CREATED_AT)","id":5,"install_state":"none","kind":"hohenheim:application","name":"wire-created","status":"created","template":""}
+
+## create from an unknown template
+> POST /api/v1/instances (application/x-www-form-urlencoded, 38 bytes)
+< 422 application/json; charset=utf-8
+{"code":"unknown_template","field":"template_id","message":"That template does not exist","status":422,"violations":[{"code":"unknown_template","field":"template_id","message":"That template does not exist"}]}
+
+## delete an instance
+> POST /api/v1/instances/4/delete (application/x-www-form-urlencoded, 0 bytes)
+< 200 application/json; charset=utf-8
+{"id":4,"status":"deleted"}
+
+## delete an instance with a view grant
+> POST /api/v1/instances/1/delete (application/x-www-form-urlencoded, 0 bytes)
+< 422 application/json; charset=utf-8
+{"code":"instance_not_permitted","message":"You are not allowed to perform this action on this instance","status":422,"violations":[{"code":"instance_not_permitted","message":"You are not allowed to perform this action on this instance"}]}

@@ -1,0 +1,79 @@
+## an absent record
+> GET /api/v1/instances/999999
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## a write to an absent record
+> POST /api/v1/sites/999999/delete (application/x-www-form-urlencoded, 0 bytes)
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## a path no route declares
+> GET /api/v1/no-such-route
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## a read without a key
+> GET /api/v1/instances
+< 401 application/json; charset=utf-8
+{"code":"UNAUTHORIZED","message":"You need to be signed in to continue","status":401}
+
+## a write without a key
+> POST /api/v1/sites (application/x-www-form-urlencoded, 19 bytes)
+< 401 application/json; charset=utf-8
+{"code":"UNAUTHORIZED","message":"You need to be signed in to continue","status":401}
+
+## a read with an unknown key
+> GET /api/v1/instances
+< 401 application/json; charset=utf-8
+{"code":"INVALID_API_KEY","message":"The presented API key is not valid","status":401}
+
+## a read as a browser session
+> GET /api/v1/instances
+< 403 application/json; charset=utf-8
+{"code":"FORBIDDEN","message":"You are not allowed to do that","status":403}
+
+## a write as a browser session
+> POST /api/v1/sites (application/x-www-form-urlencoded, 17 bytes)
+< 403 application/json; charset=utf-8
+{"code":"CSRF_INVALID","message":"This form was submitted without its security token","status":403}
+
+## backup call 1 of a five-call window
+> POST /api/v1/instances/999999/backup (application/x-www-form-urlencoded, 0 bytes)
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## backup call 2 of a five-call window
+> POST /api/v1/instances/999999/backup (application/x-www-form-urlencoded, 0 bytes)
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## backup call 3 of a five-call window
+> POST /api/v1/instances/999999/backup (application/x-www-form-urlencoded, 0 bytes)
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## backup call 4 of a five-call window
+> POST /api/v1/instances/999999/backup (application/x-www-form-urlencoded, 0 bytes)
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## backup call 5 of a five-call window
+> POST /api/v1/instances/999999/backup (application/x-www-form-urlencoded, 0 bytes)
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## backup call 6 of a five-call window
+> POST /api/v1/instances/999999/backup (application/x-www-form-urlencoded, 0 bytes)
+< 429 application/json; charset=utf-8
+{"code":"RATE_LIMITED","message":"Too many requests","status":429}
+
+## an artifact over the upload cap
+> POST /api/v1/sites/1/artifact (application/octet-stream, 1048577 bytes)
+< 422 application/json; charset=utf-8
+{"code":"artifact_too_large","message":"The uploaded artifact is larger than builds.max_upload_mb allows.","status":422,"violations":[{"code":"artifact_too_large","message":"The uploaded artifact is larger than builds.max_upload_mb allows."}]}
+
+## a form body over the request cap
+> POST /api/v1/sites (application/x-www-form-urlencoded, 20971521 bytes)
+< 413 application/json; charset=utf-8
+{"code":"PAYLOAD_TOO_LARGE","message":"Request body exceeds the configured limit of 20971520 bytes","status":413}

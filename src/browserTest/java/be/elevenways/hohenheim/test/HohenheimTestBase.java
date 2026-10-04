@@ -21,6 +21,8 @@ import be.elevenways.zenit.common.security.csrf.CsrfTokens;
 import be.elevenways.zenit.common.session.Session;
 import com.microsoft.playwright.options.Cookie;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -359,6 +361,19 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
     protected static HttpResponse<String> sendFollowingRedirects(HttpRequest.@NonNull Builder builder)
             throws Exception {
         return send(builder, HttpClient.Redirect.NORMAL);
+    }
+
+    /** {@link #sendRequest} answering the raw body bytes, for a test comparing a reply byte for byte. */
+    protected static HttpResponse<byte[]> sendRequestBytes(HttpRequest.@NonNull Builder builder) {
+        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
+        try {
+            return client.send(builder.build(), HttpResponse.BodyHandlers.ofByteArray());
+        } catch (IOException failure) {
+            throw new UncheckedIOException(failure);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted while waiting for " + builder.build().uri(), interrupted);
+        }
     }
 
     private static HttpResponse<String> send(HttpRequest.Builder builder,
