@@ -1,8 +1,13 @@
 package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.cms.SiteDomainResource;
+import be.elevenways.hohenheim.model.InstanceFileModel;
+import be.elevenways.hohenheim.model.StackFileModel;
+import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
+import be.elevenways.hohenheim.server.instance.TemplateDeclarationGuards;
+import be.elevenways.hohenheim.server.cms.SiteDomainRouteInvariant;
 import be.elevenways.hohenheim.server.cms.SiteEnableInvariant;
+import be.elevenways.hohenheim.server.auth.OperatorTrustedWrites;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviderGuards;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.dns.DnsPeerCascades;
@@ -14,6 +19,7 @@ import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.dns.DnsClaimReleases;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.game.GameDomains;
+import be.elevenways.hohenheim.server.instance.ContainerFileRules;
 import be.elevenways.hohenheim.server.instance.GeneratedInstanceFiles;
 import be.elevenways.hohenheim.server.instance.InstanceCatalogGuards;
 import be.elevenways.hohenheim.server.stack.StackCascades;
@@ -59,13 +65,16 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // then refused had already written that row (and would have written the DNS release
         // and game-domain teardown after it). Authority is asked before any consequence.
         TenantWrites.install();
+        // A delegated admin passes TenantWrites as the operator, yet where an operator-owned site or provider connects
+        // (an any-address fetch) is the non-delegable hohenheim.admin.system's alone.
+        OperatorTrustedWrites.install();
         // No domain row can take a route an enabled site already owns, and every row
         // stamps the live-route claim its unique index arbitrates (form, clone, seeder,
         // API writeback, direct model save).
-        SiteDomainResource.installRouteInvariant();
+        SiteDomainRouteInvariant.installRouteInvariant();
         // A protected path stores the canonical prefix the dispatcher guards, names a
         // list, and claims its (site, path) pair once (form, delegated form, restore).
-        be.elevenways.hohenheim.server.cms.ProtectedPathResource.installProtectionInvariant();
+        be.elevenways.hohenheim.server.cms.ProtectedPathInvariant.install();
         // A DNS record a system authored carries derived attribution, and no caller can
         // hand-write that attribution onto a row of its own.
         GeneratedDnsRecords.install();
@@ -76,6 +85,12 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // The same derived-attribution discipline for instance config files a system
         // authored (the game-domains Velocity forced-hosts materialization).
         GeneratedInstanceFiles.install();
+        // A file staged into a container lands on an absolute, non-climbing path with an octal mode, whichever lane
+        // wrote it (form, inline cell, API, direct save).
+        ContainerFileRules.install(InstanceFileModel.SCHEMA, InstanceFileModel.CONTAINER_PATH, InstanceFileModel.MODE);
+        ContainerFileRules.install(StackFileModel.SCHEMA, StackFileModel.CONTAINER_PATH, StackFileModel.MODE);
+        ContainerFileRules.install(InstanceTemplateFileModel.SCHEMA, InstanceTemplateFileModel.CONTAINER_PATH, InstanceTemplateFileModel.MODE);
+        TemplateDeclarationGuards.init();
         // A game-domains mapping dies with its domain row, and its generated output
         // (forced-hosts config, DNS rows) dies with it.
         GameDomains.install();

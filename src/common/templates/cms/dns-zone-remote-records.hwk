@@ -8,7 +8,8 @@
 {% declare records: List<DnsRecordView> %}
 {% declare addRecordTarget: RouteTarget %}
 {% declare recordsTabTarget: RouteTarget %}
-{% declare remoteFormTarget: RouteTarget %}
+{% declare remoteForm: PageFormState = null %}
+{% declare deleteForms: Map<String, PageFormState> %}
 {% declare editable: Boolean = false %}
 {% declare notice: String = "" %}
 {% declare editRecord: DnsRecordFormView = null %}
@@ -38,8 +39,11 @@
 
     {% if editRecord %}
     {% let editType = editRecord.type %}
-    <form use:Zenit.form={% remoteFormTarget %}>
-        <input type="hidden" name="record_id" value={% editRecord.id %}>
+    <form method="post" action={% remoteForm.postTarget %}>
+        {% csrf() %}
+        {% each remoteForm.hidden as field %}
+        <input type="hidden" name={% field.name %} value={% field.value %}>
+        {% /each %}
         <pl-card>
             <pl-card-header>
                 <pl-card-title>
@@ -143,9 +147,12 @@
                 </pl-table-cell>
                 {% if editable %}
                 <pl-table-cell>
-                    <form use:Zenit.form={% remoteFormTarget %} use:CmsConfirm.destructive={% t("delete_confirm", scope: "dns_remote") %}>
-                        <input type="hidden" name="action" value="delete">
-                        <input type="hidden" name="record_id" value={% record.id %}>
+                    {% let deleteForm = deleteForms[record.id] %}
+                    <form method="post" action={% deleteForm.postTarget %} use:CmsConfirm.destructive={% t("delete_confirm", scope: "dns_remote") %}>
+                        {% csrf() %}
+                        {% each deleteForm.hidden as field %}
+                        <input type="hidden" name={% field.name %} value={% field.value %}>
+                        {% /each %}
                         <pl-button variant={% "ghost" %} type="submit">{{ t("delete_remote", scope: "dns_remote") }}</pl-button>
                     </form>
                 </pl-table-cell>

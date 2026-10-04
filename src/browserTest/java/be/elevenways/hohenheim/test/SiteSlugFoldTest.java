@@ -56,7 +56,7 @@ class SiteSlugFoldTest extends HohenheimTestBase {
             + "&settings.root_path=%2Ftmp"
             + "&enabled=false"
             + "&hostname=";
-        return adminPostForm("/admin/sites/new", body);
+        return adminPostForm("/admin/sites/new", body + "&" + siteCreateEnvelope());
     }
 
     private static Row siteNamed(String name) {

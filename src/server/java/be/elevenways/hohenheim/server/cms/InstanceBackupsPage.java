@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -15,8 +16,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * Backups tab on an instance, gated on {@code backups}.
  *
  * AIDEV-NOTE: restore-to-new stays OPERATOR-ONLY and this tab does not change that.
- * The /manage projection is built over {@code ManageInstanceBackupResource}, whose
- * rowActions() is deliberately empty, so a tenant's rows carry no restore button --
+ * The /manage tab reads the panel's tenant twin ({@code InstanceBackupParts.manage()}),
+ * which places no restore-to-new, so a tenant's rows carry no restore button --
  * and {@code InstanceBackups.restoreToNew} refuses a tenant-originated call anyway.
  * Both halves were already decided; a per-instance VIEW is not the place to reopen them.
  */
@@ -24,11 +25,11 @@ public final class InstanceBackupsPage extends InstanceArtifactsPage {
 
     public static final String SLUG = "backups";
 
-    InstanceBackupsPage(@NonNull InstanceBackupResource resource) {
-        super(resource);
+    InstanceBackupsPage() {
+        super(InstanceBackupParts.SLUG);
     }
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_backups_page"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_backups"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_backup"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("box-archive"); }

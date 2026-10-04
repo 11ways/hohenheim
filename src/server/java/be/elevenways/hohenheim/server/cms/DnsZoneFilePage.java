@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DnsSecMaterial;
@@ -8,7 +10,8 @@ import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
 import org.xbill.DNS.DSRecord;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -25,14 +28,18 @@ import java.util.Map;
  * Zone-file tab on a DNS zone: standard master-file export plus a paste-to-
  * import form (the POST is the host-declared DNS_ZONE_IMPORT endpoint).
  */
-public final class DnsZoneFilePage implements RecordScopedPage<Row> {
+public final class DnsZoneFilePage implements RecordTab.Rendered<Row> {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dns_zone_file"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("dns_zone_file"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("zone_file").withFilter("scope", "dns_zone"); }
     @Override public @NonNull String slug() { return "zonefile"; }
     @Override public @NonNull Icon icon() { return Icon.of("file-lines"); }
 
     @Override
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row zone) {
+        return render(request.conduit(), request.access(), zone);
+    }
+
     public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
                                            @NonNull AccessContext accessContext,
                                            @NonNull Row zone) {
@@ -63,6 +70,6 @@ public final class DnsZoneFilePage implements RecordScopedPage<Row> {
             ? DnsSecMaterial.dsRecord(zone) : null;
         vars.put("dsRecord", ds != null ? ds.toString() : "");
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/dns-zone-file"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.DNS_ZONE_FILE, vars);
     }
 }

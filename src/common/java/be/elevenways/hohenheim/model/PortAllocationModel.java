@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -22,7 +23,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
  */
 public class PortAllocationModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "port_allocation");
+    public static final Identifier MODEL_ID = HohenheimIds.id("port_allocation");
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
@@ -87,16 +88,6 @@ public class PortAllocationModel extends Model {
      */
     public static final StringField ALLOCATION_MODE = SCHEMA.addField(
         StringField.builder().name("allocation_mode").build());
-
-    /**
-     * Which controller GENERATION wrote a record-less managed-process claim: the host
-     * lease's fence at allocation time (HostLeases). The boot sweep only judges rows
-     * from a LOWER generation than its own held fence, so a claim can never be freed by
-     * the very controller run that wrote it, and never while a rival holds the host.
-     * Null on owner-carrying claims (their record is the identity) and on legacy rows.
-     */
-    public static final LongField CONTROLLER_FENCE = SCHEMA.addField(
-        LongField.builder("controller_fence").filterable(false).build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("created_at").build());

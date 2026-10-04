@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.zenit.test.support.OutboundFixture;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
@@ -39,8 +40,8 @@ class AuthProviderAdminTest extends HohenheimTestBase {
         assertThat(placeholder.count()).isEqualTo(1);
         assertThat(placeholder.innerText()).contains("choose a type");
 
-        // PermissionField: a free-text pl-select over the KnownPermissions
-        // vocabulary (the LuckPerms editor model) with described entries.
+        // PermissionField: a free-text pl-select over the declared permissions
+        // (Permissions.declared(), as FieldOption suggestions) (the LuckPerms editor model) with described entries.
         var picker = page.locator("pl-select[name='required_permission']");
         assertThat(picker.count()).isEqualTo(1);
         assertThat(picker.getAttribute("free-text")).isNotNull();
@@ -197,13 +198,16 @@ class AuthProviderAdminTest extends HohenheimTestBase {
             exchange.close();
         });
         stub.start();
+        // A realm rides the public-internet guard, which refuses loopback: the fixture resolves a public-looking host
+        // to the stub, as a real realm would be reached.
+        OutboundFixture realm = OutboundFixture.route("suggest-realm.example.test", stub.getAddress().getPort());
 
         var model = Models.get(SiteAuthProviderModel.class);
         Row row = model.createEmptyRow();
         row.set(SiteAuthProviderModel.NAME, "Realm Suggest Provider");
         row.set(SiteAuthProviderModel.PROVIDER_TYPE, "hohenheim:proteus");
         row.set(SiteAuthProviderModel.CONFIG, Map.of(
-            "endpoint", "http://127.0.0.1:" + stub.getAddress().getPort(),
+            "endpoint", "http://" + realm.host() + ":" + stub.getAddress().getPort(),
             "realm_client", "testrealm",
             "access_key", "test-access-key",
             "authenticator", "password"));
@@ -230,6 +234,7 @@ class AuthProviderAdminTest extends HohenheimTestBase {
                 .isEqualTo(1);
         } finally {
             model.delete(row);
+            realm.close();
             stub.stop(0);
         }
 

@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.server.BootSettle;
@@ -15,7 +17,6 @@ import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -72,8 +73,12 @@ public final class InstanceSnapshots {
      */
     public int create(int instanceId, @Nullable String note) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.SNAPSHOTS);
-        return this.instances.operations().exclusive(instanceId,
+        int snapshotId = this.instances.operations().exclusive(instanceId,
             InstanceOperationLock.Contention.REFUSE, () -> createLocked(instanceId, note));
+        // Written here, once, on success, whichever surface asked; no surface writes one of its own.
+        ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.SNAPSHOT,
+            "snapshot #" + snapshotId);
+        return snapshotId;
     }
 
     /** {@link #create}'s body; the caller holds the instance's operation lock. */
@@ -86,7 +91,7 @@ public final class InstanceSnapshots {
         VolumeSnapshotSupport support = requireSupport(resolved);
         Map<String, String> volumes = logicalVolumes(resolved);
         if (volumes.isEmpty()) {
-            throw refusal("snapshot_no_volumes", resolved.row(), null);
+            throw HohenheimViolations.instanceRefusal("snapshot_no_volumes", resolved.row(), null);
         }
         InstanceStatus live = resolved.runtime().status(resolved.spec().handle());
         requirePresent(live, resolved);
@@ -118,7 +123,7 @@ public final class InstanceSnapshots {
                     captureInto(snapshot[0], directory[0], support, resolved, volumes);
                 });
         } catch (IOException error) {
-            throw refusal("instance_snapshot_failed", resolved.row(), error);
+            throw HohenheimViolations.instanceRefusal("instance_snapshot_failed", resolved.row(), error);
         }
         Blast.log("SNAPSHOT: captured instance", instanceId, "into", directory[0].toString());
         pruneForRetention(instanceId);
@@ -170,7 +175,7 @@ public final class InstanceSnapshots {
         } catch (IOException | RuntimeException error) {
             FileTrees.deleteQuietly(directory);
             RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot)
-                .set(InstanceSnapshotModel.ERROR, describe(error))
+                .set(InstanceSnapshotModel.ERROR, HohenheimViolations.reasonOf(error))
                 .write();
             throw error;
         }
@@ -215,13 +220,13 @@ public final class InstanceSnapshots {
                             .write();
                     } catch (IOException | RuntimeException error) {
                         RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot[0])
-                            .set(InstanceSnapshotModel.ERROR, describe(error))
+                            .set(InstanceSnapshotModel.ERROR, HohenheimViolations.reasonOf(error))
                             .write();
                         throw error;
                     }
                 });
         } catch (IOException error) {
-            throw refusal("instance_snapshot_failed", resolved.row(), error);
+            throw HohenheimViolations.instanceRefusal("instance_snapshot_failed", resolved.row(), error);
         }
         Blast.log("SNAPSHOT: captured native snapshot", nativeName[0], "of instance", instanceId);
         pruneForRetention(instanceId);
@@ -241,7 +246,7 @@ public final class InstanceSnapshots {
         if (snapshot == null
                 || !InstanceSnapshotModel.STATUS_COMPLETE.equals(
                     snapshot.get(InstanceSnapshotModel.STATUS))) {
-            throw Violations.ofForm(violationText("snapshot_not_restorable")
+            throw Violations.ofForm(HohenheimViolations.text("snapshot_not_restorable")
                 .withArg("id", snapshotId));
         }
         int instanceId = snapshot.get(InstanceSnapshotModel.INSTANCE_ID);
@@ -272,7 +277,7 @@ public final class InstanceSnapshots {
             String declaredPath = volumes.get(entry.getKey());
             Object capturedPath = entry.getValue().get("path");
             if (declaredPath == null || !declaredPath.equals(capturedPath)) {
-                throw Violations.ofForm(violationText("snapshot_mismatch")
+                throw Violations.ofForm(HohenheimViolations.text("snapshot_mismatch")
                     .withArg("volume", entry.getKey())
                     .withArg("name", resolved.row().get(InstanceModel.NAME)));
             }
@@ -286,12 +291,12 @@ public final class InstanceSnapshots {
                 actualSize = Files.size(file);
                 actualSha = BackupArchive.sha256Of(file);
             } catch (IOException missing) {
-                throw Violations.ofForm(violationText("snapshot_corrupt")
+                throw Violations.ofForm(HohenheimViolations.text("snapshot_corrupt")
                     .withArg("volume", entry.getKey())
-                    .withArg("reason", describe(missing)));
+                    .withArg("reason", HohenheimViolations.reasonOf(missing)));
             }
             if (actualSize != expectedSize || !actualSha.equals(expectedSha)) {
-                throw Violations.ofForm(violationText("snapshot_corrupt")
+                throw Violations.ofForm(HohenheimViolations.text("snapshot_corrupt")
                     .withArg("volume", entry.getKey())
                     .withArg("reason", "expected sha256 " + expectedSha + " (" + expectedSize
                         + " bytes), found " + actualSha + " (" + actualSize + " bytes)"));
@@ -315,7 +320,7 @@ public final class InstanceSnapshots {
                     support.restoreVolumes(resolved.spec(), volumes, tars);
                 });
         } catch (IOException error) {
-            throw refusal("instance_restore_failed", resolved.row(), error);
+            throw HohenheimViolations.instanceRefusal("instance_restore_failed", resolved.row(), error);
         }
         recordRestore(instanceId, "snapshot #" + snapshotId);
         Blast.log("SNAPSHOT: restored snapshot", snapshotId, "onto instance", instanceId);
@@ -330,8 +335,6 @@ public final class InstanceSnapshots {
             InstanceModel.STATUS_STOPPED, wasRunning, InstanceMaintenanceWindow.Failure.HOLD_ERROR);
     }
 
-    /** The activity action an in-place snapshot restore is recorded under. */
-    public static final String ACTIVITY_RESTORE_ACTION = "restored_snapshot";
 
     /**
      * Record the restore on the INSTANCE record.
@@ -346,7 +349,7 @@ public final class InstanceSnapshots {
      */
     private static void recordRestore(int instanceId, String detail) {
         ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-            ACTIVITY_RESTORE_ACTION, detail);
+            HohenheimActivityAction.RESTORED_SNAPSHOT, detail);
     }
 
     /**
@@ -361,7 +364,7 @@ public final class InstanceSnapshots {
     private void restoreNative(int instanceId, @NonNull Resolved resolved,
                                @NonNull Row snapshot, @NonNull String nativeName) {
         if (!(resolved.runtime() instanceof NativeSnapshotSupport support)) {
-            throw Violations.ofForm(violationText("snapshots_unsupported")
+            throw Violations.ofForm(HohenheimViolations.text("snapshots_unsupported")
                 .withArg("kind", String.valueOf((Object) resolved.row().get(InstanceModel.KIND))));
         }
         // -- verification, BEFORE any live state changes -----------------------
@@ -369,12 +372,12 @@ public final class InstanceSnapshots {
         requirePresent(live, resolved);
         try {
             if (!support.snapshotExists(resolved.spec(), nativeName)) {
-                throw Violations.ofForm(violationText("snapshot_missing")
+                throw Violations.ofForm(HohenheimViolations.text("snapshot_missing")
                     .withArg("snapshot", nativeName)
                     .withArg("name", resolved.row().get(InstanceModel.NAME)));
             }
         } catch (IOException unanswerable) {
-            throw refusal("instance_restore_failed", resolved.row(), unanswerable);
+            throw HohenheimViolations.instanceRefusal("instance_restore_failed", resolved.row(), unanswerable);
         }
         boolean wasRunning = live.running();
 
@@ -383,7 +386,7 @@ public final class InstanceSnapshots {
             InstanceMaintenanceWindow.run(this.instances, resolved, restoreWindow(wasRunning),
                 () -> support.restoreSnapshot(resolved.spec(), nativeName));
         } catch (IOException error) {
-            throw refusal("instance_restore_failed", resolved.row(), error);
+            throw HohenheimViolations.instanceRefusal("instance_restore_failed", resolved.row(), error);
         }
         recordRestore(instanceId, "native snapshot " + nativeName);
         Blast.log("SNAPSHOT: restored native snapshot", nativeName, "onto instance", instanceId);
@@ -431,7 +434,7 @@ public final class InstanceSnapshots {
                 // retention hits escape would report that capture as failed while its
                 // snapshot sits complete on the daemon -- a lie in the opposite direction.
                 Blast.log("SNAPSHOT: retention hit an unexpected failure on snapshot", id,
-                    "- kept for a later sweep:", describe(unexpected));
+                    "- kept for a later sweep:", HohenheimViolations.reasonOf(unexpected));
             }
         }
     }
@@ -468,7 +471,7 @@ public final class InstanceSnapshots {
                 if (undeletable != null) {
                     Blast.log("SNAPSHOT: could not reclaim interrupted capture", id,
                         "payload at", directory, "- retried at the next boot:",
-                        describe(undeletable));
+                        HohenheimViolations.reasonOf(undeletable));
                 } else {
                     Blast.log("SNAPSHOT: reclaimed interrupted capture", id,
                         "payload at", directory);
@@ -502,7 +505,7 @@ public final class InstanceSnapshots {
             }
         } catch (IOException unreachable) {
             Blast.log("SNAPSHOT: could not reclaim interrupted native capture", id,
-                "(" + nativeName + ") - retried at the next boot:", describe(unreachable));
+                "(" + nativeName + ") - retried at the next boot:", HohenheimViolations.reasonOf(unreachable));
         }
     }
 
@@ -545,7 +548,7 @@ public final class InstanceSnapshots {
     private static int instanceOf(int snapshotId) {
         Row snapshot = Models.get(InstanceSnapshotModel.class).findById(snapshotId);
         if (snapshot == null) {
-            throw Violations.ofForm(violationText("snapshot_not_restorable")
+            throw Violations.ofForm(HohenheimViolations.text("snapshot_not_restorable")
                 .withArg("id", snapshotId));
         }
         return snapshot.get(InstanceSnapshotModel.INSTANCE_ID);
@@ -560,9 +563,9 @@ public final class InstanceSnapshots {
     private static void requireRemoved(@NonNull Path root, @NonNull String label) {
         IOException failure = FileTrees.delete(root);
         if (failure != null) {
-            throw Violations.ofForm(violationText("snapshot_delete_failed")
+            throw Violations.ofForm(HohenheimViolations.text("snapshot_delete_failed")
                 .withArg("snapshot", label)
-                .withArg("reason", describe(failure)));
+                .withArg("reason", HohenheimViolations.reasonOf(failure)));
         }
     }
 
@@ -586,9 +589,9 @@ public final class InstanceSnapshots {
         try {
             support.deleteSnapshot(resolved.spec(), nativeName);
         } catch (IOException error) {
-            throw Violations.ofForm(violationText("snapshot_delete_failed")
+            throw Violations.ofForm(HohenheimViolations.text("snapshot_delete_failed")
                 .withArg("snapshot", nativeName)
-                .withArg("reason", describe(error)));
+                .withArg("reason", HohenheimViolations.reasonOf(error)));
         }
     }
 
@@ -599,7 +602,7 @@ public final class InstanceSnapshots {
         if (resolved.runtime() instanceof VolumeSnapshotSupport support) {
             return support;
         }
-        throw Violations.ofForm(violationText("snapshots_unsupported")
+        throw Violations.ofForm(HohenheimViolations.text("snapshots_unsupported")
             .withArg("kind", String.valueOf((Object) resolved.row().get(InstanceModel.KIND))));
     }
 
@@ -624,11 +627,11 @@ public final class InstanceSnapshots {
     /** Refuse an ABSENT or UNREACHABLE workload with a named violation. */
     static void requirePresent(@NonNull InstanceStatus live, @NonNull Resolved resolved) {
         if (live.state() == ContainerState.ABSENT) {
-            throw Violations.ofForm(violationText("instance_workload_absent")
+            throw Violations.ofForm(HohenheimViolations.text("instance_workload_absent")
                 .withArg("name", resolved.row().get(InstanceModel.NAME)));
         }
         if (live.state() == ContainerState.UNREACHABLE) {
-            throw Violations.ofForm(violationText("instance_unreachable")
+            throw Violations.ofForm(HohenheimViolations.text("instance_unreachable")
                 .withArg("name", resolved.row().get(InstanceModel.NAME)));
         }
     }
@@ -639,9 +642,6 @@ public final class InstanceSnapshots {
         return (capMb == null || capMb <= 0 ? 1024L : capMb.longValue()) * 1024 * 1024;
     }
 
-    static @NonNull String describe(@NonNull Exception error) {
-        return error.getMessage() != null ? error.getMessage() : error.toString();
-    }
 
     private static Path snapshotRoot() {
         return Path.of(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Backup.SNAPSHOT_PATH));
@@ -662,16 +662,5 @@ public final class InstanceSnapshots {
         return Map.of();
     }
 
-    private static Violations refusal(String key, Row row, @Nullable Exception cause) {
-        Microcopy text = violationText(key)
-            .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME)));
-        if (cause != null) {
-            text = text.withArg("reason", describe(cause));
-        }
-        return Violations.ofForm(text);
-    }
 
-    private static Microcopy violationText(String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
-    }
 }

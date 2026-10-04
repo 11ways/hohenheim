@@ -6,16 +6,14 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelPeer;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
-import be.elevenways.zenit.cms.common.resource.Resource;
-import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -51,12 +49,12 @@ class RecordTitleDeclarationTest extends HohenheimTestBase {
      */
     @Test
     void everyResourceCanTitleItsOwnRecords() throws Exception {
-        List<Resource<?>> resources = new ArrayList<>();
+        List<PanelResource<?>> resources = new ArrayList<>();
         for (String slug : List.of("admin", ManagePanel.SLUG)) {
             Panel panel = PanelRegistry.getBySlug(slug);
             assertThat(panel).as("step 1: the '" + slug + "' panel is registered").isNotNull();
-            for (PanelPeer peer : panel.peers()) {
-                if (peer instanceof Resource<?> resource) {
+            for (PanelEntry entry : panel.entries()) {
+                if (entry instanceof PanelResource<?> resource) {
                     resources.add(resource);
                 }
             }
@@ -66,19 +64,20 @@ class RecordTitleDeclarationTest extends HohenheimTestBase {
 
         List<String> untitled = new ArrayList<>();
         int walked = 0;
-        for (Resource<?> resource : resources) {
-            Model model = resource.model();
-            if (model == null || WITHOUT_A_TITLE.contains(resource.slug())) {
+        for (PanelResource<?> resource : resources) {
+            if (resource.subject().modelId() == null || WITHOUT_A_TITLE.contains(resource.slug())) {
                 // A model-independent resource titles its own rows through recordTitle,
                 // which has no schema to read and is checked by its own tests.
                 continue;
             }
+            Model model = resource.model();
+            assertThat(model).as("step 2: %s resolves its declared model", resource.slug()).isNotNull();
             walked++;
             boolean declares = !model.requireSchema().getDisplayFields().isEmpty()
-                || overridesRecordTitle(resource);
+                || resource.reads().titleMapping() != null;
             if (!declares) {
                 untitled.add(resource.slug() + " -> " + model.getModelName()
-                    + " (no display fields, no recordTitle override)");
+                    + " (no display fields, no declared title mapping)");
             }
         }
 
@@ -148,26 +147,11 @@ class RecordTitleDeclarationTest extends HohenheimTestBase {
 
         // 4. The same words head the LIST's name cell, which rendered the raw stored
         //    search text before -- type token included.
-        String ruleList = adminGet("/admin/access-rules?search=203.0.113.0").body();
+        String ruleList = adminGet("/admin/access-rules?text=203.0.113.0").body();
         assertThat(ruleList).as("step 4: the list cell reads as the rule, not as its index")
             .contains("Allowed network");
         assertThat(ruleList).as("step 4: the raw type token is gone from the cell")
             .doesNotContain("ip_allow 203.0.113.0/24");
     }
 
-    /** @return whether this resource declares a record title of its own */
-    private static boolean overridesRecordTitle(Resource<?> resource) throws Exception {
-        Method declared = resource.getClass().getMethod("recordTitle", Object.class);
-        Class<?> owner = declared.getDeclaringClass();
-        if (!Resource.class.equals(owner) && !RowResource.class.equals(owner)) {
-            return true;
-        }
-        // A RowResource's bridge method hides the Row-typed override; ask for that too.
-        try {
-            return !RowResource.class.equals(
-                resource.getClass().getMethod("recordTitle", Row.class).getDeclaringClass());
-        } catch (NoSuchMethodException notRowBacked) {
-            return false;
-        }
-    }
 }

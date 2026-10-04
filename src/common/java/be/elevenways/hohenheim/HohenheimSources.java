@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.ActivitySources;
 import be.elevenways.zenit.common.ZenitModule;
@@ -32,7 +33,20 @@ public final class HohenheimSources implements ZenitModule {
      * constant (the server-side HohenheimPanel.ACCESS is the same string) so
      * common-registered sources can declare it without a server import.
      */
-    public static final Permission ADMIN_ACCESS = Permission.of("hohenheim.admin.access");
+    public static final Permission ADMIN_ACCESS = Permission.declare("hohenheim.admin.access",
+        Microcopy.of("hohenheim_admin_access").withFilter("scope", "permission"), Permission.Delegation.DELEGABLE);
+
+    /**
+     * Editing the installation's settings: every value an operator declares for the whole install, among them the
+     * endpoints Hohenheim itself fetches with operator trust ({@code hohenheim.auth_proteus}, which rides
+     * {@code OutboundUrlGuard.ANY_ADDRESS}) and the private-network opt-ins.
+     *
+     * AIDEV-NOTE: NOT delegable, unlike {@link #ADMIN_ACCESS}: whoever holds a delegated admin grant must never be
+     * able to point a trusted, any-address fetch at this host or the LAN. The bootstrap operator holds the "*" grant
+     * and is therefore unaffected. The same tier as quirkyquarters' qq.admin.system.
+     */
+    public static final Permission ADMIN_SYSTEM = Permission.declare("hohenheim.admin.system",
+        Microcopy.of("hohenheim_admin_system").withFilter("scope", "permission"), Permission.Delegation.NOT_DELEGABLE);
 
     /**
      * The delegated /manage eligibility gate, kept as a common constant for the same
@@ -40,7 +54,8 @@ public final class HohenheimSources implements ZenitModule {
      * lanes) must name it without a server import. The server-side ManagePanel.ACCESS
      * aliases this so the two faces can never spell it differently.
      */
-    public static final Permission MANAGE_ACCESS = Permission.of("hohenheim.manage.access");
+    public static final Permission MANAGE_ACCESS = Permission.declareComputed("hohenheim.manage.access",
+        Microcopy.of("hohenheim_manage_access").withFilter("scope", "permission"), Permission.Delegation.DELEGABLE);
 
     /**
      * Managing a host's install media: publishing ISOs onto its storage and removing
@@ -54,10 +69,11 @@ public final class HohenheimSources implements ZenitModule {
      * this permission unable to say no to anyone. The bootstrap operator holds the "*"
      * grant and is therefore unaffected.
      */
-    public static final Permission MEDIA_MANAGE = Permission.of("hohenheim.media.manage");
+    public static final Permission MEDIA_MANAGE = Permission.declare("hohenheim.media.manage",
+        Microcopy.of("hohenheim_media_manage").withFilter("scope", "permission"), Permission.Delegation.DELEGABLE);
 
     public static final Identifier SPAMSERVICE_SYSTEM_USERS =
-        Identifier.of("hohenheim", "spamservice_system_users");
+        HohenheimIds.id("spamservice_system_users");
 
     private static volatile boolean registered = false;
 
@@ -118,14 +134,14 @@ public final class HohenheimSources implements ZenitModule {
             .build());
 
         // No explicit source for DatabaseEngineModel: the shared-engine pick on a
-        // database's create form and the engine column ride the zenit-cms-derived default
-        // of DatabaseEngineResource (its declared NAME search, the admin permission, the
-        // edit link and inline create). An explicit copy here replaced that default
-        // WITHOUT the edit/inline-create facets (source_capability_dropped at boot).
+        // database's create form and the engine column ride the model source zenit-cms
+        // derives from the engines panel resource, DatabaseParts#engines (its declared NAME
+        // search, the admin gate and the edit link).
 
-        // No explicit source for SiteAuthProviderModel or DnsZoneModel either: their
-        // explicit copies added nothing over the derived defaults (AuthProviderResource and
-        // DnsZoneResource declare the same search fields) and only cost the edit link.
+        // No explicit source for DnsZoneModel either: its explicit copy added nothing over
+        // the derived default (DnsZoneResource declares the same search fields) and only
+        // cost the edit link. SiteAuthProviderModel and the stack models need none: their
+        // admin entries are panel resources, whose model-level source zenit-cms derives.
         // Bans, hosts and runtime images DO need a projection / subtitle / sortable the
         // derived default lacks; they are declared server-side in AdminSources, where the
         // edit link and inline create can be spelled beside those facets.

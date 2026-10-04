@@ -30,13 +30,13 @@ class SiteCloneNameTest extends HohenheimTestBase {
     private Integer createRedirectSite(String name) throws Exception {
         HttpResponse<String> response = adminPostForm("/admin/sites/new",
             "name=" + URLEncoder.encode(name, StandardCharsets.UTF_8) + "&upstream_kind=hohenheim%3Aredirect"
-            + "&settings.target_url=https%3A%2F%2Fexample.com&settings.http_status=301");
+            + "&settings.target_url=https%3A%2F%2Fexample.com&settings.http_status=301&" + siteCreateEnvelope());
         assertThat(response.statusCode()).as("the site '%s' is created", name).isIn(302, 303);
         return site(name).get(SiteModel.ID);
     }
 
     private HttpResponse<String> clone(Integer siteId, String body) throws Exception {
-        return adminPostForm("/admin/sites/" + siteId + "/action/clone_site", body);
+        return adminPostForm("/admin/sites/invoke/hohenheim.clone_site?ids=" + siteId, body);
     }
 
     @Test
@@ -54,9 +54,9 @@ class SiteCloneNameTest extends HohenheimTestBase {
         // 2. A site that is trashed still holds its slug (the constraint spans every row), yet the
         //    list, and every plain read, no longer shows it.
         Integer retired = createRedirectSite("Retired Name");
-        assertThat(adminPostForm("/admin/sites/" + retired + "/delete", confirmed("")).statusCode())
-            .as("step 2: the site is deleted").isIn(200, 302, 303);
-        popFlash();
+        HttpResponse<String> deleted = adminPostForm("/admin/sites/" + retired + "/delete", confirmed(""));
+        assertThat(deleted.statusCode()).as("step 2: the site is deleted").isIn(200, 302, 303);
+        popFlash(deleted);
         assertThat((Object) site("Retired Name").get(SiteModel.DELETED_AT)).as("step 2: softly").isNotNull();
         assertThat(Models.get(SiteModel.class).find().where(SiteModel.NAME.eq("Retired Name")).first())
             .as("step 2: a plain read does not see it").isNull();
@@ -65,7 +65,7 @@ class SiteCloneNameTest extends HohenheimTestBase {
         //    own conflict is the check, so the answer is the field's refusal, never the generic
         //    failure a check that could not see the trashed row used to hand out.
         HttpResponse<String> refused = clone(origin, confirmed("name=Retired+Name"));
-        assertThat(refused.statusCode()).as("step 3: the form comes back instead of a redirect").isEqualTo(200);
+        assertThat(refused.statusCode()).as("step 3: the form comes back instead of a redirect").isEqualTo(422);
         assertThat(refused.body()).as("step 3: carrying the name's refusal").contains(DUPLICATE);
         assertThat(Models.get(SiteModel.class).find().withTrashed().where(SiteModel.NAME.eq("Retired Name")).count())
             .as("step 3: and nothing was created").isEqualTo(1);

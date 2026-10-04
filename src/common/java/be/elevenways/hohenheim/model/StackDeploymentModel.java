@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -8,6 +9,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 
 import java.util.List;
 
@@ -18,7 +20,7 @@ import java.util.List;
  */
 public class StackDeploymentModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "stack_deployment");
+    public static final Identifier MODEL_ID = HohenheimIds.id("stack_deployment");
     public static final Schema SCHEMA = new Schema();
 
     public static final String STATUS_RUNNING = "running";
@@ -38,11 +40,11 @@ public class StackDeploymentModel extends Model {
 
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_RUNNING, v -> v.displayName("Running")
-            .label(statusLabel(STATUS_RUNNING)).icon("rotate").color("warning"))
+            .label(statusLabel(STATUS_RUNNING)).icon("rotate").color(BadgeVariant.WARNING))
         .value(STATUS_SUCCESS, v -> v.displayName("Success")
-            .label(statusLabel(STATUS_SUCCESS)).icon("circle-check").color("success"))
+            .label(statusLabel(STATUS_SUCCESS)).icon("circle-check").color(BadgeVariant.SUCCESS))
         .value(STATUS_FAILED, v -> v.displayName("Failed")
-            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color("destructive"))
+            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color(BadgeVariant.DESTRUCTIVE))
         .build());
 
     /** The translation token for a stack deployment status; the key IS the stored value. */

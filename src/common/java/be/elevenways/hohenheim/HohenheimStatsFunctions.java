@@ -1,14 +1,12 @@
 package be.elevenways.hohenheim;
 
-import be.elevenways.domino.common.DominoElement;
 import be.elevenways.hawkeye.common.annotation.Arg;
 import be.elevenways.hawkeye.common.annotation.HawkeyeFunction;
+import be.elevenways.hawkeye.common.customelement.CustomElement;
 import be.elevenways.hawkeye.common.lambda.LambdaReference1;
 import be.elevenways.hawkeye.common.render.RenderContext;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.key.IdentityKey;
-import be.elevenways.zenit.common.channel.ChannelClient;
-import be.elevenways.zenit.common.channel.ClientChannelLink;
+import be.elevenways.zenit.common.channel.ChannelLinks;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -21,18 +19,15 @@ import java.util.Map;
  * live link for one instance, and fold arriving samples into a plottable series.
  *
  * AIDEV-NOTE: every method is a no-op on the server -- the link belongs to the MOUNTED
- * element (the QQChatFunctions shape), never to a render expression. The previous shape
- * subscribed inside a {@code returnsReference} template function; hydration revives values
- * without re-running {@code {% let %}} calls, so after a hard load the subscription simply
- * never existed, and nothing ever closed the links a client render did open.
+ * element, never to a render expression: zenit's {@link ChannelLinks} link, released by the
+ * element's own disconnect, so there is no close to call. The previous shape subscribed inside
+ * a {@code returnsReference} template function; hydration revives values without re-running
+ * {@code {% let %}} calls, so after a hard load the subscription simply never existed.
  */
 public final class HohenheimStatsFunctions {
 
     /** Points plotted per series; matches the hub's server-side ring. */
     private static final int WINDOW = 60;
-
-    private static final IdentityKey<ClientChannelLink<Object, Object>> LINK_KEY =
-        IdentityKey.create("hohenheim.instance_stats.link");
 
     private HohenheimStatsFunctions() {
     }
@@ -79,8 +74,8 @@ public final class HohenheimStatsFunctions {
 
     /**
      * Opens the live stats link for an instance and routes every arriving sample to
-     * {@code onSample}. Re-opening on an element that already holds a link is a no-op, so
-     * a remount cannot stack two subscriptions.
+     * {@code onSample}, for as long as {@code owner} is connected; opening again replaces the
+     * link, never stacks one.
      */
     @HawkeyeFunction(
         name = "connect",
@@ -89,7 +84,7 @@ public final class HohenheimStatsFunctions {
         returnType = Void.class,
         returnsReference = false,
         arguments = {
-            @Arg(name = "owner", required = true, type = DominoElement.class, expectsReference = false,
+            @Arg(name = "owner", required = true, type = CustomElement.class, expectsReference = false,
                  description = "The element that owns the link"),
             @Arg(name = "instanceId", required = true, type = Integer.class, expectsReference = false,
                  description = "The instance to watch"),
@@ -98,50 +93,15 @@ public final class HohenheimStatsFunctions {
         }
     )
     public static void connect(RenderContext context,
-                               @Nullable DominoElement owner,
+                               @Nullable CustomElement owner,
                                @Nullable Integer instanceId,
                                @Nullable LambdaReference1<Object, ?> onSample) {
 
         if (!Blast.IS_TEAVM || owner == null || instanceId == null || onSample == null) {
             return;
         }
-        if (owner.getAttachment(LINK_KEY) != null) {
-            return;
-        }
-
-        var link = ChannelClient.shared().open(
-                HohenheimChannels.INSTANCE_STATS,
-                instanceId,
+        ChannelLinks.openWhileConnected(owner, HohenheimChannels.INSTANCE_STATS, instanceId,
                 sample -> onSample.invoke(context, sample));
-
-        owner.setAttachment(LINK_KEY, link);
-    }
-
-    /** Closes the element's stats link; safe to call when none was ever opened. */
-    @HawkeyeFunction(
-        name = "disconnect",
-        namespace = "InstanceStats",
-        description = "Close the live stats channel",
-        returnType = Void.class,
-        returnsReference = false,
-        arguments = {
-            @Arg(name = "owner", required = true, type = DominoElement.class, expectsReference = false,
-                 description = "The element that owns the link")
-        }
-    )
-    public static void disconnect(RenderContext context, @Nullable DominoElement owner) {
-
-        if (!Blast.IS_TEAVM || owner == null) {
-            return;
-        }
-
-        var link = owner.getAttachment(LINK_KEY);
-        if (link == null) {
-            return;
-        }
-
-        owner.setAttachment(LINK_KEY, null);
-        link.close();
     }
 
     /**

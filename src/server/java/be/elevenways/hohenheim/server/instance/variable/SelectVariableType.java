@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance.variable;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.EnumField;
@@ -8,6 +9,8 @@ import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.ListField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -20,7 +23,7 @@ import java.util.Map;
  */
 public final class SelectVariableType implements VariableTypeHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "select");
+    public static final Identifier ID = HohenheimIds.id("select");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final ListField<String> OPTIONS = SETTINGS_SCHEMA.addField(
@@ -44,7 +47,7 @@ public final class SelectVariableType implements VariableTypeHandler {
     public Icon getIcon() { return Icon.of("list"); }
 
     @Override
-    public String getColor() { return "purple"; }
+    public BadgeColor color() { return ColorHue.PURPLE; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }

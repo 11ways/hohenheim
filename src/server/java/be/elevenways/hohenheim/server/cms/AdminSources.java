@@ -1,12 +1,18 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.ResourceVerb;
 import be.elevenways.zenit.cms.server.page.CmsRecordSources;
+import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
 import be.elevenways.zenit.common.data.RecordCreateProvider;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
@@ -15,6 +21,11 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Permission;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
+
+import java.util.Objects;
+
+import java.util.Objects;
 
 /**
  * The admin-gated record sources that need MORE than the zenit-cms-derived default
@@ -29,8 +40,9 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * so the facets must be declared HERE, on the explicit source; the browser registry does
  * not need these entries (registry membership is a server-authoritative question, and the
  * dependent pick rules carry their own mapping). A source whose explicit copy added
- * nothing over the derived default (dns_zone, site_auth_provider) is simply not declared:
- * the derived default IS the source.
+ * nothing over the derived default (dns_zone) is simply not declared: the derived default
+ * IS the source. A model whose admin entry is a PanelResource gets its model-level source from
+ * zenit-cms as well (CmsRecordSources: the entry's gate, search, edit link and inline create).
  */
 public final class AdminSources {
 
@@ -49,19 +61,30 @@ public final class AdminSources {
 
     /** The registration body, callable again so a test can replay it against a fresh registry. */
     static void declare() {
+        Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimPanel.SLUG), "the admin panel");
         // Bans: feeds the active-bans stat tile (rules on `active`) and any bans-created
-        // chart (sortable doubles as the bucketable whitelist for created_at).
-        RecordSourceRegistry.INSTANCE.register(complete(RecordSource.of(BanModel.class)
+        // chart (sortable doubles as the bucketable whitelist for created_at). BanParts is a
+        // panel resource, so this is the model's own source; no inline create (no pick offers
+        // a ban: the manual ban is the entry's quick-add bar).
+        RecordSourceRegistry.INSTANCE.register(admin(RecordSource.of(BanModel.class)
             .project(BanModel.IP, BanModel.SOURCE, BanModel.ACTIVE,
                 BanModel.EXPIRES_AT, BanModel.CREATED_AT)
-            .sortable(BanModel.CREATED_AT), BanModel.class, new BanResource()));
+            .sortable(BanModel.CREATED_AT), BanModel.class).build());
+
+        // Backup targets, for the instance form's target pick: BackupTargetParts is a panel resource, whose one
+        // source is panel-qualified, so the model's own source is this one, creatable through the admin entry's
+        // own create form exactly as the derived default was. Absent with the instance role.
+        if (panel.entryBySlug(BackupTargetParts.SLUG) instanceof PanelResource<?> targets) {
+            RecordSourceRegistry.INSTANCE.register(complete(RecordSource.of(BackupTargetModel.class)
+                .search(BackupTargetModel.NAME), BackupTargetModel.class, panel, targets));
+        }
 
         // Hosts, for the instance form's DEPENDENT host pick: the projection is the rule
         // vocabulary, so runtime and volume_backend MUST be projected -- the resolver
         // (HohenheimPickRules.KindHostRules) narrows on exactly those two.
         RecordSourceRegistry.INSTANCE.register(complete(RecordSource.of(ServerModel.class)
             .project(ServerModel.NAME, ServerModel.RUNTIME, ServerModel.VOLUME_BACKEND)
-            .search(ServerModel.NAME), ServerModel.class, new ServerResource()));
+            .search(ServerModel.NAME), ServerModel.class, panel, panel.entryBySlug(ServerParts.SLUG)));
 
         // Runtime images ("yolks"), for the instance form's dependent image pick: enabled
         // and incus_image are the resolver's rule vocabulary (HohenheimPickRules.RuntimeImageRules).
@@ -72,7 +95,8 @@ public final class AdminSources {
             .subtitle(row -> {
                 Object description = row.get(RuntimeImageModel.DESCRIPTION);
                 return description != null ? String.valueOf(description) : "";
-            }), RuntimeImageModel.class, new RuntimeImageResource()));
+            }), RuntimeImageModel.class, panel, panel.entryBySlug(RuntimeImageParts.SLUG)));
+
     }
 
     /**
@@ -82,16 +106,12 @@ public final class AdminSources {
      */
     private static <M extends Model> @NonNull RecordSource<M> complete(RecordSource.@NonNull Builder<M> builder,
                                                                       @NonNull Class<M> modelClass,
-                                                                      @NonNull RowResource resource) {
-        M model = Models.get(modelClass);
-        Identifier modelId = model.getModelId();
-        String primaryKey = model.getPrimaryKeyField().getName();
-        builder.permission(HohenheimSources.ADMIN_ACCESS)
-            .editUrl((Row row) -> AdminRecordLinks.detailUrl(modelId, String.valueOf(row.get(primaryKey))));
-
-        RecordCreateProvider create = CmsRecordSources.createProviderFor(resource);
+                                                                      @NonNull Panel panel,
+                                                                      @Nullable PanelEntry resource) {
+        admin(builder, modelClass);
+        RecordCreateProvider create = resource != null ? CmsRecordSources.createProviderFor(panel, resource) : null;
         if (create != null) {
-            Permission createPermission = resource.createPermission();
+            Permission createPermission = ResourceVerbs.permission(resource, ResourceVerb.CREATE);
             if (createPermission != null) {
                 builder.creatable(create, createPermission);
             } else {
@@ -99,5 +119,15 @@ public final class AdminSources {
             }
         }
         return builder.build();
+    }
+
+    /** The admin gate and the detail-page edit link. */
+    private static <M extends Model> RecordSource.@NonNull Builder<M> admin(RecordSource.@NonNull Builder<M> builder,
+                                                                            @NonNull Class<M> modelClass) {
+        M model = Models.get(modelClass);
+        Identifier modelId = model.getModelId();
+        String primaryKey = model.getPrimaryKeyField().getName();
+        return builder.permission(HohenheimSources.ADMIN_ACCESS)
+            .editUrl((Row row) -> AdminRecordLinks.detailUrl(modelId, String.valueOf(row.get(primaryKey))));
     }
 }

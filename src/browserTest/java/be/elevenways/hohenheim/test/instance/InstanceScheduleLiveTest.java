@@ -1,54 +1,54 @@
 package be.elevenways.hohenheim.test.instance;
 
-import be.elevenways.hohenheim.model.StoredRows;
-import be.elevenways.hohenheim.test.ApiSupport;
-import be.elevenways.hohenheim.test.Poll;
-import be.elevenways.hohenheim.test.TestDatabases;
-import be.elevenways.hohenheim.test.docker.TestImages;
-import be.elevenways.hohenheim.test.live.LiveLane;
-import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.model.StoredRows;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.instance.InstanceService;
-import be.elevenways.hohenheim.server.schedule.InstanceBackupAction;
-import be.elevenways.hohenheim.server.schedule.InstanceConsoleCommandAction;
-import be.elevenways.hohenheim.server.schedule.InstancePowerAction;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
-import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
-import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
+import be.elevenways.zenit.common.task.record.RecordScheduleRuns;
 import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
 import be.elevenways.zenit.common.task.record.RunStatus;
 import be.elevenways.zenit.common.task.record.StepFailurePolicy;
 import be.elevenways.zenit.common.task.record.StepStatus;
+import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
+import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
-import java.time.Duration;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -151,15 +151,15 @@ class InstanceScheduleLiveTest {
     }
 
     private static void step(int scheduleId, int position, String action, int offsetSeconds,
-                             Map<String, Object> payload) {
+                             Map<String, Object> input) {
         Row row = Models.get(RecordScheduleStepModel.class).createEmptyRow();
         row.set(RecordScheduleStepModel.SCHEDULE_ID, scheduleId);
         row.set(RecordScheduleStepModel.POSITION, position);
         row.set(RecordScheduleStepModel.ACTION, action);
         row.set(RecordScheduleStepModel.OFFSET_SECONDS, offsetSeconds);
         row.set(RecordScheduleStepModel.FAILURE_POLICY, StepFailurePolicy.ABORT.storageKey());
-        if (payload != null) {
-            row.set(RecordScheduleStepModel.PAYLOAD, payload);
+        if (input != null) {
+            row.set(RecordScheduleStepModel.INPUT, input);
         }
         Models.get(RecordScheduleStepModel.class).save(row);
     }
@@ -182,12 +182,40 @@ class InstanceScheduleLiveTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
+    /** Sweeps until the run has a verdict: a step with an offset is a due row, run by a later sweep. */
+    private static Row finished(RecordSchedules recordSchedules, Row run) {
+        if (run == null) {
+            return null;
+        }
+        int runId = run.get(RecordScheduleRunModel.ID);
+        long deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos();
+        Row current = run;
+        while (RunStatus.RUNNING.storageKey().equals(current.get(RecordScheduleRunModel.STATUS))
+                && System.nanoTime() < deadline) {
+            try {
+                Thread.sleep(250);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return current;
+            }
+            recordSchedules.runDue(null);
+            RecordSchedules.awaitRunningSteps(Duration.ofSeconds(60));
+            current = Models.get(RecordScheduleRunModel.class).find().noCache()
+                .where(RecordScheduleRunModel.ID.eq(runId)).first();
+        }
+        return current;
+    }
+
+    /** The run's steps through the one reader, as status and error maps. */
     private static List<Map<String, Object>> stepsOf(Row run) {
-        Object raw = run.get(RecordScheduleRunModel.STEP_RESULTS);
-        Object steps = raw instanceof Map<?, ?> map
-            ? ((Map<String, Object>) map).get(RecordScheduleRunModel.KEY_STEPS) : null;
-        return steps instanceof List<?> list ? (List<Map<String, Object>>) list : List.of();
+        List<Map<String, Object>> outcomes = new ArrayList<>();
+        for (RecordScheduleRuns.Step step : RecordScheduleRuns.steps(run)) {
+            Map<String, Object> outcome = new HashMap<>();
+            outcome.put(RecordScheduleRunModel.KEY_STATUS, step.status() == null ? null : step.status().storageKey());
+            outcome.put(RecordScheduleRunModel.KEY_ERROR, step.error());
+            outcomes.add(outcome);
+        }
+        return outcomes;
     }
 
     // -- the journey ----------------------------------------------------------
@@ -223,12 +251,12 @@ class InstanceScheduleLiveTest {
 
                 // 2. THE Pterodactyl-parity chain: warn on the console, restart 2s later.
                 int chainId = schedule(id, "restart with warning", tenantId);
-                step(chainId, 1, InstanceConsoleCommandAction.ID.toString(), 0,
+                step(chainId, 1, InstanceOperations.CONSOLE_COMMAND.id().toString(), 0,
                     Map.of("command", "echo warned >> /data/marker"));
-                step(chainId, 2, InstancePowerAction.ID.toString(), 2,
-                    Map.of("operation", InstancePowerAction.OP_RESTART));
+                step(chainId, 2, InstanceOperations.RESTART.id().toString(), 2, null);
 
-                Row chainRun = recordSchedules.runNow(chainId);
+                // The restart waits its 2 s offset as a due row; the sweep runs it once due.
+                Row chainRun = finished(recordSchedules, recordSchedules.runNow(chainId));
                 assertThat(chainRun).as("step 2: the chain ran").isNotNull();
                 assertThat(chainRun.get(RecordScheduleRunModel.STATUS))
                     .as("step 2: both steps completed")
@@ -284,7 +312,7 @@ class InstanceScheduleLiveTest {
                     .updateAll();
 
                 int backupScheduleId = schedule(id, "Nightly backup", null);
-                step(backupScheduleId, 1, InstanceBackupAction.ID.toString(), 0, null);
+                step(backupScheduleId, 1, InstanceOperations.BACKUP.id().toString(), 0, null);
 
                 Row backupRun = recordSchedules.runNow(backupScheduleId);
                 assertThat(backupRun.get(RecordScheduleRunModel.STATUS))

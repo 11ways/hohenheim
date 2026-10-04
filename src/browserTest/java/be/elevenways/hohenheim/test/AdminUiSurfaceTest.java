@@ -2,21 +2,25 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
+import be.elevenways.hohenheim.instance.VolumeOperations;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
+import be.elevenways.hohenheim.server.cms.VolumeParts;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelPeer;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
-import be.elevenways.zenit.cms.common.resource.Resource;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -188,10 +192,10 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
 
         // The power verb is not offered AND its invoke answers missing.
         HttpResponse<String> deploy = httpPostForm(
-            "/admin/instances/" + generatedDbInstanceId + "/action/deploy_instance",
+            "/admin/instances/invoke/hohenheim.start_instance?ids=" + generatedDbInstanceId,
             "", sessionToken, csrfToken);
         assertThat(deploy.statusCode())
-            .as("a hidden action's invoke answers 404, the unoffered-slug rule")
+            .as("an operation that does not apply to a generated row answers 404 on the one invoke route")
             .isEqualTo(404);
     }
 
@@ -245,7 +249,8 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
     void volumesDeclareThroughTheFunnelAndTheGuardsHold() throws Exception {
         // Declare via the CMS form: quota entered in MB, stored in bytes.
         HttpResponse<String> create = httpPostForm("/admin/instance-volumes/new",
-            "instance_id=" + workspaceId + "&name=data&container_path=%2Fdata&quota_mb=100",
+            "instance_id=" + workspaceId + "&name=data&container_path=%2Fdata&quota_mb=100&"
+                + PanelResourceCalls.createEnvelope(),
             sessionToken, csrfToken);
         assertThat(create.statusCode()).isIn(302, 303);
         Row declared = Models.get(InstanceVolumeModel.class).find()
@@ -268,8 +273,8 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
             .where(InstanceVolumeModel.INSTANCE_ID.eq(workspaceId))
             .where(InstanceVolumeModel.NAME.eq("home")).first();
         HttpResponse<String> destroyHome = httpPostForm(
-            "/admin/instance-volumes/" + home.get(InstanceVolumeModel.ID)
-                + "/action/destroy_volume",
+            CmsRoutes.invoke("admin", VolumeParts.SLUG, VolumeOperations.DESTROY.id())
+                .with(CmsEndpoints.SUBJECT_PARAM, String.valueOf(home.get(InstanceVolumeModel.ID))).toUrl(),
             confirmed("", "home"), sessionToken, csrfToken);
         assertThat(destroyHome.statusCode()).isIn(302, 303);
         assertThat(Models.get(InstanceVolumeModel.class)
@@ -278,7 +283,8 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
 
         // FALSIFICATION 2: a kind that mounts no volumes cannot be declared onto.
         HttpResponse<String> wrongKind = httpPostForm("/admin/instance-volumes/new",
-            "instance_id=" + dockerId + "&name=data&container_path=%2Fdata",
+            "instance_id=" + dockerId + "&name=data&container_path=%2Fdata&"
+                + PanelResourceCalls.createEnvelope(),
             sessionToken, csrfToken);
         assertThat(wrongKind.statusCode()).isNotIn(302, 303);
         assertThat(Models.get(InstanceVolumeModel.class).find()
@@ -300,7 +306,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
     void siteUpstreamPickIsNarrowedServerSide() throws Exception {
         HttpResponse<String> refused = httpPostForm("/admin/sites/new",
             "name=ui-wave-refused-site&upstream_kind=hohenheim%3Ainstance&instance_id="
-                + generatedDbInstanceId,
+                + generatedDbInstanceId + "&" + PanelResourceCalls.createEnvelope(),
             sessionToken, csrfToken);
         assertThat(refused.statusCode())
             .as("a database engine as an upstream must not create-redirect")
@@ -311,7 +317,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
 
         HttpResponse<String> accepted = httpPostForm("/admin/sites/new",
             "name=ui-wave-exposed-site&upstream_kind=hohenheim%3Ainstance&instance_id="
-                + applicationId,
+                + applicationId + "&" + PanelResourceCalls.createEnvelope(),
             sessionToken, csrfToken);
         assertThat(accepted.statusCode())
             .as("the control: the application is exposable").isIn(302, 303);
@@ -323,12 +329,12 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
             .isEqualTo(applicationId);
     }
 
-    /** The sites list keeps its verbs: toggle inline, edit and delete synthesized. */
+    /** The sites list keeps its verbs: the placed switch, the synthesized edit and the placed delete operation. */
     @Test
     void sitesListOffersItsRowActions() throws Exception {
         String list = adminGet("/admin/sites").body();
-        assertThat(list).as("the toggle verb renders").contains("toggle_site");
-        assertThat(list).as("the synthesized delete renders").contains("data-action-id=\"zenitcms:delete\"");
+        assertThat(list).as("the site switch renders").containsAnyOf("hohenheim:enable_site", "hohenheim:disable_site");
+        assertThat(list).as("the delete operation renders").contains("data-action-id=\"hohenheim:delete_site\"");
     }
 
     /**
@@ -427,7 +433,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
         // 1. Every registered kind answers from its own generatedOnly() declaration.
         List<String> deployable = new ArrayList<>();
         for (InstanceKindInfo entry : InstanceKindRegistry.REGISTRY) {
-            Identifier id = InstanceKindRegistry.REGISTRY.getId(entry);
+            Identifier id = InstanceKindRegistry.REGISTRY.idOf(entry);
             if (id == null) {
                 continue;
             }
@@ -463,13 +469,13 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
         //    offers Deploy, the generated database engine does not.
         assertThat(adminGet("/admin/instances?filter.name=ui-wave-workspace").body())
             .as("step 4: the control -- an authored workspace offers Deploy")
-            .contains("deploy_instance");
+            .contains("start_instance");
         String engine = adminGet("/admin/instances?filter.name=ui-wave-db-engine").body();
         assertThat(engine).as("step 4: the engine row is the one listed")
             .contains("ui-wave-db-engine");
         assertThat(engine)
             .as("step 4: an owner-managed kind is never offered Deploy")
-            .doesNotContain("deploy_instance");
+            .doesNotContain("start_instance");
     }
 
     /**
@@ -477,7 +483,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
      * bar carries none of them.
      *
      * Steps 1-3 are the contract, step 4 the falsification: the demoted peers used to be
-     * HeaderAction.Url buttons in the title bar, and the whole point of declaring them as
+     * header link buttons in the title bar, and the whole point of declaring them as
      * related pages is that no such button can come back.
      */
     @Test
@@ -527,16 +533,16 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
         assertThat(admin).isNotNull();
         assertThat(manage).isNotNull();
 
-        PanelPeer operatorList = admin.peerBySlug("instances");
-        PanelPeer tenantList = manage.peerBySlug("instances");
-        assertThat(operatorList).isInstanceOf(Resource.class);
-        assertThat(tenantList).isInstanceOf(Resource.class);
+        PanelEntry operatorList = admin.entryBySlug("instances");
+        PanelEntry tenantList = manage.entryBySlug("instances");
+        assertThat(operatorList).isInstanceOf(PanelResource.class);
+        assertThat(tenantList).isInstanceOf(PanelResource.class);
 
-        assertThat(((Resource<?>) operatorList).relatedPages())
+        assertThat(((PanelResource<?>) operatorList).relatedPages())
             .as("the operator list names its demoted catalogs").isNotEmpty();
-        assertThat(((Resource<?>) tenantList).relatedPages())
+        assertThat(((PanelResource<?>) tenantList).relatedPages())
             .as("the tenant list names none of them").isEmpty();
-        assertThat(((Resource<?>) manage.peerBySlug("sites")).relatedPages())
+        assertThat(((PanelResource<?>) manage.entryBySlug("sites")).relatedPages())
             .as("nor does the tenant site list").isEmpty();
     }
 
@@ -588,16 +594,16 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
         String inline = page.substring(band, menu);
         String overflow = page.substring(menu);
 
-        // 2. Deploy is the FIRST action rowActions() declares, and the band keeps
+        // 2. Deploy is the FIRST placed operation actions() declares, and the band keeps
         //    declaration order, so it leads without any style saying so -- which is why
         //    it no longer declares ActionStyle.PRIMARY (that only made it render filled,
         //    on every list row, next to the red Delete). The band never grows past its
         //    cap however many actions the resource declares.
         assertThat(inline).as("step 2: the leading verb is inline")
-            .contains("deploy_instance");
+            .contains("start_instance");
         int secondAction = inline.indexOf("data-action-id=",
             inline.indexOf("data-action-id=") + 1);
-        assertThat(inline.indexOf("deploy_instance"))
+        assertThat(inline.indexOf("start_instance"))
             .as("step 2: and it is the FIRST one, on declaration order alone")
             .isLessThan(secondAction < 0 ? inline.length() : secondAction);
         assertThat(countOf(inline, "data-action-id="))

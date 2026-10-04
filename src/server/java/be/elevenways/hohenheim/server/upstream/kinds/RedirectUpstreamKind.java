@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.upstream.kinds;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.server.proxy.RequestPath;
@@ -9,6 +10,8 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import io.undertow.util.Headers;
 
 import java.util.Map;
@@ -20,7 +23,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  */
 public class RedirectUpstreamKind implements UpstreamKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "redirect");
+    public static final Identifier ID = HohenheimIds.id("redirect");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final StringField TARGET_URL = SETTINGS_SCHEMA.addField(
@@ -63,7 +66,7 @@ public class RedirectUpstreamKind implements UpstreamKindHandler {
     public Icon getIcon() { return Icon.of("up-right-from-square"); }
 
     @Override
-    public String getColor() { return "cyan"; }
+    public BadgeColor color() { return ColorHue.CYAN; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }

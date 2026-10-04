@@ -1,14 +1,17 @@
 package be.elevenways.hohenheim.server.backup;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.options.ServerOptions;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.EnumField;
-import be.elevenways.zenit.common.orm.field.RegistryEnumField;
+import be.elevenways.zenit.common.orm.field.RegistryMemberField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -28,7 +31,7 @@ import java.util.Map;
  */
 public final class SshTargetKind implements BackupTargetKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "ssh");
+    public static final Identifier ID = HohenheimIds.id("ssh");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     /**
@@ -37,7 +40,7 @@ public final class SshTargetKind implements BackupTargetKindHandler {
      * backup target at a different machine.
      */
     public static final EnumField SERVER = SETTINGS_SCHEMA.addField(
-        RegistryEnumField.builder("server")
+        RegistryMemberField.builder("server")
             .registry(ServerOptions.REGISTRY)
             .label(HohenheimFormCopy.label("server"))
             .help(HohenheimFormCopy.help("backup_ssh_server"))
@@ -69,7 +72,7 @@ public final class SshTargetKind implements BackupTargetKindHandler {
     public Icon getIcon() { return Icon.of("server"); }
 
     @Override
-    public String getColor() { return "blue"; }
+    public BadgeColor color() { return ColorHue.BLUE; }
 
     @Override
     public Schema getSchema() {

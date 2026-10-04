@@ -16,7 +16,6 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.Objects;
 
 /**
  * THE system-write scope for rows nothing operator-facing authored, shared by every
@@ -89,7 +88,7 @@ public final class GeneratedRows {
         ACTIVE.set(scope);
         try {
             Exception[] failure = new Exception[1];
-            Accountability.runAs(new Accountability(null, null, null, null, origin), () -> {
+            Accountability.runAs(new Accountability(null, null, null, null, null, origin), () -> {
                 try {
                     body.run();
                 } catch (Exception e) {
@@ -208,16 +207,9 @@ public final class GeneratedRows {
      */
     private static boolean changesAttribution(@NonNull Row row, @Nullable Row stored,
                                               @NonNull Columns columns) {
-        return differs(row, stored, columns.by().getName())
-            || differs(row, stored, columns.forModel().getName())
-            || differs(row, stored, columns.forId().getName())
-            || differs(row, stored, columns.at().getName());
-    }
-
-    private static boolean differs(@NonNull Row row, @Nullable Row stored, @NonNull String field) {
-        if (!row.has(field)) {
-            return false;
-        }
-        return !Objects.equals(row.get(field), stored != null ? stored.get(field) : null);
+        return row.changes(columns.by(), stored)
+            || row.changes(columns.forModel(), stored)
+            || row.changes(columns.forId(), stored)
+            || row.changes(columns.at(), stored);
     }
 }

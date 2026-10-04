@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
@@ -9,7 +10,6 @@ import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.host.VolumeOperations;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -192,6 +192,13 @@ public final class InstanceVolumes {
     public static @NonNull Row declare(int instanceId, @NonNull String name,
                                        @NonNull String containerPath, @Nullable Long quotaBytes,
                                        boolean exclusive) {
+        return declare(instanceId, name, containerPath, quotaBytes, exclusive, null);
+    }
+
+    /** The reviewed version guards the service's actual save, including edits made after the operation loaded. */
+    public static @NonNull Row declare(int instanceId, @NonNull String name,
+                                      @NonNull String containerPath, @Nullable Long quotaBytes,
+                                      boolean exclusive, @Nullable Long reviewedVersion) {
         requirePlainName(name);
         InstanceVolumeModel model = Models.get(InstanceVolumeModel.class);
         Row volume = model.find()
@@ -199,6 +206,9 @@ public final class InstanceVolumes {
             .where(InstanceVolumeModel.NAME.eq(name))
             .first();
         if (volume == null) {
+            if (reviewedVersion != null) {
+                throw HohenheimViolations.ofForm("unknown_instance");
+            }
             volume = model.createEmptyRow();
             volume.set(InstanceVolumeModel.INSTANCE_ID, instanceId);
             volume.set(InstanceVolumeModel.NAME, name);
@@ -207,6 +217,12 @@ public final class InstanceVolumes {
         volume.set(InstanceVolumeModel.QUOTA_BYTES, quotaBytes);
         volume.set(InstanceVolumeModel.EXCLUSIVE, exclusive);
         volume.set(InstanceVolumeModel.HOST_PATH, hostPathFor(instanceId, name));
+        if (reviewedVersion != null) {
+            volume.set(InstanceVolumeModel.VERSION, Math.toIntExact(reviewedVersion));
+        }
+        // AIDEV-NOTE: declaration writers do not own observations; a concurrent usage refresh must survive.
+        volume.remove(InstanceVolumeModel.USED_BYTES.getName());
+        volume.remove(InstanceVolumeModel.OBSERVED_AT.getName());
         model.save(volume);
         return volume;
     }
@@ -247,8 +263,7 @@ public final class InstanceVolumes {
             if (containerPath.equals(mounted.getValue())
                     && !hostPath.equals(mounted.getKey())) {
                 throw Violations.ofField(InstanceVolumeModel.CONTAINER_PATH.getName(),
-                    containerPath, Microcopy.of("volume_container_path_conflict")
-                        .withFilter("scope", "violations")
+                    containerPath, HohenheimViolations.text("volume_container_path_conflict")
                         .withArg("path", containerPath)
                         .withArg("first", nameOfHostPath(mounted.getKey()))
                         .withArg("second", nameOfHostPath(hostPath)));
@@ -344,8 +359,7 @@ public final class InstanceVolumes {
         VolumeBackend backend = ServerModel.volumeBackendOf(server);
 
         if (!backend.supportsSnapshot()) {
-            throw Violations.ofForm(Microcopy.of("volume_no_snapshot_support")
-                .withFilter("scope", "violations")
+            throw Violations.ofForm(HohenheimViolations.text("volume_no_snapshot_support")
                 .withArg("name", serverName)
                 .withArg("backend", backend.label()));
         }
@@ -377,9 +391,10 @@ public final class InstanceVolumes {
                 if (used < 0) {
                     continue;
                 }
-                volume.set(InstanceVolumeModel.USED_BYTES, used);
-                volume.set(InstanceVolumeModel.OBSERVED_AT, Now.instant());
-                Models.get(InstanceVolumeModel.class).save(volume);
+                Models.get(InstanceVolumeModel.class).find()
+                    .where(InstanceVolumeModel.ID.eq(volume.get(InstanceVolumeModel.ID)))
+                    .assign(InstanceVolumeModel.USED_BYTES, used)
+                    .assign(InstanceVolumeModel.OBSERVED_AT, Now.instant()).updateAll();
             }
         } catch (RuntimeException unreadable) {
             Blast.log("VOLUMES: could not refresh usage of instance", ownerInstanceId,
@@ -452,8 +467,7 @@ public final class InstanceVolumes {
             .where(InstanceVolumeModel.NAME.eq(name))
             .first();
         if (volume == null) {
-            throw Violations.ofForm(Microcopy.of("volume_unknown")
-                .withFilter("scope", "violations").withArg("name", name));
+            throw Violations.ofForm(HohenheimViolations.text("volume_unknown").withArg("name", name));
         }
         Row server = requireServer(serverName);
         String hostPath = hostPathFor(ownerInstanceId, name);
@@ -497,8 +511,7 @@ public final class InstanceVolumes {
     private static @NonNull Row requireServer(@NonNull String serverName) {
         Row server = Models.get(ServerModel.class).findByName(serverName);
         if (server == null) {
-            throw Violations.ofForm(Microcopy.of("volume_host_unknown")
-                .withFilter("scope", "violations").withArg("name", serverName));
+            throw Violations.ofForm(HohenheimViolations.text("volume_host_unknown").withArg("name", serverName));
         }
         return server;
     }
@@ -516,7 +529,7 @@ public final class InstanceVolumes {
         if (name.isBlank() || name.contains("/") || name.contains("\\")
                 || name.equals(".") || name.equals("..") || name.startsWith("-")) {
             throw Violations.ofField(InstanceVolumeModel.NAME.getName(), name,
-                Microcopy.of("volume_name_invalid").withFilter("scope", "violations")
+                HohenheimViolations.text("volume_name_invalid")
                     .withArg("name", name));
         }
     }

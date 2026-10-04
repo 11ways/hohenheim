@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
@@ -15,7 +16,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.resource.DashboardPanelPeer;
+import be.elevenways.zenit.cms.common.panel.PanelDashboard;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
@@ -45,9 +46,9 @@ import java.util.Map;
  * @author Jelle De Loecker
  * @since 0.2.0
  */
-public final class ManageDashboard extends DashboardPanelPeer {
+public final class ManageDashboard extends PanelDashboard {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "manage_dashboard"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("manage_dashboard"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("dashboard").withFilter("scope", "manage"); }
     @Override public @NonNull String slug() { return "dashboard"; }
     @Override public @NonNull Icon icon() { return Icon.LAYOUT_DASH; }
@@ -118,7 +119,7 @@ public final class ManageDashboard extends DashboardPanelPeer {
                         .withArg("instance", String.valueOf(instance.get(InstanceModel.NAME))),
                     Microcopy.of("blocked_instance_detail").withFilter("scope", "manage_dashboard"),
                     CmsRoutes.subpage(ManagePanel.SLUG, HohenheimSlugs.INSTANCES, id,
-                        InstanceOverviewPage.SLUG)));
+                        InstanceOverview.SLUG)));
             } catch (RuntimeException failed) {
                 // A broken host/kind record must never kill the landing page, but
                 // silence is not visibility either -- the log names the row.

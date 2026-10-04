@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.ManageInstanceBackupResource;
+import be.elevenways.hohenheim.server.cms.InstanceBackupParts;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -114,13 +114,13 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         // 3. Restore is the RESOURCE's declared action, targeting the resource's own
         //    invoke route -- not a form this page invented.
         assertThat(snapshots.body())
-            .withFailMessage("step 3: the snapshot restore action is not relayed from"
-                + " InstanceSnapshotResource")
-            .contains("/admin/instance-snapshots/" + snapshotId + "/action/restore_snapshot");
+            .withFailMessage("step 3: the snapshot restore operation is not relayed from"
+                + " the panel's snapshot entry")
+            .contains("/admin/instance-snapshots/invoke/hohenheim.restore_snapshot?ids=" + snapshotId);
         assertThat(backups.body())
-            .withFailMessage("step 3: the backup restore action is not relayed from"
-                + " InstanceBackupResource")
-            .contains("/admin/instance-backups/" + backupId + "/action/restore_backup");
+            .withFailMessage("step 3: the backup restore operation is not relayed from"
+                + " the panel's backup entry")
+            .contains("/admin/instance-backups/invoke/hohenheim.restore_backup?ids=" + backupId);
 
         // 4. And the row links back into the generated record page, which stays the one
         //    place a row is deleted -- no second delete UI.
@@ -207,7 +207,7 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
 
             // 3. Secondary anchor: the delegated resource offers no row action either, so the
             //    tenant is never shown a button that could only fail.
-            assertThat(new ManageInstanceBackupResource().rowActions())
+            assertThat(InstanceBackupParts.manage().actions())
                 .withFailMessage("step 3: the delegated backup resource declares a row action;"
                     + " restore-to-new is refused underneath it, so a rendered button here"
                     + " could only fail")

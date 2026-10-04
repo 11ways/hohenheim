@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -77,7 +76,7 @@ final class CapabilityScopes {
      */
     static @Nullable Criteria gitProviderScope(@NonNull AccessContext ctx) {
         Model model = Models.get(GitProviderModel.class);
-        if (ctx.isAnonymous()) {
+        if (!ctx.isAccount()) {
             return model.matchNone();
         }
         RecordCapabilityScope scope = capabilityScope(ctx, GitProviderModel.MODEL_ID, MANAGE);
@@ -106,7 +105,7 @@ final class CapabilityScopes {
      */
     static @Nullable Criteria accessListScope(@NonNull AccessContext ctx) {
         Model model = Models.get(AccessListModel.class);
-        if (ctx.isAnonymous()) {
+        if (!ctx.isAccount()) {
             return model.matchNone();
         }
         RecordCapabilityScope scope = capabilityScope(ctx, AccessListModel.MODEL_ID, MANAGE);
@@ -340,6 +339,9 @@ final class CapabilityScopes {
      * {@code out_of_scope} and rolls back a perfectly legitimate allocation. Call it from
      * the funnel that planted the grant, never speculatively;
      * {@link RecordOwners#grantCreatorManage} already does.
+     *
+     * AIDEV-NOTE: core's AccessContext memoizes the same walk beneath this memo (zenit:capability_scopes), so both
+     * are dropped; keeping only this one served the stale "none" from core's.
      */
     static void forgetCapabilityScopes(@NonNull AccessContext ctx) {
         Conduit conduit = ctx.conduit();
@@ -348,19 +350,20 @@ final class CapabilityScopes {
         if (cache != null) {
             cache.clear();
         }
+        ctx.forgetCapabilityScopes();
     }
 
     /**
      * The principal-only face of {@link #capabilityScope(AccessContext, Identifier, String)},
-     * for the conduit-less callers. The installed WebSocket authenticator is the sanctioned
-     * principal-only path and rides the SAME walk, whole-model rows included -- which is why
+     * for the conduit-less callers. A detached context is the sanctioned principal-only path
+     * and rides the SAME walk, whole-model rows included -- which is why
      * this replaced a hand-rolled candidates-plus-confirm loop that could only ever answer
      * with a set.
      */
     static @NonNull RecordCapabilityScope capabilityScope(@NonNull Principal principal,
                                                           @NonNull Identifier model,
                                                           @NonNull String capability) {
-        return Zenit.getWebSocketAuthenticator().capabilityScope(principal, model, capability);
+        return AccessContext.detached(principal).capabilityScope(model, capability);
     }
 
     /**

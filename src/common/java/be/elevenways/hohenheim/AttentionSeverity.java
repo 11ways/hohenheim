@@ -8,7 +8,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  *
  * AIDEV-NOTE: {@link #key()} is what the attention widget stamps as {@code data-severity} and what
  * app.scss's {@code .hh-attention-item[data-severity="..."]} rules match, so the rendered value is a
- * fact ON the member, never a literal in a collector. AttentionSeverityVocabularyTest binds every
+ * fact ON the member, never a literal in a collector. DashboardVocabularyDriftTest binds every
  * member to its stylesheet rule. The keys are the strings the pre-enum collectors wrote, so a test or
  * selector reading {@code data-severity='error'} keeps working.
  *

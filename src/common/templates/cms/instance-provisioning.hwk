@@ -1,12 +1,13 @@
-{#- Provisioning tab on an instance: template, install state, variables (secret
-    VALUES never rendered) and config files. -#}
+{#- Provisioning tab on an instance: template, install state, the variables child list section (secret VALUES
+    never rendered) and config files. -#}
 {% declare title: String %}
 {% declare instanceName: String %}
 {% declare templateName: String = "" %}
 {% declare installState: String %}
 {% declare installStateLabel: Microcopy %}
 {% declare installError: String = "" %}
-{% declare variables: List %}
+{% declare sections: List<ChildListSectionState> %}
+{% declare panelSlug: String = "" %}
 {% declare files: List %}
 {% declare addFileTarget: RouteTarget = null %}
 {% declare canAddFile: Boolean = false %}
@@ -37,31 +38,10 @@
         </pl-card-content>
     </pl-card>
 
-    <h2>{{ t("variables", scope: "template_contents") }}</h2>
-    {% if variables %}
-    <pl-table striped={% true %}>
-        <pl-table-header><pl-table-row>
-            <pl-table-head>{{ t("key", scope: "template_contents") }}</pl-table-head>
-            <pl-table-head>{{ t("value", scope: "instance_provisioning") }}</pl-table-head>
-        </pl-table-row></pl-table-header>
-        <pl-table-body>
-            {% each variables as index, variable %}
-            <pl-table-row>
-                <pl-table-cell><code>{{ variable.get("key") }}</code></pl-table-cell>
-                <pl-table-cell>
-                    {% if variable.get("secret") %}
-                    <pl-badge variant="secondary">{{ t("secret_set", scope: "instance_provisioning") }}</pl-badge>
-                    {% else %}
-                    <code>{{ variable.get("value") }}</code>
-                    {% /if %}
-                </pl-table-cell>
-            </pl-table-row>
-            {% /each %}
-        </pl-table-body>
-    </pl-table>
-    {% else %}
-    <p>{{ t("no_variables", scope: "template_contents") }}</p>
-    {% /if %}
+    {#- The variables: the framework's child list section over the instance-owned values, read-only. -#}
+    {% each sections as section key section.resourceSlug %}
+    {% render "zenitcms:child-list-section" var:section=section var:panelSlug=panelSlug %}
+    {% /each %}
 
     <h2>{{ t("files", scope: "template_contents") }}</h2>
     {% if files %}

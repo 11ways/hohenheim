@@ -2,14 +2,19 @@ package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostKeys;
-import be.elevenways.hohenheim.server.process.BoundedProcess;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
+import be.elevenways.protoblast.server.process.Termination;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import java.nio.charset.StandardCharsets;
+import java.io.InterruptedIOException;
+import java.io.IOException;
+import java.time.Duration;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 /**
  * THE {@code nft} invocation seam of the application: one interface, one production
@@ -95,18 +100,34 @@ public interface NftRunner {
     record Result(int exitCode, @NonNull String stdout, @NonNull String stderr) {
 
         /**
-         * Run {@code argv} through {@link BoundedProcess} and answer in this seam's shape: a
+         * Run {@code argv} through a {@link Subprocess} and answer in this seam's shape: a
          * timeout, a start failure or an interruption is exit -1 with the reason as stderr.
          */
         public static @NonNull Result of(@NonNull List<String> argv, @Nullable String stdin,
                                          long timeoutSeconds) {
-            BoundedProcess.Result run = BoundedProcess.execute(argv, stdin,
-                TimeUnit.SECONDS.toMillis(timeoutSeconds), OUTPUT_CAP_CHARS);
-            if (run.timedOut()) {
-                return new Result(-1, run.stdout(), "timed out after " + timeoutSeconds + "s"
-                    + (run.stderr().isBlank() ? "" : ": " + run.stderr().trim()));
+            Subprocess nft = Subprocess.of(argv)
+                .collectStdout(OUTPUT_CAP_CHARS)
+                .stderrLimit(OUTPUT_CAP_CHARS)
+                .timeout(Duration.ofSeconds(timeoutSeconds))
+                .stopGrace(Duration.ZERO);
+            if (stdin != null) {
+                nft.stdin(stdin.getBytes(StandardCharsets.UTF_8));
             }
-            return new Result(run.exitCode(), run.stdout(), run.stderr());
+            ProcessOutcome run;
+            try {
+                run = nft.runChecked();
+            } catch (InterruptedIOException interrupted) {
+                return new Result(-1, "", "interrupted");
+            } catch (IOException notRun) {
+                return new Result(-1, "", String.valueOf(notRun.getMessage()));
+            }
+            String stdout = run.stdout().text();
+            String stderr = run.stderr().text();
+            if (run.termination() == Termination.TIMED_OUT) {
+                return new Result(-1, stdout, "timed out after " + timeoutSeconds + "s"
+                    + (stderr.isBlank() ? "" : ": " + stderr.trim()));
+            }
+            return new Result(run.exitCode(), stdout, stderr);
         }
 
         public boolean ok() {

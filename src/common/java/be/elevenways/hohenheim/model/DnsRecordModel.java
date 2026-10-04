@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -8,6 +9,7 @@ import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
+import be.elevenways.zenit.common.ui.ColorHue;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -30,7 +32,7 @@ import java.util.Map;
  */
 public class DnsRecordModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "dns_record");
+    public static final Identifier MODEL_ID = HohenheimIds.id("dns_record");
     public static final Schema SCHEMA = new Schema();
 
     public static final String TYPE_A = "A";
@@ -88,15 +90,16 @@ public class DnsRecordModel extends Model {
         .label(HohenheimFormCopy.label("record_name")).help(HohenheimFormCopy.help("record_name")).build());
     public static final EnumField TYPE = SCHEMA.addField(EnumField.builder("type")
         .label(HohenheimFormCopy.label("record_type")).help(HohenheimFormCopy.help("record_type"))
-        .value(TYPE_A, v -> v.displayName("A").label(typeLabel("a")).icon("location-dot").color("blue"))
-        .value(TYPE_AAAA, v -> v.displayName("AAAA").label(typeLabel("aaaa")).icon("location-dot").color("indigo"))
-        .value(TYPE_CNAME, v -> v.displayName("CNAME").label(typeLabel("cname")).icon("link").color("purple"))
-        .value(TYPE_NS, v -> v.displayName("NS").label(typeLabel("ns")).icon("server").color("orange"))
-        .value(TYPE_MX, v -> v.displayName("MX").label(typeLabel("mx")).icon("envelope").color("green")
+        .value(TYPE_A, v -> v.displayName("A").label(typeLabel("a")).icon("location-dot").color(ColorHue.BLUE))
+        .value(TYPE_AAAA, v -> v.displayName("AAAA").label(typeLabel("aaaa")).icon("location-dot")
+            .color(ColorHue.INDIGO))
+        .value(TYPE_CNAME, v -> v.displayName("CNAME").label(typeLabel("cname")).icon("link").color(ColorHue.PURPLE))
+        .value(TYPE_NS, v -> v.displayName("NS").label(typeLabel("ns")).icon("server").color(ColorHue.ORANGE))
+        .value(TYPE_MX, v -> v.displayName("MX").label(typeLabel("mx")).icon("envelope").color(ColorHue.GREEN)
             .schema(MX_DATA_SCHEMA))
-        .value(TYPE_TXT, v -> v.displayName("TXT").label(typeLabel("txt")).icon("quote-left").color("gray"))
-        .value(TYPE_CAA, v -> v.displayName("CAA").label(typeLabel("caa")).icon("certificate").color("teal"))
-        .value(TYPE_SRV, v -> v.displayName("SRV").label(typeLabel("srv")).icon("network-wired").color("pink")
+        .value(TYPE_TXT, v -> v.displayName("TXT").label(typeLabel("txt")).icon("quote-left").color(ColorHue.GRAY))
+        .value(TYPE_CAA, v -> v.displayName("CAA").label(typeLabel("caa")).icon("certificate").color(ColorHue.TEAL))
+        .value(TYPE_SRV, v -> v.displayName("SRV").label(typeLabel("srv")).icon("network-wired").color(ColorHue.PINK)
             .schema(SRV_DATA_SCHEMA))
         .build());
 

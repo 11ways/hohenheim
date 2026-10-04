@@ -1,9 +1,12 @@
 package be.elevenways.hohenheim.test.preview;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.DnsRecordModel;
+import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
+import be.elevenways.hohenheim.preview.PreviewOperations;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -14,6 +17,7 @@ import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
+import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
@@ -22,15 +26,27 @@ import be.elevenways.hohenheim.server.preview.PreviewQuota;
 import be.elevenways.hohenheim.server.quota.OwnerQuota;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.security.SystemPurpose;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
+import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.task.TaskHold;
+import be.elevenways.zenit.server.task.TaskRuntime;
+import be.elevenways.zenit.server.task.TaskService;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
+import be.elevenways.zenit.server.operation.OperationRequest;
+import be.elevenways.zenit.server.task.record.RunRecordSchedulesTask;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -43,6 +59,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
@@ -52,6 +69,8 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * one-shot record schedule the framework sweeper enforces.
  */
 class PreviewMechanicsTest extends HohenheimTestBase {
+    private static final SystemPurpose OTHER_SYSTEM_WORK = SystemPurpose.declare(
+        Identifier.of("hohenheim_test", "other_preview_work"));
 
     private static Integer siteId;
 
@@ -77,6 +96,33 @@ class PreviewMechanicsTest extends HohenheimTestBase {
         siteModel.save(site);
         siteId = site.get(SiteModel.ID);
         applicationId = site.get(SiteModel.INSTANCE_ID);
+    }
+
+    @Test
+    void previewExpirySubjectsAdmitDeclaredSystemWorkOnly() {
+        // 1. Expiry's explicit source admits the system identity but not an anonymous caller.
+        Row preview = newPreviewRow("system-source-ref", "prev-mech--system-source-ref.preview.test", null);
+        String key = String.valueOf(preview.get(PreviewDeploymentModel.ID));
+        Row loaded = OperationRequest.of(PreviewOperations.EXPIRE, ZenitPlacementSurface.SCHEDULE_STEP)
+            .asSystem(RecordSchedules.systemIdentity(1), null).subjectKeys(List.of(key)).loadSubjects().getFirst();
+        assertThat(loaded.get(PreviewDeploymentModel.ID)).as("1: system loads the expiry subject")
+            .isEqualTo(preview.get(PreviewDeploymentModel.ID));
+        assertThatThrownBy(() -> OperationRequest.of(PreviewOperations.EXPIRE, ZenitPlacementSurface.SCHEDULE_STEP)
+            .caller(AccessContext.anonymous()).subjectKeys(List.of(key)).loadSubjects())
+            .as("1: anonymous cannot load the expiry subject").isInstanceOfSatisfying(DomainRefusal.class,
+                refusal -> assertThat(refusal.reason()).isSameAs(ZenitRefusalReason.NOT_FOUND));
+        assertThatThrownBy(() -> OperationRequest.of(PreviewOperations.EXPIRE, ZenitPlacementSurface.SCHEDULE_STEP)
+            .asSystem(ExecutionIdentity.system("record-schedule:1"), null).subjectKeys(List.of(key)).loadSubjects())
+            .as("1: a schedule-shaped label cannot supply its system purpose")
+            .isInstanceOfSatisfying(DomainRefusal.class,
+                refusal -> assertThat(refusal.reason()).isSameAs(ZenitRefusalReason.NOT_FOUND));
+        assertThatThrownBy(() -> OperationRequest.of(PreviewOperations.EXPIRE, ZenitPlacementSurface.SCHEDULE_STEP)
+            .asSystem(ExecutionIdentity.system(OTHER_SYSTEM_WORK, "unrelated system work"), null)
+            .subjectKeys(List.of(key)).loadSubjects())
+            .as("1: a different system purpose cannot load the expiry subject")
+            .isInstanceOfSatisfying(DomainRefusal.class,
+                refusal -> assertThat(refusal.reason()).isSameAs(ZenitRefusalReason.NOT_FOUND));
+        PreviewDeployments.destroy(preview.get(PreviewDeploymentModel.ID), "operator");
     }
 
     @Test
@@ -112,6 +158,84 @@ class PreviewMechanicsTest extends HohenheimTestBase {
         assertThat(PreviewDeployments.hostnameFor("shop", "a".repeat(70), "preview.test"))
             .as("step 4: distinct over-long refs on one site stay distinct")
             .isNotEqualTo(PreviewDeployments.hostnameFor("shop", "b".repeat(70), "preview.test"));
+    }
+
+    /**
+     * An existing preview keeps the hostname it was minted with across a redeploy, whatever slug fold minted it;
+     * only a new preview derives one, under today's fold.
+     */
+    @Test
+    void anExistingPreviewKeepsItsHostnameAcrossARedeploy() throws Exception {
+        String owner = Objects.requireNonNull(
+            OwnerQuota.currentOwnerPack(InstanceModel.MODEL_ID, applicationId), "the application's owner is readable");
+        Integer savedCap = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Previews.MAX_PER_OWNER);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Previews.MAX_PER_OWNER,
+            Math.toIntExact(PreviewQuota.usedBy(owner) + 2));
+        try {
+            // 1. A live preview of a ref with a g-breve and an s-comma, minted under the 2026-09 fold, which dropped
+            //    both letters, with its generated domain row and DNS row.
+            String oldRef = "feature/\u011e\u00fcne\u015f-\u0218ase";
+            String minted = "prev-mech--feature-unes-ase.preview.test";
+            assertThat(PreviewDeployments.hostnameFor("prev-mech", oldRef, "preview.test"))
+                .as("step 1: today's fold would name it differently").isNotEqualTo(minted);
+            Row existing = newPreviewRow(oldRef, minted, null);
+            int existingId = existing.get(PreviewDeploymentModel.ID);
+            var zones = Models.get(DnsZoneModel.class);
+            Row zone = zones.createEmptyRow();
+            zone.set(DnsZoneModel.ORIGIN, "refold-preview.test");
+            zone.set(DnsZoneModel.ENABLED, true);
+            zones.save(zone);
+            GeneratedRows.as(new GeneratedRows.Attribution(PreviewDomains.SOURCE,
+                PreviewDeploymentModel.MODEL_ID.toString(), existingId), () -> {
+                    Row domain = Models.get(SiteDomainModel.class).createEmptyRow();
+                    domain.set(SiteDomainModel.SITE_ID, siteId);
+                    domain.set(SiteDomainModel.HOSTNAME, minted);
+                    domain.set(SiteDomainModel.MATCH_TYPE, "exact");
+                    domain.set(SiteDomainModel.FORCE_SSL, false);
+                    domain.set(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT, true);
+                    Models.get(SiteDomainModel.class).save(domain);
+                    Row record = Models.get(DnsRecordModel.class).createEmptyRow();
+                    record.set(DnsRecordModel.ZONE_ID, zone.get(DnsZoneModel.ID));
+                    record.set(DnsRecordModel.NAME, "prev-mech--feature-unes-ase");
+                    record.set(DnsRecordModel.TYPE, DnsRecordModel.TYPE_A);
+                    record.set(DnsRecordModel.VALUE, "192.0.2.10");
+                    record.set(DnsRecordModel.ENABLED, true);
+                    Models.get(DnsRecordModel.class).save(record);
+                });
+
+            // 2. A redeploy of that ref claims the SAME row and keeps its stored hostname; the build then fails
+            //    (no such repository), which touches neither the domain row nor the DNS row.
+            Row redeployed = PreviewDeployments.queue(applicationId, oldRef, null, null, DeployTrigger.MANUAL);
+            assertThat((Integer) redeployed.get(PreviewDeploymentModel.ID))
+                .as("step 2: the redeploy claims the existing row").isEqualTo(existingId);
+            assertThat((String) redeployed.get(PreviewDeploymentModel.HOSTNAME))
+                .as("step 2: and keeps the hostname it was minted with").isEqualTo(minted);
+            awaitStatus(existingId, PreviewDeploymentModel.STATUS_FAILED);
+            assertThat((String) Models.get(PreviewDeploymentModel.class).findById(existingId)
+                .get(PreviewDeploymentModel.HOSTNAME)).as("step 2: still after the build ran").isEqualTo(minted);
+            assertThat((String) generatedDomainOf(existingId).get(SiteDomainModel.HOSTNAME))
+                .as("step 2: the generated domain row is unchanged").isEqualTo(minted);
+            assertThat(generatedDnsOf(existingId)).as("step 2: and so is the DNS row")
+                .extracting(row -> (String) row.get(DnsRecordModel.NAME))
+                .containsExactly("prev-mech--feature-unes-ase");
+
+            // 3. A NEW preview of such a ref derives its hostname under today's fold.
+            String newRef = "fix/\u011eiri\u0219";
+            Row fresh = PreviewDeployments.queue(applicationId, newRef, null, null, DeployTrigger.MANUAL);
+            int freshId = fresh.get(PreviewDeploymentModel.ID);
+            assertThat((String) fresh.get(PreviewDeploymentModel.HOSTNAME))
+                .as("step 3: a new preview gets the 2026-10 fold's name")
+                .isEqualTo("prev-mech--fix-giris.preview.test")
+                .isEqualTo(PreviewDeployments.hostnameFor("prev-mech", newRef, "preview.test"));
+            awaitStatus(freshId, PreviewDeploymentModel.STATUS_FAILED);
+
+            PreviewDeployments.destroy(existingId, "operator");
+            PreviewDeployments.destroy(freshId, "operator");
+            assertThat(generatedDnsOf(existingId)).as("step 4: teardown reclaims the DNS row").isEmpty();
+            zones.delete(zone.get(DnsZoneModel.ID));
+        } finally {
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Previews.MAX_PER_OWNER, savedCap);
+        }
     }
 
     @Test
@@ -248,33 +372,51 @@ class PreviewMechanicsTest extends HohenheimTestBase {
 
         // 3. The FRAMEWORK sweeper (the exact call RunRecordSchedulesTask makes every
         //    minute) fires the due one-shot; the reached preview is fully reclaimed.
-        new RecordSchedules(Datasources.getDefault()).runDue(null);
+        // AIDEV-NOTE: runDue starts each due step on its own virtual thread and returns. The destroy that step runs
+        // stamps deleted_at BEFORE it deletes the schedule rows, so awaiting deleted_at (as this test once did)
+        // read the half-finished teardown. awaitRunningSteps waits for every step this process started. The ambient
+        // minute sweeper is HELD (and any sweep already running awaited) while this test sweeps: a background sweep
+        // that had claimed the one-shot but not yet counted its step let our runDue skip it and
+        // awaitRunningSteps return before the destroy began. A null service means no background sweeper runs.
+        TaskService taskService = TaskRuntime.service();
+        try (TaskHold sweeperHold = taskService == null ? null
+                : taskService.pause(RunRecordSchedulesTask.ID)) {
+            if (sweeperHold != null) {
+                assertThat(sweeperHold.awaitIdle(Duration.ofSeconds(20)))
+                    .as("step 3: a background sweep already running has ended").isTrue();
+            }
+            new RecordSchedules(Datasources.getDefault()).runDue(null);
+            assertThat(RecordSchedules.awaitRunningSteps(Duration.ofSeconds(20)))
+                .as("step 3: the sweep's steps ended").isTrue();
 
-        Row dead = awaitDestroyed(previewId);
-        assertThat((String) dead.get(PreviewDeploymentModel.STATUS))
-            .as("step 3: expiry is stamped as EXPIRED, visibly")
-            .isEqualTo(PreviewDeploymentModel.STATUS_EXPIRED);
-        assertThat((Object) dead.get(PreviewDeploymentModel.DELETED_AT))
-            .as("the reached preview is soft-deleted").isNotNull();
-        assertThat(generatedDomainOf(previewId))
-            .as("step 3: its generated hostname row is gone").isNull();
-        assertThat(schedulesOf(previewId))
-            .as("step 3: the dead preview left no schedule rows behind").isEmpty();
+            Row dead = StoredRows.byId(Models.get(PreviewDeploymentModel.class), previewId);
+            assertThat((String) dead.get(PreviewDeploymentModel.STATUS))
+                .as("step 3: expiry is stamped as EXPIRED, visibly")
+                .isEqualTo(PreviewDeploymentModel.STATUS_EXPIRED);
+            assertThat((Object) dead.get(PreviewDeploymentModel.DELETED_AT))
+                .as("the reached preview is soft-deleted").isNotNull();
+            assertThat(generatedDomainOf(previewId))
+                .as("step 3: its generated hostname row is gone").isNull();
+            assertThat(schedulesOf(previewId))
+                .as("step 3: the dead preview left no schedule rows behind").isEmpty();
 
-        // 4. The healthy preview survived, its one-shot still armed and unspent.
-        Row alive = StoredRows.byId(Models.get(PreviewDeploymentModel.class), healthyId);
-        assertThat((Object) alive.get(PreviewDeploymentModel.DELETED_AT))
-            .as("step 4: the unexpired preview survived the sweep").isNull();
-        List<Row> armed = schedulesOf(healthyId);
-        assertThat(armed).as("step 4: its one-shot schedule is still armed").hasSize(1);
-        assertThat((Object) armed.get(0).get(RecordScheduleModel.COMPLETED_AT))
-            .as("step 4: and is not spent").isNull();
+            // 4. The healthy preview survived, its one-shot still armed and unspent.
+            Row alive = StoredRows.byId(Models.get(PreviewDeploymentModel.class), healthyId);
+            assertThat((Object) alive.get(PreviewDeploymentModel.DELETED_AT))
+                .as("step 4: the unexpired preview survived the sweep").isNull();
+            List<Row> armed = schedulesOf(healthyId);
+            assertThat(armed).as("step 4: its one-shot schedule is still armed").hasSize(1);
+            assertThat((Object) armed.get(0).get(RecordScheduleModel.COMPLETED_AT))
+                .as("step 4: and is not spent").isNull();
 
-        // 5. A second sweep changes nothing: the healthy deadline is still ahead.
-        new RecordSchedules(Datasources.getDefault()).runDue(null);
-        alive = StoredRows.byId(Models.get(PreviewDeploymentModel.class), healthyId);
-        assertThat((Object) alive.get(PreviewDeploymentModel.DELETED_AT))
-            .as("step 5: still untouched after another sweep").isNull();
+            // 5. A second sweep changes nothing: the healthy deadline is still ahead.
+            new RecordSchedules(Datasources.getDefault()).runDue(null);
+            assertThat(RecordSchedules.awaitRunningSteps(Duration.ofSeconds(20)))
+                .as("step 5: the second sweep's steps ended").isTrue();
+            alive = StoredRows.byId(Models.get(PreviewDeploymentModel.class), healthyId);
+            assertThat((Object) alive.get(PreviewDeploymentModel.DELETED_AT))
+                .as("step 5: still untouched after another sweep").isNull();
+        }
 
         // 6. Operator teardown reclaims the schedule with the record: soft delete
         //    fires no remove hooks, so destroy must (and does) delete it explicitly.
@@ -380,18 +522,6 @@ class PreviewMechanicsTest extends HohenheimTestBase {
             Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Security.RELEASE_QUARANTINE_DAYS, savedWindow);
         }
-    }
-
-    /**
-     * The ambient minute sweeper can win the lease race for a due one-shot; whoever
-     * fires it, the destroyed STATE is what matters -- await it briefly.
-     */
-    private static Row awaitDestroyed(int previewId) {
-        return Poll.value("preview " + previewId + " is soft-deleted", Duration.ofSeconds(10),
-            Duration.ofMillis(100), () -> {
-                Row row = StoredRows.byId(Models.get(PreviewDeploymentModel.class), previewId);
-                return row != null && row.get(PreviewDeploymentModel.DELETED_AT) != null ? row : null;
-            });
     }
 
     private static List<Row> schedulesOf(int previewId) {
@@ -509,6 +639,22 @@ class PreviewMechanicsTest extends HohenheimTestBase {
             expiresAt != null ? expiresAt : Now.instant().plusSeconds(3600));
         model.save(preview);
         return preview;
+    }
+
+    private static List<Row> generatedDnsOf(int previewId) {
+        return Models.get(DnsRecordModel.class).find()
+            .where(DnsRecordModel.GENERATED_BY.eq(PreviewDomains.SOURCE))
+            .where(DnsRecordModel.GENERATED_FOR_MODEL.eq(PreviewDeploymentModel.MODEL_ID.toString()))
+            .where(DnsRecordModel.GENERATED_FOR_ID.eq(previewId))
+            .all();
+    }
+
+    private static void awaitStatus(int previewId, String status) {
+        Poll.until("preview " + previewId + " reaches status " + status, Duration.ofSeconds(20),
+            Duration.ofMillis(100), () -> {
+                Row row = Models.get(PreviewDeploymentModel.class).findById(previewId);
+                return row != null && status.equals(row.get(PreviewDeploymentModel.STATUS));
+            });
     }
 
     private static Row generatedDomainOf(int previewId) {

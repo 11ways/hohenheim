@@ -32,7 +32,7 @@ import java.util.function.BooleanSupplier;
  * the {@link NftRunner} seam and nothing else.
  *
  * AIDEV-NOTE: commands run as ROOT via {@code sudo -n -- nft ...},
- * deliberately NOT through SystemUsers.executionBuilder (which exists to DROP
+ * deliberately NOT through SystemUsers.execution (which exists to DROP
  * privilege and refuses uid 0). nft only works as root; the sudoers rule on
  * the VPS already allows it. On nft 0.9.x (Debian 11) {@code add table/chain/set}
  * are idempotent for identical definitions, but {@code add rule} APPENDS, so

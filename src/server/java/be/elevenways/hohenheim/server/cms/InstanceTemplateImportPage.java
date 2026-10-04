@@ -1,15 +1,17 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.server.instance.CommunityScripts;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.PanelPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -22,21 +24,21 @@ import java.util.Map;
  */
 public final class InstanceTemplateImportPage extends PanelPage {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_templates_import"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_templates_import"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("import").withFilter("scope", "instance_template"); }
     @Override public @NonNull String slug() { return HohenheimSlugs.INSTANCE_TEMPLATES_IMPORT; }
     @Override public @NonNull Icon icon() { return Icon.of("file-import"); }
     @Override public boolean showInNav() { return false; }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request) {
+        Conduit conduit = request.conduit();
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", Microcopy.of("import").withFilter("scope", "instance_template")
             .resolve(conduit.getLocales(), conduit.getMessageResolver()));
         vars.put("catalogApps", CommunityScripts.catalogApps());
         vars.put("catalogRevision", CommunityScripts.catalogRevision());
         vars.put("templatesTarget", CmsRoutes.list(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_TEMPLATES));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/template-import"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.TEMPLATE_IMPORT, vars);
     }
 }

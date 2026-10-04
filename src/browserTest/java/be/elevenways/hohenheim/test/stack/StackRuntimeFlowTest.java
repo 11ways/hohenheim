@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.stack;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.live.LiveLane;
@@ -258,7 +259,7 @@ class StackRuntimeFlowTest {
         // 2. Purge: container and volume both go, the stack reads inactive.
         //    This is the one stack operation that destroys DATA, so it is also the one
         //    that must be answerable: it records who purged, on the stack record.
-        Accountability.runAs(new Accountability("purger", "The purger", null, "junit",
+        Accountability.runAs(new Accountability("purger", null, "The purger", null, "junit",
                 Accountability.ORIGIN_WEB), () -> {
             try {
                 runtime.purgeVolumes(stackId);
@@ -275,7 +276,7 @@ class StackRuntimeFlowTest {
             List<Row> purged = Models.get(ActivityModel.class).find()
                 .where(ActivityModel.MODEL.eq(StackModel.MODEL_ID.toString()))
                 .where(ActivityModel.RECORD_ID.eq(String.valueOf(stackId)))
-                .where(ActivityModel.ACTION.eq(StackRuntime.ACTIVITY_PURGE_ACTION))
+                .where(ActivityModel.ACTION.eq(HohenheimActivityAction.VOLUMES_PURGED.id().toString()))
                 .all();
             assertThat(purged)
                 .withFailMessage("step 2: the volume purge must name who destroyed the"

@@ -1,10 +1,13 @@
 package be.elevenways.hohenheim.server.instance.variable;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -13,7 +16,7 @@ import java.util.Map;
 /** On/off variable; stores "true"/"false". */
 public final class BooleanVariableType implements VariableTypeHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "boolean");
+    public static final Identifier ID = HohenheimIds.id("boolean");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     @Override
@@ -31,7 +34,7 @@ public final class BooleanVariableType implements VariableTypeHandler {
     public Icon getIcon() { return Icon.of("toggle-on"); }
 
     @Override
-    public String getColor() { return "green"; }
+    public BadgeColor color() { return ColorHue.GREEN; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }

@@ -267,7 +267,7 @@ class DatabaseServiceTest {
     /**
      * Record-after against the real daemon: the port the kernel handed the container is
      * in the ledger, attributed to the database record, and released when it is destroyed.
-     * The live half of PortLedgerTest.recordAfterLearnsRelearnsReportsAndReleases -- that
+     * The live half of PortLedgerTest.recordAfterLearnsRelearnsReportsAndReleasesWithTheRecord -- that
      * one proves the logic without a daemon, this one proves the wiring reaches it.
      */
     @Test

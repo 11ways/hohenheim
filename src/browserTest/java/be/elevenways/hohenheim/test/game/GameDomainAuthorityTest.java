@@ -192,11 +192,13 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
         //    refused, and the mapping does NOT exist afterwards.
         AccessContext instancesOnly = contextFor(
             new UserPrincipal(tenantInstancesId, "Tenant Instances"));
-        Throwable refusedDomain = catchThrowable(() ->
-            GameDomains.applyAuthorized(instancesOnly, mappingRow(domainId, backendId, proxyId)));
+        Row deniedDomain = mappingRow(domainId, backendId, proxyId);
+        Throwable refusedDomain = catchThrowable(() -> GameDomains.applyAuthorized(instancesOnly, deniedDomain));
         assertThat(refusedDomain)
             .as("step 1: instance authority alone must not create a mapping")
             .isInstanceOf(Violations.class);
+        assertThat(deniedDomain.get(GameDomainModel.ID))
+            .as("step 1: domain authority is refused before an insert assigns a key").isNull();
         assertThat(mappingCount())
             .as("step 1: the refused mapping was NOT created")
             .isZero();
@@ -205,11 +207,13 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
         //    refused the same way.
         AccessContext domainOnly = contextFor(
             new UserPrincipal(tenantDomainId, "Tenant Domain"));
-        Throwable refusedInstance = catchThrowable(() ->
-            GameDomains.applyAuthorized(domainOnly, mappingRow(domainId, backendId, proxyId)));
+        Row deniedInstance = mappingRow(domainId, backendId, proxyId);
+        Throwable refusedInstance = catchThrowable(() -> GameDomains.applyAuthorized(domainOnly, deniedInstance));
         assertThat(refusedInstance)
             .as("step 2: domain authority alone must not create a mapping")
             .isInstanceOf(Violations.class);
+        assertThat(deniedInstance.get(GameDomainModel.ID))
+            .as("step 2: instance authority is refused before an insert assigns a key").isNull();
         assertThat(mappingCount())
             .as("step 2: the refused mapping was NOT created")
             .isZero();

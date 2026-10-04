@@ -1,10 +1,12 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.RootDiskUsageSupport;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -44,6 +46,11 @@ public class ObserveInstanceDisk extends ScheduledTask {
     /** One instance's outcome; MEASURED only where a driver really answered. */
     public record Observation(int instanceId, boolean measured, long usedBytes,
                               long limitBytes) {
+    }
+
+    @Override
+    public @NonNull Identifier id() {
+        return HohenheimIds.id("observe_instance_disk");
     }
 
     @Override

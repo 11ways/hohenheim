@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.security;
 
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.security.SecurityEventTypes;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -27,10 +29,10 @@ import java.util.Set;
 public enum BanScope {
 
     /** HTTP/TLS traffic to the proxy: the app-level ban cache plus the web nftables sets. */
-    WEB("web", "Web", "globe", "blue"),
+    WEB("web", "Web", "globe", ColorHue.BLUE),
 
     /** SSH traffic only: the ssh nftables sets, and deliberately NOT the proxy's ban cache. */
-    SSH("ssh", "SSH", "terminal", "purple");
+    SSH("ssh", "SSH", "terminal", ColorHue.PURPLE);
 
     /**
      * The event types whose crossing means the actor was attacking SSH, derived from core's
@@ -47,9 +49,9 @@ public enum BanScope {
     private final String token;
     private final String displayName;
     private final String icon;
-    private final String color;
+    private final BadgeColor color;
 
-    BanScope(String token, String displayName, String icon, String color) {
+    BanScope(String token, String displayName, String icon, BadgeColor color) {
         this.token = token;
         this.displayName = displayName;
         this.icon = icon;
@@ -72,7 +74,7 @@ public enum BanScope {
     }
 
     /** The badge color. */
-    public @NonNull String color() {
+    public @NonNull BadgeColor color() {
         return this.color;
     }
 

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server;
 
 import be.elevenways.domino.common.DominoFile;
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
@@ -9,6 +10,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.RouteTarget;
@@ -71,7 +73,7 @@ final class DatabaseHandlers {
                 return HandlerSupport.redirect(CmsRoutes.list(HandlerSupport.ADMIN, "databases"));
             }
             try {
-                ActivityLog.record(Models.get(DatabaseModel.class), name, "backup_downloaded", name);
+                ActivityLog.record(Models.get(DatabaseModel.class), name, HohenheimActivityAction.BACKUP_DOWNLOADED, name);
             } catch (RuntimeException | Error failed) {
                 // Nothing will serve the stream now; its unlinked file is freed on close.
                 try {
@@ -109,7 +111,7 @@ final class DatabaseHandlers {
                 HohenheimFlash.error(conduit, databaseMessage("restore_failed", name));
                 return HandlerSupport.redirect(restorePage);
             }
-            ActivityLog.record(Models.get(DatabaseModel.class), name, ActivityLog.ACTION_RESTORE, name);
+            ActivityLog.record(Models.get(DatabaseModel.class), name, ZenitActivityAction.RESTORE, name);
             HohenheimFlash.success(conduit, databaseMessage("restored", name));
             return HandlerSupport.redirect(restorePage);
         });

@@ -17,11 +17,12 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.cms.common.panel.PanelPeer;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.widget.common.WidgetInstance;
@@ -65,7 +66,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
     @BeforeAll
     static void seed() {
         // The two tenant sites, then the operator's catch-all over both -- the starfleet
-        // shape (site "Starfleet catch-all", domain *.starfleet.life). Grants come LAST:
+        // shape (site "Starfleet catch-all", domain **.starfleet.life). Grants come LAST:
         // the wildcard row is a system write judged owner-scoped, and two sites nobody
         // has been granted yet compare as one operator owner. The conflict scan names the
         // FIRST conflicting row in id order, so the identical row (Bob's) must be older
@@ -75,7 +76,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
         bobSiteId = site("Tenant-iso Bob", "tenant-iso-bob");
         domain(bobSiteId, "b." + ZONE, SiteDomainModel.MATCH_EXACT);
         catchAllSiteId = site("Tenant-iso catch-all", "tenant-iso-catch-all");
-        domain(catchAllSiteId, "*." + ZONE, SiteDomainModel.MATCH_WILDCARD);
+        domain(catchAllSiteId, "**." + ZONE, SiteDomainModel.MATCH_WILDCARD);
 
         aliceId = ApiSupport.user("alice-iso@hohenheim.local", "Alice Iso");
         alice = new UserPrincipal(aliceId, "Alice Iso");
@@ -138,11 +139,11 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
         // 5. And so does a certificate order: the exact hostname is authorized and
         //    attributed to the tenant's OWN row, the wildcard's names refuse NOT_MANAGED
         //    (served by the catch-all, so never NOT_SERVED), an unserved name NOT_SERVED.
-        CertificateAuthority.Requester tenant = CertificateAuthority.Requester.ofSubject(aliceId);
+        CertificateAuthority.Requester tenant = CertificateAuthority.Requester.ofSubject(PrincipalRef.account(aliceId));
         assertThat(CertificateAuthority.authorize(tenant, List.of("a." + ZONE)))
             .as("step 5: the order is authorized and attributed to the deciding row")
             .containsEntry("a." + ZONE, aliceDomainId);
-        for (String foreign : List.of("zzz." + ZONE, "*." + ZONE, "b." + ZONE)) {
+        for (String foreign : List.of("zzz." + ZONE, "**." + ZONE, "b." + ZONE)) {
             assertThatThrownBy(() -> CertificateAuthority.authorize(tenant, List.of(foreign)))
                 .as("step 5: " + foreign + " is served by a site the tenant does not manage")
                 .isInstanceOf(CertificateAuthority.Refused.class)
@@ -200,7 +201,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
             .isEqualTo("route_overlaps_other_site");
         assertThat(adminFree.all().get(0).message().args().asMap())
             .as("step 2: pattern and holding site included")
-            .containsEntry("hostname", "*." + ZONE)
+            .containsEntry("hostname", "**." + ZONE)
             .containsEntry("site", "Tenant-iso catch-all");
 
         // 3. Nothing was written by any of the four refusals.
@@ -282,7 +283,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
     /**
      * AIDEV-NOTE: the role snapshot is process-global, Panel.peers() memoizes per instance
      * and a Panel self-registers in its constructor, so this asserts the panel's peer
-     * DECLARATION for each role set (ManagePanel.declarePeers, which buildPeers returns and
+     * DECLARATION for each role set (ManagePanel.declareEntries, which buildEntries returns and
      * peersBySlug -- the route dispatch -- memoizes) rather than an HTTP round trip against
      * the shared server, exactly like DashboardRoleGatingTest asserts the collectors.
      */
@@ -298,7 +299,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
         try {
             // 1. The full node: every projection is declared and the overview lists instances.
             roles(EnumSet.allOf(Role.class));
-            assertThat(slugsOf(ManagePanel.declarePeers()))
+            assertThat(slugsOf(ManagePanel.declareEntries()))
                 .as("step 1: a full node projects the instance tier")
                 .contains("instances", "databases", "instance-databases");
             assertThat(instanceSources(new ManageDashboard().widgets(ctx)))
@@ -309,7 +310,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
             //    instance, database and instance-database projections have no route, the
             //    overview offers no instance list, and the proxy tier's own peers stay.
             roles(EnumSet.of(Role.PROXY, Role.DNS, Role.FIREWALL));
-            List<String> appliance = slugsOf(ManagePanel.declarePeers());
+            List<String> appliance = slugsOf(ManagePanel.declareEntries());
             assertThat(appliance)
                 .as("step 2: every workload-tier projection is absent with its role off")
                 .doesNotContain("instances", "databases", "instance-databases",
@@ -324,7 +325,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
 
             // 3. DNS off drops the record authoring peer and nothing else of the proxy tier.
             roles(EnumSet.of(Role.PROXY));
-            List<String> proxyOnly = slugsOf(ManagePanel.declarePeers());
+            List<String> proxyOnly = slugsOf(ManagePanel.declareEntries());
             assertThat(proxyOnly)
                 .as("step 3: no DNS authoring without the DNS role")
                 .doesNotContain("dns-records");
@@ -359,9 +360,9 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
 
     // --- Fixture helpers ---------------------------------------------------------------
 
-    private static List<String> slugsOf(List<PanelPeer> peers) {
+    private static List<String> slugsOf(List<PanelEntry> peers) {
         List<String> slugs = new ArrayList<>();
-        for (PanelPeer peer : peers) {
+        for (PanelEntry peer : peers) {
             slugs.add(peer.slug());
         }
         return slugs;

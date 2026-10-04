@@ -3,7 +3,10 @@ package be.elevenways.hohenheim.test.host;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.cms.HostEnrolment;
-import be.elevenways.hohenheim.server.cms.ServerResource;
+import be.elevenways.hohenheim.server.cms.ServerParts;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.ResourceVerb;
+import be.elevenways.zenit.cms.common.resource.RowWriteCall;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -55,13 +58,14 @@ class HostEnrolmentTransactionTest {
     @Test
     void aFailedCeremonyIsRecordedOnTheCommittedHostAndNeverRunsInsideATransaction() {
         Db.run(datasource, () -> {
-            ServerResource resource = new ServerResource();
+            PanelResource<Row> resource = ServerParts.admin();
             AccessContext operator = AccessContext.of(TenantConduits.stubFor(null));
             ServerModel servers = Models.get(ServerModel.class);
 
             // 1. The resource owns its write envelope: the framework must NOT wrap its
             //    create/update in the rollback transaction that used to swallow the row.
-            assertThat(resource.verifiesScopeBeforeMutating())
+            assertThat(resource.writes().ownsWriteEnvelope(ResourceVerb.CREATE)
+                && resource.writes().ownsWriteEnvelope(ResourceVerb.UPDATE))
                 .as("step 1: the host resource runs its mutations bare (two-phase, owned here)")
                 .isTrue();
 
@@ -69,7 +73,8 @@ class HostEnrolmentTransactionTest {
             RecordingCeremony refusing = new RecordingCeremony(false, false);
             Object id;
             try (HostEnrolment.Replacement ignored = HostEnrolment.replaceCeremonyForTesting(refusing)) {
-                id = resource.persistRow(incusHost("enrol-refused", TOKEN), operator);
+                id = resource.writes().rowWriter(ResourceVerb.CREATE).write(
+                    new RowWriteCall(ResourceVerb.CREATE, null, incusHost("enrol-refused", TOKEN), operator));
             }
             Row created = servers.findById(id);
             assertThat(created)
@@ -99,7 +104,8 @@ class HostEnrolmentTransactionTest {
             try (HostEnrolment.Replacement ignored = HostEnrolment.replaceCeremonyForTesting(accepting)) {
                 Map<String, Object> retry = new LinkedHashMap<>();
                 retry.put("incus_trust_token", "fresh-token");
-                resource.updateRow(servers.findById(id), Map.copyOf(retry), operator);
+                resource.writes().rowWriter(ResourceVerb.UPDATE).write(
+                    new RowWriteCall(ResourceVerb.UPDATE, servers.findById(id), Map.copyOf(retry), operator));
             }
             Row retried = servers.findById(id);
             assertThat(accepting.steps)
@@ -116,10 +122,10 @@ class HostEnrolmentTransactionTest {
             RecordingCeremony keyless = new RecordingCeremony(true, true);
             Object dockerId;
             try (HostEnrolment.Replacement ignored = HostEnrolment.replaceCeremonyForTesting(keyless)) {
-                dockerId = resource.persistRow(Map.of(
+                dockerId = resource.writes().rowWriter(ResourceVerb.CREATE).write(new RowWriteCall(ResourceVerb.CREATE, null, Map.of(
                     "name", "enrol-keyless",
                     "runtime", ServerModel.RUNTIME_DOCKER,
-                    "ssh_target", "deploy@keyless.example.test"), operator);
+                    "ssh_target", "deploy@keyless.example.test"), operator));
             }
             Row keylessRow = servers.findById(dockerId);
             assertThat(keylessRow).as("step 4: the docker host row survives a failed mint").isNotNull();
@@ -133,11 +139,11 @@ class HostEnrolmentTransactionTest {
             // 5. A token on a host it can never enrol on is refused BEFORE phase one writes.
             RecordingCeremony untouched = new RecordingCeremony(false, true);
             try (HostEnrolment.Replacement ignored = HostEnrolment.replaceCeremonyForTesting(untouched)) {
-                assertThatThrownBy(() -> resource.persistRow(Map.of(
+                assertThatThrownBy(() -> resource.writes().rowWriter(ResourceVerb.CREATE).write(new RowWriteCall(ResourceVerb.CREATE, null, Map.of(
                         "name", "enrol-wrong-lane",
                         "runtime", ServerModel.RUNTIME_DOCKER,
                         "ssh_target", "deploy@wrong.example.test",
-                        "incus_trust_token", TOKEN), operator))
+                         "incus_trust_token", TOKEN), operator)))
                     .as("step 5: a trust token on a docker host is refused")
                     .isInstanceOf(Violations.class);
             }

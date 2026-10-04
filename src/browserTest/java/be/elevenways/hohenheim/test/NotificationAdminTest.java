@@ -1,7 +1,11 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
+import be.elevenways.hohenheim.server.cms.NotificationChannelParts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.comms.server.CommsDeliveryModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -86,14 +90,16 @@ class NotificationAdminTest extends HohenheimTestBase {
         assertThat(row).isNotNull();
         Integer id = row.get(NotificationChannelModel.ID);
 
-        var test = adminPostForm("/admin/notifications/" + id + "/action/test_channel", "");
-        assertThat(test.statusCode()).isIn(200, 302, 303);
-        // The failure toast rides the SESSION (popped on the next render); the
-        // redirect URL stays clean.
-        String location = test.headers().firstValue("Location").orElse("");
-        assertThat(location).doesNotContain("_flash=");
+        // The test send is the placed operation, posted to the one invoke route with the row as its subject.
+        var test = adminPostForm(CmsRoutes.invoke(HohenheimSlugs.ADMIN, "notifications",
+                NotificationChannelParts.TEST.id())
+            .with(CmsEndpoints.SUBJECT_PARAM, String.valueOf(id)).toUrl(), "");
+        assertThat(test.statusCode()).isIn(302, 303);
+        // The failure toast rides the SESSION; the redirect hands it off to the load of
+        // its own Location, so the test follows that Location to see it.
+        assertThat(landingOf(test)).isEqualTo("/admin/notifications/" + id);
 
-        navigateToApp("/admin/notifications/" + id);
+        navigateToApp(test.headers().firstValue("Location").orElseThrow());
         waitForHydration();
         String content = page.content();
         assertThat(content).contains("Test delivery failed");
@@ -111,6 +117,14 @@ class NotificationAdminTest extends HohenheimTestBase {
         assertThat((String) delivery.get(CommsDeliveryModel.STATUS))
             .as("an inline test delivery must not stay queued for retry")
             .isEqualTo("failed");
+
+        // The operator finds that failure without asking anyone: the delivery log in the system group lists the
+        // row, failed.
+        navigateToApp("/admin/deliveries");
+        waitForHydration();
+        String deliveryRow = page.locator("pl-table-row[data-row-key='" + delivery.get(CommsDeliveryModel.ID) + "']")
+            .innerText();
+        assertThat(deliveryRow).as("the delivery log lists the failed test send").contains("failed");
     }
 
     /**

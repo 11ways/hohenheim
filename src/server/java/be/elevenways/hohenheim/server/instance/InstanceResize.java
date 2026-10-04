@@ -23,7 +23,7 @@ import java.util.function.IntConsumer;
  *
  * AIDEV-NOTE: this exists because the two tiers disagreed, and only one of them was
  * right. Saving a Memory limit on {@code /admin/databases} reprovisions
- * ({@code DatabaseResource.updateRow} -> {@code provisionInBackground} -> recreate), while
+ * (the {@code DatabaseParts} update -> {@code provisionInBackground} -> recreate), while
  * saving the same number on an INSTANCE persisted the setting and MOVED THE BOOKING --
  * both ledgers, host and owner, through the write hooks -- while the daemon kept applying
  * the old {@code HostConfig.Memory} until somebody happened to press Restart. That breaks
@@ -85,7 +85,7 @@ public final class InstanceResize {
      * Recreate the workload once the caller's write has COMMITTED, when the ceilings moved
      * on a live one.
      *
-     * AIDEV-NOTE: afterCommit, for the reason DatabaseResource.updateRow records: the
+     * AIDEV-NOTE: afterCommit, for the reason ProvisionedRecords#resize records: the
      * deploy reads the row on its own connection, so one scheduled from inside the CMS
      * mutation transaction would apply the OLD ceiling it was fired to replace. The deploy
      * itself then rides a virtual thread because it is live daemon work (pull, create,

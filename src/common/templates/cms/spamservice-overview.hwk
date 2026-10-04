@@ -23,7 +23,7 @@
     </pl-card>
     <div class="cms-content-columns">
         <pl-card>
-            <pl-card-header><pl-card-title>{{ t("runtime", scope: "spamservice") }}</pl-card-title><pl-badge variant={% ready ? "success" : "warning" %}>{{ runtime.state }}</pl-badge></pl-card-header>
+            <pl-card-header><pl-card-title>{{ t("runtime", scope: "spamservice") }}</pl-card-title><pl-badge variant={% ready ? BadgeVariant.SUCCESS : BadgeVariant.WARNING %}>{{ runtime.state }}</pl-badge></pl-card-header>
             <pl-card-content><pl-table><pl-table-body>
                 <pl-table-row><pl-table-head>{{ t("configured", scope: "spamservice") }}</pl-table-head><pl-table-cell>{{ runtime.configured }}</pl-table-cell></pl-table-row>
                 <pl-table-row><pl-table-head>{{ t("enabled", scope: "spamservice") }}</pl-table-head><pl-table-cell>{{ runtime.enabled }}</pl-table-cell></pl-table-row>
@@ -33,8 +33,8 @@
             </pl-table-body></pl-table></pl-card-content>
         </pl-card>
         <pl-card>
-            <pl-card-header><pl-card-title>{{ t("readiness", scope: "spamservice") }}</pl-card-title><pl-badge variant={% ready ? "success" : "warning" %}>{% if ready %}{{ t("ready", scope: "spamservice") }}{% else %}{{ t("not_ready", scope: "spamservice") }}{% /if %}</pl-badge></pl-card-header>
-            <pl-card-content><pl-table><pl-table-body>{% each checks as check %}<pl-table-row><pl-table-head>{{ check.name }}</pl-table-head><pl-table-cell><pl-badge variant={% check.ok ? "success" : "destructive" %}>{{ check.ok }}</pl-badge></pl-table-cell></pl-table-row>{% else %}<pl-empty-state title={% t("no_checks", scope: "spamservice") %}></pl-empty-state>{% /each %}</pl-table-body></pl-table></pl-card-content>
+            <pl-card-header><pl-card-title>{{ t("readiness", scope: "spamservice") }}</pl-card-title><pl-badge variant={% ready ? BadgeVariant.SUCCESS : BadgeVariant.WARNING %}>{% if ready %}{{ t("ready", scope: "spamservice") }}{% else %}{{ t("not_ready", scope: "spamservice") }}{% /if %}</pl-badge></pl-card-header>
+            <pl-card-content><pl-table><pl-table-body>{% each checks as check %}<pl-table-row><pl-table-head>{{ check.name }}</pl-table-head><pl-table-cell><pl-badge variant={% check.ok ? BadgeVariant.SUCCESS : BadgeVariant.DESTRUCTIVE %}>{{ check.ok }}</pl-badge></pl-table-cell></pl-table-row>{% else %}<pl-empty-state title={% t("no_checks", scope: "spamservice") %}></pl-empty-state>{% /each %}</pl-table-body></pl-table></pl-card-content>
         </pl-card>
     </div>
     {% if connected %}

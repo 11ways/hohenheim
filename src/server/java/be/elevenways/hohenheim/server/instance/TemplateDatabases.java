@@ -8,10 +8,10 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.database.TenantDatabases;
-import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.text.Slugs;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -135,8 +135,8 @@ public final class TemplateDatabases {
      * prefix, inside the funnel's own label ceiling ("anymedia-wordpress-db").
      */
     public static @NonNull String labelFor(@NonNull String instanceName, @NonNull String prefix) {
-        String suffix = "-" + slug(prefix);
-        String head = slug(instanceName);
+        String suffix = "-" + Slugs.slugify(prefix);
+        String head = Slugs.slugify(instanceName);
         int room = MAX_LABEL_LENGTH - suffix.length();
         if (head.length() > room) {
             head = head.substring(0, room);
@@ -145,12 +145,6 @@ public final class TemplateDatabases {
             }
         }
         return (head.isEmpty() ? "db" : head) + suffix;
-    }
-
-    private static @NonNull String slug(@NonNull String text) {
-        String slug = BlastString.lower(text).replaceAll("[^a-z0-9]+", "-");
-        slug = slug.replaceAll("^-+", "").replaceAll("-+$", "");
-        return slug;
     }
 
     private static @NonNull String prefixOf(@NonNull Row declaration) {

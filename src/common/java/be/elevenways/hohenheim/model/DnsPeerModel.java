@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.util.BlastString;
@@ -9,6 +10,7 @@ import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.hohenheim.net.Hostnames;
+import be.elevenways.zenit.common.ui.ColorHue;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -22,7 +24,7 @@ import java.util.List;
  */
 public class DnsPeerModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "dns_peer");
+    public static final Identifier MODEL_ID = HohenheimIds.id("dns_peer");
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
@@ -46,10 +48,10 @@ public class DnsPeerModel extends Model {
         .defaultValue(TYPE_NAMESERVER)
         .value(TYPE_NAMESERVER, v -> v.displayName("Nameserver")
             .label(Microcopy.of("type_nameserver").withFilter("scope", "dns_peer"))
-            .icon("server").color("gray"))
+            .icon("server").color(ColorHue.GRAY))
         .value(TYPE_HOHENHEIM, v -> v.displayName("Hohenheim")
             .label(Microcopy.of("type_hohenheim").withFilter("scope", "dns_peer"))
-            .icon("handshake").color("blue"))
+            .icon("handshake").color(ColorHue.BLUE))
         .label(HohenheimFormCopy.label("peer_type")).help(HohenheimFormCopy.help("peer_type")).build());
     public static final StringField BASE_URL = SCHEMA.addField(StringField.builder().name("base_url")
         .label(HohenheimFormCopy.label("peer_base_url")).help(HohenheimFormCopy.help("peer_base_url")).build());

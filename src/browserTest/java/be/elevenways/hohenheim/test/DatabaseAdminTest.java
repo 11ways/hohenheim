@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -86,7 +87,17 @@ class DatabaseAdminTest extends HohenheimTestBase {
             assertThat(page.locator(".cms-form-actions pl-button[type='submit']").count())
                 .as("the detail form offers Save, for the resource ceilings")
                 .isEqualTo(1);
-            assertThat(page.locator("form.cms-delete-form pl-button").count()).isEqualTo(1);
+            // The delete is the delete_database operation's record action (inline or in the toolbar's overflow
+            // menu), never a parallel legacy delete form.
+            assertThat(page.locator("form.cms-delete-form").count())
+                .as("no legacy delete form beside the operation").isZero();
+            String delete = "[data-action-id='" + DatabaseParts.DELETE.id() + "']:visible";
+            if (page.locator(delete).count() == 0) {
+                page.locator(".cms-record-toolbar pl-dropdown-menu-trigger pl-button").first().click();
+            }
+            assertThat(page.locator(delete).count())
+                .as("the detail offers the database delete").isPositive();
+            page.keyboard().press("Escape");
             // Everything describing the provisioned container stays frozen. A readonly
             // entry renders a static value and NO named control at all (zenit-forms
             // form/plain.hwk), so the absence of the control IS the freeze -- asserted

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.host;
 
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -15,14 +16,14 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public enum PreflightStatus {
 
-    PASS("pass", "success"),
-    WARN("warn", "warning"),
-    FAIL("fail", "destructive");
+    PASS("pass", BadgeVariant.SUCCESS),
+    WARN("warn", BadgeVariant.WARNING),
+    FAIL("fail", BadgeVariant.DESTRUCTIVE);
 
     private final String token;
-    private final String badgeVariant;
+    private final BadgeVariant badgeVariant;
 
-    PreflightStatus(String token, String badgeVariant) {
+    PreflightStatus(String token, BadgeVariant badgeVariant) {
         this.token = token;
         this.badgeVariant = badgeVariant;
     }
@@ -33,7 +34,7 @@ public enum PreflightStatus {
     }
 
     /** The pl-badge variant this verdict renders as. */
-    public @NonNull String badgeVariant() {
+    public @NonNull BadgeVariant badgeVariant() {
         return this.badgeVariant;
     }
 

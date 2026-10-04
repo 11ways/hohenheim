@@ -1,9 +1,10 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.zenit.cms.common.resource.RecordTab;
+import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.ManageInstanceResource;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.test.ApiSupport;
@@ -12,17 +13,26 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.cms.common.action.RowAction;
-import be.elevenways.zenit.common.flash.FlashEncoding;
-import be.elevenways.zenit.common.flash.FlashLevel;
+import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.text.HtmlEscape;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
+import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.server.cms.InstanceMigratePage;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -215,41 +225,24 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
     }
 
     /**
-     * A refused submit is an ERROR flash NAMING the refusal, never a success toast -- and
+     * A refused submit redraws its form NAMING the refusal, never a success redirect -- and
      * the two refusals it can meet (the same host, an ineligible other host) are told
-     * apart by the name each carries, not by a status code both shapes share.
-     *
-     * The flash is read out of the SESSION rather than off the redirect's landing page:
-     * the session bucket IS what this lane produces, so asserting it keeps the
-     * refusal-vs-success distinction under test independently of the rendering half
-     * (which zenitcms:record-tabs now performs for every app-owned subpage).
+     * apart by the key each carries, not by a status code both shapes share.
      */
     @Test
     void arefusedSubmitSurfacesTheRefusalInsteadOfASuccessToast() throws Exception {
         int localHost = ServerModel.localServerId();
 
-        // 1. The host the workload ALREADY runs on: refused by its own name, as an ERROR.
-        //    A success toast here would carry migrated_toast at level SUCCESS, so the two
-        //    outcomes can no longer look alike to this test.
-        HttpResponse<String> sameHost = adminPostForm(migrateUrl(),
-            "target_server_id=" + localHost);
+        // 1. The host the workload ALREADY runs on: the migrate operation refuses it by its own name, answered on
+        //    the invoke lane as a refusal (never a success redirect), naming why.
+        HttpResponse<String> sameHost = invokeMigrate(localHost);
         assertThat(sameHost.statusCode())
-            .withFailMessage("step 1: the refused submit must answer with the lane's"
-                + " post-redirect-get, never an error page (HTTP %s)", sameHost.statusCode())
-            .isIn(302, 303);
-        FlashEncoding.Decoded sameHostFlash = popFlash();
-        assertThat(sameHostFlash)
-            .withFailMessage("step 1: the refused submit stashed no flash at all -- the"
-                + " operator would see the page reload as if the move had happened")
-            .isNotNull();
-        assertThat(sameHostFlash.level())
-            .withFailMessage("step 1: a refused migration reported level %s -- anything"
-                + " but ERROR reads as a success", sameHostFlash.level())
-            .isEqualTo(FlashLevel.ERROR);
-        assertThat(sameHostFlash.message().key())
-            .withFailMessage("step 1: the flash must NAME the refusal (found '%s')",
-                sameHostFlash.message().key())
-            .isEqualTo("migrate_same_host");
+            .withFailMessage("step 1: the refused move must answer as a refusal, never a success (HTTP %s)",
+                sameHost.statusCode())
+            .isEqualTo(422);
+        assertRedrawnMigrateForm(sameHost, "step 1");
+        assertThat(sameHost.body()).as("step 1: the answer NAMES the refusal by its own key")
+            .contains(refusalText("migrate_same_host", "migrate-subject"));
 
         // 2. A DIFFERENT host, one the survey already called ineligible: the record must
         //    not move. Submitting the current host could never prove that -- "did not
@@ -259,20 +252,12 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
                     && !candidate.eligible()))
             .as("step 2: the stranger host is a genuine OTHER destination, and ineligible")
             .isTrue();
-        HttpResponse<String> other = adminPostForm(migrateUrl(),
-            "target_server_id=" + strangerHostId);
-        assertThat(other.statusCode())
-            .withFailMessage("step 2: the refused submit must answer with the lane's"
-                + " post-redirect-get (HTTP %s)", other.statusCode())
-            .isIn(302, 303);
-        FlashEncoding.Decoded otherFlash = popFlash();
-        assertThat(otherFlash).as("step 2: the second refusal stashed a flash too").isNotNull();
-        assertThat(otherFlash.level())
-            .as("step 2: also as an ERROR").isEqualTo(FlashLevel.ERROR);
-        assertThat(otherFlash.message().key())
-            .withFailMessage("step 2: and named as the ADMISSION refusal, so the operator"
-                + " learns what to fix (found '%s')", otherFlash.message().key())
-            .isEqualTo("host_not_admitted");
+        HttpResponse<String> other = invokeMigrate(strangerHostId);
+        assertThat(other.statusCode()).as("step 2: also refused").isEqualTo(422);
+        assertRedrawnMigrateForm(other, "step 2");
+        assertThat(other.body()).as("step 2: and named as the ADMISSION refusal, so the operator learns what to fix")
+            .contains(refusalText("host_not_admitted", "migrate-stranger"))
+            .doesNotContain(refusalText("migrate_same_host", "migrate-subject"));
 
         // 3. THE STATE: the record still names the host it started on -- a move onto the
         //    stranger would have written its id here.
@@ -295,8 +280,8 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
      * affordance and no migrate ROUTE at all.
      *
      * The counterfactual is structural: put {@code migrate_instance} in
-     * {@link ManageInstanceResource#rowActions()} (or {@code InstanceMigratePage} in its
-     * subpages) and assertions 3 and 4 fail immediately.
+     * {@link InstanceParts#manage()}'s actions (or {@code InstanceMigratePage} in its
+     * tabs) and assertions 3 and 4 fail immediately.
      */
     @Test
     void aDelegatedTenantHasNoMigrateAffordanceAndNoMigrateRoute() throws Exception {
@@ -309,13 +294,16 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
             .as("step 1: and sees the instance they hold manage on")
             .contains("migrate-subject");
 
-        // 2. The delegated resource declares its actions itself; migrate is not among
-        //    them, by construction rather than by a second predicate.
-        assertThat(new ManageInstanceResource().rowActions().stream()
-                .map(RowAction::id).map(Object::toString))
-            .withFailMessage("step 2: the /manage instance resource declares the migrate"
+        // 2. The delegated entry declares its actions and tabs itself; migrate is among
+        //    neither, by construction rather than by a second predicate.
+        assertThat(InstanceParts.manage().actions().stream()
+                .map(PanelAction::id).map(Object::toString))
+            .withFailMessage("step 2: the /manage instance entry declares the migrate"
                 + " action -- placement is an operator authority")
             .noneMatch(id -> id.contains("migrate"));
+        assertThat(InstanceParts.manage().tabs().declared().stream().map(RecordTab::slug))
+            .withFailMessage("step 2: the /manage instance entry declares the migrate tab")
+            .doesNotContain(InstanceMigratePage.SLUG);
 
         // 3. Nothing on the tenant's own record page points at the migrate page.
         HttpResponse<String> record = httpGet("/manage/instances/" + instanceId, tenantSession);
@@ -331,17 +319,19 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
                 .statusCode())
             .withFailMessage("step 4: the tenant can GET the migrate page")
             .isEqualTo(404);
-        assertThat(httpPostForm("/manage/instances/" + instanceId + "/page/migrate",
+        String invoke = CmsRoutes.invoke(HohenheimSlugs.MANAGE, HohenheimSlugs.INSTANCES,
+            InstanceOperations.MIGRATE.id()).with(CmsEndpoints.SUBJECT_PARAM, String.valueOf(instanceId)).toUrl();
+        assertThat(httpPostForm(invoke,
                 "target_server_id=" + strangerHostId, tenantSession, tenantCsrf).statusCode())
             .withFailMessage("step 4: the tenant can POST a migration")
             .isEqualTo(404);
 
         // 5. The tenant is not merely locked out of everything: their own power action is
         //    still declared, so step 2's absence is the migrate decision, not an empty list.
-        assertThat(new ManageInstanceResource().rowActions().stream()
-                .map(RowAction::id).map(Object::toString))
+        assertThat(InstanceParts.manage().actions().stream()
+                .map(PanelAction::id).map(Object::toString))
             .as("step 5: positive anchor -- the delegated surface still offers power")
-            .anyMatch(id -> id.contains("deploy_instance"));
+            .anyMatch(id -> id.contains("start_instance"));
     }
 
     /**
@@ -383,5 +373,33 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
 
     private static String migrateUrl() {
         return "/admin/instances/" + instanceId + "/page/migrate";
+    }
+
+    /**
+     * A refused submit redraws the migrate form it came from, still carrying its tab and the chosen destination, so a
+     * bare error page fails here.
+     */
+    private static void assertRedrawnMigrateForm(HttpResponse<String> response, String step) {
+        assertThat(response.body()).as(step + ": the migrate form is redrawn, still on its tab")
+            .contains("name=\"" + CmsEndpoints.TAB_PARAM.getName() + "\"")
+            .contains("value=\"" + InstanceMigratePage.SLUG + "\"")
+            .contains("name=\"" + InstanceOperations.TARGET_SERVER.getName() + "\"");
+    }
+
+    /** @return a refusal key's shipped English text for this name, as the page escapes it */
+    private static String refusalText(String key, String name) {
+        return HtmlEscape.text(HohenheimViolations.text(key).withArg("name", name)
+            .resolve(LocaleChain.ofTags("en"), new ShippedCatalogs()));
+    }
+
+    /** The no-script submit of the migrate tab's form for one destination: the operation's invoke with the tab. */
+    private HttpResponse<String> invokeMigrate(int target) throws Exception {
+        String path = CmsRoutes.invoke(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES,
+                InstanceOperations.MIGRATE.id())
+            .with(CmsEndpoints.SUBJECT_PARAM, String.valueOf(instanceId)).toUrl();
+        return adminPostForm(path, ApiSupport.form(CmsEndpoints.TAB_PARAM.getName(), InstanceMigratePage.SLUG,
+            InstanceOperations.TARGET_SERVER.getName(), String.valueOf(target),
+            CmsEndpoints.INVOCATION_PARAM.getName(), UUID.randomUUID().toString(),
+            CmsConfirmation.FIELD, CmsConfirmation.PLAIN_PROOF));
     }
 }

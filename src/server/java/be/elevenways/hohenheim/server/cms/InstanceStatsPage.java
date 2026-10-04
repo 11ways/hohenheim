@@ -1,16 +1,18 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimStatsFunctions.Metric;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -29,19 +31,18 @@ import java.util.function.ToDoubleFunction;
  * chart that fills in as soon as the channel link opens, which is the honest rendering of
  * "there is no history because we keep none".
  */
-public final class InstanceStatsPage implements RecordScopedPage<Row> {
+public final class InstanceStatsPage implements RecordTab.Rendered<Row> {
 
     public static final String SLUG = "stats";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_stats_page"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_stats"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("stats").withFilter("scope", "instance"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("chart-line"); }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
+        Conduit conduit = request.conduit();
         Integer instanceId = instance.get(InstanceModel.ID);
         String status = instance.get(InstanceModel.STATUS);
         List<InstanceStats.Sample> history = InstanceStats.history(instanceId);
@@ -67,9 +68,9 @@ public final class InstanceStatsPage implements RecordScopedPage<Row> {
         // enforces no root quota there is deliberately none. Stating both is the point --
         // a live-only page that silently omits the one stored figure reads as "we measure
         // nothing", which is wrong in one direction and right in the other.
-        vars.put("disk", InstanceOverviewPage.diskViewOf(instance));
+        vars.put("disk", InstanceOverview.diskViewOf(instance));
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-stats"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_STATS, vars);
     }
 
     private static @NonNull List<Object> seriesOf(@NonNull List<InstanceStats.Sample> history,

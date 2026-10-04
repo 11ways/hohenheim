@@ -1,17 +1,15 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.quota.ChargedDimension;
 import be.elevenways.hohenheim.server.quota.ChargedModel;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.server.quota.OwnerDimension;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
-
-import java.util.Map;
 
 /**
  * The ROOT disk's charge, into the very same owner disk-GB bucket the attached
@@ -88,7 +86,7 @@ public final class InstanceRootDiskQuota {
         if (!row.has(InstanceModel.SETTINGS.getName())) {
             return;
         }
-        Object raw = settingsOf(row).get(RootDisk.SETTING);
+        Object raw = InstanceModel.settingsOf(row).get(RootDisk.SETTING);
         if (raw == null || (raw instanceof String text && text.isBlank())) {
             // No declaration in this write. That is not automatically "nothing to
             // check": on a row that ALREADY has one, an absent or blank key is a
@@ -96,16 +94,16 @@ public final class InstanceRootDiskQuota {
             requireNoShrink(row, stored);
             return;
         }
-        if (RootDisk.declaredGb(settingsOf(row)) == null) {
+        if (RootDisk.declaredGb(InstanceModel.settingsOf(row)) == null) {
             throw Violations.ofField(RootDisk.SETTING, raw,
-                violation("root_disk_invalid"));
+                HohenheimViolations.text("root_disk_invalid"));
         }
-        String kind = effectiveKind(row, stored);
+        String kind = row.afterWrite(InstanceModel.KIND, stored);
         InstanceKindHandler handler = InstanceKinds.getHandler(kind);
         if (handler == null || handler.getSchema() == null
                 || handler.getSchema().getField(RootDisk.SETTING) == null) {
             throw Violations.ofField(RootDisk.SETTING, raw,
-                violation("root_disk_unsupported").withArg("kind", String.valueOf(kind)));
+                HohenheimViolations.text("root_disk_unsupported").withArg("kind", String.valueOf(kind)));
         }
         requireNoShrink(row, stored);
     }
@@ -131,7 +129,7 @@ public final class InstanceRootDiskQuota {
         int after = effectiveGb(row, stored);
         if (after < before) {
             throw Violations.ofField(RootDisk.SETTING, after,
-                violation("root_disk_shrink").withArg("current", before));
+                HohenheimViolations.text("root_disk_shrink").withArg("current", before));
         }
     }
 
@@ -139,7 +137,7 @@ public final class InstanceRootDiskQuota {
 
     /** The declared root GB of a stored row (0 = none declared). */
     private static int declaredGbOf(@NonNull Row instance) {
-        Integer declared = RootDisk.declaredGb(settingsOf(instance));
+        Integer declared = RootDisk.declaredGb(InstanceModel.settingsOf(instance));
         return declared == null ? 0 : declared;
     }
 
@@ -153,22 +151,5 @@ public final class InstanceRootDiskQuota {
             return declaredGbOf(row);
         }
         return declaredGbOf(stored);
-    }
-
-    private static @Nullable String effectiveKind(@NonNull Row row, @Nullable Row stored) {
-        if (row.has(InstanceModel.KIND.getName()) || stored == null) {
-            return row.get(InstanceModel.KIND);
-        }
-        return stored.get(InstanceModel.KIND);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static @NonNull Map<String, Object> settingsOf(@NonNull Row instance) {
-        return instance.get(InstanceModel.SETTINGS) instanceof Map<?, ?> map
-            ? (Map<String, Object>) map : Map.of();
-    }
-
-    private static Microcopy violation(String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
     }
 }

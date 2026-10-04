@@ -25,6 +25,7 @@ import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.validation.validator.Max;
@@ -297,6 +298,26 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
             .contains("template_import_checksum");
         assertThat(Models.get(InstanceTemplateModel.class).find().count())
             .as("step 4: the tampered import created NOTHING").isEqualTo(before);
+
+        // 4b. An honestly signed document whose file mode is no octal mode: the file model's own rule refuses it
+        //     before anything is written, so no half-imported template is left behind.
+        @SuppressWarnings("unchecked")
+        Map<String, Object> parsed = (Map<String, Object>) Zenit.DRY.parse(document);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> body = (Map<String, Object>) parsed.get("template");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> declaredFile = ((List<Map<String, Object>>) body.get("files")).getFirst();
+        declaredFile.put("mode", "0999");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> checksum = (Map<String, Object>) parsed.get("checksum");
+        checksum.put("value", TemplatePortability.checksumOf(body));
+        String badMode = Zenit.DRY.stringify(parsed);
+        Throwable modeRefusal = catchThrowable(() -> new TemplatePortability().importDocument(badMode, "bad-mode"));
+        assertThat(violationKeys(modeRefusal))
+            .as("step 4b: the non-octal mode is refused by the file rule, on its entry")
+            .contains("mode=file_mode_format");
+        assertThat(Models.get(InstanceTemplateModel.class).find().count())
+            .as("step 4b: the refused import created NOTHING").isEqualTo(before);
 
         // 5. COUNTERFACTUAL (approval): the imported template is NOT selectable for a
         //    non-admin until an operator approves it; the approval stamp flips exactly

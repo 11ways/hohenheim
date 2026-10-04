@@ -1,10 +1,15 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ActivityText;
+import be.elevenways.zenit.common.security.PrincipalRef;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.MessageResolvers;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Accountability;
@@ -50,27 +55,29 @@ public final class HostPostureAcknowledgement {
      */
     public static void record(@NonNull Row server) {
         if (!ServerModel.postureNeedsAcknowledgement(server)) {
-            throw Violations.ofForm(violation("posture_not_acknowledgeable")
+            throw Violations.ofForm(HohenheimViolations.text("posture_not_acknowledgeable")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
         if (ServerModel.postureAcknowledged(server)) {
-            throw Violations.ofForm(violation("posture_already_acknowledged")
+            throw Violations.ofForm(HohenheimViolations.text("posture_already_acknowledged")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
         Accountability who = Accountability.current();
         String actor = who.actor();
-        if (actor == null || actor.isBlank()) {
-            throw Violations.ofForm(violation("posture_acknowledgement_needs_actor")
+        PrincipalRef principal = who.actorReference();
+        if (principal == null || !principal.kind().account() || Accountability.ORIGIN_SYSTEM.equals(who.origin())) {
+            throw Violations.ofForm(HohenheimViolations.text("posture_acknowledgement_needs_actor")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
-        String label = who.actorLabel() != null ? who.actorLabel() : actor;
+        String label = ActivityText.actorName(principal, actor, who.actorLabel(), who.origin())
+            .resolve(LocaleChain.empty(), MessageResolvers.getDefault());
         String posture = server.get(ServerModel.POSTURE);
-        ActivityLog.withAction(ActivityLog.ACTION_UPDATE, ACTIVITY_DETAIL, () -> {
+        ActivityLog.withAction(ZenitActivityAction.UPDATE, ACTIVITY_DETAIL, () -> {
             server.set(ServerModel.ACKNOWLEDGED_POSTURE, posture);
             server.set(ServerModel.ACKNOWLEDGED_WARNING_VERSION,
                 ServerModel.POSTURE_WARNING_VERSION);
             server.set(ServerModel.ACKNOWLEDGED_AT, Now.instant());
-            server.set(ServerModel.ACKNOWLEDGED_BY, actor);
+            ServerModel.ACKNOWLEDGER.write(server, principal);
             server.set(ServerModel.ACKNOWLEDGED_BY_LABEL, label);
             Models.get(ServerModel.class).save(server);
         });
@@ -81,7 +88,4 @@ public final class HostPostureAcknowledgement {
             "actor", actor));
     }
 
-    private static Microcopy violation(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
-    }
 }

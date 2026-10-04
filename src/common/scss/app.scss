@@ -185,22 +185,6 @@
         font-size: var(--pl-font-size-sm);
     }
 
-    /* The domains tab's row actions: edit link and remove form on one line. */
-    .hh-domain-row-actions {
-        white-space: nowrap;
-    }
-
-    .hh-domain-row-actions > * {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--pl-space-xs);
-        vertical-align: middle;
-    }
-
-    .hh-domain-row-actions form {
-        margin: 0;
-    }
-
     // Dashboard attention panel
     .hh-attention-list {
         list-style: none;

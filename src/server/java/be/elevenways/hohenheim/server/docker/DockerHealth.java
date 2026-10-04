@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.docker;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.protoblast.common.Blast;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -75,7 +76,7 @@ public final class DockerHealth {
             }
             recordUnreachable("the daemon did not answer /_ping with OK");
         } catch (Exception e) {
-            recordUnreachable(e.getMessage() != null ? e.getMessage() : e.toString());
+            recordUnreachable(HohenheimViolations.reasonOf(e));
         }
         return status;
     }

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
@@ -7,6 +8,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -36,14 +38,14 @@ final class AccessRuleSummaries {
         return switch (type == null ? "" : type) {
             case AccessRuleModel.TYPE_GROUP -> ruleText(
                 AccessListModel.SATISFY_ALL.equals(
-                    AccessRuleModel.text(data.get(AccessRuleModel.GROUP_SATISFY.getName())))
+                    Texts.trimmedOrNull(data.get(AccessRuleModel.GROUP_SATISFY.getName())))
                     ? "summary_group_all" : "summary_group_any");
             case AccessRuleModel.TYPE_IP_ALLOW, AccessRuleModel.TYPE_IP_DENY -> ruleText("summary_network")
                 .withArg("network", blank(data.get(AccessRuleModel.NETWORK.getName())));
             case AccessRuleModel.TYPE_BASIC_AUTH -> ruleText("summary_basic_auth")
                 .withArg("username", blank(data.get(AccessRuleModel.BASIC_AUTH_USERNAME.getName())));
             case AccessRuleModel.TYPE_AUTH_PROVIDER -> {
-                String permission = AccessRuleModel.text(
+                String permission = Texts.trimmedOrNull(
                     data.get(AccessRuleModel.PROVIDER_REQUIRED_PERMISSION.getName()));
                 Microcopy summary = ruleText(permission == null
                     ? "summary_auth_provider" : "summary_auth_provider_permission")
@@ -84,8 +86,8 @@ final class AccessRuleSummaries {
      */
     static @NonNull EnumBadgeState enabledBadge(boolean enabled) {
         return enabled
-            ? new EnumBadgeState("on", ruleText("state_on"), null, "check", "success", null, true)
-            : new EnumBadgeState("off", ruleText("state_off"), null, "xmark", "secondary", null, true);
+            ? new EnumBadgeState("on", ruleText("state_on"), null, "check", BadgeVariant.SUCCESS, null, true)
+            : new EnumBadgeState("off", ruleText("state_off"), null, "xmark", BadgeVariant.SECONDARY, null, true);
     }
 
     /** The on/off cue of one stored rule row. */

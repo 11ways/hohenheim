@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.edit.EditView;
@@ -11,6 +12,13 @@ import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.security.PrincipalField;
+import be.elevenways.zenit.common.security.PrincipalKinds;
+import be.elevenways.zenit.common.security.PrincipalRef;
+import be.elevenways.zenit.common.ui.BadgeVariant;
+import be.elevenways.zenit.common.ui.ColorHue;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -18,7 +26,7 @@ import java.util.List;
 
 public class CertificateModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "certificate");
+    public static final Identifier MODEL_ID = HohenheimIds.id("certificate");
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #STATUS} value for an active certificate. */
@@ -63,11 +71,11 @@ public class CertificateModel extends Model {
         .help(HohenheimFormCopy.help("cert_nice_name")).build());
     public static final EnumField PROVIDER = SCHEMA.addField(EnumField.builder("provider")
         .value(PROVIDER_LETSENCRYPT, v -> v.displayName("Let's Encrypt")
-            .label(providerLabel(PROVIDER_LETSENCRYPT)).icon("lock").color("green"))
+            .label(providerLabel(PROVIDER_LETSENCRYPT)).icon("lock").color(ColorHue.GREEN))
         .value(PROVIDER_CUSTOM, v -> v.displayName("Custom")
-            .label(providerLabel(PROVIDER_CUSTOM)).icon("file-import").color("blue"))
+            .label(providerLabel(PROVIDER_CUSTOM)).icon("file-import").color(ColorHue.BLUE))
         .value(PROVIDER_ACME_ACCOUNT, v -> v.displayName("ACME account")
-            .label(providerLabel(PROVIDER_ACME_ACCOUNT)).color("gray"))
+            .label(providerLabel(PROVIDER_ACME_ACCOUNT)).color(ColorHue.GRAY))
         .build());
 
     /** The translation token for a certificate provider; the key IS the stored value. */
@@ -88,11 +96,11 @@ public class CertificateModel extends Model {
         .help(HohenheimFormCopy.help("cert_auto_renew")).build());
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_ACTIVE, v -> v.displayName("Active")
-            .label(statusLabel(STATUS_ACTIVE)).icon("circle-check").color("success"))
+            .label(statusLabel(STATUS_ACTIVE)).icon("circle-check").color(BadgeVariant.SUCCESS))
         .value(STATUS_PENDING, v -> v.displayName("Pending")
-            .label(statusLabel(STATUS_PENDING)).icon("clock").color("warning"))
+            .label(statusLabel(STATUS_PENDING)).icon("clock").color(BadgeVariant.WARNING))
         .value(STATUS_ERROR, v -> v.displayName("Error")
-            .label(statusLabel(STATUS_ERROR)).icon("triangle-exclamation").color("destructive"))
+            .label(statusLabel(STATUS_ERROR)).icon("triangle-exclamation").color(BadgeVariant.DESTRUCTIVE))
         .build());
 
     /** The translation token for a certificate status; the key IS the stored value. */
@@ -119,9 +127,9 @@ public class CertificateModel extends Model {
     public static final StringField LETSENCRYPT_EMAIL = SCHEMA.addField(StringField.builder().name("letsencrypt_email").build());
     public static final EnumField CHALLENGE_TYPE = SCHEMA.addField(EnumField.builder("challenge_type")
         .value(CHALLENGE_HTTP, value -> value.displayName("HTTP-01")
-            .label(challengeLabel(CHALLENGE_HTTP)).icon("globe").color("blue"))
+            .label(challengeLabel(CHALLENGE_HTTP)).icon("globe").color(ColorHue.BLUE))
         .value(CHALLENGE_DNS, value -> value.displayName("DNS-01")
-            .label(challengeLabel(CHALLENGE_DNS)).icon("at").color("violet"))
+            .label(challengeLabel(CHALLENGE_DNS)).icon("at").color(ColorHue.VIOLET))
         .label(HohenheimFormCopy.label("cert_challenge_type"))
         .help(HohenheimFormCopy.help("cert_challenge_type"))
         .visibleIn(EditView.EDIT)
@@ -136,20 +144,21 @@ public class CertificateModel extends Model {
         EnumField.builder("dns_publisher")
             .value(DNS_PUBLISHER_MANUAL, v -> v.displayName("Manual")
                 .label(Microcopy.of("manual").withFilter("scope", "dns_publisher"))
-                .icon("pen").color("gray"))
+                .icon("pen").color(ColorHue.GRAY))
             .value(DNS_PUBLISHER_INTERNAL, v -> v.displayName("Internal")
                 .label(Microcopy.of("internal").withFilter("scope", "dns_publisher"))
-                .icon("server").color("green"))
+                .icon("server").color(ColorHue.GREEN))
             .value(DNS_PUBLISHER_COMMAND, v -> v.displayName("Command hook")
                 .label(Microcopy.of("command").withFilter("scope", "dns_publisher"))
-                .icon("terminal").color("blue"))
+                .icon("terminal").color(ColorHue.BLUE))
             .visibleIn(EditView.EDIT)
             .label(HohenheimFormCopy.label("cert_dns_publisher"))
             .help(HohenheimFormCopy.help("cert_dns_publisher")).build());
 
     /**
-     * The user whose authority this certificate was issued under, or null for operator and
-     * unattended orders.
+     * The id of the principal whose authority this certificate was issued under, beside
+     * {@link #REQUESTED_BY_KIND}; null for unattended orders. Read the pair through
+     * {@link #requesterOf}, never the id alone.
      *
      * AIDEV-NOTE: renewal re-runs CertificateAuthority against THIS subject rather than
      * trusting the fact that issuance once succeeded. Without it a certificate ordered by a
@@ -159,6 +168,12 @@ public class CertificateModel extends Model {
      */
     public static final IntegerField REQUESTED_BY_USER_ID = SCHEMA.addField(
         IntegerField.builder().name("requested_by_user_id").build());
+
+    /** The kind of {@link #REQUESTED_BY_USER_ID}'s principal; together they are the certificate's owner. */
+    public static final StringField REQUESTED_BY_KIND = SCHEMA.addField(PrincipalKinds.kindField("requested_by_kind"));
+
+    /** The requester pair: the certificate's owner, re-decided against every renewal sweep. */
+    public static final PrincipalField REQUESTER = PrincipalField.of(REQUESTED_BY_KIND, REQUESTED_BY_USER_ID);
 
     /** Dedup stamp for the expiring-soon alert; a renewal moves expires_on forward, re-arming it. */
     public static final DateTimeField EXPIRY_NOTIFIED_AT = SCHEMA.addField(DateTimeField.builder().name("expiry_notified_at").build());
@@ -195,4 +210,14 @@ public class CertificateModel extends Model {
 
     @Override
     public Schema getSchema() { return SCHEMA; }
+
+    /** @return the stored requester, or null for an unattended order or a pair naming no known principal */
+    public static @Nullable PrincipalRef requesterOf(@NonNull Row certificate) {
+        return REQUESTER.read(certificate);
+    }
+
+    /** Stores {@code requester} in {@link #REQUESTER}, both columns null for an unattended order. */
+    public static void setRequester(@NonNull Row certificate, @Nullable PrincipalRef requester) {
+        REQUESTER.write(certificate, requester);
+    }
 }

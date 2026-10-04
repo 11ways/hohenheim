@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelPeer;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
 import org.junit.jupiter.api.Test;
@@ -32,7 +32,7 @@ class AdminSettingsMountsTest extends HohenheimTestBase {
         //    mount placed right after Hohenheim's own group.
         Panel admin = PanelRegistry.getBySlug(HohenheimSlugs.ADMIN);
         assertThat(admin).as("step 2: the admin panel is registered").isNotNull();
-        PanelPeer peer = admin.peerBySlug(SettingsPage.DEFAULT_SLUG);
+        PanelEntry peer = admin.entryBySlug(SettingsPage.DEFAULT_SLUG);
         assertThat(peer).as("step 2: the standard page, never a subclass").isExactlyInstanceOf(SettingsPage.class);
         assertThat(peer.navGroup()).as("step 2: the settings entry sits in the System group")
             .isSameAs(NavGroup.SYSTEM);

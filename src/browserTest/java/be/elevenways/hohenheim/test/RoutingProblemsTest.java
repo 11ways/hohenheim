@@ -12,7 +12,7 @@ import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -102,7 +102,6 @@ class RoutingProblemsTest {
         denyRule.set(AccessRuleModel.TYPE, AccessRuleModel.TYPE_IP_DENY);
         denyRule.set(AccessRuleModel.DATA, new LinkedHashMap<>(Map.of("network", "203.0.113.0/24")));
         denyRule.set(AccessRuleModel.ENABLED, true);
-        denyRule.set(AccessRuleModel.SORT, 0);
         Models.get(AccessRuleModel.class).save(denyRule);
         Models.get(AccessRuleModel.class).find()
             .where(AccessRuleModel.ID.eq(denyRule.get(AccessRuleModel.ID)))
@@ -201,7 +200,7 @@ class RoutingProblemsTest {
      */
     @Test
     void everyRoutingReasonReadsAsASentenceInBothLocales() {
-        DefaultCatalogLoader catalogs = new DefaultCatalogLoader();
+        ShippedCatalogs catalogs = new ShippedCatalogs();
         List<String> missing = new ArrayList<>();
         for (RoutingProblem.Reason reason : RoutingProblem.Reason.values()) {
             List<AttentionItem> items = new ArrayList<>();

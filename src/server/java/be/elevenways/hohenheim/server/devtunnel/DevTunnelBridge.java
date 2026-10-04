@@ -90,21 +90,7 @@ final class DevTunnelBridge {
 
     /** Whether the connecting socket belongs to this process's own uid. */
     private boolean admits(SocketChannel tcp) {
-        Integer owner;
-        try {
-            if (!(tcp.getRemoteAddress() instanceof InetSocketAddress peer)) {
-                return false;
-            }
-            owner = this.selfUid == null ? null : this.peerOwner.apply(peer.getPort(), this.port);
-        } catch (IOException | RuntimeException unknown) {
-            owner = null;
-        }
-        if (owner != null && owner.equals(this.selfUid)) {
-            return true;
-        }
-        Blast.log("DevTunnelBridge: refused a loopback peer on port", this.port,
-            "owned by uid", owner, "- only this process's uid may reach the dev tunnel");
-        return false;
+        return LoopbackPeers.admits(tcp, this.port, this.peerOwner, this.selfUid, "DevTunnelBridge (the dev tunnel)");
     }
 
     /** Stop accepting; in-flight streams are torn down by the handler. */

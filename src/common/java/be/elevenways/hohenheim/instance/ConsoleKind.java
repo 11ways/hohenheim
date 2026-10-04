@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.validation.Violations;
@@ -127,7 +128,7 @@ public enum ConsoleKind {
         if (kind == null) {
             throw Violations.ofField("settings." + SETTING,
                 String.valueOf(settings == null ? null : settings.get(SETTING)),
-                Microcopy.of("console_kind_unknown").withFilter("scope", "violations")
+                HohenheimViolations.text("console_kind_unknown")
                     .withArg("token", String.valueOf(settings == null ? null : settings.get(SETTING))));
         }
 

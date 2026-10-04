@@ -136,7 +136,7 @@ class PaasApiTest extends HohenheimTestBase {
         keyNarrowA = ApiKeyService.create(tenantAId, PREFIX + "a-narrow",
             List.of("shortlink.*"), null).plaintext();
         // The surface that OWNS the environment editor: a key carrying the panel
-        // permission EnvironmentVariableResource lives behind, and no capability scope
+        // permission EnvironmentParts.variables() lives behind, and no capability scope
         // at all -- the environment lane must answer to the panel, not to instance
         // vocabulary the environment tier has no record capability for.
         keyAdmin = ApiKeyService.create(

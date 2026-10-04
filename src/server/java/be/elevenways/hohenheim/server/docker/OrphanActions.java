@@ -1,9 +1,10 @@
 package be.elevenways.hohenheim.server.docker;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -40,8 +41,6 @@ import java.util.Map;
  */
 public final class OrphanActions {
 
-    /** The activity action one orphan removal is recorded under, on the HOST record. */
-    public static final String ACTIVITY_ACTION = "removed_orphan";
 
     private OrphanActions() {
     }
@@ -104,7 +103,7 @@ public final class OrphanActions {
         }
         deleteFinding(finding);
         ActivityLog.record(Models.get(ServerModel.class), server.get(ServerModel.ID),
-            ACTIVITY_ACTION, kind + " " + name);
+            HohenheimActivityAction.REMOVED_ORPHAN, kind + " " + name);
         Blast.log("DOCKER RECONCILE: operator removed orphaned", kind, name,
             "on", serverName);
     }
@@ -144,8 +143,7 @@ public final class OrphanActions {
     }
 
     private static Violations refusal(String key, String detail) {
-        return Violations.ofForm(Microcopy.of(key)
-            .withFilter("scope", "violations")
+        return Violations.ofForm(HohenheimViolations.text(key)
             .withArg("name", detail));
     }
 }

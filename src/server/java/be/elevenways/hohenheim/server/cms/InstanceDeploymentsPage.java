@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
@@ -16,7 +18,8 @@ import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
@@ -24,6 +27,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.widget.common.data.WidgetBadge;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.http.ReturnTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -52,11 +56,11 @@ import java.util.Map;
  * are the only difference the reader sees -- widening this page rather than growing a
  * second one is what keeps "where do I see my deploy" one answer.
  */
-public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
+public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
 
     public static final String SLUG = "deployments";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_deployments"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_deployments"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("title").withFilter("scope", "deployments"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("rocket"); }
@@ -67,15 +71,15 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
      * repository deploys a bare container and has no history to show.
      */
     @Override
-    public boolean visibleFor(@NonNull Row record) {
+    public boolean visibleFor(@NonNull Row record, @NonNull AccessContext access) {
         return InstanceKinds.isReleaseManaged(record.get(InstanceModel.KIND))
             || WorkspaceBuilds.deploysSource(record);
     }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
+        Conduit conduit = request.conduit();
+        AccessContext accessContext = request.access();
         Integer instanceId = instance.get(InstanceModel.ID);
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", CmsSupport.pageTitle(conduit, "instance_deployments",
@@ -115,7 +119,7 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
         vars.put("timeWording", RelativeTimeWording.resolve(
             conduit.getLocales(), conduit.getMessageResolver()));
 
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-deployments"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_DEPLOYMENTS, vars);
     }
 
     /** The application lane: release operations, the serving commit and the rollback offer. */
@@ -186,7 +190,7 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
     }
 
     /** One history row in the shape both lanes and the shared deploy-detail partial read. */
-    private static @NonNull Map<String, Object> entry(@Nullable Object id, @NonNull EnumField statusField,
+    static @NonNull Map<String, Object> entry(@Nullable Object id, @NonNull EnumField statusField,
                                                      @Nullable Object status, @NonNull String reason,
                                                      @Nullable Object commit, @Nullable Object durationMs,
                                                      @NonNull String failure, @Nullable Instant startedAt,
@@ -194,7 +198,11 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
         Map<String, Object> entry = new HashMap<>();
         entry.put("id", id);
         entry.put("status", orEmpty(status));
-        entry.put("statusVariant", variantOf(statusField, status));
+        // AIDEV-NOTE: forward the shared enum facets so semantic roles and categorical hues survive both lanes.
+        WidgetBadge.Colors colors = WidgetBadge.colorsOf(statusField, status);
+        entry.put("statusVariant", colors.variant());
+        entry.put("statusColorSet", colors.colorSet());
+        entry.put("statusKnown", colors.known());
         entry.put("reason", reason);
         entry.put("commit", shortSha(commit));
         entry.put("duration", durationLabel(durationMs));
@@ -240,22 +248,6 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
         vars.put("webhookUrl", url);
     }
 
-    /**
-     * The badge variant DECLARED on the status enum value itself, for either vocabulary.
-     *
-     * AIDEV-NOTE: read off the field rather than switched on here, so a new status carries
-     * its colour everywhere at once -- and so the two status vocabularies this page renders
-     * (release operations, build operations) need no mapping table between them.
-     * Unknown/blank degrades to secondary, the honest answer for a value the vocabulary
-     * does not contain.
-     */
-    private static String variantOf(@NonNull EnumField field, @Nullable Object status) {
-        EnumField.EnumValue value = status == null
-            ? null : field.getValues().get(String.valueOf(status));
-        String color = value != null ? value.getColor() : null;
-        return color != null ? color : "secondary";
-    }
-
     private static String shortSha(Object sha) {
         String value = sha != null ? String.valueOf(sha) : "";
         return value.length() > 8 ? value.substring(0, 8) : value;
@@ -274,4 +266,5 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
     private static String orEmpty(Object value) {
         return value != null ? String.valueOf(value) : "";
     }
+
 }

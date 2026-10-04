@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
@@ -7,14 +8,11 @@ import be.elevenways.hohenheim.server.source.GitRepository;
 import be.elevenways.hohenheim.server.source.SourceOwnership;
 import be.elevenways.hohenheim.source.GitRefNames;
 import be.elevenways.hohenheim.source.GitSourceSchema;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
-
-import java.util.Map;
 
 /**
  * The instance declarations that must be refused AT THE WRITE, on the form the operator
@@ -49,11 +47,11 @@ public final class InstanceDeclarations {
             if (row == null) {
                 return;
             }
-            Row stored = storedOf(row);
+            Row stored = StoredRows.of(Models.get(InstanceModel.class), row);
             // Only a write that leaves the record LIVE has a declaration to judge: a soft
             // delete of a record that never named an image must not be refused for the
             // very thing it is undoing.
-            if (effectiveDeletedAt(row, stored) != null) {
+            if (row.afterWrite(InstanceModel.DELETED_AT, stored) != null) {
                 return;
             }
             Violations refused = judge(row, stored);
@@ -68,7 +66,7 @@ public final class InstanceDeclarations {
      * thrown at the first one, so a form shows all of them in one pass.
      *
      * AIDEV-NOTE: this is the one judgment; the write hook throws it and the CMS create
-     * lane ({@code InstanceResource.persistRow}) merges it with the placement refusal
+     * lane ({@code InstanceParts.place}) merges it with the placement refusal
      * BEFORE the save, because the hook can only run inside the save and a refusal thrown
      * ahead of it (placement) used to hide every refusal behind it. The save re-judges an
      * already-passing row, which is cheap and keeps the hook the authority.
@@ -101,15 +99,15 @@ public final class InstanceDeclarations {
      */
     private static void requireRuntimeImage(@NonNull Row row, @Nullable Row stored) {
 
-        InstanceKindHandler handler = InstanceKinds.getHandler(effectiveKind(row, stored));
+        InstanceKindHandler handler = InstanceKinds.getHandler(row.afterWrite(InstanceModel.KIND, stored));
 
         if (handler == null || !handler.requiresRuntimeImage()) {
             return;
         }
 
-        if (effectiveImageId(row, stored) == null) {
+        if (row.afterWrite(InstanceModel.RUNTIME_IMAGE_ID, stored) == null) {
             throw Violations.ofField(InstanceModel.RUNTIME_IMAGE_ID.getName(), null,
-                violation("runtime_image_required"));
+                HohenheimViolations.text("runtime_image_required"));
         }
     }
 
@@ -137,18 +135,18 @@ public final class InstanceDeclarations {
         // The branch reaches git's argv whichever lane names the repository (a raw URL or a
         // provider binding); one git would read as an option, or that is no ref at all, is
         // refused where it is typed rather than at the next checkout.
-        Object branch = settingsOf(row).get(GitSourceSchema.BRANCH);
+        Object branch = InstanceModel.settingsOf(row).get(GitSourceSchema.BRANCH);
         String named = branch == null ? "" : branch.toString().trim();
         if (!named.isEmpty() && !GitRefNames.isValid(named)) {
             throw Violations.ofField(GitSourceSchema.BRANCH, named,
-                violation("source_branch_invalid"));
+                HohenheimViolations.text("source_branch_invalid"));
         }
 
         // The build command runs in this directory under the checkout; one that climbs out
         // is refused where it is typed, and again where the build runs.
-        SourceBuildDetail.requireContainedDirectory(settingsOf(row));
+        SourceBuildDetail.requireContainedDirectory(InstanceModel.settingsOf(row));
 
-        Object declared = settingsOf(row).get(GitSourceSchema.REPOSITORY_URL);
+        Object declared = InstanceModel.settingsOf(row).get(GitSourceSchema.REPOSITORY_URL);
         String url = declared == null ? "" : declared.toString().trim();
 
         if (url.isEmpty()) {
@@ -158,13 +156,13 @@ public final class InstanceDeclarations {
         // A credentialed value is never echoed back: it is the secret this refusal is about.
         if (GitRepository.embeddedCredential(url) != null) {
             throw Violations.ofField(GitSourceSchema.REPOSITORY_URL, null,
-                violation("repository_url_credential"));
+                HohenheimViolations.text("repository_url_credential"));
         }
 
         // A malformed one is only a typo, and the operator corrects it in place.
         if (!GitRepository.isSupportedCloneUrl(url)) {
             throw Violations.ofField(GitSourceSchema.REPOSITORY_URL, url,
-                violation("repository_url_invalid"));
+                HohenheimViolations.text("repository_url_invalid"));
         }
 
         // AIDEV-NOTE: a LOCAL source (a path or file:// URL on the controller) is an operator
@@ -174,56 +172,13 @@ public final class InstanceDeclarations {
         // granted to a tenant later must lose the reach then, not at its next edit.
         if (!GitRepository.isRemoteCloneUrl(url)) {
             Integer id = row.get(InstanceModel.ID);
+            // Ownership only: the mark this write leaves is OperatorTrustedWrites' to stamp, before this hook runs.
             boolean operatorOwned = !TenantWrites.isTenantOriginated()
-                && (id == null || SourceOwnership.localSourcesAllowed(InstanceModel.MODEL_ID, id));
+                && (id == null || SourceOwnership.isOperatorOwned(InstanceModel.MODEL_ID, id));
             if (!operatorOwned) {
                 throw Violations.ofField(GitSourceSchema.REPOSITORY_URL, url,
-                    violation("repository_url_local_refused"));
+                    HohenheimViolations.text("repository_url_local_refused"));
             }
         }
-    }
-
-    private static @Nullable String effectiveKind(@NonNull Row row, @Nullable Row stored) {
-        if (row.has(InstanceModel.KIND.getName()) || stored == null) {
-            return row.get(InstanceModel.KIND);
-        }
-        return stored.get(InstanceModel.KIND);
-    }
-
-    /**
-     * The image the write will END UP naming: a partial CMS update carries only the
-     * changed keys, so reading the staged row alone would see an untouched edit as a
-     * cleared image (the effectiveGb idiom, InstanceRootDiskQuota).
-     */
-    private static @Nullable Integer effectiveImageId(@NonNull Row row, @Nullable Row stored) {
-        if (row.has(InstanceModel.RUNTIME_IMAGE_ID.getName()) || stored == null) {
-            return row.get(InstanceModel.RUNTIME_IMAGE_ID);
-        }
-        return stored.get(InstanceModel.RUNTIME_IMAGE_ID);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static @NonNull Map<String, Object> settingsOf(@NonNull Row instance) {
-        return instance.get(InstanceModel.SETTINGS) instanceof Map<?, ?> map
-            ? (Map<String, Object>) map : Map.of();
-    }
-
-    private static @Nullable Object effectiveDeletedAt(@NonNull Row row, @Nullable Row stored) {
-        if (row.has(InstanceModel.DELETED_AT.getName())) {
-            return row.get(InstanceModel.DELETED_AT.getName());
-        }
-        return stored != null ? stored.get(InstanceModel.DELETED_AT) : null;
-    }
-
-    private static @Nullable Row storedOf(@NonNull Row row) {
-        if (!row.has(InstanceModel.ID.getName()) || row.get(InstanceModel.ID) == null) {
-            return null;
-        }
-        // Trashed included: a re-save of a trashed record must still read as trashed.
-        return StoredRows.byId(Models.get(InstanceModel.class), row.get(InstanceModel.ID));
-    }
-
-    private static @NonNull Microcopy violation(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
     }
 }

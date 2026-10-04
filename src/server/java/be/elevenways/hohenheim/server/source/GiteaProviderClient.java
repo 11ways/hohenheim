@@ -1,13 +1,11 @@
 package be.elevenways.hohenheim.server.source;
 
-import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -74,15 +72,7 @@ public class GiteaProviderClient extends ApiProviderClient {
     public @NonNull List<String> listBranches(@NonNull String repository) throws IOException {
         Object parsed = getJson(this.apiBase + "/repos/" + repoPath(repository)
             + "/branches?page=1&limit=100", requireToken());
-        List<String> branches = new ArrayList<>();
-        if (parsed instanceof List<?> list) {
-            for (Object entry : list) {
-                if (entry instanceof Map<?, ?> branch && branch.get("name") != null) {
-                    branches.add(String.valueOf(branch.get("name")));
-                }
-            }
-        }
-        return branches;
+        return branchNames(parsed);
     }
 
     @Override
@@ -100,19 +90,12 @@ public class GiteaProviderClient extends ApiProviderClient {
                              @NonNull StatusState state, @NonNull String context,
                              @NonNull String description, @Nullable String targetUrl)
             throws IOException {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("state", switch (state) {
+        String stateToken = switch (state) {
             case PENDING -> "pending";
             case SUCCESS -> "success";
             case FAILURE -> "failure";
-        });
-        body.put("context", context);
-        body.put("description", truncate(description, 140));
-        if (targetUrl != null && !targetUrl.isBlank()) {
-            body.put("target_url", targetUrl);
-        }
-        postJson(this.apiBase + "/repos/" + repoPath(repository) + "/statuses/" + commitSha,
-            requireToken(), Json.stringify(body));
+        };
+        postStatus(this.apiBase + "/repos/" + repoPath(repository) + "/statuses/" + commitSha, requireToken(), stateToken, context, description, targetUrl);
     }
 
     private @NonNull String requireToken() throws IOException {

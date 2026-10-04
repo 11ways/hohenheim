@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -10,7 +11,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
 
 /** Durable upload receipt; successful rows also own immutable artifact source history. */
 public class ArtifactOperationModel extends Model {
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "artifact_operation");
+    public static final Identifier MODEL_ID = HohenheimIds.id("artifact_operation");
     public static final Schema SCHEMA = new Schema();
     public static final String PENDING = "pending";
     public static final String RUNNING = "running";

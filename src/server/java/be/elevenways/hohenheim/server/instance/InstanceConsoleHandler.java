@@ -1,8 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.websocket.WebSocketHandler;
 import be.elevenways.zenit.common.websocket.WebSocketSession;
@@ -38,11 +37,8 @@ public final class InstanceConsoleHandler implements WebSocketHandler {
     @Override
     public void onOpen() {
         // requiresLogin already refused anonymous handshakes with 401; the per-record
-        // console capability needs the route param, so it runs here. 1008 = policy.
-        Principal principal = this.session.getPrincipal();
-        if (principal == null || this.instanceId == null
-                || !HohenheimAccess.hasInstanceCapability(
-                    principal, this.instanceId, HohenheimAccess.CONSOLE)) {
+        // admission needs the route param, so it runs here. 1008 = policy.
+        if (!this.admitted()) {
             this.active = false;
             this.session.close(1008, "forbidden");
             return;
@@ -72,13 +68,23 @@ public final class InstanceConsoleHandler implements WebSocketHandler {
             interactive ? "(interactive)" : "(plain)");
     }
 
-    /** Mid-session re-check of the console capability (revoked = 1008 by the core). */
+    /** Mid-session re-check of the admission (revoked = 1008 by the core). */
     @Override
     public boolean revalidate() {
-        Principal principal = this.session.getPrincipal();
-        return principal != null && this.instanceId != null
-            && HohenheimAccess.hasInstanceCapability(
-                principal, this.instanceId, HohenheimAccess.CONSOLE);
+        return this.admitted();
+    }
+
+    /**
+     * Whether the console operation is offered to this socket's principal on its instance: the operation's own gate,
+     * applicability and authorization, so the socket admits exactly whom the console form does.
+     *
+     * AIDEV-NOTE: the socket is a console SURFACE, and its own capability check let an admin (or a hand-granted
+     * delegate) type raw input into a product-generated instance's TTY that every placed surface refuses (review 8
+     * D01). Never check the capability here again beside the operation: ask the operation.
+     */
+    private boolean admitted() {
+        return InstanceOperationHandlers.offered(InstanceOperations.CONSOLE_COMMAND, this.session.getPrincipal(),
+            this.instanceId);
     }
 
     /**

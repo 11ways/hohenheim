@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.instance.InstanceInstalls;
+import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
@@ -174,7 +175,8 @@ class InstanceTemplateInstallLiveTest {
                 // 6. Reinstall under PRESERVE: the volume's data survives, the script
                 //    appends a second line.
                 service.stop(id);
-                new InstanceInstalls().reinstall(id);
+                InstanceOperationLock.production().exclusive(id, InstanceOperationLock.Contention.QUEUE,
+                    () -> new InstanceInstalls().reinstall(id));
                 assertThat(service.deploy(id).state())
                     .as("step 6: redeploy after preserve-reinstall runs")
                     .isEqualTo(ContainerState.RUNNING);
@@ -188,7 +190,8 @@ class InstanceTemplateInstallLiveTest {
                     InstanceTemplateModel.REINSTALL_CLEAR);
                 Models.get(InstanceTemplateModel.class).save(template);
                 service.stop(id);
-                new InstanceInstalls().reinstall(id);
+                InstanceOperationLock.production().exclusive(id, InstanceOperationLock.Contention.QUEUE,
+                    () -> new InstanceInstalls().reinstall(id));
                 assertThat(service.deploy(id).state())
                     .as("step 7: redeploy after clear-reinstall runs")
                     .isEqualTo(ContainerState.RUNNING);

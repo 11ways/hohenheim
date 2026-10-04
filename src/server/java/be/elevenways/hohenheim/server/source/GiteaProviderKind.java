@@ -1,10 +1,13 @@
 package be.elevenways.hohenheim.server.source;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -16,7 +19,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public final class GiteaProviderKind implements GitProviderKind {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "gitea");
+    public static final Identifier ID = HohenheimIds.id("gitea");
 
     @Override public @NonNull Identifier typeId() { return ID; }
 
@@ -39,7 +42,7 @@ public final class GiteaProviderKind implements GitProviderKind {
      */
     @Override public Icon getIcon() { return Icon.of("git-alt"); }
 
-    @Override public String getColor() { return "success"; }
+    @Override public BadgeColor color() { return BadgeVariant.SUCCESS; }
 
     @Override public Schema getSchema() { return null; }
 

@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.net.Hostnames;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -12,13 +14,14 @@ import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import java.util.List;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.ui.ColorHue;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import be.elevenways.zenit.common.validation.Violations;
 
 public class SiteDomainModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "site_domain");
+    public static final Identifier MODEL_ID = HohenheimIds.id("site_domain");
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #MATCH_TYPE} value for an exact hostname match. */
@@ -45,13 +48,13 @@ public class SiteDomainModel extends Model {
         return EnumField.builder("match_type")
             .value(MATCH_EXACT, v -> v.displayName("Exact")
                 .label(Microcopy.of("exact").withFilter("scope", "domain_match"))
-                .icon("check").color("green"))
+                .icon("check").color(ColorHue.GREEN))
             .value(MATCH_WILDCARD, v -> v.displayName("Wildcard")
                 .label(Microcopy.of("wildcard").withFilter("scope", "domain_match"))
-                .icon("sitemap").color("orange"))
+                .icon("sitemap").color(ColorHue.ORANGE))
             .value(MATCH_REGEX, v -> v.displayName("Regex")
                 .label(Microcopy.of("regex").withFilter("scope", "domain_match"))
-                .icon("code").color("purple"));
+                .icon("code").color(ColorHue.PURPLE));
     }
 
     /**
@@ -112,7 +115,7 @@ public class SiteDomainModel extends Model {
      * AIDEV-NOTE: judged on the EFFECTIVE tier, so a glob-shaped hostname is held to the
      * glob grammar even when its column says exact -- refusing it as an invalid exact name
      * would be the column-versus-content split all over again. Absence is deliberately not
-     * a syntax question: an empty hostname is answered by SiteDomainResource's
+     * a syntax question: an empty hostname is answered by SiteDomainRouteInvariant's
      * {@code hostname_required}, which is the refusal an operator can act on.
      *
      * @throws Violations anchored on the hostname field
@@ -131,7 +134,7 @@ public class SiteDomainModel extends Model {
             default -> Hostnames.isValidLabelSequence(hostname);
         };
         if (!valid) {
-            throw violation(HOSTNAME.getName(), hostname, "hostname_invalid");
+            throw HohenheimViolations.ofField(HOSTNAME.getName(), hostname, "hostname_invalid");
         }
     }
 
@@ -225,7 +228,7 @@ public class SiteDomainModel extends Model {
      * AIDEV-NOTE: derived, never operator-editable, and backed by a UNIQUE index
      * (M045_SiteDomainRouteClaims). Concurrency is handled by the serialized write
      * transaction that this model's save() declares (see RouteClaims): the conflict scan
-     * in SiteDomainResource runs inside the same transaction as the claim write, so it
+     * in SiteDomainRouteInvariant runs inside the same transaction as the claim write, so it
      * cannot go stale, and it is what refuses OVERLAPPING listener sets whose keys
      * differ; the index refuses identical keys even for writers that dodge the
      * transaction. NULL means "no claim", so staged duplicates on disabled sites stay
@@ -259,6 +262,14 @@ public class SiteDomainModel extends Model {
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
     static {
+        // Every domain save is ONE write transaction: the route-conflict scan
+        // (beforeValidate), the live-route claim stamp (beforeWrite) and the row write
+        // commit or fail together.
+        //
+        // AIDEV-NOTE: this transaction IS the route invariant for overlapping listener
+        // sets -- see RouteClaims. Without it the scan is a read-then-write with a window,
+        // and this declaration is what makes Model.save open the transaction. Do not remove.
+        SCHEMA.saveAtomically();
         // The hostname is the human title (breadcrumbs, relation pickers) instead of "SiteDomain #id".
         SCHEMA.setDisplayFields(HOSTNAME);
         SCHEMA.addBeforeValidateHook(context -> {
@@ -295,22 +306,22 @@ public class SiteDomainModel extends Model {
     public static void validateTlsPassthroughValues(Row row) {
         String path = (String) effective(row, PATH);
         if (path != null && !path.isBlank() && !"/".equals(path.trim())) {
-            throw violation("path", path, "tls_passthrough_no_path");
+            throw HohenheimViolations.ofField("path", path, "tls_passthrough_no_path");
         }
         if (Boolean.TRUE.equals(effective(row, STRIP_PATH))) {
-            throw violation("strip_path", true, "tls_passthrough_no_http_options");
+            throw HohenheimViolations.ofField("strip_path", true, "tls_passthrough_no_http_options");
         }
         Object certificateId = effective(row, CERTIFICATE_ID);
         if (certificateId != null) {
-            throw violation("certificate_id", certificateId, "tls_passthrough_backend_certificate");
+            throw HohenheimViolations.ofField("certificate_id", certificateId, "tls_passthrough_backend_certificate");
         }
         if (Boolean.TRUE.equals(effective(row, HSTS_ENABLED))
                 || Boolean.TRUE.equals(effective(row, HSTS_SUBDOMAINS))) {
-            throw violation("hsts_enabled", effective(row, HSTS_ENABLED),
+            throw HohenheimViolations.ofField("hsts_enabled", effective(row, HSTS_ENABLED),
                 "tls_passthrough_no_http_options");
         }
         if (hasValues(effective(row, CUSTOM_HEADERS)) || hasValues(effective(row, RESPONSE_HEADERS))) {
-            throw violation("custom_headers", effective(row, CUSTOM_HEADERS),
+            throw HohenheimViolations.ofField("custom_headers", effective(row, CUSTOM_HEADERS),
                 "tls_passthrough_no_http_options");
         }
     }
@@ -331,27 +342,7 @@ public class SiteDomainModel extends Model {
         return value instanceof java.util.Map<?, ?> map && !map.isEmpty();
     }
 
-    private static Violations violation(String field, Object value, String key) {
-        return Violations.ofField(field, value,
-            Microcopy.of(key).withFilter("scope", "violations"));
-    }
 
-    /**
-     * Every domain save is ONE write transaction: the route-conflict scan
-     * (beforeValidate), the live-route claim stamp (beforeWrite) and the row write
-     * commit or fail together.
-     *
-     * AIDEV-NOTE: this transaction IS the route invariant for overlapping listener
-     * sets -- see RouteClaims. Without it the scan is a read-then-write with a window,
-     * and Model.save only wraps a transaction for revisionable schemas, which this
-     * model is not. Do not remove.
-     */
-    @Override
-    public Row save(@NonNull Row row) {
-        Row[] result = new Row[1];
-        this.requireDatasource().withTransaction(tx -> result[0] = super.save(row));
-        return result[0];
-    }
 
     public List<Row> findBySiteId(int siteId) {
         return find()

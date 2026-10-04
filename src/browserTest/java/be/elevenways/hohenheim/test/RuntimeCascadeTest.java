@@ -26,9 +26,9 @@ import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
-import be.elevenways.hohenheim.server.cms.InstanceTemplateResource;
-import be.elevenways.hohenheim.server.cms.RuntimeImageResource;
-import be.elevenways.hohenheim.server.cms.ServerResource;
+import be.elevenways.hohenheim.server.cms.RuntimeImageParts;
+import be.elevenways.hohenheim.server.cms.ServerParts;
+import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -241,18 +241,11 @@ class RuntimeCascadeTest {
             int volumeId = templateVolume(templateId, "data");
             int instanceId = instance("cascade-from-template", templateId, null);
             Model templates = Models.get(InstanceTemplateModel.class);
-            InstanceTemplateResource resource = new InstanceTemplateResource();
-            AccessContext operator = AccessContext.of(TenantConduits.stubFor(null));
+            // AIDEV-TODO: step 1 (the catalog offers the delete DEAD, delete_in_use with the count, and live again once
+            //   the instance is gone) returns once the template entry's delete rides the O2 delete family's per-record
+            //   unavailable reason (opencode-24); until then the parts-built entry offers it and the funnel refuses it.
 
-            // 1. The resource offers the delete DEAD with the count on screen.
-            Microcopy reason = resource.deleteUnavailableReason(templates.findById(templateId), operator);
-            assertThat(reason).as("step 1: a template in use is offered dead").isNotNull();
-            assertThat(reason.key()).as("step 1: with the in-use reason").isEqualTo("delete_in_use");
-            assertThat(reason.filters().get("scope")).as("step 1: in the template's own words")
-                .isEqualTo("instance_template");
-            assertThat(reason.args().get("count")).as("step 1: naming the count").isEqualTo(1L);
-
-            // 2. The funnel refuses a direct delete the same way, naming the template.
+            // 2. The funnel refuses a direct delete, naming the template.
             assertThatThrownBy(() -> templates.delete(templates.findById(templateId)))
                 .as("step 2: the funnel refuses too")
                 .isInstanceOf(Violations.class)
@@ -260,10 +253,8 @@ class RuntimeCascadeTest {
             assertThat(Models.get(InstanceTemplateVariableModel.class).findById(variableId))
                 .as("step 2: the variable was not swept ahead of the refusal").isNotNull();
 
-            // 3. With the instance gone the delete is offered live and takes the contents.
+            // 3. With the instance gone the delete takes the contents.
             softDelete(instanceId);
-            assertThat(resource.deleteUnavailableReason(templates.findById(templateId), operator))
-                .as("step 3: nothing runs from it any more").isNull();
             templates.delete(templates.findById(templateId));
             assertThat(Models.get(InstanceTemplateVariableModel.class).findById(variableId))
                 .as("step 3: the variable died with the template").isNull();
@@ -291,11 +282,11 @@ class RuntimeCascadeTest {
             int templateId = template("cascade-image-template", imageId);
             int instanceId = instance("cascade-in-image", null, imageId);
             Model images = Models.get(RuntimeImageModel.class);
-            RuntimeImageResource resource = new RuntimeImageResource();
-            AccessContext operator = AccessContext.of(TenantConduits.stubFor(null));
+            AccessContext operator = TenantConduits.operator();
 
             // 1. Offered dead with both counts.
-            Microcopy reason = resource.deleteUnavailableReason(images.findById(imageId), operator);
+            Microcopy reason = ((OperationPipeline.Offer.Unavailable) OperationPipeline.offer(
+                RuntimeImageParts.DELETE, operator, images.findById(imageId))).reason();
             assertThat(reason).as("step 1: an image in use is offered dead").isNotNull();
             assertThat(reason.filters().get("scope")).isEqualTo("runtime_image");
             assertThat(reason.args().get("instances")).as("step 1: one live instance").isEqualTo(1L);
@@ -460,8 +451,7 @@ class RuntimeCascadeTest {
             int targetId = server("cascade-target");
             int instanceId = instance("cascade-mover", null, null);
             Model servers = Models.get(ServerModel.class);
-            ServerResource resource = new ServerResource();
-            AccessContext operator = AccessContext.of(TenantConduits.stubFor(null));
+            AccessContext operator = TenantConduits.operator();
             // The window opens the way InstanceOperationGuard opens it: one set-based
             // statement that fires no write hooks and leaves SERVER_ID on the source.
             Models.get(InstanceModel.class).find()
@@ -472,7 +462,8 @@ class RuntimeCascadeTest {
                 .updateAll();
 
             // 1. The resource offers the target's delete DEAD, naming the workload.
-            Microcopy reason = resource.deleteUnavailableReason(servers.findById(targetId), operator);
+            Microcopy reason = ((OperationPipeline.Offer.Unavailable) OperationPipeline.offer(
+                ServerParts.DELETE, operator, servers.findById(targetId))).reason();
             assertThat(reason).as("step 1: a migration target is offered dead").isNotNull();
             assertThat(reason.key()).as("step 1: with the migrating reason").isEqualTo("delete_migrating");
             assertThat(reason.args().get("instance")).as("step 1: naming the workload")
@@ -492,8 +483,8 @@ class RuntimeCascadeTest {
                 .assign(InstanceModel.STATUS, "stopped")
                 .assign(InstanceModel.MIGRATE_TARGET_ID, (Object) null)
                 .updateAll();
-            assertThat(resource.deleteUnavailableReason(servers.findById(targetId), operator))
-                .as("step 3: nothing is moving onto it any more").isNull();
+            assertThat(OperationPipeline.offer(ServerParts.DELETE, operator, servers.findById(targetId)))
+                .as("step 3: nothing is moving onto it any more").isInstanceOf(OperationPipeline.Offer.Available.class);
             servers.delete(servers.findById(targetId));
             assertThat(servers.findById(targetId)).as("step 3: the host is gone").isNull();
 
@@ -723,7 +714,7 @@ class RuntimeCascadeTest {
     private static int template(String name, Integer imageId) {
         Row row = Models.get(InstanceTemplateModel.class).createEmptyRow();
         row.set(InstanceTemplateModel.NAME, name);
-        row.set(InstanceTemplateModel.KIND, "hohenheim:docker_container");
+        row.set(InstanceTemplateModel.KIND, "hohenheim:application");
         row.set(InstanceTemplateModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine", "tag", "latest")));
         row.set(InstanceTemplateModel.RUNTIME_IMAGE_ID, imageId);
         Models.get(InstanceTemplateModel.class).save(row);

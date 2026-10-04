@@ -32,7 +32,7 @@ public final class StoredRows {
             return null;
         }
         Field<Object, ?> primaryKey = (Field<Object, ?>) model.getPrimaryKeyField();
-        return model.find().withTrashed().where(primaryKey.eq(id)).first();
+        return model.find().withTrashed().noCache().where(primaryKey.eq(id)).first();
     }
 
     /** @return the stored version of a row being written, trashed included, or null on a create */

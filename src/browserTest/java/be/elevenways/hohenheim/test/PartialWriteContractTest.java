@@ -1,24 +1,24 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.cms.AuthProviderResource;
-import be.elevenways.hohenheim.server.cms.CertificateResource;
-import be.elevenways.hohenheim.server.cms.InstanceDeviceResource;
-import be.elevenways.hohenheim.server.cms.InstanceScheduleResource;
-import be.elevenways.hohenheim.server.cms.InstanceScheduleStepResource;
-import be.elevenways.hohenheim.server.cms.ManageSiteResource;
-import be.elevenways.hohenheim.server.cms.ServerResource;
-import be.elevenways.hohenheim.server.cms.SiteResource;
-import be.elevenways.hohenheim.server.schedule.InstanceSnapshotAction;
+import be.elevenways.hohenheim.server.cms.AuthProviderParts;
+import be.elevenways.hohenheim.server.cms.HohenheimPanel;
+import be.elevenways.hohenheim.server.cms.InstanceScheduleParts;
+import be.elevenways.hohenheim.server.cms.InstanceScheduleStepParts;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
-import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.server.panel.PartsWrites;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -46,7 +46,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * AIDEV-NOTE: this is the sibling of {@link InlineCellIsolationTest}, which can only walk
  * resources that DECLARE {@code inlineEditableFields()} and is therefore blind to these.
  * Every case here is a real defect that shipped: a refusal naming a field the operator
- * never touched, or -- the SiteResource one -- a silent de-provisioning of a git-backed
+ * never touched, or -- the site edit one -- a silent de-provisioning of a git-backed
  * site on a rename. Nothing in this file declares inline editing; making the overrides
  * correct and widening the feature are two decisions, and only the first is pinned here.
  */
@@ -145,7 +145,7 @@ class PartialWriteContractTest extends HohenheimTestBase {
         Row step = steps.createEmptyRow();
         step.set(RecordScheduleStepModel.SCHEDULE_ID, scheduleId);
         step.set(RecordScheduleStepModel.POSITION, 1);
-        step.set(RecordScheduleStepModel.ACTION, InstanceSnapshotAction.ID.toString());
+        step.set(RecordScheduleStepModel.ACTION, InstanceOperations.SNAPSHOT.id().toString());
         step.set(RecordScheduleStepModel.OFFSET_SECONDS, 0);
         steps.save(step);
         stepId = step.get(RecordScheduleStepModel.ID);
@@ -160,28 +160,50 @@ class PartialWriteContractTest extends HohenheimTestBase {
         deviceId = device.get(InstanceDeviceModel.ID);
     }
 
-    /** One override, driven with the one entry the inline cell lane would send. */
-    private record Case(String who, RowResource resource, Model model, int id,
+    /** One writer, driven with the one entry the inline cell lane would send. */
+    private record Case(String who, Writer writer, Model model, int id,
                         String column, Object value) {}
+
+    /** A partial write of one record: a row resource's updateRow, or an operation-written entry's patch. */
+    @FunctionalInterface
+    private interface Writer {
+        void write(Row before, Map<String, Object> values);
+    }
+
+    private static Writer rows(PanelResource<Row> resource) {
+        return (before, values) -> PartsWrites.updateRow(resource, before, values, admin());
+    }
+
+    /** The site entries' updates are operations: a partial write is the patch their inline lane posts. */
+    private static Writer patch(String panel, int id) {
+        return patch(panel, HohenheimSlugs.SITES, id);
+    }
+
+    /** An entry's partial write as its lane posts it: an operation's patch, or the row lane's partial map. */
+    private static Writer patch(String panel, String entry, int id) {
+        return (before, values) -> PanelResourceCalls.patch(panel, entry, id, values, admin());
+    }
 
     private static List<Case> cases() {
         List<Case> cases = new ArrayList<>();
-        cases.add(new Case("admin/sites", new SiteResource(), Models.get(SiteModel.class),
+        cases.add(new Case("admin/sites", patch(HohenheimSlugs.ADMIN, gitSiteId), Models.get(SiteModel.class),
             gitSiteId, SiteModel.NAME.getName(), PREFIX + "renamed site"));
-        cases.add(new Case("manage/sites", new ManageSiteResource(), Models.get(SiteModel.class),
+        cases.add(new Case("manage/sites", patch(HohenheimSlugs.MANAGE, gitSiteId), Models.get(SiteModel.class),
             gitSiteId, SiteModel.DESCRIPTION.getName(), "a note the operator typed"));
-        cases.add(new Case("admin/servers", new ServerResource(), Models.get(ServerModel.class),
+        cases.add(new Case("admin/servers", patch(HohenheimSlugs.ADMIN, "servers", serverId), Models.get(ServerModel.class),
             serverId, ServerModel.NAME.getName(), PREFIX + "renamed-host"));
-        cases.add(new Case("admin/auth-providers", new AuthProviderResource(),
+        cases.add(new Case("admin/auth-providers", patch(HohenheimSlugs.ADMIN, AuthProviderParts.SLUG, providerId),
             Models.get(SiteAuthProviderModel.class), providerId,
             SiteAuthProviderModel.NAME.getName(), PREFIX + "renamed provider"));
-        cases.add(new Case("admin/certificates", new CertificateResource(),
+        cases.add(new Case("admin/certificates", patch(HohenheimSlugs.ADMIN, HohenheimSlugs.CERTIFICATES, certificateId),
             Models.get(CertificateModel.class), certificateId,
             CertificateModel.NICE_NAME.getName(), PREFIX + "renamed cert"));
-        cases.add(new Case("admin/instance-schedules", new InstanceScheduleResource(),
+        cases.add(new Case("admin/instance-schedules", rows(PanelEntryViews.of(HohenheimPanel.SLUG,
+            InstanceScheduleParts.SLUG)),
             Models.get(RecordScheduleModel.class), scheduleId,
             RecordScheduleModel.NAME.getName(), PREFIX + "renamed schedule"));
-        cases.add(new Case("admin/instance-schedule-steps", new InstanceScheduleStepResource(),
+        cases.add(new Case("admin/instance-schedule-steps", rows(PanelEntryViews.of(HohenheimPanel.SLUG,
+            InstanceScheduleStepParts.SLUG)),
             Models.get(RecordScheduleStepModel.class), stepId,
             RecordScheduleStepModel.OFFSET_SECONDS.getName(), 30));
         return cases;
@@ -206,7 +228,7 @@ class PartialWriteContractTest extends HohenheimTestBase {
 
             // 2. The map is Map.of: ONE entry and IMMUTABLE, exactly what the cell lane
             //    hands over. An override that stages values by mutating it dies here.
-            one.resource().updateRow(before, Map.of(one.column(), one.value()), admin());
+            one.writer().write(before, Map.of(one.column(), one.value()));
 
             Map<String, Object> after = InlineCellIsolationTest.storedValues(one.model(), one.id());
             assertThat(String.valueOf(after.get(one.column())))
@@ -252,8 +274,8 @@ class PartialWriteContractTest extends HohenheimTestBase {
             .containsEntry("root_path", "/tmp/" + PREFIX + "site");
 
         // 2. A rename through the cell lane: one entry, immutable, no settings in sight.
-        new SiteResource().updateRow(before, Map.of(SiteModel.NAME.getName(), PREFIX + "still git"),
-            admin());
+        PanelResourceCalls.patch(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, gitSiteId,
+            Map.of(SiteModel.NAME.getName(), PREFIX + "still git"), admin());
 
         Row after = sites.findById(gitSiteId);
         assertThat((String) after.get(SiteModel.NAME))
@@ -268,19 +290,19 @@ class PartialWriteContractTest extends HohenheimTestBase {
      * Steps 1-2: a device resize is no longer refused as a rename it never asked for.
      *
      * AIDEV-NOTE: this asserts on the SHAPE of the refusal rather than on a stored value,
-     * because {@code InstanceDeviceResource.updateRow} funnels into the daemon and there is
+     * because {@code InstanceAttachmentParts.resizeDevice} funnels into the daemon and there is
      * no container behind this fixture. What must never come back is the identity refusal:
      * the resize either reaches the daemon and fails there, or succeeds.
      */
     @Test
     void aPartialDeviceWriteIsNoLongerRefusedAsARenameOrRetype() {
         Row device = Models.get(InstanceDeviceModel.class).findById(deviceId);
-        InstanceDeviceResource resource = new InstanceDeviceResource();
+        PanelResource<Row> resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DEVICES);
 
         // 1. The one entry the cell lane would send for a disk resize.
         Throwable refusal = null;
         try {
-            resource.updateRow(device, Map.of(InstanceDeviceModel.SIZE_GB.getName(), 8), admin());
+            PartsWrites.updateRow(resource, device, Map.of(InstanceDeviceModel.SIZE_GB.getName(), 8), admin());
         } catch (Throwable thrown) {
             refusal = thrown;
         }

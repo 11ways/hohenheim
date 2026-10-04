@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.host;
 
+import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.live.LiveLane;
@@ -8,9 +10,7 @@ import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
-import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.host.HostLeases;
@@ -97,7 +97,6 @@ class HostFencingTest {
 
         Db.run(datasource, () -> {
             HostFixtures.admitLocal();
-            int localId = ServerModel.localServerId();
 
             Map<String, Object> settings = new LinkedHashMap<>();
             settings.put("image", TestImages.ALPINE);
@@ -157,12 +156,15 @@ class HostFencingTest {
                 }
                 assertThat(stalled)
                     .as("step 1: controller A reached its stall point").isTrue();
-                // A's fence, read off its JVM-held lease (no DB statement involved).
-                long aFence = leasesA.requireFence(localId);
+                // A's fence: the generation of the record's claim A holds while it stalls.
+                String claimKey = InstanceOperationLock.KEY_PREFIX + id;
+                long aFence = Leases.of(datasource).fenceOf(claimKey);
 
-                // 2. B takes the host lease over after A's TTL expires and deploys the
-                //    SAME instance to completion (removing A's container by owner label:
-                //    the winner's reconciliation, not the loser's cleanup).
+                // 2. A's claim lapses (a stall past its 2s TTL, never renewed in time), then B takes
+                //    the record over and deploys the SAME instance to completion (removing A's
+                //    container by owner label: the winner's reconciliation, not the loser's cleanup).
+                Poll.until("step 2: A's stalled claim lapsed", Duration.ofSeconds(30),
+                    () -> !rivalCoordinator.anyHeld(List.of(claimKey)));
                 InstanceStatus bStatus = controllerB.deploy(id);
                 assertThat(bStatus.publishedPort())
                     .as("step 2: controller B's deploy published a port").isNotNull();
@@ -187,7 +189,7 @@ class HostFencingTest {
                     .as("step 4: the record says running -- B's outcome stuck")
                     .isEqualTo(InstanceModel.STATUS_RUNNING);
                 assertThat((Long) after.get(InstanceModel.CLAIM_FENCE))
-                    .as("step 4: the stored fence is a strictly later generation than A's")
+                    .as("step 4: the stored fence is B's claim, a strictly later generation than A's")
                     .isGreaterThan(aFence);
 
                 // 5. HOST state, not just the API answer: exactly ONE container carries

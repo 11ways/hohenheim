@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -13,7 +15,8 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -40,11 +43,11 @@ import java.util.Map;
  * had no such tab (F6, 2026-08-29) -- the only way to an attachment was the nav-hidden
  * list at /admin/instance-databases.
  */
-public final class InstanceDatabasesPage implements RecordScopedPage<Row> {
+public final class InstanceDatabasesPage implements RecordTab.Rendered<Row> {
 
     public static final String SLUG = "databases";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_databases"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_databases"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_database"); }
     @Override public boolean secondaryTab() { return true; }
     @Override public @NonNull String slug() { return SLUG; }
@@ -56,17 +59,17 @@ public final class InstanceDatabasesPage implements RecordScopedPage<Row> {
      * refuses those kinds by name ({@code instance_kind_no_injection}).
      */
     @Override
-    public boolean visibleFor(@NonNull Row record) {
+    public boolean visibleFor(@NonNull Row record, @NonNull AccessContext access) {
         InstanceKindHandler handler = InstanceKinds.getHandler(record.get(InstanceModel.KIND));
         return handler != null && handler.supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER);
     }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
+        Conduit conduit = request.conduit();
+        AccessContext accessContext = request.access();
         Integer instanceId = instance.get(InstanceModel.ID);
-        String panel = CmsSupport.panelSlug(conduit);
+        String panel = request.panelSlug();
 
         List<Map<String, Object>> attachments = new ArrayList<>();
         for (Row link : Models.get(InstanceDatabaseModel.class).findByInstanceId(instanceId)) {
@@ -103,7 +106,7 @@ public final class InstanceDatabasesPage implements RecordScopedPage<Row> {
         // renders it (the InstanceDevicesPage lesson).
         vars.put("attachTarget", canEdit ? attachTarget(panel, instanceId) : null);
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-databases"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_DATABASES, vars);
     }
 
     /** The attachment create form, opened with its owning instance prefilled. */

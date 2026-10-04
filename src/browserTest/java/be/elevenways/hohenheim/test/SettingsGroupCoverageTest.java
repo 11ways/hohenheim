@@ -3,6 +3,11 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimRetiredNames;
 import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.setting.SettingsForms;
+import be.elevenways.zenit.forms.common.render.FormEntryFacets;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import be.elevenways.zenit.server.setting.DryFileSource;
 import be.elevenways.zenit.server.setting.RetiredName;
 import org.junit.jupiter.api.Test;
@@ -72,6 +77,55 @@ class SettingsGroupCoverageTest {
         assertThat(HohenheimSettings.HOHENHEIM.getChildGroups().keySet())
             .as("step 3: forcing a definition registers the group, it does not just name it")
             .containsAll(DECLARED_GROUPS);
+    }
+
+    @Test
+    void settingsGroupAndNeverBanCopyResolveThroughTheHostsEnglishAndDutchCatalogs() {
+        HohenheimSettingsBoot.forceDefinitions();
+        ShippedCatalogs catalogs = new ShippedCatalogs();
+
+        // 1. Every group names its own catalog key; localization never depends on an English fallback.
+        assertThat(HohenheimSettings.HOHENHEIM.displayLabel().key()).as("step 1: the root's key")
+            .isEqualTo("settings.hohenheim.label");
+        for (var group : HohenheimSettings.HOHENHEIM.getChildGroups().values()) {
+            Microcopy label = group.displayLabel();
+            assertThat(label.key()).as("step 1: %s keeps its stored group path", group.getName())
+                .isEqualTo("settings.hohenheim." + group.getName() + ".label");
+            assertThat(label.fallback()).as("step 1: %s has no literal-label fallback", group.getName()).isNull();
+            assertThat(group.isAdvanced()).as("step 1: localized labels do not invent advanced-group metadata")
+                .isFalse();
+            Microcopy description = group.displayDescription();
+            assertThat(description).as("step 1: %s declares description copy", group.getName()).isNotNull();
+            assertThat(description.key()).as("step 1: %s keeps its description identity", group.getName())
+                .isEqualTo("settings.hohenheim." + group.getName() + ".help");
+            assertThat(description.fallback()).as("step 1: descriptions are not literal-code fallbacks").isNull();
+            for (String language : new String[] {"en", "nl"}) {
+                String resolved = label.resolve(LocaleChain.ofTags(language), catalogs);
+                assertThat(resolved).as("step 1: %s resolves in %s", group.getName(), language)
+                    .isNotBlank().isNotEqualTo(label.key());
+                assertThat(description.resolve(LocaleChain.ofTags(language), catalogs))
+                    .as("step 1: %s description resolves in %s", group.getName(), language)
+                    .isNotBlank().isNotEqualTo(description.key());
+            }
+        }
+
+        // 2. The actual chips entry carries the never-ban label/help tokens the browser journey checks.
+        var neverBan = SettingsForms.specFor(HohenheimSettings.Security.GROUP).entries().stream()
+            .filter(entry -> entry.name().equals("never_ban")).findFirst().orElseThrow();
+        Microcopy label = FormEntryFacets.label(neverBan);
+        Microcopy help = FormEntryFacets.help(neverBan);
+        assertThat(label.key()).as("step 2: the declared label reaches the chips entry")
+            .isEqualTo("settings.hohenheim.security.never_ban.label");
+        assertThat(help.key()).as("step 2: the declared help reaches the chips entry")
+            .isEqualTo("settings.hohenheim.security.never_ban.help");
+        assertThat(label.resolve(LocaleChain.ofTags("en"), catalogs)).as("step 2: English label")
+            .isEqualTo("Never ban");
+        assertThat(label.resolve(LocaleChain.ofTags("nl"), catalogs)).as("step 2: Dutch label")
+            .isEqualTo("Nooit verbannen");
+        for (String language : new String[] {"en", "nl"}) {
+            assertThat(help.resolve(LocaleChain.ofTags(language), catalogs))
+                .as("step 2: help resolves in %s", language).isNotBlank().isNotEqualTo(help.key());
+        }
     }
 
     /**

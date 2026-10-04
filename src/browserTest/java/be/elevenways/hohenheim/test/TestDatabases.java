@@ -11,6 +11,8 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.orm.backup.SnapshotCapableDatasource;
+import be.elevenways.zenit.server.orm.seed.Seeds;
+import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.task.TaskRuntime;
 
 import java.io.File;
@@ -119,8 +121,14 @@ public final class TestDatabases {
 
     /** {@link #freshDatasource()}, then the runtime booted over it. */
     public static synchronized SqlDatasource freshBootedDatasource() throws Exception {
+        boolean alreadyBooted = ServerZenitRuntime.INSTANCE != null;
         SqlDatasource datasource = freshDatasource();
         HohenheimTestRuntime.ensureBooted();
+        if (alreadyBooted) {
+            // Runtime boot is process-wide, but its SEED stage belongs to each new database.
+            TaskRuntime.registerModels(datasource);
+            Seeds.runDiscovered();
+        }
         return datasource;
     }
 
@@ -146,6 +154,19 @@ public final class TestDatabases {
         } catch (Exception ignored) {
             // Best effort; see the note above.
         }
+    }
+
+    /**
+     * Re-point the datasource-bound services at the database {@code HohenheimDatabase} serves now, for a class that
+     * opened its own file (an upgrade fixture) instead of a fresh copy.
+     *
+     * AIDEV-NOTE: without it such a class passes only as the first in its JVM: zenit-auth kept answering from the
+     * database of the class before. The task models are registered on it too (the service stays stopped, as after
+     * every swap), so the class reads its own task rows.
+     */
+    public static synchronized void adoptCurrentDatabase() {
+        rebindDatasourceBoundServices();
+        TaskRuntime.registerModels(HohenheimDatabase.datasource());
     }
 
     /**

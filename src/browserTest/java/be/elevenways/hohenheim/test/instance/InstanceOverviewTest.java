@@ -1,19 +1,21 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.server.cms.InstanceParts;
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
-import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeAll;
 
 import java.net.http.HttpResponse;
 import java.time.Instant;
@@ -35,6 +37,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 class InstanceOverviewTest extends HohenheimTestBase {
 
     private static Integer instanceId;
+
+    @BeforeAll
+    static void seed() throws Exception {
+        // The landing-row assertion must not depend on whether earlier classes filled the first page.
+        freshSeededDatabase();
+        instanceId = null;
+    }
 
     /** The deploy-blocker alert's own title copy, which identifies the band. */
     private static final String BLOCKER_TITLE = "This instance cannot start yet";
@@ -88,7 +97,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
             .contains("cms-record-actions");
         assertThat(page.body())
             .withFailMessage("step 3: the deploy action is not projected onto the page")
-            .contains("/action/deploy_instance");
+            .contains("/invoke/hohenheim.start_instance");
         assertThat(page.body())
             .withFailMessage("step 3: invoke targets do not carry _return, so a refresh"
                 + " result would leave the page the operator is on")
@@ -107,13 +116,13 @@ class InstanceOverviewTest extends HohenheimTestBase {
         assertThat(page.body())
             .withFailMessage("step 1: no restart action exists -- an operator would have"
                 + " to press stop and then deploy by hand")
-            .contains("/action/restart_instance");
+            .contains("/invoke/hohenheim.restart_instance");
 
         // 2. THE CONFIRMATION, asserted on the declaration the page renders rather than on
         //    a substring of step 1: a restart stops a running workload, so the affordance
         //    must ask first. (Pre-fix this step asserted contains("restart_instance"),
         //    which is a substring of step 1's own target and could never fail.)
-        RowAction.Invoke<Row> restart = restartAction();
+        PanelAction<Row> restart = restartAction();
         assertThat(restart.confirmation())
             .withFailMessage("step 2: the restart action declares no confirmation, so the"
                 + " rendered button stops a running workload on a single click")
@@ -132,15 +141,14 @@ class InstanceOverviewTest extends HohenheimTestBase {
             .contains("restart_confirm");
     }
 
-    /** The declared restart row action, which the overview page projects. */
-    private static RowAction.Invoke<Row> restartAction() {
-        for (RowAction<Row> action : new InstanceResource().rowActions()) {
-            if (action instanceof RowAction.Invoke<Row> invoke
-                    && "restart_instance".equals(invoke.id().getPath())) {
-                return invoke;
+    /** The placed restart operation, which the overview page projects. */
+    private static PanelAction<Row> restartAction() {
+        for (PanelAction<Row> action : InstanceParts.admin().actions()) {
+            if ("restart_instance".equals(action.id().getPath())) {
+                return action;
             }
         }
-        throw new AssertionError("InstanceResource declares no restart_instance action");
+        throw new AssertionError("the instance entry places no restart_instance action");
     }
 
     /**
@@ -305,7 +313,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
             //    host rather than about the operator's own authority.
             assertThat(blocked)
                 .as("step 4: the deploy control is still offered")
-                .contains("/action/deploy_instance");
+                .contains("/invoke/hohenheim.start_instance");
 
             // 5. THE DURABILITY: ask again, with no action in between. A toast is gone by
             //    now; this must not be.
@@ -341,8 +349,9 @@ class InstanceOverviewTest extends HohenheimTestBase {
         try {
             // 1. One recorded action per instance, so a band filtered on the model alone
             //    would show both and a correctly filtered one shows exactly one.
-            ActivityLog.record(instances, instance(), "deploy", "overview band fixture");
-            ActivityLog.record(instances, decoy.get(InstanceModel.ID), "deploy", "decoy fixture");
+            ActivityLog.record(instances, instance(), HohenheimActivityAction.DEPLOYED, "overview band fixture");
+            ActivityLog.record(instances, decoy.get(InstanceModel.ID), HohenheimActivityAction.DEPLOYED,
+                "decoy fixture");
 
             Object mine = latestActivityId(String.valueOf(instance()));
             Object theirs = latestActivityId(String.valueOf(decoy.get(InstanceModel.ID)));

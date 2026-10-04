@@ -1,17 +1,24 @@
 package be.elevenways.hohenheim.server.api;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.SiteDomainResource;
-import be.elevenways.hohenheim.server.cms.SiteResource;
+import be.elevenways.hohenheim.server.cms.DomainParts;
+import be.elevenways.hohenheim.server.cms.SiteParts;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
+import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.http.body.FormSubmissionRawValues;
@@ -29,22 +36,21 @@ import java.util.Objects;
  * its hostnames, through the very resource pipeline the admin form posts to.
  *
  * AIDEV-NOTE: there is no model write in this class, on purpose. Every mutation goes
- * through zenit-cms {@code ResourceWrites} over {@link SiteResource} and
- * {@link SiteDomainResource}: the CREATE-view spec, coercion, validation, FieldAccess and
- * the scope-verified transaction are the framework's, and the route claim, hostname
- * canonicalization, tenant column freeze and proxy reload are the model write hooks'.
- * A raw {@code Model.save} here would skip none of the hooks but all of the form
- * discipline, and a hand-rolled coercion would be a second policy. Authorization is
- * decided exactly where the panels decide it: sites are created and deleted only in the
- * admin panel ({@code ManageSiteResource} is neither creatable nor deletable), so those
- * two verbs demand {@link HohenheimAccess#isAdmin}; domain rows are a tenant's own
- * affordance on a site they manage, so those ride the same {@code manage} walk the
- * read lane uses and let {@code TenantWrites} refuse the columns a tenant may not set.
+ * through zenit-cms {@code ResourceWrites} over the admin panel's own site and domain
+ * entries ({@link SiteParts#admin()}, {@link DomainParts#admin()}): the site verbs are
+ * domain operations ({@code SiteWrites}), so the input coercion, authorizers and
+ * availability are the pipeline's, and the route claim, hostname canonicalization, tenant
+ * column freeze and proxy reload are the model write hooks'. Authorization is decided
+ * exactly where the panels decide it: sites are created and deleted only by installation
+ * administration (the /manage twin does neither), so those two verbs demand
+ * {@link HohenheimAccess#isAdmin}; domain rows are a tenant's own affordance on a site they
+ * manage, so those ride the same {@code manage} walk the read lane uses and let
+ * {@code TenantWrites} refuse the columns a tenant may not set.
+ *
+ * AIDEV-NOTE: the /api/v1 answers are a frozen wire (stage 4 contract 10): a site verb's
+ * pipeline refusal answers exactly what the row lane answered, see {@link #refused}.
  */
 public final class SiteApi {
-
-    private static final SiteResource SITES = new SiteResource();
-    private static final SiteDomainResource DOMAINS = new SiteDomainResource();
 
     private SiteApi() {
     }
@@ -55,15 +61,22 @@ public final class SiteApi {
             if (ctx == null) {
                 return null;
             }
+            Panel panel = ApiConduits.adminPanel();
+            PanelResource<Row> sites = ApiConduits.rowEntry(conduit, panel, HohenheimSlugs.SITES);
+            if (sites == null) {
+                return null;
+            }
             try {
-                int siteId = (Integer) ResourceWrites.create(ApiConduits.adminPanel(), SITES,
+                int siteId = (Integer) ResourceWrites.create(panel, sites,
                     FormSubmissionRawValues.fromConduit(conduit), ctx);
                 Row created = Objects.requireNonNull(
                     Models.get(SiteModel.class).findById(siteId));
-                ActivityLog.record(Models.get(SiteModel.class), siteId, "created",
+                ActivityLog.record(Models.get(SiteModel.class), siteId, ZenitActivityAction.CREATE,
                     created.get(SiteModel.NAME));
                 return ApiConduits.json(PaasApi.siteProjection(created, true));
             } catch (Violations refused) {
+                return ApiConduits.refusal(conduit, refused);
+            } catch (DomainRefusal refused) {
                 return ApiConduits.refusal(conduit, refused);
             } catch (AccessRefusedException refused) {
                 conduit.forbidden();
@@ -80,14 +93,21 @@ public final class SiteApi {
             if (site == null) {
                 return null;
             }
+            Panel panel = ApiConduits.adminPanel();
+            PanelResource<Row> sites = ApiConduits.rowEntry(conduit, panel, HohenheimSlugs.SITES);
+            if (sites == null) {
+                return null;
+            }
             try {
-                // SiteResource.deleteRow is the soft delete the admin form runs, previews
+                // The delete operation is the soft delete the admin form runs, previews
                 // reclaimed and deleted_at stamped by the site's SoftDeleteBehaviour; the
-                // offered-but-dead lockout (the site serving this very panel) refuses
-                // through ResourceWrites like the form does.
-                ResourceWrites.delete(ApiConduits.adminPanel(), SITES, site, ctx);
+                // offered-but-dead lockout (the site serving this very panel) is its
+                // availability and refuses here exactly as it did on the row lane.
+                ResourceWrites.delete(panel, sites, site, ctx);
                 return ApiConduits.json(Map.of("id", site.get(SiteModel.ID), "status", "deleted"));
             } catch (Violations refused) {
+                return ApiConduits.refusal(conduit, refused);
+            } catch (DomainRefusal refused) {
                 return ApiConduits.refusal(conduit, refused);
             } catch (AccessRefusedException refused) {
                 conduit.forbidden();
@@ -128,11 +148,16 @@ public final class SiteApi {
                     ApiConduits.violationText("domain_site_mismatch")));
             }
             raw.put(siteKey, String.valueOf(siteId));
+            Panel panel = ApiConduits.adminPanel();
+            PanelResource<Row> domains = ApiConduits.rowEntry(conduit, panel, DomainParts.SLUG);
+            if (domains == null) {
+                return null;
+            }
             try {
-                int domainId = (Integer) ResourceWrites.create(ApiConduits.adminPanel(), DOMAINS, raw, ctx);
+                int domainId = (Integer) ResourceWrites.create(panel, domains, raw, ctx);
                 Row added = Objects.requireNonNull(
                     Models.get(SiteDomainModel.class).findById(domainId));
-                ActivityLog.record(Models.get(SiteModel.class), siteId, "domain_added",
+                ActivityLog.record(Models.get(SiteModel.class), siteId, HohenheimActivityAction.DOMAIN_ADDED,
                     added.get(SiteDomainModel.HOSTNAME));
                 return ApiConduits.json(domainProjection(added));
             } catch (Violations refused) {
@@ -163,9 +188,14 @@ public final class SiteApi {
                 conduit.notFound();
                 return null;
             }
+            Panel panel = ApiConduits.adminPanel();
+            PanelResource<Row> domains = ApiConduits.rowEntry(conduit, panel, DomainParts.SLUG);
+            if (domains == null) {
+                return null;
+            }
             try {
-                ResourceWrites.delete(ApiConduits.adminPanel(), DOMAINS, domain, ctx);
-                ActivityLog.record(Models.get(SiteModel.class), siteId, "domain_removed",
+                ResourceWrites.delete(panel, domains, domain, ctx);
+                ActivityLog.record(Models.get(SiteModel.class), siteId, HohenheimActivityAction.DOMAIN_REMOVED,
                     domain.get(SiteDomainModel.HOSTNAME));
                 return ApiConduits.json(Map.of("id", domainId, "site_id", siteId,
                     "status", "deleted"));

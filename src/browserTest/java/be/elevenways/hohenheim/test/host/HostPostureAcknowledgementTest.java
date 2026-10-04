@@ -3,17 +3,24 @@ package be.elevenways.hohenheim.test.host;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.cms.ServerResource;
+import be.elevenways.hohenheim.server.cms.ServerParts;
+import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
+import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.zenit.server.operation.OperationRequest;
+import be.elevenways.zenit.test.support.TestAccessContexts;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostPostureAcknowledgement;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.ActionContext;
-import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -22,11 +29,12 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.microcopy.Translation;
-import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -91,10 +99,28 @@ class HostPostureAcknowledgementTest {
      * Its OWN database: the chooser walks EVERY host row, so a neighbouring class's
      * leftover admitted host would silently change what "refused" means here.
      */
+    /** The accepting operator: an account principal, stored with its kind. */
+    private static final Accountability OPERATOR = new Accountability("7", PrincipalRef.account(7).storedKind(),
+        "Ada Operator", "203.0.113.9", "test-agent", Accountability.ORIGIN_WEB);
+
     @BeforeAll
     static void setUp() throws Exception {
         datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
+    }
+
+    @Test
+    void systemWorkCannotSignAnOperatorsPostureAcknowledgement() {
+        Db.run(datasource, () -> {
+            Row host = Models.get(ServerModel.class).findById(admittedSharedHost("system-probe"));
+            Throwable refused = catchThrowable(() -> Accountability.runAs(
+                new Accountability("1", "zenit:system", "internal posture sweep", null, null,
+                    Accountability.ORIGIN_SYSTEM), () -> HostPostureAcknowledgement.record(host)));
+            assertThat(refused).as("step 1: an identified system actor is still not an accepting operator")
+                .isInstanceOf(Violations.class);
+            assertThat(ServerModel.postureAcknowledged(Models.get(ServerModel.class).findById(
+                host.get(ServerModel.ID)))).as("step 1: system work leaves no acknowledgement").isFalse();
+        });
     }
 
     @Test
@@ -131,7 +157,7 @@ class HostPostureAcknowledgementTest {
                 .isFalse();
             assertThat(Map.of(
                     "posture", String.valueOf((Object) declared.get(ServerModel.ACKNOWLEDGED_POSTURE)),
-                    "by", String.valueOf((Object) declared.get(ServerModel.ACKNOWLEDGED_BY)),
+                    "by", String.valueOf(ServerModel.ACKNOWLEDGER.read(declared)),
                     "at", String.valueOf((Object) declared.get(ServerModel.ACKNOWLEDGED_AT))))
                 .as("step 2: no acknowledgement column was written by the plain save")
                 .isEqualTo(Map.of("posture", "null", "by", "null", "at", "null"));
@@ -160,31 +186,34 @@ class HostPostureAcknowledgementTest {
             //    the only lane that exists. All five columns land, and the activity row
             //    beside them carries a real actor.
             Row unacknowledged = servers.findById(hostId);
-            RowAction.Invoke<Row> action = acknowledgeAction();
-            assertThat(action.isVisibleFor(unacknowledged, AccessContext.anonymous()))
+            PanelAction<Row> action = acknowledgeAction();
+            var principal = TestAccessContexts.authenticated(7, "Ada Operator");
+            AccessContext operator = AccessContext.of(TenantConduits.stubFor(principal), principal, TestAccessContexts.allowAll());
+            @SuppressWarnings("unchecked")
+            Operation<Row, Void, Microcopy> operation = (Operation<Row, Void, Microcopy>) action.operation();
+            assertThat(OperationPipeline.offer(operation, operator, unacknowledged))
                 .as("step 4: the action offers itself on a host that needs it")
-                .isTrue();
-            Accountability.runAs(new Accountability("user:7", "Ada Operator",
-                    "203.0.113.9", "test-agent", Accountability.ORIGIN_WEB),
-                () -> action.handler().apply(unacknowledged,
-                    ActionContext.of(AccessContext.anonymous())));
+                .isInstanceOf(OperationPipeline.Offer.Available.class);
+            Accountability.runAs(OPERATOR,
+                () -> OperationPipeline.invoke(OperationRequest.of(operation, CmsPlacementSurface.ADMIN_ACTION)
+                    .caller(operator).subjectKeys(List.of(String.valueOf(hostId)))));
 
             Row acknowledged = servers.findById(hostId);
             assertThat(Map.of(
                     "posture", String.valueOf((Object) acknowledged.get(ServerModel.ACKNOWLEDGED_POSTURE)),
                     "version", String.valueOf((Object) acknowledged.get(ServerModel.ACKNOWLEDGED_WARNING_VERSION)),
-                    "by", String.valueOf((Object) acknowledged.get(ServerModel.ACKNOWLEDGED_BY)),
+                    "by", String.valueOf(ServerModel.ACKNOWLEDGER.read(acknowledged)),
                     "label", String.valueOf((Object) acknowledged.get(ServerModel.ACKNOWLEDGED_BY_LABEL))))
                 .as("step 4: actor, warning version and the posture accepted are all on"
                     + " the RECORD -- the authority a gate can still read in a year")
                 .isEqualTo(Map.of("posture", ServerModel.POSTURE_SHARED_CONTAINER,
                     "version", String.valueOf(ServerModel.POSTURE_WARNING_VERSION),
-                    "by", "user:7", "label", "Ada Operator"));
+                    "by", String.valueOf(PrincipalRef.account(7)), "label", "Ada Operator"));
             assertThat((Instant) acknowledged.get(ServerModel.ACKNOWLEDGED_AT))
                 .as("step 4: with a timestamp").isNotNull();
-            assertThat(action.isVisibleFor(acknowledged, AccessContext.anonymous()))
+            assertThat(OperationPipeline.offer(operation, operator, acknowledged))
                 .as("step 4: and the action stops offering itself once it is done")
-                .isFalse();
+                .isInstanceOf(OperationPipeline.Offer.Hidden.class);
 
             Row activity = latestAcknowledgementActivity();
             assertThat(activity)
@@ -192,9 +221,9 @@ class HostPostureAcknowledgementTest {
                     + " activity retention prunes at 90 days, so it can never be the"
                     + " authority a gate reads")
                 .isNotNull();
-            assertThat(String.valueOf((Object) activity.get(ActivityModel.ACTOR)))
+            assertThat(ActivityModel.ACTOR_PRINCIPAL.read(activity))
                 .as("step 4: and it names a real actor, not system work")
-                .isEqualTo("user:7");
+                .isEqualTo(PrincipalRef.account(7));
 
             // 5. Now BOTH hostile-tenant fixtures place, and they CO-LOCATE: this is the
             //    plan's gate step, with the divergence stated in the class docblock -- the
@@ -237,8 +266,7 @@ class HostPostureAcknowledgementTest {
             //     exists for. (The step-6 full-row save masked it -- findById loads every
             //     column.) The gate still refused the mismatched pair, so nothing was ever
             //     wrongly granted; what was open is the away-and-back resurrection.
-            Accountability.runAs(new Accountability("user:7", "Ada Operator",
-                    "203.0.113.9", "test-agent", Accountability.ORIGIN_WEB),
+            Accountability.runAs(OPERATOR,
                 () -> HostPostureAcknowledgement.record(servers.findById(hostId)));
             assertThat(ServerModel.postureAcknowledged(servers.findById(hostId)))
                 .as("step 6b precondition: the host is acknowledged again")
@@ -252,7 +280,7 @@ class HostPostureAcknowledgementTest {
                 .as("step 6b: a save staging ONLY the posture must still erase the"
                     + " acknowledgement")
                 .isNull();
-            assertThat((String) servers.findById(hostId).get(ServerModel.ACKNOWLEDGED_BY))
+            assertThat(ServerModel.ACKNOWLEDGER.read(servers.findById(hostId)))
                 .as("step 6b: and erase the whole record of it, not just the posture column")
                 .isNull();
 
@@ -267,8 +295,7 @@ class HostPostureAcknowledgementTest {
 
             // 6c. And the hook does NOT fire on a save that never touches the posture: an
             //     eraser that ran on every write would wipe acknowledgements at random.
-            Accountability.runAs(new Accountability("user:7", "Ada Operator",
-                    "203.0.113.9", "test-agent", Accountability.ORIGIN_WEB),
+            Accountability.runAs(OPERATOR,
                 () -> HostPostureAcknowledgement.record(servers.findById(hostId)));
             Row unrelated = servers.createEmptyRow();
             unrelated.set(ServerModel.ID, hostId);
@@ -293,8 +320,7 @@ class HostPostureAcknowledgementTest {
             // 7. INVALIDATOR TWO: a warning-version bump goes stale WITHOUT touching the
             //    row. Simulated by storing an older version -- the arithmetic is the same
             //    one a real bump performs, and it needs no write to invalidate.
-            Accountability.runAs(new Accountability("user:7", "Ada Operator",
-                    "203.0.113.9", "test-agent", Accountability.ORIGIN_WEB),
+            Accountability.runAs(OPERATOR,
                 () -> HostPostureAcknowledgement.record(servers.findById(hostId)));
             Row current = servers.findById(hostId);
             assertThat(ServerModel.postureAcknowledged(current))
@@ -308,10 +334,10 @@ class HostPostureAcknowledgementTest {
                 .as("step 7: an acknowledgement of an OLDER warning does not answer for"
                     + " the current one")
                 .isFalse();
-            assertThat((String) stale.get(ServerModel.ACKNOWLEDGED_BY))
+            assertThat(ServerModel.ACKNOWLEDGER.read(stale))
                 .as("step 7: and going stale wrote nothing -- the record of who accepted"
                     + " what is still there to read")
-                .isEqualTo("user:7");
+                .isEqualTo(PrincipalRef.account(7));
             assertThat(keyOf(catchThrowable(() ->
                     HostAdmission.requireInstancePlacement(hostId,
                         WorkloadIsolation.SHARED_KERNEL, BUCKET_A))))
@@ -364,14 +390,13 @@ class HostPostureAcknowledgementTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static RowAction.Invoke<Row> acknowledgeAction() {
-        for (RowAction<Row> action : new ServerResource().rowActions()) {
-            if (action instanceof RowAction.Invoke<Row> invoke
-                    && Identifier.of("hohenheim", "acknowledge_posture").equals(invoke.id())) {
-                return invoke;
+    private static PanelAction<Row> acknowledgeAction() {
+        for (PanelAction<Row> action : ServerParts.admin().actions()) {
+            if (Identifier.of("hohenheim", "acknowledge_posture").equals(action.id())) {
+                return action;
             }
         }
-        throw new AssertionError("acknowledge_posture row action not found on ServerResource");
+        throw new AssertionError("acknowledge_posture placed operation not found on ServerParts");
     }
 
     private static Row latestAcknowledgementActivity() {
@@ -399,9 +424,9 @@ class HostPostureAcknowledgementTest {
             .as("the check needs the hohenheim project dir as its working directory").isTrue();
         try (URLClassLoader own = new URLClassLoader(
                 new URL[] {resources.toUri().toURL()}, null)) {
-            DefaultCatalogLoader loader = new DefaultCatalogLoader("META-INF/microcopy/", own);
-            for (Translation candidate : loader.findCandidates("acknowledge_body",
-                    LocaleChain.ofTags(tag))) {
+            ShippedCatalogs loader = new ShippedCatalogs("META-INF/microcopy/", own);
+            for (Translation candidate : loader.variants("acknowledge_body",
+                    LocaleChain.ofTags(tag)).stream().map(Translation::of).toList()) {
                 for (Translation.Filter filter : candidate.getFilters()) {
                     if ("scope".equals(filter.getName()) && "server".equals(filter.getValue())) {
                         return String.valueOf(candidate.getSource());

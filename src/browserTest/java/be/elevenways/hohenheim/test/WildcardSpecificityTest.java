@@ -48,11 +48,12 @@ class WildcardSpecificityTest {
         broadUpstream = respondingWith("broad-wildcard");
         narrowUpstream = respondingWith("narrow-wildcard");
 
-        // "Alpha" sorts before "Zeta", so pre-fix the broad pattern was consulted first.
+        // "Alpha" sorts before "Zeta", so pre-fix the broad pattern was consulted first; "**." spans every depth,
+        // so it matches foo.example.com too.
         Row alpha = ProxyTestSupport.setupSite("hohenheim:address", "Alpha Broad", "alpha-broad",
             Map.of("forward_host", "127.0.0.1",
                    "forward_port", broadUpstream.getAddress().getPort()));
-        ProxyTestSupport.addDomain(alpha, "*.com", "wildcard", null, false);
+        ProxyTestSupport.addDomain(alpha, "**.com", "wildcard", null, false);
         Row zeta = ProxyTestSupport.setupSite("hohenheim:address", "Zeta Narrow", "zeta-narrow",
             Map.of("forward_host", "127.0.0.1",
                    "forward_port", narrowUpstream.getAddress().getPort()));
@@ -68,6 +69,38 @@ class WildcardSpecificityTest {
         assertThat(ProxyTestSupport.rawRequest(port, "bar.com", "/"))
             .as("a host only the broad pattern matches still reaches the broad site")
             .contains("broad-wildcard");
+    }
+
+    /**
+     * Equally specific wildcards that both match a host keep the order live routing had before HostPattern: the
+     * tie breaks on the regex the old matcher compiled, never on the pattern text, so no host switches backends.
+     */
+    @Test
+    @Timeout(30)
+    void equallySpecificWildcardsKeepTheirOldTieOrder() throws Exception {
+        broadUpstream = respondingWith("dash-star");
+        narrowUpstream = respondingWith("question-b");
+
+        // 1. a-*.tie.test and a?b.tie.test spell the same number of literal characters and both match a-b.tie.test;
+        //    the old matcher consulted a?b first ('[' sorts before the escaped '-'), the pattern text would not.
+        Row dash = ProxyTestSupport.setupSite("hohenheim:address", "Tie Dash", "tie-dash",
+            Map.of("forward_host", "127.0.0.1", "forward_port", broadUpstream.getAddress().getPort()));
+        ProxyTestSupport.addDomain(dash, "a-*.tie.test", "wildcard", null, false);
+        Row question = ProxyTestSupport.setupSite("hohenheim:address", "Tie Question", "tie-question",
+            Map.of("forward_host", "127.0.0.1", "forward_port", narrowUpstream.getAddress().getPort()));
+        ProxyTestSupport.addDomain(question, "a?b.tie.test", "wildcard", null, false);
+
+        proxy = ProxyTestSupport.startProxy();
+        int port = ProxyTestSupport.httpPort(proxy);
+
+        // 2. The host both match goes where it always went.
+        assertThat(ProxyTestSupport.rawRequest(port, "a-b.tie.test", "/"))
+            .as("step 2: the old winner a?b still serves a-b.tie.test")
+            .contains("question-b").doesNotContain("dash-star");
+
+        // 3. A host only one of them matches is unaffected.
+        assertThat(ProxyTestSupport.rawRequest(port, "a-zz.tie.test", "/"))
+            .as("step 3: a-zz.tie.test is a-*'s alone").contains("dash-star");
     }
 
     private static HttpServer respondingWith(String body) throws Exception {

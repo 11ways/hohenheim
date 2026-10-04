@@ -1,42 +1,62 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.server.HandlerSupport;
-import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.common.routing.RouteTarget;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
+import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.instance.InstanceOperations.ExecRun;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.instance.InstanceExec;
+import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
+import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.action.ActionPlacement;
+import be.elevenways.zenit.cms.common.action.ActionRequest;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
-import be.elevenways.zenit.cms.common.page.CmsFormBody;
-import be.elevenways.zenit.cms.common.resource.SubmittableRecordScopedPage;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
+import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
+import be.elevenways.zenit.cms.server.page.PageActions;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.operation.OperationResult;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
-import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.protoblast.common.http.Uri;
-import be.elevenways.zenit.server.http.ReturnTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
- * Exec tab on an instance: run one arbitrary command inside the workload and read its
- * exit code and output. The tab itself is gated on the {@code exec} capability, so a
- * console or config delegate never sees it -- and {@code InstanceExec.run} asks the same
- * capability again, because a hidden tab is an affordance and a direct POST is not.
+ * Exec tab on an instance: run one arbitrary command inside the workload and read its exit code and output, through
+ * the exec operation the tab places (its form posts to the one invoke route with the tab as {@code _tab}).
+ *
+ * AIDEV-NOTE: the tab exists exactly where the operation is offered (the console tab's shape): the exec capability on
+ * THIS record, an authored instance. InstanceExec asks the capability once more on its funnel, because that funnel is
+ * what a future API lane would reach too.
  */
-public final class InstanceExecPage implements SubmittableRecordScopedPage<Row> {
+public final class InstanceExecPage implements RecordTab.Rendered<Row> {
 
     public static final String SLUG = "exec";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_exec"); }
+    /** The exec operation over this tab's own record. */
+    private static final PanelAction<Row> EXEC = PanelAction.<Row, ExecRun>places(InstanceOperations.EXEC,
+            ActionPlacement.PAGE, InstanceExecPage::ran)
+        // The form's title and submit: the card the tab always drew, its description the one line of context.
+        .confirmation(ConfirmationSpec.builder()
+            .title(Microcopy.of("title").withFilter("scope", "instance_exec"))
+            .body(Microcopy.of("description").withFilter("scope", "instance_exec"))
+            .confirmLabel(Microcopy.of("run").withFilter("scope", "instance_exec"))
+            .build())
+        .selectedByRoute(instance -> String.valueOf((Object) instance.get(InstanceModel.ID)))
+        .build();
+
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_exec"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("exec").withFilter("scope", "instance"); }
     /**
      * Housekeeping, not an everyday destination: the tab lives in the strip's "More"
@@ -46,66 +66,47 @@ public final class InstanceExecPage implements SubmittableRecordScopedPage<Row> 
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("code"); }
 
-    /**
-     * The tab exists only for a principal that may actually exec on THIS record -- the
-     * per-record half of the hide-and-enforce pair (zenit-cms 404s an unoffered slug, so
-     * this is a gate on the route as well as on the nav).
-     */
+    /** Hide AND enforce (an unoffered slug 404s): exactly where the exec operation is offered on this record. */
     @Override
     public boolean visibleFor(@NonNull Row record, @NonNull AccessContext accessContext) {
-        return HohenheimAccess.hasInstanceCapability(
-            accessContext, record.get(InstanceModel.ID), HohenheimAccess.EXEC);
+        return InstanceOperationHandlers.offered(InstanceOperations.EXEC, accessContext, record);
     }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
-        String status = instance.get(InstanceModel.STATUS);
+    public @NonNull List<PanelAction<Row>> actions() {
+        return List.of(EXEC);
+    }
+
+    @Override
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
+        Conduit conduit = request.conduit();
+        boolean running = InstanceModel.STATUS_RUNNING.equals(instance.get(InstanceModel.STATUS));
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", instance.get(InstanceModel.NAME));
         vars.put("instanceName", instance.get(InstanceModel.NAME));
         vars.put("instanceId", instance.get(InstanceModel.ID));
-        vars.put("running", InstanceModel.STATUS_RUNNING.equals(status));
-        InstanceExecResults.Run run = InstanceExecResults.pop(conduit,
-            instance.get(InstanceModel.ID));
+        vars.put("running", running);
+        if (running && PageActions.open(request, this, instance, EXEC.id()) instanceof PageActions.Form form) {
+            vars.put("document", form.state());
+        }
+        InstanceExecResults.Run run = InstanceExecResults.pop(conduit, instance.get(InstanceModel.ID));
         vars.put("execOutput", run == null ? "" : run.output());
         vars.put("execExit", run == null ? "" : run.exitCode());
-        vars.put("returnUrl", ReturnTarget.capture(conduit));
-        // AIDEV-NOTE: the hidden field NAME comes from the framework constant --
-        // ReturnTarget is server-only, so the common template cannot reach it.
-        vars.put("returnParam", ReturnTarget.PARAM);
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-exec"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_EXEC, vars);
     }
 
     /**
-     * Run the submitted command. The framework has already re-checked
-     * {@link #visibleFor} for this POST, and {@code InstanceExec.run} asks the exec
-     * capability a third time on the funnel -- deliberately, because that funnel is
-     * what a future API lane would reach too.
+     * The run's output is page CONTENT: it rides the session to this tab's next render, never the URL or a toast.
+     * This tab renders under /admin AND /manage, so the way back is built from the HOSTING panel.
      */
-    @Override
-    public @NonNull CmsActionResult submit(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
-        Map<String, Object> body = conduit.getBody(CmsFormBody.BODY);
-        Object raw = body == null ? null : body.get("command");
-        String command = raw == null ? "" : String.valueOf(raw).strip();
-        int instanceId = instance.get(InstanceModel.ID);
-
-        // AIDEV-NOTE: this tab renders under /admin AND /manage, so the destination is
-        // built from the HOSTING panel rather than from conduit.getPath().
-        RouteTarget back = CmsRoutes.subpage(CmsSupport.panelSlug(conduit),
-            HohenheimSlugs.INSTANCES, instanceId, SLUG);
-        try {
-            InstanceExec.Run run = new InstanceExec().run(instanceId, command);
-            // Output is page CONTENT, so it rides the session, never the URL.
-            InstanceExecResults.stash(conduit, instanceId, run.exitCode(), run.output());
-            return CmsActionResult.redirect(new Uri(back.toUrl()));
-        } catch (Violations refused) {
-            // NEVER a silent swallow: the refusal becomes the page's error toast.
-            return CmsActionResult.errorToast(HandlerSupport.violationMessage(refused));
-        }
+    private static @NonNull CmsActionResult ran(@NonNull ActionRequest<Row> request,
+                                                @NonNull OperationResult<ExecRun> result) {
+        int instanceId = request.subject().get(InstanceModel.ID);
+        ExecRun run = result.value();
+        InstanceExecResults.stash(request.request().conduit(), instanceId, run.exitCode(), run.output());
+        return CmsActionResult.redirect(new Uri(CmsRoutes.subpage(request.request().panelSlug(),
+            HohenheimSlugs.INSTANCES, instanceId, SLUG).toUrl()));
     }
+
 }

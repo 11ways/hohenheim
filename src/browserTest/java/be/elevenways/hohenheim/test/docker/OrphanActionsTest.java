@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.test.live.LiveLane;
@@ -92,7 +93,7 @@ class OrphanActionsTest {
                     .isTrue();
                 Row removal = Models.get(ActivityModel.class).find()
                     .where(ActivityModel.MODEL.eq(ServerModel.MODEL_ID.toString()))
-                    .where(ActivityModel.ACTION.eq(OrphanActions.ACTIVITY_ACTION))
+                    .where(ActivityModel.ACTION.eq(HohenheimActivityAction.REMOVED_ORPHAN.id().toString()))
                     .orderBy(ActivityModel.ID, SortOrder.DESC).first();
                 assertThat(removal)
                     .as("step 2b: the daemon-side removal is recorded on the host record")

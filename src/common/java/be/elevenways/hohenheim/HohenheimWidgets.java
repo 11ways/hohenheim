@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim;
 
+import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.annotation.ZenitAutoLoad;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.widget.common.WidgetRegistry;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -17,18 +17,18 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * @author Jelle De Loecker
  * @since  0.1.0
  */
-@ZenitAutoLoad
+@BlastAutoLoad
 public final class HohenheimWidgets {
 
     /**
      * Dashboard attention panel: operational states that need an operator (error certificates,
      * down/degraded sites, failed databases, failed latest deploys, failed task runs).
      */
-    public static final DisplayWidget ATTENTION = register("attention", "cms/widget-attention",
+    public static final DisplayWidget ATTENTION = register("attention", HohenheimTemplateIds.WIDGET_ATTENTION,
         Microcopy.of("attention").withFilter("scope", "dashboard"), "bell");
 
     /** First-run guidance shown while the installation has no sites. */
-    public static final DisplayWidget ONBOARDING = register("onboarding", "cms/widget-onboarding",
+    public static final DisplayWidget ONBOARDING = register("onboarding", HohenheimTemplateIds.WIDGET_ONBOARDING,
         Microcopy.of("onboarding").withFilter("scope", "dashboard"), "rocket");
 
     /**
@@ -37,44 +37,45 @@ public final class HohenheimWidgets {
      * the whole band once every step is done, so it retires itself.
      */
     public static final DisplayWidget ONBOARDING_CHECKLIST = register("onboarding_checklist",
-        "cms/widget-onboarding-checklist",
+        HohenheimTemplateIds.WIDGET_ONBOARDING_CHECKLIST,
         Microcopy.of("checklist_title").withFilter("scope", "onboarding_checklist"), "list-check");
 
     /**
      * The host's live contact state: a status dot, the state word and the last-contact relative time.
      *
-     * AIDEV-NOTE: deliberately NOT folded into {@code zenitwidget:status}. That widget renders
+     * AIDEV-NOTE: deliberately NOT folded into {@code zenit:status}. That widget renders
      * BADGES, and this cell's whole point is that it is not one -- the dot carries the verdict and
      * the relative time carries when it was last true. Reducing it to a pill would drop the
      * timestamp, which is the half an operator reads.
      */
-    public static final DisplayWidget HOST_STATE = register("host_state", "cms/widget-host-state",
+    public static final DisplayWidget HOST_STATE = register("host_state", HohenheimTemplateIds.WIDGET_HOST_STATE,
         Microcopy.of("state").withFilter("scope", "server_overview"), "tower-broadcast");
 
     /** Per-lane trust state: the pinned fingerprint, what the machine offers now, and this controller's own client material. */
-    public static final DisplayWidget HOST_TRUST = register("host_trust", "cms/widget-host-trust",
+    public static final DisplayWidget HOST_TRUST = register("host_trust", HohenheimTemplateIds.WIDGET_HOST_TRUST,
         Microcopy.of("trust_ssh").withFilter("scope", "server_overview"), "key");
 
     /** The stored preflight report: kernel-truth isolation, every check with its own stamp, and the measured facts. */
-    public static final DisplayWidget HOST_PREFLIGHT = register("host_preflight", "cms/widget-host-preflight",
+    public static final DisplayWidget HOST_PREFLIGHT = register("host_preflight",
+        HohenheimTemplateIds.WIDGET_HOST_PREFLIGHT,
         Microcopy.of("preflight_report").withFilter("scope", "server_overview"), "stethoscope");
 
     /** Everything this host carries: the same three populations that block cordon, drain and delete. */
-    public static final DisplayWidget HOST_WORKLOADS = register("host_workloads", "cms/widget-host-workloads",
+    public static final DisplayWidget HOST_WORKLOADS = register("host_workloads",
+        HohenheimTemplateIds.WIDGET_HOST_WORKLOADS,
         Microcopy.of("workloads").withFilter("scope", "server_overview"), "cubes");
 
     /** Every port claim an instance holds, joined to its host's declared address. */
     public static final DisplayWidget INSTANCE_ENDPOINTS = register("instance_endpoints",
-        "cms/widget-instance-endpoints",
+        HohenheimTemplateIds.WIDGET_INSTANCE_ENDPOINTS,
         Microcopy.of("endpoint").withFilter("scope", "instance_overview"), "plug");
 
     private HohenheimWidgets() {
     }
 
-    private static @NonNull DisplayWidget register(@NonNull String id, @NonNull String template,
+    private static @NonNull DisplayWidget register(@NonNull String id, @NonNull Identifier template,
                                                    @NonNull Microcopy label, @NonNull String icon) {
-        DisplayWidget widget = new DisplayWidget(Identifier.of("hohenheim", id), label, Icon.of(icon),
-            Identifier.of("hohenheim", template));
+        DisplayWidget widget = new DisplayWidget(HohenheimIds.id(id), label, Icon.of(icon), template);
         WidgetRegistry.INSTANCE.register(widget);
         return widget;
     }

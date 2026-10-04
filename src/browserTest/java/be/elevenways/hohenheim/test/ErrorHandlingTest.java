@@ -33,7 +33,7 @@ class ErrorHandlingTest extends HohenheimTestBase {
      * request still carries its principal.
      */
     static final PageEndpoint TEST_ERROR = Endpoint.pageBuilder()
-        .identifier(Identifier.of("hohenheimtest", "test_error"))
+        .identifier(Identifier.of("hohenheim_test", "test_error"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("_test").addDelimiter().addStatic("error").build())
         .authenticatesItself()
@@ -134,7 +134,7 @@ class ErrorHandlingTest extends HohenheimTestBase {
         assertThat(surface.count())
             .as("the error surfaces instead of the navigation silently failing").isEqualTo(1);
         assertThat(surface.getAttribute("variant"))
-            .as("as a failure, not a notice").isEqualTo(FlashLevel.ERROR.variant());
+            .as("as a failure, not a notice").isEqualTo(FlashLevel.ERROR.toast().token());
         assertThat(surface.textContent())
             .as("stated in words, and without quoting the exception in this posture")
             .isNotBlank()

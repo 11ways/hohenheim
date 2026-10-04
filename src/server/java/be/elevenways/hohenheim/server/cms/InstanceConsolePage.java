@@ -1,18 +1,23 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.instance.ConsoleKind;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -35,19 +40,20 @@ import java.util.Map;
  * WebSocket) and the command form. The admin CSP (zenit's STRICT_ADMIN) carries ghostty's
  * wasm concessions panel-wide, so this tab is reached by soft navigation like every other.
  */
-public final class InstanceConsolePage implements RecordScopedPage<Row> {
+public final class InstanceConsolePage implements RecordTab.Rendered<Row> {
 
     public static final String SLUG = "console";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_console"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_console"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("console").withFilter("scope", "instance"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("terminal"); }
 
     /**
-     * The tab exists only for a principal that may actually attach to THIS record's
-     * console -- the per-record half of the hide-and-enforce pair (zenit-cms 404s an
-     * unoffered slug, so this is a gate on the route as well as on the nav).
+     * The tab exists only where the console operation is offered on THIS record -- the offer
+     * its socket admits through, so a generated instance's console is never offered here --
+     * the per-record half of the hide-and-enforce pair (zenit-cms 404s an unoffered slug, so
+     * this is a gate on the route as well as on the nav).
      *
      * AIDEV-NOTE: this shipped ungated, which made the page a wider door than the socket
      * it fronts: the live terminal's handshake demands CONSOLE (InstanceConsoleHandler)
@@ -57,14 +63,12 @@ public final class InstanceConsolePage implements RecordScopedPage<Row> {
      */
     @Override
     public boolean visibleFor(@NonNull Row record, @NonNull AccessContext accessContext) {
-        return HohenheimAccess.hasInstanceCapability(
-            accessContext, record.get(InstanceModel.ID), HohenheimAccess.CONSOLE);
+        return InstanceOperationHandlers.offered(InstanceOperations.CONSOLE_COMMAND, accessContext, record);
     }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
+        Conduit conduit = request.conduit();
         Integer instanceId = instance.get(InstanceModel.ID);
         String status = instance.get(InstanceModel.STATUS);
 
@@ -75,7 +79,7 @@ public final class InstanceConsolePage implements RecordScopedPage<Row> {
             ? template.get(InstanceTemplateModel.STOP_COMMAND) : null;
 
         Map<String, Object> vars = new HashMap<>();
-        this.addStoredLogs(conduit, vars, instanceId);
+        this.addStoredLogs(conduit, request.panelSlug(), vars, instanceId);
         vars.put("title", instance.get(InstanceModel.NAME));
         vars.put("instanceName", instance.get(InstanceModel.NAME));
         vars.put("instanceId", instanceId);
@@ -94,15 +98,20 @@ public final class InstanceConsolePage implements RecordScopedPage<Row> {
         // AIDEV-NOTE: the hidden field NAME comes from the framework constant --
         // ReturnTarget is server-only, so the common template cannot reach it.
         vars.put("returnParam", ReturnTarget.PARAM);
-        vars.put("commandTarget", HohenheimEndpoints.INSTANCE_CONSOLE_COMMAND
-            .with(HohenheimEndpoints.INSTANCE_ID, instanceId));
+        // The command form is the placed console operation's own invoke, its line asked here instead of in the
+        // action's dialog: the form posts the confirmation proof the dialog would, and lands back on this tab.
+        vars.put("commandTarget", CmsRoutes.invoke(request.panelSlug(), HohenheimSlugs.INSTANCES,
+                InstanceOperations.CONSOLE_COMMAND.id())
+            .with(CmsEndpoints.SUBJECT_PARAM, String.valueOf(instanceId)));
+        vars.put("confirmParam", CmsConfirmation.FIELD);
+        vars.put("confirmProof", CmsConfirmation.PLAIN_PROOF);
         // AIDEV-NOTE: WebSocketEndpoint is not a RouteTarget and has no with(...), and
         // pl-terminal takes a wsUrl STRING anyway, so the socket route is RENDERED from
         // its own declaration here -- endpoint-derived, never concatenated.
         vars.put("consoleWsUrl", HohenheimEndpoints.INSTANCE_CONSOLE.toUrl(
             Map.of(HohenheimEndpoints.INSTANCE_ID, instanceId)));
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-console"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_CONSOLE, vars);
     }
 
     @SuppressWarnings("unchecked")
@@ -115,7 +124,8 @@ public final class InstanceConsolePage implements RecordScopedPage<Row> {
      * selects. Retention without a reader would be storage for nobody, so the history the
      * sweeper prunes is the history this tab renders.
      */
-    private void addStoredLogs(@NonNull Conduit conduit, @NonNull Map<String, Object> vars,
+    private void addStoredLogs(@NonNull Conduit conduit, @NonNull String panel,
+                               @NonNull Map<String, Object> vars,
                                @Nullable Integer instanceId) {
         List<Map<String, Object>> logs = new ArrayList<>();
         InstanceLogModel model = Models.get(InstanceLogModel.class);
@@ -123,7 +133,7 @@ public final class InstanceConsolePage implements RecordScopedPage<Row> {
             for (Row log : model.findByInstanceId(instanceId, 50)) {
                 Map<String, Object> entry = new HashMap<>();
                 entry.put("id", log.get(InstanceLogModel.ID));
-                entry.put("target", logTarget(conduit, instanceId, log.get(InstanceLogModel.ID)));
+                entry.put("target", logTarget(panel, instanceId, log.get(InstanceLogModel.ID)));
                 entry.put("handle", String.valueOf((Object) log.get(InstanceLogModel.HANDLE)));
                 entry.put("lineCount", log.get(InstanceLogModel.LINE_COUNT));
                 entry.put("createdAt", String.valueOf((Object) log.get(InstanceLogModel.CREATED_AT)));
@@ -158,14 +168,15 @@ public final class InstanceConsolePage implements RecordScopedPage<Row> {
      * route PLUS a query parameter cannot be built from CmsRoutes -- its builders return
      * the RouteTarget interface, which has no with(...).
      */
-    private static @NonNull RouteTarget logTarget(@NonNull Conduit conduit,
+    private static @NonNull RouteTarget logTarget(@NonNull String panel,
                                                   @NonNull Integer instanceId,
                                                   @NonNull Integer logId) {
         return CmsEndpoints.RECORD_SUBPAGE
-            .with(CmsEndpoints.PANEL_PARAM, CmsSupport.panelSlug(conduit))
+            .with(CmsEndpoints.PANEL_PARAM, panel)
             .with(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.INSTANCES)
             .with(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf(instanceId))
             .with(CmsEndpoints.SUBPAGE_PARAM, SLUG)
             .with(HohenheimParams.SELECTED_LOG, logId);
     }
+
 }

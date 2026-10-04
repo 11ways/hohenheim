@@ -3,22 +3,18 @@ package be.elevenways.hohenheim.server.instance.variable;
 import be.elevenways.hohenheim.instance.VariableTypeRegistry;
 import be.elevenways.protoblast.common.registry.Identifier;
 
-import java.util.HashMap;
-import java.util.Map;
-
 /**
  * Registration hook for the compile-time-discovered variable types plus the server-side
- * handler map (the InstanceKinds shape). Nothing is registered manually.
+ * handler lookup (the InstanceKinds shape). Nothing is registered manually.
+ *
+ * AIDEV-NOTE: a handler is read out of THE registry, never a private handler map beside it;
+ * an entry that is not a server handler fails closed as "unknown type".
  */
 public final class VariableTypes {
 
-    private static final Map<Identifier, VariableTypeHandler> HANDLERS = new HashMap<>();
-
     /**
      * Entries arrive via the generated BlastAutoLoadInit; force it so lookups work
-     * regardless of which class the JVM touched first. MUST be the LAST static field:
-     * the loader re-enters register() while this class is mid init and needs HANDLERS
-     * assigned.
+     * regardless of which class the JVM touched first. MUST be the LAST static field.
      */
     @SuppressWarnings("unused")
     private static final Object AUTO_LOAD_TRIGGER =
@@ -28,9 +24,7 @@ public final class VariableTypes {
 
     /** Compile-time discovery hook (BlastAutoLoadInit). */
     public static void register(VariableTypeHandler handler) {
-        Identifier id = handler.typeId();
-        VariableTypeRegistry.REGISTRY.add(id, handler);
-        HANDLERS.put(id, handler);
+        VariableTypeRegistry.REGISTRY.add(handler.typeId(), handler);
     }
 
     public static VariableTypeHandler getHandler(String typeIdentifier) {
@@ -38,6 +32,7 @@ public final class VariableTypes {
             return null;
         }
         Identifier id = Identifier.tryParse(typeIdentifier);
-        return id != null ? HANDLERS.get(id) : null;
+        return id != null && VariableTypeRegistry.REGISTRY.get(id) instanceof VariableTypeHandler handler
+            ? handler : null;
     }
 }

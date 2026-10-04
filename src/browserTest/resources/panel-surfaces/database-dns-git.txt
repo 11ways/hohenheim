@@ -1,0 +1,523 @@
+case admin.git-providers.operator admin git-providers operator
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column kind at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column base_url at=2 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column shared at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column created_at at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+tab history at=0 landing=false view=false
+tab access at=1 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab binding=searchable:false,clearable:false,presentation:DEFAULT
+control CREATE%20base_url at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github
+control CREATE%20access_token at=4 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control CREATE%20app_private_key_pem at=5 kind=zenitforms:control/text input=secret required=false readonly=false options= binding=
+control CREATE%20shared at=6 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:github]/settings.app_id at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:github]/settings.app_installation_id at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+
+case admin.git-providers.tenant-git admin git-providers tenant-git
+admission - verdict=zenit:forbidden
+
+case admin.game-domains.operator admin game-domains operator
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column site_domain_id at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column backend_instance_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column proxy_instance_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column backend_port at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column enabled at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+tab history at=0 landing=false view=false
+control CREATE%20site_domain_id at=0 kind=zenitforms:form/relation-pick input=number required=true readonly=false options= binding=source:hohenheim.site_domain,rules:,siblings:,resolver:,clearable:false,creatable:false
+control CREATE%20backend_instance_id at=1 kind=zenitforms:form/relation-pick input=number required=true readonly=false options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:false,creatable:false
+control CREATE%20proxy_instance_id at=2 kind=zenitforms:form/relation-pick input=number required=true readonly=false options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:false,creatable:false
+control CREATE%20backend_port at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20enabled at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+
+case admin.game-domains.tenant-git admin game-domains tenant-git
+admission - verdict=zenit:forbidden
+
+case admin.dns-zone-peers.operator admin dns-zone-peers operator
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column zone_id at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column peer_name at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+tab history at=0 landing=false view=false
+control CREATE%20zone_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.dns_zone,rules:,siblings:,resolver:,clearable:true,creatable:true
+control CREATE%20peer_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
+
+case admin.dns-zone-peers.tenant-git admin dns-zone-peers tenant-git
+admission - verdict=zenit:forbidden
+
+case admin.git-providers.operator.shared admin git-providers operator
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column kind at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column base_url at=2 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column shared at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column created_at at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:test_git_provider at=1 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/test_git_provider
+row zenit:delete at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+inline name
+tab history at=0 landing=false view=false
+tab access at=1 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab binding=searchable:false,clearable:false,presentation:DEFAULT
+control CREATE%20base_url at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github
+control CREATE%20access_token at=4 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control CREATE%20app_private_key_pem at=5 kind=zenitforms:control/text input=secret required=false readonly=false options= binding=
+control CREATE%20shared at=6 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:github]/settings.app_id at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:github]/settings.app_installation_id at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab binding=searchable:false,clearable:false,presentation:DEFAULT
+control EDIT%20base_url at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github
+control EDIT%20access_token at=4 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control EDIT%20app_private_key_pem at=5 kind=zenitforms:control/text input=secret required=false readonly=false options= binding=
+control EDIT%20shared at=6 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:github]/settings.app_id at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:github]/settings.app_installation_id at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+
+case admin.git-providers.operator.tenant admin git-providers operator
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column kind at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column base_url at=2 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column shared at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column created_at at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:test_git_provider at=1 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/test_git_provider
+row zenit:delete at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+inline name
+tab history at=0 landing=false view=false
+tab access at=1 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab binding=searchable:false,clearable:false,presentation:DEFAULT
+control CREATE%20base_url at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github
+control CREATE%20access_token at=4 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control CREATE%20app_private_key_pem at=5 kind=zenitforms:control/text input=secret required=false readonly=false options= binding=
+control CREATE%20shared at=6 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:github]/settings.app_id at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:github]/settings.app_installation_id at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab binding=searchable:false,clearable:false,presentation:DEFAULT
+control EDIT%20base_url at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github
+control EDIT%20access_token at=4 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control EDIT%20app_private_key_pem at=5 kind=zenitforms:control/text input=secret required=false readonly=false options= binding=
+control EDIT%20shared at=6 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:github]/settings.app_id at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:github]/settings.app_installation_id at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+
+case admin.game-domains.operator.mapping admin game-domains operator
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column site_domain_id at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column backend_instance_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column proxy_instance_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column backend_port at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column enabled at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab history at=0 landing=false view=false
+control CREATE%20site_domain_id at=0 kind=zenitforms:form/relation-pick input=number required=true readonly=false options= binding=source:hohenheim.site_domain,rules:,siblings:,resolver:,clearable:false,creatable:false
+control CREATE%20backend_instance_id at=1 kind=zenitforms:form/relation-pick input=number required=true readonly=false options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:false,creatable:false
+control CREATE%20proxy_instance_id at=2 kind=zenitforms:form/relation-pick input=number required=true readonly=false options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:false,creatable:false
+control CREATE%20backend_port at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20enabled at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20site_domain_id at=0 kind=zenitforms:form/relation-pick input=number required=true readonly=false options= binding=source:hohenheim.site_domain,rules:,siblings:,resolver:,clearable:false,creatable:false
+control EDIT%20backend_instance_id at=1 kind=zenitforms:form/relation-pick input=number required=true readonly=false options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:false,creatable:false
+control EDIT%20proxy_instance_id at=2 kind=zenitforms:form/relation-pick input=number required=true readonly=false options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:false,creatable:false
+control EDIT%20backend_port at=3 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20enabled at=4 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+
+case admin.dns-zone-peers.operator.link admin dns-zone-peers operator
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column zone_id at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column peer_name at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab history at=0 landing=false view=false
+control CREATE%20zone_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.dns_zone,rules:,siblings:,resolver:,clearable:true,creatable:true
+control CREATE%20peer_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20zone_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.dns_zone,rules:,siblings:,resolver:,clearable:true,creatable:true
+control EDIT%20peer_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
+
+case admin.dns-zone-peers.operator.prefill admin dns-zone-peers operator
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column zone_id at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column peer_name at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+tab history at=0 landing=false view=false
+control CREATE%20zone_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.dns_zone,rules:,siblings:,resolver:,clearable:true,creatable:true
+control CREATE%20peer_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
+
+case admin.git-providers.operator.sel admin git-providers operator
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column kind at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column base_url at=2 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column shared at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column created_at at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+tab history at=0 landing=false view=false
+tab access at=1 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab binding=searchable:false,clearable:false,presentation:DEFAULT
+control CREATE%20base_url at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github
+control CREATE%20access_token at=4 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control CREATE%20app_private_key_pem at=5 kind=zenitforms:control/text input=secret required=false readonly=false options= binding=
+control CREATE%20shared at=6 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:github]/settings.app_id at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:github]/settings.app_installation_id at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+
+case admin.dns-zones.operator.primary admin dns-zones operator
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column origin at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
+column enabled at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column role at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column serial at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column transfer_status at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column secondaries at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column delegation_status at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column record_count at=7 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+filter origin at=0 kind=TEXT facet=false param=filter.origin
+filter enabled at=1 kind=BOOLEAN facet=false param=filter.enabled
+link hohenheim:dns_peer at=0 lead=false target=/{panel}/dns-peers
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:check_dns_health at=1 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/check_dns_health
+row hohenheim:dns_records at=2 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/page/records
+row zenit:delete at=3 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_named%252Cscope%3Ddns_zone,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:%3Db13-surfaces-primary.test,input:false target=/{panel}/{entry}/{record}/delete
+tab records at=0 landing=false view=false
+tab zonefile at=1 landing=false view=false
+tab secondaries at=2 landing=false view=false
+tab history at=3 landing=false view=false
+control CREATE%20origin at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20enabled at=1 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20role at=2 kind=zenitforms:form/select input=select required=false readonly=false options=primary,secondary binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20primary_peer_id at=3 kind=zenitforms:form/select input=number required=false readonly=false options=%250,<host> binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20soa_primary_ns at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20soa_contact at=5 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20default_ttl at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20negative_ttl at=7 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20soa_refresh at=8 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20soa_retry at=9 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20soa_expire at=10 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20dnssec_enabled at=11 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20origin at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20enabled at=1 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20role at=2 kind=zenitforms:form/select input=select required=false readonly=false options=primary,secondary binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20primary_peer_id at=3 kind=zenitforms:form/select input=number required=false readonly=false options=%250,<host> binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20soa_primary_ns at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20soa_contact at=5 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20default_ttl at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20negative_ttl at=7 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20soa_refresh at=8 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20soa_retry at=9 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20soa_expire at=10 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20dnssec_enabled at=11 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20delegation_status at=12 kind=zenitforms:form/select input=select required=false readonly=true options=matches,apex_undeclared,soa_mname_unlisted,parent_unreachable,not_delegated,listed_not_delegated,delegated_not_listed,ns_stale_serial,missing_glue,ns_unreachable binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20delegation_checked_at at=13 kind=zenitforms:control/datetime input=datetime required=false readonly=true options= binding=
+control EDIT%20delegation_detail at=14 kind=zenitforms:control/string input=multiline required=false readonly=true options= binding=
+
+case admin.dns-zones.operator.replica admin dns-zones operator
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column origin at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
+column enabled at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column role at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column serial at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column transfer_status at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column secondaries at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column delegation_status at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column record_count at=7 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+filter origin at=0 kind=TEXT facet=false param=filter.origin
+filter enabled at=1 kind=BOOLEAN facet=false param=filter.enabled
+link hohenheim:dns_peer at=0 lead=false target=/{panel}/dns-peers
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:dns_records at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/page/records
+row zenit:delete at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_named%252Cscope%3Ddns_zone,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:%3Db13-surfaces-replica.test,input:false target=/{panel}/{entry}/{record}/delete
+tab records at=0 landing=false view=false
+tab zonefile at=1 landing=false view=false
+tab history at=2 landing=false view=false
+control CREATE%20origin at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20enabled at=1 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20role at=2 kind=zenitforms:form/select input=select required=false readonly=false options=primary,secondary binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20primary_peer_id at=3 kind=zenitforms:form/select input=number required=false readonly=false options=%250,<host> binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20soa_primary_ns at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20soa_contact at=5 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20default_ttl at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20negative_ttl at=7 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20soa_refresh at=8 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20soa_retry at=9 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20soa_expire at=10 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20dnssec_enabled at=11 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20origin at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20enabled at=1 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20role at=2 kind=zenitforms:form/select input=select required=false readonly=false options=primary,secondary binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20primary_peer_id at=3 kind=zenitforms:form/select input=number required=false readonly=false options=%250,<host> binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20soa_primary_ns at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20soa_contact at=5 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20default_ttl at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20negative_ttl at=7 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20soa_refresh at=8 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20soa_retry at=9 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20soa_expire at=10 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20dnssec_enabled at=11 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control EDIT%20transfer_status at=12 kind=zenitforms:form/select input=select required=false readonly=true options=ok,error,expired binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20last_transfer_at at=13 kind=zenitforms:control/datetime input=datetime required=false readonly=true options= binding=
+control EDIT%20transfer_message at=14 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+
+case admin.databases.operator.database admin databases operator
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=engine relation=false
+column engine at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column db_name at=2 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
+column server_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column placement at=4 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column engine_id at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column ephemeral at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column status at=7 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+filter name at=0 kind=TEXT facet=false param=filter.name
+filter engine at=1 kind=SELECT facet=true param=filter.engine
+filter db_name at=2 kind=TEXT facet=false param=filter.db_name
+filter placement at=3 kind=SELECT facet=true param=filter.placement
+filter ephemeral at=4 kind=BOOLEAN facet=false param=filter.ephemeral
+filter status at=5 kind=SELECT facet=true param=filter.status
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:backup_database at=1 verb=link band=inline style=DEFAULT disabled= confirm= target=/{entry}/b13-surfaces-db/backup
+row hohenheim:move_database_shared at=2 verb=invoke band=overflow style=PRIMARY disabled= confirm=style:PRIMARY,title:move_shared%252Cscope%3Ddatabase,body:move_shared_confirm%252Cscope%3Ddatabase,confirm:move_shared_ok%252Cscope%3Ddatabase,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/move_database_shared
+row zenit:delete at=3 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Ddatabase,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab restore at=0 landing=false view=false
+tab access at=1 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20engine at=1 kind=zenitforms:form/select input=select required=false readonly=false options=postgres,mysql,redis,mongo binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20placement at=2 kind=zenitforms:form/select input=select required=false readonly=false options=dedicated,shared binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20engine_id at=3 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.database_engine,rules:,siblings:,resolver:,clearable:true,creatable:false
+control CREATE%20db_name at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20db_user at=5 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20db_password at=6 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control CREATE%20image at=7 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20ephemeral at=8 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20memory_limit_mb at=9 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20cpu_limit at=10 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20server_id at=11 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.server,rules:,siblings:,resolver:,clearable:true,creatable:false
+control CREATE%20status at=12 kind=zenitforms:form/select input=select required=false readonly=true options=provisioning,active,failed,destroy_failed binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20name at=0 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20engine at=1 kind=zenitforms:form/select input=select required=false readonly=true options=postgres,mysql,redis,mongo binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20placement at=2 kind=zenitforms:form/select input=select required=false readonly=true options=dedicated,shared binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20engine_id at=3 kind=zenitforms:form/relation-pick input=number required=false readonly=true options= binding=source:hohenheim.database_engine,rules:,siblings:,resolver:,clearable:true,creatable:false
+control EDIT%20db_name at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20db_user at=5 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20db_password at=6 kind=zenitforms:control/string input=secret required=false readonly=true options= binding=
+control EDIT%20image at=7 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20ephemeral at=8 kind=zenitforms:control/boolean input=checkbox required=false readonly=true options= binding=
+control EDIT%20memory_limit_mb at=9 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20cpu_limit at=10 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20server_id at=11 kind=zenitforms:form/relation-pick input=number required=false readonly=true options= binding=source:hohenheim.server,rules:,siblings:,resolver:,clearable:true,creatable:false
+control EDIT%20status at=12 kind=zenitforms:form/select input=select required=false readonly=true options=provisioning,active,failed,destroy_failed binding=searchable:false,clearable:true,presentation:DEFAULT
+
+case admin.database-engines.operator admin database-engines operator v2
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=engine relation=false
+column engine at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column server_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column status at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column databases at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column memory_limit_mb at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+filter name at=0 kind=TEXT facet=false param=filter.name
+filter engine at=1 kind=SELECT facet=true param=filter.engine
+filter status at=2 kind=SELECT facet=true param=filter.status
+tab history at=0 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20engine at=1 kind=zenitforms:form/select input=select required=false readonly=false options=postgres,mysql,redis,mongo binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20root_user at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20root_password at=3 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control CREATE%20image at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20memory_limit_mb at=5 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20cpu_limit at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20server_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.server,rules:,siblings:,resolver:,clearable:true,creatable:false
+control CREATE%20status at=8 kind=zenitforms:form/select input=select required=false readonly=true options=provisioning,active,failed,destroy_failed binding=searchable:false,clearable:true,presentation:DEFAULT
+
+case admin.database-engines.operator.engine admin database-engines operator v2
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=engine relation=false
+column engine at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column server_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column status at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column databases at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column memory_limit_mb at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+filter name at=0 kind=TEXT facet=false param=filter.name
+filter engine at=1 kind=SELECT facet=true param=filter.engine
+filter status at=2 kind=SELECT facet=true param=filter.status
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Ddatabase_engine,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab history at=0 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20engine at=1 kind=zenitforms:form/select input=select required=false readonly=false options=postgres,mysql,redis,mongo binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20root_user at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20root_password at=3 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control CREATE%20image at=4 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20memory_limit_mb at=5 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20cpu_limit at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control CREATE%20server_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.server,rules:,siblings:,resolver:,clearable:true,creatable:false
+control CREATE%20status at=8 kind=zenitforms:form/select input=select required=false readonly=true options=provisioning,active,failed,destroy_failed binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20name at=0 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20engine at=1 kind=zenitforms:form/select input=select required=false readonly=true options=postgres,mysql,redis,mongo binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20root_user at=2 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20root_password at=3 kind=zenitforms:control/string input=secret required=false readonly=true options= binding=
+control EDIT%20image at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20memory_limit_mb at=5 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20cpu_limit at=6 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
+control EDIT%20server_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=true options= binding=source:hohenheim.server,rules:,siblings:,resolver:,clearable:true,creatable:false
+control EDIT%20status at=8 kind=zenitforms:form/select input=select required=false readonly=true options=provisioning,active,failed,destroy_failed binding=searchable:false,clearable:true,presentation:DEFAULT
+
+case manage.git-providers.tenant-git manage git-providers tenant-git
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column kind at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column base_url at=2 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+tab access at=0 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab binding=searchable:false,clearable:false,presentation:DEFAULT
+control CREATE%20base_url at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github
+control CREATE%20access_token at=4 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control CREATE%20app_private_key_pem at=5 kind=zenitforms:control/text input=secret required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:github]/settings.app_id at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:github]/settings.app_installation_id at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+
+case manage.git-providers.tenant-git.tenant manage git-providers tenant-git
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column kind at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column base_url at=2 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row hohenheim:test_git_provider at=1 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/test_git_provider
+row zenit:delete at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+inline name
+tab access at=0 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab binding=searchable:false,clearable:false,presentation:DEFAULT
+control CREATE%20base_url at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github
+control CREATE%20access_token at=4 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control CREATE%20app_private_key_pem at=5 kind=zenitforms:control/text input=secret required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:github]/settings.app_id at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:github]/settings.app_installation_id at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control EDIT%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab binding=searchable:false,clearable:false,presentation:DEFAULT
+control EDIT%20base_url at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github
+control EDIT%20access_token at=4 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control EDIT%20app_private_key_pem at=5 kind=zenitforms:control/text input=secret required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:github]/settings.app_id at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:github]/settings.app_installation_id at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+
+case manage.git-providers.tenant-git.shared manage git-providers tenant-git
+admission - verdict=admitted
+record - found=false
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column kind at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column base_url at=2 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+tab access at=0 landing=false view=false
+control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
+control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab binding=searchable:false,clearable:false,presentation:DEFAULT
+control CREATE%20base_url at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github
+control CREATE%20access_token at=4 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
+control CREATE%20app_private_key_pem at=5 kind=zenitforms:control/text input=secret required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:github]/settings.app_id at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:github]/settings.app_installation_id at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+
+case manage.git-providers.tenant-empty manage git-providers tenant-empty
+admission - verdict=zenit:forbidden
+
+case manage.databases.tenant-db-view.database manage databases tenant-db-view
+admission - verdict=admitted
+record - found=true
+chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column engine at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column db_name at=2 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column placement at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column status at=4 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+tab access at=0 landing=false view=false
+control EDIT%20name at=0 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20engine at=1 kind=zenitforms:form/select input=select required=false readonly=true options=postgres,mysql,redis,mongo binding=searchable:false,clearable:true,presentation:DEFAULT
+
+case manage.databases.tenant-db-credentials.database manage databases tenant-db-credentials
+admission - verdict=admitted
+record - found=true
+chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
+column name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column engine at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column db_name at=2 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
+column placement at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column status at=4 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+tab credentials at=0 landing=false view=false
+tab access at=1 landing=false view=false
+control EDIT%20name at=0 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20engine at=1 kind=zenitforms:form/select input=select required=false readonly=true options=postgres,mysql,redis,mongo binding=searchable:false,clearable:true,presentation:DEFAULT
+

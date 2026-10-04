@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.upstream.kinds;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -15,11 +16,13 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.server.http.HostPattern;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 
-import java.util.Locale;
 import java.util.Map;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -31,7 +34,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  */
 public class DevNamespaceUpstreamKind implements UpstreamKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "dev_namespace");
+    public static final Identifier ID = HohenheimIds.id("dev_namespace");
     public static final String REGISTRATION_TOKEN_KEY = "registration_token";
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
@@ -62,7 +65,7 @@ public class DevNamespaceUpstreamKind implements UpstreamKindHandler {
     public Icon getIcon() { return Icon.of("flask"); }
 
     @Override
-    public String getColor() { return "teal"; }
+    public BadgeColor color() { return ColorHue.TEAL; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }
@@ -106,19 +109,14 @@ public class DevNamespaceUpstreamKind implements UpstreamKindHandler {
          *         does not sit directly under this site's matched wildcard domain
          */
         private static String claimedName(HttpServerExchange exchange, String hostname) {
-            String pattern = exchange.getAttachment(SiteDispatcher.MATCHED_HOST_PATTERN);
-            if (pattern == null || !pattern.startsWith("*.") || hostname.isEmpty()) {
+            HostPattern pattern = HostPattern.tryParse(
+                exchange.getAttachment(SiteDispatcher.MATCHED_HOST_PATTERN));
+            if (pattern == null || pattern.base() == null || hostname.isEmpty()) {
                 return null;
             }
-            String base = pattern.substring(1).toLowerCase(Locale.ROOT); // ".dev.example.com"
-            if (!hostname.endsWith(base) || hostname.length() <= base.length()) {
-                return null;
-            }
-            String name = hostname.substring(0, hostname.length() - base.length());
-            if (name.isEmpty() || name.contains(".")) {
-                return null;
-            }
-            return name;
+            HostPattern.Match match = pattern.match(hostname, null);
+            String name = match != null ? match.label() : null;
+            return name == null || name.contains(".") ? null : name;
         }
 
         private static String hostnameOf(HttpServerExchange exchange) {

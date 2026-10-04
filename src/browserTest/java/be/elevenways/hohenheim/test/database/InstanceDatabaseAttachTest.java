@@ -1,15 +1,20 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.server.panel.PartsWrites;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.test.PanelEntryViews;
+import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.DatabaseResource;
-import be.elevenways.hohenheim.server.cms.InstanceDatabaseResource;
+import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
@@ -27,6 +32,9 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -41,6 +49,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -381,19 +390,19 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         int incusInstanceId = p.incusInstance();
         int remoteInstanceId = p.remoteInstance();
 
-        InstanceDatabaseResource resource = new InstanceDatabaseResource();
+        PanelResource<Row> resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES);
         AccessContext admin = AccessContext.anonymous();
 
         // 1. An Incus instance has no link networks at all, so its container could never
         //    reach the engine -- refused by name rather than at the next deploy.
-        assertThat(violationKeys(catchThrowable(() -> resource.persistRow(
+        assertThat(violationKeys(catchThrowable(() -> PartsWrites.persistRow(resource,
                 Map.of("instance_id", incusInstanceId, "database_id", databaseAId,
                     "env_prefix", "DB"), admin))))
             .as("step 1: a driver without link networks cannot host an attachment")
             .contains("instance_kind_no_injection");
 
         // 2. A link network exists only on the daemon both workloads share.
-        assertThat(violationKeys(catchThrowable(() -> resource.persistRow(
+        assertThat(violationKeys(catchThrowable(() -> PartsWrites.persistRow(resource,
                 Map.of("instance_id", remoteInstanceId, "database_id", databaseAId,
                     "env_prefix", "DB"), admin))))
             .as("step 2: a cross-host pairing is refused")
@@ -401,7 +410,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
 
         // 3. The same database twice on one instance is a duplicate, refused by NAME
         //    before any anonymous constraint error.
-        assertThat(violationKeys(catchThrowable(() -> resource.persistRow(
+        assertThat(violationKeys(catchThrowable(() -> PartsWrites.persistRow(resource,
                 Map.of("instance_id", instanceAId, "database_id", databaseAId,
                     "env_prefix", "OTHER"), admin))))
             .as("step 3: attaching the same database twice is refused")
@@ -409,14 +418,14 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
 
         // 4. Two databases cannot share one variable family, or the second would silently
         //    overwrite the first's credentials.
-        assertThat(violationKeys(catchThrowable(() -> resource.persistRow(
+        assertThat(violationKeys(catchThrowable(() -> PartsWrites.persistRow(resource,
                 Map.of("instance_id", instanceAId, "database_id", databaseBId,
                     "env_prefix", "db"), admin))))
             .as("step 4: a taken prefix is refused, case-insensitively")
             .contains("prefix_taken");
 
         // 5. A prefix that is not a legal variable name is refused.
-        assertThat(violationKeys(catchThrowable(() -> resource.persistRow(
+        assertThat(violationKeys(catchThrowable(() -> PartsWrites.persistRow(resource,
                 Map.of("instance_id", instanceAId, "database_id", databaseBId,
                     "env_prefix", "9-bad"), admin))))
             .as("step 5: a prefix that cannot be a variable name is refused")
@@ -424,7 +433,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
 
         // 6. POSITIVE ANCHOR: a second database on a FREE prefix is accepted, so steps
         //    3-5 discriminate rather than forbid a second attachment.
-        assertThat(catchThrowable(() -> resource.persistRow(
+        assertThat(catchThrowable(() -> PartsWrites.persistRow(resource,
                 Map.of("instance_id", instanceAId, "database_id", databaseBId,
                     "env_prefix", "CACHE"), admin)))
             .as("step 6: a second database on its own prefix attaches")
@@ -452,11 +461,12 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         //    would have let this through and left the workload unable to connect with
         //    nothing anywhere saying why.
         Row database = Models.get(DatabaseModel.class).findById(databaseAId);
+        Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
         Throwable inUse = catchThrowable(() ->
-            new DatabaseResource().deleteRow(database, AccessContext.anonymous()));
+            ResourceWrites.delete(admin, DatabaseParts.admin(), database, TenantConduits.operator()));
         assertThat(violationKeys(inUse))
             .as("step 1: a database attached to a live instance cannot be destroyed")
-            .contains("database_in_use");
+            .contains("delete_in_use");
         assertThat(InstanceDatabaseLinks.liveInstanceNames(databaseAId))
             .as("step 1: and the refusal names the workload the operator has to detach")
             .contains(p.tag() + "srv-a");
@@ -503,7 +513,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
 
     /**
      * The FORM path must not be an existence/name/host oracle: before the fix,
-     * {@code InstanceDatabaseResource.validate} ran its UNSCOPED lookups ahead of the
+     * {@code InstanceAttachmentParts.requireLinkReachable} ran its UNSCOPED lookups ahead of the
      * authority decision, so a tenant probing database ids from their own instance's
      * attach form got three distinguishable answers -- {@code database_missing} for an
      * absent id, {@code database_instance_server_mismatch} interpolating the stored
@@ -566,7 +576,8 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
 
         // 3. POSITIVE ANCHOR: the legitimate owner attaches THROUGH THE SAME FORM PATH,
         //    so the collapse above is an ordering, not a form that refuses everyone.
-        TenantConduits.as(principalA, () -> new InstanceDatabaseResource().persistRow(
+        TenantConduits.as(principalA, () -> PartsWrites.persistRow(
+            PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES),
             Map.of("instance_id", probeInstanceId, "database_id", databaseAId,
                 "env_prefix", "DB"),
             AccessContext.of(TenantConduits.stubFor(principalA))));
@@ -578,7 +589,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         //    nothing.
         Row link = links.get(0);
         Throwable repointed = catchThrowable(() -> TenantConduits.as(principalA,
-            () -> new InstanceDatabaseResource().updateRow(link,
+            () -> PartsWrites.updateRow(PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES), link,
                 Map.of("database_id", databaseRemoteId),
                 AccessContext.of(TenantConduits.stubFor(principalA)))));
         assertThat(violationKeys(repointed))
@@ -595,7 +606,8 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         // 5. POSITIVE ANCHOR for the diagnostic: an OPERATOR (no tenant origin) still
         //    gets the reachability message by name -- the collapse is tenant-scoped
         //    ordering, not a lobotomized validator.
-        Throwable operator = catchThrowable(() -> new InstanceDatabaseResource().persistRow(
+        Throwable operator = catchThrowable(() -> PartsWrites.persistRow(
+            PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES),
             Map.of("instance_id", probeInstanceId, "database_id", databaseRemoteId,
                 "env_prefix", "OP"), AccessContext.anonymous()));
         assertThat(violationKeys(operator))
@@ -607,7 +619,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
     private static Throwable probeAs(Principal principal, Integer instanceId,
                                      Integer databaseId) {
         return catchThrowable(() -> TenantConduits.as(principal,
-            () -> new InstanceDatabaseResource().persistRow(
+            () -> PartsWrites.persistRow(PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES),
                 Map.of("instance_id", instanceId, "database_id", databaseId,
                     "env_prefix", "DB"),
                 AccessContext.of(TenantConduits.stubFor(principal)))));

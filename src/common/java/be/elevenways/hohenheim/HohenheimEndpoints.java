@@ -2,7 +2,6 @@ package be.elevenways.hohenheim;
 
 import be.elevenways.hohenheim.instance.InstallMediaView;
 import be.elevenways.protoblast.common.http.HttpMethod;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.data.DataPage;
 import be.elevenways.zenit.common.routing.Endpoint;
 import be.elevenways.zenit.common.routing.EndpointRoute;
@@ -173,7 +172,11 @@ public class HohenheimEndpoints {
             .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
             .named("hh_instance_artifact");
 
-    private static final RateLimitPolicy INSTANCE_CREATE_LIMIT =
+    /**
+     * THE instance-create budget: the API create and delete endpoints and the from-template operation draw from one
+     * named family, so one principal's creates across every surface share it.
+     */
+    public static final RateLimitPolicy INSTANCE_CREATE_LIMIT =
         RateLimitPolicy.of(10, Duration.ofMinutes(10))
             .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
             .named("hh_instance_create");
@@ -215,7 +218,7 @@ public class HohenheimEndpoints {
 
     // --- Let's Encrypt request (POST for the CMS certificate-request page) ---
     public static final Endpoint<Object> CERTIFICATES_REQUEST = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "certificates_request"))
+        .identifier(HohenheimIds.id("certificates_request"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic(HohenheimSlugs.ADMIN).addDelimiter().addStatic(HohenheimSlugs.CERTIFICATES_REQUEST).build())
         .requiresPermission(HohenheimSources.ADMIN_ACCESS)
@@ -238,7 +241,7 @@ public class HohenheimEndpoints {
      * opposite answer under the same question and carries the note that says so.
      */
     public static final Endpoint<Object> INSTANCE_TEMPLATES_EXPORT = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "instance_templates_export"))
+        .identifier(HohenheimIds.id("instance_templates_export"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic(HohenheimSlugs.ADMIN).addDelimiter().addStatic(HohenheimSlugs.INSTANCE_TEMPLATES).addDelimiter()
             .addParameter(TEMPLATE_ID).addDelimiter().addStatic("export").build())
@@ -246,27 +249,10 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> INSTANCE_TEMPLATES_IMPORT = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "instance_templates_import"))
+        .identifier(HohenheimIds.id("instance_templates_import"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic(HohenheimSlugs.ADMIN).addDelimiter().addStatic(HohenheimSlugs.INSTANCE_TEMPLATES_IMPORT).build())
         .requiresPermission(HohenheimSources.ADMIN_ACCESS)
-        .build();
-
-    /**
-     * The create-from-template submit, for BOTH panels. Deliberately NOT gated on the
-     * admin permission and deliberately NOT under an {@code /admin} path: the authority
-     * to create is {@code hohenheim.instances.create} (plus the template's approval
-     * stamp, the quota and placement), all decided inside
-     * {@code InstanceTemplates.createFromTemplate} so the HTML surfaces and the
-     * automation API answer to ONE gate. requiresLogin keeps anonymous callers out
-     * before any of that runs.
-     */
-    public static final Endpoint<Object> INSTANCES_FROM_TEMPLATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "instances_from_template"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("instances").addDelimiter().addStatic("from-template").build())
-        .requiresLogin()
-        .rateLimit(INSTANCE_CREATE_LIMIT)
         .build();
 
     // --- Git provider repository/branch selection (admin pickers + automation) ---
@@ -298,7 +284,7 @@ public class HohenheimEndpoints {
     // (the docblock on the handlers says so), and closing an enumeration to it would buy
     // nothing the admin permission does not already decide.
     public static final Endpoint<DataPage> GIT_PROVIDER_REPOSITORIES = Endpoint.<DataPage>builder()
-        .identifier(Identifier.of("hohenheim", "git_provider_repositories"))
+        .identifier(HohenheimIds.id("git_provider_repositories"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic(HohenheimSlugs.ADMIN).addDelimiter().addStatic(HohenheimSlugs.GIT_PROVIDERS).addDelimiter()
             .addParameter(PROVIDER_ID).addDelimiter().addStatic("repositories").build())
@@ -307,7 +293,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<DataPage> GIT_PROVIDER_BRANCHES = Endpoint.<DataPage>builder()
-        .identifier(Identifier.of("hohenheim", "git_provider_branches"))
+        .identifier(HohenheimIds.id("git_provider_branches"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic(HohenheimSlugs.ADMIN).addDelimiter().addStatic(HohenheimSlugs.GIT_PROVIDERS).addDelimiter()
             .addParameter(PROVIDER_ID).addDelimiter().addStatic("branches").build())
@@ -329,7 +315,7 @@ public class HohenheimEndpoints {
      * property of the tree the tab is showing, not a field an operator should type.
      */
     public static final Endpoint<Object> ACCESS_RULES_ADD = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "access_rules_add"))
+        .identifier(HohenheimIds.id("access_rules_add"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic(HohenheimSlugs.ADMIN).addDelimiter().addStatic(HohenheimSlugs.ACCESS_LISTS).addDelimiter()
             .addParameter(ACCESS_LIST_ID).addDelimiter().addStatic("rules").build())
@@ -342,7 +328,7 @@ public class HohenheimEndpoints {
      * {@code manage} on the LIST, and the model write pipeline (TenantWrites) re-asks it.
      */
     public static final Endpoint<Object> MANAGE_ACCESS_RULES_ADD = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "manage_access_rules_add"))
+        .identifier(HohenheimIds.id("manage_access_rules_add"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic(HohenheimSlugs.MANAGE).addDelimiter().addStatic(HohenheimSlugs.ACCESS_LISTS).addDelimiter()
             .addParameter(ACCESS_LIST_ID).addDelimiter().addStatic("rules").build())
@@ -351,7 +337,7 @@ public class HohenheimEndpoints {
 
     // --- DNS zone-file import (POST for the CMS zone-file tab) ---
     public static final Endpoint<Object> DNS_ZONE_IMPORT = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "dns_zone_import"))
+        .identifier(HohenheimIds.id("dns_zone_import"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic(HohenheimSlugs.ADMIN).addDelimiter().addStatic(HohenheimSlugs.DNS_ZONES).addDelimiter()
             .addParameter(ZONE_ID).addDelimiter().addStatic("zonefile").build())
@@ -366,7 +352,7 @@ public class HohenheimEndpoints {
     // the Zone-file tab posts, reached with an API key. Admin-only like site create.
 
     public static final Endpoint<Object> API_V1_DNS_ZONES = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_dns_zones"))
+        .identifier(HohenheimIds.id("api_v1_dns_zones"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("dns").addDelimiter().addStatic("zones").build())
@@ -376,7 +362,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_V1_DNS_ZONE_CREATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_dns_zone_create"))
+        .identifier(HohenheimIds.id("api_v1_dns_zone_create"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("dns").addDelimiter().addStatic("zones").build())
@@ -387,7 +373,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_V1_DNS_ZONE_IMPORT = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_dns_zone_import"))
+        .identifier(HohenheimIds.id("api_v1_dns_zone_import"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("dns").addDelimiter().addStatic("zones").addDelimiter()
@@ -412,7 +398,7 @@ public class HohenheimEndpoints {
      * ({@code INSTANCE_TEMPLATES_EXPORT} carries the same question's other answer).
      */
     public static final Endpoint<Object> CERTIFICATES_DOWNLOAD = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "certificates_download"))
+        .identifier(HohenheimIds.id("certificates_download"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("certificates").addDelimiter().addParameter(CERT_ID)
             .addDelimiter().addStatic("download").build())
@@ -423,7 +409,7 @@ public class HohenheimEndpoints {
 
     // --- Managed database dump download / restore upload ---
     public static final Endpoint<Object> DATABASES_BACKUP = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "databases_backup"))
+        .identifier(HohenheimIds.id("databases_backup"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("databases").addDelimiter().addParameter(DATABASE_NAME)
             .addDelimiter().addStatic("backup").build())
@@ -437,7 +423,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> DATABASES_RESTORE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "databases_restore"))
+        .identifier(HohenheimIds.id("databases_restore"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("databases").addDelimiter().addParameter(DATABASE_NAME)
             .addDelimiter().addStatic("restore").build())
@@ -454,7 +440,7 @@ public class HohenheimEndpoints {
      * outbound HTTP client of an arbitrary origin: who may do that is its own answer.
      */
     public static final Endpoint<Object> SERVERS_MEDIA_FETCH = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "servers_media_fetch"))
+        .identifier(HohenheimIds.id("servers_media_fetch"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("servers").addDelimiter().addParameter(SERVER_ID)
             .addDelimiter().addStatic("media").addDelimiter().addStatic("fetch").build())
@@ -468,7 +454,7 @@ public class HohenheimEndpoints {
      * the query string). The counterpart to FETCH for media that has no public URL.
      */
     public static final Endpoint<Object> SERVERS_MEDIA_UPLOAD = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "servers_media_upload"))
+        .identifier(HohenheimIds.id("servers_media_upload"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("servers").addDelimiter().addParameter(SERVER_ID)
             .addDelimiter().addStatic("media").addDelimiter().addStatic("upload").build())
@@ -477,7 +463,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> SERVERS_MEDIA_DELETE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "servers_media_delete"))
+        .identifier(HohenheimIds.id("servers_media_delete"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("servers").addDelimiter().addParameter(SERVER_ID)
             .addDelimiter().addStatic("media").addDelimiter().addStatic("delete").build())
@@ -490,7 +476,7 @@ public class HohenheimEndpoints {
      * tab's live watch asks for it whenever a fetch row changes. Read-only and gated like the tab itself.
      */
     public static final Endpoint<InstallMediaView> SERVERS_MEDIA_VIEW = Endpoint.<InstallMediaView>builder()
-        .identifier(Identifier.of("hohenheim", "servers_media_view"))
+        .identifier(HohenheimIds.id("servers_media_view"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("servers").addDelimiter().addParameter(SERVER_ID)
             .addDelimiter().addStatic("media").build())
@@ -504,7 +490,7 @@ public class HohenheimEndpoints {
     // the verbs act on the record that owns the releases, and an application no site
     // exposes yet can still deploy.
     public static final Endpoint<Object> INSTANCES_DEPLOY = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "instances_deploy"))
+        .identifier(HohenheimIds.id("instances_deploy"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
             .addDelimiter().addStatic("deploy").build())
@@ -513,7 +499,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> INSTANCES_ROLLBACK = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "instances_rollback"))
+        .identifier(HohenheimIds.id("instances_rollback"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
             .addDelimiter().addStatic("rollback").build())
@@ -523,7 +509,7 @@ public class HohenheimEndpoints {
 
     // --- Automation API (znit_ bearer keys via zenit-auth) ---
     public static final Endpoint<Object> API_SITES = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_sites"))
+        .identifier(HohenheimIds.id("api_sites"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("sites").build())
         .requiresPermission(HohenheimSources.ADMIN_ACCESS)
@@ -531,7 +517,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals, so an ambient session cookie can never act here. */
     public static final Endpoint<Object> API_SITES_DEPLOY = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_sites_deploy"))
+        .identifier(HohenheimIds.id("api_sites_deploy"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("sites")
             .addDelimiter().addParameter(SITE_ID)
@@ -562,7 +548,7 @@ public class HohenheimEndpoints {
     // validation pipeline, not a parallel one.
 
     public static final Endpoint<Object> API_INSTANCES = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_instances"))
+        .identifier(HohenheimIds.id("api_instances"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("instances").build())
@@ -571,7 +557,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> API_INSTANCE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_instance"))
+        .identifier(HohenheimIds.id("api_instance"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID).build())
@@ -581,7 +567,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_INSTANCE_POWER = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_instance_power"))
+        .identifier(HohenheimIds.id("api_instance_power"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
@@ -593,7 +579,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_INSTANCE_COMMAND = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_instance_command"))
+        .identifier(HohenheimIds.id("api_instance_command"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
@@ -605,7 +591,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_INSTANCE_BACKUP = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_instance_backup"))
+        .identifier(HohenheimIds.id("api_instance_backup"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
@@ -617,7 +603,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_INSTANCE_SNAPSHOT = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_instance_snapshot"))
+        .identifier(HohenheimIds.id("api_instance_snapshot"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
@@ -630,12 +616,12 @@ public class HohenheimEndpoints {
     /**
      * Create one instance. TWO lanes behind one URL, discriminated by whether the body
      * carries a {@code template_id}: with one, the tenant's approved-template funnel;
-     * without, the admin form's own pipeline over InstanceResource (the migration lane).
+     * without, the admin form's own pipeline over the admin instance entry (the migration lane).
      *
      * csrfExempt is safe: the handler refuses non-API-key principals.
      */
     public static final Endpoint<Object> API_INSTANCE_CREATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_instance_create"))
+        .identifier(HohenheimIds.id("api_instance_create"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("instances").build())
@@ -646,7 +632,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_INSTANCE_DELETE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_instance_delete"))
+        .identifier(HohenheimIds.id("api_instance_delete"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
@@ -666,7 +652,7 @@ public class HohenheimEndpoints {
     // which is a second decode, and a second decode is how a normalized traversal slips in.
 
     public static final Endpoint<Object> API_INSTANCE_FILES = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_instance_files"))
+        .identifier(HohenheimIds.id("api_instance_files"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
@@ -676,7 +662,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> API_INSTANCE_FILE_CONTENT = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_instance_file_content"))
+        .identifier(HohenheimIds.id("api_instance_file_content"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
@@ -687,7 +673,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_INSTANCE_FILE_WRITE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_instance_file_write"))
+        .identifier(HohenheimIds.id("api_instance_file_write"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
@@ -699,7 +685,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_INSTANCE_FILE_ACTION = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_instance_file_action"))
+        .identifier(HohenheimIds.id("api_instance_file_action"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
@@ -720,7 +706,7 @@ public class HohenheimEndpoints {
     // non-API-key principals, which is what makes every csrfExempt below safe.
 
     public static final Endpoint<Object> API_PROJECTS = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_projects"))
+        .identifier(HohenheimIds.id("api_projects"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("projects").build())
@@ -729,7 +715,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> API_PROJECT = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_project"))
+        .identifier(HohenheimIds.id("api_project"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("projects").addDelimiter().addParameter(PROJECT_ID).build())
@@ -738,7 +724,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> API_V1_SITES = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_sites"))
+        .identifier(HohenheimIds.id("api_v1_sites"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("sites").build())
@@ -747,7 +733,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> API_V1_SITE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_site"))
+        .identifier(HohenheimIds.id("api_v1_site"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("sites").addDelimiter().addParameter(SITE_ID).build())
@@ -757,7 +743,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_V1_SITE_DEPLOY = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_site_deploy"))
+        .identifier(HohenheimIds.id("api_v1_site_deploy"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("sites").addDelimiter().addParameter(SITE_ID)
@@ -770,7 +756,7 @@ public class HohenheimEndpoints {
     /** Raw JAR upload; handler requires both site manage and application CONFIG.
      * csrfExempt is safe: non-API-key principals are refused. */
     public static final Endpoint<Object> API_V1_SITE_ARTIFACT = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_site_artifact"))
+        .identifier(HohenheimIds.id("api_v1_site_artifact"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("sites").addDelimiter().addParameter(SITE_ID)
@@ -784,7 +770,7 @@ public class HohenheimEndpoints {
         ParameterDefinition.builder(Integer.class).name("operation_id").stringResolver(Integer::parseInt).build();
 
     public static final Endpoint<Object> API_V1_SITE_ARTIFACT_OPERATION = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_site_artifact_operation"))
+        .identifier(HohenheimIds.id("api_v1_site_artifact_operation"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("sites").addDelimiter().addParameter(SITE_ID)
@@ -792,7 +778,7 @@ public class HohenheimEndpoints {
         .requiresLogin().rateLimit(PAAS_READ_LIMIT).build();
 
     public static final Endpoint<Object> API_V1_SITE_ARTIFACT_CURRENT = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_site_artifact_current"))
+        .identifier(HohenheimIds.id("api_v1_site_artifact_current"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("sites").addDelimiter().addParameter(SITE_ID)
@@ -801,7 +787,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_V1_SITE_ROLLBACK = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_site_rollback"))
+        .identifier(HohenheimIds.id("api_v1_site_rollback"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("sites").addDelimiter().addParameter(SITE_ID)
@@ -815,14 +801,14 @@ public class HohenheimEndpoints {
     //
     // The programmatic front door of the proxy tier: a site row and its domain rows,
     // created and deleted through the SAME resource pipeline the admin form runs
-    // (zenit-cms ResourceWrites over SiteResource / SiteDomainResource), so the route
+    // (zenit-cms ResourceWrites over the admin site and domain resources), so the route
     // claim, hostname canonicalization, tenant column freeze and proxy reload hooks all
     // fire exactly as they do for a form save. Mutations are POST like every other
     // write here (delete is a POST to `.../delete`, the DNS record lane's spelling).
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_V1_SITE_CREATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_site_create"))
+        .identifier(HohenheimIds.id("api_v1_site_create"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("sites").build())
@@ -833,7 +819,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_V1_SITE_DELETE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_site_delete"))
+        .identifier(HohenheimIds.id("api_v1_site_delete"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("sites").addDelimiter().addParameter(SITE_ID)
@@ -844,7 +830,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> API_V1_SITE_DOMAINS = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_site_domains"))
+        .identifier(HohenheimIds.id("api_v1_site_domains"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("sites").addDelimiter().addParameter(SITE_ID)
@@ -855,7 +841,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_V1_SITE_DOMAIN_CREATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_site_domain_create"))
+        .identifier(HohenheimIds.id("api_v1_site_domain_create"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("sites").addDelimiter().addParameter(SITE_ID)
@@ -867,7 +853,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_V1_SITE_DOMAIN_DELETE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_site_domain_delete"))
+        .identifier(HohenheimIds.id("api_v1_site_domain_delete"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("sites").addDelimiter().addParameter(SITE_ID)
@@ -882,13 +868,13 @@ public class HohenheimEndpoints {
     //
     // The other half of the proxy tier's write lane, added for the same migration: a
     // legacy installation's htpasswd folders and IP allow-lists convert to a list plus
-    // one call per rule. Both panels create access lists (ManageAccessListResource is
+    // one call per rule. Both panels create access lists (the /manage access-list twin is
     // creatable and plants the creator's ownership grant), so these verbs demand no
     // permission of their own -- the resource pipeline and TenantWrites are the gate,
     // and the resource CHOSEN mirrors which panel the caller would have used.
 
     public static final Endpoint<Object> API_V1_ACCESS_LISTS = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_access_lists"))
+        .identifier(HohenheimIds.id("api_v1_access_lists"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("access-lists").build())
@@ -897,7 +883,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> API_V1_ACCESS_LIST = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_access_list"))
+        .identifier(HohenheimIds.id("api_v1_access_list"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("access-lists").addDelimiter().addParameter(ACCESS_LIST_ID).build())
@@ -907,7 +893,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_V1_ACCESS_LIST_CREATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_access_list_create"))
+        .identifier(HohenheimIds.id("api_v1_access_list_create"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("access-lists").build())
@@ -918,7 +904,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_V1_ACCESS_LIST_DELETE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_access_list_delete"))
+        .identifier(HohenheimIds.id("api_v1_access_list_delete"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("access-lists").addDelimiter().addParameter(ACCESS_LIST_ID)
@@ -930,7 +916,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_V1_ACCESS_LIST_RULE_CREATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_access_list_rule_create"))
+        .identifier(HohenheimIds.id("api_v1_access_list_rule_create"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("access-lists").addDelimiter().addParameter(ACCESS_LIST_ID)
@@ -941,7 +927,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> API_V1_SITE_DEPLOYMENTS = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_site_deployments"))
+        .identifier(HohenheimIds.id("api_v1_site_deployments"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("sites").addDelimiter().addParameter(SITE_ID)
@@ -951,7 +937,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> API_V1_SITE_DEPLOYMENT_LOG = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_site_deployment_log"))
+        .identifier(HohenheimIds.id("api_v1_site_deployment_log"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("sites").addDelimiter().addParameter(SITE_ID)
@@ -962,7 +948,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> API_V1_SITE_RELEASES = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_site_releases"))
+        .identifier(HohenheimIds.id("api_v1_site_releases"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("sites").addDelimiter().addParameter(SITE_ID)
@@ -972,7 +958,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> API_V1_SITE_RELEASE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_site_release"))
+        .identifier(HohenheimIds.id("api_v1_site_release"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("sites").addDelimiter().addParameter(SITE_ID)
@@ -982,7 +968,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> API_V1_SITE_BUILDS = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_site_builds"))
+        .identifier(HohenheimIds.id("api_v1_site_builds"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("sites").addDelimiter().addParameter(SITE_ID)
@@ -992,7 +978,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> API_V1_SITE_BUILD_LOG = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_site_build_log"))
+        .identifier(HohenheimIds.id("api_v1_site_build_log"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("sites").addDelimiter().addParameter(SITE_ID)
@@ -1003,7 +989,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> API_INSTANCE_LOGS = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_instance_logs"))
+        .identifier(HohenheimIds.id("api_instance_logs"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
@@ -1013,7 +999,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> API_INSTANCE_VARIABLES = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_instance_variables"))
+        .identifier(HohenheimIds.id("api_instance_variables"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
@@ -1024,7 +1010,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_INSTANCE_VARIABLE_SET = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_instance_variable_set"))
+        .identifier(HohenheimIds.id("api_instance_variable_set"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
@@ -1036,7 +1022,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_INSTANCE_VARIABLE_DELETE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_instance_variable_delete"))
+        .identifier(HohenheimIds.id("api_instance_variable_delete"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
@@ -1047,7 +1033,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> API_INSTANCE_DEVICES = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_instance_devices"))
+        .identifier(HohenheimIds.id("api_instance_devices"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
@@ -1058,7 +1044,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_INSTANCE_DEVICE_ATTACH = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_instance_device_attach"))
+        .identifier(HohenheimIds.id("api_instance_device_attach"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
@@ -1070,7 +1056,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_INSTANCE_DEVICE_RESIZE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_instance_device_resize"))
+        .identifier(HohenheimIds.id("api_instance_device_resize"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
@@ -1082,7 +1068,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_INSTANCE_DEVICE_DETACH = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_instance_device_detach"))
+        .identifier(HohenheimIds.id("api_instance_device_detach"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
@@ -1093,7 +1079,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> API_ENVIRONMENT_VARIABLES = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_environment_variables"))
+        .identifier(HohenheimIds.id("api_environment_variables"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("environments").addDelimiter().addParameter(ENVIRONMENT_ID)
@@ -1104,7 +1090,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_ENVIRONMENT_VARIABLE_SET = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_environment_variable_set"))
+        .identifier(HohenheimIds.id("api_environment_variable_set"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("environments").addDelimiter().addParameter(ENVIRONMENT_ID)
@@ -1116,7 +1102,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_ENVIRONMENT_VARIABLE_DELETE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_environment_variable_delete"))
+        .identifier(HohenheimIds.id("api_environment_variable_delete"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("environments").addDelimiter().addParameter(ENVIRONMENT_ID)
@@ -1134,18 +1120,18 @@ public class HohenheimEndpoints {
     // authorization decision in a handler beyond the shared visibility walk, no existence
     // oracle, no field that was not enumerated), and the DOORS are the panels' own:
     //
-    // - the list is scoped by the `view` capability, exactly like ManageDatabaseResource,
+    // - the list is scoped by the `view` capability, exactly like the /manage databases,
     //   and projects the DELEGATED columns for a non-admin (a shared engine's name is
     //   another tenant's neighbour list);
     // - the move is ADMIN-ONLY, because only the admin panel offers the row action
-    //   (ManageDatabaseResource drops it), and its eligibility is DatabaseService's own
+    //   (the /manage twin has none), and its eligibility is DatabaseService's own
     //   moveRefusal -- the single declaration the row action reads too;
-    // - the delete rides DatabaseResource's delete pipeline, so `destroy` on the record
-    //   and the in-use refusal are the service's and the resource's, never this file's;
+    // - the delete is the delete_database operation the panel runs, so `destroy` on the
+    //   record and the in-use refusal are the operation's, never this file's;
     // - the engine list is ADMIN-ONLY: an engine row exists on the admin panel alone.
 
     public static final Endpoint<Object> API_DATABASES = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_databases"))
+        .identifier(HohenheimIds.id("api_databases"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("databases").build())
@@ -1161,7 +1147,7 @@ public class HohenheimEndpoints {
      * the ordinary write one.
      */
     public static final Endpoint<Object> API_DATABASE_MOVE_SHARED = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_database_move_shared"))
+        .identifier(HohenheimIds.id("api_database_move_shared"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("databases").addDelimiter().addParameter(DATABASE_ID)
@@ -1173,7 +1159,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_DATABASE_DELETE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_database_delete"))
+        .identifier(HohenheimIds.id("api_database_delete"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("databases").addDelimiter().addParameter(DATABASE_ID)
@@ -1185,7 +1171,7 @@ public class HohenheimEndpoints {
 
     /** One managed database, the shape a watcher polls while a move or a provision runs. */
     public static final Endpoint<Object> API_DATABASE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_database"))
+        .identifier(HohenheimIds.id("api_database"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("databases").addDelimiter().addParameter(DATABASE_ID).build())
@@ -1194,7 +1180,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> API_DATABASE_ENGINES = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_database_engines"))
+        .identifier(HohenheimIds.id("api_database_engines"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("engines").build())
@@ -1204,7 +1190,7 @@ public class HohenheimEndpoints {
 
     /** One shared engine with the logical databases living on it (ADMIN-ONLY). */
     public static final Endpoint<Object> API_DATABASE_ENGINE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_database_engine"))
+        .identifier(HohenheimIds.id("api_database_engine"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("engines").addDelimiter().addParameter(DB_ENGINE_ID).build())
@@ -1220,7 +1206,7 @@ public class HohenheimEndpoints {
     // tenant's workload on that machine.
 
     public static final Endpoint<Object> API_V1_HOSTS = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_hosts"))
+        .identifier(HohenheimIds.id("api_v1_hosts"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("hosts").build())
@@ -1229,7 +1215,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> API_V1_HOST = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_v1_host"))
+        .identifier(HohenheimIds.id("api_v1_host"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("hosts").addDelimiter().addParameter(SERVER_ID).build())
@@ -1241,7 +1227,7 @@ public class HohenheimEndpoints {
 
     /** Download one file from an instance volume; bounded by hohenheim.files.max_file_kb. */
     public static final Endpoint<Object> INSTANCE_FILE_DOWNLOAD = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "instance_file_download"))
+        .identifier(HohenheimIds.id("instance_file_download"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
             .addDelimiter().addStatic("files").addDelimiter().addStatic("download").build())
@@ -1251,7 +1237,7 @@ public class HohenheimEndpoints {
 
     /** Every mutating file action of the Files tab (save, upload, mkdir, rename, delete). */
     public static final Endpoint<Object> INSTANCE_FILE_ACTION = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "instance_file_action"))
+        .identifier(HohenheimIds.id("instance_file_action"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
             .addDelimiter().addStatic("files").addDelimiter().addStatic("action").build())
@@ -1262,7 +1248,7 @@ public class HohenheimEndpoints {
     // --- DNS records peer/automation API (znit_ bearer keys; the edit-forwarding
     //     channel other Hohenheim instances use to edit zones this instance owns) ---
     public static final Endpoint<Object> API_DNS_RECORDS = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_dns_records"))
+        .identifier(HohenheimIds.id("api_dns_records"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("dns").addDelimiter().addStatic("zones")
             .addDelimiter().addParameter(DNS_ORIGIN)
@@ -1272,7 +1258,7 @@ public class HohenheimEndpoints {
 
     /** csrfExempt is safe: the handlers refuse non-API-key principals, so an ambient session cookie can never act here. */
     public static final Endpoint<Object> API_DNS_RECORD_CREATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_dns_record_create"))
+        .identifier(HohenheimIds.id("api_dns_record_create"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("dns").addDelimiter().addStatic("zones")
             .addDelimiter().addParameter(DNS_ORIGIN)
@@ -1282,7 +1268,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> API_DNS_RECORD_UPDATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_dns_record_update"))
+        .identifier(HohenheimIds.id("api_dns_record_update"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("dns").addDelimiter().addStatic("zones")
             .addDelimiter().addParameter(DNS_ORIGIN)
@@ -1292,7 +1278,7 @@ public class HohenheimEndpoints {
         .build();
 
     public static final Endpoint<Object> API_DNS_RECORD_DELETE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_dns_record_delete"))
+        .identifier(HohenheimIds.id("api_dns_record_delete"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("dns").addDelimiter().addStatic("zones")
             .addDelimiter().addParameter(DNS_ORIGIN)
@@ -1311,7 +1297,7 @@ public class HohenheimEndpoints {
      * plant a transfer key.
      */
     public static final Endpoint<Object> API_DNS_PEER_KEY = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "api_dns_peer_key"))
+        .identifier(HohenheimIds.id("api_dns_peer_key"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("dns").addDelimiter()
             .addStatic("peer-key").build())
@@ -1324,7 +1310,7 @@ public class HohenheimEndpoints {
     // route authenticates itself and no login gate stands in front of it. That declaration
     // carries the CSRF exemption ddclient/routers need (GET, no cookie, no CSRF token).
     public static final Endpoint<Object> DYNDNS_UPDATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "dyndns_update"))
+        .identifier(HohenheimIds.id("dyndns_update"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("nic").addDelimiter().addStatic("update").build())
         .authenticatesItself()
@@ -1340,7 +1326,7 @@ public class HohenheimEndpoints {
      * hang, nor with the setup redirect of an unseeded install.
      */
     public static final Endpoint<Object> HEALTH = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "health"))
+        .identifier(HohenheimIds.id("health"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("health").build())
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
@@ -1353,11 +1339,11 @@ public class HohenheimEndpoints {
     /** How often a live terminal session's per-record manage grant is re-checked (revoked = 1008). */
     public static final long TERMINAL_REVALIDATION_INTERVAL_MS = 15_000;
 
-    // --- Instance console: live output over a WebSocket, commands over a POST form ---
+    // --- Instance console: live output over a WebSocket; commands are the placed console operation ---
 
     /**
      * Live console of one instance for pl-terminal. A PLAIN console is read-only here --
-     * commands go through {@link #INSTANCE_CONSOLE_COMMAND}, never raw keystrokes: a
+     * commands go through the console operation's invoke (InstanceOperations.CONSOLE_COMMAND), never raw keystrokes: a
      * non-TTY container echoes nothing, so keystroke input would be invisible typing.
      * An INTERACTIVE console ({@code console_kind=tty}: the workload's primary process
      * sits behind a pseudo-terminal) carries keystrokes up and the
@@ -1369,7 +1355,7 @@ public class HohenheimEndpoints {
      * implies it.
      */
     public static final WebSocketEndpoint INSTANCE_CONSOLE = WebSocketEndpoint.builder()
-        .identifier(Identifier.of("hohenheim", "instance_console"))
+        .identifier(HohenheimIds.id("instance_console"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("ws").addDelimiter().addStatic("instance-console")
             .addDelimiter().addParameter(INSTANCE_ID).build())
@@ -1390,7 +1376,7 @@ public class HohenheimEndpoints {
      * make the wider door indistinguishable from the narrower one at the handshake.
      */
     public static final WebSocketEndpoint INSTANCE_SHELL = WebSocketEndpoint.builder()
-        .identifier(Identifier.of("hohenheim", "instance_shell"))
+        .identifier(HohenheimIds.id("instance_shell"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("ws").addDelimiter().addStatic("instance-shell")
             .addDelimiter().addParameter(INSTANCE_ID).build())
@@ -1406,29 +1392,13 @@ public class HohenheimEndpoints {
      * revalidated mid-session (revoked = 1008).
      */
     public static final WebSocketEndpoint VM_FRAMEBUFFER = WebSocketEndpoint.builder()
-        .identifier(Identifier.of("hohenheim", "vm_framebuffer"))
+        .identifier(HohenheimIds.id("vm_framebuffer"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("ws").addDelimiter().addStatic("instance-framebuffer")
             .addDelimiter().addParameter(INSTANCE_ID).build())
         .requiresLogin()
         .revalidateEvery(TERMINAL_REVALIDATION_INTERVAL_MS)
         .handler(session -> null) // Placeholder: set in HohenheimHandlers.init(), at the MODULES stage
-        .build();
-
-    /**
-     * One console command line to a running instance (the console tab's form). The
-     * handler demands per-record CONSOLE; requiresLogin is declared EXPLICITLY even
-     * though ServerMain's baseline("/") catch-all already implies it, so the declaration
-     * can be audited in place. The rule for this file: every endpoint states its own
-     * requirement -- a permission, requiresLogin, or a public stance with its reason
-     * (DYNDNS_UPDATE, HEALTH, DEV_TUNNEL) -- and never leans on the catch-all.
-     */
-    public static final Endpoint<Object> INSTANCE_CONSOLE_COMMAND = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "instance_console_command"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
-            .addDelimiter().addStatic("console").addDelimiter().addStatic("command").build())
-        .requiresLogin()
         .build();
 
     // --- Dev-tunnel registration (remote dev servers; token-authenticated in-band) ---
@@ -1449,7 +1419,7 @@ public class HohenheimEndpoints {
     public static final long DEV_TUNNEL_REVALIDATION_INTERVAL_MS = TERMINAL_REVALIDATION_INTERVAL_MS;
 
     public static final WebSocketEndpoint DEV_TUNNEL = WebSocketEndpoint.builder()
-        .identifier(Identifier.of("hohenheim", "dev_tunnel"))
+        .identifier(HohenheimIds.id("dev_tunnel"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("ws").addDelimiter().addStatic("dev-tunnel").build())
         .revalidateEvery(DEV_TUNNEL_REVALIDATION_INTERVAL_MS)

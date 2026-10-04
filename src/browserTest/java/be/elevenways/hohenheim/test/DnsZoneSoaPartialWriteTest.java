@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.server.cms.DnsZoneResource;
+import be.elevenways.hohenheim.server.cms.DnsZoneParts;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -59,7 +59,7 @@ class DnsZoneSoaPartialWriteTest extends HohenheimTestBase {
     @Test
     void aZoneWriteWithoutTheSoaFieldsKeepsThem() {
         Model zones = Models.get(DnsZoneModel.class);
-        DnsZoneResource resource = new DnsZoneResource();
+        DnsZoneParts resource = new DnsZoneParts();
 
         // 1. A one-entry immutable write (the inline cell lane's shape, and what a form
         //    that did not render the SOA entries submits) changes that column only.

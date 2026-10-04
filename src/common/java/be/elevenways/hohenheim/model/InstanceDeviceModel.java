@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -27,7 +29,7 @@ import be.elevenways.zenit.common.validation.Violations;
  */
 public class InstanceDeviceModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "instance_device");
+    public static final Identifier MODEL_ID = HohenheimIds.id("instance_device");
     public static final Schema SCHEMA = new Schema();
 
     public static final String TYPE_DISK = "disk";
@@ -96,7 +98,7 @@ public class InstanceDeviceModel extends Model {
                     // root and eth0 are the driver-owned devices; a row claiming either
                     // would collide with the create body's own overrides.
                     throw Violations.ofField("name", name,
-                        Microcopy.of("device_name_invalid").withFilter("scope", "violations")
+                        HohenheimViolations.text("device_name_invalid")
                             .withArg("name", String.valueOf(name)));
                 }
             }
@@ -108,7 +110,7 @@ public class InstanceDeviceModel extends Model {
                     ? row.get(SOURCE_MEDIA) : null;
                 if (media == null || media.isBlank()) {
                     throw Violations.ofField("source_media", media,
-                        Microcopy.of("device_media_required").withFilter("scope", "violations"));
+                        HohenheimViolations.text("device_media_required"));
                 }
             }
             // A disk write that CARRIES the type must carry a real size (a sizeless
@@ -121,7 +123,7 @@ public class InstanceDeviceModel extends Model {
                 boolean disk = declaresDisk || !row.has(TYPE.getName());
                 if (disk && (size == null || size < 1)) {
                     throw Violations.ofField("size_gb", size,
-                        Microcopy.of("device_size_invalid").withFilter("scope", "violations"));
+                        HohenheimViolations.text("device_size_invalid"));
                 }
             }
         });

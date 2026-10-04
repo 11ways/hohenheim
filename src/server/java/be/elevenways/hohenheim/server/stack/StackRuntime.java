@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.stack;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackModel;
@@ -64,17 +66,9 @@ import java.util.function.Supplier;
  */
 public class StackRuntime {
 
-    /** The activity action a SETTLED stack deploy is recorded under. */
-    public static final String ACTIVITY_DEPLOY_ACTION = "deployed";
 
-    /** The activity action a SETTLED redeploy of an older snapshot is recorded under. */
-    public static final String ACTIVITY_ROLLBACK_ACTION = "rolled_back";
 
-    /** The activity action a SETTLED stop is recorded under. */
-    public static final String ACTIVITY_STOP_ACTION = "stopped";
 
-    /** The activity action a SETTLED volume purge is recorded under. */
-    public static final String ACTIVITY_PURGE_ACTION = "volumes_purged";
 
     /** {@link #runDeploy}'s reason for a rollback (the deployment record's own word). */
     private static final String REASON_ROLLBACK = "rollback";
@@ -208,7 +202,7 @@ public class StackRuntime {
         }
         stopServices(spec);
         setStatus(stackId, StackModel.STATUS_STOPPED);
-        recordSettled(stackId, ACTIVITY_STOP_ACTION, spec.name());
+        recordSettled(stackId, HohenheimActivityAction.STOPPED, spec.name());
         return true;
     }
 
@@ -441,7 +435,7 @@ public class StackRuntime {
             }
             destroyServices(spec, true);
             setStatus(stackId, StackModel.STATUS_INACTIVE);
-            recordSettled(stackId, ACTIVITY_PURGE_ACTION, spec.name());
+            recordSettled(stackId, HohenheimActivityAction.VOLUMES_PURGED, spec.name());
             return null;
         });
     }
@@ -592,12 +586,12 @@ public class StackRuntime {
             // answered by its failed status and its deployment record, not by an
             // activity row claiming it happened (the instance tier's rule).
             recordSettled(stackId, REASON_ROLLBACK.equals(reason)
-                ? ACTIVITY_ROLLBACK_ACTION : ACTIVITY_DEPLOY_ACTION, reason);
+                ? HohenheimActivityAction.ROLLED_BACK : HohenheimActivityAction.DEPLOYED, reason);
             return null;
         } catch (Throwable e) {
             // Throwable, not Exception: an Error thrown on the worker would otherwise
             // vanish into the executor's unread future and leave the status stuck.
-            String failure = e.getMessage() != null ? e.getMessage() : e.toString();
+            String failure = HohenheimViolations.reasonOf(e);
             log.append("FAILED: ").append(failure).append('\n');
             scoped(() -> {
                 StackDeploymentRecords.finished(recordId, false, failure, log.toString(), null);
@@ -933,7 +927,7 @@ public class StackRuntime {
             try {
                 body.run();
             } catch (Throwable e) {
-                String failure = e.getMessage() != null ? e.getMessage() : e.toString();
+                String failure = HohenheimViolations.reasonOf(e);
                 Blast.log("STACK: queued work failed for stack", stackId, "-", failure);
                 if (recordId != null) {
                     scoped(() -> {
@@ -964,7 +958,7 @@ public class StackRuntime {
     }
 
     /** Record a SETTLED stack operation on the stack record, on the worker's datasource. */
-    private void recordSettled(int stackId, @NonNull String action, @Nullable String detail) {
+    private void recordSettled(int stackId, @NonNull HohenheimActivityAction action, @Nullable String detail) {
         scoped(() -> {
             ActivityLog.record(Models.get(StackModel.class), stackId, action, detail);
             return null;

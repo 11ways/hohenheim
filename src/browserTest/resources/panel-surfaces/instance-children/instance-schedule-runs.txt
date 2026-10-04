@@ -1,0 +1,37 @@
+case admin.instance-schedule-runs.operator admin instance-schedule-runs operator v2
+admission - verdict=admitted
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column schedule_id at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column record_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column status at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext=error relation=false
+column error at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column fired_by at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column steps at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column started_at at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext=ended_at relation=false
+column ended_at at=7 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+tab history at=0 landing=false view=false
+
+case admin.instance-schedule-runs.tenant-backups admin instance-schedule-runs tenant-backups v2
+admission - verdict=zenit:forbidden
+
+case admin.instance-schedule-runs.operator.run admin instance-schedule-runs operator v2
+admission - verdict=admitted
+record - found=true
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
+column schedule_id at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column record_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column status at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext=error relation=false
+column error at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column fired_by at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column steps at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column started_at at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext=ended_at relation=false
+column ended_at at=7 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:delete at=0 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab history at=0 landing=false view=false
+control EDIT%20schedule_id at=0 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
+control EDIT%20record_id at=1 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20status at=2 kind=zenitforms:form/select input=select required=false readonly=true options=running,completed,completed_with_failures,aborted,failed,abandoned binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20fired_by at=3 kind=zenitforms:form/select input=select required=false readonly=true options=cron,manual,once binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20error at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+

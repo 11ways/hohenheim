@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -52,14 +53,17 @@ import java.util.Set;
  * narrowed by and the per-principal ACCESS half -- read through zenit-cms's
  * {@code AccessFunction.scopedBy} and the source's {@code scopedBy}, so a surface can only
  * differ from its picker by naming a DIFFERENT scope, which is then visible here. A base the
- * admin resource shares is ITS declaration ({@code SiteDomainResource.ROWS} and siblings),
+ * admin resource shares is ITS declaration ({@code DomainParts.ROWS} and siblings),
  * narrowed here per principal.
  *
  * AIDEV-NOTE: two models deliberately carry TWO scopes, both declared here so the difference
  * is written down: access lists and git providers list only the rows a tenant MANAGES
  * ({@link #MANAGED_ACCESS_LISTS}, {@link #MANAGED_GIT_PROVIDERS}), while their pickers also
  * offer the operator's SHARED rows ({@link #USABLE_ACCESS_LISTS}, {@link #USABLE_GIT_PROVIDERS}).
- * A tenant may USE a shared row and must never open, retype or delete it.
+ * A tenant may USE a shared row and must never open, retype or delete it. The usable scope is
+ * each model's core REFERENCE policy ({@code RecordSource.Builder.referencePolicy()}, declared in
+ * ManagePanel.declareSources), which every relation picker over the model reads, so the owned
+ * scope never has to widen to make a shared row attachable.
  *
  * @author Jelle De Loecker
  * @since 0.1.0
@@ -73,7 +77,7 @@ public final class TenantScopes {
     public static final RowScope SITES = RowScope.perPrincipal(TenantScopes::siteAccess);
 
     /** Domains of live sites; tenants only those of the sites they manage. */
-    public static final RowScope DOMAINS = SiteDomainResource.ROWS.andPerPrincipal(
+    public static final RowScope DOMAINS = DomainParts.ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.managedSiteScope(ctx, Models.get(SiteDomainModel.class),
             SiteDomainModel.SITE_ID::in));
 
@@ -88,11 +92,11 @@ public final class TenantScopes {
     /**
      * Certificates minus the ACME account row; tenants only the walk-reachable ones.
      *
-     * AIDEV-NOTE: the base is THE admin {@link CertificateResource#ROWS} (itself
+     * AIDEV-NOTE: the base is THE admin {@link CertificateParts#ROWS} (itself
      * {@link HohenheimSources#notTheAcmeAccountRow}), never a second spelling of the exclusion
      * (ManageCertificateResource used to carry one).
      */
-    public static final RowScope CERTIFICATES = CertificateResource.ROWS.andPerPrincipal(
+    public static final RowScope CERTIFICATES = CertificateParts.ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(CertificateModel.class),
             CertificateModel.MODEL_ID, HohenheimAccess.VIEW, CertificateModel.ID::in));
 
@@ -111,7 +115,7 @@ public final class TenantScopes {
         ctx -> HohenheimAccess.isAdmin(ctx) ? null : InstanceTemplateModel.APPROVED_AT.isNotNull());
 
     /** Instance schedules; tenants only those of viewable instances. */
-    public static final RowScope INSTANCE_SCHEDULES = InstanceScheduleResource.ROWS.andPerPrincipal(
+    public static final RowScope INSTANCE_SCHEDULES = InstanceScheduleParts.ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(RecordScheduleModel.class),
             InstanceModel.MODEL_ID, HohenheimAccess.VIEW, TenantScopes::recordIdIn));
 
@@ -133,12 +137,20 @@ public final class TenantScopes {
         ctx -> HohenheimAccess.databaseScope(ctx, HohenheimAccess.VIEW));
 
     /** Devices attached to an instance; tenants only those of viewable instances. */
-    public static final RowScope INSTANCE_DEVICES = InstanceDeviceResource.ROWS.andPerPrincipal(
+    public static final RowScope INSTANCE_DEVICES = InstanceAttachmentParts.DEVICE_ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(InstanceDeviceModel.class),
             InstanceModel.MODEL_ID, HohenheimAccess.VIEW, InstanceDeviceModel.INSTANCE_ID::in));
 
+    /**
+     * Instance-owned variables; tenants only those of viewable instances. VIEW, never MANAGE or CONFIG: the list is
+     * the read-only face the Provisioning tab always showed to anyone who may open the instance.
+     */
+    public static final RowScope INSTANCE_VARIABLES = InstanceVariableParts.ROWS.andPerPrincipal(
+        ctx -> HohenheimAccess.grantScope(ctx, Models.get(InstanceVariableModel.class),
+            InstanceModel.MODEL_ID, HohenheimAccess.VIEW, InstanceVariableModel.INSTANCE_ID::in));
+
     /** Instance-database attachments; tenants only those of viewable instances. */
-    public static final RowScope INSTANCE_DATABASES = InstanceDatabaseResource.ROWS.andPerPrincipal(
+    public static final RowScope INSTANCE_DATABASES = InstanceAttachmentParts.DATABASE_ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(InstanceDatabaseModel.class),
             InstanceModel.MODEL_ID, HohenheimAccess.VIEW, InstanceDatabaseModel.INSTANCE_ID::in));
 

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.database;
 
+import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.Secrets;
@@ -11,6 +12,7 @@ import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -44,8 +46,12 @@ import java.util.Set;
  * policy of its own), the resource CAPS (the kind's declared footprint, which is also the
  * cgroup cap the daemon enforces), and every credential.
  *
+ * Loaded at boot ({@code @BlastAutoLoad}): it is the declaring home of permissions the grants editor lists
+ * ({@code Permissions.declared()}), so they are declared before anybody reads that table.
+ *
  * @author Jelle De Loecker
  */
+@BlastAutoLoad
 public final class TenantDatabases {
 
     /**
@@ -54,8 +60,8 @@ public final class TenantDatabases {
      * yet to hold a capability on. It is eligibility only -- the real bounds are the
      * transactional instance quota the engine is charged to and placement.
      */
-    public static final Permission DATABASES_CREATE =
-        Permission.of("hohenheim.databases.create");
+    public static final Permission DATABASES_CREATE = Permission.declare("hohenheim.databases.create",
+        Microcopy.of("hohenheim_databases_create").withFilter("scope", "permission"), Permission.Delegation.DELEGABLE);
 
     /** Docker's object-name ceiling, minus room for the owner prefix and the volume suffix. */
     private static final int MAX_LABEL_LENGTH = 32;

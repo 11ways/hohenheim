@@ -1,11 +1,11 @@
 package be.elevenways.hohenheim.auth;
 
-import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Registry;
 
 /**
  * Central registry for per-site auth-provider types. Drives the SiteAuthProviderModel's
- * RegistryEnumField, the admin form's polymorphic schema, and the proxy engine's gate
+ * RegistryMemberField, the admin form's polymorphic schema, and the proxy engine's gate
  * construction. Populated at server boot by SiteAuthProviders (parallel to UpstreamKinds).
  *
  * @author Jelle De Loecker <jelle@elevenways.be>
@@ -14,7 +14,7 @@ import be.elevenways.protoblast.common.registry.Registry;
 public final class SiteAuthProviderTypeRegistry {
 
     public static final Registry<SiteAuthProviderType> REGISTRY =
-        new Registry.Simple<>(Identifier.of("hohenheim", "site_auth_provider_types"));
+        Registry.create(HohenheimIds.id("site_auth_provider_type"));
 
     /**
      * Entries arrive via the generated BlastAutoLoadInit (the handler interface

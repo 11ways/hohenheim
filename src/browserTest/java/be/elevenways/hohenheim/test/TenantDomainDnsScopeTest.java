@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import java.util.Objects;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DnsDyndnsCredentialModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
@@ -7,7 +8,11 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.ManageDnsRecordResource;
+import be.elevenways.hohenheim.server.cms.ManageDnsRecordParts;
+import be.elevenways.zenit.cms.server.panel.PartsLists;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
@@ -23,7 +28,7 @@ import be.elevenways.zenit.common.data.RecordSourceQuery;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.Principal;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -325,7 +330,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         assertThat(stolen.body()).as("step 2: the refusal is not the archived-parent copy")
             .doesNotContain("in the trash");
         assertThat(domainByHostname("stolen.tenantscope.test"))
-            .as("the AccessFunction scopes READS; the site_id a CREATE submits is a "
+            .as("the row scope scopes READS; the site_id a CREATE submits is a "
                 + "separate question and the write pipeline is what answers it")
             .isNull();
 
@@ -621,14 +626,14 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         assertGranted(DnsRecordModel.MODEL_ID, dynamicId, HohenheimAccess.VIEW);
         String storedDigest = DynamicDnsService.credentialFor(dynamicId)
             .get(DnsDyndnsCredentialModel.TOKEN_DIGEST);
-        assertThat(tenantPost("/manage/dns-records/" + dynamicId + "/action/dyndns_token", "")
+        assertThat(tenantPost("/manage/dns-records/invoke/hohenheim.dyndns_token?ids=" + dynamicId, "")
             .statusCode()).as("edit is not dyndns").isIn(403, 404);
         assertThat((String) DynamicDnsService.credentialFor(dynamicId)
             .get(DnsDyndnsCredentialModel.TOKEN_DIGEST))
             .as("the refused action minted nothing").isEqualTo(storedDigest);
 
         assertGranted(DnsRecordModel.MODEL_ID, dynamicId, HohenheimAccess.DYNDNS);
-        assertThat(tenantPost("/manage/dns-records/" + dynamicId + "/action/dyndns_token", "")
+        assertThat(tenantPost("/manage/dns-records/invoke/hohenheim.dyndns_token?ids=" + dynamicId, "")
             .statusCode()).as("the dyndns holder may re-mint").isIn(200, 302, 303);
         assertThat((String) DynamicDnsService.credentialFor(dynamicId)
             .get(DnsDyndnsCredentialModel.TOKEN_DIGEST))
@@ -892,7 +897,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         mine.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_LETSENCRYPT);
         mine.set(CertificateModel.STATUS, CertificateModel.STATUS_ACTIVE);
         mine.set(CertificateModel.DOMAIN_NAMES_TEXT, "owned.tenantscope.test");
-        mine.set(CertificateModel.REQUESTED_BY_USER_ID, tenantId);
+        CertificateModel.setRequester(mine, PrincipalRef.account(tenantId));
         mine.set(CertificateModel.CERTIFICATE_PEM, "-----BEGIN CERTIFICATE-----ownedcert");
         mine.set(CertificateModel.PRIVATE_KEY_PEM, "-----BEGIN PRIVATE KEY-----ownedsecret");
         certModel.save(mine);
@@ -1044,13 +1049,14 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
 
     /** The delegated list's own read path, driven as the operator (who is scoped to everything). */
     private static List<Row> manageSearch(String term) {
-        ManageDnsRecordResource resource = new ManageDnsRecordResource();
+        var parts = ManageDnsRecordParts.manage();
+        AccessContext access = AccessContext.of(TenantConduits.stubFor(adminPrincipal));
+        PanelRequest request = new PanelRequest(PanelRegistry.getBySlug("manage"), access.conduit(), access, null);
         TableView.Applied<Row> applied = TableView
-            .forPrincipal(adminPrincipal.id(), resource.id()).build()
-            .apply(resource.tableSpec())
-            .withSearch(term);
-        return resource.listRows(applied,
-            AccessContext.of(TenantConduits.stubFor(adminPrincipal)));
+            .forPrincipal(Objects.requireNonNull(adminPrincipal.reference()).id(), parts.id()).build()
+            .apply(PartsLists.<Row>tableSpec(parts))
+            .withSearch(parts.list().searchTerm(term));
+        return PartsReads.listRows(request, parts, null, applied, access);
     }
 
     private static List<Object> ids(List<Row> rows) {

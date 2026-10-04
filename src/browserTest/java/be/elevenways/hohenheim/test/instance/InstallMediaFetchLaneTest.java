@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.instance.InstallMediaLive;
 import be.elevenways.hohenheim.instance.InstallMediaView;
 import be.elevenways.hohenheim.model.InstallMediaFetchModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.cms.ServerMediaPage;
+import be.elevenways.hohenheim.server.cms.ServerMediaTab;
 import be.elevenways.hohenheim.server.instance.InstallMediaFetches;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.Poll;
@@ -119,7 +119,7 @@ class InstallMediaFetchLaneTest extends HohenheimTestBase {
         String settled = adminGet("/admin/servers/" + hostId + "/page/install-media").body();
         assertThat(settled).as("step 5: the ending stays listed")
             .contains("data-fetch-name=\"" + PREFIX + "iso\"");
-        InstallMediaView view = ServerMediaPage.view(host);
+        InstallMediaView view = ServerMediaTab.view(host);
         assertThat(view.fetches().stream().filter(fetch -> (PREFIX + "iso").equals(fetch.name())).toList())
             .as("step 5: the view carries the fetch as settled and ready")
             .singleElement()

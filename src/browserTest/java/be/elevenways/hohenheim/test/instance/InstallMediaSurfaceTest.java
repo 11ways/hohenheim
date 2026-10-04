@@ -1,12 +1,16 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.server.panel.PartsForms;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.test.PanelEntryViews;
+import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.ManageInstanceDeviceResource;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
@@ -45,6 +49,8 @@ import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -375,14 +381,14 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
     @Test
     void theTenantDeviceFormNeitherOffersNorAcceptsCdrom() {
         int instanceId = mediaCapableInstance("media-surf-form");
-        ManageInstanceDeviceResource resource = new ManageInstanceDeviceResource();
+        PanelResource<Row> resource = PanelEntryViews.of(HohenheimSlugs.MANAGE, InstanceAttachmentParts.DEVICES);
 
         Map<String, Object> submitted = new LinkedHashMap<>();
         submitted.put("instance_id", instanceId);
         submitted.put("type", InstanceDeviceModel.TYPE_CDROM);
         submitted.put("name", PREFIX + "sneak");
         assertThat(catchThrowable(() -> SubmittedValueCoercion
-                .coerceFormOrThrow(resource.formSpec(), submitted)))
+                .coerceFormOrThrow(PartsForms.formSpec(resource), submitted)))
             .as("a hand-posted type=cdrom fails the tenant form's own coercion --"
                 + " the select declares disk and nic only")
             .isInstanceOf(Violations.class);
@@ -393,7 +399,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
         disk.put("name", PREFIX + "ok");
         disk.put("size_gb", 1);
         Map<String, Object> coerced = SubmittedValueCoercion
-            .coerceFormOrThrow(resource.formSpec(), disk);
+            .coerceFormOrThrow(PartsForms.formSpec(resource), disk);
         assertThat(coerced)
             .as("the positive anchor: a disk submit coerces through the same spec")
             .containsEntry("type", InstanceDeviceModel.TYPE_DISK);
@@ -531,7 +537,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
             "name=media-surf-iso&url=file:///etc/passwd", sessionToken, csrfToken);
         assertThat(badUrl.statusCode())
             .as("step 4: the refusal is a redirect back to the tab").isIn(302, 303);
-        var flash = popFlash();
+        var flash = popFlash(badUrl);
         assertThat(flash)
             .as("step 4: a refusal flash was stashed").isNotNull();
         assertThat(flash.message().key())
@@ -549,7 +555,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
             assertThat(privateFetch.statusCode())
                 .as("step 4b: a private-address fetch redirects back to the tab: " + privateUrl)
                 .isIn(302, 303);
-            var privateFlash = popFlash();
+            var privateFlash = popFlash(privateFetch);
             assertThat(privateFlash)
                 .as("step 4b: a refusal flash was stashed for " + privateUrl).isNotNull();
             assertThat(privateFlash.message().key())
@@ -565,7 +571,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
             "name=held-iso", sessionToken, csrfToken);
         assertThat(inUse.statusCode())
             .as("step 5: the in-use refusal redirects back to the tab").isIn(302, 303);
-        var inUseFlash = popFlash();
+        var inUseFlash = popFlash(inUse);
         assertThat(inUseFlash)
             .as("step 5: an in-use refusal flash was stashed").isNotNull();
         assertThat(inUseFlash.message().key())
@@ -836,11 +842,9 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
         static final Schema SETTINGS_SCHEMA = new Schema();
         static final StringField IMAGE = SETTINGS_SCHEMA.addField(
             StringField.builder().name("image").build());
-        private static boolean registered;
 
         static void register() {
-            if (!registered) {
-                registered = true;
+            if (InstanceKinds.getHandler(ID.toString()) == null) {
                 InstanceKinds.register(new FakeMediaKind());
             }
         }
@@ -860,7 +864,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
 
         @Override public Icon getIcon() { return Icon.of("flask"); }
 
-        @Override public String getColor() { return "gray"; }
+        @Override public BadgeColor color() { return ColorHue.GRAY; }
 
         @Override public Schema getSchema() { return SETTINGS_SCHEMA; }
 

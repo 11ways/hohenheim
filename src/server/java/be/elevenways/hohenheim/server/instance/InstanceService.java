@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -27,6 +29,7 @@ import be.elevenways.hohenheim.server.runtime.WorkloadAttribution;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -78,14 +81,8 @@ public final class InstanceService {
     /** Publications bind loopback (DockerInstanceRuntime.HOST_BIND_ADDRESS's ledger spelling). */
     private static final String BIND_ADDRESS = "127.0.0.1";
 
-    /** The activity action a SETTLED deploy is recorded under. */
-    public static final String ACTIVITY_DEPLOY_ACTION = "deployed";
-
     /** The trigger a deploy records when its caller names none. */
     public static final String DEFAULT_DEPLOY_REASON = "deploy";
-
-    /** The activity action a SETTLED stop is recorded under. */
-    public static final String ACTIVITY_STOP_ACTION = "stopped";
 
     /** The activity detail a verified destroy renames its soft-delete row with. */
     public static final String ACTIVITY_DESTROY_DETAIL = "destroy";
@@ -97,17 +94,16 @@ public final class InstanceService {
      * AIDEV-NOTE: this was an in-flight SET, and a set is not a lock: a second deploy ran
      * beside the first (two create() calls replacing each other's container), and the
      * first one's finally cleared the mark while the second still ran. The reconciler
-     * question the set used to answer ("is this controller mid-operation on the record?")
-     * is now {@link InstanceOperationLock#isBusy}, asked through the same lock.
+     * question the set used to answer ("is anybody mid-operation on the record?") is now
+     * {@link InstanceOperationLock#runIfIdle}, asked through the same claim.
      *
      * AIDEV-NOTE: the reconciler still needs that question, for the transitional story: a
      * deploy is not marked by any status -- the record keeps its PREVIOUS status until the
      * fenced stamp at the very end -- so between {@code create} and that stamp the daemon
      * legitimately disagrees with a record that says {@code running}. The host LEASE cannot
      * answer it: {@code HostLeases.requireFence} acquires on miss and then holds for the
-     * process lifetime, so "we hold host X" means "no RIVAL is working on X", never "we
-     * are idle on X". The two guards are complementary and both are needed -- the lease
-     * excludes other controllers, this lock excludes ourselves.
+     * process lifetime, so "we hold host X" means "no RIVAL drives X", never "we are idle on
+     * X". The record's claim answers it for every controller at once.
      *
      * AIDEV-NOTE: the upstream invalidation lives HERE, at the one funnel deploy, stop and
      * destroy all pass through, rather than in each kind's lane. Only the release engine
@@ -126,9 +122,14 @@ public final class InstanceService {
      *         the record
      */
     private <T> T operation(int instanceId, @NonNull Supplier<T> body) {
+        return operation(instanceId, body, false);
+    }
+
+    private <T> T operation(int instanceId, @NonNull Supplier<T> body, boolean stored) {
         try {
-            return this.operations.exclusive(instanceId, InstanceOperationLock.Contention.REFUSE,
-                body);
+            return stored
+                ? this.operations.exclusiveStored(instanceId, InstanceOperationLock.Contention.REFUSE, body)
+                : this.operations.exclusive(instanceId, InstanceOperationLock.Contention.REFUSE, body);
         } finally {
             ApplicationUpstreams.invalidateForInstance(instanceId);
         }
@@ -288,7 +289,7 @@ public final class InstanceService {
         // Asked again on the workload half, for the same reason the power gate is: an
         // in-package caller (restart, a source build's bring-up) must not be a wider door.
         InstanceOperationGuard.requireDatabasesReady(instanceId);
-        long fence = this.leases.requireFence(resolved.serverId());
+        this.leases.requireFence(resolved.serverId());
         // The predicate (and the reasoning behind it) lives on OwnedInstances.isPlacementGated,
         // so the instance overview can explain this refusal by asking the SAME question.
         if (OwnedInstances.isPlacementGated(resolved.handler(), resolved.row())) {
@@ -317,7 +318,7 @@ public final class InstanceService {
             // Pin honesty, recorded from DAEMON truth right after create: the resolved
             // image identity behind the mutable alias is what the record answers with,
             // and what an absent-workload recreate resolves from.
-            pinResolvedImage(resolved, spec, fence);
+            pinResolvedImage(resolved, spec);
             // Desired devices reconcile BEFORE start: a recreated workload comes back
             // with its disks and NICs, never silently without them.
             new InstanceDevices(this).reconcile(resolved, instanceId);
@@ -350,7 +351,7 @@ public final class InstanceService {
             // reached the ledger first would delete the winner's fresh port claim.
             // With a readiness matcher the stamp is STARTING; the matcher's own
             // fenced write flips it to RUNNING when the line is observed.
-            stampGuarded(resolved, fence, watch != null
+            stampGuarded(resolved, watch != null
                 ? watch.initialStatus() : InstanceModel.STATUS_RUNNING);
             // Every record-after publication's observed port is recorded in ONE call: the
             // ledger supersedes whatever observed claims the owner held that are not in
@@ -381,16 +382,16 @@ public final class InstanceService {
             // The published port is fresh (loopback publications are ephemeral), so any
             // generated SRV rows riding this proxy re-reconcile now.
             GameDomains.afterInstanceDeploy(instanceId);
-            recordPower(instanceId, ACTIVITY_DEPLOY_ACTION, resolved);
+            recordPower(instanceId, HohenheimActivityAction.DEPLOYED, resolved);
             return status;
         } catch (IOException e) {
             InstanceConsoles.closeSession(instanceId);
             // Fence first, ledger second: a fenced-out loser must not park the
             // winner's claims. Whatever the previous deploy held is unverifiable
             // for a still-fenced controller: park, never delete.
-            stampGuarded(resolved, fence, InstanceModel.STATUS_ERROR);
+            stampGuarded(resolved, InstanceModel.STATUS_ERROR);
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
-            throw refusal("instance_deploy_failed", resolved.row(), e);
+            throw HohenheimViolations.instanceRefusal("instance_deploy_failed", resolved.row(), e);
         } catch (Violations refused) {
             // stampGuarded (fenced out) or the console's own named refusal: never
             // leave a console session attached to a deploy this controller lost.
@@ -426,7 +427,7 @@ public final class InstanceService {
         // An operator stop mid-capture/mid-restore would stamp STOPPED over the
         // protected status and un-protect the operation; destroy stays ungated.
         InstanceOperationGuard.requireOperable(resolved.row());
-        long fence = this.leases.requireFence(resolved.serverId());
+        this.leases.requireFence(resolved.serverId());
         try {
             // The console half of a stop: mark the coming exit OBSERVED (crash
             // detection must not fire on an operator stop), then try the template's
@@ -442,13 +443,13 @@ public final class InstanceService {
             }
             resolved.runtime().stop(resolved.spec().handle(), 10);
             this.beforeOutcomeWrite.run();
-            stampGuarded(resolved, fence, InstanceModel.STATUS_STOPPED);
+            stampGuarded(resolved, InstanceModel.STATUS_STOPPED);
             PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
-            recordPower(instanceId, ACTIVITY_STOP_ACTION, resolved);
+            recordPower(instanceId, HohenheimActivityAction.STOPPED, resolved);
         } catch (IOException e) {
-            stampGuarded(resolved, fence, InstanceModel.STATUS_ERROR);
+            stampGuarded(resolved, InstanceModel.STATUS_ERROR);
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
-            throw refusal("instance_stop_failed", resolved.row(), e);
+            throw HohenheimViolations.instanceRefusal("instance_stop_failed", resolved.row(), e);
         }
     }
 
@@ -492,7 +493,7 @@ public final class InstanceService {
             return;
         }
         Resolved resolved = resolve(instanceId);
-        long fence = this.leases.requireFence(resolved.serverId());
+        this.leases.requireFence(resolved.serverId());
         try {
             // Destroy is an intended end: never a crash, and no session survives it.
             InstanceConsoles.markStopExpected(instanceId);
@@ -509,12 +510,12 @@ public final class InstanceService {
             // still attributes it to this record, and ONLY then.
             destroyAbandonedMigrationCopy(resolved);
         } catch (IOException e) {
-            stampGuarded(resolved, fence, InstanceModel.STATUS_ERROR);
+            stampGuarded(resolved, InstanceModel.STATUS_ERROR);
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
-            throw refusal("instance_destroy_failed", resolved.row(), e);
+            throw HohenheimViolations.instanceRefusal("instance_destroy_failed", resolved.row(), e);
         }
         this.beforeOutcomeWrite.run();
-        stampGuarded(resolved, fence, InstanceModel.STATUS_STOPPED);
+        stampGuarded(resolved, InstanceModel.STATUS_STOPPED);
         // End of life: pre-allocated reservations die WITH the instance -- unlike stop,
         // which keeps them (the stable number is what DNS points at across restarts).
         PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, instanceId);
@@ -549,7 +550,7 @@ public final class InstanceService {
      * it settled against; a failed operation is answered by the {@code error} status
      * stamp and its named refusal, not by an activity row claiming it happened.
      */
-    private static void recordPower(int instanceId, @NonNull String action,
+    private static void recordPower(int instanceId, @NonNull HohenheimActivityAction action,
                                     @NonNull Resolved resolved) {
         ActivityLog.record(Models.get(InstanceModel.class), instanceId, action,
             resolved.spec().handle());
@@ -585,9 +586,9 @@ public final class InstanceService {
      * control-plane bookkeeping that must not acquire preconditions it does not need --
      * resolve() refuses a blank image and an unknown kind, and the switch half of a
      * gated release cannot afford to fail on a spec question after the candidate is
-     * already taking traffic. It reads the host off the row and stamps under the host
-     * fence, so a stale controller's flip matches zero rows exactly like every other
-     * outcome write. No capability gate: the role is not a request-reachable verb, and
+     * already taking traffic. It reads the host off the row and stamps through the
+     * release record's own claim, so a stale holder's flip matches zero rows exactly like
+     * every other outcome write. No capability gate: the role is not a request-reachable verb, and
      * the operation that owns it (a site release) gated itself at the site tier.
      *
      * @throws Violations {@code instance_not_found} or {@code instance_fenced_out}
@@ -595,13 +596,16 @@ public final class InstanceService {
     public void assignRuntimeRole(int instanceId, @NonNull String role) {
         Row row = Models.get(InstanceModel.class).findById(instanceId);
         if (row == null) {
-            throw Violations.ofForm(violationText("instance_not_found")
+            throw Violations.ofForm(HohenheimViolations.text("instance_not_found")
                 .withArg("id", instanceId));
         }
         int serverId = ServerModel.canonicalServerId(row.get(InstanceModel.SERVER_ID));
-        long fence = this.leases.requireFence(serverId);
-        InstanceOperationGuard.stampRole(this.leases, instanceId, serverId, fence, role,
-            String.valueOf((Object) row.get(InstanceModel.NAME)));
+        this.leases.requireFence(serverId);
+        // The release's own claim, queued: the caller holds the application's (the documented lock order), and a
+        // reconciler glance at the release must delay the switch, never fail it.
+        this.operations.exclusive(instanceId, InstanceOperationLock.Contention.QUEUE, () ->
+            InstanceOperationGuard.stampRole(this.leases, instanceId, serverId, role,
+                String.valueOf((Object) row.get(InstanceModel.NAME))));
     }
 
     /** Typed live status straight off the daemon; never throws. */
@@ -653,7 +657,7 @@ public final class InstanceService {
         // wrapper, which left every OTHER destroy caller (the release engine, preview expiry,
         // database teardown) recording a bare "update" for an irreversible teardown.
         boolean[] trashed = {false};
-        ActivityLog.withAction(ActivityLog.ACTION_DELETE, ACTIVITY_DESTROY_DETAIL,
+        ActivityLog.withAction(ZenitActivityAction.DELETE, ACTIVITY_DESTROY_DETAIL,
             () -> TenantWrites.inAuthorizedOperation(
                 () -> trashed[0] = Models.get(InstanceModel.class).delete(instanceId)));
         return trashed[0];
@@ -662,17 +666,16 @@ public final class InstanceService {
     // -- the fence discipline -------------------------------------------------
 
     /**
-     * THE fenced outcome write: one guarded statement that both records the status and
-     * stamps the fence -- {@code WHERE id = ? AND deleted_at IS NULL AND (claim_fence
-     * IS NULL OR claim_fence <= :myFence)}. Zero matched rows is a HARD FAILURE, never
-     * a shrug: it means a rival controller with a higher fence owns this record now,
-     * so this controller drops its hold and aborts. Cleanup is the winner's job.
+     * THE fenced outcome write ({@link InstanceOperationGuard#stamp}): the status, on the
+     * record this operation's claim still owns. Zero matched rows is a HARD FAILURE, never
+     * a shrug: a rival operation took the record over with a later fence, so this one
+     * aborts. Cleanup is the winner's job.
      *
      * @throws Violations {@code instance_fenced_out}
      */
-    private void stampGuarded(@NonNull Resolved resolved, long fence, @NonNull String status) {
+    private void stampGuarded(@NonNull Resolved resolved, @NonNull String status) {
         InstanceOperationGuard.stamp(this.leases, resolved.row().get(InstanceModel.ID),
-            resolved.serverId(), fence, status,
+            resolved.serverId(), status,
             String.valueOf((Object) resolved.row().get(InstanceModel.NAME)));
     }
 
@@ -691,8 +694,8 @@ public final class InstanceService {
      * right after create so "what is actually running" is answerable from the row.
      * Drivers without an identity-reporting capability leave the column untouched.
      */
-    private void pinResolvedImage(@NonNull Resolved resolved, @NonNull InstanceSpec spec,
-                                  long fence) throws IOException {
+    private void pinResolvedImage(@NonNull Resolved resolved, @NonNull InstanceSpec spec)
+            throws IOException {
         String observed = null;
         if (resolved.runtime() instanceof NativeSnapshotSupport support) {
             observed = support.imageIdentity(spec).id();
@@ -704,7 +707,7 @@ public final class InstanceService {
             return;
         }
         InstanceOperationGuard.stampFingerprint(this.leases,
-            resolved.row().get(InstanceModel.ID), resolved.serverId(), fence, observed,
+            resolved.row().get(InstanceModel.ID), resolved.serverId(), observed,
             String.valueOf((Object) resolved.row().get(InstanceModel.NAME)));
     }
 
@@ -720,7 +723,7 @@ public final class InstanceService {
             return;
         }
         if (!(resolved.runtime() instanceof FileStagingSupport staging)) {
-            throw Violations.ofForm(violationText("files_unsupported")
+            throw Violations.ofForm(HohenheimViolations.text("files_unsupported")
                 .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME))));
         }
         List<FileStagingSupport.StagedFile> staged = new ArrayList<>();
@@ -769,9 +772,6 @@ public final class InstanceService {
 
     // -- interrupted capture/restore recovery ---------------------------------------
 
-    /** The activity action an interrupted-status settle is recorded under. */
-    public static final String ACTIVITY_SETTLE_ACTION = "settled_interrupted";
-
     /**
      * Boot recovery: settle every instance a killed controller left {@code capturing} or
      * {@code restoring} -- statuses only the in-process outcome paths ever clear, so a
@@ -814,11 +814,19 @@ public final class InstanceService {
             int id = row.get(InstanceModel.ID);
             Integer serverId = row.get(InstanceModel.SERVER_ID);
             try {
+                // Only a record nobody holds: a live operation's claim (this controller's or a rival's)
+                // means the status is that operation's to finish, whatever the clock says.
                 Runnable settle = () -> {
-                    if (!service.settleInterrupted(id)) {
-                        Blast.log("INSTANCE: could not settle interrupted",
-                            row.get(InstanceModel.STATUS), "state of", id,
-                            "- the daemon did not answer; retried at the next boot");
+                    boolean idle = service.operations.runIfIdle(id, () -> {
+                        if (!service.settleInterrupted(id)) {
+                            Blast.log("INSTANCE: could not settle interrupted",
+                                row.get(InstanceModel.STATUS), "state of", id,
+                                "- the daemon did not answer; retried at the next boot");
+                        }
+                    });
+                    if (!idle) {
+                        Blast.log("INSTANCE: interrupted", row.get(InstanceModel.STATUS), "state of", id,
+                            "is held by a live operation; left to it");
                     }
                 };
                 if (serverId == null) {
@@ -865,11 +873,11 @@ public final class InstanceService {
         } else {
             settled = InstanceModel.STATUS_ERROR;
         }
-        long fence = this.leases.requireFence(resolved.serverId());
-        InstanceOperationGuard.stamp(this.leases, instanceId, resolved.serverId(), fence,
+        this.leases.requireFence(resolved.serverId());
+        InstanceOperationGuard.stamp(this.leases, instanceId, resolved.serverId(),
             settled, row.get(InstanceModel.NAME));
         ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-            ACTIVITY_SETTLE_ACTION, status + " -> " + settled
+            HohenheimActivityAction.SETTLED_INTERRUPTED, status + " -> " + settled
                 + " (interrupted by a controller restart)");
         Blast.log("INSTANCE: settled interrupted", status, "state of",
             row.get(InstanceModel.NAME), "->", settled);
@@ -891,7 +899,7 @@ public final class InstanceService {
      */
     public @NonNull List<String> destroyWithData(int instanceId) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.DESTROY);
-        return operation(instanceId, () -> destroyWithDataNow(instanceId));
+        return operation(instanceId, () -> destroyWithDataNow(instanceId), true);
     }
 
     /** {@link #destroyWithData}'s body; the caller holds the operation lock. */
@@ -899,7 +907,7 @@ public final class InstanceService {
         // Trashed included: removing a destroyed record's data is this verb's whole point.
         Row row = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
         if (row == null) {
-            throw Violations.ofForm(violationText("instance_not_found")
+            throw Violations.ofForm(HohenheimViolations.text("instance_not_found")
                 .withArg("id", instanceId));
         }
         String serverName = ServerModel.nameOf(
@@ -914,7 +922,7 @@ public final class InstanceService {
         }
         List<String> removed = new ArrayList<>(removeNamedVolumes(row, serverName));
         removed.addAll(InstanceVolumes.destroyAll(instanceId, serverName));
-        ActivityLog.record(Models.get(InstanceModel.class), instanceId, "deleted_data",
+        ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.DELETED_DATA,
             String.join(", ", removed));
         Blast.log("INSTANCE: deleted data of", row.get(InstanceModel.NAME), "-",
             removed.isEmpty() ? "nothing to remove" : String.join(", ", removed));
@@ -948,13 +956,12 @@ public final class InstanceService {
             return List.of();
         }
         int instanceId = row.get(InstanceModel.ID);
-        Map<String, Object> settings = row.get(InstanceModel.SETTINGS) instanceof Map<?, ?> map
-            ? castSettings(map) : Map.of();
+        Map<String, Object> settings = InstanceModel.settingsOf(row);
         InstanceSpec spec = handler.specFor(instanceId, settings);
         try {
             volumes.removeVolumesForRestore(spec, logical, logical.keySet());
         } catch (IOException e) {
-            throw refusal("instance_data_destroy_failed", row, e);
+            throw HohenheimViolations.instanceRefusal("instance_data_destroy_failed", row, e);
         }
         return new ArrayList<>(spec.volumes().keySet());
     }
@@ -962,8 +969,9 @@ public final class InstanceService {
     /**
      * Stop and deploy again, in one verb.
      *
-     * AIDEV-NOTE: THE restart composition, and there is exactly one. It used to live
-     * inline in {@code InstancePowerAction.execute} and nowhere else, so the CMS surface
+     * AIDEV-NOTE: THE restart composition, and there is exactly one: the restart operation
+     * ({@code InstanceOperations.RESTART}) runs it from every surface. It used to live
+     * inline in the scheduled power action and nowhere else, so the CMS surface
      * that wanted a restart button had to either hand-roll the pair (two independent
      * gate checks, two toasts, and a UI-side window where the workload is down with
      * nothing recording why) or grow a schedule to press it. stop() is idempotent when
@@ -1016,17 +1024,16 @@ public final class InstanceService {
     public Resolved resolve(int instanceId) {
         Row row = Models.get(InstanceModel.class).findById(instanceId);
         if (row == null) {
-            throw Violations.ofForm(violationText("instance_not_found")
+            throw Violations.ofForm(HohenheimViolations.text("instance_not_found")
                 .withArg("id", instanceId));
         }
         InstanceKindHandler handler = InstanceKinds.getHandler(row.get(InstanceModel.KIND));
         if (handler == null) {
             throw Violations.ofField("kind", row.get(InstanceModel.KIND),
-                violationText("instance_kind_unknown")
+                HohenheimViolations.text("instance_kind_unknown")
                     .withArg("kind", String.valueOf((Object) row.get(InstanceModel.KIND))));
         }
-        Map<String, Object> settings = row.get(InstanceModel.SETTINGS) instanceof Map<?, ?> map
-            ? castSettings(map) : Map.of();
+        Map<String, Object> settings = InstanceModel.settingsOf(row);
         InstanceVariables instanceVariables = new InstanceVariables();
         Map<String, String> declared = instanceVariables.valuesFor(instanceId);
         // An attached managed database's connection family is DERIVED here, at resolve
@@ -1040,7 +1047,7 @@ public final class InstanceService {
         settings = instanceVariables.applyToSettings(settings, declared, derived);
         InstanceSpec spec = handler.specFor(instanceId, settings);
         if (spec.image().isBlank() && !handler.allowsBlankImage(settings)) {
-            throw Violations.ofField("settings.image", "", violationText("instance_image_required"));
+            throw Violations.ofField("settings.image", "", HohenheimViolations.text("instance_image_required"));
         }
         // The record's pinned resolved image identity rides the spec: a driver that
         // resolves by fingerprint recreates an ABSENT workload from the pin, never by
@@ -1090,25 +1097,9 @@ public final class InstanceService {
         } catch (Violations alreadyNamed) {
             throw alreadyNamed;
         } catch (RuntimeException unaddressable) {
-            throw Violations.ofForm(violationText("instance_host_unreachable")
+            throw Violations.ofForm(HohenheimViolations.text("instance_host_unreachable")
                 .withArg("name", serverName)
-                .withArg("reason", unaddressable.getMessage() != null
-                    ? unaddressable.getMessage() : unaddressable.toString()));
+                .withArg("reason", HohenheimViolations.reasonOf(unaddressable)));
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> castSettings(Map<?, ?> map) {
-        return (Map<String, Object>) map;
-    }
-
-    private static Violations refusal(String key, Row row, IOException cause) {
-        return Violations.ofForm(violationText(key)
-            .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME)))
-            .withArg("reason", cause.getMessage() != null ? cause.getMessage() : cause.toString()));
-    }
-
-    private static Microcopy violationText(String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
     }
 }

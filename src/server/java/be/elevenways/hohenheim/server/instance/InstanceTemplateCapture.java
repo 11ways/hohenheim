@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -8,11 +10,12 @@ import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.ImageOrigin;
 import be.elevenways.hohenheim.server.runtime.ImagePublishSupport;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.text.Slugs;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -20,7 +23,6 @@ import java.io.IOException;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -59,44 +61,51 @@ public final class InstanceTemplateCapture {
      */
     public int capture(int instanceId) {
         HohenheimAccess.requireOperatorOperation();
+        // Under the record's claim, like every other verb on it: a capture beside a deploy would publish a workload
+        // the deploy is replacing.
+        return this.instances.operations().exclusive(instanceId, InstanceOperationLock.Contention.REFUSE,
+            () -> this.captureHeld(instanceId));
+    }
+
+    private int captureHeld(int instanceId) {
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
         if (!resolved.handler().supportsTemplateCapture()
                 || !(resolved.runtime() instanceof ImagePublishSupport publisher)) {
-            throw Violations.ofForm(violationText("template_capture_unsupported")
+            throw Violations.ofForm(HohenheimViolations.text("template_capture_unsupported")
                 .withArg("name", nameOf(resolved.row())));
         }
         if (!InstanceModel.STATUS_STOPPED.equals(resolved.row().get(InstanceModel.STATUS))) {
             // The DRIVER also refuses a non-stopped publish on daemon truth; this is the
             // record-status twin so the refusal happens before any status is stamped.
-            throw Violations.ofForm(violationText("template_capture_requires_stopped")
+            throw Violations.ofForm(HohenheimViolations.text("template_capture_requires_stopped")
                 .withArg("name", nameOf(resolved.row())));
         }
 
         String alias = aliasFor(resolved.row());
-        long fence = this.instances.leases().requireFence(resolved.serverId());
+        this.instances.leases().requireFence(resolved.serverId());
         InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
-            resolved.serverId(), fence, InstanceModel.STATUS_CAPTURING,
+            resolved.serverId(), InstanceModel.STATUS_CAPTURING,
             nameOf(resolved.row()));
         try {
             String description = "Captured from instance '" + nameOf(resolved.row())
                 + "' (#" + instanceId + ")";
             publisher.publishImage(resolved.spec(), alias, description);
         } catch (IOException e) {
-            throw Violations.ofForm(violationText("template_capture_failed")
+            throw Violations.ofForm(HohenheimViolations.text("template_capture_failed")
                 .withArg("name", nameOf(resolved.row()))
-                .withArg("reason", e.getMessage() != null ? e.getMessage() : e.toString()));
+                .withArg("reason", HohenheimViolations.reasonOf(e)));
         } finally {
             // A publish READS the stopped workload and never changes it; both outcomes
             // settle the record back to the state the capture started from.
             InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
-                resolved.serverId(), fence, InstanceModel.STATUS_STOPPED,
+                resolved.serverId(), InstanceModel.STATUS_STOPPED,
                 nameOf(resolved.row()));
         }
 
         int templateId = mintTemplate(resolved, instanceId, alias);
         ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-            "template_captured", alias);
+            HohenheimActivityAction.TEMPLATE_CAPTURED, alias);
         Blast.log("TEMPLATE: captured instance", nameOf(resolved.row()), "as alias",
             alias, "-> template", templateId, "(unapproved)");
         return templateId;
@@ -124,15 +133,13 @@ public final class InstanceTemplateCapture {
         // APPROVED_AT stays null by construction: capture and approval are two acts.
         templates.save(template);
         int templateId = template.get(InstanceTemplateModel.ID);
-        ActivityLog.record(templates, templateId, ActivityLog.ACTION_CREATE, alias);
+        ActivityLog.record(templates, templateId, ZenitActivityAction.CREATE, alias);
         return templateId;
     }
 
     /** A daemon-safe alias derived from the instance: {@code tpl-<slug>-<stamp>}. */
     static @NonNull String aliasFor(@NonNull Row instance) {
-        String slug = nameOf(instance).toLowerCase(Locale.ROOT)
-            .replaceAll("[^a-z0-9]+", "-")
-            .replaceAll("(^-+|-+$)", "");
+        String slug = Slugs.slugify(nameOf(instance));
         if (slug.isEmpty()) {
             slug = "instance";
         }
@@ -146,7 +153,4 @@ public final class InstanceTemplateCapture {
         return String.valueOf((Object) instance.get(InstanceModel.NAME));
     }
 
-    private static Microcopy violationText(String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
-    }
 }

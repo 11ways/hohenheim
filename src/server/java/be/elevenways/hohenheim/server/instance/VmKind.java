@@ -2,13 +2,11 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
-import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
-import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.ImageOrigin;
@@ -25,6 +23,8 @@ import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.TextField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -53,7 +53,7 @@ import java.util.Map;
  */
 public final class VmKind implements InstanceKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "vm");
+    public static final Identifier ID = HohenheimIds.id("vm");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     /**
@@ -176,7 +176,7 @@ public final class VmKind implements InstanceKindHandler {
     public Icon getIcon() { return Icon.of("server"); }
 
     @Override
-    public String getColor() { return "purple"; }
+    public BadgeColor color() { return ColorHue.PURPLE; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }
@@ -216,28 +216,18 @@ public final class VmKind implements InstanceKindHandler {
 
     @Override
     public @NonNull InstanceSpec specFor(int instanceId, @NonNull Map<String, Object> settings) {
-        String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
-        String image = settings.get("image") != null
-            ? String.valueOf(settings.get("image")).trim() : "";
         String cloudInit = settings.get("cloud_init") instanceof String text
             && !text.isBlank() ? text : null;
-        ImageOrigin imageOrigin = ImageOrigin.fromKey(
-            settings.get("image_origin") instanceof String origin ? origin : null);
         boolean secureBoot = Boolean.TRUE.equals(settings.get("secure_boot"));
         boolean guestAgent = !Boolean.FALSE.equals(settings.get("guest_agent"));
         // No command override (a VM boots its own kernel), no env (nothing injects
         // into a guest's init -- cloud-init is the provisioning lane), no named
         // volumes (attached disks are instance_devices rows), no port publication
         // (a VM is an addressable system) -- each absence is structural.
-        return InstanceSpec.builder(handle, image,
-                ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)), VM,
-                OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
+        return IncusSpecs.spec(instanceId, settings, defaultFootprintMb(settings), VM)
             .cloudInitUserData(cloudInit)
-            .imageOrigin(imageOrigin)
             .secureBoot(secureBoot)
             .guestAgent(guestAgent)
-            .rootDiskGb(RootDisk.declaredGb(settings))
-            .networkLimitMbit(NetworkBandwidth.declaredMbit(settings))
             .build();
     }
 
@@ -291,8 +281,7 @@ public final class VmKind implements InstanceKindHandler {
                 Egress.OPEN, type, serverName)
                 .requirePreparedImagePresent(image, origin, false);
         } catch (IOException absent) {
-            throw Violations.ofForm(Microcopy.of("host_prepared_image_missing")
-                .withFilter("scope", "violations")
+            throw Violations.ofForm(HohenheimViolations.text("host_prepared_image_missing")
                 .withArg("name", serverName)
                 .withArg("image", image));
         }

@@ -6,16 +6,18 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.server.GrantableModel;
-import be.elevenways.zenit.auth.server.RecordGrantCapabilityChecker;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.security.KnownCapabilities;
 import be.elevenways.zenit.common.security.KnownCapability;
 import be.elevenways.zenit.common.security.RecordCapabilityRules;
+
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static be.elevenways.hohenheim.server.auth.HohenheimAccess.BACKUPS;
 import static be.elevenways.hohenheim.server.auth.HohenheimAccess.CONFIG;
@@ -44,6 +46,9 @@ import static be.elevenways.hohenheim.server.auth.HohenheimAccess.VIEW;
  */
 final class HohenheimGrantPolicy {
 
+    /** The declarations are registry adds, which refuse a second add of a held id: one process declares once. */
+    private static final AtomicBoolean DECLARED = new AtomicBoolean();
+
     private HohenheimGrantPolicy() {
     }
 
@@ -55,9 +60,12 @@ final class HohenheimGrantPolicy {
      * every other model's deletes. Each model's capability VOCABULARY (e.g. site manage is
      * delegable, so a holder may mint the {@code cap:hohenheim:site#manage} API-key scope)
      * and the walk's composition RULES land here too, so the enforcement path and the
-     * delegation path can never see different policies.
+     * delegation path can never see different policies. A repeat (a second host main in one JVM) is a no-op.
      */
     static void declareGrantableModels() {
+        if (!DECLARED.compareAndSet(false, true)) {
+            return;
+        }
         // AIDEV-NOTE: a trashed site must NOT count as alive, or its grants survive the
         // orphan sweep and come straight back the moment the site is restored, handing an
         // operator authority the delete had already withdrawn (and a new grant could be
@@ -72,7 +80,7 @@ final class HohenheimGrantPolicy {
                 .label(Microcopy.of("manage").withFilter("scope", "capability"))
                 .elevated()
                 .asDelegable());
-        RecordGrantCapabilityChecker.declareRules(SiteModel.MODEL_ID,
+        RecordCapabilityRules.declare(SiteModel.MODEL_ID,
             RecordCapabilityRules.create()
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS)
@@ -93,11 +101,14 @@ final class HohenheimGrantPolicy {
         // owner row only runs when the model's rules name an ownerField, and dns_records has
         // no owning-principal column. It is written down anyway because the decision is that
         // ownership WOULD imply them; the day a column lands, ownedBy() is the only edit.
-        // CertificateModel's owner row is live (requested_by_user_id).
+        // CertificateModel's owner row is live (requested_by_user_id with requested_by_kind).
         RecordGrants.declareGrantable(GrantableModel.of(DnsRecordModel.MODEL_ID));
         KnownCapabilities.register(DnsRecordModel.MODEL_ID,
+            // A holder who may EDIT a record may READ it: every VIEW-asking scope (pickers, the /manage list, the
+            // delete offer's subject read) then includes edit-grant holders, never a per-scope union.
             KnownCapability.of(VIEW)
                 .label(Microcopy.of("view").withFilter("scope", "capability"))
+                .impliedBy(EDIT)
                 .asDelegable()
                 .asOwnerImplied(),
             KnownCapability.of(EDIT)
@@ -114,7 +125,7 @@ final class HohenheimGrantPolicy {
             KnownCapability.of(DYNDNS)
                 .label(Microcopy.of("dyndns").withFilter("scope", "capability"))
                 .elevated());
-        RecordGrantCapabilityChecker.declareRules(DnsRecordModel.MODEL_ID,
+        RecordCapabilityRules.declare(DnsRecordModel.MODEL_ID,
             RecordCapabilityRules.create()
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS));
@@ -236,10 +247,19 @@ final class HohenheimGrantPolicy {
                 .label(Microcopy.of("shell").withFilter("scope", "capability"))
                 .elevated()
                 .asDelegable());
-        RecordGrantCapabilityChecker.declareRules(InstanceModel.MODEL_ID,
-            RecordCapabilityRules.create()
+        RecordCapabilityRules.declare(InstanceModel.MODEL_ID,
+            RecordCapabilityRules.create().visibility(VIEW)
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS));
+
+        // Preview deployments: no vocabulary and not grantable. A preview is a projection of its application, so
+        // its authority is the application's (TenantScopes.PREVIEWS lists exactly these): manage on the preview is
+        // manage on the instance it previews, the one hop the expire_preview operation's gate asks.
+        RecordCapabilityRules.declare(PreviewDeploymentModel.MODEL_ID,
+            RecordCapabilityRules.create()
+                .gate(ManagePanel.ACCESS)
+                .admin(HohenheimPanel.ACCESS)
+                .derivedFrom(InstanceModel.MODEL_ID, PreviewDeploymentModel.APPLICATION_ID));
 
         // Managed databases: the tenant-allocation tier (Phase 5). MANAGE stays THE
         // ownership identity for exactly the reason it does on instances -- there is no
@@ -260,11 +280,11 @@ final class HohenheimGrantPolicy {
         //   variant of that page is built here, so there is nothing to enforce a `restore`
         //   grant ON. It stays operator-only and is the first candidate when a delegated
         //   restore surface is actually designed.
-        // - config: DatabaseResource is updatable() == false -- the record is immutable
-        //   after create by design (it describes a provisioned container), so no edit
-        //   operation exists for the verb to gate.
+        // - config: the /manage twin (DatabaseParts#manage) offers no update -- the record
+        //   describes a provisioned container and only the OPERATOR resizes it, so no
+        //   delegated edit operation exists for the verb to gate.
         // - power: the engine is a generatedOnly() DatabaseContainerKind instance, and
-        //   ManageInstanceResource excludes generated rows, so no tenant path reaches a
+        //   InstanceParts.manage() excludes generated rows, so no tenant path reaches a
         //   start/stop of it at all. A database is allocated and destroyed, not powered.
         // - exec: NEVER. Backup and restore are IMPLEMENTED by exec'ing into the engine
         //   container; offering the verb would be offering a superuser shell on the host.
@@ -300,7 +320,7 @@ final class HohenheimGrantPolicy {
                 .elevated()
                 .asDelegable()
                 .impliedBy(MANAGE));
-        RecordGrantCapabilityChecker.declareRules(DatabaseModel.MODEL_ID,
+        RecordCapabilityRules.declare(DatabaseModel.MODEL_ID,
             RecordCapabilityRules.create()
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS));
@@ -317,7 +337,7 @@ final class HohenheimGrantPolicy {
                 .label(Microcopy.of("manage").withFilter("scope", "capability"))
                 .elevated()
                 .asDelegable());
-        RecordGrantCapabilityChecker.declareRules(GitProviderModel.MODEL_ID,
+        RecordCapabilityRules.declare(GitProviderModel.MODEL_ID,
             RecordCapabilityRules.create()
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS));
@@ -334,7 +354,7 @@ final class HohenheimGrantPolicy {
                 .label(Microcopy.of("manage").withFilter("scope", "capability"))
                 .elevated()
                 .asDelegable());
-        RecordGrantCapabilityChecker.declareRules(AccessListModel.MODEL_ID,
+        RecordCapabilityRules.declare(AccessListModel.MODEL_ID,
             RecordCapabilityRules.create()
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS));
@@ -352,12 +372,12 @@ final class HohenheimGrantPolicy {
                 .label(Microcopy.of("view").withFilter("scope", "capability"))
                 .asDelegable()
                 .asOwnerImplied());
-        RecordGrantCapabilityChecker.declareRules(CertificateModel.MODEL_ID,
+        RecordCapabilityRules.declare(CertificateModel.MODEL_ID,
             RecordCapabilityRules.create()
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS)
-                // The requester IS the owner: the column already exists because renewal
-                // re-decides authority against it every sweep.
-                .ownedBy(CertificateModel.REQUESTED_BY_USER_ID.getName()));
+                // The requester IS the owner: the (id, kind) pair renewal re-decides authority
+                // against every sweep.
+                .ownedBy(CertificateModel.REQUESTER));
     }
 }

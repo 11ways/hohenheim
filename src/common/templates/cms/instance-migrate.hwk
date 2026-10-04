@@ -1,6 +1,7 @@
-{#- Migrate tab on an instance: the cold move to another host. Every candidate is listed
-    with its own confirmed submit, so the destructive confirmation can name BOTH the
-    source and the destination -- a single select could only say "the chosen host". -#}
+{#- Migrate tab on an instance: the cold move to another host. Every eligible candidate
+    carries the migrate operation's own form preset with that host, so its confirmation
+    names BOTH the source and the destination -- a single select could only say "the
+    chosen host". -#}
 {% declare title: String %}
 {% declare instanceName: String %}
 {% declare instanceId: Integer %}
@@ -70,12 +71,8 @@
                             {% /if %}
                         </pl-table-cell>
                         <pl-table-cell>
-                            {% if target.eligible && operable %}
-                            <form method="POST" use:CmsConfirm.destructive={% t("migrate_confirm", scope: "instance_migrate", name: instanceName, from: sourceHost, to: target.name) %}>
-                                {% csrf() %}
-                                <input type="hidden" name="target_server_id" value={% target.serverId %}>
-                                <pl-button variant="destructive" type="submit">{{ t("migrate_here", scope: "instance_migrate") }}</pl-button>
-                            </form>
+                            {% if target.form != null %}
+                            {% render "zenitcms:form/page-action" var:page=target.form %}
                             {% /if %}
                         </pl-table-cell>
                     </pl-table-row>

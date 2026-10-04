@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.server.auth.types;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.server.auth.SiteAuthContext;
 import be.elevenways.hohenheim.server.auth.SiteAuthGate;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviderTypeHandler;
@@ -13,7 +13,11 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.UrlField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.server.net.OutboundUrlGuard;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.Map;
 
@@ -26,7 +30,7 @@ import java.util.Map;
  */
 public class ProteusAuthProviderType implements SiteAuthProviderTypeHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "proteus");
+    public static final Identifier ID = HohenheimIds.id("proteus");
 
     public static final String ENDPOINT = "endpoint";
     public static final String REALM_CLIENT = "realm_client";
@@ -49,6 +53,16 @@ public class ProteusAuthProviderType implements SiteAuthProviderTypeHandler {
             .help(HohenheimFormCopy.help("proteus_authenticator")).build());
     }
 
+    /**
+     * The guard a provider's realm calls ride. AIDEV-NOTE: a provider's endpoint is config whoever manages the provider
+     * may edit, never the operator's own declaration (that is {@code hohenheim.auth_proteus}, which rides
+     * {@link OutboundUrlGuard#ANY_ADDRESS}), so it gets the public internet, or the private networks on the operator's
+     * explicit opt-in; this host and link-local stay refused either way.
+     */
+    public static @NonNull OutboundUrlGuard realmGuard() {
+        return OutboundUrlGuard.optingIn(HohenheimSettings.ProxyAuth.PROTEUS_ALLOW_PRIVATE_NETWORKS);
+    }
+
     @Override
     public Identifier typeId() { return ID; }
 
@@ -68,13 +82,13 @@ public class ProteusAuthProviderType implements SiteAuthProviderTypeHandler {
     }
 
     @Override
-    public String getColor() {
-        return "indigo";
+    public BadgeColor color() {
+        return ColorHue.INDIGO;
     }
 
     @Override
     public SiteAuthGate createGate(SiteAuthContext context) {
-        Map<String, Object> config = configMap(context);
+        Map<String, Object> config = context.providerSettings();
         String endpoint = str(config.get(ENDPOINT));
         String realmClient = str(config.get(REALM_CLIENT));
         String accessKey = str(config.get(ACCESS_KEY));
@@ -87,7 +101,7 @@ public class ProteusAuthProviderType implements SiteAuthProviderTypeHandler {
         }
 
         // Pure construction (validates config, no network I/O); a blank-config throw fails closed.
-        ProteusClient client = new ProteusClient(endpoint, realmClient, accessKey);
+        ProteusClient client = new ProteusClient(endpoint, realmClient, accessKey, realmGuard());
         long ttl = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.ProxyAuth.PERSISTENT_TTL_SECONDS);
         // AIDEV-NOTE: the binding is the realm IDENTITY (endpoint + realm client): re-pointing the
         // provider at another realm ends every session it minted, while rotating the access key
@@ -96,12 +110,6 @@ public class ProteusAuthProviderType implements SiteAuthProviderTypeHandler {
             String.valueOf(context.providerId()), endpoint, realmClient);
         return new ProteusAuthGate(context, client, authenticator,
             (int) Math.min(ttl, Integer.MAX_VALUE), binding);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> configMap(SiteAuthContext context) {
-        Object raw = context.config().get(SiteAuthProviderModel.CONFIG);
-        return raw instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
     }
 
     private static String str(Object value) {

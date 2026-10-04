@@ -12,6 +12,7 @@ import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -60,7 +61,7 @@ class SiteApiTest extends HohenheimTestBase {
         // The operator's catch-all: a live wildcard row nobody has a grant on, so every
         // free name under the zone is the operator's namespace.
         catchAllSiteId = site(PREFIX + "catch-all", true);
-        domain(catchAllSiteId, "*." + ZONE, SiteDomainModel.MATCH_WILDCARD);
+        domain(catchAllSiteId, "**." + ZONE, SiteDomainModel.MATCH_WILDCARD);
 
         int adminId = AuthModels.users().find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first().get(UserModel.ID);
@@ -153,7 +154,7 @@ class SiteApiTest extends HohenheimTestBase {
         int proxySiteId = idOf(proxy.body());
         Row proxySite = Models.get(SiteModel.class).findById(proxySiteId);
         assertThat((Object) proxySite.get(SiteModel.SLUG))
-            .as("step 1: the slug is derived exactly as SiteResource.persistRow derives it")
+            .as("step 1: the slug is derived exactly as the site create operation derives it")
             .isEqualTo(PREFIX + "proxy");
         assertThat(String.valueOf(proxySite.get(SiteModel.SETTINGS)))
             .as("step 1: the settings were coerced against the address kind's schema")
@@ -161,7 +162,7 @@ class SiteApiTest extends HohenheimTestBase {
         // The accountability of an API write is TWO columns, never one: zenit-auth's
         // resolver stamps the origin off the ApiKeyPrincipal, so the detail slot is free
         // to name the site instead of repeating the origin token.
-        Row logged = activityOf(proxySiteId, "created");
+        Row logged = activityOf(proxySiteId, ZenitActivityAction.CREATE.id().toString());
         assertThat(logged).as("step 1: the API create is recorded").isNotNull();
         assertThat((Object) logged.get(ActivityModel.ORIGIN))
             .as("step 1: an API key stamps the origin column").isEqualTo("api");
@@ -317,6 +318,42 @@ class SiteApiTest extends HohenheimTestBase {
             .as("step 9: the static site is untouched").isEqualTo(200);
     }
 
+    /**
+     * The site serving the address a delete arrives at refuses it, on this wire exactly as before the delete became
+     * an operation: the 422 envelope of a form-level violation carrying the lockout sentence (stage 4 contract 10,
+     * orchestrator decision 2026-10-02 ~23:55: the operation's availability, mapped by SiteApi).
+     */
+    @Test
+    void aSiteServingTheArrivalAddressRefusesItsDeleteAsBefore() throws Exception {
+        // 1. A switched-off site answering on the hostname this suite's requests arrive at (the Host header).
+        int lockedId = site(PREFIX + "locked", false);
+        domain(lockedId, "localhost", SiteDomainModel.MATCH_EXACT);
+        String sentence = "This site serves localhost, the address this panel is open at. Deleting it would take"
+            + " this panel offline. Move the panel to another hostname first.";
+
+        // 2. Its delete is refused with the row lane's answer: status 422, the code and the sentence at the top
+        //    level, the one form-level violation (no field) in the list, served as every other 422 of this API.
+        HttpResponse<String> refused = keyPost(keyAdmin, "/api/v1/sites/" + lockedId + "/delete", "");
+        assertThat(refused.statusCode()).as("step 2: refused as a typed violation: " + refused.body())
+            .isEqualTo(422);
+        assertThat(has(refused.body(), "status", "422")).as("step 2: the envelope's status").isTrue();
+        assertThat(has(refused.body(), "code", "\"delete_self_lockout\"")).as("step 2: the lockout code").isTrue();
+        assertThat(has(refused.body(), "message", "\"" + sentence + "\""))
+            .as("step 2: naming the address in the lockout sentence").isTrue();
+        assertThat(refused.body()).as("step 2: a form-level violation names no field").doesNotContain("\"field\"");
+        assertThat(Pattern.compile("\"code\"\\s*:").matcher(refused.body()).results().count())
+            .as("step 2: the top-level code and exactly one violation").isEqualTo(2);
+        HttpResponse<String> other = keyPost(keyAdmin, "/api/v1/sites", form("colour", "red"));
+        assertThat(refused.headers().firstValue("Content-Type"))
+            .as("step 2: served as every other refusal of this API")
+            .isEqualTo(other.headers().firstValue("Content-Type"));
+
+        // 3. Nothing was deleted: the site stays out of the trash, its hostname kept.
+        assertThat((Object) StoredRows.byId(Models.get(SiteModel.class), lockedId).get(SiteModel.DELETED_AT))
+            .as("step 3: the site is not trashed").isNull();
+        assertThat(domainsOf(lockedId)).as("step 3: and keeps its hostname").hasSize(1);
+    }
+
     /** The tenancy refusals are the panel's: neutral for a tenant, detailed for an admin. */
     @Test
     void aForeignWildcardRefusesATenantWithTheNeutralSentence() throws Exception {
@@ -327,8 +364,13 @@ class SiteApiTest extends HohenheimTestBase {
         assertThat(tenant.statusCode()).as("step 1: refused as a typed violation").isEqualTo(422);
         assertThat(codeOf(tenant.body())).as("step 1: the neutral sentence")
             .isEqualTo("hostname_unavailable");
+        assertThat(tenant.body()).as("step 1: byte-identical to before-module-fit 1446a91a's live API response")
+            .isEqualTo("{\"status\":422,\"code\":\"hostname_unavailable\","
+                + "\"message\":\"This hostname is not available on this installation\",\"field\":\"hostname\","
+                + "\"violations\":[{\"code\":\"hostname_unavailable\","
+                + "\"message\":\"This hostname is not available on this installation\",\"field\":\"hostname\"}]}");
         assertThat(tenant.body()).as("step 1: the holder is not named")
-            .doesNotContain(PREFIX + "catch-all").doesNotContain("*." + ZONE);
+            .doesNotContain(PREFIX + "catch-all").doesNotContain("**." + ZONE);
 
         // 2. The SAME claim by an admin on the tenant's site is refused with the detailed
         //    overlap sentence: the route was never free, the reader may just know why.
@@ -353,5 +395,23 @@ class SiteApiTest extends HohenheimTestBase {
             form("hostname", "own.tenant-" + ZONE));
         assertThat(landed.statusCode()).as("step 3: the tenant's own name lands: " + landed.body())
             .isEqualTo(200);
+
+        // 4. The same scoped key removes its own domain without admission to either panel.
+        Row created = domainsOf(tenantSiteId).stream()
+            .filter(row -> ("own.tenant-" + ZONE).equals(row.get(SiteDomainModel.HOSTNAME)))
+            .findFirst().orElseThrow();
+        int domainId = created.get(SiteDomainModel.ID);
+        HttpResponse<String> removed = keyPost(keyTenant,
+            "/api/v1/sites/" + tenantSiteId + "/domains/" + domainId + "/delete", "");
+        assertThat(removed.statusCode()).as("step 4: the tenant removes its own domain: " + removed.body())
+            .isEqualTo(200);
+        assertThat(has(removed.body(), "id", String.valueOf(domainId))).as("step 4: the domain id stays on the wire")
+            .isTrue();
+        assertThat(has(removed.body(), "status", "\"deleted\"")).as("step 4: the original delete answer stays")
+            .isTrue();
+        assertThat(Models.get(SiteDomainModel.class).findById(domainId)).as("step 4: the selected domain is gone")
+            .isNull();
+        assertThat(keyPost(keyTenant, "/api/v1/sites/" + tenantSiteId + "/domains/" + domainId + "/delete", "")
+            .statusCode()).as("step 4: a second removal remains a missing-record 404").isEqualTo(404);
     }
 }

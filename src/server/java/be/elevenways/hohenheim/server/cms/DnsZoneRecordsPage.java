@@ -1,7 +1,10 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.dns.DnsRecordDto;
 import be.elevenways.hohenheim.dns.DnsRecordFormView;
 import be.elevenways.hohenheim.dns.DnsRecordView;
@@ -20,18 +23,32 @@ import be.elevenways.protoblast.common.typed.rule.Operand;
 import be.elevenways.plumage.component.Pager;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
-import be.elevenways.zenit.cms.common.page.CmsFormBody;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.render.table.TableState;
-import be.elevenways.zenit.cms.common.resource.SubmittableRecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.zenit.cms.common.action.ActionPlacement;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
+import be.elevenways.zenit.cms.common.render.action.PageFormState;
+import be.elevenways.zenit.cms.server.page.PageActions;
+import be.elevenways.zenit.cms.server.panel.PartsLists;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
+import be.elevenways.zenit.cms.server.panel.PanelActionOffers;
+import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
 import be.elevenways.zenit.cms.common.schema.FilterState;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableView;
 import be.elevenways.zenit.cms.server.page.InlineEditStates;
 import be.elevenways.zenit.cms.server.page.QuickAddState;
+import be.elevenways.zenit.cms.server.panel.PartsWrites;
 import be.elevenways.zenit.cms.server.render.table.TableStateTranslator;
+import be.elevenways.zenit.common.data.FacetUrlState;
+import be.elevenways.zenit.common.data.ListState;
 import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RecordPage;
@@ -42,8 +59,8 @@ import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.routing.BoundEndpoint;
 import be.elevenways.zenit.common.routing.RouteTarget;
+import be.elevenways.zenit.common.routing.ReturnPath;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.http.ReturnTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -67,12 +84,30 @@ import java.util.Objects;
  * of their own: zenit-cms refuses a submit over a read-only zone (trashed, or under a
  * trashed record) before {@link #submit} runs, and the render offers no edit there.
  */
-public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row> {
+public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
+
+    private static final PanelAction<Row> REMOTE_EDIT = PanelAction.<Row, CmsActionResult>places(
+        DnsOperations.REMOTE_EDIT, ActionPlacement.PAGE, (request, result) -> result.value())
+        .transport("action", "record_id")
+        .confirmation(ConfirmationSpec.builder()
+            .title(Microcopy.of("save_remote").withFilter("scope", "dns_remote"))
+            .body(Microcopy.of("edit_saved").withFilter("scope", "dns_remote")).build())
+        .selectedByRoute(zone -> String.valueOf((Object) zone.get(DnsZoneModel.ID))).build();
+
+    @Override public @NonNull List<PanelAction<Row>> actions() { return List.of(REMOTE_EDIT); }
+
+    @Override
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row zone) {
+        if (DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
+            return renderRemote(request, zone);
+        }
+        return renderLocal(request.conduit(), request.access(), zone);
+    }
 
     /** This page's template, shared by the available and unavailable branches. */
-    private static final Identifier TEMPLATE = Identifier.of("hohenheim", "cms/dns-zone-records");
+    private static final Identifier TEMPLATE = HohenheimTemplateIds.DNS_ZONE_RECORDS;
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dns_zone_records"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("dns_zone_records"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("records").withFilter("scope", "dns_zone"); }
     /** This tab's slug under the zone record. */
     public static final String SLUG = "records";
@@ -92,12 +127,12 @@ public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row
         DnsRecordModel.VALUE.getName(), DnsRecordModel.TTL.getName(),
         DnsRecordModel.ENABLED.getName(), DnsRecordModel.MANAGED_BY.getName());
 
-    @Override
     public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
                                            @NonNull AccessContext accessContext,
                                            @NonNull Row zone) {
         if (DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
-            return renderRemote(conduit, zone);
+            Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(PANEL));
+            return renderRemote(new PanelRequest(panel, conduit, accessContext, null), zone);
         }
         return renderLocal(conduit, accessContext, zone);
     }
@@ -112,7 +147,7 @@ public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row
     private @NonNull ActionResult<?> renderLocal(@NonNull Conduit conduit,
                                                  @NonNull AccessContext accessContext,
                                                  @NonNull Row zone) {
-        DnsRecordResource resource = recordResource();
+        PanelResource<Row> resource = recordResource(conduit, accessContext);
         if (resource == null) {
             // The DNS role is off, so the record resource is not on the panel at all.
             return new RenderTemplateResult(TEMPLATE, unavailableVars(conduit, zone));
@@ -122,14 +157,17 @@ public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row
 
     /**
      * The record resource this tab renders through, the sibling of
-     * {@code SiteDomainsPage.domainResource}.
+     * {@code SiteParts.DOMAINS}.
      *
      * @return null when the DNS role is off, so the resource is not on the panel at all
      */
-    private static @Nullable DnsRecordResource recordResource() {
+    private static @Nullable PanelResource<Row> recordResource(Conduit conduit, AccessContext access) {
         Panel panel = PanelRegistry.getBySlug(PANEL);
-        return panel != null && panel.peerBySlug(DnsRecordResource.SLUG) instanceof DnsRecordResource peer
-            ? peer : null;
+        if (panel != null && panel.entryBySlug(DnsRecordParts.SLUG) instanceof PanelResource<?> entry) {
+            @SuppressWarnings("unchecked") PanelResource<Row> records = (PanelResource<Row>) entry;
+            return records;
+        }
+        return null;
     }
 
     /**
@@ -141,32 +179,34 @@ public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row
     @NonNull ActionResult<?> renderLocal(@NonNull Conduit conduit,
                                          @NonNull AccessContext accessContext,
                                          @NonNull Row zone,
-                                         @NonNull DnsRecordResource resource) {
+                                          @NonNull PanelResource<Row> resource) {
         Integer zoneId = zone.get(DnsZoneModel.ID);
         String origin = zone.get(DnsZoneModel.ORIGIN);
         // The panel this tab renders under: the one whose peers every write predicate below
         // resolves the record's parent against (a record under a trashed zone is read-only).
         Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(PANEL), "the admin panel is registered");
+        PanelRequest request = new PanelRequest(panel, conduit, accessContext, null);
 
-        String search = Texts.trimmedOrNull(conduit.getQueryParam(CmsEndpoints.LIST_SEARCH_PARAM.getName()));
-        Integer requestedPage = CmsSupport.parsedInt(conduit.getQueryParam(CmsEndpoints.LIST_PAGE_PARAM.getName()));
+        // The tab's search and page are core's one list state, read by its one codec.
+        ListState state = FacetUrlState.readState(ListState.Shape.PLAIN, conduit::getQueryParams);
+        String search = state.text().isEmpty() ? null : state.text();
         TableView.Applied<Row> applied = TableView
-            .forPrincipal(accessContext.principal().id(), resource.id())
+            .forPrincipal(accessContext.principalId(), resource.id())
             .visibleColumns(COLUMNS)
             .sort(SortSpec.asc(DnsRecordModel.NAME.getName()))
-            .filter(zoneScope(resource, zoneId))
+            .filter(zoneScope(resource, zoneId, accessContext))
             .build()
-            .apply(resource.tableSpec())
+            .apply(PartsLists.<Row>tableSpec(resource))
             .withSearch(search)
-            .withPage(requestedPage != null && requestedPage > 0 ? requestedPage : 1);
+            .withPage(state.page());
         // The resource's OWN list read: its access predicate, its search semantics, its
         // page window and its total -- this tab only adds the zone scope.
-        RecordPage<Row> page = resource.listPage(applied, accessContext);
+        RecordPage<Row> page = PartsReads.listPage(request, resource, null, applied, accessContext);
         List<Row> records = page.rows();
         // The per-row write verdicts below walk each record's parent (this zone) once for the whole page.
-        resource.prefetchLineage(panel, records, accessContext);
+        PartsWrites.prefetchLineage(resource, panel, records, accessContext);
 
-        BoundEndpoint<?> listTarget = CmsRoutes.subpage(PANEL, DnsZoneResource.SLUG, zoneId, this.slug());
+        BoundEndpoint<?> listTarget = CmsRoutes.subpage(PANEL, DnsZoneParts.SLUG, zoneId, this.slug());
         String listUrl = listTarget.toUrl();
         // An add returns to the listing AS IT STANDS, so a search made before it survives.
         // Rebuilt from the state this render knows rather than echoed from the request URL:
@@ -183,27 +223,23 @@ public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row
         TableState table = new TableStateTranslator().translate(
             applied,
             records,
-            resource::rowKey,
-            row -> resource.rowCells(applied, row),
-            resource.offeredRowActions(panel),
-            (actionId, row) -> ReturnTarget.bind(
-                CmsRoutes.invokeRow(PANEL, resource.slug(), resource.rowKey(row), actionId), returnTo),
+            row -> PartsReads.rowKey(resource, row),
+            row -> PartsReads.rowCells(request, resource, null, applied, row),
             column -> null,
             row -> recordUrl(resource, row, returnTo),
-            row -> resource.editableBy(panel, row, accessContext)
+            row -> ResourceVerbs.editableBy(request, resource, row, accessContext)
                 ? recordUrl(resource, row, returnTo) : null,
-            row -> resource.removableBy(panel, row, accessContext)
-                ? ReturnTarget.bind(CmsRoutes.delete(PANEL, resource.slug(), resource.rowKey(row)),
-                    returnTo).toUrl()
-                : null,
-            row -> resource.deleteConfirmationFor(row),
+            row -> null,
+            row -> DeleteConfirmation.<Row>defaults().fallback(),
             // Per ROW: a delete the principal may perform in general yet the write will
             // refuse for THIS record stays on the menu, dead, with its reason (see
-            // Resource.deleteUnavailableReason); DELETE_SUBMIT refuses with the same text.
-            row -> resource.deleteUnavailableReason(row, accessContext),
+            // ResourceVerbs.unavailable); DELETE_SUBMIT refuses with the same text.
+            row -> null,
             // Promoted seam: the framework's own affordance answer, which the generated
             // list page uses too -- this page used to carry a copy of it.
             row -> InlineEditStates.editableCellsFor(panel, resource, applied, row, accessContext),
+            PanelActionOffers.rowsForRender(request, resource, null, records, accessContext,
+                ReturnPath.of(returnTo)),
             accessContext);
 
         // A read-only zone (trashed, or under a trashed record) offers no add: its records' writes are refused by
@@ -224,14 +260,15 @@ public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row
         vars.put("resourceSlug", resource.slug());
         vars.put("listUrl", listUrl);
         vars.put("searchValue", search != null ? search : "");
-        vars.put("searchEnabled", resource.searchOffered());
+        vars.put("searchParam", FacetUrlState.TEXT_PARAM);
+        vars.put("searchEnabled", PartsLists.searchOffered(resource));
         vars.put("searchActive", search != null);
         vars.put("pager", Pager.of(page.window(), page.total(), number -> pageUrl(listTarget, search, number)));
         vars.put("addRecordTarget", addRecordTarget);
         vars.put("recordTabs", recordTabs(conduit));
         // Promoted seam: the framework's own quick-add builder. The zone preset it needs
-        // is answered by DnsRecordResource.quickCreatePresetValues, which reads THIS route.
-        QuickAddState.putVars(vars, resource, accessContext, refreshUrl,
+        // is answered by the record entry's quick-create presets, which read THIS route.
+        QuickAddState.putVars(vars, panel, resource, accessContext, refreshUrl,
             addRecordTarget == null ? null : addRecordTarget.toUrl());
         return new RenderTemplateResult(TEMPLATE, vars);
     }
@@ -258,10 +295,11 @@ public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row
      * would silently widen the tab to every zone's records -- so the tree is validated
      * against the resource's vocabulary first and a failure refuses loudly (fail closed).
      */
-    static @NonNull FilterState zoneScope(@NonNull DnsRecordResource resource, @NonNull Integer zoneId) {
+    static @NonNull FilterState zoneScope(@NonNull PanelResource<Row> resource, @NonNull Integer zoneId,
+                                           @NonNull AccessContext access) {
         Condition scope = Condition.all(Condition.test(DnsRecordModel.ZONE_ID.getName(), CoreTypes.EQUALS,
             Operand.of(zoneId)));
-        if (!RuleCompiler.validate(scope, resource.filterVocabulary()).isEmpty()) {
+        if (!RuleCompiler.validate(scope, PartsLists.filterVocabulary(resource, access)).isEmpty()) {
             throw new IllegalStateException("The DNS record vocabulary cannot scope by "
                 + DnsRecordModel.ZONE_ID.getName());
         }
@@ -276,7 +314,7 @@ public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row
         return number > 1 ? target.with(CmsEndpoints.LIST_PAGE_PARAM, number).toUrl() : target.toUrl();
     }
 
-    private static @NonNull String recordUrl(@NonNull DnsRecordResource resource, @NonNull Row row,
+    private static @NonNull String recordUrl(@NonNull PanelResource<Row> resource, @NonNull Row row,
                                              @Nullable String returnTo) {
         return ReturnTarget.bind(
             CmsRoutes.detail(PANEL, resource.slug(), resource.rowKey(row)), returnTo).toUrl();
@@ -288,7 +326,8 @@ public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row
      * When the peer is unconfigured or unreachable, the replica snapshot is
      * shown read-only instead (DNS keeps serving; only editing needs the owner).
      */
-    private @NonNull ActionResult<?> renderRemote(@NonNull Conduit conduit, @NonNull Row zone) {
+    private @NonNull ActionResult<?> renderRemote(@NonNull PanelRequest request, @NonNull Row zone) {
+        Conduit conduit = request.conduit();
         Integer zoneId = zone.get(DnsZoneModel.ID);
         String origin = zone.get(DnsZoneModel.ORIGIN);
 
@@ -362,10 +401,19 @@ public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row
         vars.put("editPort", editRecord != null ? wholeNumber(editRecord.port()) : null);
         vars.put("recordTypes", DnsRecordModel.ALL_TYPES);
         vars.put("addRecordTarget", remoteRecordTarget(zoneId, "new"));
-        vars.put("recordsTabTarget", CmsRoutes.subpage(PANEL, DnsZoneResource.SLUG, zoneId, this.slug()));
-        vars.put("remoteFormTarget", CmsRoutes.subpageSubmit(PANEL, DnsZoneResource.SLUG, zoneId, this.slug()));
+        vars.put("recordsTabTarget", CmsRoutes.subpage(PANEL, DnsZoneParts.SLUG, zoneId, this.slug()));
+        vars.put("remoteForm", editable && editRecord != null
+            ? remoteForm(request, zone, Map.of("record_id", editRecord.id())) : null);
+        Map<String, PageFormState> deletes = new LinkedHashMap<>();
+        if (editable) {
+            for (DnsRecordView record : records) {
+                PageFormState form = remoteForm(request, zone, Map.of("action", "delete", "record_id", record.id()));
+                if (form != null) deletes.put(record.id(), form);
+            }
+        }
+        vars.put("deleteForms", deletes);
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/dns-zone-remote-records"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.DNS_ZONE_REMOTE_RECORDS, vars);
     }
 
     /**
@@ -373,9 +421,7 @@ public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row
      *
      * @return a toast of the owner's answer, back on this tab; a primary zone's tab has nothing to forward
      */
-    @Override
-    public @NonNull CmsActionResult submit(@NonNull Conduit conduit, @NonNull AccessContext accessContext,
-                                           @NonNull Row zone) {
+    static @NonNull CmsActionResult forward(@NonNull Row zone, DnsOperations.@NonNull RemoteInput input) {
         if (!DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
             return CmsActionResult.refresh();
         }
@@ -385,21 +431,17 @@ public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row
             return CmsActionResult.errorToast(Microcopy.of("peer_not_configured").withFilter("scope", "dns_remote"));
         }
 
-        Map<String, Object> body = conduit.getBody(CmsFormBody.BODY);
-        Map<String, Object> form = body == null ? Map.of() : body;
         String origin = zone.get(DnsZoneModel.ORIGIN);
-        String action = HandlerSupport.submittedString(form, "action");
-        String recordText = HandlerSupport.submittedString(form, "record_id");
-        Integer recordId = HandlerSupport.submittedInteger(form, "record_id");
+        String action = input.action() == null ? "" : input.action();
+        if (!action.isEmpty() && !"delete".equals(action)) {
+            throw HohenheimViolations.ofField("action", action, "dns_remote_action_invalid");
+        }
+        String recordText = input.record_id() == null ? "" : input.record_id();
+        Integer recordId = HandlerSupport.submittedInteger(Map.of("record_id", recordText), "record_id");
         if (!recordText.isEmpty() && recordId == null) {
             return CmsActionResult.refresh();
         }
-        Map<String, String> fields = new LinkedHashMap<>();
-        for (String field : DnsPeerApi.RECORD_FIELDS) {
-            if (form.containsKey(field)) {
-                fields.put(field, HandlerSupport.submittedString(form, field));
-            }
-        }
+        Map<String, String> fields = input.fields();
 
         try {
             if ("delete".equals(action) && recordId != null) {
@@ -416,7 +458,7 @@ public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row
             // A validation refusal round-trips by microcopy key (same catalogs on both instances); a transport
             // failure shows the raw message.
             return CmsActionResult.errorToast(e.getViolationKey() != null
-                ? Microcopy.of(e.getViolationKey()).withFilter("scope", "violations")
+                ? HohenheimViolations.text(e.getViolationKey())
                 : Microcopy.of("peer_call_failed").withFilter("scope", "dns_remote")
                     .withArg("reason", String.valueOf(e.getMessage())));
         }
@@ -434,7 +476,7 @@ public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row
                                                            @NonNull String recordId) {
         return CmsEndpoints.RECORD_SUBPAGE
             .with(CmsEndpoints.PANEL_PARAM, PANEL)
-            .with(CmsEndpoints.RESOURCE_PARAM, DnsZoneResource.SLUG)
+            .with(CmsEndpoints.RESOURCE_PARAM, DnsZoneParts.SLUG)
             .with(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf(zoneId))
             .with(CmsEndpoints.SUBPAGE_PARAM, SLUG)
             .with(HohenheimParams.REMOTE_RECORD, recordId);
@@ -484,6 +526,11 @@ public final class DnsZoneRecordsPage implements SubmittableRecordScopedPage<Row
         PrimitiveCoercion.Result<Double> parsed =
             PrimitiveCoercion.toDouble(text, true, PrimitiveCoercion.TextRule.TRIMMED_BLANK_IS_NULL);
         return parsed.ok() ? parsed.value() : null;
+    }
+
+    private @Nullable PageFormState remoteForm(PanelRequest request, Row zone, Map<String, Object> values) {
+        PageActions.Opened opened = PageActions.open(request, this, zone, REMOTE_EDIT.id(), values);
+        return opened instanceof PageActions.Form form ? form.state() : null;
     }
 
     private static @NonNull String text(@Nullable String value) {

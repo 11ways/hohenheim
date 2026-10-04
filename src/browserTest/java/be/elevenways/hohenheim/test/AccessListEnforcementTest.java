@@ -302,7 +302,6 @@ class AccessListEnforcementTest {
         row.set(AccessRuleModel.TYPE, type);
         row.set(AccessRuleModel.DATA, new LinkedHashMap<>(data));
         row.set(AccessRuleModel.ENABLED, enabled);
-        row.set(AccessRuleModel.SORT, 0);
         model.save(row);
         return row.get(AccessRuleModel.ID);
     }

@@ -1,28 +1,27 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.hohenheim.instance.InstanceAttachmentOperations;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.ResourceVerb;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
+import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.test.PanelEntryViews;
+import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.cms.ManageInstanceDeviceResource;
-import be.elevenways.hohenheim.server.docker.ContainerHardening;
-import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.instance.InstanceDeviceQuota;
-import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
-import be.elevenways.hohenheim.server.instance.InstanceKinds;
-import be.elevenways.hohenheim.server.runtime.ContainerState;
-import be.elevenways.hohenheim.server.runtime.DeviceAttachSupport;
-import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
-import be.elevenways.hohenheim.server.runtime.InstanceSpec;
-import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -32,26 +31,18 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.quota.Quotas;
-import be.elevenways.zenit.common.ui.Icon;
-import org.checkerframework.checker.nullness.qual.NonNull;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
-import java.util.Set;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -74,12 +65,6 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
 
     private static final String NAME_PREFIX = "devsurf-";
 
-    /** handle -> volumes and nics the fake daemon holds. */
-    private static final Map<String, FakeWorkload> DAEMON = new ConcurrentHashMap<>();
-
-    /** Flipped to make the next daemon call refuse (the "row must not survive" lane). */
-    private static volatile boolean daemonRefuses;
-
     /** A real delegated tenant plus its API key: the /api/v1 lane speaks keys only. */
     private static Integer tenantId;
     private static String tenantKey;
@@ -101,7 +86,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
 
     @BeforeAll
     static void registerKind() {
-        FakeDeviceKind.register();
+        FakeDeviceDaemon.Kind.register();
 
         Row host = Models.get(ServerModel.class).createEmptyRow();
         host.set(ServerModel.NAME, NAME_PREFIX + "host");
@@ -137,7 +122,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
 
     @AfterEach
     void cleanUp() {
-        daemonRefuses = false;
+        FakeDeviceDaemon.refuses = false;
         Model devices = Models.get(InstanceDeviceModel.class);
         for (Row row : devices.find()
                 .where(InstanceDeviceModel.NAME.startsWith(NAME_PREFIX)).all()) {
@@ -145,7 +130,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         }
         for (Integer id : this.instances) {
             HardDeletes.byId(Models.get(InstanceModel.class), id);
-            DAEMON.remove(handleOf(id));
+            FakeDeviceDaemon.DAEMON.remove(handleOf(id));
         }
         this.instances.clear();
         if (this.previousDiskCap != null) {
@@ -156,7 +141,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
     }
 
     private static String handleOf(int instanceId) {
-        return "devsurf-instance-" + instanceId;
+        return FakeDeviceDaemon.handleOf(instanceId);
     }
 
     private int instanceRecord(String name, String kind) {
@@ -164,7 +149,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, kind);
         row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image"));
-        if (FakeDeviceKind.ID.toString().equals(kind)) {
+        if (FakeDeviceDaemon.Kind.ID.toString().equals(kind)) {
             row.set(InstanceModel.SERVER_ID, hostId);
         }
         Models.get(InstanceModel.class).save(row);
@@ -179,7 +164,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
     private int ungrantedInstance(String name) {
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, name);
-        row.set(InstanceModel.KIND, FakeDeviceKind.ID.toString());
+        row.set(InstanceModel.KIND, FakeDeviceDaemon.Kind.ID.toString());
         row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image"));
         row.set(InstanceModel.SERVER_ID, hostId);
         Models.get(InstanceModel.class).save(row);
@@ -190,8 +175,8 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
 
     /** A live workload on the fake daemon, so the attach lane is not the ABSENT one. */
     private int deviceCapableInstance(String name) {
-        int id = instanceRecord(name, FakeDeviceKind.ID.toString());
-        DAEMON.put(handleOf(id), new FakeWorkload());
+        int id = instanceRecord(name, FakeDeviceDaemon.Kind.ID.toString());
+        FakeDeviceDaemon.DAEMON.put(handleOf(id), new FakeDeviceDaemon.Workload());
         return id;
     }
 
@@ -226,7 +211,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             "instance_id=" + instanceId + "&type=disk&name=" + device + "&size_gb=2");
         assertThat(attached.statusCode())
             .as("step 2: the attach form was accepted").isIn(200, 302, 303);
-        assertThat(DAEMON.get(handle).disks.get(device))
+        assertThat(FakeDeviceDaemon.DAEMON.get(handle).disks.get(device))
             .as("step 2: the DAEMON holds a 2 GB volume -- a form that wrote only the row"
                 + " would report success and attach nothing")
             .isEqualTo(2);
@@ -240,7 +225,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             "instance_id=" + instanceId + "&type=disk&name=" + device + "&size_gb=5");
         assertThat(resized.statusCode())
             .as("step 3: the resize form was accepted").isIn(200, 302, 303);
-        assertThat(DAEMON.get(handle).disks.get(device))
+        assertThat(FakeDeviceDaemon.DAEMON.get(handle).disks.get(device))
             .as("step 3: the daemon volume grew to 5 GB").isEqualTo(5);
 
         // 4. Attaching an extra NIC is the same door.
@@ -248,7 +233,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             "instance_id=" + instanceId + "&type=nic&name=" + NAME_PREFIX + "net");
         assertThat(nic.statusCode())
             .as("step 4: the NIC attach was accepted").isIn(200, 302, 303);
-        assertThat(DAEMON.get(handle).nics)
+        assertThat(FakeDeviceDaemon.DAEMON.get(handle).nics)
             .as("step 4: the daemon carries the extra NIC")
             .contains(NAME_PREFIX + "net");
 
@@ -258,7 +243,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             "/admin/instance-devices/" + row.get(InstanceDeviceModel.ID) + "/delete", confirmed(""));
         assertThat(detached.statusCode())
             .as("step 5: the detach was accepted").isIn(200, 302, 303);
-        assertThat(DAEMON.get(handle).disks)
+        assertThat(FakeDeviceDaemon.DAEMON.get(handle).disks)
             .as("step 5: the volume is GONE at the daemon, not merely unlisted")
             .doesNotContainKey(device);
         assertThat(deviceRows(instanceId))
@@ -330,7 +315,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             .as("step 2: a refused attach leaves NO device row").isEmpty();
         assertThat(Quotas.usedOf(bucket))
             .as("step 2: and spends nothing").isEqualTo(usedBefore);
-        assertThat(DAEMON.get(handle).disks)
+        assertThat(FakeDeviceDaemon.DAEMON.get(handle).disks)
             .as("step 2: the daemon was never contacted").isEmpty();
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER,
             this.previousDiskCap);
@@ -338,10 +323,10 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         // 3. The DAEMON refuses after the row was written: the row must be reverted, or
         //    the ledger would count a disk that does not exist. This is the lane that
         //    cannot be checked by looking at a happy path.
-        daemonRefuses = true;
+        FakeDeviceDaemon.refuses = true;
         HttpResponse<String> daemonRefused = apiPost("/api/v1/instances/" + instanceId
             + "/devices", "type=disk&name=" + NAME_PREFIX + "ghost&size_gb=1");
-        daemonRefuses = false;
+        FakeDeviceDaemon.refuses = false;
         assertThat(daemonRefused.statusCode())
             .as("step 3: a daemon refusal is a refusal, not a success")
             .isEqualTo(422);
@@ -391,7 +376,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             + "/devices", "type=disk&name=" + device + "&size_gb=3");
         assertThat(attach.statusCode()).as("step 1: the API attach succeeded")
             .isEqualTo(200);
-        assertThat(DAEMON.get(handle).disks.get(device))
+        assertThat(FakeDeviceDaemon.DAEMON.get(handle).disks.get(device))
             .as("step 1: with a real 3 GB volume at the daemon").isEqualTo(3);
 
         // 2. It reads back through the API, and the projection is a whitelist: the
@@ -409,13 +394,13 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         HttpResponse<String> resize = apiPost("/api/v1/instances/" + instanceId
             + "/devices/resize", "name=" + device + "&size_gb=6");
         assertThat(resize.statusCode()).as("step 3: the API resize succeeded").isEqualTo(200);
-        assertThat(DAEMON.get(handle).disks.get(device))
+        assertThat(FakeDeviceDaemon.DAEMON.get(handle).disks.get(device))
             .as("step 3: the daemon volume is 6 GB").isEqualTo(6);
 
         HttpResponse<String> detach = apiPost("/api/v1/instances/" + instanceId
             + "/devices/detach", "name=" + device);
         assertThat(detach.statusCode()).as("step 4: the API detach succeeded").isEqualTo(200);
-        assertThat(DAEMON.get(handle).disks)
+        assertThat(FakeDeviceDaemon.DAEMON.get(handle).disks)
             .as("step 4: and the volume is gone at the daemon").isEmpty();
         assertThat(deviceRows(instanceId))
             .as("step 4: with no row left over").isEmpty();
@@ -423,7 +408,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         // 5. An instance this tenant holds nothing on is INVISIBLE, not forbidden: the
         //    device lane inherits the no-existence-oracle rule the rest of /api/v1 keeps.
         int foreign = ungrantedInstance("devsurf-foreign");
-        DAEMON.put(handleOf(foreign), new FakeWorkload());
+        FakeDeviceDaemon.DAEMON.put(handleOf(foreign), new FakeDeviceDaemon.Workload());
         assertThat(apiGet("/api/v1/instances/" + foreign + "/devices").statusCode())
             .as("step 5: listing another tenant's devices reads as MISSING")
             .isEqualTo(404);
@@ -431,7 +416,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             + "/devices", "type=disk&name=" + NAME_PREFIX + "steal&size_gb=1");
         assertThat(forced.statusCode())
             .as("step 5: and so does attaching to it").isEqualTo(404);
-        assertThat(DAEMON.get(handleOf(foreign)).disks)
+        assertThat(FakeDeviceDaemon.DAEMON.get(handleOf(foreign)).disks)
             .as("step 5: with nothing created on the foreign workload").isEmpty();
         assertThat(deviceRows(foreign))
             .as("step 5: and no row minted for it").isEmpty();
@@ -451,7 +436,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
      * {@code requireOperationCapability(instanceId, CONFIG)} at InstanceDevices :53/:89/
      * :129/:161 had zero coverage. Nothing was exploitable (the check is present at all
      * four mutators); this is regression risk, and the surface makes it real:
-     * ManageInstanceDeviceResource scopes its READ predicate to {@code view}, so a
+     * InstanceAttachmentParts.devicesManage() scopes its READ predicate to {@code view}, so a
      * view-only delegate really is shown the device list and the edit route, and the
      * mutator gate is the only thing between it and a deleted volume.
      */
@@ -466,7 +451,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         assertThat(apiPost("/api/v1/instances/" + instanceId + "/devices",
                 "type=disk&name=" + device + "&size_gb=4").statusCode())
             .as("step 1: the fixture disk was attached").isEqualTo(200);
-        assertThat(DAEMON.get(handle).disks.get(device))
+        assertThat(FakeDeviceDaemon.DAEMON.get(handle).disks.get(device))
             .as("step 1: and the daemon really holds it at 4 GB").isEqualTo(4);
 
         // 2. THE PREMISE: a VIEW-only delegate can SEE the instance and its devices.
@@ -510,10 +495,10 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
 
         // 4. STATE, not just status: nothing moved. A refusal that already wrote the row
         //    or already spoke to the daemon would pass every assertion above.
-        assertThat(DAEMON.get(handle).disks)
+        assertThat(FakeDeviceDaemon.DAEMON.get(handle).disks)
             .as("step 4: the daemon still holds exactly the original volume, unresized")
             .isEqualTo(Map.of(device, 4));
-        assertThat(DAEMON.get(handle).nics)
+        assertThat(FakeDeviceDaemon.DAEMON.get(handle).nics)
             .as("step 4: and no NIC was attached").isEmpty();
         assertThat(deviceRows(instanceId))
             .as("step 4: with exactly the one row the operator created").hasSize(1);
@@ -524,7 +509,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         assertThat(apiPost("/api/v1/instances/" + instanceId + "/devices/detach",
                 "name=" + device).statusCode())
             .as("step 5: the config holder's detach is accepted").isEqualTo(200);
-        assertThat(DAEMON.get(handle).disks)
+        assertThat(FakeDeviceDaemon.DAEMON.get(handle).disks)
             .as("step 5: and the volume is gone at the daemon, so the gate refused"
                 + " AUTHORITY in step 3 and nothing else")
             .isEmpty();
@@ -551,7 +536,8 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             .as("step 1: the fixture disk was attached").isEqualTo(200);
         Row row = deviceRows(instanceId).get(0);
 
-        ManageInstanceDeviceResource resource = new ManageInstanceDeviceResource();
+        PanelResource<Row> resource = PanelEntryViews.of(HohenheimSlugs.MANAGE, InstanceAttachmentParts.DEVICES);
+        Panel panel = PanelRegistry.getBySlug(HohenheimSlugs.MANAGE);
         AccessContext viewer = AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(viewerId, "Device Surface Viewer")));
         AccessContext operator = AccessContext.of(TenantConduits.stubFor(
@@ -561,28 +547,35 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         //    affordance below is a WRITE decision and not the row being invisible.
         RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.VIEW, true);
-        assertThat(resource.accessFunction().decide(viewer).isDenied())
+        assertThat(PartsReads.<Row>loadRow(new PanelRequest(panel, viewer.conduit(), viewer, null), resource,
+            row.get(InstanceDeviceModel.ID), viewer))
             .as("step 2: the view delegate's read scope is an allow, not a deny")
-            .isFalse();
+            .isNotNull();
         assertThat(HohenheimAccess.hasInstanceCapability(viewer, instanceId,
                 HohenheimAccess.VIEW))
             .as("step 2: and it really holds view on this instance").isTrue();
 
         // 3. The affordances are WITHHELD from it -- both of them, and the destructive
         //    one is the whole point: a detach button deletes a tenant's volume.
-        assertThat(resource.updatableBy(row, viewer))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, row, viewer))
             .as("step 3: a view-only delegate is offered no edit affordance").isFalse();
-        assertThat(resource.deletableBy(row, viewer))
+        assertThat(detachOffered(row, viewer))
             .as("step 3: nor a detach button that could only be refused").isFalse();
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.CREATE, null, viewer))
+            .as("step 3: nor an attach (create) affordance: every attach it could submit is refused by the"
+                + " mutator gate with instance_not_permitted (pinned by the authorization journey)")
+            .isFalse();
 
         // 4. And they are OFFERED to the config holder, so step 3 measured AUTHORITY and
         //    not a surface that refuses everyone -- the way an untested gate rots.
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.CONFIG, true);
-        assertThat(resource.updatableBy(row, operator))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, row, operator))
             .as("step 4: a config holder keeps its edit affordance").isTrue();
-        assertThat(resource.deletableBy(row, operator))
+        assertThat(detachOffered(row, operator))
             .as("step 4: and its detach button").isTrue();
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.CREATE, null, operator))
+            .as("step 4: and its attach affordance").isTrue();
 
         // 5. Revoking the capability takes the affordances away again, so the answer
         //    tracks the live grant graph rather than anything cached at wiring time.
@@ -590,9 +583,9 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             HohenheimAccess.CONFIG, false);
         AccessContext revoked = AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(tenantId, "Device Surface Tenant")));
-        assertThat(resource.updatableBy(row, revoked))
+        assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, row, revoked))
             .as("step 5: a revoked capability withdraws the edit affordance").isFalse();
-        assertThat(resource.deletableBy(row, revoked))
+        assertThat(detachOffered(row, revoked))
             .as("step 5: and the detach button").isFalse();
     }
 
@@ -607,158 +600,9 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         return keyPost(tenantKey, path, body);
     }
 
-    // -- the in-memory device-capable runtime -----------------------------------
-
-    private static final class FakeWorkload {
-        final Map<String, Integer> disks = new LinkedHashMap<>();
-        final List<String> nics = new ArrayList<>();
-        final Map<String, String> cdroms = new LinkedHashMap<>();
-    }
-
-    private static final class FakeDeviceRuntime
-            implements InstanceRuntime, DeviceAttachSupport {
-
-        @Override
-        public @NonNull String create(@NonNull InstanceSpec spec) {
-            DAEMON.computeIfAbsent(spec.handle(), handle -> new FakeWorkload());
-            return spec.handle();
-        }
-
-        @Override public void start(@NonNull String handle) {}
-
-        @Override public void stop(@NonNull String handle, int graceSeconds) {}
-
-        @Override public void destroy(@NonNull String handle) { DAEMON.remove(handle); }
-
-        @Override
-        public @NonNull InstanceStatus status(@NonNull String handle) {
-            return new InstanceStatus(DAEMON.containsKey(handle)
-                ? ContainerState.RUNNING : ContainerState.ABSENT, null);
-        }
-
-        private @NonNull FakeWorkload require(InstanceSpec spec) throws IOException {
-            if (daemonRefuses) {
-                throw new IOException("the fake daemon refuses this device");
-            }
-            FakeWorkload workload = DAEMON.get(spec.handle());
-            if (workload == null) {
-                throw new IOException("no workload " + spec.handle());
-            }
-            return workload;
-        }
-
-        @Override
-        public void ensureDisk(@NonNull InstanceSpec spec, @NonNull String name, int sizeGb)
-                throws IOException {
-            require(spec).disks.put(name, sizeGb);
-        }
-
-        @Override
-        public Integer diskSizeGb(@NonNull InstanceSpec spec, @NonNull String name)
-                throws IOException {
-            return require(spec).disks.get(name);
-        }
-
-        @Override
-        public void resizeDisk(@NonNull InstanceSpec spec, @NonNull String name, int sizeGb)
-                throws IOException {
-            require(spec).disks.put(name, sizeGb);
-        }
-
-        @Override
-        public void ensureNic(@NonNull InstanceSpec spec, @NonNull String name)
-                throws IOException {
-            require(spec).nics.add(name);
-        }
-
-        @Override
-        public void ensureCdrom(@NonNull InstanceSpec spec, @NonNull String name,
-                                @NonNull String mediaVolume) throws IOException {
-            require(spec).cdroms.put(name, mediaVolume);
-        }
-
-        @Override
-        public void removeDevice(@NonNull InstanceSpec spec, @NonNull String name,
-                                 boolean disk) throws IOException {
-            FakeWorkload workload = require(spec);
-            if (disk) {
-                workload.disks.remove(name);
-            } else {
-                workload.nics.remove(name);
-                workload.cdroms.remove(name);
-            }
-        }
-
-        @Override
-        public void deleteVolumes(@NonNull InstanceSpec spec, @NonNull List<String> names)
-                throws IOException {
-            FakeWorkload workload = require(spec);
-            names.forEach(workload.disks::remove);
-        }
-    }
-
-    /** An incus-runtime kind whose driver DOES carry devices, with no daemon behind it. */
-    private static final class FakeDeviceKind implements InstanceKindHandler {
-
-        static final Identifier ID = Identifier.of("hohenheim", "fake_device_capable");
-        static final Schema SETTINGS_SCHEMA = new Schema();
-        static final StringField IMAGE = SETTINGS_SCHEMA.addField(
-            StringField.builder().name("image").build());
-        private static boolean registered;
-
-        static void register() {
-            if (!registered) {
-                registered = true;
-                InstanceKinds.register(new FakeDeviceKind());
-            }
-        }
-
-        @Override public @NonNull Identifier typeId() { return ID; }
-
-        @Override public @NonNull String getDisplayName() { return "Fake device-capable"; }
-
-        @Override
-        public @NonNull Microcopy getLabel() {
-            return Microcopy.of("fake_device_capable").withFilter("scope", "instance_kind");
-        }
-
-        @Override public @NonNull Microcopy getDescription() {
-        return Microcopy.of("fake_device_capable").withFilter("scope", "instance_kind_description");
-    }
-
-        @Override public Icon getIcon() { return Icon.of("flask"); }
-
-        @Override public String getColor() { return "gray"; }
-
-        @Override public Schema getSchema() { return SETTINGS_SCHEMA; }
-
-        @Override public @NonNull Set<String> supportedRuntimes() { return Set.of(ServerModel.RUNTIME_INCUS); }
-
-        /** Its runtime really does implement DeviceAttachSupport, so it declares it. */
-        @Override public boolean supportsDevices() { return true; }
-
-        /** Cdrom journeys ride this kind too; the fake runtime honours ensureCdrom. */
-        @Override public boolean supportsInstallMedia() { return true; }
-
-        @Override
-        public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
-            return new FakeDeviceRuntime();
-        }
-
-        @Override
-        public @NonNull InstanceSpec specFor(int instanceId,
-                                             @NonNull Map<String, Object> settings) {
-            return InstanceSpec.builder("devsurf-instance-" + instanceId,
-                String.valueOf(settings.getOrDefault("image", "fake/image")),
-                ResourceLimits.none(),
-                new ContainerHardening.Profile("fake", List.of()),
-                OwnerLabels.of(InstanceModel.MODEL_ID, instanceId)).build();
-        }
-
-        /** Test kinds declare a footprint like any other: the interface has no default. */
-        @Override
-        public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
-            return 128;
-        }
+    /** Whether the detach is offered to this caller: the operation's own offer. */
+    private static boolean detachOffered(Row device, AccessContext access) {
+        return !(OperationPipeline.offer(InstanceAttachmentOperations.DETACH_DEVICE, access, device)
+            instanceof OperationPipeline.Offer.Hidden);
     }
 }

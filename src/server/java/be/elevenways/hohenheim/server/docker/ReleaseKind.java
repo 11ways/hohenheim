@@ -2,9 +2,8 @@ package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.instance.ConsoleKind;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
@@ -24,6 +23,8 @@ import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.PathField;
 import be.elevenways.zenit.common.orm.field.StringMapField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -53,7 +54,7 @@ import java.util.Map;
  */
 public final class ReleaseKind implements InstanceKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "release");
+    public static final Identifier ID = HohenheimIds.id("release");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     /** Same measured profile as every other container authority (see DockerContainerKind). */
@@ -170,7 +171,7 @@ public final class ReleaseKind implements InstanceKindHandler {
     public Icon getIcon() { return Icon.of("globe"); }
 
     @Override
-    public String getColor() { return "cyan"; }
+    public BadgeColor color() { return ColorHue.CYAN; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }
@@ -190,10 +191,6 @@ public final class ReleaseKind implements InstanceKindHandler {
 
     @Override
     public @NonNull InstanceSpec specFor(int instanceId, @NonNull Map<String, Object> settings) {
-        String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
-        String imageRef = ContainerSettings.imageReference(settings);
-        List<String> cmd = ContainerSettings.commandLine(settings);
-
         // AIDEV-NOTE: the keys are HOST PATHS under the volume root, minted from the
         // APPLICATION's id, and this method may never re-derive them from the release's own
         // handle -- that is the defect the site-keyed volumes were introduced to fix and
@@ -212,15 +209,10 @@ public final class ReleaseKind implements InstanceKindHandler {
             ? new PortPublication(number.intValue(), PortPublication.TCP, false, null, null)
             : null;
 
-        return InstanceSpec.builder(handle, imageRef,
-                ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)),
-                HARDENING, OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
-            .command(cmd)
+        return ContainerSettings.spec(instanceId, settings, defaultFootprintMb(settings), HARDENING)
             .workdir(str(settings.get("workdir")))
-            .env(EnvVars.toMap(settings.get("environment_variables")))
             .binds(binds)
             .publication(publication)
-            .tty(ConsoleKind.requireDeclared(settings).interactive())
             .build();
     }
 

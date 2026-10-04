@@ -10,7 +10,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * AIDEV-NOTE: how a state RENDERS is a fact on the member -- the {@code data-state} key app.scss
  * matches, the state marker that replaces the step's own subject icon, and whether the step offers its
  * "Open" link -- so the checklist template compares no literal. The keys are the strings the pre-enum
- * collector wrote. OnboardingStateVocabularyTest binds the keys to the stylesheet.
+ * collector wrote. DashboardVocabularyDriftTest binds the keys to the stylesheet.
  *
  * @author Jelle De Loecker
  * @since  0.1.0

@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.zenit.microcopy.Translation;
-import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import org.junit.jupiter.api.Test;
 
 import java.net.URL;
@@ -47,7 +47,7 @@ class ResourceLabelSentenceFormsTest {
 
         try (URLClassLoader own = new URLClassLoader(
                 new URL[] {resources.toUri().toURL()}, null)) {
-            DefaultCatalogLoader loader = new DefaultCatalogLoader("META-INF/microcopy/", own);
+            ShippedCatalogs loader = new ShippedCatalogs("META-INF/microcopy/", own);
 
             // 2. Every scoped title-form label must have a case=sentence sibling on the same scope.
             for (String tag : List.of("en", "nl")) {
@@ -89,13 +89,13 @@ class ResourceLabelSentenceFormsTest {
     }
 
     /** Every {@code key|scope} pair one locale declares for a label, in the asked spelling. */
-    private static TreeSet<String> labelScopes(DefaultCatalogLoader loader, String tag,
+    private static TreeSet<String> labelScopes(ShippedCatalogs loader, String tag,
                                                boolean sentenceForm) {
         LocaleChain chain = LocaleChain.ofTags(tag);
         TreeSet<String> pairs = new TreeSet<>();
 
         for (String key : LABEL_KEYS) {
-            for (Translation candidate : loader.findCandidates(key, chain)) {
+            for (Translation candidate : loader.variants(key, chain).stream().map(Translation::of).toList()) {
                 List<String> scopes = new ArrayList<>();
                 boolean isSentence = false;
 

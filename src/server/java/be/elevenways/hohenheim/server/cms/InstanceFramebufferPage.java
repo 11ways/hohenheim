@@ -1,12 +1,15 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.instance.VmKind;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -25,11 +28,11 @@ import java.util.Map;
  * needed -- the pl-framebuffer viewer is pure canvas (no wasm), and same-origin
  * WebSockets already ride the default admin {@code connect-src 'self'}.
  */
-public final class InstanceFramebufferPage implements RecordScopedPage<Row> {
+public final class InstanceFramebufferPage implements RecordTab.Rendered<Row> {
 
     public static final String SLUG = "framebuffer";
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_framebuffer"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_framebuffer"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("framebuffer").withFilter("scope", "instance"); }
     /**
      * Housekeeping, not an everyday destination: the tab lives in the strip's "More"
@@ -40,24 +43,21 @@ public final class InstanceFramebufferPage implements RecordScopedPage<Row> {
     @Override public @NonNull Icon icon() { return Icon.of("display"); }
 
     /**
-     * VM instances only (a container has no framebuffer), AND only for a principal
-     * holding CONSOLE on THIS record -- the same verb the socket's handshake demands
-     * (VmFramebufferHandler), asked here so the tab stops being offered to a view-only
-     * delegate whose every connect the socket could only 1008. The
+     * Where the open-framebuffer operation is offered: an authored VM (a container has no
+     * framebuffer), for a principal holding CONSOLE on THIS record -- the offer the socket's
+     * handshake admits through (VmFramebufferHandler), asked here so the tab stops being
+     * offered to a viewer whose every connect the socket could only 1008. The
      * {@link InstanceConsolePage} shape; zenit-cms 404s an unoffered slug, so this
      * gates the route as well as the nav.
      */
     @Override
     public boolean visibleFor(@NonNull Row record, @NonNull AccessContext accessContext) {
-        return VmKind.ID.toString().equals(record.get(InstanceModel.KIND))
-            && HohenheimAccess.hasInstanceCapability(accessContext,
-                record.get(InstanceModel.ID), HohenheimAccess.CONSOLE);
+        return InstanceOperationHandlers.offered(InstanceOperations.OPEN_FRAMEBUFFER, accessContext, record);
     }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
+        Conduit conduit = request.conduit();
         Integer instanceId = instance.get(InstanceModel.ID);
         String status = instance.get(InstanceModel.STATUS);
 
@@ -74,6 +74,7 @@ public final class InstanceFramebufferPage implements RecordScopedPage<Row> {
             Map.of(HohenheimEndpoints.INSTANCE_ID, instanceId)));
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(
-            Identifier.of("hohenheim", "cms/instance-framebuffer"), vars);
+            HohenheimTemplateIds.INSTANCE_FRAMEBUFFER, vars);
     }
+
 }

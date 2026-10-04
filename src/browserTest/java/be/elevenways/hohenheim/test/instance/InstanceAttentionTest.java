@@ -22,6 +22,8 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
+import be.elevenways.zenit.server.task.TaskRuntime;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -47,6 +49,11 @@ class InstanceAttentionTest {
     static void setUp() throws Exception {
         datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
+    }
+
+    @AfterAll
+    static void releaseTaskModels() {
+        TaskRuntime.stop();
     }
 
     private static int instance(String name, String status) {
@@ -240,11 +247,9 @@ class InstanceAttentionTest {
             // The lite boot never starts the task service, so its datasource-scoped
             // model is registered here (the table exists: M001_CreateSystemTaskTables
             // is auto-discovered by the migration runner).
-            if (Models.get(SystemTaskHistoryModel.MODEL_ID) == null) {
-                Models.registerInstance(new SystemTaskHistoryModel(datasource));
-            }
-            String nightly = BackupControlPlane.class.getName();
-            String chatty = CleanOldInstanceLogs.class.getName();
+            TaskRuntime.registerModels(datasource);
+            String nightly = BackupControlPlane.ID.toString();
+            String chatty = new CleanOldInstanceLogs().id().toString();
 
             // 1. One FAILED nightly run, then 250 newer successful runs of another task.
             taskRun(nightly, TaskStatus.FAILED,

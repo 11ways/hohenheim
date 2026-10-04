@@ -1,10 +1,10 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.CertificateModel;
-import be.elevenways.hohenheim.server.cms.CertificateResource;
-import be.elevenways.hohenheim.server.cms.DnsRecordResource;
-import be.elevenways.hohenheim.server.cms.DnsZoneResource;
-import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.hohenheim.server.cms.CertificateParts;
+import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.hohenheim.server.cms.DnsRecordParts;
+import be.elevenways.hohenheim.server.cms.DnsZoneParts;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -25,7 +25,7 @@ class RowActionPlacementTest extends HohenheimTestBase {
     @Test
     void chorePlacementIsPerActionAndRealAffordancesStayInline() {
         // 1. DNS records: minting and revoking a dyndns credential are rare per row.
-        Map<String, RowAction<Row>> records = byPath(new DnsRecordResource().rowActions());
+        Map<String, PanelAction<Row>> records = partsByPath(DnsRecordParts.admin().actions());
         assertThat(records).as("step 1: both dyndns actions are still declared")
             .containsKeys("dyndns_token", "dyndns_revoke");
         assertThat(records.get("dyndns_token").inlineInRow())
@@ -34,7 +34,10 @@ class RowActionPlacementTest extends HohenheimTestBase {
             .as("step 1: so is revoking one").isFalse();
 
         // 2. Certificates: downloading the PEM is an export, not a per-row affordance.
-        Map<String, RowAction<Row>> certificates = byPath(new CertificateResource().rowActions());
+        Map<String, PanelAction<Row>> certificates = new LinkedHashMap<>();
+        for (PanelAction<Row> action : CertificateParts.admin().actions()) {
+            certificates.put(action.id().getPath(), action);
+        }
         assertThat(certificates.get("download_certificate"))
             .as("step 2: the download action is still declared").isNotNull();
         assertThat(certificates.get("download_certificate").inlineInRow())
@@ -43,15 +46,14 @@ class RowActionPlacementTest extends HohenheimTestBase {
         // 2b. Re-issuing is an overflow chore too, and it is OFFERED ONLY where it could
         //     work: a manual upload has no ACME order to repeat. (Visibility is not
         //     authorization -- the handler and the service refuse such a row as well.)
-        RowAction<Row> reissue = certificates.get("reissue_certificate");
+        PanelAction<Row> reissue = certificates.get("reissue_certificate");
         assertThat(reissue).as("step 2b: the re-issue action is declared").isNotNull();
         assertThat(reissue.inlineInRow())
             .as("step 2b: and it overflows").isFalse();
-        assertThat(reissue.visibleFor()).as("step 2b: it declares a visibility rule").isNotNull();
-        assertThat(reissue.isVisibleFor(certificateRow(CertificateModel.PROVIDER_LETSENCRYPT),
+        assertThat(reissue.shownFor(certificateRow(CertificateModel.PROVIDER_LETSENCRYPT),
                 AccessContext.anonymous()))
             .as("step 2b: shown for a Let's Encrypt certificate").isTrue();
-        assertThat(reissue.isVisibleFor(certificateRow(CertificateModel.PROVIDER_CUSTOM),
+        assertThat(reissue.shownFor(certificateRow(CertificateModel.PROVIDER_CUSTOM),
                 AccessContext.anonymous()))
             .as("step 2b: hidden for a manual upload").isFalse();
 
@@ -59,7 +61,7 @@ class RowActionPlacementTest extends HohenheimTestBase {
         //    is a per-action declaration and not a blanket demotion. Probing a zone's
         //    delegation is that affordance; the Records link is not (since 1cbc83a1) because
         //    the zone's own title link already opens the records workspace.
-        Map<String, RowAction<Row>> zones = byPath(new DnsZoneResource().rowActions());
+        Map<String, PanelAction<Row>> zones = partsByPath(DnsZoneParts.admin().actions());
         assertThat(zones.get("check_dns_health")).as("step 3: the health probe exists").isNotNull();
         assertThat(zones.get("check_dns_health").inlineInRow())
             .as("step 3: probing a zone's health stays inline").isTrue();
@@ -75,11 +77,10 @@ class RowActionPlacementTest extends HohenheimTestBase {
         return row;
     }
 
-    private static Map<String, RowAction<Row>> byPath(List<RowAction<Row>> actions) {
-        Map<String, RowAction<Row>> map = new LinkedHashMap<>();
-        for (RowAction<Row> action : actions) {
-            map.put(action.id().getPath(), action);
-        }
+    private static Map<String, PanelAction<Row>> partsByPath(List<PanelAction<Row>> actions) {
+        Map<String, PanelAction<Row>> map = new LinkedHashMap<>();
+        for (PanelAction<Row> action : actions) map.put(action.id().getPath(), action);
         return map;
     }
+
 }

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
@@ -20,6 +21,7 @@ import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.ZenitPrincipalKind;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -104,11 +106,13 @@ class InstanceConsoleCrashRestartTest {
                 .as("step 5: the record is running again, never left down by a refused restart")
                 .isEqualTo(InstanceModel.STATUS_RUNNING);
             Row restart = deploys(instanceId).get(0);
+            // System work names the system principal as its actor (zenit 133dccf4), never the viewer.
             assertThat(Map.of(
-                    "actor", String.valueOf((Object) restart.get(ActivityModel.ACTOR)),
+                    "actorKind", String.valueOf((Object) restart.get(ActivityModel.ACTOR_KIND)),
                     "origin", String.valueOf((Object) restart.get(ActivityModel.ORIGIN))))
                 .as("step 5: the restart is the system's action, never the viewer's")
-                .isEqualTo(Map.of("actor", "null", "origin", Accountability.ORIGIN_SYSTEM));
+                .isEqualTo(Map.of("actorKind", ZenitPrincipalKind.SYSTEM.id().toString(),
+                    "origin", Accountability.ORIGIN_SYSTEM));
         });
     }
 
@@ -116,7 +120,7 @@ class InstanceConsoleCrashRestartTest {
         return Models.get(ActivityModel.class).find()
             .where(ActivityModel.MODEL.eq(InstanceModel.MODEL_ID.toString()))
             .where(ActivityModel.RECORD_ID.eq(String.valueOf(instanceId)))
-            .where(ActivityModel.ACTION.eq(InstanceService.ACTIVITY_DEPLOY_ACTION))
+            .where(ActivityModel.ACTION.eq(HohenheimActivityAction.DEPLOYED.id().toString()))
             .orderBy(ActivityModel.ID, SortOrder.DESC)
             .all();
     }

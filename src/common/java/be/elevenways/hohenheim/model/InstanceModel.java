@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hawkeye.common.annotation.HawkeyeFunction;
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -14,11 +16,13 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
+import be.elevenways.zenit.common.ui.ColorHue;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * A single managed runtime unit (the instance tier's record): one container today,
@@ -35,7 +39,7 @@ import java.util.List;
  */
 public class InstanceModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "instance");
+    public static final Identifier MODEL_ID = HohenheimIds.id("instance");
     public static final Schema SCHEMA = new Schema();
 
     /** {@link #STATUS}: record exists, nothing was ever deployed. */
@@ -138,7 +142,7 @@ public class InstanceModel extends Model {
     // ONE discriminator: the kind implies the runtime (docker_container now; system_container
     // and vm reserved). Values enumerate the registry live; stored value = "hohenheim:<kind>".
     public static final EnumField KIND = SCHEMA.addField(
-        RegistryEnumField.builder("kind")
+        RegistryMemberField.builder("kind")
             .registry(InstanceKindRegistry.REGISTRY)
             .label(HohenheimFormCopy.label("kind"))
             .help(HohenheimFormCopy.help("instance_kind"))
@@ -152,6 +156,13 @@ public class InstanceModel extends Model {
             .schemaFrom("kind")
             .label(HohenheimFormCopy.label("settings"))
             .build());
+
+    /** @return the row's kind settings as they stand on it, empty when it carries none; never mutate the result */
+    @SuppressWarnings("unchecked")
+    public static @NonNull Map<String, Object> settingsOf(@Nullable Row instance) {
+        return instance != null && instance.get(SETTINGS) instanceof Map<?, ?> map
+            ? (Map<String, Object>) map : Map.of();
+    }
 
     // The host FK (servers.id). Every write folds through ServerModel.canonicalServerId
     // (the beforeValidate hook below) -- never a re-spelling; null means the local daemon.
@@ -220,15 +231,15 @@ public class InstanceModel extends Model {
      */
     public static final EnumField INSTALL_STATE = SCHEMA.addField(EnumField.builder("install_state")
         .value(INSTALL_NONE, v -> v.displayName("None")
-            .label(Microcopy.of("none").withFilter("scope", "install_state")).color("gray"))
+            .label(Microcopy.of("none").withFilter("scope", "install_state")).color(ColorHue.GRAY))
         .value(INSTALL_PENDING, v -> v.displayName("Install pending").icon("clock")
-            .label(Microcopy.of("pending").withFilter("scope", "install_state")).color("orange"))
+            .label(Microcopy.of("pending").withFilter("scope", "install_state")).color(ColorHue.ORANGE))
         .value(INSTALL_INSTALLING, v -> v.displayName("Installing").icon("hourglass-half")
-            .label(Microcopy.of("installing").withFilter("scope", "install_state")).color("blue"))
+            .label(Microcopy.of("installing").withFilter("scope", "install_state")).color(ColorHue.BLUE))
         .value(INSTALL_INSTALLED, v -> v.displayName("Installed").icon("circle-check")
-            .label(Microcopy.of("installed").withFilter("scope", "install_state")).color("green"))
+            .label(Microcopy.of("installed").withFilter("scope", "install_state")).color(ColorHue.GREEN))
         .value(INSTALL_FAILED, v -> v.displayName("Install failed").icon("circle-exclamation")
-            .label(Microcopy.of("install_failed").withFilter("scope", "install_state")).color("red"))
+            .label(Microcopy.of("install_failed").withFilter("scope", "install_state")).color(ColorHue.RED))
         .defaultValue(INSTALL_NONE)
         .build());
 
@@ -236,7 +247,7 @@ public class InstanceModel extends Model {
      * Whether an {@link #INSTALL_STATE} member is worth SHOWING as a badge.
      *
      * AIDEV-NOTE: it lives HERE, beside the vocabulary it classifies, because the two
-     * presenters (the fleet list's status subtext and InstanceOverviewPage's state band)
+     * presenters (the fleet list's status subtext and InstanceOverview's state band)
      * must answer identically -- and because adding a member is then ONE edit. The switch
      * has no enum to be exhaustive over (the vocabulary is String constants), so
      * AdminUiSurfaceTest.everyInstallStateMemberIsClassified pins the declared key set for
@@ -249,6 +260,11 @@ public class InstanceModel extends Model {
      * classified is how a stuck install becomes invisible, so the unknown case degrades
      * towards saying too much rather than too little.
      */
+    @HawkeyeFunction(
+        name = "notable",
+        namespace = "InstallState",
+        description = "Whether an instance's install state says something worth a badge"
+    )
     public static boolean isNotableInstallState(@Nullable Object state) {
 
         if (state == null) {
@@ -279,9 +295,9 @@ public class InstanceModel extends Model {
      */
     public static final EnumField CRASH_POLICY = SCHEMA.addField(EnumField.builder("crash_policy")
         .value(CRASH_NONE, v -> v.displayName("None")
-            .label(Microcopy.of("none").withFilter("scope", "crash_policy")).color("gray"))
+            .label(Microcopy.of("none").withFilter("scope", "crash_policy")).color(ColorHue.GRAY))
         .value(CRASH_RESTART, v -> v.displayName("Restart on crash").icon("rotate")
-            .label(Microcopy.of("restart").withFilter("scope", "crash_policy")).color("green"))
+            .label(Microcopy.of("restart").withFilter("scope", "crash_policy")).color(ColorHue.GREEN))
         .defaultValue(CRASH_NONE)
         .label(HohenheimFormCopy.label("crash_policy"))
         .help(HohenheimFormCopy.help("crash_policy"))
@@ -456,19 +472,20 @@ public class InstanceModel extends Model {
      */
     public static final EnumField RUNTIME_ROLE = SCHEMA.addField(EnumField.builder("runtime_role")
         .value(ROLE_SERVING, v -> v.displayName("Serving").icon("circle-play")
-            .label(Microcopy.of("serving").withFilter("scope", "runtime_role")).color("green"))
+            .label(Microcopy.of("serving").withFilter("scope", "runtime_role")).color(ColorHue.GREEN))
         .value(ROLE_CANDIDATE, v -> v.displayName("Candidate").icon("stethoscope")
-            .label(Microcopy.of("candidate").withFilter("scope", "runtime_role")).color("blue"))
+            .label(Microcopy.of("candidate").withFilter("scope", "runtime_role")).color(ColorHue.BLUE))
         .value(ROLE_RETIRED, v -> v.displayName("Retired").icon("box-archive")
-            .label(Microcopy.of("retired").withFilter("scope", "runtime_role")).color("gray"))
+            .label(Microcopy.of("retired").withFilter("scope", "runtime_role")).color(ColorHue.GRAY))
         .defaultValue(ROLE_SERVING)
         .build());
 
     /**
-     * The controller fence of the last recorded runtime outcome. Every runtime-outcome
-     * write is conditional on it ({@code claim_fence IS NULL OR claim_fence <= :myFence})
-     * and stamps it; a stale controller's write matches ZERO rows, and zero rows is a
-     * hard failure, never a shrug (InstanceService.stampGuarded).
+     * The fence of the operation claim that holds the record (InstanceOperationLock over
+     * core ClaimedRows): stamped when an operation takes the record, and every runtime-
+     * outcome write is conditional on it ({@code claim_fence = :claimFence}); a stale
+     * holder's write matches ZERO rows, and zero rows is a hard failure, never a shrug
+     * (InstanceOperationGuard).
      */
     public static final LongField CLAIM_FENCE = SCHEMA.addField(
         LongField.builder("claim_fence").filterable(false).build());
@@ -504,6 +521,53 @@ public class InstanceModel extends Model {
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
     public static final DateTimeField DELETED_AT = SCHEMA.addField(DateTimeField.builder().name("deleted_at").build());
+
+    /**
+     * Whether the source repository URL was last set by the system tier ({@code hohenheim.admin.system} or declared
+     * system work), the one fact that lets an operator-owned instance clone a local source path; never written by a
+     * form, only by OperatorTrustedWrites' write hook.
+     *
+     * AIDEV-NOTE: reach is decided by WHO SET the target, not only by ownership at fetch time (decided 2026-10-02):
+     * ownership changes where no write hook sees it (a revoked grant, a deleted tenant, a cascade), so a target a
+     * tenant or delegate set stays unmarked and is never dialled with any-address reach after the record becomes
+     * operator-owned. M011 marked every row stored before the rule.
+     */
+    public static final BooleanField TARGET_TRUSTED = SCHEMA.addField(BooleanField.builder("target_trusted")
+        .defaultValue(false)
+        .build());
+
+    /**
+     * The columns only an operation holding the record's claim writes, through InstanceOperationGuard's fenced
+     * statements: a configuration save of an existing record never carries them.
+     *
+     * AIDEV-NOTE: a loaded row carries these as they were at load time, and a whole-row save writes every present
+     * column predicated on the primary key alone, so a config writer used to put back a status an operation had moved
+     * on from and the claim fence it had replaced, which let the old holder's late writes match again (review 14
+     * D01). A column a new fenced stamp writes belongs here.
+     */
+    public static final List<Field<?, ?>> OPERATION_OWNED = List.of(CLAIM_FENCE, STATUS, STATUS_OBSERVED_AT,
+        WORKLOAD_KILLED_AT, INSTALL_STATE, INSTALL_ERROR, RUNTIME_ROLE, IMAGE_FINGERPRINT, MIGRATE_TARGET_ID,
+        MIGRATE_RESERVED_MB);
+
+    /**
+     * Save a configuration change through the full save pipeline; an existing record's {@link #OPERATION_OWNED}
+     * columns are dropped from the row first and stay as stored.
+     *
+     * @return the saved row
+     */
+    public static @NonNull Row saveConfiguration(@NonNull Row row) {
+        return Models.get(InstanceModel.class).save(prepareConfigurationSave(row));
+    }
+
+    /** Removes operation-owned state before another configuration writer enters its normal save pipeline. */
+    public static @NonNull Row prepareConfigurationSave(@NonNull Row row) {
+        if (row.get(ID) != null) {
+            for (Field<?, ?> owned : OPERATION_OWNED) {
+                row.remove(owned.getName());
+            }
+        }
+        return row;
+    }
 
     /**
      * Instances are soft-deleted (destroy trashes the record, the backups and history outlive

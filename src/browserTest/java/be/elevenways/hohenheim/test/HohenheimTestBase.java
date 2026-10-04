@@ -1,31 +1,28 @@
 package be.elevenways.hohenheim.test;
 
-import be.elevenways.hawkeye.testSupport.HawkeyeBrowserTestBase;
+import be.elevenways.zenit.browsertest.ZenitBrowserTestBase;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.hohenheim.server.ServerMain;
-import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.AuthSettings;
-import be.elevenways.zenit.auth.model.GrantModel;
-import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.ZenitAuth;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.csrf.CsrfTokens;
 import be.elevenways.zenit.common.session.Session;
-import be.elevenways.zenit.server.ServerZenitRuntime;
-import be.elevenways.zenit.server.http.RateLimitMiddleware;
-import be.elevenways.zenit.server.http.ZenitHttpServer;
 import com.microsoft.playwright.options.Cookie;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -33,14 +30,16 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import be.elevenways.zenit.common.session.SessionToken;
-import be.elevenways.zenit.common.flash.FlashEncoding;
-import be.elevenways.zenit.server.flash.Flash;
+import be.elevenways.zenit.common.flash.FlashNotice;
+import be.elevenways.zenit.test.support.FlashHandoff;
+import be.elevenways.zenit.test.support.RateLimitExemption;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.junit.jupiter.api.BeforeEach;
 
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Browser test base for Hohenheim. Authenticates via zenit-auth: seeds an admin user and mints
@@ -52,19 +51,15 @@ import java.util.Map;
 // browserTestIsolated bucket with a fresh JVM per class, because doing that
 // beside a live shared server yanks the database out from under it.
 @org.junit.jupiter.api.Tag("shared-server")
-public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
+public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
 
-    private static ZenitHttpServer zenitServer;
-    private static int port;
     protected static String sessionToken;
     protected static String csrfToken;
+    /** Every session {@link #sessionFor} minted in this JVM, drained with the admin one before each test. */
+    private static final Set<String> MINTED_SESSIONS = ConcurrentHashMap.newKeySet();
 
     @Override
-    protected int startServer() throws Exception {
-        if (ServerZenitRuntime.INSTANCE != null) {
-            return port;
-        }
-
+    protected void bootHost() throws Exception {
         // The shared harness DECLARES its role set instead of inheriting it by
         // omission: every role on, the full-node shape this suite has always
         // exercised. load() below snapshots these into HohenheimRoles.
@@ -92,12 +87,11 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
             throw new RuntimeException("Failed to create the test database", e);
         }
 
-        // Install auth exactly as production does, BEFORE the boot stages run:
-        // ManagePanel wraps the permission checker zenit-auth installs, so the
-        // harness must not invert that order.
-        ZenitAuth.init(HohenheimDatabase.datasource());
-        // Production disables the module's default auth panel (ServerMain does the
-        // same): the users/roles resources are wired into HohenheimPanel instead.
+        // zenit-auth installs itself exactly as in production: the discovered ZenitAuthModule
+        // at the MODULES stage, which HohenheimHostWiring runs after (ManagePanel wraps the
+        // permission checker zenit-auth installs, so that order must not invert). Production
+        // disables the module's default auth panel BEFORE boot (ServerMain does the same):
+        // the users/roles resources are wired into HohenheimPanel instead.
         Zenit.SETTINGS_VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
         ServerMain.installAuthBaselines();
 
@@ -114,37 +108,19 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
 
         // Endpoint rate limits (deploy/db-io/download) share one JVM-wide
         // bucket per principal; a full suite would trip them across classes.
-        // The dedicated rate-limit test installs its own strict resolver.
-        RateLimitMiddleware.setPolicyResolver((conduit, endpoint, declared) -> null);
-
-        zenitServer = ServerZenitRuntime.createServer(0);
-        zenitServer.start();
-        port = zenitServer.getPort();
-
-        System.out.println("Hohenheim test server started on http://localhost:" + port);
-        return port;
+        // The dedicated rate-limit test lifts the exemption for its hammer.
+        RateLimitExemption.exemptAll();
     }
 
-    /** Create an enabled admin user and an active session for it; returns the session id (cookie value).
+    @Override
+    protected void afterServerStart() {
+        System.out.println("Hohenheim test server started on http://localhost:" + this.getServerPort());
+    }
+
+    /** The test admin ({@link TenantConduits#operatorUser}) and an active session for it; returns the session id.
      *  Package-visible: isolated boot tests (RoleRestrictedBootTest) reuse it instead of copying. */
     static String seedAuthenticatedAdmin() {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, "test@hohenheim.local");
-        user.set(UserModel.DISPLAY_NAME, "Test Admin");
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Now.instant());
-        user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        ZenitAuth.markSeeded();   // a user exists, so the setup gate must not redirect
-
-        // Grant everything (the /setup admin's shape) so the CMS panel's
-        // hohenheim.admin.access permission check passes.
-        Row grant = AuthModels.grants().createEmptyRow();
-        grant.set(GrantModel.SUBJECT_TYPE, GrantSubjectType.USER.key());
-        grant.set(GrantModel.SUBJECT_ID, user.get(UserModel.ID));
-        grant.set(GrantModel.PERMISSION, "*");
-        grant.set(GrantModel.VALUE, true);
-        AuthModels.grants().save(grant);
+        Row user = TenantConduits.operatorUser();
 
         Session session = Zenit.getSessionStore().create();
         session.set(AuthKeys.USER_ID, ((Integer) user.get(UserModel.ID)).longValue());
@@ -154,45 +130,39 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         return session.token().secret();
     }
 
-    @Override
-    protected void stopServer() {
-        // Shared across the JVM (the CmsBrowserTestBase pattern): the first class to
-        // finish must NOT stop the server every later class in this fork still uses.
-        // Teardown rides on JVM shutdown.
+    /** Reset a surface fixture's database and sessions while retaining the shared HTTP server. */
+    protected static void freshSeededDatabase() throws Exception {
+        TestDatabases.freshBootedDatasource();
+        MINTED_SESSIONS.clear();
+        sessionToken = seedAuthenticatedAdmin();
     }
 
-    @Override
-    protected int getServerPort() {
-        return port;
-    }
 
     /**
-     * Pop the admin session's pending flash toast, the way a page render does.
+     * Take the admin session's flash toast that loading {@code answer}'s redirect would show.
      *
      * AIDEV-NOTE: outcome messages ride the SESSION, never the redirect URL -- the
-     * seven query parameters that used to carry them are deleted. A test that asserts
-     * on a Location header for an error/saved/restored message is asserting the old
-     * channel and must read the flash instead.
+     * seven query parameters that used to carry them are deleted. A redirect hands the
+     * stashed message off under a one-shot token on its Location, so a test follows that
+     * Location: it takes the message through Flash.take (FlashHandoff), which keeps the
+     * tests off the session layout, and compares landingOf(answer) for the destination.
      */
-    protected static FlashEncoding.@Nullable Decoded popFlash() {
-        return popFlash(sessionToken);
+    protected static @Nullable FlashNotice popFlash(@NonNull HttpResponse<?> answer) {
+        return popFlash(answer, sessionToken);
     }
 
-    /** Pop the pending flash toast of an ARBITRARY session (a tenant's, not the admin's). */
-    protected static FlashEncoding.@Nullable Decoded popFlash(String token) {
+    /** Take the flash toast of an ARBITRARY session (a tenant's, not the admin's) that {@code answer} leads to. */
+    protected static @Nullable FlashNotice popFlash(@NonNull HttpResponse<?> answer, @NonNull String token) {
         Session session = Zenit.getSessionStore().get(SessionToken.of(token));
         if (session == null) {
             return null;
         }
-        Map<String, String> pending = session.get(Flash.PENDING_BY_TAB);
-        if (pending == null || !pending.containsKey(Flash.UNTABBED)) {
-            return null;
-        }
-        LinkedHashMap<String, String> remaining = new LinkedHashMap<>(pending);
-        String encoded = remaining.remove(Flash.UNTABBED);
-        session.set(Flash.PENDING_BY_TAB, remaining);
-        Zenit.getSessionStore().save(session);
-        return FlashEncoding.decode(encoded);
+        return FlashHandoff.take(session, answer.headers().firstValue("Location").orElse(null));
+    }
+
+    /** @return the redirect's Location without its flash handoff token, or "" without a Location */
+    protected static @NonNull String landingOf(@NonNull HttpResponse<?> answer) {
+        return answer.headers().firstValue("Location").map(FlashHandoff::landing).orElse("");
     }
 
     // -- shared HTTP transport ------------------------------------------------
@@ -213,7 +183,35 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         String csrf = ZenitAuth.randomToken();
         session.set(CsrfTokens.TOKEN, csrf);
         Zenit.getSessionStore().save(session);
-        return new TestSession(session.token().secret(), csrf);
+        String token = session.token().secret();
+        MINTED_SESSIONS.add(token);
+        return new TestSession(token, csrf);
+    }
+
+    /**
+     * Discard every flash notice pending in the admin session and every session {@link #sessionFor} minted.
+     *
+     * AIDEV-NOTE: a test that asserts a redirect's landingOf(answer) without redeeming its notice through popFlash
+     * leaves that notice pending, and these sessions outlive the test (the admin one serves the whole JVM, a class may
+     * keep a tenant one in a static field), so the next test would start with a stranger's toast waiting. Both
+     * shipped session stores commit an update on the spot and make save a no-op, so no save follows the drain.
+     */
+    @BeforeEach
+    void drainPendingFlash() {
+        if (sessionToken != null) {
+            drainPendingFlash(sessionToken);
+        }
+        for (String token : MINTED_SESSIONS) {
+            drainPendingFlash(token);
+        }
+    }
+
+    private static void drainPendingFlash(@NonNull String token) {
+        // A revoked or expired session resolves to null: nothing of it can reach a later test.
+        Session session = Zenit.getSessionStore().get(SessionToken.of(token));
+        if (session != null) {
+            FlashHandoff.drain(session);
+        }
     }
 
     protected @NonNull String baseUrl() {
@@ -237,6 +235,32 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         String proof = CmsConfirmation.FIELD + "=" + URLEncoder.encode(
             CmsConfirmation.proofValue(typedPhrase, typedPhrase), StandardCharsets.UTF_8);
         return body == null || body.isEmpty() ? proof : body + "&" + proof;
+    }
+
+    /**
+     * The invoke route of a placed operation on the admin sites list: a row verb names its one site in the query; a
+     * bulk verb (no site given) takes its selection in the posted body.
+     */
+    protected static @NonNull String siteInvoke(@NonNull Operation<?, ?, ?> verb, int... siteIds) {
+        String url = CmsRoutes.invoke(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, verb.id()).toUrl();
+        return siteIds.length == 0 ? url : url + "?ids=" + siteIds[0];
+    }
+
+    /**
+     * The command envelope a hand-posted site CREATE form carries (url-encoded body pairs): the site create is an
+     * operation, which refuses a post without its reviewed identity.
+     */
+    protected static @NonNull String siteCreateEnvelope() {
+        return PanelResourceCalls.createEnvelope();
+    }
+
+    /**
+     * The command envelope a hand-posted site EDIT form carries, admin or /manage: a fresh identity and the site's
+     * domain version as of now, so read it at the post, never once for several posts.
+     */
+    protected static @NonNull String siteEditEnvelope(@NonNull Object siteId) {
+        return PanelResourceCalls.editEnvelope(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, siteId,
+            TenantConduits.operator());
     }
 
     /** A request builder aimed at {@code path} on the test server, for a shape the verbs below do not cover. */
@@ -337,6 +361,19 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
     protected static HttpResponse<String> sendFollowingRedirects(HttpRequest.@NonNull Builder builder)
             throws Exception {
         return send(builder, HttpClient.Redirect.NORMAL);
+    }
+
+    /** {@link #sendRequest} answering the raw body bytes, for a test comparing a reply byte for byte. */
+    protected static HttpResponse<byte[]> sendRequestBytes(HttpRequest.@NonNull Builder builder) {
+        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
+        try {
+            return client.send(builder.build(), HttpResponse.BodyHandlers.ofByteArray());
+        } catch (IOException failure) {
+            throw new UncheckedIOException(failure);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted while waiting for " + builder.build().uri(), interrupted);
+        }
     }
 
     private static HttpResponse<String> send(HttpRequest.Builder builder,

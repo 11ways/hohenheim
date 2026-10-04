@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.orm.behaviour.OptimisticLockingBehaviour;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -28,7 +30,7 @@ import java.util.List;
  */
 public class InstanceVolumeModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "instance_volume");
+    public static final Identifier MODEL_ID = HohenheimIds.id("instance_volume");
     public static final Schema SCHEMA = new Schema();
 
     /** The volume every workspace carries: its {@code /home/site} data directory. */
@@ -81,6 +83,11 @@ public class InstanceVolumeModel extends Model {
         DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("updated_at").build());
+
+    /** Usage observations are bookkeeping; only declaration edits move the reviewed version. */
+    public static final OptimisticLockingBehaviour LOCKING = SCHEMA.addBehaviour(
+        OptimisticLockingBehaviour.create().outsideVersion(USED_BYTES, OBSERVED_AT));
+    public static final IntegerField VERSION = LOCKING.versionField();
 
     /** @return this instance's volumes, name-ordered */
     public List<Row> findByInstanceId(int instanceId) {

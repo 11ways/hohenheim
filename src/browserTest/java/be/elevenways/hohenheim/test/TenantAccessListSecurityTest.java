@@ -194,7 +194,6 @@ class TenantAccessListSecurityTest extends HohenheimTestBase {
         row.set(AccessRuleModel.TYPE, AccessRuleModel.TYPE_IP_ALLOW);
         row.set(AccessRuleModel.DATA, new LinkedHashMap<>(Map.of("network", "127.0.0.1")));
         row.set(AccessRuleModel.ENABLED, true);
-        row.set(AccessRuleModel.SORT, 0);
         model.save(row);
         return row.get(AccessRuleModel.ID);
     }

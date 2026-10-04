@@ -158,7 +158,7 @@ class DatabaseApiTest extends HohenheimTestBase {
             .doesNotContain("memory_limit_mb");
 
         // 3. ... and the two ADMIN-ONLY verbs are shut for it, because only the admin
-        //    panel offers them at all (ManageDatabaseResource drops the move row action,
+        //    panel offers them at all (DatabaseParts#manage places no move,
         //    and there is no delegated engine resource).
         assertThat(keyPost(keyTenant, "/api/v1/databases/" + databaseId + "/move-shared", "")
                 .statusCode())
@@ -188,6 +188,12 @@ class DatabaseApiTest extends HohenheimTestBase {
             + move.body()).isEqualTo(422);
         assertThat(move.body()).as("step 5: naming which of the four reasons it is")
             .contains("database_already_shared");
+        // The whole body is the frozen wire's form-level 422, byte for byte: the move runs through the
+        // move_database_shared operation now, and an ineligible record still answers exactly this.
+        String reason = "Database '" + PREFIX + "db' already lives on a shared engine";
+        assertThat(move.body()).as("step 5: the 422 body is unchanged by the operation lane")
+            .isEqualTo("{\"status\":422,\"code\":\"database_already_shared\",\"message\":\"" + reason
+                + "\",\"violations\":[{\"code\":\"database_already_shared\",\"message\":\"" + reason + "\"}]}");
         assertThat((String) databases.findById(databaseId).get(DatabaseModel.STATUS))
             .as("step 5: and nothing was queued -- the record never went provisioning")
             .isEqualTo(DatabaseModel.STATUS_ACTIVE);

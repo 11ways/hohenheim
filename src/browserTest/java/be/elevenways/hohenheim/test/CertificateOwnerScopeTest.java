@@ -10,6 +10,7 @@ import be.elevenways.zenit.common.data.RecordSourceQuery;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -60,7 +61,7 @@ class CertificateOwnerScopeTest extends HohenheimTestBase {
         own.set(CertificateModel.NICE_NAME, OWN_NAME);
         own.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_CUSTOM);
         own.set(CertificateModel.STATUS, CertificateModel.STATUS_ACTIVE);
-        own.set(CertificateModel.REQUESTED_BY_USER_ID, tenantId);
+        CertificateModel.setRequester(own, PrincipalRef.account(tenantId));
         certs.save(own);
         ownCertId = own.get(CertificateModel.ID);
 

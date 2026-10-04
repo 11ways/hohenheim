@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -11,7 +12,6 @@ import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
 import be.elevenways.hohenheim.server.runtime.ConsoleStreamSupport;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
@@ -28,6 +28,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 /**
@@ -56,6 +57,12 @@ public final class InstanceConsoles {
     private static final long FLAP_WINDOW_MS = 60_000;
 
     private static final Map<Integer, InstanceConsoleSession> SESSIONS = new ConcurrentHashMap<>();
+
+    // AIDEV-NOTE: a session's late callbacks (the readiness timer and match, the exit policy) act only while its
+    // generation is current, checked under the record's claim: closeSession bumps it for every replacement or end,
+    // including a session the pump already dropped from SESSIONS, so a replaced console can never stamp, release
+    // ports for or restart the deployment that replaced it (review 14 D02/D03).
+    private static final Map<Integer, Long> GENERATIONS = new ConcurrentHashMap<>();
 
     private static final Map<Integer, Deque<Long>> CRASH_LOG = new ConcurrentHashMap<>();
 
@@ -115,8 +122,7 @@ public final class InstanceConsoles {
             return null;
         }
         if (!(resolved.runtime() instanceof ConsoleStreamSupport support)) {
-            throw Violations.ofForm(Microcopy.of("console_unsupported")
-                .withFilter("scope", "violations")
+            throw Violations.ofForm(HohenheimViolations.text("console_unsupported")
                 .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME))));
         }
         closeSession(instanceId);
@@ -151,8 +157,9 @@ public final class InstanceConsoles {
                 session = open(watch.support(), watch.resolved(), instanceId,
                     watch.stopCommand(), watch.leases(), watch.datasource());
             } catch (Violations refused) {
+                // The deploy's own thread, under its claim: no later generation can exist yet.
                 stampIfStatus(watch.leases(), watch.serverId(), watch.instanceName(),
-                    instanceId, watch.initialStatus(), InstanceModel.STATUS_ERROR,
+                    instanceId, () -> true, watch.initialStatus(), InstanceModel.STATUS_ERROR,
                     "deferred console attach failed");
                 throw refused;
             }
@@ -173,7 +180,7 @@ public final class InstanceConsoles {
         final InstanceConsoleSession armed = session;
         armed.armReadiness(readiness, () -> withScope(watch.datasource(), () ->
             stampIfStatus(watch.leases(), watch.serverId(), watch.instanceName(), instanceId,
-                InstanceModel.STATUS_STARTING, InstanceModel.STATUS_RUNNING,
+                () -> isCurrent(armed), InstanceModel.STATUS_STARTING, InstanceModel.STATUS_RUNNING,
                 "readiness line observed on the console")));
         long deadline = readinessTimeoutMs;
         JobRunner.startVirtualThread(() -> {
@@ -188,28 +195,51 @@ public final class InstanceConsoles {
             }
             withScope(watch.datasource(), () ->
                 stampIfStatus(watch.leases(), watch.serverId(), watch.instanceName(), instanceId,
-                    InstanceModel.STATUS_STARTING, InstanceModel.STATUS_ERROR,
+                    () -> isCurrent(armed), InstanceModel.STATUS_STARTING, InstanceModel.STATUS_ERROR,
                     "readiness line not observed within " + deadline + "ms"));
         });
     }
 
-    /** One fenced conditional stamp: only writes when the row still holds {@code expected}. */
-    private static void stampIfStatus(@NonNull HostLeases leases, int serverId,
-                                      @NonNull Object name, int instanceId,
-                                      @NonNull String expected, @NonNull String status,
-                                      @NonNull String why) {
+    /**
+     * One fenced conditional stamp: only writes when the session's generation is still current and the row still
+     * holds {@code expected}, both asked under the record's claim.
+     *
+     * @return whether the status was written
+     */
+    private static boolean stampIfStatus(@NonNull HostLeases leases, int serverId,
+                                         @NonNull Object name, int instanceId,
+                                         @NonNull BooleanSupplier current,
+                                         @NonNull String expected, @NonNull String status,
+                                         @NonNull String why) {
         try {
-            Row current = Models.get(InstanceModel.class).findById(instanceId);
-            if (current == null || !expected.equals(current.get(InstanceModel.STATUS))) {
-                return;
-            }
-            long fence = leases.requireFence(serverId);
-            InstanceOperationGuard.stamp(leases, instanceId, serverId, fence, status, name);
-            Blast.log("CONSOLE: instance", instanceId, "->", status, "(" + why + ")");
+            // Under the record's claim, queued behind whatever operation holds it; the generation and the status are
+            // re-read inside it, so an operation that moved the record meanwhile wins and this observation is dropped.
+            return InstanceOperationLock.of(leases).exclusive(instanceId, InstanceOperationLock.Contention.QUEUE,
+                () -> {
+                    if (!current.getAsBoolean()) {
+                        Blast.log("CONSOLE: instance", instanceId, "-> not", status, "(" + why
+                            + "): a later console generation replaced the observing one");
+                        return false;
+                    }
+                    Row row = Models.get(InstanceModel.class).findById(instanceId);
+                    if (row == null || !expected.equals(row.get(InstanceModel.STATUS))) {
+                        return false;
+                    }
+                    leases.requireFence(serverId);
+                    InstanceOperationGuard.stamp(leases, instanceId, serverId, status, name);
+                    Blast.log("CONSOLE: instance", instanceId, "->", status, "(" + why + ")");
+                    return true;
+                });
         } catch (Violations refused) {
             Blast.log("CONSOLE: instance", instanceId, "status write refused:",
                 refused.getMessage());
+            return false;
         }
+    }
+
+    /** Whether {@code session} still watches the instance's current deployment: no closeSession came after it. */
+    private static boolean isCurrent(@NonNull InstanceConsoleSession session) {
+        return GENERATIONS.getOrDefault(session.instanceId(), 0L) == session.generation();
     }
 
     /**
@@ -227,13 +257,11 @@ public final class InstanceConsoles {
         InstanceService service = new InstanceService();
         InstanceService.Resolved resolved = service.resolve(instanceId);
         if (!(resolved.runtime() instanceof ConsoleStreamSupport support)) {
-            throw Violations.ofForm(Microcopy.of("console_unsupported")
-                .withFilter("scope", "violations")
+            throw Violations.ofForm(HohenheimViolations.text("console_unsupported")
                 .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME))));
         }
         if (!resolved.runtime().status(resolved.spec().handle()).running()) {
-            throw Violations.ofForm(Microcopy.of("console_not_running")
-                .withFilter("scope", "violations")
+            throw Violations.ofForm(HohenheimViolations.text("console_not_running")
                 .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME))));
         }
         String stopCommand = trimmedOrNull(
@@ -263,8 +291,7 @@ public final class InstanceConsoles {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONSOLE);
         InstanceService.Resolved resolved = new InstanceService().resolve(instanceId);
         if (!(resolved.runtime() instanceof ConsoleStreamSupport support)) {
-            throw Violations.ofForm(Microcopy.of("console_unsupported")
-                .withFilter("scope", "violations")
+            throw Violations.ofForm(HohenheimViolations.text("console_unsupported")
                 .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME))));
         }
         try {
@@ -273,8 +300,7 @@ public final class InstanceConsoles {
             return ConsoleRedaction.redactWhole(
                 support.consoleTail(resolved.spec().handle(), lines), instanceId);
         } catch (IOException e) {
-            throw Violations.ofForm(Microcopy.of("logs_unavailable")
-                .withFilter("scope", "violations")
+            throw Violations.ofForm(HohenheimViolations.text("logs_unavailable")
                 .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME))));
         }
     }
@@ -397,9 +423,8 @@ public final class InstanceConsoles {
         try {
             session.sendCommand(command);
         } catch (IOException e) {
-            throw Violations.ofForm(Microcopy.of("console_send_failed")
-                .withFilter("scope", "violations")
-                .withArg("reason", e.getMessage() != null ? e.getMessage() : e.toString()));
+            throw Violations.ofForm(HohenheimViolations.text("console_send_failed")
+                .withArg("reason", HohenheimViolations.reasonOf(e)));
         }
     }
 
@@ -457,6 +482,7 @@ public final class InstanceConsoles {
 
     /** Close and forget an instance's session (destroy, redeploy replacement). */
     static void closeSession(int instanceId) {
+        GENERATIONS.merge(instanceId, 1L, Long::sum);
         InstanceConsoleSession session = SESSIONS.remove(instanceId);
         if (session != null) {
             session.close();
@@ -481,10 +507,9 @@ public final class InstanceConsoles {
         try {
             console = support.openConsole(resolved.spec().handle());
         } catch (IOException e) {
-            throw Violations.ofForm(Microcopy.of("console_open_failed")
-                .withFilter("scope", "violations")
+            throw Violations.ofForm(HohenheimViolations.text("console_open_failed")
                 .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME)))
-                .withArg("reason", e.getMessage() != null ? e.getMessage() : e.toString()));
+                .withArg("reason", HohenheimViolations.reasonOf(e)));
         }
         int serverId = resolved.serverId();
         Object name = resolved.row().get(InstanceModel.NAME);
@@ -496,6 +521,7 @@ public final class InstanceConsoles {
             handle, console, (cols, rows) -> support.resizeConsole(handle, cols, rows),
             stopCommand, ConsoleRedaction.redactorFor(instanceId),
             InstanceConsoleLogs.sinkFor(instanceId, resolved.spec().handle(), datasource),
+            GENERATIONS.getOrDefault(instanceId, 0L),
             (endedSession, termination, detail) -> handleStreamEnd(endedSession, instanceId,
                 serverId, name, support, leases, datasource, termination, detail));
         SESSIONS.put(instanceId, session);
@@ -544,53 +570,73 @@ public final class InstanceConsoles {
                     "ended while the container still runs; not treating it as an exit");
                 return;
             }
-            Row row = Models.get(InstanceModel.class).findById(instanceId);
-            if (row == null) {
-                return;
-            }
-            if (stopObserved) {
-                stampIfAnyRunning(leases, serverId, name, instanceId,
-                    InstanceModel.STATUS_STOPPED, "observed stop, exit " + exitCode);
-                PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
-                return;
-            }
-            boolean restart = InstanceModel.CRASH_RESTART
-                .equals(row.get(InstanceModel.CRASH_POLICY));
-            if (!restart) {
-                stampIfAnyRunning(leases, serverId, name, instanceId,
-                    exitCode == 0 ? InstanceModel.STATUS_STOPPED : InstanceModel.STATUS_ERROR,
-                    "unexpected exit " + exitCode + ", crash policy none");
-                PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
-                return;
-            }
-            // Clean-exit-as-crash: with the restart policy ANY unobserved exit is a
-            // crash, exit code 0 included (game servers "finish" cleanly when they die).
-            if (flapExceeded(instanceId)) {
-                stampIfAnyRunning(leases, serverId, name, instanceId,
-                    InstanceModel.STATUS_ERROR,
-                    "crash loop: " + FLAP_THRESHOLD + " crashes inside " + flapWindowMs + "ms");
-                PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
-                alertCrashLoop(instanceId, name);
-                return;
-            }
-            Blast.log("CONSOLE: instance", instanceId, "crashed (exit " + exitCode
-                + ", no observed stop); crash policy restart -> redeploying");
             try {
-                new InstanceService(leases, () -> {}).deploy(instanceId);
+                // The whole exit policy runs under the record's claim and only for the current generation: an exit
+                // observed by a console a redeploy already replaced must not stamp, release the replacement's
+                // observed port claims or restart it.
+                InstanceOperationLock.of(leases).exclusive(instanceId, InstanceOperationLock.Contention.QUEUE,
+                    () -> applyExitPolicy(session, instanceId, serverId, name, leases, stopObserved, exitCode));
             } catch (Violations refused) {
-                Blast.log("CONSOLE: crash restart of instance", instanceId, "refused:",
-                    refused.getMessage());
+                Blast.log("CONSOLE: exit policy of instance", instanceId, "refused:", refused.getMessage());
             }
         });
     }
 
+    /** The exit policy proper, under the record's claim. */
+    private static void applyExitPolicy(@NonNull InstanceConsoleSession session, int instanceId, int serverId,
+                                        @NonNull Object name, @NonNull HostLeases leases, boolean stopObserved,
+                                        int exitCode) {
+        if (!isCurrent(session)) {
+            Blast.log("CONSOLE: exit", exitCode, "of a replaced console of instance", instanceId,
+                "is not this deployment's; ignored");
+            return;
+        }
+        Row row = Models.get(InstanceModel.class).findById(instanceId);
+        if (row == null) {
+            return;
+        }
+        if (stopObserved) {
+            if (!stampIfAnyRunning(leases, serverId, name, instanceId,
+                InstanceModel.STATUS_STOPPED, "observed stop, exit " + exitCode)) return;
+            PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
+            return;
+        }
+        boolean restart = InstanceModel.CRASH_RESTART
+            .equals(row.get(InstanceModel.CRASH_POLICY));
+        if (!restart) {
+            if (!stampIfAnyRunning(leases, serverId, name, instanceId,
+                exitCode == 0 ? InstanceModel.STATUS_STOPPED : InstanceModel.STATUS_ERROR,
+                "unexpected exit " + exitCode + ", crash policy none")) return;
+            PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
+            return;
+        }
+        // Clean-exit-as-crash: with the restart policy ANY unobserved exit is a
+        // crash, exit code 0 included (game servers "finish" cleanly when they die).
+        if (flapExceeded(instanceId)) {
+            if (!stampIfAnyRunning(leases, serverId, name, instanceId,
+                InstanceModel.STATUS_ERROR,
+                "crash loop: " + FLAP_THRESHOLD + " crashes inside " + flapWindowMs + "ms")) return;
+            PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
+            alertCrashLoop(instanceId, name);
+            return;
+        }
+        Blast.log("CONSOLE: instance", instanceId, "crashed (exit " + exitCode
+            + ", no observed stop); crash policy restart -> redeploying");
+        try {
+            new InstanceService(leases, () -> {}).deploy(instanceId);
+        } catch (Violations refused) {
+            Blast.log("CONSOLE: crash restart of instance", instanceId, "refused:",
+                refused.getMessage());
+        }
+    }
+
     /** Stamp from starting OR running (whichever the exit interrupted). */
-    private static void stampIfAnyRunning(@NonNull HostLeases leases, int serverId,
+    private static boolean stampIfAnyRunning(@NonNull HostLeases leases, int serverId,
                                           @NonNull Object name, int instanceId,
                                           @NonNull String status, @NonNull String why) {
-        stampIfStatus(leases, serverId, name, instanceId,
-            InstanceModel.STATUS_RUNNING, status, why);
-        stampIfStatus(leases, serverId, name, instanceId,
+        // Called under the claim, after the generation check: the re-entrant stamps need no second one.
+        return stampIfStatus(leases, serverId, name, instanceId, () -> true,
+            InstanceModel.STATUS_RUNNING, status, why) || stampIfStatus(leases, serverId, name, instanceId, () -> true,
             InstanceModel.STATUS_STARTING, status, why);
     }
 

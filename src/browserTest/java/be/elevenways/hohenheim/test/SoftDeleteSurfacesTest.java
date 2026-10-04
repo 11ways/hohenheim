@@ -1,16 +1,17 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.model.StoredRows;
-import be.elevenways.hohenheim.server.cms.SiteResource;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.data.RecordSourceQuery;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.AccessContext;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -57,11 +58,13 @@ class SoftDeleteSurfacesTest extends HohenheimTestBase {
                 .as("step 1: the API lists it").contains(NAME);
 
             // 2. Trashed through the admin delete, it is on none of them.
-            new SiteResource().deleteRow(sites.findById(siteId), AccessContext.anonymous());
+            PanelResourceCalls.delete(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES, siteId,
+                TenantConduits.operator());
             HttpResponse<String> inTrash = adminGet("/admin/sites/" + siteId);
             assertThat(inTrash.statusCode()).as("step 2: the record page opens from the Trash").isEqualTo(200);
-            assertThat(inTrash.body()).as("step 2: offering its restore")
-                .contains("/admin/sites/" + siteId + "/action/trash_restore");
+            // The Trash's restore is core's archive restore, placed on the shared invoke route.
+            assertThat(inTrash.body()).as("step 2: offering its restore over THIS site")
+                .contains(siteInvoke(SiteWrites.RESTORE, siteId));
             assertThat(pickerBody()).as("step 2: the picker no longer offers it").doesNotContain(NAME);
             assertThat(keyGet(keyAdmin, "/api/v1/sites").body())
                 .as("step 2: the API list drops it").doesNotContain(NAME);

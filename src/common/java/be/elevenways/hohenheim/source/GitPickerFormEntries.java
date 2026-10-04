@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.source;
 
 import be.elevenways.hohenheim.model.GitProviderModel;
+import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.zenit.common.annotation.ZenitAutoLoad;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.edit.EditContext;
@@ -28,7 +28,7 @@ import java.util.List;
  * both pickers deliberately -- a listing caps at the provider API's first page,
  * and a path beyond it must remain enterable.
  */
-@ZenitAutoLoad
+@BlastAutoLoad
 public final class GitPickerFormEntries {
 
     /** Auto-load sentinel; reading it runs the registrations below. */

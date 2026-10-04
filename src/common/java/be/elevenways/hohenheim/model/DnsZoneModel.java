@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.dns.DelegationVerdict;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -10,6 +11,7 @@ import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
+import be.elevenways.zenit.common.ui.ColorHue;
 
 import java.util.List;
 
@@ -19,7 +21,7 @@ import java.util.List;
  */
 public class DnsZoneModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "dns_zone");
+    public static final Identifier MODEL_ID = HohenheimIds.id("dns_zone");
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
@@ -57,11 +59,11 @@ public class DnsZoneModel extends Model {
         .value(ROLE_PRIMARY, v -> v.displayName("Primary")
             .label(Microcopy.of("role_primary").withFilter("scope", "dns_role"))
             .describe(HohenheimFormCopy.help("role_primary"))
-            .icon("star").color("blue"))
+            .icon("star").color(ColorHue.BLUE))
         .value(ROLE_SECONDARY, v -> v.displayName("Secondary")
             .label(Microcopy.of("role_secondary").withFilter("scope", "dns_role"))
             .describe(HohenheimFormCopy.help("role_secondary"))
-            .icon("copy").color("gray"))
+            .icon("copy").color(ColorHue.GRAY))
         .label(HohenheimFormCopy.label("zone_role")).help(HohenheimFormCopy.help("zone_role")).build());
     public static final IntegerField PRIMARY_PEER_ID = SCHEMA.addField(
         IntegerField.builder().name("primary_peer_id")
@@ -82,11 +84,11 @@ public class DnsZoneModel extends Model {
      */
     public static final EnumField TRANSFER_STATUS = SCHEMA.addField(EnumField.builder("transfer_status")
         .value(TRANSFER_OK, v -> v.displayName("Transferred").icon("circle-check")
-            .label(Microcopy.of("transferred").withFilter("scope", "dns_transfer")).color("green"))
+            .label(Microcopy.of("transferred").withFilter("scope", "dns_transfer")).color(ColorHue.GREEN))
         .value(TRANSFER_ERROR, v -> v.displayName("Transfer failed").icon("triangle-exclamation")
-            .label(Microcopy.of("failed").withFilter("scope", "dns_transfer")).color("red"))
+            .label(Microcopy.of("failed").withFilter("scope", "dns_transfer")).color(ColorHue.RED))
         .value(TRANSFER_EXPIRED, v -> v.displayName("Expired").icon("hourglass-end")
-            .label(Microcopy.of("expired").withFilter("scope", "dns_transfer")).color("orange"))
+            .label(Microcopy.of("expired").withFilter("scope", "dns_transfer")).color(ColorHue.ORANGE))
         .label(HohenheimFormCopy.label("transfer_status"))
         .help(HohenheimFormCopy.help("transfer_status")).build());
     public static final StringField TRANSFER_MESSAGE = SCHEMA.addField(

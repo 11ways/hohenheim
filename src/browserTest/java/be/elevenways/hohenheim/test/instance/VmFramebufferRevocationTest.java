@@ -60,7 +60,7 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
 
     @SuppressWarnings("unused")
     private static final WebSocketEndpoint TEST_FRAMEBUFFER = WebSocketEndpoint.builder()
-        .identifier(Identifier.of("hohenheimtest", "vm_framebuffer_reval"))
+        .identifier(Identifier.of("hohenheim_test", "vm_framebuffer_reval"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("test-framebuffer-reval").build())
         .requiresLogin()

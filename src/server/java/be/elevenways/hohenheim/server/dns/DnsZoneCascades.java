@@ -1,10 +1,10 @@
 package be.elevenways.hohenheim.server.dns;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.hohenheim.server.orm.PendingDeletes;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -69,7 +69,7 @@ public final class DnsZoneCascades {
             Row zone = zoneId != null ? Models.get(DnsZoneModel.class).findById(zoneId) : null;
             if (zone != null && DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
                 throw Violations.ofField(DnsRecordModel.ZONE_ID.getName(), zoneId,
-                    Microcopy.of("record_secondary_zone").withFilter("scope", "violations"));
+                    HohenheimViolations.text("record_secondary_zone"));
             }
         });
     }

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -9,10 +11,10 @@ import be.elevenways.spamservice.client.SpamserviceApiException;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.PanelPage;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -66,7 +68,7 @@ public final class SpamserviceOverviewPage extends PanelPage {
             Microcopy.of("reputation_hint").withFilter("scope", "spamservice"),
             Icon.of("magnifying-glass")));
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "spamservice_overview"); }
+    @Override public @NonNull Identifier id() { return HohenheimIds.id("spamservice_overview"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("overview").withFilter("scope", "spamservice"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.SECURITY_GROUP; }
@@ -79,7 +81,8 @@ public final class SpamserviceOverviewPage extends PanelPage {
     @Override public @NonNull Icon icon() { return Icon.of("shield"); }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext context) {
+    public @NonNull ActionResult<?> render(@NonNull PanelRequest request) {
+        Conduit conduit = request.conduit();
         SpamserviceManager manager = SpamserviceManager.get();
         SpamserviceManager.Snapshot snapshot = manager.snapshot();
         Map<String, Object> vars = new LinkedHashMap<>();
@@ -92,7 +95,7 @@ public final class SpamserviceOverviewPage extends PanelPage {
             Map.entry("artifactHash", snapshot.artifactHash() != null ? snapshot.artifactHash() : ""),
             Map.entry("crashes", snapshot.consecutiveCrashes()),
             Map.entry("error", snapshot.lastError() != null ? snapshot.lastError() : "")));
-        vars.put("sections", sections(conduit));
+        vars.put("sections", sections(request));
         vars.put("connected", false);
         vars.put("ready", snapshot.ready());
         vars.put("service", Map.of());
@@ -119,18 +122,19 @@ public final class SpamserviceOverviewPage extends PanelPage {
                 vars.put("error", failure.getMessage());
             }
         }
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/spamservice-overview"), vars);
+        return new RenderTemplateResult(HohenheimTemplateIds.SPAMSERVICE_OVERVIEW, vars);
     }
 
     /** The demoted sub-surfaces as render state: resolved label, hint, icon token and URL. */
-    private static @NonNull List<Map<String, Object>> sections(@NonNull Conduit conduit) {
+    private static @NonNull List<Map<String, Object>> sections(@NonNull PanelRequest request) {
+        Conduit conduit = request.conduit();
         List<Map<String, Object>> resolved = new ArrayList<>();
         for (Section section : SECTIONS) {
             resolved.add(Map.of(
                 "label", section.label().resolve(conduit.getLocales(), conduit.getMessageResolver()),
                 "hint", section.hint().resolve(conduit.getLocales(), conduit.getMessageResolver()),
                 "icon", section.icon().name(),
-                "url", CmsRoutes.list(CmsSupport.panelSlug(conduit), section.slug()).toUrl()));
+                "url", CmsRoutes.list(request.panelSlug(), section.slug()).toUrl()));
         }
         return resolved;
     }

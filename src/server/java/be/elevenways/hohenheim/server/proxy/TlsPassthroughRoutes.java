@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.sitetype.TlsPassthroughProvider;
 import be.elevenways.hohenheim.server.sitetype.TlsPassthroughTarget;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.server.http.HostPattern;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
@@ -16,6 +17,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 /** Atomic pre-TLS routing snapshot spanning terminating and passthrough hostnames. */
@@ -47,7 +49,11 @@ public final class TlsPassthroughRoutes {
     }
 
     private record RouteGroup(String kind, String hostname, List<Route> declarations) {}
-    private record PatternRoute(Pattern pattern, int specificity, List<Route> routes) {}
+    /**
+     * A regex or wildcard SNI route: its text is the tie-break of equal specificity, a wildcard's
+     * the same HostnamePatterns.tieKey the HTTP tier sorts by.
+     */
+    private record PatternRoute(String text, Predicate<String> host, int specificity, List<Route> routes) {}
     static record Snapshot(Map<String, List<Route>> exact, List<PatternRoute> wildcard,
                            List<PatternRoute> regex, int passthroughCount) {}
 
@@ -112,7 +118,8 @@ public final class TlsPassthroughRoutes {
             switch (group.kind()) {
                 case "regex" -> {
                     try {
-                        regex.add(new PatternRoute(HostnameRegex.compile(group.hostname()),
+                        Pattern compiled = HostnameRegex.compile(group.hostname());
+                        regex.add(new PatternRoute(compiled.pattern(), name -> compiled.matcher(name).matches(),
                             group.hostname().length(), routes));
                         passthroughCount += countPassthrough(routes);
                     } catch (Exception e) {
@@ -120,8 +127,13 @@ public final class TlsPassthroughRoutes {
                     }
                 }
                 case "wildcard" -> {
-                    wildcard.add(new PatternRoute(WildcardHostname.compile(group.hostname()),
-                        WildcardHostname.literalSpecificity(group.hostname()), routes));
+                    HostPattern pattern = HostPattern.tryParse(group.hostname());
+                    if (pattern == null || pattern.port() != null) {
+                        Blast.log("TLS routing: wildcard", group.hostname(), "is not a host pattern");
+                        continue;
+                    }
+                    wildcard.add(new PatternRoute(HostnamePatterns.tieKey(pattern), pattern::matches,
+                        HostnamePatterns.specificity(pattern), routes));
                     passthroughCount += countPassthrough(routes);
                 }
                 default -> {
@@ -133,9 +145,9 @@ public final class TlsPassthroughRoutes {
 
         Comparator<PatternRoute> specificity = Comparator
             .comparingInt(PatternRoute::specificity).reversed()
-            .thenComparing(route -> route.pattern().pattern());
+            .thenComparing(PatternRoute::text);
         wildcard.sort(specificity);
-        regex.sort(Comparator.comparing(route -> route.pattern().pattern()));
+        regex.sort(Comparator.comparing(PatternRoute::text));
         Snapshot result = new Snapshot(Map.copyOf(exact), List.copyOf(wildcard),
             List.copyOf(regex), passthroughCount);
         Blast.log("TLS routing: loaded", passthroughCount, "passthrough routes");
@@ -228,7 +240,7 @@ public final class TlsPassthroughRoutes {
                                                        String hostname, String listenerIp) {
         Decision resolved = null;
         for (PatternRoute candidate : candidates) {
-            if (!candidate.pattern().matcher(hostname).matches()) continue;
+            if (!candidate.host().test(hostname)) continue;
             Decision decision = firstAccepting(candidate.routes(), listenerIp);
             if (decision == null) continue;
             if (resolved != null && !compatible(resolved, decision)) {

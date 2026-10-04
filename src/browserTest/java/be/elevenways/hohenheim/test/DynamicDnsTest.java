@@ -6,13 +6,13 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService.Status;
-import be.elevenways.hohenheim.server.cms.DnsRecordResource;
+import be.elevenways.hohenheim.server.cms.DnsRecordParts;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import be.elevenways.zenit.server.setting.ServerSettings;
 import org.junit.jupiter.api.Test;
 
@@ -240,14 +240,14 @@ class DynamicDnsTest extends HohenheimTestBase {
     /** The dyndns token row action's description, resolved in one locale. */
     private static String dyndnsHint(String tag) {
 
-        Microcopy description = new DnsRecordResource().rowActions().stream()
+        Microcopy description = DnsRecordParts.admin().actions().stream()
             .filter(action -> action.id().equals(Identifier.of("hohenheim", "dyndns_token")))
             .findFirst()
             .orElseThrow()
-            .description();
+            .descriptionFor(new Row());
 
         assertThat(description).as("the mint action declares a description").isNotNull();
-        return description.resolve(LocaleChain.ofTags(tag), new DefaultCatalogLoader());
+        return description.resolve(LocaleChain.ofTags(tag), new ShippedCatalogs());
     }
 
     // ------------------------------------------------------------------

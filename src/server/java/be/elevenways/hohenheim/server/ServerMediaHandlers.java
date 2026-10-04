@@ -1,12 +1,13 @@
 package be.elevenways.hohenheim.server;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.instance.InstallMediaLive;
 import be.elevenways.hohenheim.model.InstallMediaFetchModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
-import be.elevenways.hohenheim.server.cms.ServerMediaPage;
+import be.elevenways.hohenheim.server.cms.ServerMediaTab;
 import be.elevenways.hohenheim.server.instance.InstallMedia;
 import be.elevenways.hohenheim.server.instance.InstallMediaFetches;
 import be.elevenways.protoblast.common.Blast;
@@ -59,7 +60,7 @@ final class ServerMediaHandlers {
                 conduit.notFound();
                 return null;
             }
-            return new DryResult<>(ServerMediaPage.view(server));
+            return new DryResult<>(ServerMediaTab.view(server));
         });
 
         HohenheimEndpoints.SERVERS_MEDIA_FETCH.setHandler(conduit -> {
@@ -135,7 +136,7 @@ final class ServerMediaHandlers {
                     Blast.log("MEDIA: could not remove the upload temp file", temp);
                 }
             }
-            ActivityLog.record(Models.get(ServerModel.class), serverId, "media_uploaded", name);
+            ActivityLog.record(Models.get(ServerModel.class), serverId, HohenheimActivityAction.MEDIA_UPLOADED, name);
             HohenheimFlash.success(conduit, mediaMessage("media_uploaded", name));
             // The uploader reloads the tab itself, so the answer is a bare status rather
             // than a redirect: there is no form post to send back.
@@ -159,7 +160,7 @@ final class ServerMediaHandlers {
                 HohenheimFlash.error(conduit, HandlerSupport.violationMessage(refused));
                 return HandlerSupport.redirect(tab);
             }
-            ActivityLog.record(Models.get(ServerModel.class), serverId, "media_deleted", name);
+            ActivityLog.record(Models.get(ServerModel.class), serverId, HohenheimActivityAction.MEDIA_DELETED, name);
             HohenheimFlash.success(conduit, mediaMessage("media_deleted", name));
             return HandlerSupport.redirect(tab);
         });
@@ -181,7 +182,7 @@ final class ServerMediaHandlers {
 
     private static @NonNull RouteTarget mediaTab(@NonNull Integer serverId) {
         return CmsRoutes.subpage(HandlerSupport.ADMIN, "servers", serverId,
-            ServerMediaPage.SLUG);
+            ServerMediaTab.SLUG);
     }
 
     private static Microcopy mediaMessage(String key, String name) {

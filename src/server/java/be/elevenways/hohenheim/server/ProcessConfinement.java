@@ -1,9 +1,12 @@
 package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.server.process.BoundedProcess;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
+import be.elevenways.protoblast.server.process.Termination;
 import be.elevenways.zenit.common.Zenit;
+import java.time.Duration;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -11,7 +14,6 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -27,7 +29,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * and the same number every container tier already books. The pids cap is TasksMax for the
  * same reason -- {@code RLIMIT_NPROC} is counted per UID, so it only means anything at all
  * because {@code WorkloadIdentity} makes the site uid exclusive, and it is kept as the
- * floor (see {@code SystemUsers.executionBuilder}) rather than as the cap.
+ * floor (see {@code SystemUsers.execution}) rather than as the cap.
  *
  * AIDEV-NOTE: the cap is REQUIRED WHERE IT IS DECLARED, and that is the whole invariant.
  * A site that declares {@code memory_limit_mb} on a host that cannot create a scope is
@@ -269,13 +271,16 @@ public final class ProcessConfinement {
             // tested for, and this child is ours, not a site's. Output is drained while the
             // wait runs, so a scope that never finishes is abandoned at the deadline
             // instead of pinning the probing thread on a pipe that never closes.
-            BoundedProcess.Result result = BoundedProcess.run(
-                new ProcessBuilder(command).redirectErrorStream(true),
-                TimeUnit.SECONDS.toMillis(PROBE_TIMEOUT_SECONDS), 8_192);
-            if (result.timedOut()) {
+            ProcessOutcome result = Subprocess.of(command)
+                .mergeStderr()
+                .collectStdout(8_192)
+                .timeout(Duration.ofSeconds(PROBE_TIMEOUT_SECONDS))
+                .stopGrace(Duration.ZERO)
+                .runChecked();
+            if (result.termination() == Termination.TIMED_OUT) {
                 return "the probe scope did not finish within " + PROBE_TIMEOUT_SECONDS + "s";
             }
-            String output = result.stdout().trim();
+            String output = result.stdout().text().trim();
             if (result.exitCode() != 0) {
                 return "exit " + result.exitCode()
                     + (output.isEmpty() ? "" : ": " + firstLine(output));

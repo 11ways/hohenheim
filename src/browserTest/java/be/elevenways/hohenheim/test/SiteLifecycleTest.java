@@ -36,7 +36,7 @@ class SiteLifecycleTest extends HohenheimTestBase {
     void addressSiteCreatesAndEdits() throws Exception {
         var response = adminPostForm("/admin/sites/new",
             "name=Test+Backend&upstream_kind=hohenheim%3Aaddress"
-            + "&settings.forward_host=127.0.0.1&settings.forward_port=8080");
+            + "&settings.forward_host=127.0.0.1&settings.forward_port=8080&" + siteCreateEnvelope());
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         Map<String, Object> proxySettings = settingsOf("Test Backend");
@@ -62,7 +62,8 @@ class SiteLifecycleTest extends HohenheimTestBase {
     void redirectAndGitSitesThroughActionsToDeletion() throws Exception {
         var response = adminPostForm("/admin/sites/new",
             "name=Old+Domain&upstream_kind=hohenheim%3Aredirect"
-            + "&settings.target_url=https%3A%2F%2Fexample.com&settings.http_status=301");
+            + "&settings.target_url=https%3A%2F%2Fexample.com&settings.http_status=301&"
+            + siteCreateEnvelope());
         assertThat(response.statusCode()).isIn(200, 302, 303);
         assertThat(settingsOf("Old Domain").get("target_url")).isEqualTo("https://example.com");
 
@@ -73,7 +74,8 @@ class SiteLifecycleTest extends HohenheimTestBase {
         response = adminPostForm("/admin/sites/new",
             "name=Git+App&upstream_kind=hohenheim%3Astatic&source=git"
             + "&settings.root_path=%2Fvar%2Fwww%2Fgitapp"
-            + "&source_settings.repository_url=https%3A%2F%2Fexample.com%2Frepo.git");
+            + "&source_settings.repository_url=https%3A%2F%2Fexample.com%2Frepo.git&"
+            + siteCreateEnvelope());
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         Row gitRow = site("Git App");
@@ -97,7 +99,7 @@ class SiteLifecycleTest extends HohenheimTestBase {
         response = adminPostForm("/admin/sites/" + redirectId,
             "name=Old+Domain&upstream_kind=hohenheim%3Aredirect"
             + "&settings.target_url=https%3A%2F%2Fexample.com"
-            + "&access_list_id=" + listId);
+            + "&access_list_id=" + listId + "&" + siteEditEnvelope(redirectId));
         assertThat(response.statusCode()).isIn(200, 302, 303);
         assertThat((Integer) site("Old Domain").get(SiteModel.ACCESS_LIST_ID)).isEqualTo(listId);
 
@@ -105,22 +107,22 @@ class SiteLifecycleTest extends HohenheimTestBase {
 
         // Switching a site off is a confirmed action (it takes its hostnames out of the
         // route table), so the POST carries the confirmation proof like every other one.
-        adminPostForm("/admin/sites/" + redirectId + "/action/toggle_site", confirmed(""));
+        adminPostForm("/admin/sites/invoke/hohenheim.disable_site?ids=" + redirectId, confirmed(""));
         assertThat((Boolean) Models.get(SiteModel.class).findById(redirectId).get(SiteModel.ENABLED))
             .isEqualTo(false);
 
-        adminPostForm("/admin/sites/" + redirectId + "/action/toggle_site", confirmed(""));
+        adminPostForm("/admin/sites/invoke/hohenheim.enable_site?ids=" + redirectId, confirmed(""));
         assertThat((Boolean) Models.get(SiteModel.class).findById(redirectId).get(SiteModel.ENABLED))
             .isEqualTo(true);
 
-        // Cloning ASKS the copy's name (an action input): a confirmed POST without one is not a
+        // Cloning ASKS the copy's name (an operation input): a confirmed POST without one is not a
         // clone but the form again, re-rendered with the field's refusal, and nothing is created.
-        response = adminPostForm("/admin/sites/" + redirectId + "/action/clone_site", confirmed(""));
-        assertThat(response.statusCode()).isEqualTo(200);
+        response = adminPostForm("/admin/sites/invoke/hohenheim.clone_site?ids=" + redirectId, confirmed(""));
+        assertThat(response.statusCode()).isEqualTo(422);
         assertThat(response.body()).as("the refused clone re-renders its form").contains("data-path=\"name\"");
         assertThat(site("Old Domain 2")).as("no name, no clone").isNull();
 
-        response = adminPostForm("/admin/sites/" + redirectId + "/action/clone_site",
+        response = adminPostForm("/admin/sites/invoke/hohenheim.clone_site?ids=" + redirectId,
             confirmed("name=Old+Domain+Staging"));
         assertThat(response.statusCode()).isIn(302, 303);
 
@@ -143,7 +145,7 @@ class SiteLifecycleTest extends HohenheimTestBase {
 
         // The success toast rides the SESSION the browser shares, so pop it (proving the
         // outcome was reported) before asserting on the next render's content.
-        assertThat(popFlash()).as("the delete reports itself as a toast").isNotNull()
+        assertThat(popFlash(response)).as("the delete reports itself as a toast").isNotNull()
             .extracting(flash -> flash.message().key()).isEqualTo("deleted");
 
         // One list render proves both the live site is listed and the soft-deleted one is

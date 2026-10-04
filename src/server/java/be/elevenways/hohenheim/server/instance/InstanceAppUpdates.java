@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -7,7 +9,6 @@ import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.AppUpdateSupport;
 import be.elevenways.hohenheim.server.runtime.InstallSupport;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -56,14 +57,14 @@ public final class InstanceAppUpdates {
 
         String script = updateScriptOf(resolved.row());
         if (script == null) {
-            throw refusal("app_update_no_script", resolved.row(), null);
+            throw HohenheimViolations.instanceRefusal("app_update_no_script", resolved.row(), null);
         }
         CommunityScripts.requireVocabularyImplemented(script, "update script");
         if (!(resolved.runtime() instanceof AppUpdateSupport support)) {
-            throw refusal("app_update_unsupported", resolved.row(), null);
+            throw HohenheimViolations.instanceRefusal("app_update_unsupported", resolved.row(), null);
         }
         if (!resolved.runtime().status(resolved.spec().handle()).running()) {
-            throw refusal("app_update_requires_running", resolved.row(), null);
+            throw HohenheimViolations.instanceRefusal("app_update_requires_running", resolved.row(), null);
         }
 
         Map<String, String> env = new LinkedHashMap<>(resolved.spec().env());
@@ -85,18 +86,18 @@ public final class InstanceAppUpdates {
                 script, env, UPDATE_TIMEOUT_MS);
             if (!outcome.succeeded()) {
                 ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-                    "app_update_failed", "exit " + outcome.exitCode());
-                throw refusal("app_update_failed", resolved.row(),
+                    HohenheimActivityAction.APP_UPDATE_FAILED, "exit " + outcome.exitCode());
+                throw HohenheimViolations.instanceRefusal("app_update_failed", resolved.row(),
                     new IOException("exit " + outcome.exitCode() + "\n" + outcome.outputTail()));
             }
             ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-                "app_updated", "in-place update script completed");
+                HohenheimActivityAction.APP_UPDATED, "in-place update script completed");
             Blast.log("INSTANCE: app update completed for", resolved.spec().handle());
             return outcome.outputTail();
         } catch (IOException error) {
             ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-                "app_update_failed", String.valueOf(error.getMessage()));
-            throw refusal("app_update_failed", resolved.row(), error);
+                HohenheimActivityAction.APP_UPDATE_FAILED, String.valueOf(error.getMessage()));
+            throw HohenheimViolations.instanceRefusal("app_update_failed", resolved.row(), error);
         }
     }
 
@@ -125,13 +126,4 @@ public final class InstanceAppUpdates {
             ? Models.get(InstanceTemplateModel.class).findById(id) : null;
     }
 
-    private static Violations refusal(String key, Row row, @Nullable IOException cause) {
-        Microcopy text = Microcopy.of(key).withFilter("scope", "violations")
-            .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME)));
-        if (cause != null) {
-            text = text.withArg("reason",
-                cause.getMessage() != null ? cause.getMessage() : cause.toString());
-        }
-        return Violations.ofForm(text);
-    }
 }

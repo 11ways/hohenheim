@@ -1,0 +1,236 @@
+case admin.instance-devices.operator admin instance-devices operator
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column instance_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column size_gb at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column source_media at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+tab history at=0 landing=false view=false
+control CREATE%20instance_id at=0 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control CREATE%20type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=disk,nic,cdrom binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20name at=2 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+control CREATE%20size_gb at=3 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control CREATE%20source_media at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+
+case manage.instance-devices.tenant-view manage instance-devices tenant-view
+admission - verdict=admitted
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column instance_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column size_gb at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column source_media at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+
+case manage.instance-devices.tenant-config manage instance-devices tenant-config
+admission - verdict=admitted
+verb CREATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column instance_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column size_gb at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column source_media at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+control CREATE%20instance_id at=0 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control CREATE%20type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=disk,nic binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20name at=2 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+control CREATE%20size_gb at=3 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+
+case admin.instance-devices.operator.disk admin instance-devices operator
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column instance_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column size_gb at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column source_media at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:detach_confirm%252Cscope%3Dinstance_device,confirm:detach%252Cscope%3Dinstance_device,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab history at=0 landing=false view=false
+control CREATE%20instance_id at=0 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control CREATE%20type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=disk,nic,cdrom binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20name at=2 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+control CREATE%20size_gb at=3 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control CREATE%20source_media at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+control EDIT%20instance_id at=0 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control EDIT%20type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=disk,nic,cdrom binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20name at=2 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+control EDIT%20size_gb at=3 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control EDIT%20source_media at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+
+case manage.instance-devices.tenant-view.disk manage instance-devices tenant-view
+admission - verdict=admitted
+record - found=true
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column instance_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column size_gb at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column source_media at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+control EDIT%20instance_id at=0 kind=zenitforms:form/plain input=number required=false readonly=true options= binding=
+control EDIT%20type at=1 kind=zenitforms:form/select input=select required=false readonly=true options=disk,nic binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20name at=2 kind=zenitforms:form/plain input=text required=false readonly=true options= binding=
+control EDIT%20size_gb at=3 kind=zenitforms:form/plain input=number required=false readonly=true options= binding=
+
+case manage.instance-devices.tenant-config.disk manage instance-devices tenant-config
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column instance_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column size_gb at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column source_media at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:detach_confirm%252Cscope%3Dinstance_device,confirm:detach%252Cscope%3Dinstance_device,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+control CREATE%20instance_id at=0 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control CREATE%20type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=disk,nic binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20name at=2 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+control CREATE%20size_gb at=3 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control EDIT%20instance_id at=0 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control EDIT%20type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=disk,nic binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20name at=2 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+control EDIT%20size_gb at=3 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+
+case admin.instance-devices.operator.cdrom admin instance-devices operator
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column instance_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column size_gb at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column source_media at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:detach_confirm%252Cscope%3Dinstance_device,confirm:detach%252Cscope%3Dinstance_device,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab history at=0 landing=false view=false
+control CREATE%20instance_id at=0 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control CREATE%20type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=disk,nic,cdrom binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20name at=2 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+control CREATE%20size_gb at=3 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control CREATE%20source_media at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+control EDIT%20instance_id at=0 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control EDIT%20type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=disk,nic,cdrom binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20name at=2 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+control EDIT%20size_gb at=3 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control EDIT%20source_media at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+
+case manage.instance-devices.tenant-view.cdrom manage instance-devices tenant-view
+admission - verdict=admitted
+record - found=true
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column instance_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column size_gb at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column source_media at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+control EDIT%20instance_id at=0 kind=zenitforms:form/plain input=number required=false readonly=true options= binding=
+control EDIT%20type at=1 kind=zenitforms:form/select input=select required=false readonly=true options=disk,nic,cdrom binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20name at=2 kind=zenitforms:form/plain input=text required=false readonly=true options= binding=
+control EDIT%20size_gb at=3 kind=zenitforms:form/plain input=number required=false readonly=true options= binding=
+
+case manage.instance-devices.tenant-config.cdrom manage instance-devices tenant-config
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column instance_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column size_gb at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column source_media at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+control CREATE%20instance_id at=0 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control CREATE%20type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=disk,nic binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20name at=2 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+control CREATE%20size_gb at=3 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control EDIT%20instance_id at=0 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control EDIT%20type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=disk,nic,cdrom binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20name at=2 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+control EDIT%20size_gb at=3 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+
+case admin.instance-devices.operator.unknown admin instance-devices operator
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+verb DELETE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column instance_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column size_gb at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column source_media at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:detach_confirm%252Cscope%3Dinstance_device,confirm:detach%252Cscope%3Dinstance_device,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+tab history at=0 landing=false view=false
+control CREATE%20instance_id at=0 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control CREATE%20type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=disk,nic,cdrom binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20name at=2 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+control CREATE%20size_gb at=3 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control CREATE%20source_media at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+control EDIT%20instance_id at=0 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control EDIT%20type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=disk,nic,cdrom,floppy binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20name at=2 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+control EDIT%20size_gb at=3 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control EDIT%20source_media at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+
+case manage.instance-devices.tenant-view.unknown manage instance-devices tenant-view
+admission - verdict=admitted
+record - found=true
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column instance_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column size_gb at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column source_media at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+control EDIT%20instance_id at=0 kind=zenitforms:form/plain input=number required=false readonly=true options= binding=
+control EDIT%20type at=1 kind=zenitforms:form/select input=select required=false readonly=true options=disk,nic,floppy binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20name at=2 kind=zenitforms:form/plain input=text required=false readonly=true options= binding=
+control EDIT%20size_gb at=3 kind=zenitforms:form/plain input=number required=false readonly=true options= binding=
+
+case manage.instance-devices.tenant-config.unknown manage instance-devices tenant-config
+admission - verdict=admitted
+record - found=true
+verb CREATE
+verb UPDATE
+chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
+column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column instance_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column type at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column size_gb at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column source_media at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
+control CREATE%20instance_id at=0 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control CREATE%20type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=disk,nic binding=searchable:false,clearable:true,presentation:DEFAULT
+control CREATE%20name at=2 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+control CREATE%20size_gb at=3 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control EDIT%20instance_id at=0 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+control EDIT%20type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=disk,nic,floppy binding=searchable:false,clearable:true,presentation:DEFAULT
+control EDIT%20name at=2 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+control EDIT%20size_gb at=3 kind=zenitforms:form/plain input=number required=false readonly=false options= binding=
+

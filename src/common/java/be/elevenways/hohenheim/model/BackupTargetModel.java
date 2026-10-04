@@ -1,9 +1,10 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.backup.BackupTargetRegistry;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -24,7 +25,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  */
 public class BackupTargetModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "backup_target");
+    public static final Identifier MODEL_ID = HohenheimIds.id("backup_target");
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
@@ -34,7 +35,7 @@ public class BackupTargetModel extends Model {
         .build());
 
     public static final EnumField KIND = SCHEMA.addField(
-        RegistryEnumField.builder("kind")
+        RegistryMemberField.builder("kind")
             .registry(BackupTargetRegistry.REGISTRY)
             .label(HohenheimFormCopy.label("kind"))
             .help(HohenheimFormCopy.help("backup_target_kind"))
@@ -120,8 +121,7 @@ public class BackupTargetModel extends Model {
             String name = String.valueOf((Object) doomed.get(NAME));
             if (controlPlane != null && !controlPlane.isBlank()
                     && controlPlane.equals(name)) {
-                throw Violations.ofForm(Microcopy.of("backup_target_control_plane")
-                    .withFilter("scope", "violations")
+                throw Violations.ofForm(HohenheimViolations.text("backup_target_control_plane")
                     .withArg("name", name));
             }
             long backups = Models.get(InstanceBackupModel.class).find()
@@ -134,8 +134,7 @@ public class BackupTargetModel extends Model {
                 .where(InstanceModel.BACKUP_TARGET_ID.eq(targetId))
                 .count();
             if (backups > 0 || instances > 0) {
-                throw Violations.ofForm(Microcopy.of("backup_target_in_use")
-                    .withFilter("scope", "violations")
+                throw Violations.ofForm(HohenheimViolations.text("backup_target_in_use")
                     .withArg("name", name)
                     .withArg("backups", backups)
                     .withArg("instances", instances));

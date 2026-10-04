@@ -10,8 +10,9 @@ import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.cms.ServerOverviewPage;
-import be.elevenways.hohenheim.server.cms.ServerResource;
+import be.elevenways.hohenheim.server.cms.ServerParts;
+import be.elevenways.hohenheim.server.cms.ServerOverviewState;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPins;
@@ -500,10 +501,10 @@ class HostEvidenceTest {
 
     /** The host list's structured status cell, through the resource's own production path. */
     private static HostStatusCell hostStatusCell(Row row) {
-        ServerResource resource = new ServerResource();
-        for (ColumnSpec column : resource.tableSpec().columns()) {
+        PanelResource<Row> resource = ServerParts.admin();
+        for (ColumnSpec column : resource.list().table().columns()) {
             if ("host_status".equals(column.name())) {
-                return (HostStatusCell) resource.cellValue(row, column);
+                return (HostStatusCell) resource.reads().cellMapping().cell(row, column);
             }
         }
         throw new IllegalStateException("the host list has no host_status column");
@@ -512,7 +513,7 @@ class HostEvidenceTest {
     /** The overview page's kernel-isolation view, built the way the page builds it. */
     private static KernelIsolationView kernelIsolationViewOf(String name) {
         Row row = Models.get(ServerModel.class).findByName(name);
-        KernelIsolationView view = ServerOverviewPage.kernelIsolationViewOf(row);
+        KernelIsolationView view = ServerOverviewState.kernelIsolationViewOf(row);
         if (view == null) {
             throw new IllegalStateException("no kernel-isolation view for '" + name + "'");
         }

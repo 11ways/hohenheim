@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -8,7 +10,6 @@ import be.elevenways.hohenheim.server.runtime.ConsoleStream;
 import be.elevenways.hohenheim.server.runtime.PtySupport;
 import be.elevenways.hohenheim.server.util.Watchdog;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -18,6 +19,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.security.Principal;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -98,9 +100,6 @@ public final class InstanceShell {
      */
     private static final long START_SETTLE_MS = 250;
 
-    /** Activity actions: a shell opening and a shell closing are both audit events. */
-    public static final String ACTIVITY_OPEN = "shell_open";
-    public static final String ACTIVITY_CLOSE = "shell_close";
 
     private static final Map<Integer, List<Session>> LIVE = new ConcurrentHashMap<>();
 
@@ -200,11 +199,10 @@ public final class InstanceShell {
 
         // GATE 1, first and on the funnel: nothing about the instance is resolved for a
         // caller who may not shell into it, so this is not an existence oracle either.
-        if (principal == null || principal.isAnonymous()
+        if (principal == null || !principal.kind().account()
                 || !HohenheimAccess.hasInstanceCapability(principal, instanceId,
                     HohenheimAccess.SHELL)) {
-            throw Violations.ofForm(Microcopy.of("instance_not_permitted")
-                .withFilter("scope", "violations"));
+            throw Violations.ofForm(HohenheimViolations.text("instance_not_permitted"));
         }
 
         Resolved resolved = this.instances.resolve(instanceId);
@@ -243,8 +241,7 @@ public final class InstanceShell {
         synchronized (sessions) {
             sessions.removeIf(session -> !session.isOpen());
             if (sessions.size() >= MAX_SESSIONS_PER_INSTANCE) {
-                throw Violations.ofForm(Microcopy.of("shell_too_many_sessions")
-                    .withFilter("scope", "violations")
+                throw Violations.ofForm(HohenheimViolations.text("shell_too_many_sessions")
                     .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)))
                     .withArg("max", String.valueOf(MAX_SESSIONS_PER_INSTANCE)));
             }
@@ -259,7 +256,7 @@ public final class InstanceShell {
         session.start();
         startSweeper();
 
-        session.record(ACTIVITY_OPEN, started.shell() + " as uid " + runUser);
+        session.record(HohenheimActivityAction.SHELL_OPEN, started.shell() + " as uid " + runUser);
         Blast.log("SHELL: opened on instance", instanceId, "as uid", runUser,
             "->", started.shell());
         return session;
@@ -338,8 +335,7 @@ public final class InstanceShell {
             try {
                 attempt = pty.openPty(resolved.spec(), List.of(candidate), cols, rows);
             } catch (IOException e) {
-                throw Violations.ofForm(Microcopy.of("shell_failed")
-                    .withFilter("scope", "violations")
+                throw Violations.ofForm(HohenheimViolations.text("shell_failed")
                     .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)))
                     .withArg("reason", String.valueOf(e.getMessage())));
             }
@@ -350,16 +346,14 @@ public final class InstanceShell {
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
                 attempt.close();
-                throw Violations.ofForm(Microcopy.of("shell_failed")
-                    .withFilter("scope", "violations")
+                throw Violations.ofForm(HohenheimViolations.text("shell_failed")
                     .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)))
                     .withArg("reason", "interrupted"));
             } catch (IOException unreachable) {
                 // The daemon could not be asked whether it started. Believing it started
                 // would be the silent-success shape; refuse and say why.
                 attempt.close();
-                throw Violations.ofForm(Microcopy.of("shell_failed")
-                    .withFilter("scope", "violations")
+                throw Violations.ofForm(HohenheimViolations.text("shell_failed")
                     .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)))
                     .withArg("reason", String.valueOf(unreachable.getMessage())));
             }
@@ -368,21 +362,21 @@ public final class InstanceShell {
             }
             attempt.close();
         }
-        throw Violations.ofForm(Microcopy.of("shell_missing_in_image")
-            .withFilter("scope", "violations")
+        throw Violations.ofForm(HohenheimViolations.text("shell_missing_in_image")
             .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)))
             .withArg("shell", String.join(", ", candidates)));
     }
 
     private static @NonNull Violations refusal(@NonNull String key, @NonNull Row instance) {
-        return Violations.ofForm(Microcopy.of(key).withFilter("scope", "violations")
+        return Violations.ofForm(HohenheimViolations.text(key)
             .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME))));
     }
 
     /** The same attribution shape zenit-auth's request resolver produces, off-request. */
     private static @NonNull Accountability accountabilityOf(@NonNull Principal principal) {
-        return new Accountability(String.valueOf(principal.id()), principal.displayName(),
-            null, null, Accountability.ORIGIN_WEB);
+        PrincipalRef actor = principal.reference();
+        return new Accountability(actor == null ? null : String.valueOf(actor.id()),
+            actor == null ? null : actor.storedKind(), principal.displayName(), null, null, Accountability.ORIGIN_WEB);
     }
 
     private static void startSweeper() {
@@ -521,7 +515,7 @@ public final class InstanceShell {
             if (sessions != null) {
                 sessions.remove(this);
             }
-            this.record(ACTIVITY_CLOSE, this.shell + " as uid " + this.runUser
+            this.record(HohenheimActivityAction.SHELL_CLOSE, this.shell + " as uid " + this.runUser
                 + " (" + reason.name().toLowerCase(java.util.Locale.ROOT) + ")");
             Blast.log("SHELL: closed on instance", this.instanceId, "-", reason);
             try {
@@ -543,7 +537,7 @@ public final class InstanceShell {
          * this runs on a pump/sweeper thread where neither ThreadLocal survives -- without
          * them an audited act would be recorded as system work, or not at all.
          */
-        void record(@NonNull String action, @NonNull String detail) {
+        void record(@NonNull HohenheimActivityAction action, @NonNull String detail) {
             Runnable write = () -> Accountability.runAs(this.accountability, () ->
                 ActivityLog.record(Models.get(InstanceModel.class), this.instanceId,
                     action, detail));

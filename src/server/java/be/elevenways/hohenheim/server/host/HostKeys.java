@@ -1,18 +1,17 @@
 package be.elevenways.hohenheim.server.host;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
-import be.elevenways.hohenheim.server.process.BoundedProcess;
-import be.elevenways.hohenheim.server.util.FileTrees;
-import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import java.time.Duration;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -26,7 +25,6 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
-import java.util.Map;
 
 /**
  * THE ssh trust and credential seam: every {@code ssh} argv the product ever builds
@@ -283,12 +281,25 @@ public final class HostKeys {
         }
         argv.add("--");
         argv.add(target.host());
-        BoundedProcess.Result result = BoundedProcess.execute(argv, null, SSH_KEYSCAN_TIMEOUT_MILLIS,
-            TOOL_OUTPUT_CAP_CHARS);
+        String scanned;
+        String failure;
+        try {
+            ProcessOutcome result = Subprocess.of(argv)
+                .collectStdout(TOOL_OUTPUT_CAP_CHARS)
+                .stderrLimit(TOOL_OUTPUT_CAP_CHARS)
+                .timeout(Duration.ofMillis(SSH_KEYSCAN_TIMEOUT_MILLIS))
+                .stopGrace(Duration.ZERO)
+                .runChecked();
+            scanned = result.stdout().text();
+            failure = result.failureText();
+        } catch (IOException notRun) {
+            scanned = "";
+            failure = String.valueOf(notRun.getMessage());
+        }
 
         Offer best = null;
         int bestRank = Integer.MAX_VALUE;
-        for (String line : result.stdout().split("\n")) {
+        for (String line : scanned.split("\n")) {
             String trimmed = line.trim();
             if (trimmed.isEmpty() || trimmed.startsWith("#")) {
                 continue;
@@ -310,8 +321,7 @@ public final class HostKeys {
         if (best == null) {
             throw Violations.ofForm(violation("host_key_scan_failed")
                 .withArg("target", String.valueOf((Object) server.get(ServerModel.SSH_TARGET)))
-                .withArg("detail", result.failureText().isEmpty()
-                    ? "no host keys offered" : result.failureText()));
+                .withArg("detail", failure.isEmpty() ? "no host keys offered" : failure));
         }
         return best;
     }
@@ -320,12 +330,7 @@ public final class HostKeys {
 
     /** Generate the host's client keypair if it has none; returns true when one was made. */
     public static boolean ensureIdentity(@NonNull Row server) {
-        String existing = server.get(HostTrustSlot.SSH.clientPrivate());
-        if (existing != null && !existing.isBlank()) {
-            return false;
-        }
-        rotateIdentity(server);
-        return true;
+        return HostIdentities.ensure(server, HostTrustSlot.SSH, () -> rotateIdentity(server));
     }
 
     /**
@@ -334,34 +339,14 @@ public final class HostKeys {
      * public half on the remote's authorized_keys.
      */
     public static void rotateIdentity(@NonNull Row server) {
-        String name = String.valueOf((Object) server.get(ServerModel.NAME));
-        Path directory = null;
-        try {
-            directory = Files.createTempDirectory("hohenheim-hostkey");
-            Path key = directory.resolve("id_ed25519");
-            BoundedProcess.Result result = BoundedProcess.execute(List.of("ssh-keygen",
-                "-q", "-t", "ed25519", "-N", "", "-C", "hohenheim-" + name,
-                "-f", key.toString()), null, SSH_KEYGEN_TIMEOUT_MILLIS, TOOL_OUTPUT_CAP_CHARS);
-            if (!result.succeeded() || !Files.exists(key)) {
-                throw Violations.ofForm(violation("identity_generation_failed")
-                    .withArg("detail", result.failureText()));
-            }
-            String privateKey = Files.readString(key, StandardCharsets.UTF_8);
-            String publicKey = Files.readString(directory.resolve("id_ed25519.pub"),
-                StandardCharsets.UTF_8).trim();
-            ActivityLog.withAction(ActivityLog.ACTION_UPDATE, "host_identity_rotated", () -> {
-                server.set(HostTrustSlot.SSH.clientPrivate(), privateKey);
-                server.set(HostTrustSlot.SSH.clientPublic(), publicKey);
-                Models.get(ServerModel.class).save(server);
-            });
-            Blast.slog("hohenheim.host.identity_rotated", Map.of("server", name));
-        } catch (IOException e) {
-            throw Violations.ofForm(violation("identity_generation_failed")
-                .withArg("detail", String.valueOf(e.getMessage())));
-        } finally {
-            // Best effort: a temp directory that survives holds a key we already replaced.
-            FileTrees.deleteQuietly(directory);
-        }
+        // ssh-keygen writes the public half beside the private one, as <file>.pub.
+        HostIdentities.rotate(server, HostTrustSlot.SSH, "hohenheim-hostkey", "id_ed25519", "id_ed25519.pub", true,
+            (privateHalf, publicHalf, name) -> Subprocess.of("ssh-keygen",
+                    "-q", "-t", "ed25519", "-N", "", "-C", "hohenheim-" + name, "-f", privateHalf.toString())
+                .collectStdout(TOOL_OUTPUT_CAP_CHARS)
+                .stderrLimit(TOOL_OUTPUT_CAP_CHARS)
+                .timeout(Duration.ofMillis(SSH_KEYGEN_TIMEOUT_MILLIS))
+                .stopGrace(Duration.ZERO));
     }
 
     // -- the materialised trust store -----------------------------------------
@@ -451,6 +436,6 @@ public final class HostKeys {
     }
 
     static Microcopy violation(String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
+        return HohenheimViolations.text(key);
     }
 }

@@ -1,16 +1,19 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.HostMode;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.incus.IncusClient;
-import be.elevenways.hohenheim.server.process.BoundedProcess;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.server.process.ProcessOutcome;
+import be.elevenways.protoblast.server.process.Subprocess;
+import be.elevenways.protoblast.server.process.Termination;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import java.time.Duration;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
@@ -71,10 +74,9 @@ public final class RestoreCapacity {
                 : availableBytes(serverId,
                     new ServerService().clientFor(ServerModel.nameOf(serverId)));
         } catch (IOException | RuntimeException error) {
-            throw Violations.ofForm(violation("restore_capacity_unknown")
-                .withArg("server", hostLabel(serverId))
-                .withArg("reason", error.getMessage() != null
-                    ? error.getMessage() : error.toString()));
+            throw Violations.ofForm(HohenheimViolations.text("restore_capacity_unknown")
+                .withArg("server", ServerModel.labelOf(serverId))
+                .withArg("reason", HohenheimViolations.reasonOf(error)));
         }
     }
 
@@ -88,25 +90,11 @@ public final class RestoreCapacity {
     public static void judge(int serverId, long availableBytes, long requiredBytes) {
         long needed = (long) (requiredBytes * HEADROOM_FACTOR);
         if (availableBytes < needed) {
-            throw Violations.ofForm(violation("restore_capacity")
-                .withArg("server", hostLabel(serverId))
+            throw Violations.ofForm(HohenheimViolations.text("restore_capacity")
+                .withArg("server", ServerModel.labelOf(serverId))
                 .withArg("needed", needed)
                 .withArg("available", availableBytes));
         }
-    }
-
-    /**
-     * The host's name, or a bare id spelling when the row is gone.
-     *
-     * AIDEV-NOTE: never {@code ServerModel.nameOf} here -- that THROWS on an unknown id,
-     * and it used to be called while BUILDING the refusal, so a host row that vanished
-     * mid-restore turned a named 422 refusal into a raw IllegalArgumentException 500.
-     * The refusal path must be the one path that cannot itself fail.
-     */
-    private static @NonNull String hostLabel(int serverId) {
-        Row server = Models.get(ServerModel.class).findById(serverId);
-        String name = server != null ? server.get(ServerModel.NAME) : null;
-        return name != null ? name : "#" + serverId;
     }
 
     /** Free space of the pool the default profile's root device names (or the first pool). */
@@ -159,17 +147,21 @@ public final class RestoreCapacity {
     private static long remoteAvailable(Row server, String dockerRoot) throws IOException {
         List<String> argv = HostKeys.sshArgv(server,
             List.of("df", "-B1", "--output=avail", dockerRoot));
-        // AIDEV-NOTE: BoundedProcess waits with the deadline; the inline read-then-wait this
+        // AIDEV-NOTE: Subprocess waits with the deadline; the inline read-then-wait this
         // replaced blocked on the pipe until ssh exited, so the 30s bound never applied.
-        BoundedProcess.Result result = BoundedProcess.run(new ProcessBuilder(argv),
-            REMOTE_DF_TIMEOUT_MILLIS, 8_192);
-        if (result.timedOut()) {
+        ProcessOutcome result = Subprocess.of(argv)
+            .collectStdout(8_192)
+            .stderrLimit(8_192)
+            .timeout(Duration.ofMillis(REMOTE_DF_TIMEOUT_MILLIS))
+            .stopGrace(Duration.ZERO)
+            .runChecked();
+        if (result.termination() == Termination.TIMED_OUT) {
             throw new IOException("Remote df timed out");
         }
         if (!result.succeeded()) {
             throw new IOException("Remote df failed (exit " + result.exitCode() + ")");
         }
-        String[] lines = result.stdout().trim().split("\n");
+        String[] lines = result.stdout().text().trim().split("\n");
         try {
             return Long.parseLong(lines[lines.length - 1].trim());
         } catch (NumberFormatException unparseable) {
@@ -177,7 +169,4 @@ public final class RestoreCapacity {
         }
     }
 
-    private static Microcopy violation(String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
-    }
 }

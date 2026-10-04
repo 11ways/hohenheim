@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.upstream.kinds;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimPaths;
@@ -13,6 +14,8 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.ui.BadgeColor;
+import be.elevenways.zenit.common.ui.ColorHue;
 
 import java.nio.file.Path;
 import java.util.Map;
@@ -25,7 +28,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  */
 public class StaticUpstreamKind implements UpstreamKindHandler {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "static");
+    public static final Identifier ID = HohenheimIds.id("static");
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final StringField ROOT_PATH = SETTINGS_SCHEMA.addField(
@@ -73,7 +76,7 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
     public Icon getIcon() { return Icon.of("folder"); }
 
     @Override
-    public String getColor() { return "teal"; }
+    public BadgeColor color() { return ColorHue.TEAL; }
 
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }

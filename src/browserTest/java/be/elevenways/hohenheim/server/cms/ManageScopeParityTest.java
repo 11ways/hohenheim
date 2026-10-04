@@ -8,21 +8,25 @@ import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
-import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
+import be.elevenways.zenit.common.data.RowScope;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -31,6 +35,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -86,7 +91,7 @@ class ManageScopeParityTest extends HohenheimTestBase {
 
         // 1. The instance pair, as the tenant: the authored instance is in both reads and the
         //    generated one -- granted just the same -- is in neither.
-        ManageInstanceResource instances = new ManageInstanceResource();
+        Projection instances = Projection.of(InstanceParts.manage());
         Set<Object> listed = resourceIds(instances, tenant);
         Set<Object> picked = sourceIds(instances, tenant);
         assertThat(listed)
@@ -100,7 +105,7 @@ class ManageScopeParityTest extends HohenheimTestBase {
 
         // 2. The domain pair, as the operator (whose walk is unconstrained, so only the
         //    scope's BASE can drop a row): a soft-deleted site's domain is in neither read.
-        ManageDomainResource domains = new ManageDomainResource();
+        Projection domains = Projection.of(DomainParts.manage());
         assertThat(resourceIds(domains, operator))
             .as("step 2: the /manage domain list hides a soft-deleted site's domain")
             .contains(liveSiteDomainId)
@@ -112,14 +117,15 @@ class ManageScopeParityTest extends HohenheimTestBase {
 
         // 3. Every model the panel projects through BOTH a list and a source: the two reads
         //    are the same set, for the tenant and for the operator.
-        List<RowResource> paired = List.of(new ManageSiteResource(), new ManageDomainResource(),
-            new ManageInstanceResource(), new ManageCertificateResource(),
-            new ManageProtectedPathResource(), new ManageDnsRecordResource(),
-            new ManageInstanceTemplateResource(), new ManageInstanceScheduleResource(),
-            new ManageProjectResource(), new ManageDatabaseResource(),
-            new ManageInstanceDeviceResource(), new ManageInstanceDatabaseResource(),
-            new ManagePreviewDeploymentResource());
-        for (RowResource resource : paired) {
+        List<Projection> paired = List.of(Projection.of(SiteParts.manage()),
+            Projection.of(DomainParts.manage()),
+            Projection.of(InstanceParts.manage()), Projection.of(CertificateParts.manage()),
+            Projection.of(ProtectedPathParts.manage()), Projection.of(ManageDnsRecordParts.manage()),
+            Projection.of(InstanceTemplateParts.manage()), Projection.of(InstanceScheduleParts.manage()),
+            Projection.of(ProjectParts.manage()), Projection.of(DatabaseParts.manage()),
+            Projection.of(InstanceAttachmentParts.devicesManage()), Projection.of(InstanceAttachmentParts.databasesManage()),
+            Projection.of(PreviewParts.manage()));
+        for (Projection resource : paired) {
             for (AccessContext ctx : List.of(tenant, operator)) {
                 assertThat(sourceIds(resource, ctx))
                     .as("step 3: %s and its record source read the same rows for %s",
@@ -129,19 +135,29 @@ class ManageScopeParityTest extends HohenheimTestBase {
         }
     }
 
-    /** The ids the resource's own access decision lets this context list. */
-    private static Set<Object> resourceIds(RowResource resource, AccessContext ctx) {
-        AccessDecision decision = resource.accessFunction().decide(ctx);
-        assertThat(decision.isDenied()).as("%s must not deny outright", resource.id()).isFalse();
+    /** A /manage list's declared row scope and the entry whose admission guards that read. */
+    private record Projection(Identifier id, Model model, RowScope scope, PanelResource<Row> entry) {
+
+        static Projection of(PanelResource<Row> resource) {
+            return new Projection(resource.id(), Models.get(Objects.requireNonNull(resource.subject().modelId())),
+                Objects.requireNonNull(resource.rowScope()), resource);
+        }
+    }
+
+    /** The ids the admitted entry's own row scope lets this context list. */
+    private static Set<Object> resourceIds(Projection resource, AccessContext ctx) {
+        Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(ManagePanel.SLUG));
+        assertThat(panel.admits(resource.entry(), ctx)).as("%s must not deny outright", resource.id()).isTrue();
+        Criteria criteria = resource.scope().criteria(ctx);
         QueryBuilder<Row> query = resource.model().find();
-        if (decision.predicate() != null) {
-            query.where(decision.predicate().criteria());
+        if (criteria != null) {
+            query.where(criteria);
         }
         return idsOf(resource.model(), query.all());
     }
 
     /** The ids the model's registered default source serves this context. */
-    private static Set<Object> sourceIds(RowResource resource, AccessContext ctx) {
+    private static Set<Object> sourceIds(Projection resource, AccessContext ctx) {
         RecordSource<?> source = RecordSourceRegistry.INSTANCE
             .requireDefaultFor(resource.model().getModelId());
         return idsOf(resource.model(),

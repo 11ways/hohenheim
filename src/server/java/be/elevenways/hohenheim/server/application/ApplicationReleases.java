@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.application;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -31,7 +32,6 @@ import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -155,7 +155,7 @@ public final class ApplicationReleases {
         int serverId = ServerModel.canonicalServerId(application.get(InstanceModel.SERVER_ID));
         try {
             return inScope(applicationId, () -> {
-                Map<String, Object> desired = desiredSettings(dockerFor(serverId), application, imported);
+                Map<String, Object> desired = desiredSettings(new ServerService().clientFor(serverId), application, imported);
                 for (String key : List.of("artifact_path", "commit_sha")) {
                     if (source.containsKey(key)) {
                         desired.put(key, source.get(key));
@@ -180,7 +180,7 @@ public final class ApplicationReleases {
         Map<String, Object> settings = resolvedSettings(application, overrides);
         String applicationName = application.get(InstanceModel.NAME);
         int serverId = ServerModel.canonicalServerId(application.get(InstanceModel.SERVER_ID));
-        DockerClient docker = dockerFor(serverId);
+        DockerClient docker = new ServerService().clientFor(serverId);
         String fingerprint = ReleaseEngine.sourceFingerprint(applicationId, settings);
 
         try {
@@ -325,7 +325,7 @@ public final class ApplicationReleases {
             // have no consumer left to disconnect: remove them all, verified.
             InstanceDatabaseNetworks.sweepFor(applicationId, true, servers);
             // The workload is gone, so nothing holds the build artifacts any more.
-            BuildArtifacts.pruneSuperseded(dockerFor(ServerModel.localServerId()),
+            BuildArtifacts.pruneSuperseded(new ServerService().clientFor(ServerModel.localServerId()),
                 InstanceModel.MODEL_ID.toString(), applicationId, "");
         } catch (Violations refused) {
             throw refused;
@@ -483,8 +483,7 @@ public final class ApplicationReleases {
             }
             if (!build.succeeded() || build.imageId() == null) {
                 throw Violations.ofField("settings.image", tag,
-                    Microcopy.of("application_image_build_failed")
-                        .withFilter("scope", "violations")
+                    HohenheimViolations.text("application_image_build_failed")
                         .withArg("reason", build.failureReason() != null
                             ? build.failureReason() : build.status()));
             }
@@ -499,8 +498,7 @@ public final class ApplicationReleases {
             String tag = str(settings.get("tag"));
             String ref = tag.isEmpty() || image.contains(":") ? image : image + ":" + tag;
             if (ref.isEmpty()) {
-                throw Violations.ofForm(Microcopy.of("application_never_built")
-                    .withFilter("scope", "violations")
+                throw Violations.ofForm(HohenheimViolations.text("application_never_built")
                     .withArg("name", str(application.get(InstanceModel.NAME))));
             }
             // Pin the mutable reference to the content-addressed digest it resolves to
@@ -692,8 +690,7 @@ public final class ApplicationReleases {
             }
         } catch (IOException unavailable) {
             throw Violations.ofField("settings.image", ref,
-                Microcopy.of("application_image_unresolvable")
-                    .withFilter("scope", "violations")
+                HohenheimViolations.text("application_image_unresolvable")
                     .withArg("reason", unavailable.getMessage() != null
                         ? unavailable.getMessage() : "daemon unreachable"));
         }
@@ -708,8 +705,7 @@ public final class ApplicationReleases {
         Row application = Models.get(InstanceModel.class).findById(applicationId);
         if (application == null
                 || !InstanceKinds.isReleaseManaged(application.get(InstanceModel.KIND))) {
-            throw Violations.ofForm(Microcopy.of("application_not_found")
-                .withFilter("scope", "violations").withArg("id", applicationId));
+            throw Violations.ofForm(HohenheimViolations.text("application_not_found").withArg("id", applicationId));
         }
         return application;
     }
@@ -720,11 +716,6 @@ public final class ApplicationReleases {
             ServerModel.canonicalServerId(application.get(InstanceModel.SERVER_ID)));
     }
 
-    static @NonNull DockerClient dockerFor(int serverId) {
-        return serverId == ServerModel.localServerId()
-            ? new DockerClient()
-            : new ServerService().clientFor(ServerModel.nameOf(serverId));
-    }
 
     private static @NonNull String str(@Nullable Object value) {
         return value == null ? "" : value.toString().trim();

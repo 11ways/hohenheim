@@ -1,7 +1,8 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -29,7 +30,7 @@ import be.elevenways.zenit.common.validation.Violations;
  */
 public class DatabaseEngineModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "database_engine");
+    public static final Identifier MODEL_ID = HohenheimIds.id("database_engine");
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
@@ -91,7 +92,7 @@ public class DatabaseEngineModel extends Model {
             Object name = row.get(NAME.getName());
             if (name != null && !DatabaseModel.isValidName(String.valueOf(name))) {
                 throw Violations.ofField(NAME.getName(), name,
-                    Microcopy.of("database_name_invalid").withFilter("scope", "violations"));
+                    HohenheimViolations.text("database_name_invalid"));
             }
         });
         SCHEMA.addBeforeValidateHook(context -> {

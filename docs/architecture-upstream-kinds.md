@@ -171,8 +171,8 @@ dev-namespace handlers set to opt into upstream `Location` rewriting.
 ## Admin UI -- the real story
 
 There is no hand-built site edit template. No `.hwk` file in the repo branches on the upstream kind; the
-`{% if siteType{:} == ... %}` design was never how this shipped. The site editor is a generated zenit-cms `RowResource`
-(`src/server/java/be/elevenways/hohenheim/server/cms/SiteResource.java:66-79`):
+`{% if siteType{:} == ... %}` design was never how this shipped. The site editor is a generated zenit-cms `PanelResource`
+whose `ResourceForm` is `SiteWrites.ADMIN_FORM` (`src/server/java/be/elevenways/hohenheim/server/cms/SiteParts.java`):
 
 ```java
 FormSpec.builder()

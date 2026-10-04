@@ -1,20 +1,20 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.auth.server.cms.AuthRolesResource;
-import be.elevenways.zenit.auth.server.cms.AuthUsersResource;
+import be.elevenways.zenit.auth.server.cms.AuthAdminParts;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelPeer;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.server.page.BuildInfoPage;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.zenit.comms.CommsSettings;
+import be.elevenways.zenit.comms.server.cms.CommsHubAdmin;
 import be.elevenways.zenit.comms.server.cms.CommsSettingsLabels;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.ui.Icon;
@@ -27,7 +27,7 @@ import java.util.List;
 /**
  * CMS panel served at /admin. Constructed by the discovered
  * {@code HohenheimHostWiring} module at the MODULES boot stage (not
- * {@code @ZenitAutoLoad}) because its resources reach server services, and
+ * {@code @BlastAutoLoad}) because its resources reach server services, and
  * because the registration must be complete before STARTHTTP binds.
  */
 public final class HohenheimPanel extends Panel {
@@ -64,7 +64,7 @@ public final class HohenheimPanel extends Panel {
     // a peer stays visible only when an operator would go LOOKING for it by name. Every
     // demoted peer is showInNav(false) -- which removes the sidebar entry and NOTHING else,
     // the route and the record stay live -- and each one has a declared home: a record tab
-    // on its parent (instance snapshots/backups), a HeaderAction on the parent list
+    // on its parent (instance snapshots/backups), a HEADER link on the parent list
     // (backup targets, quotas, game domains, auth providers, previews, build/release
     // history, reconcile findings, environments, DNS peers), or a link on the surface that
     // owns it (the spamservice sub-resources, off the abuse-protection overview). A peer
@@ -109,7 +109,7 @@ public final class HohenheimPanel extends Panel {
             .withSeparatorBefore(true);
 
     public HohenheimPanel() {
-        super(Identifier.of("hohenheim", "admin"), SLUG, Microcopy.of("title").withFilter("scope", "admin"), ACCESS);
+        super(HohenheimIds.id("admin"), SLUG, Microcopy.of("title").withFilter("scope", "admin"), ACCESS);
     }
 
     /** Below ManagePanel's default 100: an operator holding both panels lands on /admin. */
@@ -126,97 +126,103 @@ public final class HohenheimPanel extends Panel {
      * the boot-captured HohenheimRoles snapshot these gates read.
      */
     @Override
-    public List<PanelPeer> buildPeers() {
-        List<PanelPeer> peers = new ArrayList<>();
+    public @NonNull List<PanelEntry> buildEntries() {
+        List<PanelEntry> peers = new ArrayList<>();
         // The dashboard comes first: the panel landing soft-redirects to the
-        // first accessible DashboardPanelPeer.
+        // first accessible dashboard entry.
         peers.add(new AdminDashboard());
         // Projects/environments span every product tier (sites, instances, databases
         // through their sites), so they are not gated on any single role.
-        peers.add(new ProjectResource());
-        peers.add(new EnvironmentResource());
-        peers.add(new EnvironmentVariableResource());
-        addIf(peers, new SiteResource(), Role.PROXY);
-        addIf(peers, new SiteDomainResource(), Role.PROXY);
-        addIf(peers, new ReleasedClaimResource(), Role.PROXY);
-        addIf(peers, new CertificateResource(), Role.PROXY);
-        addIf(peers, new AccessListResource(), Role.PROXY);
-        addIf(peers, new AccessRuleResource(), Role.PROXY);
-        addIf(peers, new ProtectedPathResource(), Role.PROXY);
-        addIf(peers, new AuthProviderResource(), Role.PROXY);
-        addIf(peers, new DatabaseResource(), Role.DATABASES);
-        addIf(peers, new DatabaseEngineResource(), Role.DATABASES);
+        peers.add(ProjectParts.admin());
+        peers.add(EnvironmentParts.admin());
+        peers.add(EnvironmentParts.variables());
+        addIf(peers, SiteParts.admin(), Role.PROXY);
+        addIf(peers, DomainParts.admin(), Role.PROXY);
+        addIf(peers, ReleasedClaimParts.admin(), Role.PROXY);
+        addIf(peers, CertificateParts.admin(), Role.PROXY);
+        addIf(peers, AccessListParts.admin(), Role.PROXY);
+        addIf(peers, AccessRuleParts.admin(), Role.PROXY);
+        addIf(peers, ProtectedPathParts.admin(), Role.PROXY);
+        addIf(peers, AuthProviderParts.admin(), Role.PROXY);
+        addIf(peers, DatabaseParts.admin(), Role.DATABASES);
+        addIf(peers, DatabaseParts.engines(), Role.DATABASES);
         // Needs BOTH tiers to exist: it joins an instance to a managed database.
         if (HohenheimRoles.enabled(Role.DATABASES) && HohenheimRoles.enabled(Role.INSTANCES)) {
-            peers.add(new InstanceDatabaseResource());
+            peers.add(InstanceAttachmentParts.databasesAdmin());
         }
-        addIf(peers, new InstanceResource(), Role.INSTANCES);
-        addIf(peers, new InstanceTemplateResource(), Role.INSTANCES);
-        addIf(peers, new InstanceTemplateVariableResource(), Role.INSTANCES);
-        addIf(peers, new InstanceTemplateFileResource(), Role.INSTANCES);
-        addIf(peers, new InstanceTemplateVolumeResource(), Role.INSTANCES);
+        addIf(peers, InstanceParts.admin(), Role.INSTANCES);
+        addIf(peers, InstanceTemplateParts.admin(), Role.INSTANCES);
+        addIf(peers, TemplateChildParts.variables(), Role.INSTANCES);
+        addIf(peers, TemplateChildParts.files(), Role.INSTANCES);
+        addIf(peers, TemplateChildParts.volumes(), Role.INSTANCES);
         // A declared database is created through the managed-database tier at
         // instance create, so the declaration form needs both tiers like the attachment.
         if (HohenheimRoles.enabled(Role.DATABASES) && HohenheimRoles.enabled(Role.INSTANCES)) {
-            peers.add(new InstanceTemplateDatabaseResource());
+            peers.add(TemplateChildParts.databases());
         }
-        addIf(peers, new InstanceFileResource(), Role.INSTANCES);
+        addIf(peers, InstanceFileParts.admin(), Role.INSTANCES);
+        addIf(peers, InstanceVariableParts.admin(), Role.INSTANCES);
         addIf(peers, new InstanceFromTemplatePage(), Role.INSTANCES);
         addIf(peers, new InstanceTemplateImportPage(), Role.INSTANCES);
-        addIf(peers, new InstanceQuotaResource(), Role.INSTANCES);
-        addIf(peers, new InstanceSnapshotResource(), Role.INSTANCES);
-        addIf(peers, new InstanceBackupResource(), Role.INSTANCES);
-        addIf(peers, new InstanceScheduleResource(), Role.INSTANCES);
-        addIf(peers, new InstanceScheduleStepResource(), Role.INSTANCES);
-        addIf(peers, new InstanceDeviceResource(), Role.INSTANCES);
-        addIf(peers, new InstanceVolumeResource(), Role.INSTANCES);
-        addIf(peers, new RuntimeImageResource(), Role.INSTANCES);
-        addIf(peers, new InstanceScheduleRunResource(), Role.INSTANCES);
-        addIf(peers, new GameDomainResource(), Role.INSTANCES);
-        addIf(peers, new BackupTargetResource(), Role.INSTANCES);
+        addIf(peers, InstanceQuotaParts.admin(), Role.INSTANCES);
+        addIf(peers, InstanceSnapshotParts.admin(), Role.INSTANCES);
+        addIf(peers, InstanceBackupParts.admin(), Role.INSTANCES);
+        addIf(peers, InstanceScheduleParts.admin(), Role.INSTANCES);
+        addIf(peers, InstanceScheduleStepParts.admin(), Role.INSTANCES);
+        addIf(peers, InstanceAttachmentParts.devicesAdmin(), Role.INSTANCES);
+        addIf(peers, VolumeParts.admin(), Role.INSTANCES);
+        addIf(peers, RuntimeImageParts.admin(), Role.INSTANCES);
+        addIf(peers, InstanceScheduleRunParts.admin(), Role.INSTANCES);
+        addIf(peers, GameDomainResource.admin(), Role.INSTANCES);
+        addIf(peers, BackupTargetParts.admin(), Role.INSTANCES);
         // Build history serves the two tiers that produce images today (Docker sites
         // through the proxy role, container instances through the instances role).
-        addIf(peers, new BuildOperationResource(), Role.PROXY, Role.INSTANCES);
+        addIf(peers, OperationHistoryParts.builds(), Role.PROXY, Role.INSTANCES);
         // Release history: applications (the instance tier) release through the
         // health gate since the phase-0 re-keying; the proxy role merely exposes them.
-        addIf(peers, new ReleaseOperationResource(), Role.PROXY, Role.INSTANCES);
-        addIf(peers, new GitProviderResource(), Role.PROXY);
-        addIf(peers, new PreviewDeploymentResource(), Role.PROXY);
-        addIf(peers, new StackResource(), Role.STACKS);
-        addIf(peers, new StackServiceResource(), Role.STACKS);
-        addIf(peers, new StackFileResource(), Role.STACKS);
+        addIf(peers, OperationHistoryParts.releases(), Role.PROXY, Role.INSTANCES);
+        addIf(peers, GitProviderParts.admin(), Role.PROXY);
+        addIf(peers, PreviewParts.admin(), Role.PROXY);
+        addIf(peers, StackParts.stacks(), Role.STACKS);
+        addIf(peers, StackParts.services(), Role.STACKS);
+        addIf(peers, StackParts.files(), Role.STACKS);
         // The host inventory serves stacks, managed databases AND the instance
         // tier: instance placement is gated on an ADMITTED host, and admit/
         // preflight/trust live on this resource -- an instances-only node
         // without it cannot place anything.
         if (HohenheimRoles.hostWorkloadsEnabled()) {
-            peers.add(new ServerResource());
-            peers.add(new ReconcileFindingResource());
+            peers.add(ServerParts.admin());
+            peers.add(ReconcileFindingParts.admin());
         }
-        addIf(peers, new DnsZoneResource(), Role.DNS);
-        addIf(peers, new DnsRecordResource(), Role.DNS);
-        addIf(peers, new DnsPeerResource(), Role.DNS);
-        addIf(peers, new DnsZonePeerResource(), Role.DNS);
-        peers.add(new NotificationChannelResource());
-        addIf(peers, new BanResource(), Role.FIREWALL);
+        addIf(peers, DnsZoneParts.admin(), Role.DNS);
+        addIf(peers, DnsRecordParts.admin(), Role.DNS);
+        addIf(peers, DnsPeerParts.admin(), Role.DNS);
+        addIf(peers, DnsZonePeerParts.admin(), Role.DNS);
+        peers.add(NotificationChannelParts.admin());
+        // zenit-comms' delivery log: every alert the channels above sent, whether it arrived, and its retry. Gated by
+        // comms' own permissions (other people's notification history), never the delegable panel grant; an operator
+        // holding "*" sees it, a delegated admin only through an explicit comms.deliveries.* grant. Hohenheim is no
+        // hub, so the hub's projects entry is not mounted.
+        peers.add(CommsHubAdmin.install(CommsHubAdmin.Permissions.MODULE).deliveryLog(NavGroup.SYSTEM, 93));
+        addIf(peers, BanParts.admin(), Role.FIREWALL);
         // zenit-auth's generated admin resources, wired into THIS panel (the
         // module's own default panel is disabled via auth.cms.auto_panel).
         // AIDEV-NOTE: zenit-auth grew the description seam (a third constructor argument),
         // so these two describe themselves like every other entry and
         // AdminNavigationJourneyTest step 2 no longer exempts anything.
-        peers.add(new AuthUsersResource(SECURITY_GROUP, 10,
+        peers.add(AuthAdminParts.users(SECURITY_GROUP, 10,
             Microcopy.of("nav_hint").withFilter("scope", "user")));
-        peers.add(new AuthRolesResource(SECURITY_GROUP, 20,
+        peers.add(AuthAdminParts.roles(SECURITY_GROUP, 20,
             Microcopy.of("nav_hint").withFilter("scope", "role")));
         addIf(peers, new SpamserviceOverviewPage(), Role.FIREWALL);
         addIf(peers, new SpamserviceInstallationResource(), Role.FIREWALL);
-        addIf(peers, new SpamserviceSamplesResource(), Role.FIREWALL);
-        addIf(peers, new SpamserviceClientsResource(), Role.FIREWALL);
-        addIf(peers, new SpamserviceClientKeysResource(), Role.FIREWALL);
-        addIf(peers, new SpamserviceSecurityEventsResource(), Role.FIREWALL);
-        addIf(peers, new SpamserviceWordsResource(), Role.FIREWALL);
+        addIf(peers, SpamserviceSamplesResource.create(), Role.FIREWALL);
+        addIf(peers, SpamserviceClientsResource.create(), Role.FIREWALL);
+        addIf(peers, SpamserviceClientKeysResource.create(), Role.FIREWALL);
+        addIf(peers, SpamserviceSecurityEventsResource.create(), Role.FIREWALL);
+        addIf(peers, SpamserviceWordsResource.create(), Role.FIREWALL);
         addIf(peers, new SpamserviceReputationPage(), Role.FIREWALL);
-        peers.add(new AdminActivityResource());
+        peers.add(AdminActivityResource.admin());
         // Where a platform alert lands with nothing configured: every administrator's
         // own inbox, the local channel Alerts always fans out to.
         peers.add(new AdminInboxPage());
@@ -235,7 +241,7 @@ public final class HohenheimPanel extends Panel {
      * for a panel peer, shared with {@link ManagePanel} so the delegated projection of a
      * tier can never outlive the tier's own admin surface.
      */
-    static void addIf(List<PanelPeer> peers, PanelPeer peer, Role... roles) {
+    static void addIf(List<PanelEntry> peers, PanelEntry peer, Role... roles) {
         if (HohenheimRoles.anyEnabled(roles)) {
             peers.add(peer);
         }
@@ -247,13 +253,16 @@ public final class HohenheimPanel extends Panel {
      * the spamservice backend. The file-backed mounts only appear when this boot loaded that file.
      */
     private static @Nullable SettingsPage settingsPage() {
-        return SettingsPage.standard(Identifier.of("hohenheim", "settings"))
+        return SettingsPage.standard(HohenheimIds.id("settings"))
             .mount(SettingsPage.frameworkGroup("app", Microcopy.literal("Hohenheim"), HohenheimSettings.HOHENHEIM))
             .frameworkMount()
             .mount(SettingsPage.frameworkGroup(CommsSettingsLabels.MOUNT_KEY, CommsSettingsLabels.mount(),
                 CommsSettings.ROOT))
             .mount(new SettingsPage.Mount("spamservice", Microcopy.literal("Spamservice"),
                 new SpamserviceSettingsBackend()))
+            // The page edits the operator-trusted endpoints (auth_proteus is fetched with any-address reach) and the
+            // private-network opt-ins, so the delegable panel entry alone never reaches it.
+            .requirePermission(HohenheimSources.ADMIN_SYSTEM)
             .navGroup(NavGroup.SYSTEM)
             .navOrder(95)
             .description(Microcopy.of("nav_hint").withFilter("scope", "settings"))

@@ -1,17 +1,10 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.source.GitProviderKindRegistry;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.orm.field.BooleanField;
-import be.elevenways.zenit.common.orm.field.DateTimeField;
-import be.elevenways.zenit.common.orm.field.EnumField;
-import be.elevenways.zenit.common.orm.field.Field;
-import be.elevenways.zenit.common.orm.field.IntegerField;
-import be.elevenways.zenit.common.orm.field.RegistryEnumField;
-import be.elevenways.zenit.common.orm.field.SchemaField;
-import be.elevenways.zenit.common.orm.field.StringField;
-import be.elevenways.zenit.common.orm.field.TextField;
+import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 
@@ -31,7 +24,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
  */
 public class GitProviderModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "git_provider");
+    public static final Identifier MODEL_ID = HohenheimIds.id("git_provider");
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
@@ -45,7 +38,7 @@ public class GitProviderModel extends Model {
     // ONE discriminator over the kind registry: values enumerate it live, so a new kind is
     // one GitProviderKind class and no edit here. Stored value = "hohenheim:<kind>".
     public static final EnumField KIND = SCHEMA.addField(
-        RegistryEnumField.builder("kind")
+        RegistryMemberField.builder("kind")
             .registry(GitProviderKindRegistry.REGISTRY)
             // Required on the FIELD, not on one form: the kind selects the auth scheme and
             // the base-url policy, so every writer (admin form, /manage projection, API)
@@ -75,6 +68,20 @@ public class GitProviderModel extends Model {
     public static final StringField BASE_URL = SCHEMA.addField(StringField.builder().name("base_url")
         .label(HohenheimFormCopy.label("provider_base_url"))
         .help(HohenheimFormCopy.help("provider_base_url"))
+        .build());
+
+    /**
+     * Whether {@link #BASE_URL} was last set by the system tier ({@code hohenheim.admin.system} or declared system
+     * work), the one fact that lets an operator-owned provider's API calls reach any address; never written by a form,
+     * only by OperatorTrustedWrites' write hook.
+     *
+     * AIDEV-NOTE: reach is decided by WHO SET the target, not only by ownership at fetch time (decided 2026-10-02):
+     * ownership changes where no write hook sees it (a revoked grant, a deleted tenant, a cascade), so a target a
+     * tenant or delegate set stays unmarked and is never dialled with any-address reach after the record becomes
+     * operator-owned. M011 marked every row stored before the rule.
+     */
+    public static final BooleanField TARGET_TRUSTED = SCHEMA.addField(BooleanField.builder("target_trusted")
+        .defaultValue(false)
         .build());
 
     /** Personal/deploy access token; the fallback credential when no App is configured. */

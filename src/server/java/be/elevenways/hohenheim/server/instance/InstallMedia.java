@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -10,7 +11,6 @@ import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.async.ProgressSink;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.UrlPolicy;
@@ -124,12 +124,12 @@ public final class InstallMedia {
         requireName(name);
         String problem = FETCH_POLICY.problemOf(url);
         if (problem != null) {
-            throw Violations.ofField("url", url, violationText("media_url_invalid"));
+            throw Violations.ofField("url", url, HohenheimViolations.text("media_url_invalid"));
         }
         // The named refusal, before any daemon contact: the fetcher asks the SAME guard
         // again per hop, so this is a message, never the only gate.
         if (OutboundUrlGuard.PUBLIC_INTERNET.check(url) instanceof OutboundUrlGuard.Refused) {
-            throw Violations.ofField("url", url, violationText("media_url_not_public"));
+            throw Violations.ofField("url", url, HohenheimViolations.text("media_url_not_public"));
         }
         try {
             IncusClient incus = clientOf(server);
@@ -137,9 +137,9 @@ public final class InstallMedia {
         } catch (IOException e) {
             Blast.log("MEDIA: checking", name, "on",
                 server.get(ServerModel.NAME), "failed -", e.getMessage());
-            throw Violations.ofForm(violationText("media_fetch_failed")
+            throw Violations.ofForm(HohenheimViolations.text("media_fetch_failed")
                 .withArg("media", name)
-                .withArg("reason", e.getMessage() != null ? e.getMessage() : e.toString()));
+                .withArg("reason", HohenheimViolations.reasonOf(e)));
         }
     }
 
@@ -200,9 +200,9 @@ public final class InstallMedia {
         } catch (IOException e) {
             Blast.log("MEDIA: importing", name, "onto",
                 server.get(ServerModel.NAME), "failed -", e.getMessage());
-            throw Violations.ofForm(violationText("media_fetch_failed")
+            throw Violations.ofForm(HohenheimViolations.text("media_fetch_failed")
                 .withArg("media", name)
-                .withArg("reason", e.getMessage() != null ? e.getMessage() : e.toString()));
+                .withArg("reason", HohenheimViolations.reasonOf(e)));
         }
     }
 
@@ -217,7 +217,7 @@ public final class InstallMedia {
         requireName(name);
         List<String> holders = referencingInstances(server, name);
         if (!holders.isEmpty()) {
-            throw Violations.ofForm(violationText("media_in_use")
+            throw Violations.ofForm(HohenheimViolations.text("media_in_use")
                 .withArg("media", name)
                 .withArg("instances", String.join(", ", holders)));
         }
@@ -230,9 +230,9 @@ public final class InstallMedia {
                     + pool + "' after its delete was accepted");
             }
         } catch (IOException e) {
-            throw Violations.ofForm(violationText("media_delete_failed")
+            throw Violations.ofForm(HohenheimViolations.text("media_delete_failed")
                 .withArg("media", name)
-                .withArg("reason", e.getMessage() != null ? e.getMessage() : e.toString()));
+                .withArg("reason", HohenheimViolations.reasonOf(e)));
         }
     }
 
@@ -361,7 +361,7 @@ public final class InstallMedia {
     private static void requireAbsent(@NonNull IncusClient incus, @NonNull String pool,
                                       @NonNull String name) throws IOException {
         if (incus.customVolume(pool, name) != null) {
-            throw Violations.ofField("name", name, violationText("media_exists")
+            throw Violations.ofField("name", name, HohenheimViolations.text("media_exists")
                 .withArg("media", name));
         }
     }
@@ -377,12 +377,9 @@ public final class InstallMedia {
 
     private static void requireName(@NonNull String name) {
         if (!name.matches(NAME_PATTERN)) {
-            throw Violations.ofField("name", name, violationText("media_name_invalid")
+            throw Violations.ofField("name", name, HohenheimViolations.text("media_name_invalid")
                 .withArg("name", name));
         }
     }
 
-    private static Microcopy violationText(String key) {
-        return Microcopy.of(key).withFilter("scope", "violations");
-    }
 }

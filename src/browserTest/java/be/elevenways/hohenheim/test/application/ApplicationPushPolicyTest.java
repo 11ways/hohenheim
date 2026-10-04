@@ -1,22 +1,23 @@
 package be.elevenways.hohenheim.test.application;
 
+import be.elevenways.hohenheim.server.cms.InstanceParts;
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.application.ApplicationDeploys;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
-import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.PlacedActionClicks;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.zenit.cms.common.action.ActionContext;
-import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
@@ -25,8 +26,8 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -57,17 +58,6 @@ class ApplicationPushPolicyTest {
     private static Integer savedProbeTimeout;
     private static Integer savedProbeInterval;
     private static Integer savedDrain;
-
-    /** One of the panel's own row actions, found by id the way the record page finds it. */
-    @SuppressWarnings("unchecked")
-    private static RowAction.Invoke<Row> panelAction(InstanceResource panel, String path) {
-        for (RowAction<Row> action : panel.rowActions()) {
-            if (path.equals(action.id().getPath())) {
-                return (RowAction.Invoke<Row>) action;
-            }
-        }
-        throw new AssertionError("the instance panel offers no " + path);
-    }
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -220,18 +210,17 @@ class ApplicationPushPolicyTest {
                 .isTrue();
             int applicationId = application("row-action-app");
             try {
-                // 1. The panel's OWN row action, invoked directly: no HTTP, no markup.
-                InstanceResource panel = new InstanceResource();
-                RowAction.Invoke<Row> deploy = panelAction(panel, "deploy_instance");
+                // 1. The panel's OWN placed deploy, run as its invoke route runs it: no HTTP, no markup.
+                PanelAction<Row> deploy = PlacedActionClicks.placed(
+                    InstanceParts.admin(), "start_instance");
                 Row row = Models.get(InstanceModel.class).findById(applicationId);
-                Accountability.runAs(operator("42"), () -> deploy.handler().apply(row,
-                    ActionContext.of(AccessContext.anonymous())));
+                Accountability.runAs(operator("42"), () -> PlacedActionClicks.click(deploy, row));
 
                 // 2. The deploy is recorded as MANUAL -- the trigger that describes a
                 //    person standing there asking, and the one whose permission to start
                 //    a stopped workload is a decision rather than a default.
                 List<Row> deployed = activityFor(applicationId,
-                    InstanceService.ACTIVITY_DEPLOY_ACTION);
+                    HohenheimActivityAction.DEPLOYED.id().toString());
                 assertThat(deployed)
                     .as("step 2: the row action recorded the deploy")
                     .isNotEmpty();
@@ -362,7 +351,7 @@ class ApplicationPushPolicyTest {
     }
 
     private static Accountability operator(String id) {
-        return new Accountability(id, "Operator " + id, "10.0.0.1", "junit",
-            Accountability.ORIGIN_WEB);
+        return new Accountability(id, PrincipalRef.account(Long.parseLong(id)).storedKind(), "Operator " + id,
+            "10.0.0.1", "junit", Accountability.ORIGIN_WEB);
     }
 }

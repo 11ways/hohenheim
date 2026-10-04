@@ -1,202 +1,131 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.activity.ActivityRecordCell;
-import be.elevenways.hohenheim.server.auth.GrantSubjects;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.zenit.common.routing.BoundEndpoint;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.zenit.cms.common.render.activity.ActivityPresentation;
-import be.elevenways.zenit.cms.common.resource.ActivityResource;
-import be.elevenways.zenit.cms.common.resource.ListChrome;
+import be.elevenways.protoblast.common.typed.CoreTypes;
+import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.FilterState;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
-import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
+import be.elevenways.zenit.cms.server.resource.ActivityAdmin;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ActivityText;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.routing.BoundEndpoint;
 import be.elevenways.zenit.common.security.Accountability;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
- * The framework activity log with a hohenheim-authored sidebar description, a readable
- * verb and subject, and a list that opens on what a PERSON did.
+ * The framework activity log composed for this panel: a hohenheim-authored sidebar description, a readable subject, a
+ * record column linking to what it names, and a list that opens on what a PERSON did.
  *
- * AIDEV-NOTE: group, order, slug and every behaviour stay the framework's -- this exists
- * only because {@code description()} is a per-panel editorial decision and the shared
- * resource cannot know which sentence fits this product.
+ * AIDEV-NOTE: group, order, slug, search, the actor and verb cells and the detail stay the framework's
+ * ({@link ActivityAdmin#builder}); this composes only the editorial parts the shared log cannot know. Still named
+ * AdminActivityResource so its callers keep their spelling; it is a parts holder, never instantiated.
+ *
+ * @author Jelle De Loecker
+ * @since  0.9.0
  */
-public final class AdminActivityResource extends ActivityResource {
+public final class AdminActivityResource {
 
     /** The cell renderer for the record column; see {@code cms/cell/activity-record.hwk}. */
-    private static final String RECORD_RENDERER = "hohenheim:cms/cell/activity-record";
+    private static final String RECORD_RENDERER = HohenheimTemplateIds.CELL_ACTIVITY_RECORD;
 
     /**
-     * The default scope: everything a PERSON did, background writes excluded --
-     * declared through {@code Resource.defaultFilterState()} as a RuleText
-     * expression on the origin TEXT filter, so the panel renders it as a
-     * removable chip and the framework owns every override/clear rule.
+     * The default scope: everything a PERSON did, background writes excluded -- a RuleText expression on the origin
+     * TEXT filter, so the panel renders it as a removable chip and the framework owns every override/clear rule.
      *
-     * AIDEV-NOTE: the discriminator is the ORIGIN, never the verb. Several verbs
-     * ("deployed", "stopped", "reaped_controller_objects", "restored_backup",
-     * "app_updated") are written by BOTH the operator lane and a sweeper, so a verb
-     * denylist would hide real operator actions. The "is empty" arm keeps a row whose
-     * origin was never stamped visible: unknown provenance is not background
-     * provenance, and IS_EMPTY on a TEXT variable matches null as well as "".
+     * AIDEV-NOTE: the discriminator is the ORIGIN, never the verb. Several verbs ("deployed", "stopped",
+     * "reaped_controller_objects", "restored_backup", "app_updated") are written by BOTH the operator lane and a
+     * sweeper, so a verb denylist would hide real operator actions. The "is empty" arm keeps a row whose origin was
+     * never stamped visible: unknown provenance is not background provenance, and IS_EMPTY on a TEXT variable matches
+     * null as well as "".
      */
     private static final String HIDE_BACKGROUND_EXPRESSION =
         ActivityModel.ORIGIN.getName() + " != \"" + Accountability.ORIGIN_SYSTEM + "\" or "
             + ActivityModel.ORIGIN.getName() + " is empty";
 
     /**
-     * The framework's own columns, with the two that were unreadable given a renderer:
-     * the verb resolves through {@link ActivityPresentation} in {@link #cellValue} and the
-     * record id renders as a link to the record it names.
+     * The framework's own columns with the record id given a renderer, and every filter an operator needs to reach
+     * one record.
      *
-     * AIDEV-NOTE: the column list is COPIED from the framework resource rather than derived,
-     * because {@code TableSpec} has no {@code toBuilder()}. A column added upstream will not
-     * appear here -- the browser test asserts the two spellings still describe the same
-     * columns, so the copy cannot drift silently.
+     * AIDEV-NOTE: the column list is COPIED from {@link ActivityAdmin#table()} rather than derived, because
+     * {@code TableSpec} has no {@code toBuilder()}; the browser test asserts the two still describe the same columns.
      */
-    private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
+    private static final TableSpec<Row> TABLE = TableSpec.<Row>builder()
         .column(ColumnSpec.fromField(ActivityModel.CREATED_AT).build())
-        .column(ColumnSpec.fromField(ActivityModel.ACTOR_LABEL).build())
+        .column(ColumnSpec.fromField(ActivityModel.ACTOR).sortable().build())
         .column(ColumnSpec.fromField(ActivityModel.ACTION).filterable().build())
         .column(ColumnSpec.fromField(ActivityModel.MODEL).filterable().build())
         .column(ColumnSpec.fromField(ActivityModel.RECORD_ID)
             .renderer(RECORD_RENDERER).filterable().build())
         .column(ColumnSpec.fromField(ActivityModel.ORIGIN).filterable().build())
-        .filter(FilterSpec.forField(ActivityModel.MODEL, FilterSpec.Kind.TEXT).build())
-        .filter(FilterSpec.forField(ActivityModel.RECORD_ID, FilterSpec.Kind.TEXT).build())
-        .filter(FilterSpec.forField(ActivityModel.ACTION, FilterSpec.Kind.TEXT).build())
-        .filter(FilterSpec.forField(ActivityModel.ACTOR_LABEL, FilterSpec.Kind.TEXT).build())
-        .filter(FilterSpec.forField(ActivityModel.ORIGIN, FilterSpec.Kind.TEXT).build())
+        .filter(FilterSpec.leaf(ActivityModel.MODEL, CoreTypes.CONTAINS).build())
+        .filter(FilterSpec.leaf(ActivityModel.RECORD_ID, CoreTypes.CONTAINS).build())
+        .filter(FilterSpec.leaf(ActivityModel.ACTION, CoreTypes.CONTAINS).build())
+        .filter(FilterSpec.forPrincipal(ActivityModel.ACTOR_PRINCIPAL).build())
+        .filter(FilterSpec.leaf(ActivityModel.ORIGIN, CoreTypes.CONTAINS).build())
         .defaultSort(SortSpec.desc(ActivityModel.CREATED_AT.getName()))
         .build();
 
+    private AdminActivityResource() {
+    }
+
     /**
-     * The notice {@code /admin/activity} shows while recording is off, for any other
-     * surface rendering the same log; null while recording is on.
-     *
-     * AIDEV-NOTE: asks the framework resource's own {@code emptyDescription()} instead of
-     * reading {@code activity.enabled} a second time -- the fact and the sentence keep one
-     * declaring home, so a dashboard band can never disagree with the activity page about
-     * whether anything is being written down.
+     * @return the admin panel's activity log: the widest table in the panel (the column gear stays, but an audit trail
+     *         is read forwards from now), opening on operator activity -- a DEFAULT the operator removes or replaces,
+     *         never a base criteria they cannot escape
      */
+    public static @NonNull PanelResource<Row> admin() {
+        return ActivityAdmin.builder(NavGroup.SYSTEM, 90)
+            .description(Microcopy.of("nav_hint").withFilter("scope", "activity"))
+            .reads(ActivityAdmin.reads(AdminActivityResource::cell))
+            .list(ActivityAdmin.list(TABLE)
+                .chrome(CmsSupport.WIDE_LIST)
+                .defaultFilter(FilterState.empty().with(ActivityModel.ORIGIN.getName(), HIDE_BACKGROUND_EXPRESSION),
+                    filter -> ActivityModel.ORIGIN.getName().equals(filter)
+                        ? Microcopy.of("people_only").withFilter("scope", "activity") : null)
+                .build())
+            .build();
+    }
+
+    /** @return the notice the activity page shows while recording is off, null while recording is on */
     public static @Nullable Microcopy recordingNotice() {
-        return new AdminActivityResource().emptyDescription();
-    }
-
-    @Override
-    public @Nullable Microcopy description() {
-        return Microcopy.of("nav_hint").withFilter("scope", "activity");
-    }
-
-    @Override
-    public @NonNull TableSpec<Row> tableSpec() {
-        return this.tableSpec;
+        return ActivityAdmin.recordingNotice();
     }
 
     /**
-     * The actor column names a PERSON even when the entry stored no label, the verb reads
-     * as a localized word, the model token reads as its bare name, and the record id
-     * becomes a link to the record it names.
-     *
-     * AIDEV-NOTE: an entry carries the display name AS IT WAS at the time of acting, and
-     * that stays authoritative whenever it is there -- an audit trail must not rewrite who
-     * a row said acted. Only the blank case is resolved, and it is resolved by
-     * {@link HohenheimAccess#subjectLabel} rather than a lookup spelled here, because the
-     * stored actor is a bare principal id and every other surface in this panel renders
-     * that id through the packed {@code user:5} vocabulary. Unresolvable renders the raw
-     * token, which is the shared home's deliberate answer for a deleted user.
+     * The model token reads as its bare name and the record id becomes a link to the record it names; every other
+     * column keeps the framework's cell (its actor and verb names).
      */
-    @Override
-    public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
-
+    private static @Nullable Object cell(@NonNull Row row, @NonNull ColumnSpec column) {
         String name = column.name();
-
-        if (ActivityModel.ACTION.getName().equals(name)) {
-            String action = row.get(ActivityModel.ACTION);
-            // ActivityPresentation.label falls open to the raw verb for a key nobody
-            // registered, which is what the detail page and the dashboard feed show too.
-            return action == null || action.isBlank() ? null : ActivityPresentation.label(action);
-        }
-
         if (ActivityModel.MODEL.getName().equals(name)) {
-            String token = row.get(ActivityModel.MODEL);
-            String humanized = ActivityText.humanizeModelToken(token);
+            String humanized = ActivityText.humanizeModelToken(row.get(ActivityModel.MODEL));
             return humanized.isEmpty() ? null : humanized;
         }
-
         if (ActivityModel.RECORD_ID.getName().equals(name)) {
             return recordCellOf(row);
         }
-
-        Object value = super.cellValue(row, column);
-        if (!ActivityModel.ACTOR_LABEL.getName().equals(name)
-                || (value instanceof String label && !label.isBlank())) {
-            return value;
-        }
-        String actor = row.get(ActivityModel.ACTOR);
-        if (actor == null || actor.isBlank()) {
-            return value;
-        }
-        // The actor column is a free-form principal id: a numeric one is a user, spelled
-        // through the one subject-token home; anything else renders as itself.
-        PrimitiveCoercion.Result<Long> userId = PrimitiveCoercion.toLong(actor,
-            PrimitiveCoercion.NumberRule.EXACT_VALUE, PrimitiveCoercion.TextRule.TRIMMED_BLANK_IS_NULL);
-        return userId.ok() && userId.value() != null
-            ? HohenheimAccess.subjectLabel(GrantSubjects.userToken(userId.value()))
-            : actor;
-    }
-
-    /**
-     * The list opens on operator activity: the framework applies this while the
-     * origin filter is unset, chips it, lets an explicit origin value (or the
-     * rule/query tiers) replace it, and persists the chip's removal -- typing
-     * "system" into the origin filter has to show the sweepers, so this is a
-     * DEFAULT, never a base criteria the operator cannot escape.
-     */
-    @Override
-    public @NonNull FilterState defaultFilterState() {
-        return FilterState.empty().with(ActivityModel.ORIGIN.getName(), HIDE_BACKGROUND_EXPRESSION);
-    }
-
-    /** The chip reads a sentence, not the RuleText expression behind it. */
-    @Override
-    public @Nullable Microcopy defaultFilterDescription(@NonNull String filterName) {
-        if (!ActivityModel.ORIGIN.getName().equals(filterName)) {
-            return null;
-        }
-        return Microcopy.of("people_only").withFilter("scope", "activity");
-    }
-
-    /**
-     * The widest table in the panel and the highest row count, so the column gear stays --
-     * but an audit trail is read forwards from now, never through a saved view.
-     */
-    @Override
-    public @NonNull ListChrome listChrome() {
-        return CmsSupport.WIDE_LIST;
+        return null;
     }
 
     /** The record column's cell: the stored title, linked when a resource serves the model. */
     private static @Nullable ActivityRecordCell recordCellOf(@NonNull Row row) {
-
         String recordId = row.get(ActivityModel.RECORD_ID);
         if (recordId == null || recordId.isBlank()) {
             return null;
         }
         String title = row.get(ActivityModel.RECORD_TITLE);
         String label = title != null && !title.isBlank() ? title : recordId;
-        // The admin-panel walk (AdminRecordLinks): this list lives in /admin, so the record
-        // links into /admin -- never into the /manage narrowing of the same model, which the
-        // framework's panel-aware walk would fall back to when /admin serves no such model.
-        BoundEndpoint<?> target = AdminRecordLinks.detailForToken(
-            row.get(ActivityModel.MODEL), recordId);
+        // The admin-panel walk (AdminRecordLinks): this list lives in /admin, so the record links into /admin -- never
+        // into the /manage narrowing of the same model, which the panel-aware walk would fall back to.
+        BoundEndpoint<?> target = AdminRecordLinks.detailForToken(row.get(ActivityModel.MODEL), recordId);
         return new ActivityRecordCell(label, target != null ? target.toUrl() : null);
     }
 }

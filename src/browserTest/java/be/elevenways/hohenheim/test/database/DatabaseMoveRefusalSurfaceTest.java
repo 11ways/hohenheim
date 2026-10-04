@@ -44,19 +44,18 @@ class DatabaseMoveRefusalSurfaceTest extends HohenheimTestBase {
             DatabaseModel.STATUS_ACTIVE, DatabaseModel.PLACEMENT_DEDICATED, null);
         assertThat(DatabaseService.moveRefusal(record))
             .as("step 1: the move is offered for this record").isNull();
-        popFlash();
 
         // 2. Driving the action answers the page lane (a redirect or a render), never a 500.
-        var moved = adminPostForm("/admin/databases/" + record.get(DatabaseModel.ID)
-            + "/action/move_database_shared", confirmed(""));
+        var moved = adminPostForm("/admin/databases/invoke/hohenheim.move_database_shared?ids="
+            + record.get(DatabaseModel.ID), confirmed(""));
         assertThat(moved.statusCode())
             .as("step 2: the refused claim is not a server error: " + moved.body())
             .isIn(200, 302, 303);
 
         // 3. The refusal is an ERROR flash naming the claim's own reason.
-        var flash = popFlash();
+        var flash = popFlash(moved);
         assertThat(flash).as("step 3: a flash was stashed").isNotNull();
-        assertThat(flash.level()).as("step 3: it is an error").isEqualTo(FlashLevel.ERROR);
+        assertThat(flash.toast()).as("step 3: it is an error").isEqualTo(FlashLevel.ERROR.toast());
         assertThat(flash.message().key())
             .as("step 3: naming why the claim refused").isEqualTo("database_logical_identifier");
 

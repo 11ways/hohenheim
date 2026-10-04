@@ -1,15 +1,21 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.net.IpRanges;
+import be.elevenways.zenit.common.orm.behaviour.TreeBehaviour;
+import be.elevenways.zenit.common.orm.behaviour.TreeDeletePolicy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -35,7 +41,7 @@ import java.util.Map;
  */
 public class AccessRuleModel extends Model {
 
-    public static final Identifier MODEL_ID = Identifier.of("hohenheim", "access_rule");
+    public static final Identifier MODEL_ID = HohenheimIds.id("access_rule");
     public static final Schema SCHEMA = new Schema();
 
     /** A nested group of rules, combined by its own satisfy mode. */
@@ -54,7 +60,7 @@ public class AccessRuleModel extends Model {
     public static final String TYPE_AUTH_PROVIDER = "auth_provider";
 
     /** PermissionSuggestionSources key: the realm of the provider THIS rule points at. */
-    public static final String RULE_PROVIDER_SUGGESTION_SOURCE = "hohenheim:access_rule_realm";
+    public static final Identifier RULE_PROVIDER_SUGGESTION_SOURCE = HohenheimIds.id("access_rule_realm");
 
     // --- Per-type sub-schemas (the ONLY home for type-specific fields) ---
 
@@ -62,10 +68,10 @@ public class AccessRuleModel extends Model {
     public static final EnumField GROUP_SATISFY = GROUP_DATA_SCHEMA.addField(EnumField.builder("satisfy")
         .value(AccessListModel.SATISFY_ANY, v -> v.displayName("Any")
             .label(Microcopy.of("any").withFilter("scope", "access_satisfy"))
-            .icon("check").color("blue"))
+            .icon("check").color(ColorHue.BLUE))
         .value(AccessListModel.SATISFY_ALL, v -> v.displayName("All")
             .label(Microcopy.of("all").withFilter("scope", "access_satisfy"))
-            .icon("list-check").color("orange"))
+            .icon("list-check").color(ColorHue.ORANGE))
         .defaultValue(AccessListModel.SATISFY_ANY)
         .label(HohenheimFormCopy.label("satisfy"))
         .help(HohenheimFormCopy.help("rule_satisfy"))
@@ -122,25 +128,29 @@ public class AccessRuleModel extends Model {
     /** The enclosing group row, or null for a direct child of the list's implicit root. */
     public static final IntegerField PARENT_ID = SCHEMA.addField(
         IntegerField.builder().name("parent_id").filterable(false).build());
+    /**
+     * The rule's position among its own siblings, dense from 0; null on a rule not placed yet, which the tree appends
+     * after its siblings. Written by {@link #TREE} only.
+     */
     public static final IntegerField SORT = SCHEMA.addField(
-        IntegerField.builder().name("sort").defaultValue(0).build());
+        IntegerField.builder().name("sort").build());
     public static final EnumField TYPE = SCHEMA.addField(EnumField.builder("type")
         .label(HohenheimFormCopy.label("rule_type")).help(HohenheimFormCopy.help("rule_type"))
         .value(TYPE_GROUP, v -> v.displayName("Group")
             .label(Microcopy.of("group").withFilter("scope", "access_rule_type"))
-            .icon("layer-group").color("gray").schema(GROUP_DATA_SCHEMA))
+            .icon("layer-group").color(ColorHue.GRAY).schema(GROUP_DATA_SCHEMA))
         .value(TYPE_BASIC_AUTH, v -> v.displayName("Basic auth")
             .label(Microcopy.of("basic_auth").withFilter("scope", "access_rule_type"))
-            .icon("lock").color("amber").schema(BASIC_AUTH_DATA_SCHEMA))
+            .icon("lock").color(ColorHue.AMBER).schema(BASIC_AUTH_DATA_SCHEMA))
         .value(TYPE_IP_ALLOW, v -> v.displayName("Allowed network")
             .label(Microcopy.of("ip_allow").withFilter("scope", "access_rule_type"))
-            .icon("check").color("green").schema(NETWORK_DATA_SCHEMA))
+            .icon("check").color(ColorHue.GREEN).schema(NETWORK_DATA_SCHEMA))
         .value(TYPE_IP_DENY, v -> v.displayName("Denied network")
             .label(Microcopy.of("ip_deny").withFilter("scope", "access_rule_type"))
-            .icon("ban").color("red").schema(NETWORK_DATA_SCHEMA))
+            .icon("ban").color(ColorHue.RED).schema(NETWORK_DATA_SCHEMA))
         .value(TYPE_AUTH_PROVIDER, v -> v.displayName("Auth provider")
             .label(Microcopy.of("auth_provider").withFilter("scope", "access_rule_type"))
-            .icon("shield-halved").color("indigo").schema(AUTH_PROVIDER_DATA_SCHEMA))
+            .icon("shield-halved").color(ColorHue.INDIGO).schema(AUTH_PROVIDER_DATA_SCHEMA))
         .build());
 
     /** Type-specific configuration, shaped by the sub-schema the rule's TYPE declares. */
@@ -176,15 +186,15 @@ public class AccessRuleModel extends Model {
             .build());
 
     /**
-     * The enclosing group as a RELATION, so a query can name "the children of these rules"
-     * without materializing ids -- what the delete cascade asks.
+     * THE rule tree: one forest per access list (the list is the scope), dense sibling positions, a cycle guard, and a
+     * delete that takes the subtree with it -- an orphaned rule is a policy the proxy cannot reconstruct, and
+     * AccessRuleTree refuses (denies) a list that carries one.
      */
-    public static final BelongsTo<AccessRuleModel> PARENT = SCHEMA.addRelation(
-        BelongsTo.to(AccessRuleModel.class)
-            .name("parent")
-            .localKey(PARENT_ID)
-            .remoteKey(ID)
-            .build());
+    public static final TreeBehaviour TREE = SCHEMA.addBehaviour(TreeBehaviour.builder(PARENT_ID)
+        .position(SORT)
+        .scope(ACCESS_LIST_ID)
+        .onDelete(TreeDeletePolicy.CASCADE)
+        .build());
 
     /**
      * THE rule-type vocabulary, DERIVED from {@link #TYPE}'s declared values rather than
@@ -207,7 +217,7 @@ public class AccessRuleModel extends Model {
                 String type = row.get(TYPE);
                 if (type == null || !TYPE.isValidValue(type)) {
                     throw Violations.ofField(TYPE.getName(), type,
-                        Microcopy.of("access_rule_type_invalid").withFilter("scope", "violations"));
+                        HohenheimViolations.text("access_rule_type_invalid"));
                 }
             }
             validateData(row.get(TYPE), row.get(DATA), Boolean.TRUE.equals(row.get(ENABLED)));
@@ -233,45 +243,45 @@ public class AccessRuleModel extends Model {
         Map<?, ?> map = data instanceof Map<?, ?> values ? values : Map.of();
         switch (type == null ? "" : type) {
             case TYPE_GROUP -> {
-                String satisfy = text(map.get(GROUP_SATISFY.getName()));
+                String satisfy = Texts.trimmedOrNull(map.get(GROUP_SATISFY.getName()));
                 if (satisfy != null && !GROUP_SATISFY.isValidValue(satisfy)) {
                     throw Violations.ofField("data." + GROUP_SATISFY.getName(), satisfy,
-                        Microcopy.of("access_rule_satisfy_invalid").withFilter("scope", "violations"));
+                        HohenheimViolations.text("access_rule_satisfy_invalid"));
                 }
             }
             case TYPE_IP_ALLOW, TYPE_IP_DENY -> {
-                String network = text(map.get(NETWORK.getName()));
+                String network = Texts.trimmedOrNull(map.get(NETWORK.getName()));
                 if (network == null ? enabled : parseNetwork(network) == null) {
                     throw Violations.ofField("data." + NETWORK.getName(),
                         map.get(NETWORK.getName()),
-                        Microcopy.of("access_rule_network_invalid").withFilter("scope", "violations"));
+                        HohenheimViolations.text("access_rule_network_invalid"));
                 }
             }
             case TYPE_BASIC_AUTH -> {
-                String username = text(map.get(BASIC_AUTH_USERNAME.getName()));
+                String username = Texts.trimmedOrNull(map.get(BASIC_AUTH_USERNAME.getName()));
                 // A colon ENDS the userid in the credential a browser sends (RFC 7617),
                 // so a username carrying one can never be presented back to this rule.
                 if (username != null && username.indexOf(':') >= 0) {
                     throw Violations.ofField("data." + BASIC_AUTH_USERNAME.getName(), username,
-                        Microcopy.of("access_rule_username_invalid").withFilter("scope", "violations"));
+                        HohenheimViolations.text("access_rule_username_invalid"));
                 }
                 if (enabled && (username == null
-                        || text(map.get(BASIC_AUTH_PASSWORD.getName())) == null)) {
+                        || Texts.trimmedOrNull(map.get(BASIC_AUTH_PASSWORD.getName())) == null)) {
                     throw Violations.ofField("data." + BASIC_AUTH_USERNAME.getName(),
                         map.get(BASIC_AUTH_USERNAME.getName()),
-                        Microcopy.of("access_rule_credential_incomplete").withFilter("scope", "violations"));
+                        HohenheimViolations.text("access_rule_credential_incomplete"));
                 }
             }
             case TYPE_AUTH_PROVIDER -> {
                 Object raw = map.get(PROVIDER_ID.getName());
                 Integer providerId = providerId(raw);
-                if (providerId == null && text(raw) != null) {
+                if (providerId == null && Texts.trimmedOrNull(raw) != null) {
                     throw Violations.ofField("data." + PROVIDER_ID.getName(), raw,
-                        Microcopy.of("access_rule_provider_invalid").withFilter("scope", "violations"));
+                        HohenheimViolations.text("access_rule_provider_invalid"));
                 }
                 if (enabled && providerId == null) {
                     throw Violations.ofField("data." + PROVIDER_ID.getName(), null,
-                        Microcopy.of("access_rule_provider_missing").withFilter("scope", "violations"));
+                        HohenheimViolations.text("access_rule_provider_missing"));
                 }
             }
             default -> {
@@ -285,7 +295,7 @@ public class AccessRuleModel extends Model {
         if (value instanceof Number number) {
             return number.intValue() > 0 ? number.intValue() : null;
         }
-        String text = text(value);
+        String text = Texts.trimmedOrNull(value);
         if (text == null) {
             return null;
         }
@@ -303,7 +313,7 @@ public class AccessRuleModel extends Model {
         StringBuilder text = new StringBuilder(type == null ? "" : type);
         for (String key : List.of(NETWORK.getName(), BASIC_AUTH_USERNAME.getName(),
                 PROVIDER_ID.getName(), PROVIDER_REQUIRED_PERMISSION.getName())) {
-            String value = text(map.get(key));
+            String value = Texts.trimmedOrNull(map.get(key));
             if (value != null) {
                 text.append(' ').append(value);
             }
@@ -338,15 +348,6 @@ public class AccessRuleModel extends Model {
         } catch (IllegalArgumentException malformed) {
             return null;
         }
-    }
-
-    /** @return the trimmed text, or null when the value is absent or blank */
-    public static @Nullable String text(@Nullable Object value) {
-        if (value == null) {
-            return null;
-        }
-        String string = String.valueOf(value).trim();
-        return string.isEmpty() ? null : string;
     }
 
     /** The rule's type-specific data as a map (never null). */

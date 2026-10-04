@@ -2,15 +2,12 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.model.InstanceModel;
 
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
-import be.elevenways.hohenheim.server.cms.InstanceConsolePage;
 import be.elevenways.hohenheim.server.devtunnel.DevTunnelServerHandler;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceConsoleHandler;
-import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceShellHandler;
 import be.elevenways.hohenheim.server.instance.VmFramebufferHandler;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
@@ -19,8 +16,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.routing.ReturnPath;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.data.RecordSourceGate;
 import be.elevenways.zenit.server.http.ReturnTarget;
@@ -186,36 +182,6 @@ final class SiteControlHandlers {
         HohenheimEndpoints.VM_FRAMEBUFFER.setHandlerFactory(session ->
             new VmFramebufferHandler(session,
                 session.getParameter(HohenheimEndpoints.INSTANCE_ID)));
-
-        HohenheimEndpoints.INSTANCE_CONSOLE_COMMAND.setHandler(conduit -> {
-            Integer instanceId = conduit.getParameter(HohenheimEndpoints.INSTANCE_ID);
-            // The 403 is the UX half; InstanceConsoles.sendCommand asks the same CONSOLE
-            // capability again on the funnel, so a direct POST is refused either way.
-            if (instanceId == null || !HohenheimAccess.hasInstanceCapability(
-                    RecordSourceGate.accessContextOf(conduit), instanceId,
-                    HohenheimAccess.CONSOLE)) {
-                conduit.forbidden();
-                return null;
-            }
-            String backUrl = ReturnTarget.or(ReturnTarget.read(conduit),
-                CmsRoutes.subpage(HandlerSupport.ADMIN, HohenheimSlugs.INSTANCES, instanceId,
-                    InstanceConsolePage.SLUG).toUrl());
-            String command = HandlerSupport.formMap(conduit)
-                .getOrDefault("command", "").strip();
-            if (command.isEmpty()) {
-                return HandlerSupport.redirectUntyped(backUrl);
-            }
-            try {
-                InstanceConsoles.sendCommand(instanceId, command);
-            } catch (Violations refused) {
-                // NEVER a silent swallow: the refusal rides the session flash.
-                HohenheimFlash.error(conduit, HandlerSupport.violationMessage(refused));
-                return HandlerSupport.redirectUntyped(backUrl);
-            }
-            ActivityLog.record(Models.get(InstanceModel.class),
-                instanceId, "console_command", command);
-            return HandlerSupport.redirectUntyped(backUrl);
-        });
     }
 
     static void initDevTunnel() {
@@ -228,7 +194,7 @@ final class SiteControlHandlers {
      * to the admin page.
      */
     private static String deploymentsPageUrl(Conduit conduit, Integer instanceId) {
-        return ReturnTarget.or(ReturnTarget.read(conduit),
+        return ReturnPath.pathOr(ReturnTarget.readPath(conduit),
             CmsRoutes.subpage(HandlerSupport.ADMIN, HohenheimSlugs.INSTANCES, instanceId,
                 "deployments").toUrl());
     }

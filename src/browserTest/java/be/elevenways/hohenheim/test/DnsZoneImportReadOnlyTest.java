@@ -3,9 +3,11 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.api.ApiConduits;
-import be.elevenways.hohenheim.server.cms.DnsRecordResource;
+import be.elevenways.hohenheim.server.cms.DnsRecordParts;
 import be.elevenways.hohenheim.server.cms.DnsZoneFilePage;
-import be.elevenways.hohenheim.server.cms.DnsZoneResource;
+import be.elevenways.hohenheim.server.cms.DnsZoneParts;
+import be.elevenways.hohenheim.server.cms.SiteParts;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -13,11 +15,16 @@ import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelPeer;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.render.CmsRefusalCopy;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.ResourceReads;
+import be.elevenways.zenit.cms.common.resource.ResourceTabs;
+import be.elevenways.zenit.cms.common.resource.ResourceList;
+import be.elevenways.zenit.cms.server.page.CmsRecordSources;
+import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
-import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -26,7 +33,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.security.Permission;
+import be.elevenways.zenit.test.support.TestPermissions;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.Test;
@@ -59,18 +66,18 @@ class DnsZoneImportReadOnlyTest extends HohenheimTestBase {
 
         // 2. The import asks zenit-cms before it writes: a live zone in the operator panel takes it.
         AccessContext operator = AccessContext.of(TenantConduits.stubFor(adminPrincipal()));
-        DnsRecordResource records = new DnsRecordResource();
-        assertThatCode(() -> records.requireImportable(ApiConduits.adminPanel(), zoneId, operator))
+        assertThatCode(() -> DnsRecordParts.requireImportable(ApiConduits.adminPanel(), zoneId, operator))
             .as("step 2: a live zone takes an import").doesNotThrowAnyException();
 
         // 3. A zone read-only through a trashed record it belongs to is refused with the archived-parent refusal,
         //    the answer zenit-cms gives every record create there.
         int site = site("import-readonly-owner");
         Panel zonesUnderSites = new ZonesUnderSites(Map.of(zoneId, site));
-        assertThatCode(() -> records.requireImportable(zonesUnderSites, zoneId, operator))
+        CmsRecordSources.ensureRegistered(zonesUnderSites);
+        assertThatCode(() -> DnsRecordParts.requireImportable(zonesUnderSites, zoneId, operator))
             .as("step 3: under a live owner the zone takes an import").doesNotThrowAnyException();
         Models.get(SiteModel.class).delete(site);
-        assertThatThrownBy(() -> records.requireImportable(zonesUnderSites, zoneId, operator))
+        assertThatThrownBy(() -> DnsRecordParts.requireImportable(zonesUnderSites, zoneId, operator))
             .as("step 3: under a trashed owner the import is refused")
             .isInstanceOfSatisfying(AccessRefusedException.class, refused -> assertThat(refused.code())
                 .as("step 3: with the archived-parent refusal").isEqualTo(CmsRefusalCopy.ARCHIVED_PARENT));
@@ -93,7 +100,7 @@ class DnsZoneImportReadOnlyTest extends HohenheimTestBase {
     @SuppressWarnings("unchecked")
     private static Map<String, Object> renderZoneFileTab(int zoneId, boolean hostReadOnly) {
         Conduit conduit = TenantConduits.stubFor(adminPrincipal());
-        conduit.setAttribute(RecordScopedPage.RECORD_READ_ONLY, hostReadOnly);
+        conduit.setAttribute(RecordTab.RECORD_READ_ONLY, hostReadOnly);
         Row zone = Models.get(DnsZoneModel.class).findById(zoneId);
         return (Map<String, Object>) new DnsZoneFilePage().render(conduit, AccessContext.of(conduit), zone).get();
     }
@@ -101,58 +108,29 @@ class DnsZoneImportReadOnlyTest extends HohenheimTestBase {
     /** A panel where zones belong to sites: the shape under which a trashed record makes a zone read-only. */
     private static final class ZonesUnderSites extends Panel {
 
-        private final List<PanelPeer> peers;
+        private final List<PanelEntry> peers;
 
         ZonesUnderSites(Map<Integer, Integer> siteOfZone) {
-            super(Identifier.of("hohenheim-test", "zones_under_sites"), "zones-under-sites",
-                Microcopy.of("zones_under_sites"), Permission.of("hohenheim-test.zones_under_sites"));
-            this.peers = List.of(new Sites(), new SiteOwnedZones(siteOfZone));
+            super(Identifier.of("hohenheim_test", "zones_under_sites"), "zones-under-sites",
+                Microcopy.of("zones_under_sites"), TestPermissions.declared("hohenheim_test.zones_under_sites"));
+            PanelResource<Row> sites = SiteParts.admin();
+            PanelResource<Row> owner = PanelResource.builder(sites.id(), sites.slug(), sites.subject())
+                .label(sites.label()).reads(sites.reads()).list(sites.list()).form(sites.form())
+                .writes(sites.writes()).archive(sites.archive()).authority(sites.authority())
+                .tabs(ResourceTabs.none()).build();
+            this.peers = List.of(owner, PanelResource.builder(
+                    Identifier.of("hohenheim_test", "site_owned_zones"), DnsZoneParts.SLUG,
+                    SubjectType.record(DnsZoneModel.MODEL_ID))
+                .label(Microcopy.literal("Zones")).reads(ResourceReads.rows())
+                .list(ResourceList.rows(TableSpec.<Row>builder().columnFromField(DnsZoneModel.ORIGIN).build()).build())
+                .parent(ResourceParent.<Row>of(HohenheimSlugs.SITES,
+                    row -> siteOfZone.get(row.get(DnsZoneModel.ID))))
+                .build());
         }
 
         @Override
-        protected @NonNull List<PanelPeer> buildPeers() {
+        protected @NonNull List<PanelEntry> buildEntries() {
             return this.peers;
-        }
-    }
-
-    private static final class Sites extends RowResource {
-
-        @Override public @NonNull Identifier id() { return Identifier.of("hohenheim-test", "owner_sites"); }
-        @Override public @NonNull Microcopy label() { return Microcopy.of("owner_sites"); }
-        @Override public @NonNull String slug() { return "owner-sites"; }
-        @Override public @NonNull Model model() { return Models.get(SiteModel.class); }
-        @Override public @NonNull FormSpec formSpec() { return FormSpec.builder().add(SiteModel.NAME).build(); }
-
-        // Like SiteResource: a trashed site still loads, as ARCHIVED; without it the parent is merely
-        // unreachable, which zenit-cms refuses as out of scope, never as the trash.
-        @Override public boolean offersTrash() { return true; }
-
-        @Override
-        public @NonNull TableSpec<Row> tableSpec() {
-            return TableSpec.<Row>builder()
-                .column(ColumnSpec.fromField(SiteModel.NAME).build())
-                .filter(this.archivedFilter())
-                .build();
-        }
-    }
-
-    private static final class SiteOwnedZones extends RowResource {
-
-        private final Map<Integer, Integer> siteOfZone;
-
-        SiteOwnedZones(Map<Integer, Integer> siteOfZone) {
-            this.siteOfZone = siteOfZone;
-        }
-
-        @Override public @NonNull Identifier id() { return Identifier.of("hohenheim-test", "site_owned_zones"); }
-        @Override public @NonNull Microcopy label() { return Microcopy.of("site_owned_zones"); }
-        @Override public @NonNull String slug() { return DnsZoneResource.SLUG; }
-        @Override public @NonNull Model model() { return Models.get(DnsZoneModel.class); }
-        @Override public @NonNull FormSpec formSpec() { return FormSpec.builder().add(DnsZoneModel.ORIGIN).build(); }
-
-        @Override
-        public @Nullable ResourceParent<Row> parent() {
-            return ResourceParent.<Row>of("owner-sites", row -> this.siteOfZone.get(row.get(DnsZoneModel.ID)));
         }
     }
 
