@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
+import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -184,9 +185,8 @@ class ApplicationReleaseTest {
                     .as("step 4: which is not the retired release's port")
                     .isNotEqualTo(upstream.getPort());
 
-                await("step 4: the flip's operation completes after its drain window",
-                    () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
-                        latestOp(applicationId).get(ReleaseOperationModel.STATUS)));
+                await("step 4: the flip's operation completes after its drain window"
+                    + " and its drain lets go of the application", () -> settled(applicationId));
 
                 // 5. ROLLBACK flips back onto the RETAINED release, and the site follows
                 //    again. Nothing is rebuilt: the retained spec is digest-pinned.
@@ -218,9 +218,8 @@ class ApplicationReleaseTest {
                         + " generation the rollback bumped")
                     .isEqualTo(ApplicationUpstreams.resolve(applicationId).upstream());
 
-                await("step 5: the rollback completes after its drain window",
-                    () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
-                        latestOp(applicationId).get(ReleaseOperationModel.STATUS)));
+                await("step 5: the rollback completes after its drain window"
+                    + " and its drain lets go of the application", () -> settled(applicationId));
             } finally {
                 ApplicationReleases.destroyFor(applicationId);
             }
@@ -359,6 +358,18 @@ class ApplicationReleaseTest {
             .where(ReleaseOperationModel.FOR_ID.eq(applicationId))
             .orderBy(ReleaseOperationModel.ID, SortOrder.DESC)
             .first();
+    }
+
+    /**
+     * The latest operation succeeded AND nothing holds the application any more.
+     *
+     * AIDEV-NOTE: the drain writes SUCCEEDED inside its claim (an outcome write is fenced by the claim) and releases
+     * the claim only afterwards, so the status alone opens a window in which a REFUSE-contention rollback is turned
+     * away as instance_operation_in_progress. runIfIdle asks the lock itself.
+     */
+    private static boolean settled(int applicationId) {
+        return ReleaseOperationModel.STATUS_SUCCEEDED.equals(latestOp(applicationId).get(ReleaseOperationModel.STATUS))
+            && InstanceOperationLock.production().runIfIdle(applicationId, () -> { });
     }
 
     /** Bounded wait: the drain completes on a virtual thread, not inline. */
