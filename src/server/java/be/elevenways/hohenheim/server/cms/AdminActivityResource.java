@@ -8,7 +8,6 @@ import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
-import be.elevenways.zenit.cms.common.schema.FilterState;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.server.resource.ActivityAdmin;
@@ -59,6 +58,7 @@ public final class AdminActivityResource {
      */
     private static final TableSpec<Row> TABLE = TableSpec.<Row>builder()
         .column(ColumnSpec.fromField(ActivityModel.CREATED_AT).build())
+        .column(ActivityAdmin.summaryColumn())
         .column(ColumnSpec.fromField(ActivityModel.ACTOR).sortable().build())
         .column(ColumnSpec.fromField(ActivityModel.ACTION).filterable().build())
         .column(ColumnSpec.fromField(ActivityModel.MODEL).filterable().build())
@@ -70,6 +70,8 @@ public final class AdminActivityResource {
         .filter(FilterSpec.leaf(ActivityModel.ACTION, CoreTypes.CONTAINS).build())
         .filter(FilterSpec.forPrincipal(ActivityModel.ACTOR_PRINCIPAL).build())
         .filter(FilterSpec.leaf(ActivityModel.ORIGIN, CoreTypes.CONTAINS).build())
+        .filter(ActivityAdmin.onePerCommandFilter())
+        .filter(ActivityAdmin.internalFilter())
         .defaultSort(SortSpec.desc(ActivityModel.CREATED_AT.getName()))
         .build();
 
@@ -87,9 +89,11 @@ public final class AdminActivityResource {
             .reads(ActivityAdmin.reads(AdminActivityResource::cell))
             .list(ActivityAdmin.list(TABLE)
                 .chrome(CmsSupport.WIDE_LIST)
-                .defaultFilter(FilterState.empty().with(ActivityModel.ORIGIN.getName(), HIDE_BACKGROUND_EXPRESSION),
+                .defaultFilter(ActivityAdmin.defaultFilter().with(ActivityModel.ORIGIN.getName(),
+                        HIDE_BACKGROUND_EXPRESSION),
                     filter -> ActivityModel.ORIGIN.getName().equals(filter)
-                        ? Microcopy.of("people_only").withFilter("scope", "activity") : null)
+                        ? Microcopy.of("people_only").withFilter("scope", "activity")
+                        : ActivityAdmin.defaultFilterChip(filter))
                 .build())
             .build();
     }

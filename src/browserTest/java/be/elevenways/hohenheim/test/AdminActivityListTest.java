@@ -224,7 +224,9 @@ class AdminActivityListTest extends HohenheimTestBase {
             .contains("filter.origin.__cleared=1");
 
         // 3d. The cleared marker genuinely suppresses it: background rows appear
-        //     beside operator rows, and the chip is gone.
+        //     beside operator rows, and its chip is gone while the framework's own
+        //     defaults (one row per action, internal records hidden) stay, because the
+        //     panel extends ActivityAdmin.defaultFilter() instead of replacing it.
         HttpResponse<String> clearedList = adminGet("/admin/activity?filter.origin.__cleared=1");
         assertThat(clearedList.statusCode()).as("step 3d: the cleared list renders").isEqualTo(200);
         assertThat(clearedList.body())
@@ -232,8 +234,12 @@ class AdminActivityListTest extends HohenheimTestBase {
             .contains(BACKGROUND_TITLE)
             .contains(OPERATOR_TITLE);
         assertThat(clearedList.body())
-            .as("step 3d: no default chip while cleared")
-            .doesNotContain("data-chip-default");
+            .as("step 3d: the people-only chip is gone while cleared")
+            .doesNotContain("People only");
+        assertThat(clearedList.body())
+            .as("step 3d: the framework's default chips stay")
+            .contains("One row per action")
+            .contains("Internal records hidden");
 
         // 4. The origin filter genuinely flips it: naming the system origin shows the
         //    sweeps, so the default is a starting point and never a cage.
