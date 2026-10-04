@@ -1,6 +1,10 @@
 package be.elevenways.hohenheim.test.migration;
 
 import be.elevenways.hohenheim.test.LegacyStepPayloads;
+import be.elevenways.hohenheim.migration.InitialMigration;
+import be.elevenways.hohenheim.migration.M011_ReviewHardening;
+import be.elevenways.zenit.common.orm.migration.MigrationException;
+import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.common.security.ZenitPrincipalKind;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSources;
@@ -84,6 +88,7 @@ import java.util.Properties;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * The module-fit upgrade: a control-plane database the code of tag before-module-fit wrote at Hohenheim's
@@ -154,6 +159,8 @@ class HohenheimUpgradeJourneyTest {
         int siteId = Integer.parseInt(facts.getProperty("site.id"));
         int instanceId = Integer.parseInt(facts.getProperty("instance.id"));
         String url = "jdbc:sqlite:" + database.toAbsolutePath();
+        Instant retainedInstant = Instant.parse("1969-12-31T23:59:59.987654Z");
+        execute(url, "UPDATE sites SET created_at = '" + retainedInstant + "' WHERE id = " + siteId);
 
         assertThat(scalar(url, "SELECT MAX(version) FROM zenit_migrations WHERE stream = 'be.elevenways.hohenheim'"))
             .as("step 0: the fixture is an install at Hohenheim's production level").isEqualTo("010");
@@ -205,6 +212,28 @@ class HohenheimUpgradeJourneyTest {
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.PATH, database.toAbsolutePath().toString());
         FieldEncryption.installKeyring(EncryptionKeyring.loadOrCreate(keys));
         HohenheimTestRuntime.declareAccessModelsOnce();
+        // 1a. Rehearse an install whose table-creation source was removed, retaining its APPLIED history row.
+        Path rehearsalDatabase = dir.resolve("unreplayable-history.db");
+        Files.copy(database, rehearsalDatabase);
+        String rehearsalUrl = "jdbc:sqlite:" + rehearsalDatabase.toAbsolutePath();
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.PATH, rehearsalDatabase.toAbsolutePath().toString());
+        var rehearsal = HohenheimDatabase.openDatasource();
+        Models.get(SiteModel.class);
+        var withoutCreationSource = MigrationRunner.discoverMigrations(rehearsal.getDatasourceIdentifier()).stream()
+            .filter(supplier -> !(supplier.get() instanceof InitialMigration)).toList();
+        var withoutOwnerScope = withoutCreationSource.stream()
+            .filter(supplier -> !(supplier.get() instanceof M011_ReviewHardening)).toList();
+        assertThatThrownBy(() -> MigrationRunner.overCompleteSet(rehearsal, withoutOwnerScope)
+            .acknowledgeMissingMigrationVersions("001").migrate().requireSuccess())
+            .as("step 1a: missing creation history cannot silently omit the declared sites instant scope")
+            .isInstanceOf(MigrationException.class).hasMessageContaining("sites").hasMessageContaining("FrozenModel");
+        MigrationRunner.overCompleteSet(rehearsal, withoutCreationSource)
+            .acknowledgeMissingMigrationVersions("001").migrate().requireSuccess();
+        assertThat(scalar(rehearsalUrl, "SELECT created_at FROM sites WHERE id = " + siteId))
+            .as("step 1a: M011's frozen owner scope preserves the pre-epoch microseconds without creation source")
+            .isEqualTo(Now.instantText(retainedInstant));
+        HohenheimDatabase.closeDatasource();
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.PATH, database.toAbsolutePath().toString());
         assertThat(ServerZenitRuntime.runMigrationsIfRequested(new String[] {"--run-migrations"},
                 HohenheimDatabase::openDatasource))
             .as("step 1: the migration lane ran").isTrue();

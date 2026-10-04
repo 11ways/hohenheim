@@ -14,6 +14,7 @@ import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.LongField;
 import be.elevenways.zenit.common.orm.field.SchemaField;
 import be.elevenways.zenit.common.orm.field.StringField;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.migration.ForeignKeyAction;
 import be.elevenways.zenit.common.orm.migration.FrozenModel;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
@@ -153,6 +154,7 @@ public class M011_ReviewHardening extends HohenheimMigration {
 
     @Override
     public void up(@NonNull MigrationBuilder schema) {
+        schema.normalizeSqliteInstants(legacyInstantScopes());
         // Nullable with a false default, so a row written by the previous build reads as untrusted.
         schema.alterTable("sites", table ->
             table.addColumn("trusted_upstream", ColumnType.BOOLEAN, column -> column
@@ -228,6 +230,77 @@ public class M011_ReviewHardening extends HohenheimMigration {
         });
         schema.data("renumber every access-rule sibling run dense from 0 in its stored order", "1",
             M011_ReviewHardening::densifyRulePositions);
+    }
+
+    /** The M010 control-plane shape, frozen independently of the consolidated or removed migration classes. */
+    static FrozenModel[] legacyInstantScopes() {
+        return new FrozenModel[] {
+            instantScope("sites", "created_at", "updated_at", "deleted_at"),
+            instantScope("site_domains", "created_at", "updated_at", "generated_at"),
+            instantScope("certificates", "expires_on", "created_at", "updated_at", "issued_on", "next_attempt_at", "expiry_notified_at"),
+            instantScope("access_lists", "created_at", "updated_at"),
+            instantScope("protected_paths", "created_at", "updated_at"),
+            instantScope("access_rules", "created_at", "updated_at"),
+            instantScope("system_users", "last_seen_at", "created_at", "updated_at"),
+            instantScope("servers", "created_at", "updated_at", "probed_at", "last_seen_at", "host_key_pinned_at",
+                "incus_server_cert_pinned_at", "quarantined_at", "acknowledged_at", "volume_probed_at"),
+            instantScope("managed_databases", "created_at", "updated_at"),
+            instantScope("notification_channels", "created_at", "updated_at"),
+            instantScope("site_auth_providers", "created_at", "updated_at"),
+            instantScope("site_sessions", "created_at", "expires_at"),
+            instantScope("dns_zones", "created_at", "updated_at", "last_checked_at", "last_transfer_at", "delegation_checked_at"),
+            instantScope("dns_records", "created_at", "updated_at", "generated_at"),
+            instantScope("dns_peers", "created_at", "updated_at"),
+            instantScope("dns_zone_peers", "created_at", "updated_at", "probed_at", "behind_since", "stale_alerted_at", "last_axfr_at", "last_notify_at"),
+            instantScope("bans", "expires_at", "lifted_at", "created_at", "updated_at"),
+            instantScope("spamservice_installations", "created_at", "updated_at"),
+            instantScope("stacks", "created_at", "updated_at"),
+            instantScope("stack_services", "created_at", "updated_at"),
+            instantScope("stack_services_mounts", "created_at", "updated_at"),
+            instantScope("stack_services_ports", "created_at", "updated_at"),
+            instantScope("stack_services_depends_on", "created_at", "updated_at"),
+            instantScope("stack_files", "created_at", "updated_at"),
+            instantScope("stack_deployments", "started_at", "finished_at", "created_at", "updated_at"),
+            instantScope("reconcile_findings", "created_at", "updated_at"),
+            instantScope("port_allocations", "created_at", "updated_at"),
+            instantScope("released_route_claims", "released_at"),
+            instantScope("instance_quotas", "created_at", "updated_at"),
+            instantScope("backup_targets", "created_at", "updated_at"),
+            instantScope("instance_templates", "approved_at", "imported_at", "created_at", "updated_at"),
+            instantScope("runtime_images", "created_at", "updated_at"),
+            instantScope("instance_template_volumes", "created_at", "updated_at"),
+            instantScope("instances", "created_at", "updated_at", "deleted_at", "generated_at", "disk_observed_at", "status_observed_at"),
+            instantScope("instance_volumes", "observed_at", "created_at", "updated_at"),
+            instantScope("instance_snapshots", "created_at", "updated_at"),
+            instantScope("instance_backups", "created_at", "updated_at"),
+            instantScope("instance_template_variables", "created_at", "updated_at"),
+            instantScope("instance_template_files", "created_at", "updated_at"),
+            instantScope("instance_variables", "created_at", "updated_at"),
+            instantScope("instance_files", "created_at", "updated_at", "generated_at"),
+            instantScope("game_domains", "created_at", "updated_at"),
+            instantScope("build_operations", "started_at", "finished_at", "created_at", "updated_at"),
+            instantScope("release_operations", "started_at", "finished_at", "created_at", "updated_at"),
+            instantScope("projects", "created_at", "updated_at"),
+            instantScope("environments", "created_at", "updated_at"),
+            instantScope("git_providers", "created_at", "updated_at"),
+            instantScope("webhook_deliveries", "received_at", "created_at", "updated_at"),
+            instantScope("preview_deployments", "expires_at", "deleted_at", "created_at", "updated_at"),
+            instantScope("instance_devices", "created_at", "updated_at"),
+            instantScope("controller_identity", "created_at", "updated_at"),
+            instantScope("instance_logs", "saved_at", "created_at", "updated_at"),
+            instantScope("instance_databases", "created_at", "updated_at"),
+            instantScope("dns_dyndns_credentials", "created_at", "updated_at"),
+            instantScope("instance_template_databases", "created_at", "updated_at"),
+            instantScope("database_engines", "created_at", "updated_at"),
+            instantScope("artifact_operations", "finished_at", "created_at", "updated_at"),
+            instantScope("artifact_sources", "created_at", "updated_at")
+        };
+    }
+
+    private static FrozenModel instantScope(String table, String... columns) {
+        Field<?, ?> key = table.equals("site_sessions") ? StringField.builder("id").build() : IntegerField.builder("id").build();
+        Field<?, ?>[] dates = Arrays.stream(columns).map(name -> DateTimeField.builder(name).build()).toArray(Field[]::new);
+        return new FrozenModel(table, key, dates);
     }
 
     /**
