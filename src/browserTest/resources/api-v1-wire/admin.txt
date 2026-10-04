@@ -1,0 +1,159 @@
+## list zones
+> GET /api/v1/dns/zones
+< 200 application/json; charset=utf-8
+{"zones":[]}
+
+## list zones with a tenant key
+> GET /api/v1/dns/zones
+< 403 application/json; charset=utf-8
+{"code":"FORBIDDEN","message":"You are not allowed to do that","status":403}
+
+## create a zone
+> POST /api/v1/dns/zones (application/x-www-form-urlencoded, 62 bytes)
+< 200 application/json; charset=utf-8
+{"default_ttl":3600,"delegation_status":"","enabled":true,"id":1,"nameservers":["ns1.wire.test","ns2.wire.test"],"origin":"wire-zone.test","record_count":2,"role":"primary","serial":1,"soa_contact":"hostmaster@wire-zone.test","soa_primary_ns":"ns1.wire.test"}
+
+## create a zone with an undeclared field
+> POST /api/v1/dns/zones (application/x-www-form-urlencoded, 41 bytes)
+< 422 application/json; charset=utf-8
+{"code":"unknown_field","field":"colour","message":"The field colour does not exist for this type","status":422,"violations":[{"code":"unknown_field","field":"colour","message":"The field colour does not exist for this type"}]}
+
+## import a zone file
+> POST /api/v1/dns/zones/1/import (application/x-www-form-urlencoded, 271 bytes)
+< 200 application/json; charset=utf-8
+{"id":1,"imported":5,"nameservers":["ns1.wire.test","ns2.wire.test"],"notes":["SOA ignored: ns1.afraid.org dnsadmin.afraid.org serial 2604070003 ttl 3600 (the zone form owns the SOA values)","apex NS ns1.afraid.org, ns2.afraid.org replaced by the declared ns1.wire.test, ns2.wire.test"],"origin":"wire-zone.test","serial":2,"skipped":[]}
+
+## import an empty zone file
+> POST /api/v1/dns/zones/1/import (application/x-www-form-urlencoded, 11 bytes)
+< 422 application/json; charset=utf-8
+{"code":"import_empty","field":"zone_text","message":"Paste zone-file text before importing","status":422,"violations":[{"code":"import_empty","field":"zone_text","message":"Paste zone-file text before importing"}]}
+
+## list hosts
+> GET /api/v1/hosts
+< 200 application/json; charset=utf-8
+{"hosts":[{"admission":"admitted","bookable_mb":0,"booked_mb":512,"budget_mb":0,"facts_max_age_hours":168,"free_mb":0,"id":1,"measured":false,"measured_at":"2026-01-02T03:04:05Z","mode":"local","name":"wire-docker-host","overcommit_ratio":1.0,"preflight_ok":true,"reserve_mb":768,"runtime":"docker","stale":true},{"admission":"admitted","bookable_mb":0,"booked_mb":0,"budget_mb":0,"facts_max_age_hours":168,"free_mb":0,"id":2,"measured":false,"measured_at":"2026-01-02T03:04:05Z","mode":"local","name":"wire-incus-host","overcommit_ratio":1.0,"preflight_ok":true,"reserve_mb":768,"runtime":"incus","stale":true}]}
+
+## list hosts with a tenant key
+> GET /api/v1/hosts
+< 403 application/json; charset=utf-8
+{"code":"FORBIDDEN","message":"You are not allowed to do that","status":403}
+
+## read a host
+> GET /api/v1/hosts/1
+< 200 application/json; charset=utf-8
+{"admission":"admitted","bookable_mb":0,"booked_mb":512,"budget_mb":0,"facts_max_age_hours":168,"free_mb":0,"id":1,"measured":false,"measured_at":"2026-01-02T03:04:05Z","mode":"local","name":"wire-docker-host","overcommit_ratio":1.0,"preflight_ok":true,"reserve_mb":768,"runtime":"docker","stale":true,"workloads":[{"booked_mb":512,"id":1,"kind":"hohenheim:docker_container","name":"wire-web","status":"stopped"}]}
+
+## read an absent host
+> GET /api/v1/hosts/999999
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## list engines
+> GET /api/v1/engines
+< 200 application/json; charset=utf-8
+{"engines":[{"cpu_limit":null,"databases":2,"engine":"postgres","failure_reason":"","id":1,"image":"postgres:16","memory_limit_mb":1024,"name":"wire-pg","server":"wire-docker-host","status":"active"}]}
+
+## list engines with a tenant key
+> GET /api/v1/engines
+< 403 application/json; charset=utf-8
+{"code":"FORBIDDEN","message":"You are not allowed to do that","status":403}
+
+## read an engine
+> GET /api/v1/engines/1
+< 200 application/json; charset=utf-8
+{"cpu_limit":null,"databases":2,"engine":"postgres","failure_reason":"","id":1,"image":"postgres:16","logical_databases":[{"db_name":"helddb","db_user":"helddbuser","effective_memory_mb":1024,"id":1,"memory_source":"engine","name":"wire-held-db","outcome":"ok","status":"active"},{"db_name":"detacheddb","db_user":"detacheddbuser","effective_memory_mb":1024,"id":2,"memory_source":"engine","name":"wire-detached-db","outcome":"ok","status":"active"}],"memory_limit_mb":1024,"name":"wire-pg","server":"wire-docker-host","status":"active"}
+
+## read an absent engine
+> GET /api/v1/engines/999999
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## list databases
+> GET /api/v1/databases
+< 200 application/json; charset=utf-8
+{"databases":[{"attached":1,"cpu_limit":null,"db_name":"helddb","effective_memory_mb":1024,"engine":"postgres","engine_id":1,"ephemeral":false,"failure_reason":"","id":1,"memory_limit_mb":null,"memory_source":"engine","name":"wire-held-db","outcome":"ok","placement":"shared","server":"wire-docker-host","status":"active"},{"attached":0,"cpu_limit":null,"db_name":"detacheddb","effective_memory_mb":1024,"engine":"postgres","engine_id":1,"ephemeral":false,"failure_reason":"","id":2,"memory_limit_mb":null,"memory_source":"engine","name":"wire-detached-db","outcome":"ok","placement":"shared","server":"wire-docker-host","status":"active"},{"attached":0,"cpu_limit":null,"db_name":"dedicateddb","effective_memory_mb":512,"engine":"postgres","engine_id":null,"ephemeral":false,"failure_reason":"","id":3,"memory_limit_mb":null,"memory_source":"default","name":"wire-dedicated-db","outcome":"ok","placement":"dedicated","server":"wire-incus-host","status":"active"}]}
+
+## list databases as a browser session
+> GET /api/v1/databases
+< 403 application/json; charset=utf-8
+{"code":"FORBIDDEN","message":"You are not allowed to do that","status":403}
+
+## read a delegated database
+> GET /api/v1/databases/1
+< 200 application/json; charset=utf-8
+{"attached":1,"db_name":"helddb","engine":"postgres","id":1,"name":"wire-held-db","outcome":"ok","placement":"shared","status":"active"}
+
+## read an undelegated database
+> GET /api/v1/databases/2
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## move a shared database
+> POST /api/v1/databases/1/move-shared (application/x-www-form-urlencoded, 0 bytes)
+< 422 application/json; charset=utf-8
+{"code":"database_already_shared","message":"Database 'wire-held-db' already lives on a shared engine","status":422,"violations":[{"code":"database_already_shared","message":"Database 'wire-held-db' already lives on a shared engine"}]}
+
+## move a dedicated database
+> POST /api/v1/databases/3/move-shared (application/x-www-form-urlencoded, 0 bytes)
+< 200 application/json; charset=utf-8
+{"id":3,"name":"wire-dedicated-db","status":"queued","watch":"status"}
+
+## delete a database a workload holds
+> POST /api/v1/databases/1/delete (application/x-www-form-urlencoded, 0 bytes)
+< 422 application/json; charset=utf-8
+{"code":"delete_in_use","message":"Database 'wire-held-db' is attached to wire-web (\/admin\/instances\/1\/page\/databases). Detach it on each instance's Databases tab first.","status":422,"violations":[{"code":"delete_in_use","message":"Database 'wire-held-db' is attached to wire-web (\/admin\/instances\/1\/page\/databases). Detach it on each instance's Databases tab first."}]}
+
+## delete a detached database
+> POST /api/v1/databases/2/delete (application/x-www-form-urlencoded, 0 bytes)
+< 200 application/json; charset=utf-8
+{"id":2,"name":"wire-detached-db","status":"deleted"}
+
+## list access lists
+> GET /api/v1/access-lists
+< 200 application/json; charset=utf-8
+{"access_lists":[{"id":1,"name":"wire-staff","satisfy":"all","shared":true}]}
+
+## list access lists as a browser session
+> GET /api/v1/access-lists
+< 403 application/json; charset=utf-8
+{"code":"FORBIDDEN","message":"You are not allowed to do that","status":403}
+
+## read an access list
+> GET /api/v1/access-lists/1
+< 200 application/json; charset=utf-8
+{"id":1,"name":"wire-staff","rules":[],"satisfy":"all","shared":true}
+
+## read an access list the key does not manage
+> GET /api/v1/access-lists/1
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## create an access list
+> POST /api/v1/access-lists (application/x-www-form-urlencoded, 34 bytes)
+< 200 application/json; charset=utf-8
+{"id":2,"name":"wire-created-list","rules":[],"satisfy":"any","shared":false}
+
+## create an access list with an undeclared field
+> POST /api/v1/access-lists (application/x-www-form-urlencoded, 34 bytes)
+< 422 application/json; charset=utf-8
+{"code":"unknown_field","field":"colour","message":"The field colour does not exist for this type","status":422,"violations":[{"code":"unknown_field","field":"colour","message":"The field colour does not exist for this type"}]}
+
+## add a rule
+> POST /api/v1/access-lists/1/rules (application/x-www-form-urlencoded, 52 bytes)
+< 200 application/json; charset=utf-8
+{"access_list_id":1,"data":{"network":"10.0.0.0\/8"},"enabled":true,"has_password":false,"id":1,"parent_id":null,"type":"ip_allow"}
+
+## add a rule of an unknown type
+> POST /api/v1/access-lists/1/rules (application/x-www-form-urlencoded, 9 bytes)
+< 422 application/json; charset=utf-8
+{"code":"unknown_type","field":"type","message":"That is not a rule type","status":422,"violations":[{"code":"unknown_type","field":"type","message":"That is not a rule type"}]}
+
+## delete an access list
+> POST /api/v1/access-lists/2/delete (application/x-www-form-urlencoded, 0 bytes)
+< 200 application/json; charset=utf-8
+{"id":2,"status":"deleted"}
+
+## delete an access list the key does not manage
+> POST /api/v1/access-lists/1/delete (application/x-www-form-urlencoded, 0 bytes)
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}

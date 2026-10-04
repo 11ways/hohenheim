@@ -1,0 +1,40 @@
+## list the volume root
+> GET /api/v1/instances/1/files?path=/data
+< 200 application/json; charset=utf-8
+{"entries":[{"kind":"DIRECTORY","managed":false,"mode":"0755","modified":1767323045,"name":"sub","path":"\/data\/sub","size":0},{"kind":"FILE","managed":false,"mode":"0644","modified":1767323045,"name":"hello.txt","path":"\/data\/hello.txt","size":6}],"id":1,"path":"\/data","volumes":["\/data"]}
+
+## list without files.read
+> GET /api/v1/instances/1/files?path=/data
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## read a file
+> GET /api/v1/instances/1/files/content?path=/data/hello.txt
+< 200 application/octet-stream
+hello
+
+
+## read without a path
+> GET /api/v1/instances/1/files/content
+< 422 application/json; charset=utf-8
+{"code":"files_path_refused","message":"That path is not inside this instance","status":422,"violations":[{"code":"files_path_refused","message":"That path is not inside this instance"}]}
+
+## write a file
+> POST /api/v1/instances/1/files/content (application/x-www-form-urlencoded, 45 bytes)
+< 200 application/json; charset=utf-8
+{"id":1,"path":"\/data\/written.txt","status":"written"}
+
+## write outside the volume
+> POST /api/v1/instances/1/files/content (application/x-www-form-urlencoded, 42 bytes)
+< 422 application/json; charset=utf-8
+{"code":"files_path_refused","message":"That path is not inside this instance","status":422,"violations":[{"code":"files_path_refused","message":"That path is not inside this instance"}]}
+
+## make a directory
+> POST /api/v1/instances/1/files/action (application/x-www-form-urlencoded, 32 bytes)
+< 200 application/json; charset=utf-8
+{"action":"mkdir","id":1,"path":"\/data\/made"}
+
+## an unknown file action
+> POST /api/v1/instances/1/files/action (application/x-www-form-urlencoded, 32 bytes)
+< 422 application/json; charset=utf-8
+{"code":"files_unknown_action","message":"Unknown file action","status":422,"violations":[{"code":"files_unknown_action","message":"Unknown file action"}]}

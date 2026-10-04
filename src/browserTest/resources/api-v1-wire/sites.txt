@@ -1,0 +1,229 @@
+## list sites
+> GET /api/v1/sites
+< 200 application/json; charset=utf-8
+{"sites":[{"application_id":1,"enabled":false,"health":"unknown","id":1,"name":"wire-alpha","slug":"wire-alpha","type":"hohenheim:instance"},{"enabled":false,"health":"unknown","id":3,"name":"wire-static","slug":"wire-static","type":"hohenheim:static"}]}
+
+## list sites as a browser session
+> GET /api/v1/sites
+< 403 application/json; charset=utf-8
+{"code":"FORBIDDEN","message":"You are not allowed to do that","status":403}
+
+## read a managed site
+> GET /api/v1/sites/1
+< 200 application/json; charset=utf-8
+{"application_id":1,"domains":[{"certificate_id":null,"custom_headers":{},"exclude_from_letsencrypt":false,"force_ssl":false,"generated":false,"hostname":"alpha.wire.test","hsts_enabled":false,"hsts_subdomains":false,"id":1,"listen_on":"","live":false,"match_type":"exact","path":"","response_headers":{},"site_id":1,"strip_path":false}],"enabled":false,"health":"unknown","id":1,"name":"wire-alpha","release":{"duration_ms":60000,"failure_reason":"","finished_at":"2026-01-02T03:05:05Z","id":1,"image":"sha256:wire-release","kind":"release","started_at":"2026-01-02T03:04:05Z","status":"succeeded"},"rollback_available":false,"slug":"wire-alpha","type":"hohenheim:instance"}
+
+## read an unmanaged site
+> GET /api/v1/sites/2
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## list a site's domains
+> GET /api/v1/sites/1/domains
+< 200 application/json; charset=utf-8
+{"domains":[{"certificate_id":null,"custom_headers":{},"exclude_from_letsencrypt":false,"force_ssl":false,"generated":false,"hostname":"alpha.wire.test","hsts_enabled":false,"hsts_subdomains":false,"id":1,"listen_on":"","live":false,"match_type":"exact","path":"","response_headers":{},"site_id":1,"strip_path":false}],"id":1}
+
+## list an unmanaged site's domains
+> GET /api/v1/sites/2/domains
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## list deployments
+> GET /api/v1/sites/1/deployments
+< 200 application/json; charset=utf-8
+{"deployments":[{"duration_ms":60000,"failure_reason":"","finished_at":"2026-01-02T03:05:05Z","id":1,"image":"sha256:wire-release","kind":"release","started_at":"2026-01-02T03:04:05Z","status":"succeeded"}],"id":1}
+
+## list an unmanaged site's deployments
+> GET /api/v1/sites/2/deployments
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## read a deployment log
+> GET /api/v1/sites/1/deployments/1/log
+< 200 application/json; charset=utf-8
+{"id":1,"log":"wire-release-log-of-alpha"}
+
+## read another site's deployment log
+> GET /api/v1/sites/1/deployments/2/log
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## list releases
+> GET /api/v1/sites/1/releases
+< 200 application/json; charset=utf-8
+{"id":1,"releases":[{"duration_ms":60000,"failure_reason":"","finished_at":"2026-01-02T03:05:05Z","id":1,"image":"sha256:wire-release","kind":"release","started_at":"2026-01-02T03:04:05Z","status":"succeeded"}]}
+
+## list an unmanaged site's releases
+> GET /api/v1/sites/2/releases
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## read a release
+> GET /api/v1/sites/1/releases/1
+< 200 application/json; charset=utf-8
+{"duration_ms":60000,"failure_reason":"","finished_at":"2026-01-02T03:05:05Z","id":1,"image":"sha256:wire-release","kind":"release","started_at":"2026-01-02T03:04:05Z","status":"succeeded","step_log":"wire-release-log-of-alpha"}
+
+## read another site's release
+> GET /api/v1/sites/1/releases/2
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## list builds
+> GET /api/v1/sites/1/builds
+< 200 application/json; charset=utf-8
+{"builds":[{"builder_kind":"dockerfile","duration_ms":60000,"exit_code":0,"failure_reason":"","finished_at":"2026-01-02T03:05:05Z","id":1,"image":"sha256:wire-build","source_ref":"main","started_at":"2026-01-02T03:04:05Z","status":"succeeded"}],"id":1}
+
+## list an unmanaged site's builds
+> GET /api/v1/sites/2/builds
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## read a build log
+> GET /api/v1/sites/1/builds/1/log
+< 200 application/json; charset=utf-8
+{"id":1,"log":"wire-build-log-of-alpha"}
+
+## read another site's build log
+> GET /api/v1/sites/1/builds/2/log
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## read the current artifact
+> GET /api/v1/sites/1/artifact
+< 200 application/json; charset=utf-8
+{"artifact_sha256":null,"image_id":null,"instance_id":null,"stamps":null,"status":"absent"}
+
+## read the artifact of a site without an application
+> GET /api/v1/sites/3/artifact
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## read an artifact receipt
+> GET /api/v1/sites/1/artifact/1
+< 200 application/json; charset=utf-8
+{"artifact_sha256":"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08","error":null,"image_id":"sha256:wire-artifact","instance_id":null,"operation_id":1,"status":"succeeded"}
+
+## read another site's artifact receipt
+> GET /api/v1/sites/1/artifact/2
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## list projects
+> GET /api/v1/projects
+< 200 application/json; charset=utf-8
+{"projects":[{"created_at":"2026-01-02T03:04:05Z","description":"Wire project","environments":[{"description":"Live traffic","id":1,"name":"wire-production"},{"description":"","id":2,"name":"wire-staging"}],"id":1,"name":"wire-project"}]}
+
+## list projects as a browser session
+> GET /api/v1/projects
+< 403 application/json; charset=utf-8
+{"code":"FORBIDDEN","message":"You are not allowed to do that","status":403}
+
+## read a member project
+> GET /api/v1/projects/1
+< 200 application/json; charset=utf-8
+{"created_at":"2026-01-02T03:04:05Z","description":"Wire project","environments":[{"description":"Live traffic","id":1,"name":"wire-production"},{"description":"","id":2,"name":"wire-staging"}],"id":1,"name":"wire-project"}
+
+## read a project without membership
+> GET /api/v1/projects/2
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## list environment variables
+> GET /api/v1/environments/1/variables
+< 200 application/json; charset=utf-8
+{"id":1,"variables":[{"key":"WIRE_SEEDED","kind":"plain","value":"seeded-value"}]}
+
+## list environment variables with a tenant key
+> GET /api/v1/environments/1/variables
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## set an environment variable
+> POST /api/v1/environments/1/variables (application/x-www-form-urlencoded, 32 bytes)
+< 200 application/json; charset=utf-8
+{"id":1,"key":"WIRE_PLAIN","status":"set"}
+
+## set an environment variable of an unknown kind
+> POST /api/v1/environments/1/variables (application/x-www-form-urlencoded, 33 bytes)
+< 422 application/json; charset=utf-8
+{"code":"variable_kind_unknown","field":"kind","message":"Unknown variable kind mystery","status":422,"violations":[{"code":"variable_kind_unknown","field":"kind","message":"Unknown variable kind mystery"}]}
+
+## delete an environment variable
+> POST /api/v1/environments/1/variables/delete (application/x-www-form-urlencoded, 14 bytes)
+< 200 application/json; charset=utf-8
+{"id":1,"key":"WIRE_PLAIN","status":"deleted"}
+
+## delete an absent environment variable
+> POST /api/v1/environments/1/variables/delete (application/x-www-form-urlencoded, 14 bytes)
+< 422 application/json; charset=utf-8
+{"code":"variable_not_found","field":"key","message":"No variable exists for this key","status":422,"violations":[{"code":"variable_not_found","field":"key","message":"No variable exists for this key"}]}
+
+## add a domain
+> POST /api/v1/sites/1/domains (application/x-www-form-urlencoded, 23 bytes)
+< 200 application/json; charset=utf-8
+{"certificate_id":null,"custom_headers":{},"exclude_from_letsencrypt":false,"force_ssl":true,"generated":false,"hostname":"beta.wire.test","hsts_enabled":false,"hsts_subdomains":false,"id":4,"listen_on":"","live":false,"match_type":"exact","path":"","response_headers":{},"site_id":1,"strip_path":false}
+
+## add a domain naming another site
+> POST /api/v1/sites/1/domains (application/x-www-form-urlencoded, 34 bytes)
+< 422 application/json; charset=utf-8
+{"code":"domain_site_mismatch","field":"site_id","message":"The domain in the body names another site than the one in the URL","status":422,"violations":[{"code":"domain_site_mismatch","field":"site_id","message":"The domain in the body names another site than the one in the URL"}]}
+
+## remove a domain
+> POST /api/v1/sites/1/domains/4/delete (application/x-www-form-urlencoded, 0 bytes)
+< 200 application/json; charset=utf-8
+{"id":4,"site_id":1,"status":"deleted"}
+
+## remove another site's domain
+> POST /api/v1/sites/1/domains/2/delete (application/x-www-form-urlencoded, 0 bytes)
+< 404 application/json; charset=utf-8
+{"code":"NOT_FOUND","message":"The page you are looking for does not exist","status":404}
+
+## create a site
+> POST /api/v1/sites (application/x-www-form-urlencoded, 105 bytes)
+< 200 application/json; charset=utf-8
+{"domains":[],"enabled":false,"health":"unknown","id":5,"name":"wire-created","slug":"wire-created","type":"hohenheim:static"}
+
+## create a site with an undeclared field
+> POST /api/v1/sites (application/x-www-form-urlencoded, 92 bytes)
+< 422 application/json; charset=utf-8
+{"code":"unknown_field","field":"colour","message":"The field colour does not exist for this type","status":422,"violations":[{"code":"unknown_field","field":"colour","message":"The field colour does not exist for this type"}]}
+
+## delete a site
+> POST /api/v1/sites/5/delete (application/x-www-form-urlencoded, 0 bytes)
+< 200 application/json; charset=utf-8
+{"id":5,"status":"deleted"}
+
+## delete the site serving this panel
+> POST /api/v1/sites/4/delete (application/x-www-form-urlencoded, 0 bytes)
+< 422 application/json; charset=utf-8
+{"code":"delete_self_lockout","message":"This site serves localhost, the address this panel is open at. Deleting it would take this panel offline. Move the panel to another hostname first.","status":422,"violations":[{"code":"delete_self_lockout","message":"This site serves localhost, the address this panel is open at. Deleting it would take this panel offline. Move the panel to another hostname first."}]}
+
+## upload an empty artifact
+> POST /api/v1/sites/1/artifact (application/octet-stream, 0 bytes)
+< 422 application/json; charset=utf-8
+{"code":"artifact_upload_empty","message":"The request carried no artifact bytes.","status":422,"violations":[{"code":"artifact_upload_empty","message":"The request carried no artifact bytes."}]}
+
+## upload an artifact
+> POST /api/v1/sites/1/artifact (application/octet-stream, 19 bytes)
+< 202 application/json; charset=utf-8
+{"artifact_sha256":"9ae617bd939b1bc54c836d292db45ef6e18041740d95ad9aca336e1388a1f264","operation_id":3,"status":"pending"}
+
+## roll back a site without an application
+> POST /api/v1/sites/3/rollback (application/x-www-form-urlencoded, 0 bytes)
+< 422 application/json; charset=utf-8
+{"code":"rollback_not_available","message":"This site exposes no application, so there is no release to roll back","status":422,"violations":[{"code":"rollback_not_available","message":"This site exposes no application, so there is no release to roll back"}]}
+
+## roll back
+> POST /api/v1/sites/6/rollback (application/x-www-form-urlencoded, 0 bytes)
+< 200 application/json; charset=utf-8
+{"id":6,"status":"rolled_back"}
+
+## deploy a site without an application
+> POST /api/v1/sites/3/deploy (application/x-www-form-urlencoded, 0 bytes)
+< 422 application/json; charset=utf-8
+{"code":"deploy_not_available","message":"This site exposes no application, so there is nothing to deploy","status":422,"violations":[{"code":"deploy_not_available","message":"This site exposes no application, so there is nothing to deploy"}]}
+
+## deploy
+> POST /api/v1/sites/1/deploy (application/x-www-form-urlencoded, 0 bytes)
+< 200 application/json; charset=utf-8
+{"id":1,"status":"queued"}
