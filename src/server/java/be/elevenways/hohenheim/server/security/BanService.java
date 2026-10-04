@@ -11,6 +11,8 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.net.AddressScope;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
+import be.elevenways.zenit.common.orm.datasource.DatasourceDerived;
+import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
@@ -80,18 +82,14 @@ public final class BanService {
     private final AtomicBoolean nftBootStarted = new AtomicBoolean();
     private volatile @Nullable Thread nftBootThread;
 
-    // Snapshot of active, unexpired banned IPs; swapped atomically on refresh, null until loaded.
-    private volatile @Nullable ActiveBans cache;
-
     /**
-     * The active ban set and the datasource instance it was read from (identity, never equality).
+     * The active ban set, bound to its datasource by {@link DatasourceDerived}.
      *
      * AIDEV-NOTE: the set belongs to that datasource, never to the JVM: a check against another one reloads (the
-     * per-instance binding of zenit's TableAvailability). A suite that swaps the default datasource per class used
+     * core datasource-derived binding). A suite that swaps the default datasource per class used
      * to enforce the bans of whichever class loaded the cache first.
      */
-    private record ActiveBans(@NonNull Set<String> ips, @NonNull Datasource source) {
-    }
+    private final DatasourceDerived<Set<String>> cache = new DatasourceDerived<>(this);
 
     // AIDEV-NOTE: the auto-ban budget lives HERE, at the autoBan funnel, so
     // every current and future automatic trigger (threat scorer, reputation
@@ -179,7 +177,7 @@ public final class BanService {
         if (!enforcementEnabled()) {
             return false;
         }
-        ActiveBans bans = this.currentCache();
+        Set<String> bans = this.currentCache();
         if (bans == null) {
             // Boot warms the cache; this is the early-datasource (or swapped-datasource) retry, and it
             // never runs the query on the caller's (I/O) thread.
@@ -188,9 +186,9 @@ public final class BanService {
         }
         if (ip.indexOf(':') >= 0) {
             String key = IpLiterals.subnetKey(ip);
-            return key != null && bans.ips().contains(key);
+            return key != null && bans.contains(key);
         }
-        return bans.ips().contains(ip);
+        return bans.contains(ip);
     }
 
     public boolean enforcementEnabled() {
@@ -568,14 +566,16 @@ public final class BanService {
             // WEB scope only: this cache IS the proxy's HTTP/TLS refusal, and an SSH
             // brute-forcer was never declared unwelcome on a customer's website.
             Datasource source = Models.get(BanModel.class).getResolvedDatasource();
-            Set<String> ips = new HashSet<>();
-            for (Row row : listActive()) {
-                String ip = row.get(BanModel.IP);
-                if (ip != null && BanScope.WEB == BanScope.fromToken(row.get(BanModel.SCOPE))) {
-                    ips.add(ip);
+            this.cache.refresh(source, resolved -> Db.supply(resolved, () -> {
+                Set<String> ips = new HashSet<>();
+                for (Row row : listActive()) {
+                    String ip = row.get(BanModel.IP);
+                    if (ip != null && BanScope.WEB == BanScope.fromToken(row.get(BanModel.SCOPE))) {
+                        ips.add(ip);
+                    }
                 }
-            }
-            this.cache = new ActiveBans(Set.copyOf(ips), source);
+                return Set.copyOf(ips);
+            }));
         } catch (RuntimeException e) {
             // Datasource not up yet (early boot): stay empty, retry on next mutation/check.
             Blast.log("BANS: cache refresh failed -", e.getMessage());
@@ -604,17 +604,13 @@ public final class BanService {
 
     /** Test seam: forget the cached set so the next check reloads from the DB. */
     void invalidateCache() {
-        this.cache = null;
+        this.cache.clear();
     }
 
     /** @return the loaded ban set when it was read from the datasource BanModel resolves to now, else null */
-    private @Nullable ActiveBans currentCache() {
-        ActiveBans bans = this.cache;
+    private @Nullable Set<String> currentCache() {
         BanModel model = Models.get(BanModel.class);
-        if (bans == null || !model.resolvesDatasource() || bans.source() != model.getResolvedDatasource()) {
-            return null;
-        }
-        return bans;
+        return model.resolvesDatasource() ? this.cache.peek(model.getResolvedDatasource()) : null;
     }
 
     // -----------------------------------------------------------------------

@@ -7,6 +7,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.registry.Registry;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
+import be.elevenways.zenit.common.orm.datasource.DatasourceDerived;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.TypeDefinition;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -21,7 +22,7 @@ import java.util.Set;
  * Live server-name registry used by type-specific placement fields.
  *
  * AIDEV-NOTE: the registry is derived from the datasource ServerModel resolves to, so it belongs to that datasource
- * instance (the per-instance binding of zenit's TableAvailability): ensureFresh() refreshes whenever it resolves to
+ * instance through {@link DatasourceDerived}: ensureFresh() refreshes whenever it resolves to
  * another one than the last refresh read. A once-per-JVM latch kept offering the hosts of whichever class of a
  * shared-JVM lane filled it first.
  */
@@ -29,8 +30,8 @@ public final class ServerOptions {
 
     public static final Registry<TypeDefinition> REGISTRY = Registry.create(HohenheimIds.id("server"));
 
-    /** The datasource instance the last refresh read, null before the first. */
-    private static volatile @Nullable Datasource populatedFrom;
+    private static final DatasourceDerived<Map<Identifier, TypeDefinition>> CACHE =
+        new DatasourceDerived<>(ServerOptions.class);
 
     /** The ids the last refresh published: the only entries a refresh may prune. */
     private static Set<Identifier> published = Set.of();
@@ -40,16 +41,21 @@ public final class ServerOptions {
     /** Fill the registry on first use or after a datasource swap; mutations call {@link #refresh()} directly. */
     public static void ensureFresh() {
         ServerModel servers = Models.get(ServerModel.class);
-        if (servers.resolvesDatasource() && populatedFrom != servers.getResolvedDatasource()) refresh();
+        if (servers.resolvesDatasource()) {
+            CACHE.get(servers.getResolvedDatasource(), ServerOptions::populate);
+        }
     }
 
     // AIDEV-NOTE: read-only on purpose. This used to open with ensureLocal(), so the FIRST
     // getSchema() of a type-switched sub-form INSERTED the local host row mid-render. The
     // row is seeded at boot now (LocalServerSeeder); refreshing the registry only reads.
     public static synchronized void refresh() {
+        CACHE.refresh(Models.get(ServerModel.class).getResolvedDatasource(), ServerOptions::populate);
+    }
+
+    private static Map<Identifier, TypeDefinition> populate(Datasource source) {
         Map<Identifier, TypeDefinition> entries = new LinkedHashMap<>();
-        Datasource source = Models.get(ServerModel.class).getResolvedDatasource();
-        for (Row row : Models.get(ServerModel.class).find().all()) {
+        for (Row row : Models.get(ServerModel.class).find().on(source).all()) {
             String name = row.get(ServerModel.NAME);
             if (name != null && !name.isBlank()) {
                 // Keyed by the server's ID (the canonical host key), never its name:
@@ -69,7 +75,7 @@ public final class ServerOptions {
             }
         }
         published = Set.copyOf(entries.keySet());
-        populatedFrom = source;
+        return Map.copyOf(entries);
     }
 
     /** Display name for a stored server key, tolerant of a key whose server vanished. */

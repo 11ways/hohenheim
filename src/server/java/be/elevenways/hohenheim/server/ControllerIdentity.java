@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.server;
 import be.elevenways.hohenheim.model.ControllerIdentityModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
+import be.elevenways.zenit.common.orm.datasource.DatasourceDerived;
+import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -44,9 +46,7 @@ public final class ControllerIdentity {
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
-    /** Memo, keyed on the datasource the read resolved to (test forks swap datasources). */
-    private static Datasource cachedFor;
-    private static String cachedToken;
+    private static final DatasourceDerived<String> TOKENS = new DatasourceDerived<>(ControllerIdentity.class);
 
     private ControllerIdentity() {
     }
@@ -75,23 +75,14 @@ public final class ControllerIdentity {
             throw unresolvable(e);
         }
 
-        if (datasource == cachedFor && cachedToken != null) {
-            return cachedToken;
-        }
-
-        String token;
         try {
-            token = read(model);
-            if (token == null) {
-                token = mint(model);
-            }
+            return TOKENS.get(datasource, source -> Db.supply(source, () -> {
+                String token = read(model);
+                return token == null ? mint(model) : token;
+            }));
         } catch (RuntimeException e) {
             throw unresolvable(e);
         }
-
-        cachedFor = datasource;
-        cachedToken = token;
-        return token;
     }
 
     /** Resolve the identity eagerly at boot, so the token is in the log before any deploy. */
@@ -101,8 +92,7 @@ public final class ControllerIdentity {
 
     /** Drop the memo; the next {@link #token()} re-reads. Test lifecycle only. */
     public static synchronized void forgetForTest() {
-        cachedFor = null;
-        cachedToken = null;
+        TOKENS.clear();
     }
 
     private static String read(ControllerIdentityModel model) {
