@@ -122,9 +122,14 @@ public final class InstanceService {
      *         the record
      */
     private <T> T operation(int instanceId, @NonNull Supplier<T> body) {
+        return operation(instanceId, body, false);
+    }
+
+    private <T> T operation(int instanceId, @NonNull Supplier<T> body, boolean stored) {
         try {
-            return this.operations.exclusive(instanceId, InstanceOperationLock.Contention.REFUSE,
-                body);
+            return stored
+                ? this.operations.exclusiveStored(instanceId, InstanceOperationLock.Contention.REFUSE, body)
+                : this.operations.exclusive(instanceId, InstanceOperationLock.Contention.REFUSE, body);
         } finally {
             ApplicationUpstreams.invalidateForInstance(instanceId);
         }
@@ -894,7 +899,7 @@ public final class InstanceService {
      */
     public @NonNull List<String> destroyWithData(int instanceId) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.DESTROY);
-        return operation(instanceId, () -> destroyWithDataNow(instanceId));
+        return operation(instanceId, () -> destroyWithDataNow(instanceId), true);
     }
 
     /** {@link #destroyWithData}'s body; the caller holds the operation lock. */

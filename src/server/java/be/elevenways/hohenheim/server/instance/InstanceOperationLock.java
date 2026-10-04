@@ -118,8 +118,18 @@ public final class InstanceOperationLock {
      *         when there is no live record to hold
      */
     public <T> T exclusive(int instanceId, @NonNull Contention contention,
-                           @NonNull Supplier<T> body) {
-        ClaimedRows<Integer>.Held hold = this.hold(instanceId, contention);
+                            @NonNull Supplier<T> body) {
+        return exclusive(instanceId, contention, body, false);
+    }
+
+    /** Holds a stored record, including a destroyed record whose retained data an operator removes. */
+    public <T> T exclusiveStored(int instanceId, @NonNull Contention contention, @NonNull Supplier<T> body) {
+        return exclusive(instanceId, contention, body, true);
+    }
+
+    private <T> T exclusive(int instanceId, @NonNull Contention contention, @NonNull Supplier<T> body,
+                            boolean stored) {
+        ClaimedRows<Integer>.Held hold = this.hold(instanceId, contention, stored);
         if (hold == null) {
             throw refusalFor(instanceId);
         }
@@ -189,6 +199,10 @@ public final class InstanceOperationLock {
     }
 
     private ClaimedRows<Integer>.@Nullable Held hold(int instanceId, @NonNull Contention contention) {
+        return hold(instanceId, contention, false);
+    }
+
+    private ClaimedRows<Integer>.@Nullable Held hold(int instanceId, @NonNull Contention contention, boolean stored) {
         int wait = switch (contention) {
             case REFUSE -> 0;
             case QUEUE -> QUEUE_SECONDS;
@@ -199,7 +213,8 @@ public final class InstanceOperationLock {
             threads.add(current);
         }
         try {
-            return this.rows.hold(instanceId, wait, InstanceModel.ID.isNotNull(), UnaryOperator.identity());
+            return this.rows.hold(instanceId, wait, InstanceModel.ID.isNotNull(),
+                stored ? query -> query.withTrashed() : UnaryOperator.identity());
         } finally {
             threads.remove(current);
         }
