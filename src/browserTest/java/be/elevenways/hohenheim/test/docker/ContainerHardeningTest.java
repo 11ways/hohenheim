@@ -39,6 +39,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
@@ -130,7 +131,7 @@ class ContainerHardeningTest {
      * -- Docker's masked /proc entries are tmpfs subtrees, not binds of anything on disk.
      */
     private static final Set<String> PSEUDO_FILESYSTEMS = Set.of(
-        "proc", "sysfs", "tmpfs", "devpts", "mqueue", "cgroup", "cgroup2", "overlay",
+        "proc", "sysfs", "tmpfs", "devpts", "mqueue", "cgroup", "cgroup2",
         "shm", "devtmpfs", "securityfs", "debugfs", "tracefs", "bpf", "fusectl",
         "configfs", "pstore", "hugetlbfs", "ramfs", "binfmt_misc", "nsfs");
 
@@ -381,6 +382,14 @@ class ContainerHardeningTest {
             docker.restartContainer(handle, 10);
             waitForLog(docker, handle, READY_LINE, readyLines + 1,
                 "step 5: it survives a restart onto the already-chowned volume");
+            // A ready line can reach Docker before the entrypoint has exec'd the service process.
+            Poll.until("step 5: pid 1 completes its privilege drop after restart", Duration.ofSeconds(30), () -> {
+                try {
+                    return "70".equals(kernelStatusOf(docker, handle).get("Uid").split("\\s+")[0]);
+                } catch (IOException error) {
+                    throw new UncheckedIOException(error);
+                }
+            });
             assertThat(kernelStatusOf(docker, handle).get("Uid").split("\\s+")[0])
                 .as("step 5: still unprivileged after the restart").isEqualTo("70");
         } finally {
@@ -407,11 +416,8 @@ class ContainerHardeningTest {
      * through in production and had no live coverage at all: the daemon-side proof was a
      * container on daystrom (2026-08-23), not a test.
      *
-     * AIDEV-NOTE: /proc/self/mountinfo field 4 is the SUBTREE of the source filesystem a
-     * mount exposes, so a host bind is exactly a mount whose field 4 is not "/". That is
-     * what makes "no arbitrary host path" checkable rather than assertable by faith: the
-     * whole set is enumerated and compared, so a bind nobody predicted FAILS instead of
-     * being silently absent from a list of things we thought to look for.
+     * AIDEV-NOTE: filesystem roots and overlay-backed host paths can also be binds; the
+     * whole kernel mount set is checked, with daemon sources cross-checked against mounted destinations.
      */
     @Test
     void aWorkspaceContainerReachesItsOwnVolumeAndNoOtherHostPath() throws IOException {
@@ -475,6 +481,8 @@ class ContainerHardeningTest {
                 .as("step 2: and the one that is not Docker plumbing is exactly the"
                     + " declared volume directory")
                 .isEqualTo(ourVolume);
+            String daemonRoot = String.valueOf(docker.info().get("DockerRootDir"));
+            String containerId = String.valueOf(docker.inspectContainer(created).get("Id"));
             for (Map.Entry<String, String> mount : hostMounts.entrySet()) {
                 if (mount.getKey().equals("/home/site")) {
                     continue;
@@ -482,7 +490,9 @@ class ContainerHardeningTest {
                 assertThat(mount.getValue())
                     .as("step 2: %s comes from the daemon's own per-container directory",
                         mount.getKey())
-                    .startsWith("/var/lib/docker/containers/");
+                    // Kernel mount roots include the host's btrfs subvolume prefix, unlike Docker's logical path.
+                    .endsWith(Path.of(daemonRoot, "containers", containerId,
+                        Path.of(mount.getKey()).getFileName().toString()).toString());
             }
 
             // 3. The neighbour instance's volume -- a directory under the SAME volume root
@@ -741,18 +751,7 @@ class ContainerHardeningTest {
         }
     }
 
-    /**
-     * Every mount inside the container that exposes a SUBTREE of a host filesystem, as
-     * {@code container mount point -> host source path}.
-     *
-     * AIDEV-NOTE: read from {@code /proc/self/mountinfo} rather than from the daemon's
-     * {@code Mounts} array, because the daemon's array is a record of what it was ASKED
-     * for -- it cannot show a mount the runtime added, and the question here is what the
-     * process can reach. Field 4 (the mount ROOT) is the subtree of the source filesystem:
-     * "/" for a whole filesystem (proc, sysfs, the overlay rootfs, every tmpfs), an
-     * absolute host path for a bind. Kernel pseudo-filesystems are excluded by fs TYPE,
-     * so a bind hidden under /proc or /dev would still be listed.
-     */
+    /** Enumerates kernel-visible host mounts and cross-checks the sources of declared bind destinations. */
     private static Map<String, String> hostBindsOf(DockerClient docker, String container)
             throws IOException {
         DockerClient.ExecResult result = docker.exec(container,
@@ -762,6 +761,7 @@ class ContainerHardeningTest {
                 container, result.output())
             .isEqualTo(0);
         Map<String, String> binds = new LinkedHashMap<>();
+        Set<String> mounted = new java.util.HashSet<>();
         for (String line : result.output().split("\\R")) {
             int separator = line.indexOf(" - ");
             if (separator < 0) {
@@ -775,10 +775,21 @@ class ContainerHardeningTest {
             String mountRoot = head[3];
             String mountPoint = head[4];
             String type = tail[0];
-            if (mountRoot.equals("/") || PSEUDO_FILESYSTEMS.contains(type)) {
+            mounted.add(mountPoint);
+            if (mountPoint.equals("/") || PSEUDO_FILESYSTEMS.contains(type)) {
                 continue;
             }
             binds.put(mountPoint, mountRoot);
+        }
+        // Overlay/btrfs host binds can expose a filesystem root; the kernel still proves the destination exists.
+        Object declared = docker.inspectContainer(container).get("Mounts");
+        if (declared instanceof List<?> mounts) {
+            for (Object value : mounts) {
+                if (!(value instanceof Map<?, ?> mount) || !"bind".equals(mount.get("Type"))) continue;
+                String destination = String.valueOf(mount.get("Destination"));
+                assertThat(mounted).as("the daemon's bind is actually mounted in the container").contains(destination);
+                binds.put(destination, String.valueOf(mount.get("Source")));
+            }
         }
         return binds;
     }

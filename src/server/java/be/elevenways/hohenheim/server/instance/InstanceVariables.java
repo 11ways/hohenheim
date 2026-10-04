@@ -64,6 +64,11 @@ public final class InstanceVariables {
                 model.delete(existing.get(InstanceVariableModel.ID));
             }
 
+            // Optional, non-generating secrets have no stored carrier until supplied by their owning flow.
+            if (handler.isSecretValue() && (value == null || value.isEmpty())) {
+                continue;
+            }
+
             Row row = model.createEmptyRow();
             row.set(InstanceVariableModel.INSTANCE_ID, instanceId);
             row.set(InstanceVariableModel.KEY, key);
