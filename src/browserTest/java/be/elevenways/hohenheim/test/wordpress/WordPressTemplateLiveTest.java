@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
@@ -110,6 +111,7 @@ class WordPressTemplateLiveTest {
             InstanceService service = new InstanceService();
             DatabaseService databases = new DatabaseService();
 
+            Throwable failure = null;
             try {
                 // 2. The database provisions in the background; wait for ACTIVE (or a
                 //    named failure) -- the image pull is the slow part.
@@ -153,8 +155,18 @@ class WordPressTemplateLiveTest {
                     .as("step 5: the proxy fix reached wp-config.php").isEqualTo("1");
 
                 service.stop(id);
+            } catch (RuntimeException | Error failed) {
+                failure = failed;
+                throw failed;
             } finally {
-                cleanup(docker, service, id, handle, databases, databaseName);
+                try {
+                    cleanup(docker, service, id, handle, databases, databaseName);
+                } catch (RuntimeException | Error failedCleanup) {
+                    if (failure == null) {
+                        throw failedCleanup;
+                    }
+                    failure.addSuppressed(failedCleanup);
+                }
             }
         });
     }
@@ -221,10 +233,15 @@ class WordPressTemplateLiveTest {
 
     private static void cleanup(DockerClient docker, InstanceService service, int instanceId,
                                 String handle, DatabaseService databases, String databaseName) {
+        RuntimeException failure = null;
         try {
-            service.destroy(instanceId);
-        } catch (RuntimeException ignored) {
-            // never deployed, or already gone
+            // Teardown waits for background convergence instead of racing its held claim.
+            InstanceOperationLock.production().exclusive(instanceId, InstanceOperationLock.Contention.QUEUE,
+                () -> service.destroy(instanceId));
+            assertThat(Models.get(InstanceDatabaseModel.class).findByInstanceId(instanceId))
+                .as("cleanup: destroying the workload released its database attachment").isEmpty();
+        } catch (RuntimeException failed) {
+            failure = failed;
         }
         try {
             docker.removeContainer(handle, true);
@@ -243,9 +260,15 @@ class WordPressTemplateLiveTest {
         }
         try {
             databases.destroy(databaseName, true);
-        } catch (IOException | RuntimeException ignored) {
-            // best effort; the record delete below is what the next run needs
+        } catch (IOException | RuntimeException failed) {
+            if (failure == null) {
+                failure = new RuntimeException("WordPress database cleanup failed", failed);
+            } else {
+                failure.addSuppressed(failed);
+            }
         }
-        Models.get(DatabaseModel.class).find().where(DatabaseModel.NAME.eq(databaseName)).delete();
+        if (failure != null) {
+            throw failure;
+        }
     }
 }
