@@ -27,6 +27,8 @@ settings/local.dry
 settings/hohenheim.dry*
 settings/auth.dry*
 settings/comms.dry*
+# zenit's PrivateNetworkBoot writes this host's private-network authority on its first boot.
+settings/host-network.dry
 # The lock the settings writer takes beside every file it writes.
 settings/.*.lock
 

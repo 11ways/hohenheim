@@ -122,6 +122,27 @@ class ForceSslAvailabilityTest {
             .hasSize(1);
         assertThat(items.get(0).severity()).isEqualTo(AttentionSeverity.ERROR);
 
+        // Step 3b: a fresh install forces nothing: global force_https on, no domain forced, no certificate. Nothing
+        //     refuses plain HTTP, so the item stays silent (it used to fire with an empty "-" site list).
+        Row forcedDomain = Models.get(SiteDomainModel.class).find()
+            .where(SiteDomainModel.HOSTNAME.eq("forced.fssl.test")).first();
+        forcedDomain.set(SiteDomainModel.FORCE_SSL, false);
+        Models.get(SiteDomainModel.class).save(forcedDomain);
+        proxy.reload();
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, true);
+        List<AttentionItem> fresh = new ArrayList<>();
+        ProxyAttention.httpsUnavailableWithForceSsl(fresh);
+        assertThat(fresh)
+            .as("step 3b: global force_https with nothing forced and no certificate raises no HTTPS alarm")
+            .isEmpty();
+        assertThat(proxy.getDispatcher().forceSslSiteNames())
+            .as("step 3b: the dispatcher's forcing rule names no refusing site")
+            .isEmpty();
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, false);
+        forcedDomain.set(SiteDomainModel.FORCE_SSL, true);
+        Models.get(SiteDomainModel.class).save(forcedDomain);
+        proxy.reload();
+
         // Step 4: global force_https waits for a working certificate on an exact name: one no certificate covers is
         // still served, never sent to an error page.
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, true);

@@ -254,8 +254,10 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
         assertThat(plainRow.get(InstanceVariableModel.SECRET_VALUE)).isNull();
 
         // 5. Quick-add uses the full form's retained conditions, not a permanently visible second carrier.
+        //    Quick add is a header button that opens its CREATE entries in a sheet.
         navigateToApp("/admin/environment-variables?environment_id=" + environmentId);
-        String quick = "cms-quick-add ";
+        page.locator("pl-button[data-cms-quick-add-open]").click();
+        String quick = "[data-cms-quick-add] ";
         assertThat(page.locator(quick + "[data-zf-create-field='plain_value']").isVisible())
             .as("step 5: quick-add initially offers the declared plain default").isTrue();
         assertThat(page.locator(quick + "[data-zf-create-field='secret_value']").isVisible())
@@ -263,7 +265,7 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
         page.locator(quick + "[data-zf-create-field='plain_value'] textarea").fill("inactive-plain-draft");
         page.locator(quick + "[data-zf-create-field='kind'] .pl-select-field").click();
         page.locator("he-bottom .pl-select-popup[data-open] [role='option'][data-value='secret']").click();
-        page.waitForFunction("() => document.querySelector('cms-quick-add [data-conditional-entry=secret_value]').hidden === false");
+        page.waitForFunction("() => document.querySelector('[data-cms-quick-add] [data-conditional-entry=secret_value]').hidden === false");
         assertThat(page.locator(quick + "[data-zf-create-field='plain_value']").isVisible())
             .as("step 5: choosing secret hides the retained plain carrier").isFalse();
         assertThat(page.locator(quick + "[data-zf-create-field='secret_value']").isVisible())

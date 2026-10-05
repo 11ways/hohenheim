@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
-import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
@@ -17,7 +16,6 @@ import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -89,19 +87,15 @@ public final class ProxyAttention {
                 || proxy.getHttpState() != ProxyServer.State.RUNNING) {
             return;
         }
+        // The dispatcher's own forcing rule names the refusing sites (the global force_https included), so a fresh
+        // install with nothing forced raises nothing and the list is never empty.
         List<String> sites = proxy.getDispatcher().forceSslSiteNames();
-        boolean globalForce = Boolean.TRUE.equals(
-            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
-        boolean anyRoutes = proxy.getDispatcher().getExactRouteCount()
-            + proxy.getDispatcher().getWildcardRouteCount()
-            + proxy.getDispatcher().getRegexRouteCount() > 0;
-        if (sites.isEmpty() && !(globalForce && anyRoutes)) {
+        if (sites.isEmpty()) {
             return;
         }
         items.add(item(AttentionSeverity.ERROR, "certificate",
             copy("https_unavailable", "attention_title"),
-            copy("https_unavailable", "attention_detail",
-                "sites", sites.isEmpty() ? "-" : String.join(", ", sites)),
+            copy("https_unavailable", "attention_detail", "sites", String.join(", ", sites)),
             CmsRoutes.list(ADMIN, HohenheimSlugs.CERTIFICATES)));
     }
 
