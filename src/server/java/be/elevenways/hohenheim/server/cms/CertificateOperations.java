@@ -14,6 +14,7 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
 import be.elevenways.zenit.common.edit.Array;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
@@ -32,7 +33,6 @@ import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -98,8 +98,8 @@ public final class CertificateOperations {
         .build();
 
     private static final OperationInput<Order> ORDER = OperationInput.of(INPUT, Order.class, values -> new Order(
-        names(values.get(DOMAINS.getName())), values.get(NICE_NAME), values.get(EMAIL), values.get(CHALLENGE),
-        values.get(DNS_PUBLISHER)));
+        PrimitiveCoercion.toTrimmedTextList(values.get(DOMAINS)), values.get(NICE_NAME), values.get(EMAIL),
+        values.get(CHALLENGE), values.get(DNS_PUBLISHER)));
 
     /** A new certificate for the names the operator lists; the certificate list's header action. */
     public static final Operation<Void, Order, Integer> REQUEST = Operation.declare(HohenheimIds.id("request_certificate"))
@@ -244,20 +244,6 @@ public final class CertificateOperations {
 
     private static @NonNull String text(@Nullable Object value) {
         return value == null ? "" : String.valueOf(value).trim();
-    }
-
-    /** @return the submitted names, trimmed, blanks dropped */
-    private static @NonNull List<String> names(@Nullable Object value) {
-        List<String> names = new ArrayList<>();
-        if (value instanceof List<?> items) {
-            for (Object item : items) {
-                String name = item == null ? "" : String.valueOf(item).trim();
-                if (!name.isEmpty()) {
-                    names.add(name);
-                }
-            }
-        }
-        return List.copyOf(names);
     }
 
     static @NonNull Microcopy copy(@NonNull String key) {
