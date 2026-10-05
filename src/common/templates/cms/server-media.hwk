@@ -11,16 +11,12 @@
 {% declare deleteTarget: RouteTarget %}
 {% declare uploadUrl: String %}
 {% declare maxIsoGb: Long %}
-{% declare recordTabs: List<RecordTabState> %}
+{% declare head: RecordHeadState = null %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
 <section class="cms-resource-form-page">
-    <header class="cms-resource-list-header">
-        <h1>{{ title }}</h1>
-    </header>
-
-    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+    {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
 
     <hh-install-media serverId={% serverId %} view={% view %} deleteTarget={% deleteTarget %}></hh-install-media>
 

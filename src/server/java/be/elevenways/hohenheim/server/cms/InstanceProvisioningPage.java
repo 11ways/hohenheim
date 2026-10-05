@@ -113,7 +113,7 @@ public final class InstanceProvisioningPage implements RecordTab.Rendered<Row> {
             .with(HohenheimParams.INSTANCE_ID_PREFILL, instanceId) : null;
         vars.put("addFileTarget", addFileTarget);
         vars.put("canAddFile", addFileTarget != null);
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_PROVISIONING, vars);
     }
 

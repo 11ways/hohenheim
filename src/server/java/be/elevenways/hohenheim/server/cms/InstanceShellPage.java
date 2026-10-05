@@ -79,7 +79,7 @@ public final class InstanceShellPage implements ConsoleModes.Mode {
         vars.put("instanceName", instance.get(InstanceModel.NAME));
         vars.put("instanceId", instanceId);
         vars.put("running", InstanceModel.STATUS_RUNNING.equals(status));
-        vars.put("recordTabs", this.modes.strip(request, instance, recordTabs(conduit)));
+        vars.put("head", recordHead(conduit));
         vars.put("consoleModes", this.modes.views(request, instance, SLUG));
         vars.put("maxSessions", InstanceShell.MAX_SESSIONS_PER_INSTANCE);
         vars.put("idleMinutes", (int) (InstanceShell.IDLE_TIMEOUT_MS / 60_000));

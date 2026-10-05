@@ -265,7 +265,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         vars.put("searchActive", search != null);
         vars.put("pager", Pager.of(page.window(), page.total(), number -> pageUrl(listTarget, search, number)));
         vars.put("addRecordTarget", addRecordTarget);
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("head", recordHead(conduit));
         // Promoted seam: the framework's own quick-add builder. The zone preset it needs
         // is answered by the record entry's quick-create presets, which read THIS route.
         QuickAddState.putVars(vars, panel, resource, accessContext, refreshUrl,
@@ -281,7 +281,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         vars.put("origin", zone.get(DnsZoneModel.ORIGIN));
         vars.put("zoneId", zone.get(DnsZoneModel.ID));
         vars.put("available", false);
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("head", recordHead(conduit));
         return vars;
     }
 
@@ -412,7 +412,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
             }
         }
         vars.put("deleteForms", deletes);
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.DNS_ZONE_REMOTE_RECORDS, vars);
     }
 

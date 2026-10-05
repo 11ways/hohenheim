@@ -80,7 +80,7 @@ public final class InstanceFramebufferPage implements ConsoleModes.Mode {
         // from its own declaration -- never concatenated.
         vars.put("framebufferWsUrl", HohenheimEndpoints.VM_FRAMEBUFFER.toUrl(
             Map.of(HohenheimEndpoints.INSTANCE_ID, instanceId)));
-        vars.put("recordTabs", this.modes.strip(request, instance, recordTabs(conduit)));
+        vars.put("head", recordHead(conduit));
         vars.put("consoleModes", this.modes.views(request, instance, SLUG));
         return new RenderTemplateResult(
             HohenheimTemplateIds.INSTANCE_FRAMEBUFFER, vars);

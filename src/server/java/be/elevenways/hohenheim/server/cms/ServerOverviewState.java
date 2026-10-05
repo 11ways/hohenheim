@@ -30,13 +30,7 @@ import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
-import be.elevenways.zenit.cms.common.resource.PanelResource;
-import be.elevenways.zenit.cms.common.panel.PanelRequest;
-import be.elevenways.zenit.cms.common.widget.RecordActionsWidget;
-import be.elevenways.zenit.cms.server.render.action.RecordActionBands;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ActivityRules;
@@ -89,7 +83,6 @@ public final class ServerOverviewState {
 
     private ServerOverviewState() {}
 
-    @SuppressWarnings("unchecked")
     public static @NonNull WidgetTree widgets(@NonNull Row server, @NonNull AccessContext accessContext) {
         Conduit conduit = accessContext.conduit();
         Integer serverId = server.get(ServerModel.ID);
@@ -162,12 +155,7 @@ public final class ServerOverviewState {
                     acknowledgementBadge(acknowledgement, locales, resolver)))));
         }
 
-        Panel panel = PanelRegistry.getBySlug(panelSlug);
-        if (panel != null && panel.entryBySlug(ServerParts.SLUG) instanceof PanelResource<?> resource) {
-            state.add(new WidgetInstance(RecordActionsWidget.ID, Map.of())
-                .withData(RecordActionBands.forRecord(new PanelRequest(panel, conduit, accessContext, null),
-                    (PanelResource<Row>) resource, server)));
-        }
+        // The host's actions are its record heading's (zenitcms:record-head), never a second row here.
         bands.add(band(new WidgetTree(state)));
 
         List<TrustLaneView> lanes = trustLanes(server);

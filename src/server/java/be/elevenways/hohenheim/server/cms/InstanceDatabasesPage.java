@@ -105,7 +105,7 @@ public final class InstanceDatabasesPage implements RecordTab.Rendered<Row> {
         // variable is serialized into the hydration payload whether or not any element
         // renders it (the InstanceDevicesPage lesson).
         vars.put("attachTarget", canEdit ? attachTarget(panel, instanceId) : null);
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_DATABASES, vars);
     }
 

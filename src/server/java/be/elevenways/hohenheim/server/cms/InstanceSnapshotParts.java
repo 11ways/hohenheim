@@ -76,7 +76,7 @@ public final class InstanceSnapshotParts {
                 .relation(RelationPick.of(InstanceSnapshotModel.INSTANCE_ID, InstanceModel.MODEL_ID).build()).build())
             .column(ColumnSpec.fromField(InstanceSnapshotModel.STATUS).filterable().subtext("total_bytes").build())
             .column(ColumnSpec.fromField(InstanceSnapshotModel.NOTE).build())
-            .column(ColumnSpec.fromField(InstanceSnapshotModel.TOTAL_BYTES).hidden().build())
+            .column(ColumnSpec.fromField(InstanceSnapshotModel.TOTAL_BYTES).byteSize().hidden().build())
             .column(ColumnSpec.fromField(InstanceSnapshotModel.CREATED_AT).build()).build();
     }
     private static @Nullable String title(Row row) {

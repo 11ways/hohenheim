@@ -121,7 +121,7 @@ public final class TemplateContentsPage implements RecordTab.Rendered<Row> {
             .with(CmsEndpoints.PANEL_PARAM, panel)
             .with(CmsEndpoints.RESOURCE_PARAM, "instance-template-volumes")
             .with(HohenheimParams.TEMPLATE_ID_PREFILL, templateId));
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.TEMPLATE_CONTENTS, vars);
     }
 }

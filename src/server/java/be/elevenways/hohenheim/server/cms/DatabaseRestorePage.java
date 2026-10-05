@@ -46,7 +46,7 @@ public final class DatabaseRestorePage implements RecordTab.Rendered<Row> {
             .with(HohenheimEndpoints.DATABASE_NAME, name).toUrl());
         vars.put("recordId", record.get(DatabaseModel.ID));
         vars.put("usedBy", usedBy(record.get(DatabaseModel.ID)));
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.DATABASE_RESTORE, vars);
     }
 

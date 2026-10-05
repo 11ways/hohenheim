@@ -19,7 +19,7 @@
 {% declare returnParam: String %}
 {% declare deployTarget: RouteTarget %}
 {% declare rollbackTarget: RouteTarget %}
-{% declare recordTabs: List<RecordTabState> %}
+{% declare head: RecordHeadState = null %}
 {% declare timeWording: RelativeTimeWording %}
 {% declare webhookUrl: String = "" %}
 {% declare webhookSecret: String = "" %}
@@ -28,11 +28,7 @@
 
 {% block "main" %}
 <section class="cms-resource-list-page">
-    <header class="cms-resource-list-header">
-        <h1>{{ instanceName }}</h1>
-    </header>
-
-    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+    {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
 
     <pl-card>
         <pl-card-header>

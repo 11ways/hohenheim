@@ -43,6 +43,16 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 .as("step 1: the record page's lead line says what the site serves")
                 .contains("data-cms-record-lead");
 
+            // 1b. The overview heads with the record itself, and its actions are the heading's: ONE action band, never
+            //     a second row of the same actions under the verdict.
+            assertThat(page).as("step 1b: the overview draws the record heading")
+                .contains("data-cms-record-head")
+                .contains("<h1>app-journey-healthy</h1>");
+            assertThat(page.split("data-cms-record-actions", -1).length - 1)
+                .as("step 1b: exactly one action band on the page").isEqualTo(1);
+            assertThat(page).as("step 1b: and no record-actions widget repeating it")
+                .doesNotContain("cms-record-actions-widget");
+
             // 2. A name forced to HTTPS without a working certificate is the error page visitors get: said plainly,
             //    with the fix offered right there, and the address marked as not working.
             String brokenPage = adminGet(overview(broken)).body();

@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
-import be.elevenways.zenit.cms.common.render.panel.RecordTabState;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -22,9 +21,8 @@ import java.util.List;
  *
  * AIDEV-NOTE: a mode keeps its own route, its own hide-and-enforce gate ({@link Mode#offers}) and its own actions, so
  * nothing a mode authorizes moved; only the hub ({@link InstanceConsolePage}) sits in the record strip, and it is
- * offered while ANY mode is. The other modes stay out of the strip ({@code inTabs() == false}) and draw the strip
- * with the hub marked active, because the framework marks the active tab by slug alone: a tab that stands under
- * another tab is a zenit-cms gap (reported 2026-10-05), not something this class should grow.
+ * offered while ANY mode is. The other modes stay out of the strip ({@code inTabs() == false}) and stand under the
+ * hub ({@link Mode#standsUnder}), so the framework keeps Console marked active while one of them renders.
  *
  * @author Jelle De Loecker
  * @since 0.1.0
@@ -43,6 +41,12 @@ public final class ConsoleModes {
         @Override
         default boolean visibleFor(@NonNull Row record, @NonNull AccessContext access) {
             return this.offers(record, access);
+        }
+
+        /** A mode kept out of the strip stands under the Console hub, so the strip keeps Console marked. */
+        @Override
+        default @Nullable String standsUnder() {
+            return this.inTabs() ? null : InstanceConsolePage.SLUG;
         }
     }
 
@@ -117,16 +121,4 @@ public final class ConsoleModes {
         return views.size() < 2 ? List.of() : List.copyOf(views);
     }
 
-    /** @return the record strip as the framework stamped it, with the Console tab marked active */
-    @NonNull List<RecordTabState> strip(@NonNull PanelRequest request, @NonNull Row record,
-                                        @NonNull List<RecordTabState> stamped) {
-        String hubUrl = CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.INSTANCES,
-            record.get(InstanceModel.ID), InstanceConsolePage.SLUG).toUrl();
-        List<RecordTabState> tabs = new ArrayList<>(stamped.size());
-        for (RecordTabState tab : stamped) {
-            tabs.add(new RecordTabState(tab.url(), tab.label(), tab.icon(), tab.url().equals(hubUrl),
-                tab.overflow()));
-        }
-        return List.copyOf(tabs);
-    }
 }

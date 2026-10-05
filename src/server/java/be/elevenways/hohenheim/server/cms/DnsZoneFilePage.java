@@ -69,7 +69,7 @@ public final class DnsZoneFilePage implements RecordTab.Rendered<Row> {
         DSRecord ds = Boolean.TRUE.equals(zone.get(DnsZoneModel.DNSSEC_ENABLED))
             ? DnsSecMaterial.dsRecord(zone) : null;
         vars.put("dsRecord", ds != null ? ds.toString() : "");
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.DNS_ZONE_FILE, vars);
     }
 }

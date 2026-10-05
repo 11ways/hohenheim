@@ -25,16 +25,12 @@
     source set, so a common template cannot reach the constant (nor its
     Zenit.Params.zenit.return_to identifier). Never spell "_return" here by hand. -#}
 {% declare returnParam: String %}
-{% declare recordTabs: List<RecordTabState> %}
+{% declare head: RecordHeadState = null %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
 <section class="cms-resource-list-page">
-    <header class="cms-resource-list-header">
-        <h1>{{ instanceName }}</h1>
-    </header>
-
-    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+    {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
 
     {#- A runtime with no file lane states the absence; a broken browser would be worse
         than an honest "not here yet". Only the Docker driver implements the lane. -#}
@@ -46,7 +42,6 @@
     {% /if %}
 
     {% if error != "" %}<pl-alert variant="destructive" data-files-error="1">{{ error }}</pl-alert>{% /if %}
-
 
     {% if volumes %}
         <pl-breadcrumb>

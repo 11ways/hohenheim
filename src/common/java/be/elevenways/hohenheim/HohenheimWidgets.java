@@ -5,7 +5,6 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.widget.common.WidgetRegistry;
-import be.elevenways.zenit.widget.common.WidgetType;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
@@ -71,33 +70,16 @@ public final class HohenheimWidgets {
         HohenheimTemplateIds.WIDGET_INSTANCE_ENDPOINTS,
         Microcopy.of("endpoint").withFilter("scope", "instance_overview"), "plug");
 
-    /** An app's addresses with whether HTTPS works for each: the overview's Addresses card. */
+    /** An app's addresses with whether HTTPS works for each: the body of the overview's Addresses card. */
     public static final DisplayWidget APP_ADDRESSES = register("app_addresses", HohenheimTemplateIds.WIDGET_APP_ADDRESSES,
         Microcopy.of("addresses").withFilter("scope", "app_overview"), "globe");
 
-    /** An app's protected paths, an open one said as open: the overview's Protection card. */
+    /** An app's protected paths, an open one said as open: the body of the overview's Protection card. */
     public static final DisplayWidget APP_PROTECTION = register("app_protection",
         HohenheimTemplateIds.WIDGET_APP_PROTECTION,
         Microcopy.of("protection").withFilter("scope", "app_overview"), "lock");
 
-    /** An app's measured resources, each through the framework's usage gauge: the overview's Resources card. */
-    public static final DisplayWidget APP_RESOURCES = register("app_resources",
-        HohenheimTemplateIds.WIDGET_APP_RESOURCES,
-        Microcopy.of("resources").withFilter("scope", "app_overview"), "gauge");
-
-    /** An app's facts through the framework's fact list: the overview's Details card. */
-    public static final DisplayWidget APP_DETAILS = register("app_details", HohenheimTemplateIds.WIDGET_APP_DETAILS,
-        Microcopy.of("details").withFilter("scope", "app_overview"), "circle-info");
-
-    /** An app's recent activity through the framework's records list: the overview's Recent card. */
-    public static final AppRecentWidget APP_RECENT = registered(new AppRecentWidget());
-
     private HohenheimWidgets() {
-    }
-
-    private static <W extends WidgetType> @NonNull W registered(@NonNull W widget) {
-        WidgetRegistry.INSTANCE.register(widget);
-        return widget;
     }
 
     private static @NonNull DisplayWidget register(@NonNull String id, @NonNull Identifier template,

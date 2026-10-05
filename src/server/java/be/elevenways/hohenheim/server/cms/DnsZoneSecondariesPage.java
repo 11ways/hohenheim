@@ -104,7 +104,7 @@ public final class DnsZoneSecondariesPage implements RecordTab.Rendered<Row> {
             .with(CmsEndpoints.PANEL_PARAM, HohenheimSlugs.ADMIN)
             .with(CmsEndpoints.RESOURCE_PARAM, DnsZonePeerParts.SLUG)
             .with(HohenheimParams.ZONE_ID_PREFILL, zoneId));
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("head", recordHead(conduit));
         vars.put("timeWording", RelativeTimeWording.resolve(
             conduit.getLocales(), conduit.getMessageResolver()));
 

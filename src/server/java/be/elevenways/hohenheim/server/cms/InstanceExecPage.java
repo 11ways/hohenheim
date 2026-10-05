@@ -101,7 +101,7 @@ public final class InstanceExecPage implements ConsoleModes.Mode {
         InstanceExecResults.Run run = InstanceExecResults.pop(conduit, instance.get(InstanceModel.ID));
         vars.put("execOutput", run == null ? "" : run.output());
         vars.put("execExit", run == null ? "" : run.exitCode());
-        vars.put("recordTabs", this.modes.strip(request, instance, recordTabs(conduit)));
+        vars.put("head", recordHead(conduit));
         vars.put("consoleModes", this.modes.views(request, instance, SLUG));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_EXEC, vars);
     }

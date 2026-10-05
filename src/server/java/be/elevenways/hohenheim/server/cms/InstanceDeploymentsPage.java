@@ -117,7 +117,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             .with(HohenheimEndpoints.INSTANCE_ID, instanceId));
         vars.put("rollbackTarget", HohenheimEndpoints.INSTANCES_ROLLBACK
             .with(HohenheimEndpoints.INSTANCE_ID, instanceId));
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("head", recordHead(conduit));
         vars.put("timeWording", RelativeTimeWording.resolve(
             conduit.getLocales(), conduit.getMessageResolver()));
 

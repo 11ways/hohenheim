@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimWidgets;
-import be.elevenways.hohenheim.app.AppUsage;
 import be.elevenways.hohenheim.instance.InstanceDiskView;
 import be.elevenways.hohenheim.instance.InstanceEndpointView;
 import be.elevenways.hohenheim.instance.InstanceOperations;
@@ -25,6 +24,7 @@ import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.ActionButtonWidget;
 import be.elevenways.zenit.widget.common.builtin.AlertVariant;
 import be.elevenways.zenit.widget.common.builtin.AlertWidget;
+import be.elevenways.zenit.widget.common.builtin.CardWidget;
 import be.elevenways.zenit.widget.common.data.NoticeData;
 import be.elevenways.zenit.widget.common.data.UsageData;
 import be.elevenways.zenit.widget.common.data.WidgetBadge;
@@ -86,11 +86,8 @@ public final class InstanceOverview {
 
         // Why the instance cannot start, whether it runs and what it is live at are the resource's health verdict
         // (AppHealth), drawn by the framework as the page's first band; this tree is what follows it.
+        // The record's actions are its heading's (zenitcms:record-head); only the page's own refresh stays here.
         List<WidgetInstance> top = new ArrayList<>();
-        WidgetInstance actions = AppOverview.actions(accessContext, InstanceParts.SLUG, instance);
-        if (actions != null) {
-            top.add(actions);
-        }
         top.add(new WidgetInstance(ActionButtonWidget.ID, Map.of(
             "label", HohenheimWidgetCopy.localized("refresh", "instance_overview"),
             "action", REFRESH_ACTION,
@@ -116,9 +113,12 @@ public final class InstanceOverview {
         if (protection != null) {
             main.add(protection);
         }
-        main.add(new WidgetInstance(HohenheimWidgets.INSTANCE_ENDPOINTS.id(), Map.of())
-            .withData(endpointsOf(instanceId)));
-        main.add(AppOverview.resources(List.of(new AppUsage(
+        main.add(new WidgetInstance(CardWidget.ID, Map.of(
+                "title", Microcopy.of("endpoint").withFilter("scope", "instance_overview"),
+                "lead", Microcopy.of("endpoint_hint").withFilter("scope", "instance_overview")),
+            new WidgetTree(List.of(new WidgetInstance(HohenheimWidgets.INSTANCE_ENDPOINTS.id(), Map.of())
+                .withData(endpointsOf(instanceId))))));
+        main.add(AppOverview.resources(List.of(AppOverview.gauge(
             Microcopy.of("disk").withFilter("scope", "instance_overview"),
             diskUsage(instance, serverId, locales, resolver)))));
 

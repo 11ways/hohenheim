@@ -86,7 +86,7 @@ public final class ServerMediaTab implements RecordTab.Rendered<Row> {
         vars.put("uploadUrl", HohenheimEndpoints.SERVERS_MEDIA_UPLOAD
             .with(HohenheimEndpoints.SERVER_ID, serverId).toUrl());
         vars.put("maxIsoGb", InstallMedia.MAX_ISO_BYTES >> 30);
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.SERVER_MEDIA, vars);
     }
 

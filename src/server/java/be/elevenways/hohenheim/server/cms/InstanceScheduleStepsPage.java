@@ -103,7 +103,7 @@ public final class InstanceScheduleStepsPage implements RecordTab.Rendered<Row> 
             .with(CmsEndpoints.PANEL_PARAM, panel)
             .with(CmsEndpoints.RESOURCE_PARAM, "instance-schedule-steps")
             .with(HohenheimParams.SCHEDULE_ID_PREFILL, scheduleId) : null);
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_SCHEDULE_STEPS, vars);
     }
 }
