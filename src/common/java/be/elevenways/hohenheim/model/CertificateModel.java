@@ -125,11 +125,33 @@ public class CertificateModel extends Model {
 
     /** Per-cert ACME account email override; null means the global account. */
     public static final StringField LETSENCRYPT_EMAIL = SCHEMA.addField(StringField.builder().name("letsencrypt_email").build());
-    public static final EnumField CHALLENGE_TYPE = SCHEMA.addField(EnumField.builder("challenge_type")
-        .value(CHALLENGE_HTTP, value -> value.displayName("HTTP-01")
-            .label(challengeLabel(CHALLENGE_HTTP)).icon("globe").color(ColorHue.BLUE))
-        .value(CHALLENGE_DNS, value -> value.displayName("DNS-01")
-            .label(challengeLabel(CHALLENGE_DNS)).icon("at").color(ColorHue.VIOLET))
+    /**
+     * THE challenge-type vocabulary, declared once for the stored column and for the certificate request's input
+     * (CertificateOperations), which must offer it in a create-like view the column hides.
+     */
+    public static EnumField.Builder challengeTypeField() {
+        return EnumField.builder("challenge_type")
+            .value(CHALLENGE_HTTP, value -> value.displayName("HTTP-01")
+                .label(challengeLabel(CHALLENGE_HTTP)).icon("globe").color(ColorHue.BLUE))
+            .value(CHALLENGE_DNS, value -> value.displayName("DNS-01")
+                .label(challengeLabel(CHALLENGE_DNS)).icon("at").color(ColorHue.VIOLET));
+    }
+
+    /** THE DNS-01 publisher vocabulary, shared by the stored column and the certificate request's input. */
+    public static EnumField.Builder dnsPublisherField() {
+        return EnumField.builder("dns_publisher")
+            .value(DNS_PUBLISHER_MANUAL, v -> v.displayName("Manual")
+                .label(Microcopy.of("manual").withFilter("scope", "dns_publisher"))
+                .icon("pen").color(ColorHue.GRAY))
+            .value(DNS_PUBLISHER_INTERNAL, v -> v.displayName("Internal")
+                .label(Microcopy.of("internal").withFilter("scope", "dns_publisher"))
+                .icon("server").color(ColorHue.GREEN))
+            .value(DNS_PUBLISHER_COMMAND, v -> v.displayName("Command hook")
+                .label(Microcopy.of("command").withFilter("scope", "dns_publisher"))
+                .icon("terminal").color(ColorHue.BLUE));
+    }
+
+    public static final EnumField CHALLENGE_TYPE = SCHEMA.addField(challengeTypeField()
         .label(HohenheimFormCopy.label("cert_challenge_type"))
         .help(HohenheimFormCopy.help("cert_challenge_type"))
         .visibleIn(EditView.EDIT)
@@ -141,16 +163,7 @@ public class CertificateModel extends Model {
     }
 
     public static final EnumField DNS_PUBLISHER = SCHEMA.addField(
-        EnumField.builder("dns_publisher")
-            .value(DNS_PUBLISHER_MANUAL, v -> v.displayName("Manual")
-                .label(Microcopy.of("manual").withFilter("scope", "dns_publisher"))
-                .icon("pen").color(ColorHue.GRAY))
-            .value(DNS_PUBLISHER_INTERNAL, v -> v.displayName("Internal")
-                .label(Microcopy.of("internal").withFilter("scope", "dns_publisher"))
-                .icon("server").color(ColorHue.GREEN))
-            .value(DNS_PUBLISHER_COMMAND, v -> v.displayName("Command hook")
-                .label(Microcopy.of("command").withFilter("scope", "dns_publisher"))
-                .icon("terminal").color(ColorHue.BLUE))
+        dnsPublisherField()
             .visibleIn(EditView.EDIT)
             .label(HohenheimFormCopy.label("cert_dns_publisher"))
             .help(HohenheimFormCopy.help("cert_dns_publisher")).build());

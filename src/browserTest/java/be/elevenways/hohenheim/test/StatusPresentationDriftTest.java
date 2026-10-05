@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.test;
 
-import be.elevenways.hohenheim.CertificateChallenges;
 import be.elevenways.hohenheim.host.HostState;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.instance.ConsoleKind;
@@ -9,6 +8,7 @@ import be.elevenways.hohenheim.instance.StopKind;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.server.cms.CertificateOperations;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
@@ -278,15 +278,15 @@ class StatusPresentationDriftTest {
             .containsExactlyElementsOf(SiteDomainModel.MATCH_TYPE.getValues().keySet());
 
         // 4. Step 1 is CIRCULAR -- it compares an enum to constants declared beside it, so it
-        //    cannot see a value some OTHER file writes. This step asks the writers instead:
-        //    dns_publisher is chosen by a hand-built select in the request form, and that
-        //    select offered "command" (CommandDnsTxtPublisher.ID) while the enum did not,
-        //    which is the narrowing this whole method exists to catch.
-        assertThat(dnsModeOptionsOffered())
-            .as("step 4: every dns_publisher the request form offers is a declared member")
-            .isNotEmpty()
-            .allMatch(CertificateModel.DNS_PUBLISHER::isValidValue,
-                "declared in CertificateModel.DNS_PUBLISHER");
+        //    cannot see a value some OTHER writer offers. dns_publisher is chosen in the
+        //    certificate order's input, which once offered "command" (CommandDnsTxtPublisher.ID)
+        //    while the enum did not: the input must offer exactly the stored column's members.
+        assertThat(CertificateOperations.DNS_PUBLISHER.getValues().keySet())
+            .as("step 4: the certificate order offers exactly the stored dns_publisher members")
+            .containsExactlyElementsOf(CertificateModel.DNS_PUBLISHER.getValues().keySet());
+        assertThat(CertificateOperations.CHALLENGE.getValues().keySet())
+            .as("step 4: and exactly the stored challenge types")
+            .containsExactlyElementsOf(CertificateModel.CHALLENGE_TYPE.getValues().keySet());
     }
 
     @Test
@@ -486,42 +486,6 @@ class StatusPresentationDriftTest {
             }
         }
         return -1;
-    }
-
-    /**
-     * The {@code dns_mode} select's option values, read out of the request template: a literal
-     * {@code value="x"} as written, a {@code value={% CertificateChallenges.NAME %}} resolved to
-     * the constant it names, so an option spelled either way is judged against the enum.
-     *
-     * @throws AssertionError when an option value is neither shape, so a third spelling can never
-     *         slip past as "nothing offered"
-     */
-    private static List<String> dnsModeOptionsOffered() throws Exception {
-        String template = Files.readString(
-            Path.of("src/common/templates/cms/certificate-request.hwk"));
-        int select = template.indexOf("name=\"dns_mode\"");
-        assertThat(select).as("the request form still carries a dns_mode select")
-            .isGreaterThan(-1);
-        String body = template.substring(select, template.indexOf("</pl-select>", select));
-
-        List<String> offered = new ArrayList<>();
-        Matcher items = Pattern.compile("<pl-select-item value=").matcher(body);
-        Pattern literal = Pattern.compile("\"([^\"]+)\"");
-        Pattern constant = Pattern.compile("\\{%\\s*CertificateChallenges\\.([A-Z_]+)\\s*%}");
-        while (items.find()) {
-            String rest = body.substring(items.end());
-            Matcher literalValue = literal.matcher(rest);
-            Matcher constantValue = constant.matcher(rest);
-            if (literalValue.lookingAt()) {
-                offered.add(literalValue.group(1));
-            } else if (constantValue.lookingAt()) {
-                offered.add((String) CertificateChallenges.class.getField(constantValue.group(1)).get(null));
-            } else {
-                throw new AssertionError("dns_mode option value is neither a literal nor a"
-                    + " CertificateChallenges constant: " + rest.substring(0, Math.min(60, rest.length())));
-            }
-        }
-        return offered;
     }
 
     /** Public static String constants of a class whose NAME starts with the prefix. */

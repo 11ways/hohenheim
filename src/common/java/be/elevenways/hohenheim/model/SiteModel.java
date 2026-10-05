@@ -209,6 +209,7 @@ public class SiteModel extends Model {
             SiteDomainModel domains = Models.get(SiteDomainModel.class);
             domains.find().where(SiteDomainModel.SITE_ID.eq(id))
                 .assign(SiteDomainModel.FORCE_SSL, false)
+                .assign(SiteDomainModel.FORCE_SSL_AUTO, false)
                 .assign(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT, true)
                 .updateAll();
         });

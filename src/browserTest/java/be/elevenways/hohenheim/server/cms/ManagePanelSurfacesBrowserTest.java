@@ -57,6 +57,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * with the complete control, confirmation and destination facts, still before the move); a failing
  * comparison is a changed /manage or /admin surface, never a file to refresh. A twin table entry states one
  * deliberate tenant difference; an unlisted difference fails closed.
+ *
+ * AIDEV-NOTE: intended difference (W1a, 2026-10-05): the admin domain row offers {@code request_domain_certificate}
+ * before its delete; that one row fact is re-recorded in the stored set.
  */
 class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
 

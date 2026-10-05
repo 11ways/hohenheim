@@ -232,7 +232,6 @@ public final class HohenheimPanel extends Panel {
         if (settings != null) {
             peers.add(settings);
         }
-        addIf(peers, new CertificateRequestPage(), Role.PROXY);
         return peers;
     }
 

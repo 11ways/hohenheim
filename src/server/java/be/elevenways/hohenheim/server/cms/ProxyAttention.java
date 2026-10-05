@@ -5,12 +5,14 @@ import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.proxy.RoutingProblem;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
+import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
@@ -21,6 +23,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import static be.elevenways.hohenheim.server.cms.AttentionItems.copy;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
@@ -99,6 +102,40 @@ public final class ProxyAttention {
             copy("https_unavailable", "attention_detail",
                 "sites", sites.isEmpty() ? "-" : String.join(", ", sites)),
             CmsRoutes.list(ADMIN, HohenheimSlugs.CERTIFICATES)));
+    }
+
+    /**
+     * One item per name that forces HTTPS while no working certificate covers it: its visitors get an error page
+     * (a 503, or a redirect into a handshake with no certificate for the name). New names are no longer forced before
+     * a certificate works (ForceSslLatch), so this finds what earlier rows and explicit choices left behind.
+     *
+     * AIDEV-NOTE: silent while HTTPS termination is down: {@link #httpsUnavailableWithForceSsl} then names every
+     * refusing site at once, and repeating each name would bury the cause.
+     */
+    public static void forcedWithoutCertificate(List<AttentionItem> items) {
+        var proxy = ServerMain.getProxyServer();
+        if (proxy != null && !proxy.isHttpsTerminationAvailable()) {
+            return;
+        }
+        Set<String> working = CertificateCoverage.activeNames();
+        for (Row domain : Models.get(SiteDomainModel.class).find()
+                .where(SiteDomainModel.FORCE_SSL.eq(true)).all()) {
+            String hostname = domain.get(SiteDomainModel.HOSTNAME);
+            if (!SiteDomainModel.MATCH_EXACT.equals(
+                    SiteDomainModel.effectiveMatchType(hostname, domain.get(SiteDomainModel.MATCH_TYPE)))
+                    || CertificateCoverage.covers(working, hostname)) {
+                continue;
+            }
+            Row site = Models.get(SiteModel.class).findById(domain.get(SiteDomainModel.SITE_ID));
+            if (site == null || !Boolean.TRUE.equals(site.get(SiteModel.ENABLED))
+                    || site.get(SiteModel.DELETED_AT) != null) {
+                continue;
+            }
+            items.add(item(AttentionSeverity.ERROR, "lock",
+                copy("forced_without_certificate", "attention_title", "hostname", hostname),
+                copy("forced_without_certificate", "attention_detail"),
+                CmsRoutes.detail(ADMIN, HohenheimSlugs.SITES, site.get(SiteModel.ID))));
+        }
     }
 
     /** Certificates whose last renewal failed, linked to their detail page. */

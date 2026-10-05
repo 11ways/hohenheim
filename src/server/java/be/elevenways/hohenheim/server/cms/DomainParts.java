@@ -88,6 +88,9 @@ public final class DomainParts {
         return entry("site_domain")
             .scope(ROWS)
             .form(form(adminFormSpec()))
+            // Requesting a certificate stays installation administration (an issued certificate is authority over a
+            // name), so only the admin twin offers it.
+            .actions(List.of(CertificateOperations.requestForDomainAction()))
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
             .build();
     }

@@ -133,7 +133,7 @@ class SiteAccessControlTest extends HohenheimTestBase {
         // 2. Installation-scoped sensitive endpoints are admin-only.
         assertAuthorizationRefusal(limitedGet("/certificates/1/download"),
             "step 2: a certificate download is installation-scoped");
-        assertAuthorizationRefusal(limitedPost("/admin/certificates-request"),
+        assertAuthorizationRefusal(limitedPost(ApiSupport.requestCertificateTarget()),
             "step 2: so is requesting a certificate");
 
         // AIDEV-NOTE: the managed-database dump is deliberately NOT admin-only any more

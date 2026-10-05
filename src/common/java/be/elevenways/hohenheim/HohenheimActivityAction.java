@@ -75,7 +75,8 @@ public enum HohenheimActivityAction implements ActivityAction {
     ENABLED("enabled"),
     DISABLED("disabled"),
     CLONED("cloned"),
-    QUARANTINE_LIFTED("quarantine_lifted");
+    QUARANTINE_LIFTED("quarantine_lifted"),
+    HTTPS_FORCED("https_forced");
 
     static {
         ActivityActions.register(values());

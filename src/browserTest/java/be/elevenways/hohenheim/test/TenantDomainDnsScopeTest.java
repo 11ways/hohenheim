@@ -709,7 +709,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         assertThat(tenantGet("/admin/dns-zones/" + zoneId + "/page/records").statusCode())
             .isEqualTo(403);
         assertThat(tenantGet("/admin/certificates").statusCode()).isEqualTo(403);
-        assertThat(tenantGet("/admin/certificates-request?site=" + foreignSiteId).statusCode())
+        assertThat(tenantPost(ApiSupport.requestCertificateTarget(), ApiSupport.invokeTransport()).statusCode())
             .isEqualTo(403);
 
         // 5. The delegated panel has a records and a certificates peer -- and NO zone or peer

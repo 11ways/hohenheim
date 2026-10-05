@@ -20,7 +20,6 @@ public final class HohenheimSlugs {
 
     public static final String ACCESS_LISTS = "access-lists";
     public static final String CERTIFICATES = "certificates";
-    public static final String CERTIFICATES_REQUEST = "certificates-request";
     public static final String DNS_ZONES = "dns-zones";
     public static final String GIT_PROVIDERS = "git-providers";
     public static final String INSTANCE_TEMPLATES = "instance-templates";

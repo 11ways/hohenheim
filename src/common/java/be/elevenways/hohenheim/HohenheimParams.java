@@ -79,11 +79,6 @@ public final class HohenheimParams {
         ParameterDefinition.builder(String.class).name("type")
             .stringResolver(value -> value).build();
 
-    /** The site a certificate request is opened for. */
-    public static final ParameterDefinition<Integer> CERTIFICATE_REQUEST_SITE =
-        ParameterDefinition.builder(Integer.class).name("site")
-            .stringResolver(Integer::parseInt).build();
-
     /** The instance template the create-from-template page is opened for. */
     public static final ParameterDefinition<Integer> FROM_TEMPLATE_TEMPLATE =
         ParameterDefinition.builder(Integer.class).name("template")
@@ -107,19 +102,6 @@ public final class HohenheimParams {
     /** The remote DNS record the secondary-zone editor opens ({@code new} for a fresh one). */
     public static final ParameterDefinition<String> REMOTE_RECORD =
         ParameterDefinition.builder(String.class).name("record")
-            .stringResolver(value -> value).build();
-
-    /**
-     * The stored certificate the request page re-issues instead of creating a new one. A
-     * reader takes the query name off the definition itself ({@code getName()}).
-     */
-    public static final ParameterDefinition<Integer> CERTIFICATE_REISSUE =
-        ParameterDefinition.builder(Integer.class).name("cert_id")
-            .stringResolver(Integer::parseInt).build();
-
-    /** The manual-DNS challenge token the certificate request page resumes with. */
-    public static final ParameterDefinition<String> MANUAL_CHALLENGE =
-        ParameterDefinition.builder(String.class).name("manual")
             .stringResolver(value -> value).build();
 
     /** The page of notification-inbox items being read. */

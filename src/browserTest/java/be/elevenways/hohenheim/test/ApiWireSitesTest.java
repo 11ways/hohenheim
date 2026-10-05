@@ -45,6 +45,10 @@ import static be.elevenways.hohenheim.test.ApiSupport.form;
  * The site, PaaS operation, project and environment routes of {@code /api/v1}: every route's success reply and its
  * main refusal, compared byte for byte to the java-rewrite capture through {@link ApiWire}.
  *
+ * AIDEV-NOTE: intended difference (W1a, 2026-10-05): a domain added without force_ssl answers
+ * {@code "force_ssl":false}, because a new address is forced once its certificate works (ForceSslLatch), not before;
+ * the shape is unchanged and that one value is re-recorded.
+ *
  * AIDEV-NOTE: the class runs on a database of its own, copied from the migrated template, so every id is the same
  * on every run; the fixtures are created in one fixed order and every instant they carry is {@link #T0} or
  * {@link #T1}. The rollback fixture converges real releases over {@link FakeDockerDaemon} and is built after every

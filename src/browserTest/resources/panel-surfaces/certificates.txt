@@ -20,7 +20,7 @@ filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_te
 filter status at=3 kind=SELECT facet=true param=filter.status
 filter expires_on at=4 kind=TEXT facet=false param=filter.expires_on
 filter created_at at=5 kind=TEXT facet=false param=filter.created_at
-link hohenheim:certificates_request at=0 lead=false target=/{panel}/certificates-request
+header hohenheim:request_certificate at=0 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:PRIMARY,title:confirm_title%252Cscope%3Dcms,body:uses_production%252Cscope%3Dcertificate_request,confirm:confirm%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_certificate
 tab overview at=0 landing=true view=true
 tab history at=1 landing=false view=false
 tab access at=2 landing=false view=false
@@ -56,7 +56,7 @@ filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_te
 filter status at=3 kind=SELECT facet=true param=filter.status
 filter expires_on at=4 kind=TEXT facet=false param=filter.expires_on
 filter created_at at=5 kind=TEXT facet=false param=filter.created_at
-link hohenheim:certificates_request at=0 lead=false target=/{panel}/certificates-request
+header hohenheim:request_certificate at=0 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:PRIMARY,title:confirm_title%252Cscope%3Dcms,body:uses_production%252Cscope%3Dcertificate_request,confirm:confirm%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_certificate
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row hohenheim:download_certificate at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{entry}/{record}/download
 row zenit:delete at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_domains%252Cscope%3Dcertificate,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
@@ -71,23 +71,25 @@ control EDIT%20certificate_pem at=1 kind=zenitforms:control/text input=multiline
 control EDIT%20private_key_pem at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
 control EDIT%20auto_renew at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control EDIT%20covered_names_display at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control EDIT%20expiry_display at=5 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control EDIT%20challenge_type_display at=6 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control EDIT%20dns_publisher_display at=7 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control EDIT%20renewal_error_display at=8 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control EDIT%20error_count at=9 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
-control EDIT%20next_attempt_display at=10 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20dns_records_display at=5 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20expiry_display at=6 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20challenge_type_display at=7 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20dns_publisher_display at=8 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20renewal_error_display at=9 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20error_count at=10 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
+control EDIT%20next_attempt_display at=11 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 control DETAIL%20nice_name at=0 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 control DETAIL%20certificate_pem at=1 kind=zenitforms:control/text input=multiline required=false readonly=true options= binding=
 control DETAIL%20private_key_pem at=2 kind=zenitforms:control/text input=multiline required=false readonly=true options= binding=
 control DETAIL%20auto_renew at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=true options= binding=
 control DETAIL%20covered_names_display at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control DETAIL%20expiry_display at=5 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control DETAIL%20challenge_type_display at=6 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control DETAIL%20dns_publisher_display at=7 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control DETAIL%20renewal_error_display at=8 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control DETAIL%20error_count at=9 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
-control DETAIL%20next_attempt_display at=10 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20dns_records_display at=5 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20expiry_display at=6 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20challenge_type_display at=7 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20dns_publisher_display at=8 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20renewal_error_display at=9 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20error_count at=10 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
+control DETAIL%20next_attempt_display at=11 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 
 case admin.certificates.operator.issued admin certificates operator v2
 admission - verdict=admitted
@@ -114,10 +116,10 @@ filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_te
 filter status at=3 kind=SELECT facet=true param=filter.status
 filter expires_on at=4 kind=TEXT facet=false param=filter.expires_on
 filter created_at at=5 kind=TEXT facet=false param=filter.created_at
-link hohenheim:certificates_request at=0 lead=false target=/{panel}/certificates-request
+header hohenheim:request_certificate at=0 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:PRIMARY,title:confirm_title%252Cscope%3Dcms,body:uses_production%252Cscope%3Dcertificate_request,confirm:confirm%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_certificate
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row hohenheim:download_certificate at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{entry}/{record}/download
-row hohenheim:reissue_certificate at=2 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/certificates-request?cert_id%3D{issued}
+row hohenheim:reissue_certificate at=1 verb=invoke band=inline style=DEFAULT disabled= confirm=style:PRIMARY,title:confirm_title%252Cscope%3Dcms,body:reissue_notice%252Cscope%3Dcertificate_request,confirm:confirm%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.reissue_certificate?ids%3D{record}
+row hohenheim:download_certificate at=2 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{entry}/{record}/download
 row zenit:delete at=3 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_domains%252Cscope%3Dcertificate,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab overview at=0 landing=true view=true
 tab history at=1 landing=false view=false
@@ -130,23 +132,25 @@ control EDIT%20certificate_pem at=1 kind=zenitforms:control/text input=multiline
 control EDIT%20private_key_pem at=2 kind=zenitforms:control/text input=multiline required=false readonly=false options= binding=
 control EDIT%20auto_renew at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control EDIT%20covered_names_display at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control EDIT%20expiry_display at=5 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control EDIT%20challenge_type_display at=6 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control EDIT%20dns_publisher_display at=7 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control EDIT%20renewal_error_display at=8 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control EDIT%20error_count at=9 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
-control EDIT%20next_attempt_display at=10 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20dns_records_display at=5 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20expiry_display at=6 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20challenge_type_display at=7 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20dns_publisher_display at=8 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20renewal_error_display at=9 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control EDIT%20error_count at=10 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
+control EDIT%20next_attempt_display at=11 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 control DETAIL%20nice_name at=0 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 control DETAIL%20certificate_pem at=1 kind=zenitforms:control/text input=multiline required=false readonly=true options= binding=
 control DETAIL%20private_key_pem at=2 kind=zenitforms:control/text input=multiline required=false readonly=true options= binding=
 control DETAIL%20auto_renew at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=true options= binding=
 control DETAIL%20covered_names_display at=4 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control DETAIL%20expiry_display at=5 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control DETAIL%20challenge_type_display at=6 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control DETAIL%20dns_publisher_display at=7 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control DETAIL%20renewal_error_display at=8 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
-control DETAIL%20error_count at=9 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
-control DETAIL%20next_attempt_display at=10 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20dns_records_display at=5 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20expiry_display at=6 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20challenge_type_display at=7 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20dns_publisher_display at=8 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20renewal_error_display at=9 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
+control DETAIL%20error_count at=10 kind=zenitforms:control/number input=number required=false readonly=true options= binding=
+control DETAIL%20next_attempt_display at=11 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 
 case admin.certificates.operator.selection admin certificates operator v2
 admission - verdict=admitted
@@ -170,7 +174,7 @@ filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_te
 filter status at=3 kind=SELECT facet=true param=filter.status
 filter expires_on at=4 kind=TEXT facet=false param=filter.expires_on
 filter created_at at=5 kind=TEXT facet=false param=filter.created_at
-link hohenheim:certificates_request at=0 lead=false target=/{panel}/certificates-request
+header hohenheim:request_certificate at=0 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:PRIMARY,title:confirm_title%252Cscope%3Dcms,body:uses_production%252Cscope%3Dcertificate_request,confirm:confirm%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_certificate
 tab overview at=0 landing=true view=true
 tab history at=1 landing=false view=false
 tab access at=2 landing=false view=false
@@ -201,7 +205,7 @@ filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_te
 filter status at=3 kind=SELECT facet=true param=filter.status
 filter expires_on at=4 kind=TEXT facet=false param=filter.expires_on
 filter created_at at=5 kind=TEXT facet=false param=filter.created_at
-link hohenheim:certificates_request at=0 lead=false target=/{panel}/certificates-request
+header hohenheim:request_certificate at=0 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:PRIMARY,title:confirm_title%252Cscope%3Dcms,body:uses_production%252Cscope%3Dcertificate_request,confirm:confirm%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_certificate
 tab overview at=0 landing=true view=true
 tab history at=1 landing=false view=false
 tab access at=2 landing=false view=false

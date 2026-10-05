@@ -1354,12 +1354,6 @@
       "scope": "release_status"
     }
   ],
-  "forced": [
-    {
-      "text": "HTTPS",
-      "scope": "site_tls"
-    }
-  ],
   "hostname": [
     {
       "text": "Hostnaam",
@@ -1408,10 +1402,6 @@
   },
   "none": [
     {
-      "text": "Geen",
-      "scope": "site_domains"
-    },
-    {
       "text": "Geen installatiestap",
       "scope": "install_state"
     },
@@ -1424,13 +1414,11 @@
       "scope": "volume_backend"
     },
     {
-      "text": "Geen hostnaam",
-      "scope": "site_tls"
-    }
-  ],
-  "off": [
+      "text": "Geen certificaat",
+      "scope": "site_domains"
+    },
     {
-      "text": "Alleen HTTP",
+      "text": "Geen adres",
       "scope": "site_tls"
     }
   ],
@@ -2871,7 +2859,7 @@
       "scope": "field"
     },
     {
-      "text": "Stuur gewone HTTP-verzoeken door naar HTTPS.",
+      "text": "Stuurt bezoekers naar HTTPS. Zonder werkend certificaat voor dit adres krijgen ze in plaats daarvan een foutpagina. Een nieuw adres zet dit zelf aan zodra zijn certificaat werkt.",
       "scope": "help"
     }
   ],
@@ -5299,10 +5287,16 @@
       "target": "activity_action"
     }
   ],
-  "missing": {
-    "text": "Ontbreekt",
-    "scope": "stack_state"
-  },
+  "missing": [
+    {
+      "text": "Ontbreekt",
+      "scope": "stack_state"
+    },
+    {
+      "text": "Geen certificaat",
+      "scope": "site_tls"
+    }
+  ],
   "orphaned": [
     {
       "text": "Verweesd",
@@ -11207,7 +11201,7 @@
     "scope": "site"
   },
   "partial": {
-    "text": "Gemengd",
+    "text": "Gedeeltelijk",
     "scope": "site_tls"
   },
   "quota_mb": {
@@ -11881,15 +11875,15 @@
     "scope": "violations"
   },
   "covered": {
-    "text": "Gedekt",
+    "text": "Werkt",
     "scope": "site_domains"
   },
   "not_covered": {
-    "text": "Niet gedekt",
+    "text": "Werkt niet",
     "scope": "site_domains"
   },
   "coverage_pending": {
-    "text": "Certificaat in behandeling",
+    "text": "Wacht op het certificaat",
     "scope": "site_domains"
   },
   "expires": {
@@ -12851,7 +12845,7 @@
   "settings.hohenheim.proxy.fallback_address.label": "Terugvaladres",
   "settings.hohenheim.proxy.fallback_address.help": "Adres dat de verzoeken ontvangt die bij geen enkele site horen.",
   "settings.hohenheim.proxy.force_https.label": "HTTPS afdwingen",
-  "settings.hohenheim.proxy.force_https.help": "Stuurt elk HTTP-verzoek door naar HTTPS.",
+  "settings.hohenheim.proxy.force_https.help": "Stuurt bezoekers naar HTTPS op elk adres met een werkend certificaat.",
   "settings.hohenheim.proxy.http_port.label": "HTTP-poort",
   "settings.hohenheim.proxy.http_port.help": "Poort waarop de HTTP-proxy luistert.",
   "settings.hohenheim.proxy.http_socket_path.label": "HTTP-socketpad",
@@ -13028,5 +13022,106 @@
   "settings.spamservice.help": "Spamscoring en bronnen van reputatiegegevens",
   "settings.spamservice.scoring.help": "Drempels voor spamverdicts",
   "settings.spamservice.reputation.help": "Downloadbare IP-informatiedatabases; een lege URL schakelt die bron uit",
-  "settings.spamservice.events.help": "Bewaartermijn voor ontvangen beveiligingsgebeurtenissen"
+  "settings.spamservice.events.help": "Bewaartermijn voor ontvangen beveiligingsgebeurtenissen",
+  "https_forced": {
+    "text": "HTTPS ingeschakeld",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "not_used": [
+    {
+      "text": "Niet gebruikt",
+      "scope": "site_domains"
+    },
+    {
+      "text": "Niet gebruikt",
+      "scope": "site_tls"
+    }
+  ],
+  "works": {
+    "text": "Werkt",
+    "scope": "site_tls"
+  },
+  "broken": {
+    "text": "Foutpagina",
+    "scope": "site_tls"
+  },
+  "patterns": {
+    "text": "Patronen",
+    "scope": "site_tls"
+  },
+  "forced_without_certificate": [
+    {
+      "text": "Bezoekers van {$hostname} krijgen een foutpagina",
+      "scope": "attention_title"
+    },
+    {
+      "text": "HTTPS is afgedwongen, maar dit adres heeft nog geen werkend certificaat.",
+      "scope": "attention_detail"
+    }
+  ],
+  "get_certificate": {
+    "text": "Certificaat aanvragen",
+    "scope": "certificate_request"
+  },
+  "uses_production": {
+    "text": "Dit vraagt een echt certificaat aan bij Let's Encrypt (productie), wat meetelt voor de limieten daar.",
+    "scope": "certificate_request"
+  },
+  "dns_mode_help": {
+    "text": "Waar de TXT-records komen die Let's Encrypt controleert. Handmatig: je voegt ze toe bij je DNS-provider en kiest daarna DNS controleren op het certificaat.",
+    "scope": "certificate_request"
+  },
+  "verify_dns_hint": {
+    "text": "Controleert de gepubliceerde TXT-records en rondt de aanvraag af.",
+    "scope": "certificate_request"
+  },
+  "letsencrypt_disabled": {
+    "text": "Let's Encrypt staat uit in de instellingen.",
+    "scope": "certificate_request_error"
+  },
+  "does_not_point_here": {
+    "text": "{$hostname} wijst nog niet hierheen, maar naar {$addresses}.",
+    "scope": "certificate_request_error"
+  },
+  "does_not_resolve": {
+    "text": "{$hostname} bestaat nog niet in DNS. Laat het eerst naar deze server wijzen.",
+    "scope": "certificate_request_error"
+  },
+  "acme_unauthorized": {
+    "text": "Let's Encrypt kon niet bevestigen dat deze server antwoordt voor deze namen. Controleer of elke naam hierheen wijst.",
+    "scope": "certificate_request_error"
+  },
+  "acme_connection": {
+    "text": "Let's Encrypt kon deze server niet bereiken via HTTP voor een van de namen. Controleer de firewall en of poort 80 open staat.",
+    "scope": "certificate_request_error"
+  },
+  "acme_dns": {
+    "text": "Let's Encrypt kon een van de namen niet opzoeken in DNS.",
+    "scope": "certificate_request_error"
+  },
+  "acme_rate_limited": {
+    "text": "Let's Encrypt weigerde omdat er recent te veel certificaten zijn aangevraagd. Probeer het later opnieuw.",
+    "scope": "certificate_request_error"
+  },
+  "acme_caa": {
+    "text": "Een CAA-record op het domein staat Let's Encrypt niet toe om ervoor uit te geven.",
+    "scope": "certificate_request_error"
+  },
+  "acme_rejected_identifier": {
+    "text": "Let's Encrypt geeft geen certificaten uit voor een van deze namen.",
+    "scope": "certificate_request_error"
+  },
+  "acme_other": {
+    "text": "Let's Encrypt heeft het certificaat niet uitgegeven. De vernieuwingsfout van het certificaat en het serverlogboek bevatten de details.",
+    "scope": "certificate_request_error"
+  },
+  "dns_records_none": {
+    "text": "Geen DNS-records te publiceren",
+    "scope": "certificate"
+  },
+  "cert_dns_records": {
+    "text": "Te publiceren DNS-records",
+    "scope": "field"
+  }
 }

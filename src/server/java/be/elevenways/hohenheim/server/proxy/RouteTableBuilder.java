@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.preview.PreviewRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.TlsPassthroughProvider;
+import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.protoblast.common.Blast;
@@ -84,7 +85,8 @@ final class RouteTableBuilder {
     /** The rows one generation is built from, each bucketed with ONE query per table. */
     private record Inputs(List<Row> sites, Map<Integer, List<Row>> domainsBySite,
                           Map<Integer, Row> accessLists, Map<Integer, List<Row>> rulesByList,
-                          Map<Integer, Row> authProviders, Map<Integer, List<Row>> protectedPathsBySite) {
+                          Map<Integer, Row> authProviders, Map<Integer, List<Row>> protectedPathsBySite,
+                          Set<String> certifiedNames) {
 
         static Inputs load() {
             List<Row> sites = Models.get(SiteModel.class).findEnabled();
@@ -125,7 +127,7 @@ final class RouteTableBuilder {
                 }
             }
             return new Inputs(sites, domainsBySite, accessLists, rulesByList, authProviders,
-                protectedPathsBySite);
+                protectedPathsBySite, CertificateCoverage.activeNames());
         }
     }
 
@@ -256,7 +258,7 @@ final class RouteTableBuilder {
         boolean siteRouteAdded = false;
         for (Row domain : domains) {
             siteRouteAdded |= addDomain(domain, siteId, siteName, requestHandler, accessTree,
-                pathGuards, settings, authGate, siteGate.providerName());
+                pathGuards, settings, authGate, siteGate.providerName(), inputs.certifiedNames());
         }
         if (!siteRouteAdded) {
             releaseUnused(requestHandler, authGate, treeGates);
@@ -347,7 +349,8 @@ final class RouteTableBuilder {
     private boolean addDomain(Row domain, Integer siteId, String siteName,
                               SiteRequestHandler requestHandler, @Nullable AccessRuleTree accessTree,
                               List<RouteEntry.PathGuard> pathGuards, Map<String, Object> settings,
-                              @Nullable SiteAuthGate authGate, @Nullable String authProviderName) {
+                              @Nullable SiteAuthGate authGate, @Nullable String authProviderName,
+                              Set<String> certifiedNames) {
         String hostname = domain.get(SiteDomainModel.HOSTNAME);
         String matchType = domain.get(SiteDomainModel.MATCH_TYPE);
         if (hostname == null || hostname.isEmpty()) {
@@ -366,8 +369,12 @@ final class RouteTableBuilder {
             domainHandler = previewHandler;
         }
 
+        // The global force_https waits for a working certificate on an exact name, as a domain's own latch does; a
+        // pattern has no one certificate to wait for and keeps failing closed.
+        boolean globalForce = !SiteDomainModel.MATCH_EXACT.equals(SiteDomainModel.effectiveMatchType(hostname, matchType))
+            || CertificateCoverage.covers(certifiedNames, hostname);
         RouteEntry entry = new RouteEntry(domainHandler, siteName, domain, accessTree,
-            pathGuards, settings, authGate, authProviderName);
+            pathGuards, settings, authGate, authProviderName, globalForce);
 
         // HostnamePatterns.effectiveKind is THE tier decision, shared with the write-time
         // overlap scan: a hostname carrying glob characters routes as a wildcard whatever

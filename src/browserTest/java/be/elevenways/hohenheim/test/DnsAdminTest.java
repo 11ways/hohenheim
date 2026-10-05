@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DnsPeerApi;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
@@ -19,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Admin flows for hosted DNS: zone CRUD with validation, the records tab,
  * record validation through the codec, zone-file export/import, and the
- * certificate-request page's hosted-DNS option gating.
+ * certificate order's hosted-DNS refusal.
  */
 class DnsAdminTest extends HohenheimTestBase {
 
@@ -185,21 +186,18 @@ class DnsAdminTest extends HohenheimTestBase {
         assertThat(DnsRecordModel.portOf(srv)).isEqualTo(8443);
     }
 
-    /** The certificate-request page only offers hosted DNS when a DNS server is serving. */
+    /** A certificate order that publishes through hosted DNS is refused, its input kept, while no DNS server serves. */
     @Test
-    void certificateRequestOffersHostedDnsOnlyWhenServing() {
-        navigateToApp("/admin/certificates-request");
-        waitForHydration();
-        // Item children portal into the overlay popup at hydration, so the
-        // option's disabled state is asserted inside the open popup. No DNS
-        // server runs in this test boot, so hosted DNS renders disabled.
-        page.click("pl-select[name='dns_mode'] .pl-select-field");
-        page.waitForSelector("he-bottom .pl-select-popup[data-open]");
-        var internal = page.locator(
-            "he-bottom .pl-select-popup[data-open] div[role='option'][data-value='internal']");
-        assertThat(internal.count()).isEqualTo(1);
-        assertThat(internal.getAttribute("aria-disabled")).isEqualTo("true");
-        page.keyboard().press("Escape");
+    void certificateRequestRefusesHostedDnsUnlessServing() throws Exception {
+        // No DNS server runs in this test boot, so the hosted-DNS publisher cannot answer the challenge.
+        var refused = adminPostForm(ApiSupport.requestCertificateTarget(), ApiSupport.form(
+            "domains", "hosted.dns-admin.test", "challenge_type", "dns", "dns_publisher", "internal")
+            + "&" + ApiSupport.invokeTransport());
+        assertThat(refused.statusCode()).as("step 1: the order is refused, never placed").isEqualTo(422);
+        assertThat(refused.body()).as("step 1: and names the missing DNS server")
+            .contains(ApiSupport.shippedText(Microcopy.of("dns_server_disabled")
+                .withFilter("scope", "certificate_request_error")))
+            .as("step 1: the typed name is kept in the redrawn input").contains("hosted.dns-admin.test");
     }
 
     /**

@@ -676,6 +676,7 @@ public final class PreviewDeployments {
         domain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
         // Plain HTTP + wildcard-cert SNI: a preview never triggers ACME issuance.
         domain.set(SiteDomainModel.FORCE_SSL, false);
+        domain.set(SiteDomainModel.FORCE_SSL_AUTO, false);
         domain.set(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT, true);
         domains.save(domain);
     }

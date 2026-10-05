@@ -201,6 +201,7 @@ public final class SiteOperationHandlers {
             domainClone.set(SiteDomainModel.HOSTNAME, domain.get(SiteDomainModel.HOSTNAME) + ".clone");
             domainClone.set(SiteDomainModel.MATCH_TYPE, domain.get(SiteDomainModel.MATCH_TYPE));
             domainClone.set(SiteDomainModel.FORCE_SSL, domain.get(SiteDomainModel.FORCE_SSL));
+            domainClone.set(SiteDomainModel.FORCE_SSL_AUTO, domain.get(SiteDomainModel.FORCE_SSL_AUTO));
             domainClone.set(SiteDomainModel.HSTS_ENABLED, domain.get(SiteDomainModel.HSTS_ENABLED));
             domainClone.set(SiteDomainModel.HSTS_SUBDOMAINS, domain.get(SiteDomainModel.HSTS_SUBDOMAINS));
             domainClone.set(SiteDomainModel.PATH, domain.get(SiteDomainModel.PATH));

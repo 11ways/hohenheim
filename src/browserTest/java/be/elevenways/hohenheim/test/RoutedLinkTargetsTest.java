@@ -1,9 +1,10 @@
 package be.elevenways.hohenheim.test;
 
-import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.server.cms.CertificateOperations;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -87,8 +88,8 @@ class RoutedLinkTargetsTest extends HohenheimTestBase {
         assertThat(tab.statusCode()).as("step 2: the Domains tab renders").isEqualTo(200);
         String html = tab.body();
 
-        // 3. THE LINKS. The add and the certificate request are the domain section's own: the child list's create
-        //    under this site, and the tab's declared header link.
+        // 3. THE LINKS. The add is the domain section's own: the child list's create under this site; the
+        //    certificate request is each domain row's placed action.
         String add = hrefOf(html, "data-cms-child-create=\"domains\"");
         assertThat(add)
             .as("step 3: the create link names its panel, resource and this site as the parent")
@@ -96,9 +97,9 @@ class RoutedLinkTargetsTest extends HohenheimTestBase {
         assertThat(add)
             .as("step 3: and is bound back to the tab it was offered on")
             .contains("_return=");
-        assertThat(hrefOf(html, "data-action-id=\"hohenheim:request_certificate\""))
-            .as("step 3: the certificate request link keeps its ?site= parameter")
-            .matches("/admin/certificates-request\\?site=" + siteId + "(&.*)?");
+        assertThat(html)
+            .as("step 3: each exact hostname's row offers its own certificate request")
+            .contains("data-action-id=\"" + CertificateOperations.REQUEST_FOR_DOMAIN.id() + "\"");
 
         // 4. And the per-row edit anchor, bound back to this tab.
         assertThat(html)
@@ -138,10 +139,9 @@ class RoutedLinkTargetsTest extends HohenheimTestBase {
             .as("step 5.4: dropping the parent fails the step-3 assertion above")
             .isNotEqualTo(expected);
 
-        // 5.5. Wrong PARAMETER: binding the certificate page's ?site= instead of the create
-        //    form's parent= is the exact confusion these two neighbouring links invite.
+        // 5.5. Wrong PARAMETER: binding the site as a selected subject instead of the create form's parent=.
         assertThat(CmsRoutes.create("admin", "domains")
-                .with(HohenheimParams.CERTIFICATE_REQUEST_SITE, siteId).toUrl())
+                .with(CmsEndpoints.SUBJECT_PARAM, String.valueOf(siteId)).toUrl())
             .as("step 5.5: binding the wrong parameter definition fails the step-3 assertion above")
             .isNotEqualTo(expected);
     }

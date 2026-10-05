@@ -272,11 +272,6 @@ public class SiteDispatcher implements HttpHandler {
 
         String hostname = extractHostname(exchange);
 
-        if (shouldForceHttpsGlobally(exchange)) {
-            redirectToHttps(exchange, hostname);
-            return;
-        }
-
         RouteTable generation = acquireRoutes();
         AtomicBoolean generationReleased = new AtomicBoolean();
         Runnable releaseGeneration = () -> {
@@ -355,7 +350,10 @@ public class SiteDispatcher implements HttpHandler {
         // completes while the site refuses -- the refusal self-heals. The global force_https
         // setting rides the same gate for MATCHED routes only: an unmatched hostname has no
         // content to protect and keeps its 404/fallback.
-        boolean forceSsl = entry.forceSsl || Boolean.TRUE.equals(
+        // AIDEV-NOTE: the global setting waits for a working certificate on an exact name (RouteEntry.globalForce):
+        // forcing a name no certificate covers sent every visitor of a new domain to an error page. "Working" is an
+        // ACTIVE certificate ROW, not the loaded TLS store, so a store that empties still fails closed here.
+        boolean forceSsl = entry.forceSsl || entry.globalForce && Boolean.TRUE.equals(
             Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
         if (forceSsl && !ProxyScheme.isEffectivelyHttps(exchange)) {
             if (httpsAvailable) {
@@ -556,17 +554,6 @@ public class SiteDispatcher implements HttpHandler {
                 exchange.dispatch(dispatch);
             }
         }, entry.requestDelayMs, TimeUnit.MILLISECONDS);
-    }
-
-    /**
-     * Pre-resolution global redirect, kept gated on availability on purpose: for MATCHED
-     * routes the entry-level gate above fails closed when HTTPS is down, and an UNMATCHED
-     * hostname has no content to protect, so it keeps its 404/fallback instead of a 503.
-     */
-    private boolean shouldForceHttpsGlobally(HttpServerExchange exchange) {
-        return httpsAvailable
-            && !ProxyScheme.isEffectivelyHttps(exchange)
-            && Boolean.TRUE.equals(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
     }
 
     public void setHttpsAvailable(boolean httpsAvailable) {

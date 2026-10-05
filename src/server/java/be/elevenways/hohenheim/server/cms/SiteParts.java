@@ -23,10 +23,7 @@ import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
-import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
-import be.elevenways.zenit.cms.common.action.PanelAction;
-import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.ChildList;
@@ -94,8 +91,8 @@ public final class SiteParts {
 
     /**
      * The Domains tab: the framework's child list over the panel's domain entry (its /manage twin there), narrowed to
-     * the site, without the site column every row would repeat, plus the certificate each hostname is covered by and
-     * the certificate request link.
+     * the site, without the site column every row would repeat, plus the certificate each hostname is covered by; a
+     * domain row's own action requests one.
      *
      * AIDEV-NOTE: the rows, their edit and remove, the add link with its parent preset, the scope and a trashed site's
      * read-only state are the child list's own; what a hostless site's empty tab tells the reader is the domain list's
@@ -107,8 +104,7 @@ public final class SiteParts {
         .column(DomainParts.SLUG, SubjectType.record(SiteDomainModel.MODEL_ID),
             ColumnSpec.virtual(CERTIFICATE_COLUMN, Microcopy.of("certificate").withFilter("scope", "site_domains"))
                 .renderer(HohenheimTemplateIds.CELL_DOMAIN_CERTIFICATE).build(),
-            SiteParts::certificateCell)
-        .headerLink(DomainParts.SLUG, requestCertificateLink());
+            SiteParts::certificateCell);
 
     /**
      * The Protected paths tab: the framework's child list over the panel's protected-path entry (its /manage twin
@@ -341,18 +337,39 @@ public final class SiteParts {
             domains.size() - 1);
     }
 
+    /**
+     * Whether HTTPS works for the site's names: read from the certificates that cover them, never from force_ssl, so a
+     * name forced without a working certificate is the one red state.
+     */
     static @NonNull SiteTlsCell tlsCellOf(@NonNull Row site) {
         List<Row> domains = domainsOf(site);
         if (domains.isEmpty()) {
             return new SiteTlsCell(SiteTlsCell.NONE);
         }
-        long forced = domains.stream()
-            .filter(domain -> Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL)))
-            .count();
-        if (forced == domains.size()) {
-            return new SiteTlsCell(SiteTlsCell.FORCED);
+        if (tlsPassthrough(site)) {
+            return new SiteTlsCell(SiteTlsCell.NOT_USED);
         }
-        return new SiteTlsCell(forced > 0 ? SiteTlsCell.PARTIAL : SiteTlsCell.OFF);
+        Set<String> working = CertificateCoverage.activeNames();
+        int exact = 0;
+        int covered = 0;
+        for (Row domain : domains) {
+            String hostname = domain.get(SiteDomainModel.HOSTNAME);
+            if (!SiteDomainModel.MATCH_EXACT.equals(
+                    SiteDomainModel.effectiveMatchType(hostname, domain.get(SiteDomainModel.MATCH_TYPE)))) {
+                continue;
+            }
+            exact++;
+            if (CertificateCoverage.covers(working, hostname)) {
+                covered++;
+            } else if (Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL))) {
+                return new SiteTlsCell(SiteTlsCell.BROKEN);
+            }
+        }
+        if (exact == 0) {
+            return new SiteTlsCell(SiteTlsCell.PATTERNS);
+        }
+        return new SiteTlsCell(covered == exact ? SiteTlsCell.WORKS
+            : covered > 0 ? SiteTlsCell.PARTIAL : SiteTlsCell.MISSING);
     }
 
     static @NonNull SiteUpstreamCell upstreamCellOf(@NonNull Row site) {
@@ -384,22 +401,6 @@ public final class SiteParts {
         return new SiteUpstreamCell(kindKey, label, icon, color, summary, instanceName, instanceUrl);
     }
 
-    /**
-     * Requesting a certificate for the site's hostnames stays installation administration, because an issued
-     * certificate is authority over a name; the request page lives only on the admin panel. A TLS passthrough site
-     * terminates no TLS here, so it has nothing to request.
-     */
-    private static @NonNull PanelAction<Row> requestCertificateLink() {
-        return PanelAction.<Row>link(HohenheimIds.id("request_certificate"), ActionPlacement.HEADER)
-            .label(Microcopy.of("request_certificate").withFilter("scope", "site_domains"))
-            .route((site, request) -> CmsEndpoints.LIST
-                .with(CmsEndpoints.PANEL_PARAM, HohenheimSlugs.ADMIN)
-                .with(CmsEndpoints.RESOURCE_PARAM, "certificates-request")
-                .with(HohenheimParams.CERTIFICATE_REQUEST_SITE, site.get(SiteModel.ID)))
-            .shownWhen((site, access) -> HohenheimAccess.isAdmin(access) && !tlsPassthrough(site))
-            .build();
-    }
-
     private static boolean tlsPassthrough(@Nullable Row site) {
         return site != null && SiteModel.UPSTREAM_TLS_PASSTHROUGH.equals(site.get(SiteModel.UPSTREAM_KIND));
     }
@@ -414,8 +415,11 @@ public final class SiteParts {
      * operator's wildcard, and printing its name to a tenant for whom it is a 404 was a leak.
      */
     private static @Nullable DomainCertCell certificateCell(@NonNull Row domain, @NonNull PanelRequest request) {
-        if (!SiteDomainModel.MATCH_EXACT.equals(domain.get(SiteDomainModel.MATCH_TYPE))
-                || tlsPassthrough(Models.get(SiteModel.class).findById(domain.get(SiteDomainModel.SITE_ID)))) {
+        if (tlsPassthrough(Models.get(SiteModel.class).findById(domain.get(SiteDomainModel.SITE_ID)))) {
+            CertCoverage notUsed = CertCoverage.NOT_USED;
+            return new DomainCertCell(notUsed.key(), notUsed.badgeVariant(), notUsed.label(), null, null, null);
+        }
+        if (!SiteDomainModel.MATCH_EXACT.equals(domain.get(SiteDomainModel.MATCH_TYPE))) {
             return null;
         }
         Row cert = CertificateCoverage.coveringCertificate(domain.get(SiteDomainModel.HOSTNAME));

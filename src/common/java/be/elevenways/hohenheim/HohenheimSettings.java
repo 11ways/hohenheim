@@ -132,7 +132,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Boolean> FORCE_HTTPS = GROUP.buildSetting("force_https", Boolean.class)
             .defaultValue(true)
-            .description("Redirect HTTP to HTTPS globally")
+            .description("Send visitors to HTTPS on every address with a working certificate")
             .build();
 
         public static final SettingDefinition<String> IPV6_ADDRESS = GROUP.buildSetting("ipv6_address", String.class)

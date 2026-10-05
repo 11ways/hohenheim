@@ -122,12 +122,13 @@ class ForceSslAvailabilityTest {
             .hasSize(1);
         assertThat(items.get(0).severity()).isEqualTo(AttentionSeverity.ERROR);
 
-        // Step 4: global force_https gets the same fail-closed treatment for MATCHED routes.
+        // Step 4: global force_https waits for a working certificate on an exact name: one no certificate covers is
+        // still served, never sent to an error page.
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, true);
-        String globalRefused = ProxyTestSupport.rawRequest(port, "plain.fssl.test", "/");
-        assertThat(globalRefused)
-            .as("step 4: global force_https refuses cleartext on a matched route while HTTPS is down")
-            .contains("503");
+        String uncertified = ProxyTestSupport.rawRequest(port, "plain.fssl.test", "/");
+        assertThat(uncertified)
+            .as("step 4: global force_https leaves a name without a certificate on plain HTTP")
+            .contains("200").contains("cleartext-content");
         String unmatched = ProxyTestSupport.rawRequest(port, "unknown.fssl.test", "/");
         assertThat(unmatched)
             .as("step 4: an unmatched hostname has nothing to protect and stays a 404")
@@ -146,6 +147,15 @@ class ForceSslAvailabilityTest {
             .as("step 5: with HTTPS up the force-SSL route redirects instead of refusing")
             .contains("301")
             .contains("Location: https://forced.fssl.test");
+
+        // Step 5b: once an active certificate covers the plain name, global force_https applies to it as well.
+        installCertificate("plain.fssl.test");
+        proxy.reload();
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, true);
+        assertThat(ProxyTestSupport.rawRequest(port, "plain.fssl.test", "/"))
+            .as("step 5b: a certified name is forced by the global setting")
+            .contains("301").contains("Location: https://plain.fssl.test");
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, false);
 
         // Step 6: the attention item clears once HTTPS termination is available again.
         List<AttentionItem> after = new ArrayList<>();
@@ -173,6 +183,7 @@ class ForceSslAvailabilityTest {
         certRow.set(CertificateModel.NICE_NAME, "Force SSL Test");
         certRow.set(CertificateModel.PROVIDER, "custom");
         certRow.set(CertificateModel.STATUS, "active");
+        certRow.set(CertificateModel.DOMAIN_NAMES_TEXT, hostname);
         certRow.set(CertificateModel.CERTIFICATE_PEM, TlsCertificateTest.certToPem(cert));
         certRow.set(CertificateModel.PRIVATE_KEY_PEM, TlsCertificateTest.keyToPem(keyPair));
         certModel.save(certRow);
