@@ -138,7 +138,7 @@ class IncusDiskSignalLiveTest {
                 assertThat(diskItems())
                     .as("step 5: the near-full instance is now the ONE item raised, as a"
                         + " warning at roughly 90%% of its ceiling")
-                    .containsExactly("warning /admin/instances/" + id);
+                    .containsExactly("warning /admin/instances/" + id + "/page/overview");
 
                 // 6. Keep writing until the QUOTA ITSELF stops it. dd is expected to fail
                 //    here -- that failure IS the enforcement, and it is why an Incus root
@@ -156,7 +156,7 @@ class IncusDiskSignalLiveTest {
                     .as("step 6: and it is now against that ceiling").isGreaterThan(0.95);
                 assertThat(diskItems())
                     .as("step 6: which escalates the item from warning to ERROR")
-                    .containsExactly("error /admin/instances/" + id);
+                    .containsExactly("error /admin/instances/" + id + "/page/overview");
 
                 // 7. WITHOUT CORRUPTING THE INSTANCE: it is still running and still usable
                 //    after being driven into its ceiling, and freeing space is enough to

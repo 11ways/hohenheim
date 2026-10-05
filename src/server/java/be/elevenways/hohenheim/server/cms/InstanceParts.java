@@ -595,18 +595,20 @@ public final class InstanceParts {
     }
 
     /**
-     * Where a surface links an instance row: its own record (or one of its subpages), and for a release row, which the
-     * admin scope does not serve, its application's Deploys tab.
+     * Where a surface links an instance row: its front door, the overview (or another subpage), and for a release row,
+     * which the admin scope does not serve, its application's Deploys tab.
      *
-     * @param subpage the record subpage to open, or null for the record itself; ignored for a release row
+     * AIDEV-NOTE: never the bare record URL: for an operator who may edit, that URL IS the edit form (only a read view
+     * redirects to the landing tab), so a link there opens Edit instead of the overview.
+     *
+     * @param subpage the record subpage to open, or null for the front door; ignored for a release row
      * @return the route; the list itself for a release row no application owns
      */
     static @NonNull RouteTarget recordRoute(@NonNull String panel, @NonNull Row instance,
                                             @Nullable String subpage) {
         Integer id = instance.get(InstanceModel.ID);
         if (!ReleaseKind.ID.toString().equals(instance.get(InstanceModel.KIND))) {
-            return subpage == null ? CmsRoutes.detail(panel, SLUG, id)
-                : CmsRoutes.subpage(panel, SLUG, id, subpage);
+            return CmsRoutes.subpage(panel, SLUG, id, subpage == null ? InstanceOverview.SLUG : subpage);
         }
         int application = ApplicationReleases.linkOwnerOf(instance);
         return id == null || application == id ? CmsRoutes.list(panel, SLUG)

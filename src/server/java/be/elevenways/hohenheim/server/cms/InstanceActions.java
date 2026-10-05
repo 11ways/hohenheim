@@ -58,15 +58,19 @@ final class InstanceActions {
     /** The health band's fix for a blocked instance ({@link AppHealth}): its host's page, where Check and admit lives. */
     static final Identifier CHECK_HOST = HohenheimIds.id("instance_check_host");
 
+    /** The address of the site serving this workload, in a new tab ({@link SiteActions#openSiteAction}). */
+    static final Identifier OPEN_SITE = HohenheimIds.id("instance_open_site");
+
     private InstanceActions() {
     }
 
     /**
-     * The operator panel's placed operations, Deploy first: the record band keeps declaration order inside the
-     * inline band, and placed actions lead the declared row actions, so the first declared verb leads.
+     * The operator panel's actions, Open site then Deploy first (the board's heading): the record band keeps
+     * declaration order inside the inline band, so the first declared verb leads.
      */
     static @NonNull List<PanelAction<Row>> placedOperator() {
-        return List.of(deployAction(false), stopAction(), restartAction(), snapshotAction(), backupAction(),
+        return List.of(SiteActions.openSiteAction(OPEN_SITE, AppHealth::openUrlOfInstance), deployAction(false),
+            stopAction(), restartAction(), snapshotAction(), backupAction(),
             appUpdateAction(false), consoleCommandAction(), exposeAction(), rollbackAction(),
             installAction(), reinstallAction(), captureTemplateAction(), migrateAction(),
             destroyWithDataAction(), checkHostAction());
@@ -77,8 +81,8 @@ final class InstanceActions {
      * console line.
      */
     static @NonNull List<PanelAction<Row>> placedDelegated() {
-        return List.of(deployAction(true), stopAction(), snapshotAction(), backupAction(), appUpdateAction(true),
-            consoleCommandAction());
+        return List.of(SiteActions.openSiteAction(OPEN_SITE, AppHealth::openUrlOfInstance), deployAction(true),
+            stopAction(), snapshotAction(), backupAction(), appUpdateAction(true), consoleCommandAction());
     }
 
     /**

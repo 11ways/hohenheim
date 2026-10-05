@@ -18,7 +18,7 @@
 {% declare returnParam: String %}
 {% declare storedLogs: List %}
 {% declare selectedLogText: String = "" %}
-{% declare selectedLogTitle: String = "" %}
+{% declare selectedLogAtIso: String = "" %}
 {#- The placed console operation's invoke and the confirmation proof its dialog would post
     (CmsConfirmation, server side), both supplied by the page. -#}
 {% declare commandTarget: RouteTarget %}
@@ -91,7 +91,7 @@
                     <pl-table-body>
                         {% each storedLogs as index, log %}
                         <pl-table-row>
-                            <pl-table-cell><a use:Zenit.route={% log.get("target") %}>{{ log.get("createdAt") }}</a></pl-table-cell>
+                            <pl-table-cell><a use:Zenit.route={% log.get("target") %}><pl-relative-time datetime={% log.get("createdAtIso") %}></pl-relative-time></a></pl-table-cell>
                             <pl-table-cell>{{ log.get("lineCount") }}</pl-table-cell>
                             <pl-table-cell>{{ log.get("handle") }}</pl-table-cell>
                         </pl-table-row>
@@ -107,7 +107,7 @@
         {% if selectedLogText != "" %}
         <pl-card>
             <pl-card-header>
-                <pl-card-title>{{ t("stored_log", scope: "instance_console", title: selectedLogTitle) }}</pl-card-title>
+                <pl-card-title>{{ t("stored_log", scope: "instance_console", title: Dates.absoluteText(selectedLogAtIso)) }}</pl-card-title>
             </pl-card-header>
             <pl-card-content>
                 {#- Redacted at ingest, but still the workload's stdout VERBATIM, and a
@@ -116,7 +116,7 @@
                     as HTML. pl-log-view carries it as its plain `text` property and owns the
                     mono frame, the bounded height and the named scroll region. -#}
                 <pl-log-view text={% selectedLogText %}
-                             label={% t("stored_log", scope: "instance_console", title: selectedLogTitle) %}></pl-log-view>
+                             label={% t("stored_log", scope: "instance_console", title: Dates.absoluteText(selectedLogAtIso)) %}></pl-log-view>
             </pl-card-content>
         </pl-card>
         {% /if %}

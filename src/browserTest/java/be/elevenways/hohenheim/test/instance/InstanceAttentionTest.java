@@ -152,14 +152,14 @@ class InstanceAttentionTest {
             assertThat(raised(InstanceAttention::instancesLowOnDisk))
                 .as("step 7: 96% of a real, enforced ceiling raises exactly one ERROR item,"
                     + " and the unbounded workload still stays quiet")
-                .containsExactly("error /admin/instances/" + healthy);
+                .containsExactly("error /admin/instances/" + healthy + "/page/overview");
 
             // 8. Between the two thresholds it is a WARNING, not an error: "worth watching"
             //    and "about to break" are different operator problems.
             observeDisk(healthy, 8_800_000_000L, 10_000_000_000L);
             assertThat(raised(InstanceAttention::instancesLowOnDisk))
                 .as("step 8: 88% is a warning, not an error")
-                .containsExactly("warning /admin/instances/" + healthy);
+                .containsExactly("warning /admin/instances/" + healthy + "/page/overview");
         });
     }
 

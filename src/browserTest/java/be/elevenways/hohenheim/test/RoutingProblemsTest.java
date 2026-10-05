@@ -165,7 +165,7 @@ class RoutingProblemsTest {
             .as("step 4: carrying the kind this build does not know").isEqualTo("hohenheim:retired_kind");
         assertThat(unknownItem.target()).as("step 4: the item links somewhere").isNotNull();
         assertThat(unknownItem.target().toUrl()).as("step 4: to the site's own record")
-            .endsWith("/admin/sites/" + unknown.get(SiteModel.ID));
+            .endsWith("/admin/sites/" + unknown.get(SiteModel.ID) + "/page/overview");
         assertThat(items).as("step 4: the healthy site raises nothing")
             .noneMatch(item -> "Problems Healthy".equals(item.title().args().get("name")));
 

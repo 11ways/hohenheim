@@ -162,7 +162,8 @@ public final class InstanceConsolePage implements ConsoleModes.Mode {
                 entry.put("target", logTarget(panel, instanceId, log.get(InstanceLogModel.ID)));
                 entry.put("handle", String.valueOf((Object) log.get(InstanceLogModel.HANDLE)));
                 entry.put("lineCount", log.get(InstanceLogModel.LINE_COUNT));
-                entry.put("createdAt", String.valueOf((Object) log.get(InstanceLogModel.CREATED_AT)));
+                // The ISO instant; the template words it in the viewer's zone (pl-relative-time, Dates.absoluteText).
+                entry.put("createdAtIso", String.valueOf((Object) log.get(InstanceLogModel.CREATED_AT)));
                 logs.add(entry);
             }
         }
@@ -171,7 +172,7 @@ public final class InstanceConsolePage implements ConsoleModes.Mode {
         // A malformed id reads as null: the page renders with no selection.
         Integer selected = CmsSupport.prefill(conduit, HohenheimParams.SELECTED_LOG);
         String text = "";
-        String title = "";
+        String atIso = "";
         if (selected != null && instanceId != null) {
             Row log = model.findById(selected);
             // Ownership guard: a log id belonging to another instance must not render.
@@ -180,11 +181,11 @@ public final class InstanceConsolePage implements ConsoleModes.Mode {
                 // it leaves here as TEXT and the template renders it as a text node.
                 String stored = log.get(InstanceLogModel.LOG_TEXT);
                 text = stored != null ? stored : "";
-                title = String.valueOf((Object) log.get(InstanceLogModel.CREATED_AT));
+                atIso = String.valueOf((Object) log.get(InstanceLogModel.CREATED_AT));
             }
         }
         vars.put("selectedLogText", text);
-        vars.put("selectedLogTitle", title);
+        vars.put("selectedLogAtIso", atIso);
     }
 
     /**

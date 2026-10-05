@@ -15,6 +15,7 @@ import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.routing.UrlTarget;
 import be.elevenways.zenit.common.text.Slugs;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -23,6 +24,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
@@ -44,14 +46,15 @@ final class SiteActions {
     static final Identifier FIX_HTTPS = HohenheimIds.id("site_fix_https");
     static final Identifier ADD_ADDRESS = HohenheimIds.id("site_add_address");
     static final Identifier FIX_PROTECTION = HohenheimIds.id("site_fix_protection");
+    static final Identifier OPEN_SITE = HohenheimIds.id("site_open");
 
     private SiteActions() {
     }
 
     /** The operator panel's placed operations, in the order the legacy row actions had, then the health fixes. */
     static @NonNull List<PanelAction<Row>> operator() {
-        return List.of(enableAction(), disableAction(), cloneAction(), rollbackAction(), fixHttpsAction(),
-            addAddressAction(), fixProtectionAction());
+        return List.of(openSiteAction(OPEN_SITE, AppHealth::openUrl), enableAction(), disableAction(), cloneAction(),
+            rollbackAction(), fixHttpsAction(), addAddressAction(), fixProtectionAction());
     }
 
     /**
@@ -59,7 +62,25 @@ final class SiteActions {
      * stay operator acts.
      */
     static @NonNull List<PanelAction<Row>> delegated() {
-        return List.of(enableAction(), disableAction(), fixHttpsAction(), addAddressAction(), fixProtectionAction());
+        return List.of(openSiteAction(OPEN_SITE, AppHealth::openUrl), enableAction(), disableAction(),
+            fixHttpsAction(), addAddressAction(), fixProtectionAction());
+    }
+
+    /**
+     * The app's own address in a new tab, the record heading's first action (the board's Open site), offered only
+     * while visitors reach it: the instance's twin passes {@link AppHealth#openUrlOfInstance}.
+     */
+    static @NonNull PanelAction<Row> openSiteAction(@NonNull Identifier id,
+                                                    @NonNull Function<Row, @Nullable String> url) {
+        return PanelAction.<Row>link(id, ActionPlacement.ROW)
+            .label(Microcopy.of("open_site").withFilter("scope", "app_overview"))
+            .icon(Icon.of("up-right-from-square"))
+            .inlineInRow(false)
+            .openInNewTab()
+            .shownWhen((row, access) -> url.apply(row) != null)
+            .route((row, request) -> new UrlTarget(Objects.requireNonNull(url.apply(row),
+                "Open site is shown only while the app has an address")))
+            .build();
     }
 
     /** To the site's addresses, where each name forced without a certificate gets one. */
@@ -143,8 +164,8 @@ final class SiteActions {
     /** The record-creating clone; the form opens on {@link #freeCloneName}, and the copy's page is where it lands. */
     private static @NonNull PanelAction<Row> cloneAction() {
         return PanelAction.<Row, Integer>places(SiteOperations.CLONE, ActionPlacement.ROW,
-                (request, result) -> CmsActionResult.redirect(new Uri(CmsRoutes.detail(request.request().panelSlug(),
-                    HohenheimSlugs.SITES, Objects.requireNonNull(result.value(),
+                (request, result) -> CmsActionResult.redirect(new Uri(SiteParts.recordRoute(
+                    request.request().panelSlug(), Objects.requireNonNull(result.value(),
                         "a clone answers the copy's id")).toUrl())))
             .inlineOnRecord(false)
             .inlineInRow(false)
