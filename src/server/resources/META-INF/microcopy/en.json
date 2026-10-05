@@ -6067,7 +6067,7 @@
   },
   "snapshot": [
     {
-      "text": "Snapshot",
+      "text": "Take a snapshot",
       "scope": "instance"
     },
     {
@@ -13387,6 +13387,10 @@
   "fix_https": {
     "text": "Get a certificate",
     "scope": "app_health"
+  },
+  "open_site": {
+    "text": "Open site",
+    "scope": "app_overview"
   },
   "fix_protection": {
     "text": "Fix protection",

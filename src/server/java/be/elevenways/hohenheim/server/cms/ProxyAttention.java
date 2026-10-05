@@ -129,7 +129,7 @@ public final class ProxyAttention {
             items.add(item(AttentionSeverity.ERROR, "lock",
                 copy("forced_without_certificate", "attention_title", "hostname", hostname),
                 copy("forced_without_certificate", "attention_detail"),
-                CmsRoutes.detail(ADMIN, HohenheimSlugs.SITES, site.get(SiteModel.ID))));
+                SiteParts.recordRoute(ADMIN, site.get(SiteModel.ID))));
         }
     }
 
@@ -186,7 +186,7 @@ public final class ProxyAttention {
                     "globe",
                     copy("site", "attention_title", "name", site.get(SiteModel.NAME)),
                     copy(health == SiteHealth.DOWN ? "down" : "degraded", "attention_detail"),
-                    CmsRoutes.detail(ADMIN, HohenheimSlugs.SITES, siteId)));
+                    SiteParts.recordRoute(ADMIN, siteId)));
             }
         }
     }
@@ -221,7 +221,7 @@ public final class ProxyAttention {
                 copy(unrouted ? "site_unrouted" : "site_refusing", "attention_title",
                     "name", problem.siteName()),
                 reasonOf(problem),
-                CmsRoutes.detail(ADMIN, HohenheimSlugs.SITES, problem.siteId())));
+                SiteParts.recordRoute(ADMIN, problem.siteId())));
         }
     }
 

@@ -223,6 +223,42 @@ final class AppHealth {
 
     /** The address a visitor types: the first exact name, with the scheme that actually works for it. */
     static @NonNull String liveAddress(@NonNull List<Row> domains, @NonNull Set<String> working, boolean passthrough) {
+        String url = exactUrl(domains, working, passthrough);
+        return url != null ? url : String.valueOf((Object) domains.get(0).get(SiteDomainModel.HOSTNAME));
+    }
+
+    /**
+     * Where a site's Open site link goes: its first exact name over the scheme that works, or null while visitors
+     * reach nothing there (trashed, switched off, no exact name, or a name forced to HTTPS without a certificate).
+     */
+    static @Nullable String openUrl(@NonNull Row site) {
+        if (site.get(SiteModel.DELETED_AT) != null || !Boolean.TRUE.equals(site.get(SiteModel.ENABLED))) {
+            return null;
+        }
+        List<Row> domains = SiteParts.domainsOf(site);
+        Set<String> working = CertificateCoverage.activeNames();
+        boolean passthrough = SiteParts.tlsPassthrough(site);
+        if (forcedWithoutCertificate(domains, working, passthrough) != null) {
+            return null;
+        }
+        return exactUrl(domains, working, passthrough);
+    }
+
+    /** Where an instance's Open site link goes: the first site serving it that visitors reach, null when none does. */
+    static @Nullable String openUrlOfInstance(@NonNull Row instance) {
+        for (Row site : Models.get(SiteModel.class).find()
+                .where(SiteModel.INSTANCE_ID.eq(instance.get(InstanceModel.ID))).all()) {
+            String url = openUrl(site);
+            if (url != null) {
+                return url;
+            }
+        }
+        return null;
+    }
+
+    /** @return the first exact name with the scheme that works for it, null when these domains hold no exact name */
+    private static @Nullable String exactUrl(@NonNull List<Row> domains, @NonNull Set<String> working,
+                                             boolean passthrough) {
         for (Row domain : domains) {
             if (exact(domain)) {
                 String hostname = domain.get(SiteDomainModel.HOSTNAME);
@@ -230,7 +266,7 @@ final class AppHealth {
                 return (https ? "https://" : "http://") + hostname;
             }
         }
-        return String.valueOf((Object) domains.get(0).get(SiteDomainModel.HOSTNAME));
+        return null;
     }
 
     static boolean exact(@NonNull Row domain) {

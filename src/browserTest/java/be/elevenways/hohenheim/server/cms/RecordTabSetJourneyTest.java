@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -33,6 +34,7 @@ class RecordTabSetJourneyTest extends HohenheimTestBase {
         int id = instance.get(InstanceModel.ID);
         String record = "/admin/instances/" + id;
         Row snapshot = snapshot(id, "before the tab-set move");
+        Row log = storedLog(id, "hello from an earlier run");
         try {
             // 1. The strip keeps the board's daily tabs in view, in order, and folds the housekeeping into More.
             String overview = adminGet(record + "/page/overview").body();
@@ -65,6 +67,19 @@ class RecordTabSetJourneyTest extends HohenheimTestBase {
             assertThat(console).as("step 3: the active mode says what it is for")
                 .contains("The workload's own output, live");
 
+            // 3b. A stored console run is listed by WHEN it ran, in the viewer's words (never a raw ISO instant), and
+            //     the opened run's card names that time the same way.
+            assertThat(console).as("step 3b: the stored run's time is a relative-time element over its instant")
+                .contains("<pl-relative-time datetime=\"2026-10-05T08:26:17.808879Z\"");
+            assertThat(console).as("step 3b: the raw instant is never the visible text")
+                .doesNotContain(">2026-10-05T08:26:17.808879Z<");
+            String opened = adminGet(record + "/page/console?log=" + log.get(InstanceLogModel.ID)).body();
+            assertThat(opened).as("step 3b: the opened run shows its output")
+                .contains("hello from an earlier run");
+            assertThat(opened).as("step 3b: and its title words the time, never the ISO instant")
+                .contains("Console output of ")
+                .doesNotContain("Console output of 2026-10-05T08:26:17");
+
             // 4. A mode stands under the Console tab: the strip marks Console active, the switch marks the mode.
             String shell = adminGet(record + "/page/shell").body();
             Pattern consoleActive = Pattern.compile(
@@ -86,11 +101,14 @@ class RecordTabSetJourneyTest extends HohenheimTestBase {
             assertThat(backups).as("step 6: the Backups tab lists the snapshot")
                 .contains("before the tab-set move")
                 .contains("/admin/instance-snapshots/" + snapshot.get(InstanceSnapshotModel.ID));
+            assertThat(backups).as("step 6: the section's making action says what it does")
+                .contains("Take a snapshot");
             assertThat(adminGet(record + "/page/snapshots").statusCode())
                 .as("step 6: the snapshots route is retired").isEqualTo(404);
             assertThat(adminGet(record + "/page/schedules").statusCode())
                 .as("step 6: and so is the schedules route").isEqualTo(404);
         } finally {
+            HardDeletes.row(Models.get(InstanceLogModel.class), log);
             HardDeletes.row(Models.get(InstanceSnapshotModel.class), snapshot);
             HardDeletes.row(Models.get(InstanceModel.class), instance);
         }
@@ -128,7 +146,9 @@ class RecordTabSetJourneyTest extends HohenheimTestBase {
             assertThat(strip).as("step 2: the tabs read as the overview's cards do")
                 .contains("Addresses").contains("Protection")
                 .doesNotContain(">Domains<").doesNotContain("Protected paths");
-            assertThat(strip.split(Pattern.quote(siteRecord + "/page/access\""), -1).length - 1)
+            // A strip tab is the anchor the width fit measures (data-pl-fit-item); its hidden copy in More is not a tab.
+            String accessTab = "data-pl-fit-item=\"" + siteRecord + "/page/access\"";
+            assertThat(strip.split(Pattern.quote(accessTab), -1).length - 1)
                 .as("step 2: one Access tab, the contributed one").isEqualTo(1);
 
             // 3. A site's own tab (Addresses) heads with the site too.
@@ -177,6 +197,20 @@ class RecordTabSetJourneyTest extends HohenheimTestBase {
         site.set(SiteModel.ENABLED, true);
         Models.get(SiteModel.class).save(site);
         return site;
+    }
+
+    private static Row storedLog(int instanceId, String text) {
+        var logs = Models.get(InstanceLogModel.class);
+        Row row = logs.createEmptyRow();
+        row.set(InstanceLogModel.INSTANCE_ID, instanceId);
+        row.set(InstanceLogModel.HANDLE, "tab-set-workload");
+        row.set(InstanceLogModel.LOG_TEXT, text);
+        row.set(InstanceLogModel.LINE_COUNT, 1);
+        row.set(InstanceLogModel.SAVED_AT, Instant.parse("2026-10-05T08:26:17.808879Z"));
+        logs.save(row);
+        row.set(InstanceLogModel.CREATED_AT, Instant.parse("2026-10-05T08:26:17.808879Z"));
+        logs.save(row);
+        return row;
     }
 
     private static Row snapshot(int instanceId, String note) {

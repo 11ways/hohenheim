@@ -58,8 +58,8 @@ public final class InstanceFromTemplatePage extends PanelPage {
     /** The wizard: the create operation over the template its request selects. */
     public static final PanelAction<Row> CREATE = PanelAction.<Row, Integer>places(
             InstanceTemplateOperations.CREATE_INSTANCE_FROM_TEMPLATE, ActionPlacement.PAGE,
-            (request, result) -> CmsActionResult.redirect(new Uri(CmsRoutes.detail(request.request().panelSlug(),
-                HohenheimSlugs.INSTANCES, result.value()).toUrl())))
+            (request, result) -> CmsActionResult.redirect(new Uri(CmsRoutes.subpage(request.request().panelSlug(),
+                HohenheimSlugs.INSTANCES, result.value(), InstanceOverview.SLUG).toUrl())))
         .confirmation(ConfirmationSpec.generic(Microcopy.of("create").withFilter("scope", "instance_from_template"),
             false))
         .selectedBy(HohenheimParams.FROM_TEMPLATE_TEMPLATE.getName())

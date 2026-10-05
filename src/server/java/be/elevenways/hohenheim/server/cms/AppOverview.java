@@ -287,7 +287,7 @@ final class AppOverview {
         if (instance != null) {
             facts.add(WidgetFact.link(text("workload", locales, resolver),
                 Models.get(InstanceModel.class).getDisplayTitle(instance),
-                CmsRoutes.detail(panelSlug, HohenheimSlugs.INSTANCES, instanceId).toUrl()));
+                InstanceParts.recordRoute(panelSlug, instance, null).toUrl()));
         }
         Instant created = site.get(SiteModel.CREATED_AT);
         if (created != null) {

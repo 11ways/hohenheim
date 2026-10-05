@@ -53,6 +53,11 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             assertThat(page).as("step 1b: and no record-actions widget repeating it")
                 .doesNotContain("cms-record-actions-widget");
 
+            // 1c. The heading's first action opens the site where visitors reach it, in a new tab.
+            assertThat(page).as("step 1c: Open site leads to the live address")
+                .contains("href=\"http://healthy.app-journey.test")
+                .contains("Open site");
+
             // 2. A name forced to HTTPS without a working certificate is the error page visitors get: said plainly,
             //    with the fix offered right there, and the address marked as not working.
             String brokenPage = adminGet(overview(broken)).body();
@@ -64,6 +69,9 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 .contains("broken.app-journey.test has no working certificate");
             assertThat(brokenPage).as("step 2: and the fix leads to the site's addresses")
                 .contains("/admin/sites/" + broken.get(SiteModel.ID) + "/page/" + SiteParts.DOMAINS_TAB);
+            assertThat(brokenPage).as("step 2: a site visitors cannot reach offers no Open site")
+                .doesNotContain("href=\"https://broken.app-journey.test")
+                .doesNotContain("href=\"http://broken.app-journey.test");
 
             // 3. The list draws the same verdicts: one producer, so the glyph and the band never disagree.
             String list = adminGet("/admin/sites?q=app-journey").body();
@@ -121,6 +129,33 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 .contains("data-cms-health=\"attention\"");
         } finally {
             localBefore.restore();
+            HardDeletes.row(Models.get(InstanceModel.class), instance);
+        }
+    }
+
+    @Test
+    void aWorkloadServedByASiteOpensThatSite() throws Exception {
+        Row instance = instance("app-journey-served");
+        Row site = site("app-journey-served-site");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:instance");
+        site.set(SiteModel.INSTANCE_ID, instance.get(InstanceModel.ID));
+        Models.get(SiteModel.class).save(site);
+        domain(site, "served.app-journey.test", false);
+        Row bare = instance("app-journey-unserved");
+        try {
+            // 1. The workload's heading leads with Open site, to the address of the site serving it.
+            String served = adminGet("/admin/instances/" + instance.get(InstanceModel.ID) + "/page/overview").body();
+            assertThat(served).as("step 1: Open site leads to the serving site's address")
+                .contains("href=\"http://served.app-journey.test")
+                .contains("Open site");
+
+            // 2. A workload no site serves has nothing to open.
+            String unserved = adminGet("/admin/instances/" + bare.get(InstanceModel.ID) + "/page/overview").body();
+            assertThat(unserved).as("step 2: no Open site without a serving site")
+                .doesNotContain("Open site");
+        } finally {
+            HardDeletes.row(Models.get(SiteModel.class), site);
+            HardDeletes.row(Models.get(InstanceModel.class), bare);
             HardDeletes.row(Models.get(InstanceModel.class), instance);
         }
     }

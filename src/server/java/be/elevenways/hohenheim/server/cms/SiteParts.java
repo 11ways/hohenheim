@@ -294,6 +294,14 @@ public final class SiteParts {
     }
 
     /**
+     * Where a surface links a site: its front door, the overview, never the bare record URL (for an operator who may
+     * edit, that URL is the edit form; see {@link InstanceParts#recordRoute}).
+     */
+    static @NonNull RouteTarget recordRoute(@NonNull String panel, @NonNull Object siteId) {
+        return CmsRoutes.subpage(panel, HohenheimSlugs.SITES, siteId, AppOverview.SLUG);
+    }
+
+    /**
      * A brand-new site lands on its Domains tab: a filled first hostname still leads to where the second one, the
      * certificate and the TLS switches live, and a blank one means the site has nothing to answer on yet.
      */
@@ -404,7 +412,7 @@ public final class SiteParts {
             Row instance = Models.get(InstanceModel.class).findById(instanceId);
             if (instance != null) {
                 instanceName = Models.get(InstanceModel.class).getDisplayTitle(instance);
-                instanceUrl = CmsRoutes.detail(HohenheimPanel.SLUG, HohenheimSlugs.INSTANCES, instanceId).toUrl();
+                instanceUrl = InstanceParts.recordRoute(HohenheimPanel.SLUG, instance, null).toUrl();
             }
         }
 
