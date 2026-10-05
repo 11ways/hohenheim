@@ -107,8 +107,9 @@ class DomainEditTest extends HohenheimTestBase {
         waitForHydration();
         assertThat(page.locator("pl-select[name='match_type'] .pl-select-value")
             .textContent().trim()).as("step 2: match type defaults to exact").isEqualTo("Exact hostname");
+        // A new address forces HTTPS by itself once its certificate works (ForceSslLatch), never before.
         assertThat(page.locator("pl-switch[name='force_ssl']").getAttribute("checked"))
-            .as("step 2: force SSL defaults on").isNotNull();
+            .as("step 2: force SSL defaults off until a certificate works").isNull();
 
         // 3. The created domain belongs to that site.
         var domainResponse = adminPostForm("/admin/domains/new",

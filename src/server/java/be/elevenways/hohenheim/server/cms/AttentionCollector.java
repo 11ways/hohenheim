@@ -86,6 +86,7 @@ public final class AttentionCollector {
             ProxyAttention.errorCertificates(items);
             ProxyAttention.failedProxyListeners(items);
             ProxyAttention.httpsUnavailableWithForceSsl(items);
+            ProxyAttention.forcedWithoutCertificate(items);
             ProxyAttention.unhealthySites(items);
             ProxyAttention.routingProblems(items);
             InstanceAttention.failedDeployments(items);

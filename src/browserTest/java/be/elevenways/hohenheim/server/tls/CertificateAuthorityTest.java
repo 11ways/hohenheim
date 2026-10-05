@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -96,24 +97,17 @@ class CertificateAuthorityTest extends HohenheimTestBase {
             .extracting(refused -> ((CertificateAuthority.Refused) refused).refusal())
             .isEqualTo(CertificateAuthority.Refusal.NOT_SERVED);
 
-        // 2. And over the real admin-gated endpoint, which is the surface that used to
-        //    accept a free-form hostname list on nothing but requiresPermission.
+        // 2. And over the certificate list's request operation, which is the surface that used to accept a free-form
+        //    hostname list on nothing but requiresPermission.
         HttpResponse<String> response = adminPost(
-            "challenge_type=http&dns_mode=manual&nice_name=Unserved&domains=" + unserved);
+            "challenge_type=http&dns_publisher=manual&nice_name=Unserved&domains=" + unserved);
         assertThat(response.statusCode())
-            .describedAs("the request form answers with its error redirect")
-            .isIn(302, 303);
-        // The refusal rides the SESSION flash, never the redirect URL.
-        var refusal = popFlash(response);
-        assertThat(refusal)
-            .describedAs("a refused request must stash a flash naming the refusal")
-            .isNotNull();
-        assertThat(refusal.message().key())
-            .describedAs("the refusal names the serving half, not a generic failure")
-            .isEqualTo("hostname_not_served");
-        assertThat(String.valueOf(refusal.message().args().asMap().get("hostnames")))
-            .describedAs("the refusal names the hostname it is about")
-            .contains(unserved);
+            .describedAs("the request answers as a refusal, its input redrawn")
+            .isEqualTo(422);
+        assertThat(response.body())
+            .describedAs("the refusal names the serving half and the hostname, not a generic failure")
+            .contains(ApiSupport.shippedText(Microcopy.of("hostname_not_served")
+                .withFilter("scope", "certificate_request_error").withArg("hostnames", unserved)));
 
         // 3. STATE, not just status: no certificate order exists for that name.
         assertThat(certificateFor(unserved))
@@ -433,6 +427,6 @@ class CertificateAuthorityTest extends HohenheimTestBase {
     }
 
     private HttpResponse<String> adminPost(String body) throws Exception {
-        return adminPostForm("/admin/certificates-request", body);
+        return adminPostForm(ApiSupport.requestCertificateTarget(), body + "&" + ApiSupport.invokeTransport());
     }
 }

@@ -4,10 +4,11 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.HohenheimEndpoints;
-import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
+import be.elevenways.hohenheim.server.tls.AcmeService;
+import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.typed.CoreTypes;
@@ -21,11 +22,9 @@ import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
-import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
-import be.elevenways.zenit.cms.common.resource.RelatedPage;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
@@ -112,6 +111,9 @@ public final class CertificateParts {
         "cert_renewal_error", "renewal");
     private static final StringField NEXT_ATTEMPT_DISPLAY = displayField("next_attempt_display",
         "cert_next_attempt_at", "renewal");
+    /** The TXT records a manual DNS-01 order waits for; "Verify DNS and finish" continues it once they are published. */
+    private static final StringField DNS_RECORDS_DISPLAY = displayField("dns_records_display",
+        "cert_dns_records", "coverage");
 
     /** Wall-clock shape of {@code Dates.wallText}, which needs a RenderContext this hook has not. */
     private static final DateTimeFormatter WALL_CLOCK = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -122,6 +124,7 @@ public final class CertificateParts {
         .add(CertificateModel.PRIVATE_KEY_PEM)
         .add(CertificateModel.AUTO_RENEW)
         .add(COVERED_NAMES_DISPLAY)
+        .add(DNS_RECORDS_DISPLAY)
         .add(EXPIRY_DISPLAY)
         .add(CHALLENGE_DISPLAY)
         .add(DNS_PUBLISHER_DISPLAY)
@@ -207,7 +210,8 @@ public final class CertificateParts {
             .description(Microcopy.of("nav_hint").withFilter("scope", "certificate"))
             .icon(Icon.of("certificate")).navGroup(HohenheimPanel.NETWORK_GROUP).navOrder(20)
             .scope(ROWS)
-            .reads(ResourceReads.rows().mapValues(Set.of(COVERED_NAMES_DISPLAY.getName(), EXPIRY_DISPLAY.getName(),
+            .reads(ResourceReads.rows().mapValues(Set.of(COVERED_NAMES_DISPLAY.getName(), DNS_RECORDS_DISPLAY.getName(),
+                EXPIRY_DISPLAY.getName(),
                 CHALLENGE_DISPLAY.getName(), DNS_PUBLISHER_DISPLAY.getName(), RENEWAL_ERROR_DISPLAY.getName(),
                 NEXT_ATTEMPT_DISPLAY.getName()), CertificateParts::displayValues))
             .list(ResourceList.rows(ADMIN_TABLE).chrome(CmsSupport.WIDE_LIST).facets().ruleFilters()
@@ -221,7 +225,6 @@ public final class CertificateParts {
             .actions(actions())
             // AIDEV-NOTE: parity is the tab contract here: the legacy twin offered no contributed access tab.
             .tabs(ResourceTabs.<Row>of(List.of(RecordOverview.<Row>fields())).withHistory())
-            .relatedPages(RelatedPage.toPeer("certificates-request"))
             .build();
     }
 
@@ -275,6 +278,7 @@ public final class CertificateParts {
     private static @NonNull List<ResourceFieldBinding> fieldBindings() {
         return List.of(
             ResourceFieldBinding.of(COVERED_NAMES_DISPLAY.getName(), FieldAccess.alwaysReadonly()),
+            ResourceFieldBinding.of(DNS_RECORDS_DISPLAY.getName(), FieldAccess.alwaysReadonly()),
             ResourceFieldBinding.of(EXPIRY_DISPLAY.getName(), FieldAccess.alwaysReadonly()),
             ResourceFieldBinding.of(CHALLENGE_DISPLAY.getName(), FieldAccess.alwaysReadonly()),
             ResourceFieldBinding.of(DNS_PUBLISHER_DISPLAY.getName(), FieldAccess.alwaysReadonly()),
@@ -294,6 +298,7 @@ public final class CertificateParts {
         List<String> names = CertificateCoverage.namesOf(row);
         values.put(COVERED_NAMES_DISPLAY.getName(),
             names.isEmpty() ? copy("coverage_none") : String.join(", ", names));
+        values.put(DNS_RECORDS_DISPLAY.getName(), dnsRecordsText(row));
         values.put(EXPIRY_DISPLAY.getName(), instantText(row.get(CertificateModel.EXPIRES_ON),
             copy("expiry_none")));
         values.put(CHALLENGE_DISPLAY.getName(), orNone(
@@ -308,6 +313,24 @@ public final class CertificateParts {
         values.put(NEXT_ATTEMPT_DISPLAY.getName(), instantText(row.get(CertificateModel.NEXT_ATTEMPT_AT),
             copy(Boolean.TRUE.equals(row.get(CertificateModel.AUTO_RENEW)) ? "next_attempt_auto" : "next_attempt_manual")));
         return values;
+    }
+
+    /** The waiting manual DNS-01 order's records as "name TXT value" entries, or the sentence that none waits. */
+    private static @NonNull String dnsRecordsText(@NonNull Row row) {
+        var proxy = ServerMain.getProxyServer();
+        AcmeService.ManualDnsRequest pending = proxy == null ? null
+            : proxy.getAcmeService().manualDnsRequestFor(row.get(CertificateModel.ID));
+        if (pending == null || pending.records().isEmpty()) {
+            return copy("dns_records_none");
+        }
+        StringBuilder text = new StringBuilder();
+        for (var record : pending.records()) {
+            if (!text.isEmpty()) {
+                text.append("; ");
+            }
+            text.append(record.name()).append(" TXT ").append(record.value());
+        }
+        return text.toString();
     }
 
     /** An absolute wall-clock stamp plus the relative wording, or the absence sentence. */
@@ -412,21 +435,11 @@ public final class CertificateParts {
             // Exporting the PEM is rare next to edit/delete: overflow, not inline.
             .inlineInRow(false)
             .build());
-        // Re-ordering a certificate is how a domain is added or HTTP-01/DNS-01 is switched:
-        // the row's own domain list and challenge are readonly on the form because they
-        // describe what the CA actually issued, and only a new order may change them.
-        actions.add(PanelAction.<Row>link(HohenheimIds.id("reissue_certificate"), ActionPlacement.ROW)
-            .label(Microcopy.of("reissue").withFilter("scope", "certificate"))
-            .icon(Icon.of("rotate"))
-            .route((row, request) -> CmsRoutes.list(HohenheimSlugs.ADMIN, HohenheimSlugs.CERTIFICATES_REQUEST)
-                .with(HohenheimParams.CERTIFICATE_REISSUE, row.get(CertificateModel.ID)))
-            // A manual upload has no order to repeat, and the ACME account row is not a
-            // certificate at all. The page and the handler refuse them again -- this only
-            // stops offering an action that could never succeed.
-            .shownWhen((row, ctx) -> CertificateModel.PROVIDER_LETSENCRYPT
-                .equals(row.get(CertificateModel.PROVIDER)))
-            .inlineInRow(false)
-            .build());
+        // Re-ordering a certificate is how a domain is added or HTTP-01/DNS-01 is switched: the row's own domain list
+        // and challenge are readonly on the form because they describe what the CA actually issued.
+        actions.add(CertificateOperations.reissueAction());
+        actions.add(CertificateOperations.continueDnsAction());
+        actions.add(CertificateOperations.requestAction());
         return actions;
     }
 

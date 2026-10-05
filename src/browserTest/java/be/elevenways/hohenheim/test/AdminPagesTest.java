@@ -2,9 +2,11 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.cms.CertificateOperations;
 import be.elevenways.hohenheim.server.cms.InstanceQuotaParts;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -27,6 +29,8 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import be.elevenways.zenit.test.support.RateLimitExemption;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.server.panel.PartsReads;
 import com.microsoft.playwright.Locator;
 import org.junit.jupiter.api.*;
@@ -383,49 +387,25 @@ class AdminPagesTest extends HohenheimTestBase {
     /** The request and upload forms render their fields and refuse impossible input. */
     @Test
     void certificateRequestAndUploadFormsRenderAndValidate() throws Exception {
-        navigateToApp("/admin/certificates-request");
-        waitForHydration();
+        // The certificate list offers the request as its own header action: the placed operation, no hand-built page.
+        assertThat(adminGet("/admin/certificates").body())
+            .contains("data-action-id=\"" + CertificateOperations.REQUEST.id() + "\"");
 
-        String content = page.content();
-        assertThat(content).contains("Let's Encrypt");
-        assertThat(content).contains("DNS-01");
-        assertThat(content).contains("*.example.com");
-        assertThat(page.locator("pl-textarea[name='domains']").count()).isZero();
-        assertThat(page.locator("zf-array pl-input[name='domains']").count()).isEqualTo(1);
-
-        // Hand-built form pages get their inter-field rhythm from the plumage
-        // card itself (pl-card-content > pl-field + pl-field); a regression
-        // here squishes every label against the previous description.
-        Object gap = page.evaluate(
-            "() => getComputedStyle(document.querySelector('pl-card-content .zf-entries')).gap");
-        assertThat(String.valueOf(gap)).isEqualTo("32px");
-
-        // Item children portal into the overlay popup at hydration, so the
-        // command option's disabled state is asserted inside the open popup.
-        page.click("pl-select[name='dns_mode'] .pl-select-field");
-        page.waitForSelector("he-bottom .pl-select-popup[data-open]");
-        var command = page.locator(
-            "he-bottom .pl-select-popup[data-open] div[role='option'][data-value='command']");
-        assertThat(command.count()).isEqualTo(1);
-        assertThat(command.getAttribute("aria-disabled")).isEqualTo("true");
-        page.keyboard().press("Escape");
-
-        // A wildcard with HTTP validation is refused before the CA is contacted.
-        var response = adminPostForm("/admin/certificates-request",
-            "nice_name=wildcard&domains=*.example.test&challenge_type=http&dns_mode=manual");
-        assertThat(response.statusCode()).isIn(302, 303);
-        var wildcardRefusal = popFlash(response);
-        assertThat(wildcardRefusal).describedAs("the refusal rides the session flash").isNotNull();
-        assertThat(wildcardRefusal.message().key()).isEqualTo("wildcard_requires_dns");
+        // A wildcard with HTTP validation is refused before the CA is contacted, the input redrawn.
+        String wildcardRefusal = ApiSupport.shippedText(Microcopy.of("wildcard_requires_dns")
+            .withFilter("scope", "certificate_request_error"));
+        var response = adminPostForm(ApiSupport.requestCertificateTarget(),
+            "nice_name=wildcard&domains=*.example.test&challenge_type=http&dns_publisher=manual&"
+                + ApiSupport.invokeTransport());
+        assertThat(response.statusCode()).isEqualTo(422);
+        assertThat(response.body()).contains(wildcardRefusal);
 
         // Every repeated domain value is kept, so the wildcard is still seen.
-        response = adminPostForm("/admin/certificates-request",
+        response = adminPostForm(ApiSupport.requestCertificateTarget(),
             "nice_name=wildcard&domains=&domains=example.test&domains=*.example.test"
-                + "&challenge_type=http&dns_mode=manual");
-        assertThat(response.statusCode()).isIn(302, 303);
-        var repeatedRefusal = popFlash(response);
-        assertThat(repeatedRefusal).describedAs("the refusal rides the session flash").isNotNull();
-        assertThat(repeatedRefusal.message().key()).isEqualTo("wildcard_requires_dns");
+                + "&challenge_type=http&dns_publisher=manual&" + ApiSupport.invokeTransport());
+        assertThat(response.statusCode()).isEqualTo(422);
+        assertThat(response.body()).contains(wildcardRefusal);
 
         adminPostForm("/admin/certificates/new",
             "nice_name=my-bad-cert&certificate_pem=NOT-A-PEM-BODY&private_key_pem=NOT-A-KEY");
@@ -443,7 +423,7 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(page.locator("pl-textarea[name='certificate_pem']").count()).isEqualTo(1);
         assertThat(page.locator("pl-textarea[name='private_key_pem']").count()).isEqualTo(1);
 
-        content = page.content();
+        String content = page.content();
         assertThat(content).contains("Certificate (PEM)");
         assertThat(content).contains("Private key (PEM)");
         assertThat(content).contains("intermediate chain");
@@ -478,7 +458,7 @@ class AdminPagesTest extends HohenheimTestBase {
             // latency. The DETAIL page below stays hydrated on purpose: it is the one place
             // this method proves the client render does not turn the diagnostic into an input.
             String list = adminGet("/admin/certificates").body();
-            assertThat(list).contains("/admin/certificates-request");
+            assertThat(list).contains("data-action-id=\"" + CertificateOperations.REQUEST.id() + "\"");
             assertThat(list)
                 .as("the renewal error is a visible list column")
                 .contains("DNS problem: NXDOMAIN");
@@ -589,12 +569,9 @@ class AdminPagesTest extends HohenheimTestBase {
             .doesNotContain(goneUrl);
     }
 
-    /**
-     * The re-issue mode of the request page: a ?cert_id= link turns the create form into the
-     * edit form of an existing order, and a row that has no order to repeat is refused.
-     */
+    /** A Let's Encrypt certificate is re-ordered through its own row, and a row with no order to repeat is refused. */
     @Test
-    void certificateRequestPageOpensInReissueModeForAnAcmeRow() throws Exception {
+    void aLetsEncryptCertificateIsReorderedThroughItsOwnRow() throws Exception {
         var certModel = Models.get(CertificateModel.class);
         Row cert = certModel.createEmptyRow();
         cert.set(CertificateModel.NICE_NAME, "reissue-me-cert");
@@ -612,48 +589,41 @@ class AdminPagesTest extends HohenheimTestBase {
         certModel.save(uploaded);
 
         try {
-            // 1. The list offers the action for the ACME row, in the overflow menu.
+            // 1. The list offers the re-order for the ACME row and never for the manual upload.
             String list = adminGet("/admin/certificates").body();
             assertThat(list)
-                .as("step 1: the re-issue link is rendered for the ACME certificate")
-                .contains("/admin/certificates-request?cert_id=" + cert.get(CertificateModel.ID));
+                .as("step 1: the re-order is offered for the ACME certificate")
+                .contains(reissueTarget(cert));
             assertThat(list)
                 .as("step 1: and never for the manual upload")
-                .doesNotContain("/admin/certificates-request?cert_id="
-                    + uploaded.get(CertificateModel.ID));
+                .doesNotContain(reissueTarget(uploaded));
 
-            // 2. The page opens PREFILLED with what the row was last issued for, carrying the
-            //    hidden id that makes the POST write back into that row.
-            navigateToApp("/admin/certificates-request?cert_id=" + cert.get(CertificateModel.ID));
-            waitForHydration();
-            assertThat(page.locator("input[name='reissue_cert_id']").getAttribute("value"))
-                .as("step 2: the row the submit re-issues is carried in the form")
-                .isEqualTo(String.valueOf(cert.get(CertificateModel.ID)));
-            var domainInputs = page.locator("zf-array pl-input[name='domains'] input");
-            assertThat(domainInputs.count())
-                .as("step 2: both stored hostnames are prefilled as rows").isEqualTo(2);
-            assertThat(List.of(domainInputs.nth(0).inputValue(), domainInputs.nth(1).inputValue()))
-                .as("step 2: carrying the names the row was last issued for")
-                .containsExactly("alpha.example.test", "beta.example.test");
-            assertThat(page.locator("pl-input[name='nice_name'] input").inputValue())
-                .as("step 2: with the certificate's own name").isEqualTo("reissue-me-cert");
-            assertThat(page.content())
-                .as("step 2: and the page says it is re-issuing, not creating")
-                .contains("re-issue");
+            // 2. Its submit writes back into that row through the same order lane: a manual DNS-01 re-order has no
+            //    record to wait on, so it is refused with the row untouched.
+            var manual = adminPostForm(reissueTarget(cert), "domains=alpha.example.test&domains=beta.example.test"
+                + "&nice_name=reissue-me-cert&challenge_type=dns&dns_publisher=manual&" + ApiSupport.invokeTransport());
+            assertThat(manual.statusCode()).as("step 2: refused as input, redrawn").isEqualTo(422);
+            assertThat(manual.body()).as("step 2: naming why")
+                .contains(ApiSupport.shippedText(Microcopy.of("reissue_manual_unsupported")
+                    .withFilter("scope", "certificate_request_error")));
 
-            // 3. A row with no ACME order to repeat is refused at render, and the form stays
-            //    a plain create form rather than half-adopting the row.
-            navigateToApp("/admin/certificates-request?cert_id="
-                + uploaded.get(CertificateModel.ID));
-            waitForHydration();
-            assertThat(page.locator("pl-alert[variant='destructive']").count())
-                .as("step 3: the refusal is shown").isGreaterThanOrEqualTo(1);
-            assertThat(page.locator("input[name='reissue_cert_id']").count())
-                .as("step 3: and nothing would be written back to it").isZero();
+            // 3. A row with no ACME order to repeat is refused outright, and nothing is written back to it.
+            var refused = adminPostForm(reissueTarget(uploaded), "domains=uploaded.example.test&challenge_type=http&"
+                + ApiSupport.invokeTransport());
+            assertThat(refused.statusCode()).as("step 3: the manual upload cannot be re-ordered")
+                .isGreaterThanOrEqualTo(400);
+            assertThat((String) certModel.findById(uploaded.get(CertificateModel.ID)).get(CertificateModel.PROVIDER))
+                .as("step 3: and stays the upload it was").isEqualTo(CertificateModel.PROVIDER_CUSTOM);
         } finally {
             certModel.delete(cert);
             certModel.delete(uploaded);
         }
+    }
+
+    /** @return the certificate row's re-order invoke path */
+    private static String reissueTarget(Row cert) {
+        return CmsRoutes.invoke(HohenheimSlugs.ADMIN, HohenheimSlugs.CERTIFICATES, CertificateOperations.REISSUE.id())
+            .with(CmsEndpoints.SUBJECT_PARAM, String.valueOf((Object) cert.get(CertificateModel.ID))).toUrl();
     }
 
     // -----------------------------------------------------------------------
@@ -783,13 +753,9 @@ class AdminPagesTest extends HohenheimTestBase {
             assertThat(page.locator("pl-select[name='site_id'] .pl-select-value").textContent().trim())
                 .isEqualTo("Record Tabs Site");
 
-            // The request-certificate link prefills the site's exact hostnames.
-            navigateToApp("/admin/certificates-request?site=" + siteId);
-            waitForHydration();
-            var domainInputs = page.locator("zf-array pl-input[name='domains'] input");
-            assertThat(domainInputs.count()).isEqualTo(2);
-            assertThat(domainInputs.nth(0).inputValue()).isEqualTo("weave.example.test");
-            assertThat(domainInputs.nth(1).inputValue()).isEqualTo("bare.example.test");
+            // Each exact hostname's row offers "Get a certificate" for itself.
+            assertThat(adminGet("/admin/domains").body())
+                .contains("data-action-id=\"" + CertificateOperations.REQUEST_FOR_DOMAIN.id() + "\"");
         } finally {
             certModel.delete(cert);
             domainModel.delete(covered);

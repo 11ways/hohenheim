@@ -27,6 +27,8 @@ final class RouteEntry {
     final String path;
     final boolean stripPath;
     final boolean forceSsl;
+    /** Whether the global force_https applies here: a pattern, or an exact name an active certificate covers. */
+    final boolean globalForce;
     final int requestDelayMs;
     final int requestTimeoutMs;
     final boolean hstsEnabled;
@@ -63,8 +65,9 @@ final class RouteEntry {
     RouteEntry(SiteRequestHandler handler, String siteName, Row domain,
                @Nullable AccessRuleTree accessTree, List<PathGuard> pathGuards,
                Map<String, Object> siteSettings, @Nullable SiteAuthGate authGate,
-               @Nullable String authProviderName) {
+               @Nullable String authProviderName, boolean globalForce) {
         this.handler = handler;
+        this.globalForce = globalForce;
         this.siteName = siteName;
         this.hostPattern = domain != null ? domain.get(SiteDomainModel.HOSTNAME) : null;
         this.authGate = authGate;

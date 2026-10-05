@@ -124,6 +124,9 @@ class HohenheimUpgradeJourneyTest {
     /** The wildcard route and the released wildcard claim step 0 writes, spelled as Hohenheim stored them. */
     private static final int WILDCARD_DOMAIN = 901;
     private static final int RELEASED_CLAIM = 901;
+
+    /** An exact route step 0 writes with force_ssl switched off, beside the wildcard row's stored default. */
+    private static final int PLAIN_DOMAIN = 902;
     private static final String LEGACY_WILDCARD = "*.wild.upgrade.test";
     private static final String RELEASED_WILDCARD = "*.gone.upgrade.test";
 
@@ -195,6 +198,8 @@ class HohenheimUpgradeJourneyTest {
         execute(url, "INSERT INTO site_domains (id, site_id, hostname, match_type, live_route_key) VALUES ("
             + WILDCARD_DOMAIN + ", " + siteId + ", '" + LEGACY_WILDCARD + "', 'wildcard', '" + LEGACY_WILDCARD
             + "' || char(10) || char(10))");
+        execute(url, "INSERT INTO site_domains (id, site_id, hostname, match_type, force_ssl) VALUES (" + PLAIN_DOMAIN
+            + ", " + siteId + ", 'plain.upgrade.test', 'exact', 0)");
         execute(url, "INSERT INTO released_route_claims (id, claim_key, hostname, match_type, former_site_id,"
             + " released_at) VALUES (" + RELEASED_CLAIM + ", '" + RELEASED_WILDCARD + "' || char(10) || char(10), '"
             + RELEASED_WILDCARD + "', 'wildcard', " + siteId + ", " + seededAt.toEpochMilli() + ")");
@@ -292,6 +297,16 @@ class HohenheimUpgradeJourneyTest {
             + RELEASED_CLAIM)).as("step 4: the released claim and its key are respelled")
             .containsExactly("**.gone.upgrade.test|" + RouteClaims.keyOf("**.gone.upgrade.test", "wildcard", null,
                 null));
+
+        // 4b. Every stored route keeps the force_ssl it had, and none is armed to change it: the latch that forces
+        //     HTTPS once a certificate works is for rows written from here on.
+        Row plain = Models.get(SiteDomainModel.class).findById(PLAIN_DOMAIN);
+        assertThat((Boolean) wildcard.get(SiteDomainModel.FORCE_SSL))
+            .as("step 4b: the route stored with the old default stays forced").isTrue();
+        assertThat((Boolean) plain.get(SiteDomainModel.FORCE_SSL))
+            .as("step 4b: the route stored unforced stays unforced").isFalse();
+        assertThat(List.of(wildcard.get(SiteDomainModel.FORCE_SSL_AUTO), plain.get(SiteDomainModel.FORCE_SSL_AUTO)))
+            .as("step 4b: and neither is armed").containsOnly(false);
 
         // 5. The API key keeps its scopes, its zenit-auth model scope under today's spelling, and authenticates.
         Row key = AuthModels.apiKeys().find().noCache().where(ApiKeyModel.LABEL.eq("upgrade-key")).first();

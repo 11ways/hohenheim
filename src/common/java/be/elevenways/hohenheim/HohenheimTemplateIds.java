@@ -19,7 +19,6 @@ public final class HohenheimTemplateIds {
 
     // Admin pages under cms/.
     public static final Identifier ACCESS_LIST_RULES = Identifier.of("hohenheim", "cms/access-list-rules");
-    public static final Identifier CERTIFICATE_REQUEST = Identifier.of("hohenheim", "cms/certificate-request");
     public static final Identifier DATABASE_CREDENTIALS = Identifier.of("hohenheim", "cms/database-credentials");
     public static final Identifier DATABASE_RESTORE = Identifier.of("hohenheim", "cms/database-restore");
     public static final Identifier DNS_ZONE_FILE = Identifier.of("hohenheim", "cms/dns-zone-file");

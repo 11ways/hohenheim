@@ -177,10 +177,28 @@ public class SiteDomainModel extends Model {
         .label(HohenheimFormCopy.label("strip_path"))
         .help(HohenheimFormCopy.help("strip_path"))
         .build());
+    /**
+     * Whether plain HTTP is refused for this hostname (a redirect while HTTPS terminates, a 503 while it does not).
+     *
+     * AIDEV-NOTE: a NEW row starts OFF and armed through {@link #FORCE_SSL_AUTO}: forcing HTTPS on a name no
+     * certificate covers yet sent every visitor to an error page behind a green badge. The column default in
+     * InitialMigration stays true (frozen), so a raw insert keeps the old meaning; the ORM default is what new rows get.
+     */
     public static final BooleanField FORCE_SSL = SCHEMA.addField(BooleanField.builder("force_ssl")
-        .defaultValue(true)
+        .defaultValue(false)
         .label(HohenheimFormCopy.label("force_ssl"))
         .help(HohenheimFormCopy.help("force_ssl"))
+        .build());
+
+    /**
+     * Armed latch: {@link #FORCE_SSL} switches on by itself, once, when a working certificate first covers this
+     * hostname (ForceSslLatch), and the latch clears. An operator's own choice of {@link #FORCE_SSL} disarms it, so
+     * the system never overrules an explicit "off". Stored rows from before the latch read false: their stored
+     * force_ssl is kept as it is.
+     */
+    public static final BooleanField FORCE_SSL_AUTO = SCHEMA.addField(BooleanField.builder("force_ssl_auto")
+        .defaultValue(true)
+        .filterable(false)
         .build());
     public static final IntegerField CERTIFICATE_ID = SCHEMA.addField(IntegerField.builder().name("certificate_id")
         .label(HohenheimFormCopy.label("certificate"))
@@ -285,21 +303,42 @@ public class SiteDomainModel extends Model {
                 // in, so the two can never disagree in storage at all. Validating the tier
                 // without writing it back would leave a glob-under-exact row storable by an
                 // operator, and a whole set of consumers read this column RAW to decide
-                // real things -- CertificateRequestPage and ManagePanel gate certificate
+                // real things -- the certificate request operation and ManagePanel gate certificate
                 // orders on `MATCH_EXACT.equals(column)`, InstanceDeploymentsPage queries on it,
                 // TlsPassthroughRoutes builds SNI routes from it. Each of those would have
                 // to re-derive the tier, which is exactly the duplication that produced the
                 // takeover. One write here makes every raw reader correct by construction.
                 row.set(MATCH_TYPE, effectiveMatchType(canonical, matchType));
             }
+            disarmOnExplicitChoice(row);
             Integer siteId = (Integer) effective(row, SITE_ID);
             Row site = StoredRows.byId(Models.get(SiteModel.class), siteId);
             if (site == null || !SiteModel.UPSTREAM_TLS_PASSTHROUGH
                     .equals(site.get(SiteModel.UPSTREAM_KIND))) return;
             row.set(FORCE_SSL, false);
+            row.set(FORCE_SSL_AUTO, false);
             row.set(EXCLUDE_FROM_LETSENCRYPT, true);
             validateTlsPassthroughValues(row);
         });
+    }
+
+    /**
+     * Disarms the {@link #FORCE_SSL_AUTO} latch when a write states force_ssl itself: switched on at create, or
+     * changed on an update. A create carrying the default off keeps the latch armed.
+     */
+    private static void disarmOnExplicitChoice(@NonNull Row row) {
+        if (!row.has(FORCE_SSL.getName())) {
+            return;
+        }
+        Object staged = row.get(FORCE_SSL.getName());
+        Row stored = row.has(ID.getName()) && row.get(ID) != null
+            ? Models.get(SiteDomainModel.class).findById(row.get(ID)) : null;
+        boolean explicit = stored == null
+            ? Boolean.TRUE.equals(staged)
+            : Boolean.TRUE.equals(staged) != Boolean.TRUE.equals(stored.get(FORCE_SSL));
+        if (explicit) {
+            row.set(FORCE_SSL_AUTO, false);
+        }
     }
 
     /** Enforces the model-level invariants of an encrypted, pre-HTTP route. */

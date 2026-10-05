@@ -172,6 +172,12 @@ public class M011_ReviewHardening extends HohenheimMigration {
             table.timestamps();
             table.addIndex("install_media_fetches_server", List.of("server_id", "created_at"));
         });
+        // A stored domain keeps the force_ssl it has: the latch that forces HTTPS once a certificate works is armed for
+        // rows written from here on only.
+        schema.alterTable("site_domains", table ->
+            table.addColumn("force_ssl_auto", ColumnType.BOOLEAN, column -> column
+                .nullable(true)
+                .defaultValue(false)));
         // No default and no backfill: "no kill observed" until the next sweep asks the daemon.
         schema.alterTable("instances", table ->
             table.addColumn("workload_killed_at", ColumnType.DATETIME, column -> column.nullable(true)));

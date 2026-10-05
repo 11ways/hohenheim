@@ -115,7 +115,7 @@ public class HohenheimEndpoints {
     // The LE request burns Let's Encrypt quota; db dump/restore stream whole
     // databases; deploys spawn builds. Keyed per principal (per IP for
     // anonymous rejects) so one runaway client cannot starve the rest.
-    private static final RateLimitPolicy LE_REQUEST_LIMIT =
+    public static final RateLimitPolicy LE_REQUEST_LIMIT =
         RateLimitPolicy.of(5, Duration.ofHours(1))
             .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
             .named("hh_le_request");
@@ -215,15 +215,6 @@ public class HohenheimEndpoints {
         RateLimitPolicy.of(120, Duration.ofMinutes(1))
             .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
             .named("hh_paas_route_write");
-
-    // --- Let's Encrypt request (POST for the CMS certificate-request page) ---
-    public static final Endpoint<Object> CERTIFICATES_REQUEST = Endpoint.<Object>builder()
-        .identifier(HohenheimIds.id("certificates_request"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic(HohenheimSlugs.ADMIN).addDelimiter().addStatic(HohenheimSlugs.CERTIFICATES_REQUEST).build())
-        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
-        .rateLimit(LE_REQUEST_LIMIT)
-        .build();
 
     // --- Instance templates: export download, import paste, create-from-template ---
 

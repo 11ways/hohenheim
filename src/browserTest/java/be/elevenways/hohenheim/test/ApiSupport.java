@@ -1,6 +1,11 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.server.cms.CertificateOperations;
 import be.elevenways.hohenheim.server.cms.InstanceFromTemplatePage;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.text.HtmlEscape;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -8,6 +13,7 @@ import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -90,7 +96,23 @@ public final class ApiSupport {
 
     /** @return the transport fields the wizard's document posts beside its input */
     public static String fromTemplateTransport() {
+        return invokeTransport();
+    }
+
+    /** @return the transport fields every no-script operation submit posts beside its input */
+    public static String invokeTransport() {
         return form(CmsEndpoints.INVOCATION_PARAM.getName(), UUID.randomUUID().toString(),
             CmsConfirmation.FIELD, CmsConfirmation.PLAIN_PROOF);
+    }
+
+    /** @return the certificate list's "Request certificate" invoke path */
+    public static String requestCertificateTarget() {
+        return CmsRoutes.invoke(HohenheimSlugs.ADMIN, HohenheimSlugs.CERTIFICATES, CertificateOperations.REQUEST.id())
+            .toUrl();
+    }
+
+    /** @return a shipped message's English text as a page escapes it */
+    public static String shippedText(Microcopy message) {
+        return HtmlEscape.text(message.resolve(LocaleChain.ofTags("en"), new ShippedCatalogs()));
     }
 }

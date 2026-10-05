@@ -64,18 +64,14 @@ class FormRefusalVisibilityTest extends HohenheimTestBase {
             .contains("This is not a valid on/off value")
             .doesNotContain("data-unresolved>" + SubmittedValueCoercion.INVALID_BOOLEAN_MESSAGE_KEY);
 
-        // Step 4: the LE request lane refuses comma-joined domains with a 302
-        // whose follow-up page RENDERS the flash naming the bad hostnames --
-        // pinned because a curl-only probe once read this refusal as "302 and
-        // then nothing".
-        var commaDomains = adminPostForm("/admin/certificates-request",
-            "domains=a.example.com%2Cb.example.com");
-        assertThat(commaDomains.statusCode()).isEqualTo(302);
-        assertThat(landingOf(commaDomains)).isEqualTo("/admin/certificates-request");
-        var followUp = httpGet(commaDomains.headers().firstValue("Location").orElseThrow(), sessionToken);
-        assertThat(followUp.statusCode()).isEqualTo(200);
-        assertThat(followUp.body())
-            .as("the refusal flash renders on the page the redirect lands on")
+        // Step 4: the certificate request refuses comma-joined domains with a 422 whose redrawn input RENDERS the
+        // refusal naming the bad hostnames -- pinned because a curl-only probe once read this refusal as "and then
+        // nothing".
+        var commaDomains = adminPostForm(ApiSupport.requestCertificateTarget(),
+            "domains=a.example.com%2Cb.example.com&challenge_type=http&" + ApiSupport.invokeTransport());
+        assertThat(commaDomains.statusCode()).isEqualTo(422);
+        assertThat(commaDomains.body())
+            .as("the refusal renders in the answer itself")
             .contains("Invalid hostnames")
             .contains("a.example.com,b.example.com");
     }

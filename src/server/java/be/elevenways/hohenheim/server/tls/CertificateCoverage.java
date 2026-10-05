@@ -10,7 +10,10 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Which stored certificate covers a hostname, by SAN list (exact or
@@ -73,14 +76,33 @@ public final class CertificateCoverage {
         return parsed;
     }
 
-    private static boolean covers(@NonNull Row cert, @NonNull String hostname) {
-        int dot = hostname.indexOf('.');
-        String wildcard = dot > 0 ? "*" + hostname.substring(dot) : null;
-        for (String name : namesOf(cert)) {
-            if (name.equals(hostname) || name.equals(wildcard)) {
-                return true;
+    /**
+     * Every name an ACTIVE certificate declares, read once, for callers that ask about many hostnames (the route
+     * table build).
+     */
+    public static @NonNull Set<String> activeNames() {
+        Set<String> names = new HashSet<>();
+        for (Row cert : Models.get(CertificateModel.class).find()
+                .where(CertificateModel.STATUS.eq(CertificateModel.STATUS_ACTIVE)).all()) {
+            if (!CertificateModel.PROVIDER_ACME_ACCOUNT.equals(cert.get(CertificateModel.PROVIDER))) {
+                names.addAll(namesOf(cert));
             }
         }
-        return false;
+        return names;
+    }
+
+    /** @return whether one of {@code names} (a SAN list or {@link #activeNames()}) covers the hostname */
+    public static boolean covers(@NonNull Collection<String> names, @Nullable String hostname) {
+        if (hostname == null || hostname.isEmpty()) {
+            return false;
+        }
+        String needle = BlastString.lower(hostname);
+        int dot = needle.indexOf('.');
+        return names.contains(needle) || dot > 0 && names.contains("*" + needle.substring(dot));
+    }
+
+    /** @return whether the certificate's SAN list covers the hostname */
+    public static boolean covers(@NonNull Row cert, @Nullable String hostname) {
+        return covers(namesOf(cert), hostname);
     }
 }

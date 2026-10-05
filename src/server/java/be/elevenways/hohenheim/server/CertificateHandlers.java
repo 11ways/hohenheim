@@ -1,37 +1,16 @@
 package be.elevenways.hohenheim.server;
 
-import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
-import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.CertificateModel;
-import be.elevenways.hohenheim.server.cms.CertificateRequestForm;
-import be.elevenways.hohenheim.server.cms.HohenheimFlash;
-import be.elevenways.hohenheim.server.dns.InternalDnsTxtPublisher;
-import be.elevenways.hohenheim.server.tls.AcmeService;
-import be.elevenways.hohenheim.server.tls.CertificateAuthority;
-import be.elevenways.hohenheim.server.tls.CommandDnsTxtPublisher;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.SortOrder;
-import be.elevenways.zenit.common.result.ActionResult;
-import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.server.http.body.FormSubmissionRawValues;
-import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 
 /**
- * Certificates: the Let's Encrypt request form (HTTP-01, DNS-01 manual/internal/hook)
- * and the PEM bundle download.
+ * Certificates: the PEM bundle download. Let's Encrypt orders are placed operations (CertificateOperations).
  */
 final class CertificateHandlers {
 
@@ -40,189 +19,6 @@ final class CertificateHandlers {
 
     static void init() {
         CertificateModel certModel = Models.get(CertificateModel.class);
-
-        HohenheimEndpoints.CERTIFICATES_REQUEST.setHandler(conduit -> {
-            Map<String, Object> form = FormSubmissionRawValues.fromConduit(conduit);
-
-            String manualToken = HandlerSupport.submittedString(form, "manual_token");
-            if (!manualToken.isEmpty()) {
-                var proxy = ServerMain.getProxyServer();
-                if (proxy == null) {
-                    return requestError(conduit, certificateError("proxy_unavailable"));
-                }
-                int certId = proxy.getAcmeService().completeManualDnsCertificate(manualToken);
-                if (certId < 0) {
-                    return requestError(conduit, certificateError("dns_validation_failed"));
-                }
-                ActivityLog.record(certModel, certId, HohenheimActivityAction.REQUESTED, "manual DNS-01");
-                return HandlerSupport.redirect(CmsRoutes.list(HandlerSupport.ADMIN, HohenheimSlugs.CERTIFICATES));
-            }
-
-            List<String> hostnames = CertificateRequestForm.submittedDomains(form);
-            String niceName = HandlerSupport.submittedString(form, "nice_name");
-            String email = HandlerSupport.submittedString(form, "letsencrypt_email");
-            String challengeType = HandlerSupport.submittedString(form, "challenge_type");
-            String dnsMode = HandlerSupport.submittedString(form, "dns_mode");
-            if (challengeType.isEmpty()) challengeType = CertificateModel.CHALLENGE_HTTP;
-            if (dnsMode.isEmpty()) dnsMode = CertificateModel.DNS_PUBLISHER_MANUAL;
-
-            if (!email.isEmpty() && !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
-                return requestError(conduit, certificateError("invalid_email").withArg("email", email));
-            }
-            if (hostnames.isEmpty()) {
-                return requestError(conduit, certificateError("domain_required"));
-            }
-            if (niceName.isEmpty()) {
-                niceName = hostnames.get(0);
-            }
-
-            boolean dns = CertificateModel.CHALLENGE_DNS.equals(challengeType);
-            if (!dns && !CertificateModel.CHALLENGE_HTTP.equals(challengeType)) {
-                return requestError(conduit, certificateError("unknown_validation")
-                    .withArg("method", challengeType));
-            }
-            if (!dns && hostnames.stream().anyMatch(name -> AcmeService.wildcardSanBase(name) != null)) {
-                return requestError(conduit, certificateError("wildcard_requires_dns"));
-            }
-            List<String> invalid = AcmeService.invalidHostnames(hostnames, dns);
-            if (!invalid.isEmpty()) {
-                return requestError(conduit, certificateError("invalid_hostnames")
-                    .withArg("hostnames", String.join(", ", invalid)));
-            }
-
-            // Input validation first: only a request that could actually be
-            // ordered gets refused on operational grounds.
-            var proxy = ServerMain.getProxyServer();
-            if (proxy == null) {
-                return requestError(conduit, certificateError("proxy_unavailable"));
-            }
-
-            var requester = CertificateAuthority.Requester.of(AccessContext.of(conduit));
-
-            // Re-issue: the same submission, aimed at a row that already exists. The row is
-            // resolved and re-checked HERE as well as in the service -- the row action's
-            // visibility rule is a rendering decision and authorizes nothing.
-            Row reissueTarget = null;
-            int reissueCertId = HandlerSupport.submittedId(form, "reissue_cert_id");
-            if (reissueCertId > 0) {
-                reissueTarget = certModel.findById(reissueCertId);
-                if (reissueTarget == null || !CertificateModel.PROVIDER_LETSENCRYPT
-                        .equals(reissueTarget.get(CertificateModel.PROVIDER))) {
-                    return requestError(conduit, certificateError("reissue_unavailable"));
-                }
-                if (dns && CertificateModel.DNS_PUBLISHER_MANUAL.equals(dnsMode)) {
-                    return requestError(conduit, certificateError("reissue_manual_unsupported"));
-                }
-            }
-
-            if (dns && CertificateModel.DNS_PUBLISHER_MANUAL.equals(dnsMode)) {
-                try {
-                    var manual = proxy.getAcmeService().prepareManualDnsCertificate(
-                        hostnames, niceName, email.isEmpty() ? null : email, requester);
-                    // The manual token is addressable page STATE (the operator resumes
-                    // the challenge on this URL), so it stays a query parameter.
-                    return HandlerSupport.redirect(
-                        CmsRoutes.list(HandlerSupport.ADMIN, HohenheimSlugs.CERTIFICATES_REQUEST)
-                            .with(HohenheimParams.MANUAL_CHALLENGE, manual.token()));
-                } catch (CertificateAuthority.Refused refused) {
-                    return requestError(conduit, refusalMessage(refused));
-                } catch (Exception e) {
-                    return requestError(conduit, certificateError("dns_start_failed")
-                        .withArg("reason", e.getMessage()));
-                }
-            }
-
-            if (dns && CertificateModel.DNS_PUBLISHER_INTERNAL.equals(dnsMode)) {
-                var dnsServer = ServerMain.getDnsServer();
-                if (dnsServer == null || !dnsServer.isRunning()) {
-                    return requestError(conduit, certificateError("dns_server_disabled"));
-                }
-                InternalDnsTxtPublisher internal = new InternalDnsTxtPublisher();
-                List<String> unhosted = new ArrayList<>();
-                List<String> replicated = new ArrayList<>();
-                String owningPeer = null;
-                for (String hostname : hostnames) {
-                    String wildcardBase = AcmeService.wildcardSanBase(hostname);
-                    String base = wildcardBase != null ? wildcardBase : hostname;
-                    InternalDnsTxtPublisher.Refusal refusal =
-                        internal.refusalFor("_acme-challenge." + base);
-                    if (refusal == null) {
-                        continue;
-                    }
-                    if (InternalDnsTxtPublisher.REFUSAL_NOT_PRIMARY.equals(refusal.key())) {
-                        replicated.add(base);
-                        if (owningPeer == null) {
-                            owningPeer = refusal.peer();
-                        }
-                    }
-                    else {
-                        unhosted.add(base);
-                    }
-                }
-                if (!unhosted.isEmpty()) {
-                    return requestError(conduit, certificateError("zone_not_hosted")
-                        .withArg("hostnames", String.join(", ", unhosted)));
-                }
-                if (!replicated.isEmpty()) {
-                    return requestError(conduit, certificateError("zone_not_primary")
-                        .withArg("hostnames", String.join(", ", replicated))
-                        .withArg("peer", String.valueOf(owningPeer)));
-                }
-            }
-            else if (dns && !CommandDnsTxtPublisher.ID.equals(dnsMode)) {
-                return requestError(conduit, certificateError("unknown_dns_mode")
-                    .withArg("mode", dnsMode));
-            }
-
-            String publisher = dns ? dnsMode : null;
-            if (dns && CommandDnsTxtPublisher.ID.equals(dnsMode) && !CommandDnsTxtPublisher.isConfigured()) {
-                return requestError(conduit, certificateError("hook_not_configured"));
-            }
-            if (reissueTarget != null) {
-                String previousDomains = String.valueOf(
-                    reissueTarget.get(CertificateModel.DOMAIN_NAMES_TEXT));
-                AcmeService.ReissueResult outcome;
-                try {
-                    outcome = proxy.getAcmeService().reissueCertificate(reissueTarget, hostnames,
-                        email.isEmpty() ? null : email, challengeType, publisher, requester);
-                } catch (CertificateAuthority.Refused refused) {
-                    return requestError(conduit, refusalMessage(refused));
-                }
-                if (!outcome.issued()) {
-                    return requestError(conduit, certificateError("reissue_failed")
-                        .withArg("reason", String.valueOf(outcome.failureReason())));
-                }
-                // The names are the point of the entry; no key material is ever logged.
-                ActivityLog.record(certModel, reissueCertId, HohenheimActivityAction.REISSUED,
-                    previousDomains + " -> " + String.join(",", hostnames));
-                return HandlerSupport.redirect(CmsRoutes.list(HandlerSupport.ADMIN, HohenheimSlugs.CERTIFICATES));
-            }
-
-            AcmeService.RequestOutcome outcome;
-            try {
-                outcome = proxy.getAcmeService().requestCertificate(hostnames, niceName,
-                    email.isEmpty() ? null : email, challengeType, publisher, requester);
-            } catch (CertificateAuthority.Refused refused) {
-                return requestError(conduit, refusalMessage(refused));
-            }
-
-            Integer certId = outcome.certificateId();
-            if (!outcome.issued() || certId == null) {
-                // The reason of THE row this request wrote (or joined), never a guess at which
-                // error row is ours.
-                Row failed = certId != null ? certModel.findById(certId) : null;
-                String reason = failed != null ? failed.get(CertificateModel.RENEWAL_ERROR) : null;
-                if (reason == null) {
-                    reason = certificateError("unknown_reason")
-                        .resolve(conduit.getLocales(), conduit.getMessageResolver());
-                }
-                return requestError(conduit, certificateError("request_failed")
-                    .withArg("reason", reason));
-            }
-
-            ActivityLog.record(certModel, certId, HohenheimActivityAction.REQUESTED, niceName);
-            return HandlerSupport.redirect(CmsRoutes.list(HandlerSupport.ADMIN, HohenheimSlugs.CERTIFICATES));
-        });
 
         HohenheimEndpoints.CERTIFICATES_DOWNLOAD.setHandler(conduit -> {
             Integer certId = conduit.getParameter(HohenheimEndpoints.CERT_ID);
@@ -242,33 +38,5 @@ final class CertificateHandlers {
                 (niceName != null ? niceName : "certificate") + ".pem", bundle.getBytes(StandardCharsets.UTF_8));
             return null;
         });
-    }
-
-    private static Microcopy certificateError(String key) {
-        return Microcopy.of(key).withFilter("scope", "certificate_request_error");
-    }
-
-    private static ActionResult<Object> requestError(Conduit conduit, Microcopy message) {
-        HohenheimFlash.error(conduit, message);
-        return HandlerSupport.redirect(
-            CmsRoutes.list(HandlerSupport.ADMIN, HohenheimSlugs.CERTIFICATES_REQUEST));
-    }
-
-    /**
-     * The user-facing rendering of an authority refusal.
-     *
-     * AIDEV-NOTE: this MAPS a decision, it does not make one -- the decision lives in
-     * CertificateAuthority, inside the service, so every entry point (this form, the manual
-     * DNS lane, the renewal sweep) answers to the same rule. The old hostname-eligibility
-     * check that lived here compared hostnames with HOSTNAME.eq, so a name covered only by
-     * a wildcard row was never seen at all.
-     */
-    private static Microcopy refusalMessage(CertificateAuthority.Refused refused) {
-        String key = switch (refused.refusal()) {
-            case NOT_SERVED -> "hostname_not_served";
-            case NOT_MANAGED -> "hostname_not_managed";
-            case EXCLUDED -> "excluded_hostnames";
-        };
-        return certificateError(key).withArg("hostnames", refused.hostname());
     }
 }

@@ -107,6 +107,10 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // A deleted certificate releases every domain row that pinned it (the pin is
         // cleared, platform selection takes over) instead of leaving a dangling reference.
         CertificateCascades.install();
+        // A domain armed to force HTTPS once a certificate works is forced when one starts covering it (every
+        // certificate writer) or when it is written under one that already does. AFTER TenantWrites: the latch's own
+        // column is derived, never a tenant's.
+        be.elevenways.hohenheim.server.tls.ForceSslLatch.install();
         // A stack takes its services, their config files and its deployment history with
         // it; a service whose lowered workload is still live refuses to go. AFTER
         // TenantWrites for the same reason as above.

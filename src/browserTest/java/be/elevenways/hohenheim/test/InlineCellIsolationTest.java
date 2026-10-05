@@ -91,6 +91,13 @@ class InlineCellIsolationTest extends HohenheimTestBase {
     static final Set<String> BOOKKEEPING = Set.of("updated_at");
 
     /**
+     * Columns one cell's write moves by its model's own rule, keyed {@code model#column}: writing a domain's force_ssl
+     * is the operator's explicit choice, which disarms the force_ssl_auto latch (SiteDomainModel).
+     */
+    static final Map<String, Set<String>> CONSEQUENCES = Map.of(
+        "hohenheim:site_domain#force_ssl", Set.of("force_ssl_auto"));
+
+    /**
      * How to move a value whose SHAPE the generic mutation would break, keyed
      * {@code model#column}. Each takes the value the editor is showing and returns a
      * different, still-valid one.
@@ -181,7 +188,9 @@ class InlineCellIsolationTest extends HohenheimTestBase {
                 // that moved was moved by an updateRow reading a key the submit never
                 // carried, and nothing in the response would have said so.
                 for (Map.Entry<String, Object> column : before.entrySet()) {
-                    if (column.getKey().equals(name) || BOOKKEEPING.contains(column.getKey())) {
+                    if (column.getKey().equals(name) || BOOKKEEPING.contains(column.getKey())
+                            || CONSEQUENCES.getOrDefault(model.getModelId() + "#" + name, Set.of())
+                                .contains(column.getKey())) {
                         continue;
                     }
                     assertThat(String.valueOf(after.get(column.getKey())))

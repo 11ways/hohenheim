@@ -107,7 +107,8 @@ public final class TenantWrites {
         SiteDomainModel.ID.getName(),
         SiteDomainModel.CREATED_AT.getName(),
         SiteDomainModel.UPDATED_AT.getName(),
-        SiteDomainModel.LIVE_ROUTE_KEY.getName());
+        SiteDomainModel.LIVE_ROUTE_KEY.getName(),
+        SiteDomainModel.FORCE_SSL_AUTO.getName());
 
     /**
      * The DNS record types a delegated tenant may author. NS/CAA/DS/DNSKEY/MX are absent by

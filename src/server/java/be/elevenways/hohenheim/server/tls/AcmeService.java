@@ -512,6 +512,19 @@ public class AcmeService {
         return manualRequest(token, pending);
     }
 
+    /**
+     * The manual DNS-01 order still waiting on a certificate row: the TXT records its operator must publish, or null
+     * when none waits (never started, finished, expired or lost to a restart).
+     */
+    public @Nullable ManualDnsRequest manualDnsRequestFor(int certificateId) {
+        for (Map.Entry<String, PendingManualDnsOrder> pending : manualDnsOrders.entrySet()) {
+            if (pending.getValue().certificateId() == certificateId) {
+                return manualDnsRequest(pending.getKey());
+            }
+        }
+        return null;
+    }
+
     /** Trigger and finish a manual order after the operator confirms all TXT values exist. */
     public int completeManualDnsCertificate(String token) {
         PendingManualDnsOrder pending = manualDnsOrders.remove(token);

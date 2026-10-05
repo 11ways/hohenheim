@@ -161,7 +161,7 @@
 ## add a domain
 > POST /api/v1/sites/1/domains (application/x-www-form-urlencoded, 23 bytes)
 < 200 application/json; charset=utf-8
-{"certificate_id":null,"custom_headers":{},"exclude_from_letsencrypt":false,"force_ssl":true,"generated":false,"hostname":"beta.wire.test","hsts_enabled":false,"hsts_subdomains":false,"id":4,"listen_on":"","live":false,"match_type":"exact","path":"","response_headers":{},"site_id":1,"strip_path":false}
+{"certificate_id":null,"custom_headers":{},"exclude_from_letsencrypt":false,"force_ssl":false,"generated":false,"hostname":"beta.wire.test","hsts_enabled":false,"hsts_subdomains":false,"id":4,"listen_on":"","live":false,"match_type":"exact","path":"","response_headers":{},"site_id":1,"strip_path":false}
 
 ## add a domain naming another site
 > POST /api/v1/sites/1/domains (application/x-www-form-urlencoded, 34 bytes)

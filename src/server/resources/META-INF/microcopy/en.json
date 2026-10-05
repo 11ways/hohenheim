@@ -1354,12 +1354,6 @@
       "scope": "release_status"
     }
   ],
-  "forced": [
-    {
-      "text": "HTTPS",
-      "scope": "site_tls"
-    }
-  ],
   "hostname": [
     {
       "text": "Hostname",
@@ -1408,10 +1402,6 @@
   },
   "none": [
     {
-      "text": "None",
-      "scope": "site_domains"
-    },
-    {
       "text": "No install step",
       "scope": "install_state"
     },
@@ -1424,13 +1414,11 @@
       "scope": "volume_backend"
     },
     {
-      "text": "No hostname",
-      "scope": "site_tls"
-    }
-  ],
-  "off": [
+      "text": "No certificate",
+      "scope": "site_domains"
+    },
     {
-      "text": "HTTP only",
+      "text": "No address",
       "scope": "site_tls"
     }
   ],
@@ -2871,7 +2859,7 @@
       "scope": "field"
     },
     {
-      "text": "Redirect plain HTTP requests to HTTPS.",
+      "text": "Send visitors to HTTPS. Without a working certificate for this address they get an error page instead. A new address switches this on by itself once its certificate works.",
       "scope": "help"
     }
   ],
@@ -5299,10 +5287,16 @@
       "target": "activity_action"
     }
   ],
-  "missing": {
-    "text": "Missing",
-    "scope": "stack_state"
-  },
+  "missing": [
+    {
+      "text": "Missing",
+      "scope": "stack_state"
+    },
+    {
+      "text": "No certificate",
+      "scope": "site_tls"
+    }
+  ],
   "orphaned": [
     {
       "text": "Orphaned",
@@ -11207,7 +11201,7 @@
     "scope": "site"
   },
   "partial": {
-    "text": "Mixed",
+    "text": "Partly",
     "scope": "site_tls"
   },
   "quota_mb": {
@@ -11881,15 +11875,15 @@
     "scope": "violations"
   },
   "covered": {
-    "text": "Covered",
+    "text": "Works",
     "scope": "site_domains"
   },
   "not_covered": {
-    "text": "Not covered",
+    "text": "Not working",
     "scope": "site_domains"
   },
   "coverage_pending": {
-    "text": "Certificate pending",
+    "text": "Waiting for the certificate",
     "scope": "site_domains"
   },
   "expires": {
@@ -12851,7 +12845,7 @@
   "settings.hohenheim.proxy.fallback_address.label": "Fallback address",
   "settings.hohenheim.proxy.fallback_address.help": "Address that receives requests matching no site.",
   "settings.hohenheim.proxy.force_https.label": "Force HTTPS",
-  "settings.hohenheim.proxy.force_https.help": "Redirects every HTTP request to HTTPS.",
+  "settings.hohenheim.proxy.force_https.help": "Sends visitors to HTTPS on every address with a working certificate.",
   "settings.hohenheim.proxy.http_port.label": "HTTP port",
   "settings.hohenheim.proxy.http_port.help": "Port the HTTP proxy listens on.",
   "settings.hohenheim.proxy.http_socket_path.label": "HTTP socket path",
@@ -13028,5 +13022,106 @@
   "settings.spamservice.help": "Spam scoring behaviour and reputation data sources",
   "settings.spamservice.scoring.help": "Spam verdict thresholds",
   "settings.spamservice.reputation.help": "Downloadable IP intelligence databases; blank URLs disable that source",
-  "settings.spamservice.events.help": "Ingested security-event retention"
+  "settings.spamservice.events.help": "Ingested security-event retention",
+  "https_forced": {
+    "text": "HTTPS switched on",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "not_used": [
+    {
+      "text": "Not used",
+      "scope": "site_domains"
+    },
+    {
+      "text": "Not used",
+      "scope": "site_tls"
+    }
+  ],
+  "works": {
+    "text": "Works",
+    "scope": "site_tls"
+  },
+  "broken": {
+    "text": "Error page",
+    "scope": "site_tls"
+  },
+  "patterns": {
+    "text": "Patterns",
+    "scope": "site_tls"
+  },
+  "forced_without_certificate": [
+    {
+      "text": "Visitors of {$hostname} get an error page",
+      "scope": "attention_title"
+    },
+    {
+      "text": "HTTPS is forced, but this address has no working certificate yet.",
+      "scope": "attention_detail"
+    }
+  ],
+  "get_certificate": {
+    "text": "Get a certificate",
+    "scope": "certificate_request"
+  },
+  "uses_production": {
+    "text": "This orders a real certificate from Let's Encrypt (production), which counts against its rate limits.",
+    "scope": "certificate_request"
+  },
+  "dns_mode_help": {
+    "text": "Where the TXT records Let's Encrypt checks are published. Manual: you add them at your DNS provider, then choose Verify DNS on the certificate.",
+    "scope": "certificate_request"
+  },
+  "verify_dns_hint": {
+    "text": "Checks the published TXT records and finishes the order.",
+    "scope": "certificate_request"
+  },
+  "letsencrypt_disabled": {
+    "text": "Let's Encrypt is switched off in Settings.",
+    "scope": "certificate_request_error"
+  },
+  "does_not_point_here": {
+    "text": "{$hostname} does not point here yet, it points to {$addresses}.",
+    "scope": "certificate_request_error"
+  },
+  "does_not_resolve": {
+    "text": "{$hostname} does not resolve yet. Point it at this server first.",
+    "scope": "certificate_request_error"
+  },
+  "acme_unauthorized": {
+    "text": "Let's Encrypt could not confirm that this server answers for these names. Check that each name points here.",
+    "scope": "certificate_request_error"
+  },
+  "acme_connection": {
+    "text": "Let's Encrypt could not reach this server over HTTP for one of the names. Check the firewall and that port 80 is open.",
+    "scope": "certificate_request_error"
+  },
+  "acme_dns": {
+    "text": "Let's Encrypt could not look up one of the names in DNS.",
+    "scope": "certificate_request_error"
+  },
+  "acme_rate_limited": {
+    "text": "Let's Encrypt refused because too many certificates were requested recently. Try again later.",
+    "scope": "certificate_request_error"
+  },
+  "acme_caa": {
+    "text": "A CAA record on the domain does not allow Let's Encrypt to issue for it.",
+    "scope": "certificate_request_error"
+  },
+  "acme_rejected_identifier": {
+    "text": "Let's Encrypt does not issue certificates for one of these names.",
+    "scope": "certificate_request_error"
+  },
+  "acme_other": {
+    "text": "Let's Encrypt did not issue the certificate. The certificate's renewal error and the server log have the details.",
+    "scope": "certificate_request_error"
+  },
+  "dns_records_none": {
+    "text": "No DNS records to publish",
+    "scope": "certificate"
+  },
+  "cert_dns_records": {
+    "text": "DNS records to publish",
+    "scope": "field"
+  }
 }

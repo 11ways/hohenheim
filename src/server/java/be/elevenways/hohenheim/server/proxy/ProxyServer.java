@@ -191,7 +191,7 @@ public class ProxyServer {
         if (siteNames.isEmpty() && !(globalForce && anyRoutes)) return;
         Blast.log("PROXY: HTTPS is UNAVAILABLE; force-SSL sites refuse plain HTTP (503):",
             siteNames.isEmpty() ? "(none)" : String.join(", ", siteNames),
-            globalForce ? "-- proxy.force_https is on, so EVERY routed site refuses" : "");
+            globalForce ? "-- proxy.force_https is on, so every routed name with a certificate refuses" : "");
     }
 
     private void startHttpListener() {

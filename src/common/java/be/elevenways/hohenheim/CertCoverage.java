@@ -7,14 +7,15 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
- * Whether a certificate covers one exact hostname, and in what state: the vocabulary a domain row renders.
+ * Whether HTTPS works for one exact hostname: which certificate state covers it, the vocabulary every HTTPS cell
+ * (a domain row, a site's summary) renders.
  *
  * AIDEV-NOTE: the three covered states DERIVE their key from CertificateModel's own STATUS values
  * (the declaring home); NONE is the one state that model cannot express. How a state renders -- the
  * {@code data-cert-status} key, the badge variant and the wording a reader who may not open the
  * certificate sees -- is a fact on the member, so the domains tab compares no literal. An unknown
  * certificate status fails CLOSED onto {@link #ERROR}: a coverage badge never claims coverage it
- * cannot vouch for. DashboardVocabularyDriftTest binds the members to the model's status values.
+ * cannot vouch for. NOT_USED is the second state without a certificate, for a name this proxy terminates no TLS for. DashboardVocabularyDriftTest binds the members to the model's status values.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -22,6 +23,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public enum CertCoverage {
 
     NONE("none", BadgeVariant.OUTLINE, Microcopy.of("none").withFilter("scope", "site_domains")),
+    /** HTTPS is not this proxy's to give: a TLS passthrough site terminates nothing here. */
+    NOT_USED("not_used", BadgeVariant.OUTLINE, Microcopy.of("not_used").withFilter("scope", "site_domains")),
     ACTIVE(CertificateModel.STATUS_ACTIVE, BadgeVariant.SUCCESS,
         Microcopy.of("covered").withFilter("scope", "site_domains")),
     PENDING(CertificateModel.STATUS_PENDING, BadgeVariant.WARNING,
@@ -56,7 +59,10 @@ public enum CertCoverage {
 
     /** @return whether a certificate record stands behind this state */
     public boolean hasCertificate() {
-        return this != NONE;
+        return switch (this) {
+            case NONE, NOT_USED -> false;
+            case ACTIVE, PENDING, ERROR -> true;
+        };
     }
 
     /**
