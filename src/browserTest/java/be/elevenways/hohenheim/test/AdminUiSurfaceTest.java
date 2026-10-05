@@ -562,15 +562,15 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
         String strip = page.substring(page.indexOf("cms-record-tabs"), more);
         String menu = page.substring(more);
 
-        // 2. What an operator opens daily stays on the strip.
-        assertThat(strip).as("step 2: the front door, the console, the files and the stats"
+        // 2. What an operator opens daily stays on the strip: the board's app tabs.
+        assertThat(strip).as("step 2: the front door, the console, the files, the metrics and the backups"
                 + " stay visible")
-            .contains("/page/overview", "/page/console", "/page/files", "/page/stats");
+            .contains("/page/overview", "/page/console", "/page/files", "/page/stats", "/page/backups");
 
         // 3. FALSIFICATION: the housekeeping tabs are NOT on the strip -- they are in the
         //    menu. Before the declaration they filled the strip in declaration order and
         //    pushed Files and Stats out of it.
-        for (String slug : List.of("volumes", "snapshots", "backups", "schedules")) {
+        for (String slug : List.of("volumes", "provisioning", "databases")) {
             assertThat(strip).as("step 3: " + slug + " is not an everyday tab")
                 .doesNotContain("/page/" + slug);
             assertThat(menu).as("step 3: " + slug + " is reachable in the More menu")

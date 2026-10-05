@@ -11,6 +11,7 @@
 {% declare execExit: String = "" %}
 {% declare document: PageFormState = null %}
 {% declare recordTabs: List<RecordTabState> %}
+{% declare consoleModes: List<ConsoleModeView> %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
@@ -20,6 +21,8 @@
         </header>
 
         {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+        {% render "hohenheim:cms/console-modes" var:modes=consoleModes %}
 
         {% if running %}
             <pl-card>

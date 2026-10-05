@@ -10,7 +10,6 @@ import be.elevenways.hohenheim.server.instance.InstanceShell;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
-import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -32,14 +31,28 @@ import java.util.Map;
  * asks the {@code shell} capability again on its own funnel. Hide AND enforce -- zenit-cms 404s an
  * unoffered slug, so {@link #visibleFor} gates the route as well as the nav.
  */
-public final class InstanceShellPage implements RecordTab.Rendered<Row> {
+public final class InstanceShellPage implements ConsoleModes.Mode {
 
     public static final String SLUG = "shell";
+
+    private final @NonNull ConsoleModes modes;
+
+    InstanceShellPage(@NonNull ConsoleModes modes) {
+        this.modes = modes;
+    }
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_shell"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("shell").withFilter("scope", "instance"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("terminal"); }
+
+    /** A mode of the Console tab, reached through its mode switch. */
+    @Override public boolean inTabs() { return false; }
+
+    @Override
+    public @NonNull Microcopy hint() {
+        return Microcopy.of("shell").withFilter("scope", "console_mode");
+    }
 
     /**
      * The tab exists only for a principal that may actually shell into THIS record.
@@ -51,7 +64,7 @@ public final class InstanceShellPage implements RecordTab.Rendered<Row> {
      * the capability is entitled to read.
      */
     @Override
-    public boolean visibleFor(@NonNull Row record, @NonNull AccessContext accessContext) {
+    public boolean offers(@NonNull Row record, @NonNull AccessContext accessContext) {
         return InstanceOperationHandlers.offered(InstanceOperations.OPEN_SHELL, accessContext, record);
     }
 
@@ -66,7 +79,8 @@ public final class InstanceShellPage implements RecordTab.Rendered<Row> {
         vars.put("instanceName", instance.get(InstanceModel.NAME));
         vars.put("instanceId", instanceId);
         vars.put("running", InstanceModel.STATUS_RUNNING.equals(status));
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("recordTabs", this.modes.strip(request, instance, recordTabs(conduit)));
+        vars.put("consoleModes", this.modes.views(request, instance, SLUG));
         vars.put("maxSessions", InstanceShell.MAX_SESSIONS_PER_INSTANCE);
         vars.put("idleMinutes", (int) (InstanceShell.IDLE_TIMEOUT_MS / 60_000));
         // AIDEV-NOTE: WebSocketEndpoint is not a RouteTarget and has no with(...), and

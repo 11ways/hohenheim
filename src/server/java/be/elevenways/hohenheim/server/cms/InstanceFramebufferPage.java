@@ -9,7 +9,6 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
-import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -28,19 +27,28 @@ import java.util.Map;
  * needed -- the pl-framebuffer viewer is pure canvas (no wasm), and same-origin
  * WebSockets already ride the default admin {@code connect-src 'self'}.
  */
-public final class InstanceFramebufferPage implements RecordTab.Rendered<Row> {
+public final class InstanceFramebufferPage implements ConsoleModes.Mode {
 
     public static final String SLUG = "framebuffer";
 
+    private final @NonNull ConsoleModes modes;
+
+    InstanceFramebufferPage(@NonNull ConsoleModes modes) {
+        this.modes = modes;
+    }
+
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_framebuffer"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("framebuffer").withFilter("scope", "instance"); }
-    /**
-     * Housekeeping, not an everyday destination: the tab lives in the strip's "More"
-     * menu so the visible strip stays the handful of tabs an operator opens daily.
-     */
-    @Override public boolean secondaryTab() { return true; }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("display"); }
+
+    /** A mode of the Console tab, reached through its mode switch. */
+    @Override public boolean inTabs() { return false; }
+
+    @Override
+    public @NonNull Microcopy hint() {
+        return Microcopy.of("screen").withFilter("scope", "console_mode");
+    }
 
     /**
      * Where the open-framebuffer operation is offered: an authored VM (a container has no
@@ -51,7 +59,7 @@ public final class InstanceFramebufferPage implements RecordTab.Rendered<Row> {
      * gates the route as well as the nav.
      */
     @Override
-    public boolean visibleFor(@NonNull Row record, @NonNull AccessContext accessContext) {
+    public boolean offers(@NonNull Row record, @NonNull AccessContext accessContext) {
         return InstanceOperationHandlers.offered(InstanceOperations.OPEN_FRAMEBUFFER, accessContext, record);
     }
 
@@ -72,7 +80,8 @@ public final class InstanceFramebufferPage implements RecordTab.Rendered<Row> {
         // from its own declaration -- never concatenated.
         vars.put("framebufferWsUrl", HohenheimEndpoints.VM_FRAMEBUFFER.toUrl(
             Map.of(HohenheimEndpoints.INSTANCE_ID, instanceId)));
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("recordTabs", this.modes.strip(request, instance, recordTabs(conduit)));
+        vars.put("consoleModes", this.modes.views(request, instance, SLUG));
         return new RenderTemplateResult(
             HohenheimTemplateIds.INSTANCE_FRAMEBUFFER, vars);
     }

@@ -12,6 +12,7 @@
 {% declare idleMinutes: Integer = 0 %}
 {% declare shellWsUrl: String %}
 {% declare recordTabs: List<RecordTabState> %}
+{% declare consoleModes: List<ConsoleModeView> %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
@@ -21,6 +22,8 @@
         </header>
 
         {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+        {% render "hohenheim:cms/console-modes" var:modes=consoleModes %}
 
         {% if unsupportedRuntime %}
             <pl-empty-state icon="terminal" attr:data-shell-unsupported={% true %}>

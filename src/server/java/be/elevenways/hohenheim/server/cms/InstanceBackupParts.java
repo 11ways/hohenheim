@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.InstanceBackupOperations;
 import be.elevenways.hohenheim.instance.InstanceBackupOperations.Restored;
 import be.elevenways.hohenheim.model.BackupTargetModel;
@@ -18,6 +19,7 @@ import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
+import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -96,6 +98,9 @@ public final class InstanceBackupParts {
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(17)
             .showInNav(false)
+            // A backup belongs to its instance: listed in the instance's Backups tab, its record page leads back there.
+            .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceBackupModel.INSTANCE_ID)
+                .tab(InstanceParts.BACKUPS_TAB))
             .reads(ResourceReads.rows().title(InstanceBackupParts::title))
             // A backup is immutable evidence: no create (born from the instance action or the nightly task) and no
             // update; readers view, actions act.

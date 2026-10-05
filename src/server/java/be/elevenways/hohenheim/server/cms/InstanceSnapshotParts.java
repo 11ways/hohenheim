@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.InstanceSnapshotOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
@@ -20,6 +21,7 @@ import be.elevenways.zenit.cms.common.resource.ResourceForm;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
+import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
@@ -56,6 +58,9 @@ public final class InstanceSnapshotParts {
             .label(Microcopy.of("plural").withFilter("scope", "instance_snapshot"))
             .recordLabel(Microcopy.of("singular").withFilter("scope", "instance_snapshot"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP).navOrder(16).icon(Icon.of("camera")).showInNav(false)
+            // A snapshot belongs to its instance: listed in the instance's Backups tab, its record page leads back there.
+            .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceSnapshotModel.INSTANCE_ID)
+                .tab(InstanceParts.BACKUPS_TAB))
             .form(ResourceForm.<Row>of(FormSpec.builder().add(InstanceSnapshotModel.NOTE).build())
                 .inlineEditable(InstanceSnapshotModel.NOTE).build())
             .list(ResourceList.rows(tableSpec()).chrome(ListChrome.MINIMAL).search(InstanceSnapshotModel.NOTE).build())

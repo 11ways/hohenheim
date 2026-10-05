@@ -376,6 +376,22 @@
         }
     }
 
+    // The Console tab's mode switch (console-modes.hwk): the segmented band and the active mode's one line beside it,
+    // wrapping under it on a narrow screen.
+    .hh-console-modes {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--pl-space-sm) var(--pl-space-md);
+        margin-block-end: var(--pl-space-md);
+    }
+
+    .hh-console-mode-hint {
+        margin: 0;
+        font-size: var(--pl-font-size-sm);
+        color: var(--pl-color-text-muted);
+    }
+
     .hh-app-card-header {
         display: flex;
         flex-direction: row;

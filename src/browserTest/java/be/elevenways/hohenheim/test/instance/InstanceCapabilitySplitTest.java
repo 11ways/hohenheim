@@ -24,6 +24,7 @@ import be.elevenways.zenit.common.security.KnownCapabilities;
 import be.elevenways.zenit.common.security.RecordCapabilityDecision;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.server.cms.ConsoleModes;
 import be.elevenways.hohenheim.server.cms.InstanceExecPage;
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import org.junit.jupiter.api.AfterAll;
@@ -327,12 +328,12 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
                 .hasCapability(InstanceModel.MODEL_ID, instanceId, HohenheimAccess.EXEC))
             .as("step 4: and the walk agrees the delegate holds no exec").isFalse();
 
-        // Step 5: the exec TAB is not reachable either -- the admin panel gate answers
+        // Step 5: the exec MODE is not reachable either -- the admin panel gate answers
         // first here, which is stated rather than relied on: the enforcing check is the
         // funnel in step 4 plus InstanceExecPage.visibleFor.
         assertThat(httpGet("/admin/instances/" + instanceId + "/page/exec", consoleSession)
                 .statusCode())
-            .as("step 5: the exec tab is not reachable for the delegate")
+            .as("step 5: the exec mode is not reachable for the delegate")
             .isNotEqualTo(200);
     }
 
@@ -479,8 +480,14 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
         assertThat(OperationPipeline.offer(InstanceOperations.EXEC, contextOf(consolePrincipal), instance))
             .as("step 1b: never to a console-only delegate")
             .isNotInstanceOf(OperationPipeline.Offer.Available.class);
-        assertThat(new InstanceExecPage().actions()).as("step 1b: the exec tab places the exec operation")
-            .singleElement().matches(action -> action.id().equals(InstanceOperations.EXEC.id()));
+        assertThat(ConsoleModes.operator().tabs())
+            .as("step 1b: the console's one-off command mode places the exec operation")
+            .filteredOn(tab -> InstanceExecPage.SLUG.equals(tab.slug()))
+            .singleElement().satisfies(tab -> assertThat(tab.actions())
+                .singleElement().matches(action -> action.id().equals(InstanceOperations.EXEC.id())));
+        assertThat(ConsoleModes.delegated().tabs())
+            .as("step 1b: and the delegated console has no one-off command mode")
+            .noneMatch(tab -> InstanceExecPage.SLUG.equals(tab.slug()));
 
         // Step 2: and the tenant-write invariant never fires for an operator, so the
         // config edit the delegates were refused genuinely lands.

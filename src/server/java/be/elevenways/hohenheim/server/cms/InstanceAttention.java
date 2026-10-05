@@ -96,7 +96,7 @@ public final class InstanceAttention {
                 copy("instance_backup", "attention_title",
                     "name", instance.get(InstanceModel.NAME)),
                 literal(latest.get(InstanceBackupModel.ERROR)),
-                InstanceParts.recordRoute(ADMIN, instance, InstanceBackupsPage.SLUG)));
+                InstanceParts.recordRoute(ADMIN, instance, InstanceParts.BACKUPS_TAB)));
         }
     }
 
@@ -135,7 +135,7 @@ public final class InstanceAttention {
                     copy("instance_backup_never", "attention_title",
                         "name", instance.get(InstanceModel.NAME)),
                     copy("instance_backup_never", "attention_detail"),
-                    InstanceParts.recordRoute(ADMIN, instance, InstanceBackupsPage.SLUG)));
+                    InstanceParts.recordRoute(ADMIN, instance, InstanceParts.BACKUPS_TAB)));
                 continue;
             }
             Instant completedAt = newestComplete.get(InstanceBackupModel.CREATED_AT);
@@ -146,7 +146,7 @@ public final class InstanceAttention {
                     copy("instance_backup_stale", "attention_title",
                         "name", instance.get(InstanceModel.NAME)),
                     copy("instance_backup_stale", "attention_detail", "days", age),
-                    InstanceParts.recordRoute(ADMIN, instance, InstanceBackupsPage.SLUG)));
+                    InstanceParts.recordRoute(ADMIN, instance, InstanceParts.BACKUPS_TAB)));
             }
         }
     }

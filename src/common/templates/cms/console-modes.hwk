@@ -1,0 +1,15 @@
+{#- The Console tab's mode switch: plumage's segmented band of links, each mode its own route, and the active mode's
+    one line beside it. The page passes an empty list while a single mode is offered, and then this draws nothing. -#}
+{% declare modes: List<ConsoleModeView> %}
+{% if modes.size() > 1 %}
+<div class="hh-console-modes">
+    <pl-nav orientation="horizontal" variant="segmented" class="hh-console-mode-switch" label={% t("console_modes", scope: "instance") %}>
+        {% each modes as mode key mode.key %}
+            <pl-nav-item href={% mode.url %} active={% mode.active %} attr:data-console-mode={% mode.key %}>{{ mode.label }}</pl-nav-item>
+        {% /each %}
+    </pl-nav>
+    {% each modes as mode key mode.key %}
+        {% if mode.active %}<p class="hh-console-mode-hint">{{ mode.hint }}</p>{% /if %}
+    {% /each %}
+</div>
+{% /if %}

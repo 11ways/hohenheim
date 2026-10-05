@@ -70,14 +70,16 @@ class InstanceScheduleJourneyTest extends HohenheimTestBase {
     }
 
     @Test
-    void addAPowerScheduleFromTheTabSeeItsNextRunAndDeleteIt() throws Exception {
-        // 1. The tab offers "Add schedule" pointing at the scoped create form.
-        HttpResponse<String> tab = adminGet("/admin/instances/" + instanceId + "/page/schedules");
-        assertThat(tab.statusCode()).as("step 1: the Schedules tab renders").isEqualTo(200);
+    void addAPowerScheduleFromTheBackupsTabSeeItsNextRunAndDeleteIt() throws Exception {
+        // 1. The Backups tab's schedules section offers the create form; the old Schedules route is retired.
+        HttpResponse<String> tab = adminGet("/admin/instances/" + instanceId + "/page/backups");
+        assertThat(tab.statusCode()).as("step 1: the Backups tab renders").isEqualTo(200);
         assertThat(tab.body())
-            .as("step 1: the add link carries the instance")
-            .contains("add-schedule-link")
-            .contains("record_id=" + instanceId);
+            .as("step 1: its schedules section links the schedule create form")
+            .contains("/admin/instance-schedules/new");
+        assertThat(adminGet("/admin/instances/" + instanceId + "/page/schedules").statusCode())
+            .as("step 1: schedules are a section of the Backups tab, not a route of their own")
+            .isEqualTo(404);
 
         // 2. The create form is headed by the record label and shows the INSTANCE, picked
         //    by name, not a raw id box.
@@ -130,13 +132,13 @@ class InstanceScheduleJourneyTest extends HohenheimTestBase {
         assertThat(stored.get(RecordScheduleStepModel.ACTION))
             .as("step 4: it is the stop operation").isEqualTo(InstanceOperations.STOP.id().toString());
 
-        // 5. The tab lists the schedule with its next run.
-        HttpResponse<String> listed = adminGet("/admin/instances/" + instanceId + "/page/schedules");
+        // 5. The Backups tab lists the schedule with its next run, linking into the schedule's own record page.
+        HttpResponse<String> listed = adminGet("/admin/instances/" + instanceId + "/page/backups");
         assertThat(listed.body())
-            .as("step 5: the schedule is listed with its next-run copy")
+            .as("step 5: the schedule is listed with its next run and its record link")
             .contains(PREFIX + "nightly")
-            .contains("data-next-run")
-            .contains(nextFire.toString());
+            .contains(nextFire.toString())
+            .contains("/admin/instance-schedules/" + scheduleId);
 
         // 6. Delete it from the record: the chain goes with it.
         HttpResponse<String> deleted = httpPostForm(

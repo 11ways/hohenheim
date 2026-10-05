@@ -8,7 +8,9 @@ import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.ManagedByCell;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
+import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
@@ -29,6 +31,7 @@ import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.resource.ChildList;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -57,6 +60,8 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.edit.Select;
+import be.elevenways.zenit.common.operation.SubjectType;
+import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
@@ -74,6 +79,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -94,6 +100,12 @@ public final class InstanceParts {
 
     /** This entry's slug on both panels. */
     public static final String SLUG = HohenheimSlugs.INSTANCES;
+
+    /** The Backups tab's slug, which the artifact and schedule resources name as their parent's tab. */
+    public static final String BACKUPS_TAB = "backups";
+
+    /** The artifact sections' stored-failure column, drawn only in the Backups tab. */
+    private static final String FAILURE_COLUMN = "failure";
 
     /** Virtual column naming the owning product record of a generated row. */
     static final String MANAGED_BY_COLUMN = "managed_by";
@@ -383,46 +395,76 @@ public final class InstanceParts {
         return vocabulary.build();
     }
 
+    /**
+     * The operator's record tabs, in the strip's order: the overview (the landing), the console with its modes, files,
+     * metrics and backups stay visible beside the framework's edit tab; the rest sit in "More".
+     */
     private static @NonNull List<RecordTab<Row>> adminTabs() {
-        return List.of(
-            InstanceOverview.tab(),
-            new InstanceConsolePage(), new InstanceFramebufferPage(),
-            new InstanceProvisioningPage(),
-            new InstanceDeploymentsPage(),
-            new InstanceFilesPage(), new InstanceStatsPage(),
-            // The exec tab hides AND 404s itself for anyone without the exec capability on the record
-            // (InstanceExecPage.visibleFor); the admin panel gate is not the only thing standing between a delegate
-            // and an arbitrary command.
-            new InstanceExecPage(),
-            // The interactive shell tab hides AND 404s itself without the `shell` capability on the record. It is NOT
-            // the exec tab under another name: exec is admin-only and single-shot, this is a delegable tenant verb
-            // bounded to a workload that runs as a non-root uid.
-            new InstanceShellPage(),
-            new InstanceSnapshotsPage(InstanceSnapshotParts.SLUG),
-            new InstanceBackupsPage(),
-            new InstanceSchedulesPage(), new InstanceDevicesPage(),
-            new InstanceVolumesTab(), new InstanceDatabasesPage(),
-            // Operator-only: the page hides AND 404s itself for a delegate, and the /manage entry never lists it.
-            new InstanceMigratePage());
+        List<RecordTab<Row>> tabs = new ArrayList<>();
+        tabs.add(InstanceOverview.tab());
+        // The console's hub tab first, then its modes (shell, the one-off command, a VM's screen), each routed and
+        // gated as its own page and reached through the console's mode switch (ConsoleModes).
+        tabs.addAll(ConsoleModes.operator().tabs());
+        tabs.add(new InstanceFilesPage());
+        tabs.add(new InstanceStatsPage());
+        tabs.add(backupsTab());
+        tabs.add(new InstanceDeploymentsPage());
+        tabs.add(new InstanceProvisioningPage());
+        tabs.add(new InstanceDevicesPage());
+        tabs.add(new InstanceVolumesTab());
+        tabs.add(new InstanceDatabasesPage());
+        // Operator-only: the page hides AND 404s itself for a delegate, and the /manage entry never lists it.
+        tabs.add(new InstanceMigratePage());
+        return List.copyOf(tabs);
     }
 
+    /** The delegate's record tabs: the operator's set without the one-off command and the migration. */
     private static @NonNull List<RecordTab<Row>> manageTabs() {
-        return List.of(
-            InstanceOverview.tab(),
-            new InstanceConsolePage(), new InstanceFramebufferPage(),
-            new InstanceProvisioningPage(),
-            new InstanceDeploymentsPage(),
-            new InstanceFilesPage(), new InstanceStatsPage(),
-            // Offered on the TENANT panel too, unlike the exec tab: exec is ADMIN-sensitivity with deliberately no
-            // /manage surface, while `shell` is a delegable tenant verb bounded to a workload that runs as its own
-            // non-root uid. It hides AND 404s itself without the capability.
-            new InstanceShellPage(),
-            // The artifact tabs read THIS panel's entries: the backup twin places no restore-to-new, which is how it
-            // stays operator-only here too.
-            new InstanceSnapshotsPage(InstanceSnapshotParts.SLUG),
-            new InstanceBackupsPage(),
-            new InstanceSchedulesPage(), new InstanceDevicesPage(),
-            new InstanceVolumesTab(), new InstanceDatabasesPage());
+        List<RecordTab<Row>> tabs = new ArrayList<>();
+        tabs.add(InstanceOverview.tab());
+        // The shell is a delegable tenant verb bounded to a workload that runs as its own non-root uid; the one-off
+        // command is ADMIN-sensitivity with deliberately no /manage surface (ConsoleModes.delegated()).
+        tabs.addAll(ConsoleModes.delegated().tabs());
+        tabs.add(new InstanceFilesPage());
+        tabs.add(new InstanceStatsPage());
+        // The sections read THIS panel's entries: the backup twin places no restore-to-new, which is how it stays
+        // operator-only here too.
+        tabs.add(backupsTab());
+        tabs.add(new InstanceDeploymentsPage());
+        tabs.add(new InstanceProvisioningPage());
+        tabs.add(new InstanceDevicesPage());
+        tabs.add(new InstanceVolumesTab());
+        tabs.add(new InstanceDatabasesPage());
+        return List.copyOf(tabs);
+    }
+
+    /**
+     * The Backups tab: the framework's child list with a section per artifact resource of the hosting panel (its
+     * /manage twin there) narrowed to this instance -- backups, snapshots and the schedules that make them -- each
+     * row relaying its own entry's placed operations, so restore keeps its confirmation and operator-only refusal.
+     *
+     * AIDEV-NOTE: built per panel (a child list resolves in the panel it is declared on). An artifact's stored
+     * failure text is the daemon's own wording, shown through {@link WithheldFailure}: an operator reads it, a
+     * delegate reads that it failed.
+     */
+    private static @NonNull ChildList<Row> backupsTab() {
+        return ChildList.<Row>sections(BACKUPS_TAB, Microcopy.of("backups").withFilter("scope", "instance"),
+                InstanceBackupParts.SLUG, InstanceSnapshotParts.SLUG, InstanceScheduleParts.SLUG)
+            .icon(Icon.of("box-archive"))
+            .hide(InstanceBackupParts.SLUG, InstanceBackupModel.INSTANCE_ID.getName())
+            .hide(InstanceSnapshotParts.SLUG, InstanceSnapshotModel.INSTANCE_ID.getName())
+            .hide(InstanceScheduleParts.SLUG, RecordScheduleModel.RECORD_ID.getName())
+            .column(InstanceBackupParts.SLUG, SubjectType.record(InstanceBackupModel.MODEL_ID), failureColumn(),
+                (backup, request) -> WithheldFailure.of(request.conduit()).shown(backup.get(InstanceBackupModel.ERROR)))
+            .column(InstanceSnapshotParts.SLUG, SubjectType.record(InstanceSnapshotModel.MODEL_ID), failureColumn(),
+                (snapshot, request) -> WithheldFailure.of(request.conduit())
+                    .shown(snapshot.get(InstanceSnapshotModel.ERROR)));
+    }
+
+    /** The column an artifact's stored failure reads in, blank while it has none. */
+    private static @NonNull ColumnSpec failureColumn() {
+        return ColumnSpec.virtual(FAILURE_COLUMN, Microcopy.of("failure").withFilter("scope", "instance_artifacts"))
+            .build();
     }
 
     /**
