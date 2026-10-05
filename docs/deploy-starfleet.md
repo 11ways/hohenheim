@@ -1675,3 +1675,30 @@ ROLLBACK needs the PRE-REVERT database: the lane's preflight holds the reverted 
 (remove `hohenheim.db-wal`/`-shm` first), then `tools/deploy-host.sh --rollback <target> --preflight <dir>`.
 
 Pins stay at 010.
+
+## Deploy 2026-10-05 (evening): W1b, the app pages and record tabs, starfleet and daystrom
+
+Swapped both test installs from a357b201 to the pushed hohenheim 27064da4 (jar sha256 `e03e77bc...c4660d9`,
+279561785 bytes, 15 stamp rows clean; zenit 621dae2c, zenit-cms 533c4437, plumage 16e0e13e, hawkeye 6fca1b33).
+Ships W1b (protected paths, Check and admit, dead verbs say why), the dashboard/copy fixes, the app overview with
+one health verdict, the instance tab set with console modes and the Backups tab, and the record heading on every
+tab. Lane: `tools/deploy-host.sh <target> <jar>`, rehearsal on a byte copy green, NO migrations applied (M011
+unchanged since a357b201; the only framework schema-adjacent change is the SQLite rebuild orphan handling).
+
+starfleet: lane green, healthy after both restarts, `zenit-dev deployed` current, 0 journal errors since the
+16:03 UTC start. Apex and www 200, SOA answered by starfleet, `/admin` 302 to `/login`. Preflight
+`/root/hohenheim-preflight-20261005-160144/`. Notice at boot (not a refusal): migration `2026_07_07_000002`
+keeps its recorded checksum under a superseded framework rule.
+
+daystrom: lane green, healthy after both restarts, current, 0 journal errors since the 16:08 UTC start, health
+200, `/admin` 302 to `/login`, nightstrom admitted and seen at 16:08:06 UTC. Preflight
+`/root/hohenheim-preflight-20261005-160748/`.
+
+Logged-in screenshot pass on starfleet (dashboard, sites, a site overview, an instance's edit/console/backups,
+DNS zones, settings): all 200, no page errors, no raw keys. Found on real data: the site overview's Recent card
+squeezes its activity row into a narrow column (word per line); the stored console logs show raw ISO timestamps
+(`2026-10-05T08:26:17.808879Z`); the dashboard's recent activity is dominated by seed/system rows ("Updated ·
+#2 · Dns zone peer", runtime-image seeds); the site header offers only More (no Open site); the health band
+touches the cards below it; settings is one very long page (W5 regroups it).
+
+ROLLBACK: `tools/deploy-host.sh --rollback <target> --preflight <dir above>` (no migrations were applied).
