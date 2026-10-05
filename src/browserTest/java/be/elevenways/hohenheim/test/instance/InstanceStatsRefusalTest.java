@@ -78,8 +78,8 @@ class InstanceStatsRefusalTest extends HohenheimTestBase {
                 assertThat(ChannelException.reasonOf(denied))
                     .as("step 0: instance " + asked + " is refused as not permitted")
                     .isEqualTo(ZenitRefusalReason.PERMISSION_DENIED);
-                assertThat(ChannelException.retriable(denied))
-                    .as("step 0: which no retry lifts").isFalse();
+                assertThat(ChannelException.recoveryOf(denied))
+                    .as("step 0: which neither a wait nor a sign-in lifts").isEqualTo(DomainRefusal.Recovery.NEVER);
             }
             RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID,
                 instanceId, HohenheimAccess.VIEW, true);
