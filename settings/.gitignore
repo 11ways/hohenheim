@@ -1,0 +1,8 @@
+# Auto-generated: machine-local settings files are never committed.
+local.dry
+.local.dry.lock
+host-network.dry
+.host-network.dry.lock
+field-encryption.keys
+field-encryption.keys.lock
+..gitignore.lock
