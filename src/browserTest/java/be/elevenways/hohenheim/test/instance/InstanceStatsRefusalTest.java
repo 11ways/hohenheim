@@ -15,6 +15,8 @@ import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.channel.ChannelException;
 import be.elevenways.zenit.common.channel.FakeChannelLink;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
@@ -26,9 +28,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * A live-stats link that cannot open tells a DELEGATED viewer only that there is nothing
- * to stream; the daemon's own failure text (socket paths, host names, transport errors)
- * reaches operators alone -- the InstanceOverview install_error rule.
+ * A live-stats link that cannot open says why in a typed reason: a viewer without the
+ * instance is refused as not permitted, never told whether it exists, and a workload with
+ * nothing to stream tells a DELEGATED viewer only that; the daemon's own failure text
+ * (socket paths, host names, transport errors) reaches operators alone -- the
+ * InstanceOverview install_error rule.
  */
 class InstanceStatsRefusalTest extends HohenheimTestBase {
 
@@ -64,18 +68,30 @@ class InstanceStatsRefusalTest extends HohenheimTestBase {
         Integer tenantId = ApiSupport.user("stats-refusal-tenant@hohenheim.local",
             "Stats Refusal Tenant");
         try {
+            // 0. Before the grant, the tenant's link is refused as not permitted, the same for
+            //    an instance that does not exist: a typed reason the client ends the link on.
+            FakeChannelLink<Object, Object> tenantLink = new FakeChannelLink<>(
+                HohenheimChannels.INSTANCE_STATS, "stats-tenant")
+                .principal(new UserPrincipal(tenantId, "Stats Refusal Tenant"));
+            for (int asked : new int[]{instanceId, Integer.MAX_VALUE}) {
+                Throwable denied = catchThrowable(() -> new InstanceStatsHandler(tenantLink).onOpen(asked));
+                assertThat(ChannelException.reasonOf(denied))
+                    .as("step 0: instance " + asked + " is refused as not permitted")
+                    .isEqualTo(ZenitRefusalReason.PERMISSION_DENIED);
+                assertThat(ChannelException.retriable(denied))
+                    .as("step 0: which no retry lifts").isFalse();
+            }
             RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID,
                 instanceId, HohenheimAccess.VIEW, true);
 
             // 1. A tenant holding VIEW is admitted, and its refusal is the bare sentence.
-            FakeChannelLink<Object, Object> tenantLink = new FakeChannelLink<>(
-                HohenheimChannels.INSTANCE_STATS, "stats-tenant")
-                .principal(new UserPrincipal(tenantId, "Stats Refusal Tenant"));
             Throwable tenantRefusal = catchThrowable(() ->
                 new InstanceStatsHandler(tenantLink).onOpen(instanceId));
             assertThat(tenantRefusal)
                 .as("step 1: a workload with nothing to stream refuses the link")
-                .isInstanceOf(ChannelException.class);
+                .isInstanceOf(DomainRefusal.class);
+            assertThat(ChannelException.reasonOf(tenantRefusal))
+                .as("step 1: as unavailable now").isEqualTo(ZenitRefusalReason.OPERATION_UNAVAILABLE);
             assertThat(tenantRefusal.getMessage())
                 .as("step 1: the delegated viewer reads no daemon text at all")
                 .isEqualTo("No live stats");
@@ -90,7 +106,7 @@ class InstanceStatsRefusalTest extends HohenheimTestBase {
                 new InstanceStatsHandler(adminLink).onOpen(instanceId));
             assertThat(adminRefusal)
                 .as("step 2: the operator's link is refused too")
-                .isInstanceOf(ChannelException.class);
+                .isInstanceOf(DomainRefusal.class);
             assertThat(adminRefusal.getMessage())
                 .as("step 2: and the operator reads the driver's own reason")
                 .startsWith("No live stats: ")
