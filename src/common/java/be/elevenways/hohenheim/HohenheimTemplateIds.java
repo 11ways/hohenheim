@@ -26,7 +26,6 @@ public final class HohenheimTemplateIds {
     public static final Identifier DNS_ZONE_REMOTE_RECORDS = Identifier.of("hohenheim", "cms/dns-zone-remote-records");
     public static final Identifier DNS_ZONE_SECONDARIES = Identifier.of("hohenheim", "cms/dns-zone-secondaries");
     public static final Identifier INBOX = Identifier.of("hohenheim", "cms/inbox");
-    public static final Identifier INSTANCE_ARTIFACTS = Identifier.of("hohenheim", "cms/instance-artifacts");
     public static final Identifier INSTANCE_CONSOLE = Identifier.of("hohenheim", "cms/instance-console");
     public static final Identifier INSTANCE_DATABASES = Identifier.of("hohenheim", "cms/instance-databases");
     public static final Identifier INSTANCE_DEPLOYMENTS = Identifier.of("hohenheim", "cms/instance-deployments");
@@ -37,7 +36,6 @@ public final class HohenheimTemplateIds {
     public static final Identifier INSTANCE_FROM_TEMPLATE = Identifier.of("hohenheim", "cms/instance-from-template");
     public static final Identifier INSTANCE_MIGRATE = Identifier.of("hohenheim", "cms/instance-migrate");
     public static final Identifier INSTANCE_PROVISIONING = Identifier.of("hohenheim", "cms/instance-provisioning");
-    public static final Identifier INSTANCE_SCHEDULES = Identifier.of("hohenheim", "cms/instance-schedules");
     public static final Identifier INSTANCE_SCHEDULE_STEPS = Identifier.of("hohenheim", "cms/instance-schedule-steps");
     public static final Identifier INSTANCE_SHELL = Identifier.of("hohenheim", "cms/instance-shell");
     public static final Identifier INSTANCE_STATS = Identifier.of("hohenheim", "cms/instance-stats");

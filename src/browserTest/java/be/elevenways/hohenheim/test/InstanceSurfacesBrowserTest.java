@@ -48,6 +48,11 @@ import java.util.Map;
  * AIDEV-NOTE: intended difference, app health (W3a, 2026-10-05): the admin list gains the framework health column
  * ({@code column health}, every later column one place on), and a workload its host refuses offers the
  * {@code instance_check_host} link to that host, the health band's fix. Only those facts changed.
+ *
+ * AIDEV-NOTE: intended difference, the board's tab set (W3b, 2026-10-05): the console's modes (shell, the one-off
+ * command, a VM's screen) follow the Console tab as routed pages out of the strip, snapshots and schedules became
+ * sections of the Backups tab (their own tabs are gone), and the housekeeping tabs follow Backups. Only the
+ * {@code tab} facts were re-recorded, each case's from its capture; no verb, column or filter fact moved.
  */
 class InstanceSurfacesBrowserTest extends HohenheimTestBase {
 

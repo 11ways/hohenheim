@@ -281,7 +281,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         //    existence oracle the detail page is not. (The name check below is only a
         //    backstop -- today's refusal is a generic envelope that structurally carries
         //    no record data, and a bare doesNotContain against it would prove nothing.)
-        for (String tab : new String[] {"console", "provisioning", "schedules"}) {
+        for (String tab : new String[] {"console", "provisioning", "backups"}) {
             HttpResponse<String> foreignTab =
                 tenantGet("/manage/instances/" + instanceBId + "/page/" + tab);
             HttpResponse<String> absentTab =

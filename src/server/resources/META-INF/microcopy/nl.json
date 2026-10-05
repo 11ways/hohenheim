@@ -1194,10 +1194,6 @@
       "scope": "stack_deployments"
     },
     {
-      "text": "Nog geen planningen",
-      "scope": "instance_schedule"
-    },
-    {
       "text": "Nog geen stappen",
       "scope": "schedule_step"
     },
@@ -1208,10 +1204,6 @@
     {
       "text": "Geen extra apparaten",
       "scope": "instance_device"
-    },
-    {
-      "text": "Nog niets vastgelegd",
-      "scope": "instance_artifacts"
     },
     {
       "text": "Geen installatiemedia",
@@ -1250,10 +1242,6 @@
     {
       "text": "Gebruik de actie Deployen voor de eerste deployment.",
       "scope": "stack_deployments"
-    },
-    {
-      "text": "Plan consolecommando's, stroomacties, back-ups of snapshots voor deze instantie.",
-      "scope": "instance_schedule"
     },
     {
       "text": "Voeg geordende stappen toe: elke stap heeft een actie, wachttijd en faalbeleid.",
@@ -1651,10 +1639,6 @@
     },
     {
       "text": "Status",
-      "scope": "instance_artifacts"
-    },
-    {
-      "text": "Status",
       "scope": "field"
     }
   ],
@@ -1855,10 +1839,6 @@
     {
       "text": "Naam",
       "scope": "spamservice_key"
-    },
-    {
-      "text": "Naam",
-      "scope": "instance_schedule"
     },
     {
       "text": "Naam",
@@ -2778,10 +2758,6 @@
       "scope": "spamservice_client"
     },
     {
-      "text": "Actief",
-      "scope": "instance_schedule"
-    },
-    {
       "text": "Ingeschakeld",
       "scope": "spamservice"
     },
@@ -3603,10 +3579,6 @@
     {
       "text": "Voeg een peer toe om deze zone via geauthenticeerde AXFR naar hem te repliceren.",
       "scope": "dns_secondaries"
-    },
-    {
-      "text": "Gebruik de eigen momentopname- of back-upactie van de instantie om er een vast te leggen.",
-      "scope": "instance_artifacts"
     },
     {
       "text": "Een lijst zonder regels laat elk verzoek door.",
@@ -4813,6 +4785,10 @@
     {
       "text": "Consolecommando",
       "scope": "stop_kind"
+    },
+    {
+      "text": "Voert één opdracht uit in de workload en toont de uitvoer en de exitcode.",
+      "scope": "console_mode"
     }
   ],
   "registry_server": [
@@ -5153,10 +5129,6 @@
     {
       "text": "Uitgeschakeld",
       "scope": "stack_services"
-    },
-    {
-      "text": "Uitgeschakeld",
-      "scope": "instance_schedule"
     },
     {
       "text": "Uitgeschakeld",
@@ -5535,10 +5507,6 @@
     {
       "text": "Aangemaakt",
       "scope": "instance_status"
-    },
-    {
-      "text": "Gemaakt",
-      "scope": "instance_artifacts"
     },
     {
       "text": "Aangemaakt",
@@ -6234,10 +6202,16 @@
     "text": "Snapshots",
     "scope": "capability"
   },
-  "backups": {
-    "text": "Back-ups",
-    "scope": "capability"
-  },
+  "backups": [
+    {
+      "text": "Back-ups",
+      "scope": "capability"
+    },
+    {
+      "text": "Back-ups",
+      "scope": "instance"
+    }
+  ],
   "backup_target": {
     "text": "Back-updoel",
     "scope": "field"
@@ -6260,16 +6234,10 @@
       "scope": "attention_title"
     }
   ],
-  "note": [
-    {
-      "text": "Notitie",
-      "scope": "field"
-    },
-    {
-      "text": "Notitie",
-      "scope": "instance_artifacts"
-    }
-  ],
+  "note": {
+    "text": "Notitie",
+    "scope": "field"
+  },
   "directory": {
     "text": "Map",
     "scope": "field"
@@ -6891,6 +6859,10 @@
     {
       "text": "Console",
       "scope": "capability"
+    },
+    {
+      "text": "De eigen uitvoer van de workload, live, en een regel naar het hoofdproces.",
+      "scope": "console_mode"
     }
   ],
   "console_unsupported": {
@@ -6987,10 +6959,6 @@
   },
   "add": [
     {
-      "text": "Planning toevoegen",
-      "scope": "instance_schedule"
-    },
-    {
       "text": "Stap toevoegen",
       "scope": "schedule_step"
     },
@@ -7013,14 +6981,6 @@
   },
   "run_finished": {
     "text": "Uitvoering klaar: {$status}",
-    "scope": "instance_schedule"
-  },
-  "cron": {
-    "text": "Cron",
-    "scope": "instance_schedule"
-  },
-  "timezone": {
-    "text": "Tijdzone",
     "scope": "instance_schedule"
   },
   "steps": {
@@ -7310,29 +7270,17 @@
     }
   ],
   "stats": {
-    "text": "Statistieken",
+    "text": "Metingen",
     "scope": "instance"
   },
-  "size": [
-    {
-      "text": "Grootte",
-      "scope": "instance_files"
-    },
-    {
-      "text": "Grootte",
-      "scope": "instance_artifacts"
-    }
-  ],
-  "actions": [
-    {
-      "text": "Acties",
-      "scope": "instance_files"
-    },
-    {
-      "text": "Acties",
-      "scope": "instance_artifacts"
-    }
-  ],
+  "size": {
+    "text": "Grootte",
+    "scope": "instance_files"
+  },
+  "actions": {
+    "text": "Acties",
+    "scope": "instance_files"
+  },
   "up": {
     "text": "Een niveau omhoog",
     "scope": "instance_files"
@@ -8382,7 +8330,7 @@
     "scope": "violations"
   },
   "framebuffer": {
-    "text": "Framebuffer",
+    "text": "Scherm",
     "scope": "instance"
   },
   "hint": {
@@ -9116,7 +9064,7 @@
       "scope": "capability"
     },
     {
-      "text": "Exec",
+      "text": "Opdracht uitvoeren",
       "scope": "instance"
     },
     {
@@ -9152,7 +9100,7 @@
     "scope": "violations"
   },
   "stored_logs_description": {
-    "text": "Console-uitvoer die van eerdere runs van deze instantie bewaard is.",
+    "text": "De uitvoer van elke eerdere consolesessie, nieuwste eerst. De console openen start een sessie, dus een bezoek voegt er een toe.",
     "scope": "instance_console"
   },
   "workload": [
@@ -9259,10 +9207,6 @@
       "scope": "server_media"
     },
     {
-      "text": "{$name} - Planningen",
-      "scope": "instance_schedule"
-    },
-    {
       "text": "{$name} - Stappen",
       "scope": "schedule_step"
     },
@@ -9305,14 +9249,6 @@
     {
       "text": "{$name} - Migreren",
       "scope": "instance_migrate"
-    },
-    {
-      "text": "{$name} - Momentopnames",
-      "scope": "instance_snapshots"
-    },
-    {
-      "text": "{$name} - Back-ups",
-      "scope": "instance_backups"
     },
     {
       "text": "Regels van {$name}",
@@ -10986,6 +10922,10 @@
     {
       "text": "Shell",
       "scope": "instance"
+    },
+    {
+      "text": "Een terminal in de workload, als de eigen gebruiker van de workload.",
+      "scope": "console_mode"
     }
   ],
   "stop_grace_seconds": [
@@ -11916,18 +11856,6 @@
   },
   "step_execution": {
     "text": "Stap {$id}: {$attempts} pogingen; gestart {$started}; geëindigd {$ended}",
-    "scope": "instance_schedule"
-  },
-  "next_run": {
-    "text": "Volgende uitvoering",
-    "scope": "instance_schedule"
-  },
-  "next_run_disabled": {
-    "text": "Niet gepland zolang uitgeschakeld",
-    "scope": "instance_schedule"
-  },
-  "next_run_sweep": {
-    "text": "Bij de volgende controle (binnen een minuut)",
     "scope": "instance_schedule"
   },
   "last_failure": {
@@ -13481,5 +13409,17 @@
   "on_host": {
     "text": "op {$host}",
     "scope": "app_overview"
+  },
+  "console_modes": {
+    "text": "Consolemodi",
+    "scope": "instance"
+  },
+  "screen": {
+    "text": "Het scherm en toetsenbord van de virtuele machine, voor als niets anders antwoordt.",
+    "scope": "console_mode"
+  },
+  "failure": {
+    "text": "Fout",
+    "scope": "instance_artifacts"
   }
 }

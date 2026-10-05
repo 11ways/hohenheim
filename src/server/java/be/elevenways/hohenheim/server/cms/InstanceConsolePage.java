@@ -17,7 +17,6 @@ import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
-import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -36,38 +35,64 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Console tab on an instance: the live output terminal (fed by the instance-console
- * WebSocket) and the command form. The admin CSP (zenit's STRICT_ADMIN) carries ghostty's
- * wasm concessions panel-wide, so this tab is reached by soft navigation like every other.
+ * Console tab on an instance, and its live-console mode: the output terminal (fed by the instance-console WebSocket)
+ * and the command form. It is the one tab of the console's modes ({@link ConsoleModes}) in the record strip. The admin
+ * CSP (zenit's STRICT_ADMIN) carries ghostty's wasm concessions panel-wide, so this tab is reached by soft navigation
+ * like every other.
  */
-public final class InstanceConsolePage implements RecordTab.Rendered<Row> {
+public final class InstanceConsolePage implements ConsoleModes.Mode {
 
     public static final String SLUG = "console";
+
+    private final @NonNull ConsoleModes modes;
+
+    InstanceConsolePage(@NonNull ConsoleModes modes) {
+        this.modes = modes;
+    }
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_console"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("console").withFilter("scope", "instance"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("terminal"); }
 
+    @Override
+    public @NonNull Microcopy hint() {
+        return Microcopy.of("console").withFilter("scope", "console_mode");
+    }
+
     /**
-     * The tab exists only where the console operation is offered on THIS record -- the offer
-     * its socket admits through, so a generated instance's console is never offered here --
-     * the per-record half of the hide-and-enforce pair (zenit-cms 404s an unoffered slug, so
-     * this is a gate on the route as well as on the nav).
+     * The live console is offered only where the console operation is offered on THIS record -- the offer its socket
+     * admits through, so a generated instance's console is never offered here.
      *
      * AIDEV-NOTE: this shipped ungated, which made the page a wider door than the socket
      * it fronts: the live terminal's handshake demands CONSOLE (InstanceConsoleHandler)
      * and the command form's POST demands it too, but {@link #addStoredLogs} reads
      * InstanceLogModel directly and rendered every RETAINED console episode to anyone the
-     * resource's view-only scope let through. Same output, same capability.
+     * resource's view-only scope let through. Same output, same capability. The TAB is wider (any mode offered, see
+     * {@link #visibleFor}); the console's own output still renders only under this gate.
      */
     @Override
-    public boolean visibleFor(@NonNull Row record, @NonNull AccessContext accessContext) {
+    public boolean offers(@NonNull Row record, @NonNull AccessContext accessContext) {
         return InstanceOperationHandlers.offered(InstanceOperations.CONSOLE_COMMAND, accessContext, record);
+    }
+
+    /** The tab is in the strip while any console mode is offered; zenit-cms 404s it otherwise. */
+    @Override
+    public boolean visibleFor(@NonNull Row record, @NonNull AccessContext accessContext) {
+        return this.modes.anyOffered(record, accessContext);
     }
 
     @Override
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
+        if (!this.offers(instance, request.access())) {
+            // The tab is reachable because another mode is offered: render that mode, never this one's output.
+            ConsoleModes.Mode other = this.modes.firstOfferedBesidesHub(instance, request.access());
+            if (other == null) {
+                throw new IllegalStateException("Console tab rendered with no mode offered on instance "
+                    + instance.get(InstanceModel.ID));
+            }
+            return other.render(request, instance);
+        }
         Conduit conduit = request.conduit();
         Integer instanceId = instance.get(InstanceModel.ID);
         String status = instance.get(InstanceModel.STATUS);
@@ -111,6 +136,7 @@ public final class InstanceConsolePage implements RecordTab.Rendered<Row> {
         vars.put("consoleWsUrl", HohenheimEndpoints.INSTANCE_CONSOLE.toUrl(
             Map.of(HohenheimEndpoints.INSTANCE_ID, instanceId)));
         vars.put("recordTabs", recordTabs(conduit));
+        vars.put("consoleModes", this.modes.views(request, instance, SLUG));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_CONSOLE, vars);
     }
 

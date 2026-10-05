@@ -17,7 +17,6 @@ import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
-import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.cms.server.page.PageActions;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.operation.OperationResult;
@@ -33,14 +32,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Exec tab on an instance: run one arbitrary command inside the workload and read its exit code and output, through
- * the exec operation the tab places (its form posts to the one invoke route with the tab as {@code _tab}).
+ * The one-off command mode of an instance's Console tab: run one arbitrary command inside the workload and read its
+ * exit code and output, through the exec operation this mode places (its form posts to the one invoke route with this
+ * mode's slug as {@code _tab}).
  *
- * AIDEV-NOTE: the tab exists exactly where the operation is offered (the console tab's shape): the exec capability on
+ * AIDEV-NOTE: the mode exists exactly where the operation is offered (the console tab's shape): the exec capability on
  * THIS record, an authored instance. InstanceExec asks the capability once more on its funnel, because that funnel is
  * what a future API lane would reach too.
  */
-public final class InstanceExecPage implements RecordTab.Rendered<Row> {
+public final class InstanceExecPage implements ConsoleModes.Mode {
 
     public static final String SLUG = "exec";
 
@@ -56,19 +56,28 @@ public final class InstanceExecPage implements RecordTab.Rendered<Row> {
         .selectedByRoute(instance -> String.valueOf((Object) instance.get(InstanceModel.ID)))
         .build();
 
+    private final @NonNull ConsoleModes modes;
+
+    InstanceExecPage(@NonNull ConsoleModes modes) {
+        this.modes = modes;
+    }
+
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_exec"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("exec").withFilter("scope", "instance"); }
-    /**
-     * Housekeeping, not an everyday destination: the tab lives in the strip's "More"
-     * menu so the visible strip stays the handful of tabs an operator opens daily.
-     */
-    @Override public boolean secondaryTab() { return true; }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("code"); }
 
+    /** A mode of the Console tab, reached through its mode switch. */
+    @Override public boolean inTabs() { return false; }
+
+    @Override
+    public @NonNull Microcopy hint() {
+        return Microcopy.of("command").withFilter("scope", "console_mode");
+    }
+
     /** Hide AND enforce (an unoffered slug 404s): exactly where the exec operation is offered on this record. */
     @Override
-    public boolean visibleFor(@NonNull Row record, @NonNull AccessContext accessContext) {
+    public boolean offers(@NonNull Row record, @NonNull AccessContext accessContext) {
         return InstanceOperationHandlers.offered(InstanceOperations.EXEC, accessContext, record);
     }
 
@@ -92,7 +101,8 @@ public final class InstanceExecPage implements RecordTab.Rendered<Row> {
         InstanceExecResults.Run run = InstanceExecResults.pop(conduit, instance.get(InstanceModel.ID));
         vars.put("execOutput", run == null ? "" : run.output());
         vars.put("execExit", run == null ? "" : run.exitCode());
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("recordTabs", this.modes.strip(request, instance, recordTabs(conduit)));
+        vars.put("consoleModes", this.modes.views(request, instance, SLUG));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_EXEC, vars);
     }
 

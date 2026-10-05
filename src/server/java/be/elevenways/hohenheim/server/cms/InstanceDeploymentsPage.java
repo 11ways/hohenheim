@@ -64,6 +64,8 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
     @Override public @NonNull Microcopy label() { return Microcopy.of("title").withFilter("scope", "deployments"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("rocket"); }
+    /** The release history is read after a deploy, not daily: it sits in the strip's "More" menu. */
+    @Override public boolean secondaryTab() { return true; }
 
     /**
      * A record has this tab when deploying it means deploying a SOURCE: a release-managed

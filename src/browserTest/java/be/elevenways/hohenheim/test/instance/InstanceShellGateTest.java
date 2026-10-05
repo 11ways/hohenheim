@@ -111,24 +111,31 @@ class InstanceShellGateTest extends HohenheimTestBase {
             .as("step 1: the console delegate sees the record")
             .isEqualTo(200);
 
-        // 2. ...and is offered no shell tab, and cannot reach the route by hand. A hidden
-        //    tab is an affordance; the 404 is the gate.
-        assertThat(asConsole.body())
-            .withFailMessage("step 2: a console-only delegate is offered the SHELL tab --"
+        // 2. ...and its Console tab offers no shell mode, and the shell route cannot be reached by hand. A hidden
+        //    mode is an affordance; the 404 is the gate.
+        HttpResponse<String> consoleTab = httpGet(record + "/page/console", consoleSession);
+        assertThat(consoleTab.statusCode())
+            .as("step 2: the console delegate opens its Console tab")
+            .isEqualTo(200);
+        assertThat(consoleTab.body())
+            .withFailMessage("step 2: a console-only delegate is offered the SHELL mode --"
                 + " console is stdin to the workload's own process, never a new program")
             .doesNotContain("/page/shell");
         assertThat(httpGet(record + "/page/shell", consoleSession).statusCode())
             .withFailMessage("step 2: a console-only delegate can reach the shell route by hand")
             .isEqualTo(404);
 
-        // 3. Positive anchor: the shell delegate is offered it AND can open it, so step 2
-        //    is a gate rather than a tab that exists for nobody.
+        // 3. Positive anchor: the shell delegate is offered the Console tab, which opens on the shell (the one mode
+        //    it holds), AND can open the shell route itself, so step 2 is a gate rather than a mode for nobody.
         HttpResponse<String> asShell = httpGet(record, shellSession);
         assertThat(asShell.body())
-            .as("step 3: a shell delegate is offered the tab")
-            .contains("/page/shell");
+            .as("step 3: a shell delegate is offered the Console tab")
+            .contains("/page/console");
+        assertThat(httpGet(record + "/page/console", shellSession).body())
+            .as("step 3: whose Console tab opens on the shell")
+            .contains("data-shell-runs-as-root");
         assertThat(httpGet(record + "/page/shell", shellSession).statusCode())
-            .as("step 3: and can open it")
+            .as("step 3: and can open the shell route")
             .isEqualTo(200);
     }
 

@@ -1194,10 +1194,6 @@
       "scope": "stack_deployments"
     },
     {
-      "text": "No schedules yet",
-      "scope": "instance_schedule"
-    },
-    {
       "text": "No steps yet",
       "scope": "schedule_step"
     },
@@ -1208,10 +1204,6 @@
     {
       "text": "No extra devices",
       "scope": "instance_device"
-    },
-    {
-      "text": "Nothing captured yet",
-      "scope": "instance_artifacts"
     },
     {
       "text": "No install media",
@@ -1250,10 +1242,6 @@
     {
       "text": "Use the Deploy action to run the first deployment.",
       "scope": "stack_deployments"
-    },
-    {
-      "text": "Schedule console commands, power actions, backups or snapshots for this instance.",
-      "scope": "instance_schedule"
     },
     {
       "text": "Add ordered steps: each carries an action, an offset and a failure policy.",
@@ -1651,10 +1639,6 @@
     },
     {
       "text": "Status",
-      "scope": "instance_artifacts"
-    },
-    {
-      "text": "Status",
       "scope": "field"
     }
   ],
@@ -1855,10 +1839,6 @@
     {
       "text": "Name",
       "scope": "spamservice_key"
-    },
-    {
-      "text": "Name",
-      "scope": "instance_schedule"
     },
     {
       "text": "Name",
@@ -2779,10 +2759,6 @@
     },
     {
       "text": "Enabled",
-      "scope": "instance_schedule"
-    },
-    {
-      "text": "Enabled",
       "scope": "spamservice"
     },
     {
@@ -3603,10 +3579,6 @@
     {
       "text": "Add a peer to replicate this zone to it over authenticated AXFR.",
       "scope": "dns_secondaries"
-    },
-    {
-      "text": "Use the instance's own snapshot or backup action to capture one.",
-      "scope": "instance_artifacts"
     },
     {
       "text": "A list without rules lets every request through.",
@@ -4813,6 +4785,10 @@
     {
       "text": "Console command",
       "scope": "stop_kind"
+    },
+    {
+      "text": "Runs one command inside the workload and shows its output and exit code.",
+      "scope": "console_mode"
     }
   ],
   "registry_server": [
@@ -5153,10 +5129,6 @@
     {
       "text": "Disabled",
       "scope": "stack_services"
-    },
-    {
-      "text": "Disabled",
-      "scope": "instance_schedule"
     },
     {
       "text": "Disabled",
@@ -5535,10 +5507,6 @@
     {
       "text": "Created",
       "scope": "instance_status"
-    },
-    {
-      "text": "Created",
-      "scope": "instance_artifacts"
     },
     {
       "text": "Created",
@@ -6234,10 +6202,16 @@
     "text": "Snapshots",
     "scope": "capability"
   },
-  "backups": {
-    "text": "Backups",
-    "scope": "capability"
-  },
+  "backups": [
+    {
+      "text": "Backups",
+      "scope": "capability"
+    },
+    {
+      "text": "Backups",
+      "scope": "instance"
+    }
+  ],
   "backup_target": {
     "text": "Backup target",
     "scope": "field"
@@ -6260,16 +6234,10 @@
       "scope": "attention_title"
     }
   ],
-  "note": [
-    {
-      "text": "Note",
-      "scope": "field"
-    },
-    {
-      "text": "Note",
-      "scope": "instance_artifacts"
-    }
-  ],
+  "note": {
+    "text": "Note",
+    "scope": "field"
+  },
   "directory": {
     "text": "Directory",
     "scope": "field"
@@ -6891,6 +6859,10 @@
     {
       "text": "Console",
       "scope": "capability"
+    },
+    {
+      "text": "The workload's own output, live, and a line to its main process.",
+      "scope": "console_mode"
     }
   ],
   "console_unsupported": {
@@ -6987,10 +6959,6 @@
   },
   "add": [
     {
-      "text": "Add schedule",
-      "scope": "instance_schedule"
-    },
-    {
       "text": "Add step",
       "scope": "schedule_step"
     },
@@ -7013,14 +6981,6 @@
   },
   "run_finished": {
     "text": "Run finished: {$status}",
-    "scope": "instance_schedule"
-  },
-  "cron": {
-    "text": "Cron",
-    "scope": "instance_schedule"
-  },
-  "timezone": {
-    "text": "Timezone",
     "scope": "instance_schedule"
   },
   "steps": {
@@ -7310,29 +7270,17 @@
     }
   ],
   "stats": {
-    "text": "Stats",
+    "text": "Metrics",
     "scope": "instance"
   },
-  "size": [
-    {
-      "text": "Size",
-      "scope": "instance_files"
-    },
-    {
-      "text": "Size",
-      "scope": "instance_artifacts"
-    }
-  ],
-  "actions": [
-    {
-      "text": "Actions",
-      "scope": "instance_files"
-    },
-    {
-      "text": "Actions",
-      "scope": "instance_artifacts"
-    }
-  ],
+  "size": {
+    "text": "Size",
+    "scope": "instance_files"
+  },
+  "actions": {
+    "text": "Actions",
+    "scope": "instance_files"
+  },
   "up": {
     "text": "Up one level",
     "scope": "instance_files"
@@ -8382,7 +8330,7 @@
     "scope": "violations"
   },
   "framebuffer": {
-    "text": "Framebuffer",
+    "text": "Screen",
     "scope": "instance"
   },
   "hint": {
@@ -9116,7 +9064,7 @@
       "scope": "capability"
     },
     {
-      "text": "Exec",
+      "text": "Run a command",
       "scope": "instance"
     },
     {
@@ -9152,7 +9100,7 @@
     "scope": "violations"
   },
   "stored_logs_description": {
-    "text": "Console output kept from earlier runs of this instance.",
+    "text": "The output of each earlier console session, newest first. Opening the console starts a session, so a visit adds one.",
     "scope": "instance_console"
   },
   "workload": [
@@ -9259,10 +9207,6 @@
       "scope": "server_media"
     },
     {
-      "text": "{$name} - Schedules",
-      "scope": "instance_schedule"
-    },
-    {
       "text": "{$name} - Steps",
       "scope": "schedule_step"
     },
@@ -9305,14 +9249,6 @@
     {
       "text": "{$name} - Migrate",
       "scope": "instance_migrate"
-    },
-    {
-      "text": "{$name} - Snapshots",
-      "scope": "instance_snapshots"
-    },
-    {
-      "text": "{$name} - Backups",
-      "scope": "instance_backups"
     },
     {
       "text": "Rules of {$name}",
@@ -10986,6 +10922,10 @@
     {
       "text": "Shell",
       "scope": "instance"
+    },
+    {
+      "text": "A terminal inside the workload, as the workload's own user.",
+      "scope": "console_mode"
     }
   ],
   "stop_grace_seconds": [
@@ -11916,18 +11856,6 @@
   },
   "step_execution": {
     "text": "Step {$id}: {$attempts} attempts; started {$started}; ended {$ended}",
-    "scope": "instance_schedule"
-  },
-  "next_run": {
-    "text": "Next run",
-    "scope": "instance_schedule"
-  },
-  "next_run_disabled": {
-    "text": "Not scheduled while disabled",
-    "scope": "instance_schedule"
-  },
-  "next_run_sweep": {
-    "text": "At the next sweep (within a minute)",
     "scope": "instance_schedule"
   },
   "last_failure": {
@@ -13481,5 +13409,17 @@
   "on_host": {
     "text": "on {$host}",
     "scope": "app_overview"
+  },
+  "console_modes": {
+    "text": "Console modes",
+    "scope": "instance"
+  },
+  "screen": {
+    "text": "The virtual machine's screen and keyboard, for when nothing else answers.",
+    "scope": "console_mode"
+  },
+  "failure": {
+    "text": "Failure",
+    "scope": "instance_artifacts"
   }
 }

@@ -28,13 +28,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * Per-instance Snapshots and Backups tabs: a SCOPED VIEW of the panel-wide resources,
- * never a second UI over the same rows.
+ * The per-instance Backups tab: a SCOPED VIEW of the panel-wide backup and snapshot resources (the framework's child
+ * list), never a second UI over the same rows.
  *
  * AIDEV-NOTE: the pre-fix defect, verified 2026-08-11 -- both slugs answered 404, so a
  * snapshot or backup could only be found by opening a flat installation-wide list and
  * filtering it by instance id. The gating half is the counterfactual: a tenant holding
- * ONLY console on the record must reach neither tab, and restore-to-new must stay off
+ * ONLY console on the record must see no artifact row, and restore-to-new must stay off
  * the delegated surface entirely.
  */
 class InstanceArtifactTabsTest extends HohenheimTestBase {
@@ -86,80 +86,64 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
     }
 
     /**
-     * Both tabs exist, show THIS record's rows, and relay the owning resource's own
-     * actions instead of hand-rolling a second restore button.
+     * The Backups tab lists THIS record's backups and snapshots as sections of the panel's own resources, and relays
+     * their actions instead of hand-rolling a second restore button.
      */
     @Test
-    void bothTabsScopeTheResourcesRowsToThisRecordAndRelayItsActions() throws Exception {
-        // 1. THE ABSENCE: pre-fix both slugs answered 404.
-        HttpResponse<String> snapshots = httpGet(url("snapshots"), sessionToken);
-        assertThat(snapshots.statusCode())
-            .withFailMessage("step 1: the per-instance snapshots tab does not exist (HTTP %s)",
-                snapshots.statusCode())
-            .isEqualTo(200);
+    void theBackupsTabScopesTheResourcesRowsToThisRecordAndRelaysTheirActions() throws Exception {
+        // 1. One tab holds both artifact kinds; the separate snapshots route is retired.
         HttpResponse<String> backups = httpGet(url("backups"), sessionToken);
         assertThat(backups.statusCode())
-            .withFailMessage("step 1: the per-instance backups tab does not exist (HTTP %s)",
-                backups.statusCode())
+            .withFailMessage("step 1: the per-instance Backups tab does not exist (HTTP %s)", backups.statusCode())
             .isEqualTo(200);
+        assertThat(httpGet(url("snapshots"), sessionToken).statusCode())
+            .as("step 1: snapshots are a section of the Backups tab, not a route of their own")
+            .isEqualTo(404);
 
-        // 2. Each shows its own record's row, with the stored detail.
-        assertThat(snapshots.body()).as("step 2: the snapshot row renders")
-            .contains("data-artifact-id=\"" + snapshotId + "\"")
-            .contains("before the risky upgrade");
-        assertThat(backups.body()).as("step 2: the backup row renders")
-            .contains("data-artifact-id=\"" + backupId + "\"")
-            .contains("67890");
+        // 2. Each section shows its own record's row, with the stored detail, linking into the generated record page,
+        //    which stays the one place a row is deleted.
+        assertThat(backups.body()).as("step 2: the snapshot row renders with its note and record link")
+            .contains("before the risky upgrade")
+            .contains("/admin/instance-snapshots/" + snapshotId);
+        assertThat(backups.body()).as("step 2: the backup row renders with its record link")
+            .contains("/admin/instance-backups/" + backupId);
 
-        // 3. Restore is the RESOURCE's declared action, targeting the resource's own
-        //    invoke route -- not a form this page invented.
-        assertThat(snapshots.body())
-            .withFailMessage("step 3: the snapshot restore operation is not relayed from"
-                + " the panel's snapshot entry")
+        // 3. Restore is the RESOURCE's declared action, targeting the resource's own invoke route -- not a form this
+        //    page invented.
+        assertThat(backups.body())
+            .withFailMessage("step 3: the snapshot restore operation is not relayed from the panel's snapshot entry")
             .contains("/admin/instance-snapshots/invoke/hohenheim.restore_snapshot?ids=" + snapshotId);
         assertThat(backups.body())
-            .withFailMessage("step 3: the backup restore operation is not relayed from"
-                + " the panel's backup entry")
+            .withFailMessage("step 3: the backup restore operation is not relayed from the panel's backup entry")
             .contains("/admin/instance-backups/invoke/hohenheim.restore_backup?ids=" + backupId);
-
-        // 4. And the row links back into the generated record page, which stays the one
-        //    place a row is deleted -- no second delete UI.
-        assertThat(snapshots.body()).as("step 4: the row links into the generated resource")
-            .contains("/admin/instance-snapshots/" + snapshotId);
     }
 
     /**
-     * Each tab answers to the capability its OPERATIONS answer to, and the gate is on the
-     * route as well as on the tab strip.
+     * Each section answers to the capability its rows answer to: a delegate holding only console reaches the tab
+     * (the record's schedules live there too) and sees none of the artifacts it may not touch.
      */
     @Test
-    void aConsoleOnlyDelegateReachesNeitherTab() throws Exception {
+    void aConsoleOnlyDelegateSeesNoArtifactRow() throws Exception {
         // 1. The delegate genuinely reaches the record -- without this the rest is vacuous.
         HttpResponse<String> record = httpGet("/manage/instances/" + instanceId, consoleSession);
         assertThat(record.statusCode()).as("step 1: the console delegate sees the record")
             .isEqualTo(200);
 
-        // 2. Neither artifact tab is offered.
-        assertThat(record.body())
-            .withFailMessage("step 2: a console-only delegate is offered the snapshots tab")
-            .doesNotContain("/page/snapshots");
-        assertThat(record.body())
-            .withFailMessage("step 2: a console-only delegate is offered the backups tab")
-            .doesNotContain("/page/backups");
+        // 2. The Backups tab renders, and lists neither artifact: each section is the delegated twin's own scope.
+        HttpResponse<String> backups = httpGet("/manage/instances/" + instanceId + "/page/backups", consoleSession);
+        assertThat(backups.statusCode()).as("step 2: the Backups tab renders for the delegate")
+            .isEqualTo(200);
+        assertThat(backups.body())
+            .withFailMessage("step 2: a console-only delegate is shown the snapshot")
+            .doesNotContain("before the risky upgrade")
+            .doesNotContain("/manage/instance-snapshots/" + snapshotId);
+        assertThat(backups.body())
+            .withFailMessage("step 2: a console-only delegate is shown the backup")
+            .doesNotContain("/manage/instance-backups/" + backupId);
 
-        // 3. Nor reachable by hand: an unoffered slug 404s.
-        assertThat(httpGet("/manage/instances/" + instanceId + "/page/snapshots", consoleSession)
-                .statusCode())
-            .withFailMessage("step 3: the snapshots route is open to a console-only delegate")
-            .isEqualTo(404);
-        assertThat(httpGet("/manage/instances/" + instanceId + "/page/backups", consoleSession)
-                .statusCode())
-            .withFailMessage("step 3: the backups route is open to a console-only delegate")
-            .isEqualTo(404);
-
-        // 4. Positive anchor: the console tab the delegate DOES hold is offered, so
-        //    step 2's absences are the capability gate and not an empty tab strip.
-        assertThat(record.body()).as("step 4: the console tab is offered")
+        // 3. Positive anchor: the console tab the delegate DOES hold is offered, so step 2's absences are the
+        //    capability scope and not an empty record.
+        assertThat(record.body()).as("step 3: the console tab is offered")
             .contains("/page/console");
     }
 
