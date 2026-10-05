@@ -35,10 +35,6 @@ settings/.*.lock
 settings/field-encryption.keys
 settings/field-encryption.keys.lock
 
-# Written by zenit's PrivateNetworkBoot on the host's first boot: this host's network decision, never committed.
-settings/host-network.dry
-settings/.host-network.dry.lock
-
 # Git-provisioned site slots. Anchored to the repo root so a `data/` folder
 # anywhere else (tests, fixtures, docs) is NOT ignored. If you reconfigure
 # storage.data_path to somewhere outside the repo, add that path to
