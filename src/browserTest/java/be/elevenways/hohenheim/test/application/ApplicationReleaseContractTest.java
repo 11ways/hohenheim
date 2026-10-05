@@ -208,8 +208,7 @@ class ApplicationReleaseContractTest {
                 assertThat(second).isNotEqualTo(first);
                 assertThat(new InstanceService().resolve(second).spec().env())
                     .containsEntry("JAR", "private-two.jar");
-                await("second release settled", () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
-                    latestOp(applicationId).get(ReleaseOperationModel.STATUS)));
+                await("second release settled", () -> ReleaseSettling.settled(applicationId));
                 ReleaseEngine.rollback(applicationId);
                 int rolledBack = servingOf(applicationId).get(InstanceModel.ID);
                 assertThat(new InstanceService().resolve(rolledBack).spec().env())
@@ -385,9 +384,12 @@ class ApplicationReleaseContractTest {
                 assertThat(ReleaseEngine.newestRetired(applicationId).get(InstanceModel.ID))
                     .as("step 2: the superseded release is the retained rollback target")
                     .isEqualTo(firstId);
-                await("step 2: the release operation completes after the drain window",
-                    () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
-                        reload(swapOp).get(ReleaseOperationModel.STATUS)));
+                await("step 2: the release operation completes after the drain window"
+                    + " and its drain lets go of the application",
+                    () -> ReleaseSettling.settled(applicationId));
+                assertThat(reload(swapOp).get(ReleaseOperationModel.STATUS))
+                    .as("step 2: and the settled operation is the swap")
+                    .isEqualTo(ReleaseOperationModel.STATUS_SUCCEEDED);
                 assertThat(daemon.exists(FakeDockerDaemon.handleOf(firstId)))
                     .as("step 2: the retained release's container is KEPT").isTrue();
                 assertThat(daemon.isRunning(FakeDockerDaemon.handleOf(firstId)))

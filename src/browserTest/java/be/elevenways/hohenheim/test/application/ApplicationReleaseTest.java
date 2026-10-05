@@ -15,7 +15,6 @@ import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
-import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -186,11 +185,15 @@ class ApplicationReleaseTest {
                     .isNotEqualTo(upstream.getPort());
 
                 await("step 4: the flip's operation completes after its drain window"
-                    + " and its drain lets go of the application", () -> settled(applicationId));
+                    + " and its drain lets go of the application", () -> ReleaseSettling.settled(applicationId));
 
                 // 5. ROLLBACK flips back onto the RETAINED release, and the site follows
                 //    again. Nothing is rebuilt: the retained spec is digest-pinned.
                 int pullsBefore = daemon.callCount("api:POST /images/create");
+                // Read BEFORE the rollback: its drain (window 0 here) reclaims this older
+                // retired release on another thread, so reading it afterwards races that.
+                Object retainedFingerprint = ApplicationReleases.storedSettings(
+                    Models.get(InstanceModel.class).findById(firstId)).get("source_fingerprint");
                 ReleaseEngine.rollback(applicationId);
                 Row back = ApplicationReleases.ownedServing(applicationId);
                 assertThat(ApplicationReleases.storedSettings(back).get("image"))
@@ -210,16 +213,22 @@ class ApplicationReleaseTest {
                     .isNotEqualTo(secondId);
                 assertThat(ApplicationReleases.storedSettings(back).get("source_fingerprint"))
                     .as("step 5: carrying the retained release's own source identity")
-                    .isEqualTo(ApplicationReleases.storedSettings(
-                        Models.get(InstanceModel.class).findById(firstId))
-                            .get("source_fingerprint"));
+                    .isEqualTo(retainedFingerprint);
                 assertThat(handler.current())
                     .as("step 5: and the site follows it, re-resolved off the same"
                         + " generation the rollback bumped")
                     .isEqualTo(ApplicationUpstreams.resolve(applicationId).upstream());
 
                 await("step 5: the rollback completes after its drain window"
-                    + " and its drain lets go of the application", () -> settled(applicationId));
+                    + " and its drain lets go of the application", () -> ReleaseSettling.settled(applicationId));
+                assertThat(Models.get(InstanceModel.class).findById(firstId))
+                    .as("step 5: the drain reclaimed the older retired release; exactly one"
+                        + " superseded release stays retained")
+                    .isNull();
+                assertThat(Models.get(InstanceModel.class).findById(secondId)
+                        .get(InstanceModel.RUNTIME_ROLE))
+                    .as("step 5: and that one is the release the rollback superseded")
+                    .isEqualTo(InstanceModel.ROLE_RETIRED);
             } finally {
                 ApplicationReleases.destroyFor(applicationId);
             }
@@ -358,18 +367,6 @@ class ApplicationReleaseTest {
             .where(ReleaseOperationModel.FOR_ID.eq(applicationId))
             .orderBy(ReleaseOperationModel.ID, SortOrder.DESC)
             .first();
-    }
-
-    /**
-     * The latest operation succeeded AND nothing holds the application any more.
-     *
-     * AIDEV-NOTE: the drain writes SUCCEEDED inside its claim (an outcome write is fenced by the claim) and releases
-     * the claim only afterwards, so the status alone opens a window in which a REFUSE-contention rollback is turned
-     * away as instance_operation_in_progress. runIfIdle asks the lock itself.
-     */
-    private static boolean settled(int applicationId) {
-        return ReleaseOperationModel.STATUS_SUCCEEDED.equals(latestOp(applicationId).get(ReleaseOperationModel.STATUS))
-            && InstanceOperationLock.production().runIfIdle(applicationId, () -> { });
     }
 
     /** Bounded wait: the drain completes on a virtual thread, not inline. */

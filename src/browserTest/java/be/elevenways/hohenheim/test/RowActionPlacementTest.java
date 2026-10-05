@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.server.cms.DnsRecordParts;
 import be.elevenways.hohenheim.server.cms.DnsZoneParts;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.AccessContext;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
@@ -50,12 +49,11 @@ class RowActionPlacementTest extends HohenheimTestBase {
         assertThat(reissue).as("step 2b: the re-issue action is declared").isNotNull();
         assertThat(reissue.inlineInRow())
             .as("step 2b: and it overflows").isFalse();
-        assertThat(reissue.shownFor(certificateRow(CertificateModel.PROVIDER_LETSENCRYPT),
-                AccessContext.anonymous()))
-            .as("step 2b: shown for a Let's Encrypt certificate").isTrue();
-        assertThat(reissue.shownFor(certificateRow(CertificateModel.PROVIDER_CUSTOM),
-                AccessContext.anonymous()))
-            .as("step 2b: hidden for a manual upload").isFalse();
+        // A placed operation hides through hiddenWhen; shownFor is the link and screen verbs' condition.
+        assertThat(reissue.hiddenFor(certificateRow(CertificateModel.PROVIDER_LETSENCRYPT)))
+            .as("step 2b: shown for a Let's Encrypt certificate").isFalse();
+        assertThat(reissue.hiddenFor(certificateRow(CertificateModel.PROVIDER_CUSTOM)))
+            .as("step 2b: hidden for a manual upload").isTrue();
 
         // 3. FALSIFICATION: an action that IS a per-row affordance keeps the row, so this
         //    is a per-action declaration and not a blanket demotion. Probing a zone's

@@ -38,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * AIDEV-NOTE: intended difference, certificate orders as placed operations (W1a, 2026-10-05): the request page link
  * became the list's {@code request_certificate} header action, the re-issue link the row's {@code reissue_certificate}
- * invoke (inline, before the download), and the form gained the {@code dns_records_display} entry a waiting manual
+ * invoke (still in the overflow after the download, still Let's Encrypt rows only), and the form gained the {@code dns_records_display} entry a waiting manual
  * DNS-01 order fills; those facts are re-recorded, every other one is the capture as stored.
  *
  * @author Jelle De Loecker
