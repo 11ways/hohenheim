@@ -72,6 +72,9 @@ public final class AttentionCollector {
      */
     private static final String ADMIN = HohenheimSlugs.ADMIN;
 
+    /** The settings anchor of the group holding the control-plane backup target ("app" mount, database group). */
+    static final String CONTROL_PLANE_BACKUP_SECTION = "setting-app-database";
+
     private AttentionCollector() {}
 
     /**
@@ -87,6 +90,7 @@ public final class AttentionCollector {
             ProxyAttention.failedProxyListeners(items);
             ProxyAttention.httpsUnavailableWithForceSsl(items);
             ProxyAttention.forcedWithoutCertificate(items);
+            ProxyAttention.openProtectedPaths(items);
             ProxyAttention.unhealthySites(items);
             ProxyAttention.routingProblems(items);
             InstanceAttention.failedDeployments(items);
@@ -199,7 +203,8 @@ public final class AttentionCollector {
             items.add(item(AttentionSeverity.ERROR, "box-archive",
                 copy("control_plane_backup", "attention_title"),
                 copy("control_plane_backup", "attention_detail"),
-                CmsRoutes.list(ADMIN, SettingsPage.DEFAULT_SLUG)));
+                CmsRoutes.settingsSection(ADMIN, SettingsPage.DEFAULT_SLUG, CONTROL_PLANE_BACKUP_SECTION)
+                    .withFragment(CONTROL_PLANE_BACKUP_SECTION)));
             return;
         }
         controlPlaneBackupFreshness(items);

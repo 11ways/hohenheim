@@ -60,6 +60,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * AIDEV-NOTE: intended difference (W1a, 2026-10-05): the admin domain row offers {@code request_domain_certificate}
  * before its delete; that one row fact is re-recorded in the stored set.
+ *
+ * AIDEV-NOTE: intended difference (W1b, 2026-10-05): the site form shows its instance pick only for the instance kind
+ * (SiteWrites.ADMIN_FORM's showWhen). The page still renders it, wrapped as a conditional entry the browser toggles,
+ * but the surface capture does not descend into conditional entries, so the admin site cases drop the
+ * {@code instance_id} control and the later controls move up one place. Only those facts were re-recorded.
  */
 class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
 

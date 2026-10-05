@@ -24,11 +24,12 @@ verb CREATE
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
 column path at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
 column access_list_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
-column site_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column protection at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 tab history at=0 landing=false view=false
 control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20path at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control CREATE%20access_list_id at=2 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:,clearable:true,creatable:false
+control CREATE%20access_list_id at=2 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:,clearable:true,creatable:true
 
 case admin.protected-paths.tenant admin protected-paths tenant v2
 admission - verdict=zenit:forbidden
@@ -148,16 +149,17 @@ verb DELETE
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
 column path at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
 column access_list_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
-column site_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column protection at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab history at=0 landing=false view=false
 control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20path at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control CREATE%20access_list_id at=2 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:,clearable:true,creatable:false
+control CREATE%20access_list_id at=2 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:,clearable:true,creatable:true
 control EDIT%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control EDIT%20path at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control EDIT%20access_list_id at=2 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:,clearable:true,creatable:false
+control EDIT%20access_list_id at=2 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:,clearable:true,creatable:true
 
 case admin.auth-providers.operator.free admin auth-providers operator v2
 admission - verdict=admitted
@@ -281,7 +283,8 @@ verb CREATE
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
 column path at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
 column access_list_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
-column site_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column protection at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20path at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20access_list_id at=2 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:,clearable:true,creatable:false
@@ -329,7 +332,8 @@ verb DELETE
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
 column path at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
 column access_list_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
-column site_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column protection at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
 control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false

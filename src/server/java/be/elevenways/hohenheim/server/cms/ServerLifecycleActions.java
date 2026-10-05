@@ -76,19 +76,11 @@ final class ServerLifecycleActions {
                         ? summary.errorKind() : "unknown"));
                 return serverCopy("host_probe_ok").withArg("name", name).withArg("summary", formatSummary(summary, label));
             }, row -> true).description(serverCopy("probe_now_hint")).icon(Icon.of("heart-pulse")).inlineInRow(false).build(),
-            place("preflight_server", serverCopy("preflight"), row -> {
-                HostPreflight.Report[] report = new HostPreflight.Report[1];
-                ActivityLog.withAction(ZenitActivityAction.UPDATE, "preflight",
-                    () -> report[0] = HostPreflight.runAndStore(row.get(ServerModel.NAME)));
-                return serverCopy(report[0].passed() ? "preflight_passed" : "preflight_failed")
-                    .withArg("name", row.get(ServerModel.NAME));
-            }, row -> true).icon(Icon.of("stethoscope")).inlineInRow(false).build(),
-            place("admit_server", serverCopy("admit"), row -> {
-                HostAdmission.requireAdmittable(row);
-                setAdmission(row, ServerModel.ADMISSION_ADMITTED, "admit");
-                return serverCopy("host_admitted").withArg("name", row.get(ServerModel.NAME));
-            }, row -> !ServerModel.ADMISSION_ADMITTED.equals(row.get(ServerModel.ADMISSION)))
-                .icon(Icon.of("circle-check")).build(),
+            place("check_host", serverCopy("check_and_admit"), ServerLifecycleActions::checkHost, row -> true)
+                .dynamicLabel(row -> serverCopy(awaitsAdmission(row) ? "check_and_admit" : "check_again"))
+                .description(serverCopy("check_and_admit_hint"))
+                // The first inline verb leads by position, not by a filled style (InstanceActions' deploy note).
+                .icon(Icon.of("stethoscope")).build(),
             place("cordon_server", serverCopy("cordon"), row -> {
                 setAdmission(row, ServerModel.ADMISSION_CORDONED, "cordon");
                 return serverCopy("host_cordoned").withArg("name", row.get(ServerModel.NAME));
@@ -135,6 +127,46 @@ final class ServerLifecycleActions {
         OperationHandlers.attach(operation).applies(applies::test).handle(call -> handler.apply(call.subject()));
         return PanelAction.<Row, Microcopy>places(operation, ActionPlacement.ROW,
             (request, result) -> CmsActionResult.refreshWithToast(result.value()));
+    }
+
+    /**
+     * Preflight, then, on a host waiting for admission whose required checks all pass, admission: one operator
+     * verb where there used to be two buttons offered in the wrong order. An admitted or cordoned host is only
+     * re-checked; uncordoning stays its own decision.
+     *
+     * AIDEV-NOTE: the command runs outside a transaction (CmsCommands.EXTERNAL), so the refusal below keeps the
+     * report preflight stored: the host page's Must pass section shows exactly what failed.
+     *
+     * @throws Violations {@code host_check_failed} naming the failed required checks, or admission's own refusal
+     */
+    private static Microcopy checkHost(Row row) {
+        String name = row.get(ServerModel.NAME);
+        HostPreflight.Report[] report = new HostPreflight.Report[1];
+        ActivityLog.withAction(ZenitActivityAction.UPDATE, "preflight",
+            () -> report[0] = HostPreflight.runAndStore(name));
+        String failed = report[0].checks().stream()
+            .filter(check -> check.required() && check.failed())
+            .map(HostPreflight.Check::name)
+            .collect(Collectors.joining(", "));
+        if (!awaitsAdmission(row)) {
+            return failed.isEmpty() ? serverCopy("host_checked").withArg("name", name)
+                : serverCopy("host_checked_failing").withArg("name", name).withArg("checks", failed);
+        }
+        if (!failed.isEmpty() || !report[0].passed()) {
+            throw Violations.ofForm(CmsSupport.violationText("host_check_failed").withArg("name", name)
+                .withArg("checks", failed.isEmpty() ? "-" : failed));
+        }
+        // Admission reads what preflight just stored, never the subject loaded before it ran.
+        Row stored = Models.get(ServerModel.class).findById(row.get(ServerModel.ID));
+        HostAdmission.requireAdmittable(stored);
+        setAdmission(stored, ServerModel.ADMISSION_ADMITTED, "admit");
+        return serverCopy("host_checked_admitted").withArg("name", name);
+    }
+
+    /** @return whether the host is neither admitted nor cordoned: checking it may admit it */
+    private static boolean awaitsAdmission(Row row) {
+        return !ServerModel.ADMISSION_ADMITTED.equals(row.get(ServerModel.ADMISSION))
+            && !ServerModel.ADMISSION_CORDONED.equals(row.get(ServerModel.ADMISSION));
     }
 
     private static void setAdmission(Row row, String admission, String action) {

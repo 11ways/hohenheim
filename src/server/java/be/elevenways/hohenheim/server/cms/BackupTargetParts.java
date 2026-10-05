@@ -9,6 +9,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
@@ -117,13 +118,12 @@ public final class BackupTargetParts {
         return PanelResource.builder(HohenheimIds.id("backup_target"), SLUG, SUBJECT)
             .label(Microcopy.of("plural").withFilter("scope", "backup_target"))
             .recordLabel(Microcopy.of("singular").withFilter("scope", "backup_target"))
-            // Demoted out of the sidebar, so this sentence reaches a reader through the panel index and the
-            // related-pages menu of the list that names it.
+            // A sidebar entry of its own in System, beside Settings, whose control-plane backup setting names one of
+            // these targets: without it the page was reachable only from the instance list's related pages.
             .description(CmsSupport.navHint("backup_target"))
-            .showInNav(false)
             .icon(Icon.of("box-archive"))
-            .navGroup(HohenheimPanel.DEPLOY_GROUP)
-            .navOrder(18)
+            .navGroup(NavGroup.SYSTEM)
+            .navOrder(94)
             .reads(ResourceReads.rows())
             // The name is the only text a target carries; the credentials live in a secret settings blob.
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()

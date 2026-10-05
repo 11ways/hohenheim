@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -220,5 +221,38 @@ public final class OwnedInstances {
     public static boolean isPlacementGated(@NonNull InstanceKindHandler handler,
                                            @NonNull Row instance) {
         return handler.tenantAuthored() || isTenantAttributed(instance);
+    }
+
+    /**
+     * Why this instance's next start or deploy will be refused by its host, or null: the deploy lane's OWN gate
+     * (HostAdmission.instancePlacementRefusal) behind the deploy lane's OWN predicate ({@link #isPlacementGated}), so
+     * the overview's notice, the power buttons' availability and the refusal itself cannot drift.
+     *
+     * AIDEV-NOTE: it explains DECLARED preconditions only; controller contention is a runtime event and stays a toast.
+     * The catch is not decoration: InstanceMigrations records that ONE unaddressable host used to 500 the whole
+     * migrate page, and a bad host record must never kill an instance's landing page or a list of its buttons.
+     */
+    public static @Nullable Microcopy placementRefusal(@NonNull Row instance) {
+        try {
+            InstanceKindHandler handler = InstanceKinds.getHandler(instance.get(InstanceModel.KIND));
+            // An unknown kind is its own story, and resolving it would throw here.
+            if (handler == null || !isPlacementGated(handler, instance)) {
+                return null;
+            }
+            return HostAdmission.instancePlacementRefusal(
+                ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID)),
+                handler.isolation(), instance.get(InstanceModel.QUOTA_BUCKET));
+        } catch (RuntimeException failed) {
+            return null;
+        }
+    }
+
+    /**
+     * @param delegated whether the reader is on a surface where hosts are operator inventory (the tenant panel, a
+     *                  non-operator caller): the host-naming refusal becomes the host-free sentence
+     * @return the refusal as the reader may see it
+     */
+    public static @NonNull Microcopy placementReason(@NonNull Microcopy refusal, boolean delegated) {
+        return delegated ? Microcopy.of("deploy_blocked_delegated").withFilter("scope", "instance_overview") : refusal;
     }
 }

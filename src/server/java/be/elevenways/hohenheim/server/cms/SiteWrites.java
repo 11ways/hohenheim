@@ -81,7 +81,7 @@ public final class SiteWrites {
             .presentation(Select.Presentation.CARDS)
             .clearable(false)
             .build())
-        // The pick resolves ONLY while the chosen upstream kind is the instance one (disabled otherwise), and offers
+        // The pick is SHOWN only while the chosen upstream kind is the instance one (its showWhen below), and offers
         // only kinds whose serving container publishes a port. An instance is never created on a whim from inside a
         // site form, so there is no "create new" here. The submit is re-narrowed by this same form's coercion.
         .add(RelationPick.of(SiteModel.INSTANCE_ID, InstanceModel.MODEL_ID)
@@ -112,6 +112,11 @@ public final class SiteWrites {
             SiteModel.DESCRIPTION.getName(),
             SiteModel.AUTH_PROVIDER_ID.getName(),
             SiteModel.ACCESS_LIST_ID.getName()))
+        // AIDEV-NOTE: an inactive entry is omitted from the submit, so a full save of a site switched AWAY from the
+        // instance kind writes its instance_id as null: the link is cleared with the kind, and switching back asks
+        // for it again. That is what keeps hiding the pick from being the one-way door the 2026-09-08 note feared.
+        .showWhen(SiteModel.INSTANCE_ID.getName(), SiteModel.UPSTREAM_KIND.getName(),
+            InstanceUpstreamKind.ID.toString())
         .build();
 
     /** The delegated form: only non-execution metadata is editable on /manage. */

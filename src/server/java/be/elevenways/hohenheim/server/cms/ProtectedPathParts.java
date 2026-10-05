@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceAuthority;
@@ -18,13 +19,17 @@ import be.elevenways.zenit.cms.common.resource.ResourceReads;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.cms.server.render.table.TableStateTranslator;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
+
+import java.util.Objects;
 
 /**
  * The protected paths' shared parts, and the admin protected-path resource and its /manage twin built from them.
@@ -42,6 +47,9 @@ public final class ProtectedPathParts {
 
     /** The entry slug both twins share, which the site's tab and the parent links name. */
     public static final String SLUG = "protected-paths";
+
+    /** The virtual column saying whether the path is really guarded. */
+    static final String PROTECTION_COLUMN = "protection";
 
     private static final SubjectType<Row> SUBJECT = SubjectType.record(ProtectedPathModel.MODEL_ID);
 
@@ -74,6 +82,8 @@ public final class ProtectedPathParts {
                 .label(FieldLabels.labelForRelation(ProtectedPathModel.ACCESS_LIST_ID))
                 .relation(RelationPick.of(ProtectedPathModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID).build())
                 .build())
+            .column(ColumnSpec.virtual(PROTECTION_COLUMN, pathText("protection"))
+                .renderer(TableStateTranslator.ENUM_BADGE_RENDERER).build())
             .column(ColumnSpec.fromField(ProtectedPathModel.SITE_ID)
                 .label(FieldLabels.labelForRelation(ProtectedPathModel.SITE_ID))
                 .relation(RelationPick.of(ProtectedPathModel.SITE_ID, SiteModel.MODEL_ID).build())
@@ -82,10 +92,10 @@ public final class ProtectedPathParts {
         FormSpec form = FormSpec.builder()
             .add(RelationPick.of(ProtectedPathModel.SITE_ID, SiteModel.MODEL_ID).build())
             .add(ProtectedPathModel.PATH)
-            // Creating a list from inside this pick stays off for the site form's reason: an empty list going live
-            // here would GUARD NOTHING while reading as protection.
-            .add(RelationPick.of(ProtectedPathModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID)
-                .creatable(false).build())
+            // A list created from inside this pick starts empty, and the invariant refuses pointing a path at a list
+            // that lets everyone through, naming it: the operator adds a rule to it and saves again. That beats the
+            // dead end of a pick saying "No results found" with no way forward.
+            .add(RelationPick.of(ProtectedPathModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID).build())
             .build();
         return PanelResource.builder(HohenheimIds.id(id), SLUG, SUBJECT)
             .label(Microcopy.of("plural").withFilter("scope", "protected_path"))
@@ -97,10 +107,28 @@ public final class ProtectedPathParts {
             .parent(ResourceParent.of(HohenheimSlugs.SITES, ProtectedPathModel.SITE_ID).tab(SLUG))
             .reads(ResourceReads.rows())
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()
-                .search(ProtectedPathModel.PATH).build())
+                .search(ProtectedPathModel.PATH)
+                .computed(Objects.requireNonNull(table.column(PROTECTION_COLUMN)),
+                    (path, request) -> protectionBadge(path))
+                .build())
             .form(ResourceForm.<Row>of(form).build())
             .writes(ResourceMutations.rows().create().update().delete().build())
             .authority(authority());
+    }
+
+    /**
+     * "Protected" or "Open to everyone": the gate's own reading of the path's list, so a path whose list lets every
+     * visitor through never reads as protection.
+     */
+    static @NonNull EnumBadgeState protectionBadge(@NonNull Row path) {
+        return ProtectedPathInvariant.isOpen(path)
+            ? new EnumBadgeState("open", pathText("open_to_everyone"), null, "lock-open", BadgeVariant.DESTRUCTIVE,
+                null, true)
+            : new EnumBadgeState("protected", pathText("protected"), null, "lock", BadgeVariant.SUCCESS, null, true);
+    }
+
+    private static @NonNull Microcopy pathText(@NonNull String key) {
+        return Microcopy.of(key).withFilter("scope", "protected_path");
     }
 
     /**

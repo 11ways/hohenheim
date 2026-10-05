@@ -30,6 +30,7 @@ import be.elevenways.zenit.cms.server.page.CmsRecordSources;
 import be.elevenways.zenit.common.data.RecordCreateProvider;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
+import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.security.PermissionComputation;
@@ -249,10 +250,15 @@ public final class ManagePanel extends Panel {
         // panel resource's source, so the tenant list is never widened to offer a shared row.
         // An explicit override for the same two-panel shadowing reason as site_domain
         // (the admin access-list entry and its /manage twin, AccessListParts, both expose the model).
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(AccessListModel.class)
+        // It keeps the facet the derived default had: inline create through the admin entry, offered to whoever holds
+        // admin access (an operator in a protected path's pick; never a tenant). Without it every pick over lists read
+        // "No results found" on an installation that had none yet.
+        Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN),
+            "the admin panel is registered before its sources");
+        RecordSourceRegistry.INSTANCE.override(adminCreatable(RecordSource.of(AccessListModel.class)
             .search(AccessListModel.NAME)
             .scopedBy(TenantScopes.USABLE_ACCESS_LISTS)
-            .referencePolicy()
+            .referencePolicy(), admin, HohenheimSlugs.ACCESS_LISTS)
             .build());
 
         // Protected paths: child rows scoped by their parent SITE, like domains.
@@ -289,14 +295,7 @@ public final class ManagePanel extends Panel {
         var dnsRecords = RecordSource.of(DnsRecordModel.class)
             .search(DnsRecordModel.NAME, DnsRecordModel.VALUE)
             .scopedBy(TenantScopes.DNS_RECORDS);
-        Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN),
-            "the admin panel is registered before its sources");
-        PanelEntry dnsEntry = admin.entryBySlug(DnsRecordParts.SLUG);
-        RecordCreateProvider dnsCreate = dnsEntry != null ? CmsRecordSources.createProviderFor(admin, dnsEntry) : null;
-        if (dnsCreate != null) {
-            dnsRecords.creatable(dnsCreate, HohenheimSources.ADMIN_ACCESS);
-        }
-        RecordSourceRegistry.INSTANCE.override(dnsRecords.build());
+        RecordSourceRegistry.INSTANCE.override(adminCreatable(dnsRecords, admin, DnsRecordParts.SLUG).build());
 
         // Certificates: this REPLACES the common ADMIN_ACCESS-gated registration (which the
         // browser registry keeps, legitimately -- the scope below reads zenit-auth record
@@ -413,5 +412,21 @@ public final class ManagePanel extends Panel {
      */
     static boolean hasManageScope(@NonNull AccessContext ctx) {
         return HohenheimAccess.managesAnySite(ctx);
+    }
+
+    /**
+     * Inline create through an admin entry's own create form, offered only to whoever holds the admin panel's access:
+     * the explicit sources here serve both panels, and the admin entry's create endpoint refuses everyone else.
+     *
+     * @return the builder, creatable when the entry offers an inline create
+     */
+    private static <M extends Model> RecordSource.@NonNull Builder<M> adminCreatable(
+            RecordSource.@NonNull Builder<M> builder, @NonNull Panel admin, @NonNull String entrySlug) {
+        PanelEntry entry = admin.entryBySlug(entrySlug);
+        RecordCreateProvider create = entry != null ? CmsRecordSources.createProviderFor(admin, entry) : null;
+        if (create != null) {
+            builder.creatable(create, HohenheimSources.ADMIN_ACCESS);
+        }
+        return builder;
     }
 }

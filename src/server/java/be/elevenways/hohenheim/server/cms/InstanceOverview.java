@@ -11,9 +11,6 @@ import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.ports.PortLedger;
-import be.elevenways.hohenheim.server.host.HostAdmission;
-import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
-import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
@@ -146,9 +143,9 @@ public final class InstanceOverview {
         }
 
         // The DECLARED precondition that will refuse the next deploy, stated where the
-        // operator already is. Deploy stays offered on purpose: the button is what proves
-        // the explanation is about a host, not about their own authority.
-        InstanceBlockerView blocker = deployBlockerOf(conduit, instance, serverId, delegated);
+        // operator already is; the power buttons read the same reason as their availability,
+        // so they are offered dead saying this instead of refusing after the click.
+        InstanceBlockerView blocker = deployBlockerOf(conduit, instance, delegated);
         if (blocker.blocked()) {
             String hostUrl = blocker.hostLinkable() && !delegated
                 ? CmsRoutes.subpage(panelSlug, "servers", serverId, ServerOverviewState.SLUG).toUrl()
@@ -291,55 +288,20 @@ public final class InstanceOverview {
     // -- deploy blocker --------------------------------------------------------------
 
     /**
-     * Why this instance's next deploy will be refused, or {@link InstanceBlockerView#CLEAR}.
-     *
-     * AIDEV-NOTE: this asks the deploy lane's OWN gate (HostAdmission.instancePlacementRefusal)
-     * behind the deploy lane's OWN predicate (OwnedInstances.isPlacementGated), so the
-     * explanation and the refusal cannot drift. It deliberately does NOT call
-     * InstanceService.resolve (which builds variables, a DB environment, a spec and a runtime
-     * client, and throws refusals of its own) or HostLeases.requireFence (which ACQUIRES a
-     * lease). This page explains DECLARED preconditions; controller contention is a runtime
-     * event and stays a toast.
-     *
-     * The catch is not decoration: InstanceMigrations records that ONE unaddressable host
-     * used to 500 the whole migrate page, and a bad host record must never kill an instance's
-     * landing page.
+     * Why this instance's next deploy will be refused, or {@link InstanceBlockerView#CLEAR}: the one reason source
+     * ({@link OwnedInstances#placementRefusal}) the power buttons' availability reads too.
      */
     private static @NonNull InstanceBlockerView deployBlockerOf(@NonNull Conduit conduit,
                                                                 @NonNull Row instance,
-                                                                int serverId,
                                                                 boolean delegated) {
-        try {
-            InstanceKindHandler handler = InstanceKinds.getHandler(instance.get(InstanceModel.KIND));
-
-            // An unknown kind is its own story, and resolving it would throw here.
-            if (handler == null || !OwnedInstances.isPlacementGated(handler, instance)) {
-                return InstanceBlockerView.CLEAR;
-            }
-
-            Microcopy refusal = HostAdmission.instancePlacementRefusal(serverId,
-                handler.isolation(), instance.get(InstanceModel.QUOTA_BUCKET));
-
-            if (refusal == null) {
-                return InstanceBlockerView.CLEAR;
-            }
-
-            // The host-free sentence is decided by the SURFACE, exactly as the host fact and
-            // the install error are above: an operator opening /manage must see what a tenant
-            // sees there. Every placement refusal interpolates the host's NAME, which is
-            // operator inventory this panel blanks everywhere else.
-            if (delegated) {
-                return new InstanceBlockerView(true,
-                    Microcopy.of("deploy_blocked_delegated")
-                        .withFilter("scope", "instance_overview")
-                        .resolve(conduit.getLocales(), conduit.getMessageResolver()), false);
-            }
-
-            return new InstanceBlockerView(true,
-                refusal.resolve(conduit.getLocales(), conduit.getMessageResolver()), true);
-        } catch (RuntimeException failed) {
+        Microcopy refusal = OwnedInstances.placementRefusal(instance);
+        if (refusal == null) {
             return InstanceBlockerView.CLEAR;
         }
+        // The host-free sentence is decided by the SURFACE: every placement refusal interpolates the host's NAME,
+        // which is operator inventory the delegated panel blanks everywhere else.
+        return new InstanceBlockerView(true, OwnedInstances.placementReason(refusal, delegated)
+            .resolve(conduit.getLocales(), conduit.getMessageResolver()), !delegated);
     }
 
     // -- disk ------------------------------------------------------------------------

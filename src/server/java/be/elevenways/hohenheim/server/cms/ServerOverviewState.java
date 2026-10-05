@@ -63,6 +63,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
@@ -321,14 +322,44 @@ public final class ServerOverviewState {
     // -- preflight -----------------------------------------------------------------
 
     /** The whole stored report as one payload: kernel verdict, checks, facts and stamp. */
-    private static @NonNull HostPreflightReportView preflightReport(@NonNull Row server) {
+    static @NonNull HostPreflightReportView preflightReport(@NonNull Row server) {
         Instant probedAt = server.get(ServerModel.PROBED_AT);
+        List<PreflightCheckView> mustPass = new ArrayList<>();
+        List<PreflightCheckView> advice = new ArrayList<>();
+        for (PreflightCheckView check : preflightChecks(server)) {
+            (check.required() ? mustPass : advice).add(check.withFix(fixFor(check)));
+        }
+        // What blocks comes first; within each half the stored order stays.
+        Comparator<PreflightCheckView> failingFirst = Comparator.comparing(check -> !check.notPassing());
+        mustPass.sort(failingFirst);
+        advice.sort(failingFirst);
         return new HostPreflightReportView(
             kernelIsolationViewOf(server),
-            preflightChecks(server),
+            mustPass,
+            advice,
             preflightFacts(server),
             probedAt != null ? probedAt.toString() : null,
             Boolean.TRUE.equals(server.get(ServerModel.PREFLIGHT_OK)));
+    }
+
+    /**
+     * What an operator does about a check that did not pass, or null.
+     *
+     * AIDEV-NOTE: the check names are the batteries' own declarations (HostPreflight.DOCKER_BATTERY,
+     * IncusPreflight.BATTERY); HostCheckAndAdmitJourneyTest asserts every one of them has this copy in both
+     * shipped catalogs, so a new check fails the build until it says how to fix it.
+     */
+    static @Nullable Microcopy fixFor(@NonNull PreflightCheckView check) {
+        if (!check.notPassing() || !(HostPreflight.DOCKER_BATTERY.contains(check.name())
+                || IncusPreflight.BATTERY.contains(check.name()))) {
+            return null;
+        }
+        return fixCopy(check.name());
+    }
+
+    /** @return the how-to-fix sentence of one declared check */
+    static @NonNull Microcopy fixCopy(@NonNull String checkName) {
+        return Microcopy.of("fix_" + checkName).withFilter("scope", "server_overview");
     }
 
     /** Every stored check with its own status/required/detail/timestamp. */
