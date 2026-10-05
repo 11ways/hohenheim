@@ -36,7 +36,9 @@ import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.cms.common.resource.RelatedPage;
 import be.elevenways.zenit.cms.common.resource.ResourceAuthority;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
+import be.elevenways.zenit.cms.common.resource.RecordLead;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
+import be.elevenways.zenit.cms.common.resource.ResourceHealth;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
@@ -106,6 +108,7 @@ public final class InstanceParts {
     public static @NonNull PanelResource<Row> admin() {
         TableSpec<Row> table = adminTable();
         return entry("instance")
+            .health(AppHealth.instances(false))
             // Soft-deleted rows are invisible (the model's soft-delete behaviour hides them from every default find);
             // everything else is LISTED, generated rows included -- with a "Managed by" column instead of a hole in
             // the fleet. The one exception is release rows: one application deploys releases faster than an operator
@@ -166,6 +169,7 @@ public final class InstanceParts {
      */
     public static @NonNull PanelResource<Row> manage() {
         return entry("manage_instance")
+            .health(AppHealth.instances(true))
             // Admins see every live instance; everyone else only the ones the walk confirms view on, which is what
             // makes an unowned id read as MISSING rather than forbidden. Generated (product-tier-owned) instances stay
             // off the delegated surface too: their one UI is the owning record's own page.
@@ -233,6 +237,8 @@ public final class InstanceParts {
     private static ResourceForm.@NonNull Builder<Row> form(@NonNull FormSpec spec) {
         return ResourceForm.<Row>of(spec)
             .landingTab(InstanceOverview.SLUG)
+            .lead((instance, access) -> instance.get(InstanceModel.ID) == null ? null
+                : new RecordLead(AppOverview.instanceLead(instance, access.conduit()), null))
             .inlineEditable(InstanceModel.NAME, InstanceModel.CRASH_POLICY)
             // Saving a new memory or CPU ceiling RECREATES the workload's container, so it is briefly down; on the
             // create form there is nothing to recreate.
@@ -332,6 +338,7 @@ public final class InstanceParts {
             // The kind qualifies the name and the install state qualifies the status; both stay declared (and
             // filterable) so the picker and the filter strip keep them.
             .column(ColumnSpec.fromField(InstanceModel.NAME).filterable().subtext("kind").build())
+            .column(ResourceHealth.column())
             .column(ColumnSpec.fromField(InstanceModel.KIND).filterable().hidden().build())
             .column(ColumnSpec.fromField(InstanceModel.SERVER_ID)
                 .relation(RelationPick.of(InstanceModel.SERVER_ID, ServerModel.MODEL_ID).build()).build())

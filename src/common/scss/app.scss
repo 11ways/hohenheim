@@ -338,13 +338,68 @@
     // section widget and has to claim the dashboard grid's full width -- the cards
     // inside it lay themselves out, exactly as the dashboard bands do.
     .hh-server-overview,
-    .hh-instance-overview {
+    .hh-app-overview {
         grid-column: 1 / -1;
         min-width: 0;
     }
 
+    // An app's overview (AppOverview): the action row across the top, a wide column for what visitors reach and what
+    // the workload uses, a narrow one for its facts and history. One column on a narrow screen.
+    .hh-app-overview {
+        display: grid;
+        grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+        gap: var(--pl-space-md);
+        align-items: start;
+
+        > .hh-app-top {
+            grid-column: 1 / -1;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: var(--pl-space-sm);
+
+            > pl-alert {
+                flex-basis: 100%;
+            }
+        }
+
+        > .hh-app-main,
+        > .hh-app-side {
+            display: flex;
+            flex-direction: column;
+            gap: var(--pl-space-md);
+            min-width: 0;
+        }
+
+        @media (max-width: 60rem) {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
+
+    .hh-app-card-header {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--pl-space-sm);
+    }
+
+    .hh-app-card-glyph {
+        display: inline-flex;
+        color: var(--pl-color-text-muted);
+    }
+
+    .hh-app-card-stack {
+        display: flex;
+        flex-direction: column;
+        gap: var(--pl-space-md);
+    }
+
+    .hh-app-usage-label {
+        font-size: var(--pl-font-size-sm);
+    }
+
     .hh-server-overview,
-    .hh-instance-overview,
     .hh-instance-migrate {
         .hh-overview-card {
             margin-bottom: var(--pl-space-md);

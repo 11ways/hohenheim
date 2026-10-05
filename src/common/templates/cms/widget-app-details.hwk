@@ -1,0 +1,10 @@
+{#- An app's facts, drawn by the framework's fact list inside the card. -#}
+{% declare widget: WidgetInstance %}
+{% declare data: List<WidgetFact> = null %}
+{% let title = t("details", scope: "app_overview") %}
+<pl-card class="widget hh-app-card" data-app-card="details">
+    {% render "hohenheim:cms/app-card-header" var:title=title %}
+    <pl-card-content>
+        {% render "zenitwidget:widget-display/fact-list" var:widget=widget var:data=data %}
+    </pl-card-content>
+</pl-card>

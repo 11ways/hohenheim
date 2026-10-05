@@ -45,8 +45,8 @@ class InstanceOverviewTest extends HohenheimTestBase {
         instanceId = null;
     }
 
-    /** The deploy-blocker alert's own title copy, which identifies the band. */
-    private static final String BLOCKER_TITLE = "This instance cannot start yet";
+    /** The health verdict's headline for a workload its host refuses (AppHealth), which identifies the band. */
+    private static final String BLOCKER_TITLE = "overview-instance cannot start yet";
 
     private int instance() {
         if (instanceId != null) {
@@ -285,8 +285,8 @@ class InstanceOverviewTest extends HohenheimTestBase {
             //    the block" from "always shows a warning" -- and admission alone is not
             //    enough: the gate also asks for identity, posture, preflight and contact.
             HostFixtures.admitLocal();
-            // The banner is the framework's alert widget now, so it is identified by the
-            // copy it carries rather than by a hand-written data attribute.
+            // The explanation is the record's health band now (the framework draws the
+            // resource's verdict first), identified by the headline it carries.
             assertThat(adminGet(overviewUrl()).body())
                 .as("step 1: an admitted host produces no blocker banner")
                 .doesNotContain(BLOCKER_TITLE);
@@ -302,7 +302,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
                     + " so the only explanation is the toast that follows the click")
                 .contains(BLOCKER_TITLE);
 
-            // 3. It points at the host whose preflight/admit fixes it -- an explanation
+            // 3. It points at the host whose Check and admit fixes it -- an explanation
             //    with no lever is only half an answer.
             assertThat(blocked)
                 .as("step 3: and links to the host that must be fixed")
@@ -361,8 +361,8 @@ class InstanceOverviewTest extends HohenheimTestBase {
             // 2. The band renders, and links this instance's entry.
             String body = adminGet(overviewUrl()).body();
             assertThat(body)
-                .as("step 2: the overview carries a recent-activity band")
-                .contains("Recent activity");
+                .as("step 2: the overview carries a Recent card")
+                .contains("data-app-card=\"recent\"");
             assertThat(body)
                 .as("step 2: it links this instance's own activity entry")
                 .contains("/admin/activity/" + mine);

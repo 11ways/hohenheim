@@ -64,6 +64,11 @@ public final class HohenheimTemplateIds {
     public static final Identifier WIDGET_HOST_WORKLOADS = Identifier.of("hohenheim", "cms/widget-host-workloads");
     public static final Identifier WIDGET_INSTANCE_ENDPOINTS =
         Identifier.of("hohenheim", "cms/widget-instance-endpoints");
+    public static final Identifier WIDGET_APP_ADDRESSES = Identifier.of("hohenheim", "cms/widget-app-addresses");
+    public static final Identifier WIDGET_APP_PROTECTION = Identifier.of("hohenheim", "cms/widget-app-protection");
+    public static final Identifier WIDGET_APP_RESOURCES = Identifier.of("hohenheim", "cms/widget-app-resources");
+    public static final Identifier WIDGET_APP_DETAILS = Identifier.of("hohenheim", "cms/widget-app-details");
+    public static final Identifier WIDGET_APP_RECENT = Identifier.of("hohenheim", "cms/widget-app-recent");
 
     // List-cell partials; a column names one through its String renderer.
     public static final String CELL_ACTIVITY_RECORD = "hohenheim:cms/cell/activity-record";

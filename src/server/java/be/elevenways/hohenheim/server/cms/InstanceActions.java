@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
@@ -19,6 +20,7 @@ import be.elevenways.hohenheim.server.instance.InstanceTemplateCapture;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
@@ -53,6 +55,9 @@ import java.util.List;
  */
 final class InstanceActions {
 
+    /** The health band's fix for a blocked instance ({@link AppHealth}): its host's page, where Check and admit lives. */
+    static final Identifier CHECK_HOST = HohenheimIds.id("instance_check_host");
+
     private InstanceActions() {
     }
 
@@ -64,7 +69,7 @@ final class InstanceActions {
         return List.of(deployAction(false), stopAction(), restartAction(), snapshotAction(), backupAction(),
             appUpdateAction(false), consoleCommandAction(), exposeAction(), rollbackAction(),
             installAction(), reinstallAction(), captureTemplateAction(), migrateAction(),
-            destroyWithDataAction());
+            destroyWithDataAction(), checkHostAction());
     }
 
     /**
@@ -174,6 +179,22 @@ final class InstanceActions {
                 .body(Microcopy.of("backup_confirm").withFilter("scope", "instance"))
                 .confirmLabel(Microcopy.of("backup_now").withFilter("scope", "instance"))
                 .build())
+            .build();
+    }
+
+    /**
+     * To the instance's host, offered while that host refuses the instance (the same refusal the power buttons read):
+     * the operator's way from "cannot start" to the check that admits the host.
+     */
+    private static @NonNull PanelAction<Row> checkHostAction() {
+        return PanelAction.<Row>link(CHECK_HOST, ActionPlacement.ROW)
+            .label(Microcopy.of("check_host").withFilter("scope", "app_health"))
+            .icon(Icon.of("stethoscope"))
+            .inlineOnRecord(false)
+            .inlineInRow(false)
+            .shownWhen((row, ctx) -> HohenheimAccess.isAdmin(ctx) && OwnedInstances.placementRefusal(row) != null)
+            .route((row, request) -> CmsRoutes.subpage(request.panelSlug(), "servers",
+                ServerModel.canonicalServerId(row.get(InstanceModel.SERVER_ID)), ServerOverviewState.SLUG))
             .build();
     }
 

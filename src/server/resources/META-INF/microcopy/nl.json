@@ -1122,6 +1122,10 @@
     {
       "text": "Verminderd",
       "scope": "stack_status"
+    },
+    {
+      "text": "Antwoordt, maar niet betrouwbaar",
+      "scope": "app_health"
     }
   ],
   "deploy": [
@@ -2744,10 +2748,6 @@
     {
       "text": "Recente activiteit",
       "scope": "dashboard"
-    },
-    {
-      "text": "Recente activiteit",
-      "scope": "instance_overview"
     },
     {
       "text": "Recente activiteit",
@@ -5081,8 +5081,8 @@
       "scope": "instance_migrate"
     },
     {
-      "text": "Toestand",
-      "scope": "instance_overview"
+      "text": "Status",
+      "scope": "app_overview"
     }
   ],
   "add_file": [
@@ -5262,6 +5262,10 @@
     {
       "text": "Actief",
       "scope": "preview_status"
+    },
+    {
+      "text": "Draait",
+      "scope": "app_health"
     }
   ],
   "unhealthy": {
@@ -5495,10 +5499,16 @@
     "text": "Kan deze site niet herstellen: {$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog {$days} dag(en) gereserveerd; een beheerder kan de quarantaine opheffen",
     "scope": "violations"
   },
-  "kind": {
-    "text": "Soort",
-    "scope": "field"
-  },
+  "kind": [
+    {
+      "text": "Soort",
+      "scope": "field"
+    },
+    {
+      "text": "Soort",
+      "scope": "app_overview"
+    }
+  ],
   "instance_kind": {
     "text": "Wat deze instantie draait; de soort bepaalt de instellingen en de runtime-driver",
     "scope": "help"
@@ -5534,6 +5544,10 @@
       "text": "Aangemaakt",
       "scope": "cms",
       "target": "activity_action"
+    },
+    {
+      "text": "Aangemaakt",
+      "scope": "app_overview"
     }
   ],
   "error": [
@@ -6364,6 +6378,10 @@
     {
       "text": "Installatie mislukt",
       "scope": "install_state"
+    },
+    {
+      "text": "Installatie mislukt",
+      "scope": "app_health"
     }
   ],
   "reinstall_no_step": {
@@ -6689,10 +6707,16 @@
     "text": "Keuze",
     "scope": "variable_type"
   },
-  "install": {
-    "text": "Installatie uitvoeren",
-    "scope": "instance"
-  },
+  "install": [
+    {
+      "text": "Installatie uitvoeren",
+      "scope": "instance"
+    },
+    {
+      "text": "Installatie",
+      "scope": "app_overview"
+    }
+  ],
   "reinstall": {
     "text": "Herinstalleren",
     "scope": "instance"
@@ -6929,6 +6953,10 @@
     {
       "text": "Spamservice draait niet, dus er valt niets te stoppen.",
       "scope": "spamservice"
+    },
+    {
+      "text": "Draait niet",
+      "scope": "app_health"
     }
   ],
   "not_running_description": [
@@ -7176,10 +7204,16 @@
     "text": "Enkel loopback",
     "scope": "port_exposure"
   },
-  "public": {
-    "text": "Publiek",
-    "scope": "port_exposure"
-  },
+  "public": [
+    {
+      "text": "Publiek",
+      "scope": "port_exposure"
+    },
+    {
+      "text": "Openbaar",
+      "scope": "app_overview"
+    }
+  ],
   "instance_not_permitted": {
     "text": "Je mag deze actie niet uitvoeren op deze instantie",
     "scope": "violations"
@@ -9121,10 +9155,16 @@
     "text": "Console-uitvoer die van eerdere runs van deze instantie bewaard is.",
     "scope": "instance_console"
   },
-  "workload": {
-    "text": "Workload",
-    "scope": "instance_console"
-  },
+  "workload": [
+    {
+      "text": "Workload",
+      "scope": "instance_console"
+    },
+    {
+      "text": "Workload",
+      "scope": "app_overview"
+    }
+  ],
   "instance_crashed": [
     {
       "text": "Instantie {$name} vraagt aandacht",
@@ -9796,14 +9836,6 @@
   "checklist_deploy_detail": {
     "text": "Deploy start de workload op zijn host.",
     "scope": "onboarding_checklist"
-  },
-  "deploy_blocked": {
-    "text": "Deze instantie kan nog niet starten",
-    "scope": "instance_overview"
-  },
-  "deploy_blocked_fix": {
-    "text": "Los dit op bij host {$host}",
-    "scope": "instance_overview"
   },
   "deploy_blocked_delegated": {
     "text": "De host neemt op dit moment geen nieuwe workloads aan. Je beheerder moet dit oplossen.",
@@ -11227,10 +11259,6 @@
   "volume_quota_invalid": {
     "text": "De groottelimiet moet een positief aantal megabytes zijn",
     "scope": "violations"
-  },
-  "exposed_by": {
-    "text": "Beschikbaar via",
-    "scope": "instance_overview"
   },
   "status_confirmed": {
     "text": "Status bevestigd",
@@ -13015,11 +13043,17 @@
   "settings.spamservice.scoring.help": "Drempels voor spamverdicts",
   "settings.spamservice.reputation.help": "Downloadbare IP-informatiedatabases; een lege URL schakelt die bron uit",
   "settings.spamservice.events.help": "Bewaartermijn voor ontvangen beveiligingsgebeurtenissen",
-  "https_forced": {
-    "text": "HTTPS ingeschakeld",
-    "scope": "cms",
-    "target": "activity_action"
-  },
+  "https_forced": [
+    {
+      "text": "HTTPS ingeschakeld",
+      "scope": "cms",
+      "target": "activity_action"
+    },
+    {
+      "text": "HTTPS verplicht",
+      "scope": "app_overview"
+    }
+  ],
   "not_used": [
     {
       "text": "Niet gebruikt",
@@ -13050,6 +13084,10 @@
     {
       "text": "HTTPS is afgedwongen, maar dit adres heeft nog geen werkend certificaat.",
       "scope": "attention_detail"
+    },
+    {
+      "text": "HTTPS is verplicht, maar {$host} heeft geen werkend certificaat, dus elk bezoek eindigt in een fout.",
+      "scope": "app_health"
     }
   ],
   "get_certificate": {
@@ -13128,10 +13166,16 @@
     "text": "Host {$name} is nog niet toegelaten. Deze controles moeten eerst slagen: {$checks}. Op de pagina van de host staat wat je aan elk ervan doet.",
     "scope": "violations"
   },
-  "protection": {
-    "text": "Bescherming",
-    "scope": "protected_path"
-  },
+  "protection": [
+    {
+      "text": "Bescherming",
+      "scope": "protected_path"
+    },
+    {
+      "text": "Beveiliging",
+      "scope": "app_overview"
+    }
+  ],
   "protected": {
     "text": "Beschermd",
     "scope": "protected_path"
@@ -13285,5 +13329,157 @@
   "fix_container_seccomp": {
     "text": "Draai Incus-containers met seccomp-filtering ingeschakeld.",
     "scope": "server_overview"
+  },
+  "addresses": {
+    "text": "Adressen",
+    "scope": "app_overview"
+  },
+  "add_address": [
+    {
+      "text": "Adres toevoegen",
+      "scope": "app_overview"
+    },
+    {
+      "text": "Adres toevoegen",
+      "scope": "app_health"
+    }
+  ],
+  "no_addresses": {
+    "text": "Nog geen adres. Voeg er een toe zodat bezoekers het kunnen bereiken.",
+    "scope": "app_overview"
+  },
+  "protect_path": {
+    "text": "Pad beveiligen",
+    "scope": "app_overview"
+  },
+  "resources": {
+    "text": "Middelen",
+    "scope": "app_overview"
+  },
+  "details": {
+    "text": "Details",
+    "scope": "app_overview"
+  },
+  "recent": {
+    "text": "Recent",
+    "scope": "app_overview"
+  },
+  "main_address": {
+    "text": "Hoofdadres",
+    "scope": "app_overview"
+  },
+  "pattern_note": {
+    "text": "Past op meerdere namen",
+    "scope": "app_overview"
+  },
+  "pattern": {
+    "text": "Patroon",
+    "scope": "app_overview"
+  },
+  "list_admits_everyone": {
+    "text": "Toegangslijst {$list} laat iedereen binnen",
+    "scope": "app_overview"
+  },
+  "by_list": {
+    "text": "Toegangslijst {$list}",
+    "scope": "app_overview"
+  },
+  "everything_else": {
+    "text": "Al de rest",
+    "scope": "app_overview"
+  },
+  "switched_on": {
+    "text": "Ingeschakeld",
+    "scope": "app_overview"
+  },
+  "switched_off": [
+    {
+      "text": "Uitgeschakeld",
+      "scope": "app_overview"
+    },
+    {
+      "text": "Uitgeschakeld",
+      "scope": "app_health"
+    }
+  ],
+  "in_trash": {
+    "text": "In de prullenbak",
+    "scope": "app_health"
+  },
+  "switched_off_detail": {
+    "text": "Bezoekers krijgen geen antwoord tot het weer ingeschakeld is.",
+    "scope": "app_health"
+  },
+  "no_address": {
+    "text": "Nog geen adres",
+    "scope": "app_health"
+  },
+  "no_address_detail": {
+    "text": "Voeg een adres toe zodat bezoekers het kunnen bereiken.",
+    "scope": "app_health"
+  },
+  "error_page": {
+    "text": "Bezoekers krijgen een foutpagina",
+    "scope": "app_health"
+  },
+  "upstream_down": {
+    "text": "Wat het serveert, antwoordt niet.",
+    "scope": "app_health"
+  },
+  "workload_not_running": {
+    "text": "De workload {$name} draait niet.",
+    "scope": "app_health"
+  },
+  "path_open": {
+    "text": "{$path} is open voor iedereen",
+    "scope": "app_health"
+  },
+  "path_open_detail": {
+    "text": "De toegangslijst laat iedereen binnen, dus het pad is niet beveiligd.",
+    "scope": "app_health"
+  },
+  "degraded_detail": {
+    "text": "Sommige verzoeken naar wat het serveert, mislukken.",
+    "scope": "app_health"
+  },
+  "live_at": {
+    "text": "Live op {$address}",
+    "scope": "app_health"
+  },
+  "install_failed_detail": {
+    "text": "Installeer opnieuw zodra de oorzaak opgelost is.",
+    "scope": "app_health"
+  },
+  "cannot_start": {
+    "text": "{$name} kan nog niet starten",
+    "scope": "app_health"
+  },
+  "status_unknown": {
+    "text": "Status onbekend",
+    "scope": "app_health"
+  },
+  "stopped_after_error": {
+    "text": "Gestopt na een fout",
+    "scope": "app_health"
+  },
+  "not_running_detail": {
+    "text": "Deploy om het te starten.",
+    "scope": "app_health"
+  },
+  "fix_https": {
+    "text": "Certificaat aanvragen",
+    "scope": "app_health"
+  },
+  "fix_protection": {
+    "text": "Beveiliging herstellen",
+    "scope": "app_health"
+  },
+  "check_host": {
+    "text": "Host controleren",
+    "scope": "app_health"
+  },
+  "on_host": {
+    "text": "op {$host}",
+    "scope": "app_overview"
   }
 }

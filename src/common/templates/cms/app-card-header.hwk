@@ -1,0 +1,14 @@
+{#- The header of an app overview card: its title, and the one link the card offers (Add address, Protect a path)
+    at the header's end. No link renders no button: a reader who may not add one is not shown a door that refuses. -#}
+{% declare title: String %}
+{% declare linkLabel: String = null %}
+{% declare linkUrl: String = null %}
+{% declare linkIcon: String = null %}
+<pl-card-header>
+    <div class="hh-app-card-header">
+        <pl-card-title>{{ title }}</pl-card-title>
+        {% if linkUrl != null and linkLabel != null %}
+        <pl-button variant="outline" size="sm"><a href={% linkUrl %}>{% if linkIcon != null %}<pl-icon name={% linkIcon %} size="sm"></pl-icon>{% /if %}<span>{{ linkLabel }}</span></a></pl-button>
+        {% /if %}
+    </div>
+</pl-card-header>

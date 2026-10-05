@@ -44,6 +44,10 @@ import java.util.Map;
  * a host that is not admitted, so start, restart, install and reinstall carry {@code disabled=host_not_admitted} (the
  * tenant's start {@code deploy_blocked_delegated}), the overview notice's own reason. Only those five facts were
  * re-recorded.
+ *
+ * AIDEV-NOTE: intended difference, app health (W3a, 2026-10-05): the admin list gains the framework health column
+ * ({@code column health}, every later column one place on), and a workload its host refuses offers the
+ * {@code instance_check_host} link to that host, the health band's fix. Only those facts changed.
  */
 class InstanceSurfacesBrowserTest extends HohenheimTestBase {
 

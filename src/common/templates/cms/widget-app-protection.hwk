@@ -1,0 +1,26 @@
+{#- An app's protected paths. A path whose protection admits everyone is said as OPEN, never drawn as protected: that
+    green lock over an open door is the lie this card exists to stop telling. -#}
+{% declare widget: WidgetInstance %}
+{% declare data: AppProtectionCard = null %}
+{% let title = t("protection", scope: "app_overview") %}
+{% let protectLabel = t("protect_path", scope: "app_overview") %}
+{% let protectUrl = data != null ? data.protectUrl : null %}
+<pl-card class="widget hh-app-card" data-app-card="protection">
+    {% render "hohenheim:cms/app-card-header" var:title=title var:linkLabel=protectLabel var:linkUrl=protectUrl var:linkIcon="lock" %}
+    <pl-card-content>
+        <pl-list variant="default">
+            {% each data.rows as row %}
+            <pl-list-item data-app-protection={% row.path %} attr:data-app-protection-open={% row.open ? "1" : null %}>
+                <span slot="leading" class="hh-app-card-glyph"><pl-icon name={% row.open ? "triangle-exclamation" : row.guarded ? "key" : "globe" %} size="sm"></pl-icon></span>
+                <pl-list-item-title>{% if row.url != null %}<a href={% row.url %} data-row-link>{{ row.path }}</a>{% else %}{{ row.path }}{% /if %}</pl-list-item-title>
+                <pl-list-item-meta>{{ row.summary }}</pl-list-item-meta>
+                {% if row.open %}
+                <pl-list-item-trailing><pl-badge tone="quiet" variant="warning">{{ t("open_to_everyone", scope: "protected_path") }}</pl-badge></pl-list-item-trailing>
+                {% elseif row.guarded %}
+                <pl-list-item-trailing><pl-badge tone="quiet" variant="success">{{ t("protected", scope: "protected_path") }}</pl-badge></pl-list-item-trailing>
+                {% /if %}
+            </pl-list-item>
+            {% /each %}
+        </pl-list>
+    </pl-card-content>
+</pl-card>
