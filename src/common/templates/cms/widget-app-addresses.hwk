@@ -1,0 +1,26 @@
+{#- An app's addresses, each with whether HTTPS works for it (never whether it is "forced": a forced name without a
+    working certificate is the one red state). -#}
+{% declare widget: WidgetInstance %}
+{% declare data: AppAddressesCard = null %}
+{% let title = t("addresses", scope: "app_overview") %}
+{% let addLabel = t("add_address", scope: "app_overview") %}
+{% let addUrl = data != null ? data.addUrl : null %}
+<pl-card class="widget hh-app-card" data-app-card="addresses">
+    {% render "hohenheim:cms/app-card-header" var:title=title var:linkLabel=addLabel var:linkUrl=addUrl var:linkIcon="plus" %}
+    <pl-card-content>
+        {% if data != null and data.rows %}
+        <pl-list variant="default">
+            {% each data.rows as address %}
+            <pl-list-item data-app-address={% address.hostname %}>
+                <span slot="leading" class="hh-app-card-glyph"><pl-icon name="globe" size="sm"></pl-icon></span>
+                <pl-list-item-title>{% if address.url != null %}<a href={% address.url %} data-row-link>{{ address.hostname }}</a>{% else %}{{ address.hostname }}{% /if %}</pl-list-item-title>
+                {% if address.note != "" %}<pl-list-item-meta>{{ address.note }}</pl-list-item-meta>{% /if %}
+                <pl-list-item-trailing><pl-badge tone="quiet" variant={% address.variant %}>{{ address.state }}</pl-badge></pl-list-item-trailing>
+            </pl-list-item>
+            {% /each %}
+        </pl-list>
+        {% else %}
+        <p class="hh-muted" data-app-addresses-empty>{{ t("no_addresses", scope: "app_overview") }}</p>
+        {% /if %}
+    </pl-card-content>
+</pl-card>

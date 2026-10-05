@@ -389,11 +389,11 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
             .doesNotContain("No install step");
         String quietOverview = adminGet("/admin/instances/" + workspaceId
             + "/page/overview").body();
-        assertThat(quietOverview).as("step 2: nor one in the record's state band")
+        assertThat(quietOverview).as("step 2: nor one in the record's Details card")
             .doesNotContain("No install step");
         assertThat(quietOverview)
-            .as("step 2: the band itself still renders the states that DO say something")
-            .contains("widget-status-badges");
+            .as("step 2: the card itself still renders the states that DO say something")
+            .contains("data-app-card=\"details\"").contains("<pl-badge");
 
         try {
             // 3. FALSIFICATION: a pending install is a state an operator acts on, and it
@@ -404,7 +404,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
                 .as("step 3: a pending install still reads under the status pill")
                 .contains("Install pending");
             assertThat(adminGet("/admin/instances/" + workspaceId + "/page/overview").body())
-                .as("step 3: and in the state band")
+                .as("step 3: and in the Details card")
                 .contains("Install pending");
 
             // 4. FALSIFICATION 2: a failed install is never quietly dropped.

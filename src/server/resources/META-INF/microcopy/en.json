@@ -1122,6 +1122,10 @@
     {
       "text": "Degraded",
       "scope": "stack_status"
+    },
+    {
+      "text": "Answers, but not reliably",
+      "scope": "app_health"
     }
   ],
   "deploy": [
@@ -2744,10 +2748,6 @@
     {
       "text": "Recent activity",
       "scope": "dashboard"
-    },
-    {
-      "text": "Recent activity",
-      "scope": "instance_overview"
     },
     {
       "text": "Recent activity",
@@ -5081,8 +5081,8 @@
       "scope": "instance_migrate"
     },
     {
-      "text": "State",
-      "scope": "instance_overview"
+      "text": "Status",
+      "scope": "app_overview"
     }
   ],
   "add_file": [
@@ -5262,6 +5262,10 @@
     {
       "text": "Running",
       "scope": "preview_status"
+    },
+    {
+      "text": "Running",
+      "scope": "app_health"
     }
   ],
   "unhealthy": {
@@ -5495,10 +5499,16 @@
     "text": "Cannot restore this site: {$hostname} was recently released by another owner and stays reserved for {$days} more day(s); an administrator can lift the quarantine",
     "scope": "violations"
   },
-  "kind": {
-    "text": "Kind",
-    "scope": "field"
-  },
+  "kind": [
+    {
+      "text": "Kind",
+      "scope": "field"
+    },
+    {
+      "text": "Kind",
+      "scope": "app_overview"
+    }
+  ],
   "instance_kind": {
     "text": "What this instance runs; the kind decides its settings and its runtime driver",
     "scope": "help"
@@ -5534,6 +5544,10 @@
       "text": "Created",
       "scope": "cms",
       "target": "activity_action"
+    },
+    {
+      "text": "Created",
+      "scope": "app_overview"
     }
   ],
   "error": [
@@ -6364,6 +6378,10 @@
     {
       "text": "Install failed",
       "scope": "install_state"
+    },
+    {
+      "text": "Installation failed",
+      "scope": "app_health"
     }
   ],
   "reinstall_no_step": {
@@ -6689,10 +6707,16 @@
     "text": "Choice",
     "scope": "variable_type"
   },
-  "install": {
-    "text": "Run install",
-    "scope": "instance"
-  },
+  "install": [
+    {
+      "text": "Run install",
+      "scope": "instance"
+    },
+    {
+      "text": "Install",
+      "scope": "app_overview"
+    }
+  ],
   "reinstall": {
     "text": "Reinstall",
     "scope": "instance"
@@ -6929,6 +6953,10 @@
     {
       "text": "Spamservice is not running, so there is nothing to stop.",
       "scope": "spamservice"
+    },
+    {
+      "text": "Not running",
+      "scope": "app_health"
     }
   ],
   "not_running_description": [
@@ -7176,10 +7204,16 @@
     "text": "Loopback only",
     "scope": "port_exposure"
   },
-  "public": {
-    "text": "Public",
-    "scope": "port_exposure"
-  },
+  "public": [
+    {
+      "text": "Public",
+      "scope": "port_exposure"
+    },
+    {
+      "text": "Public",
+      "scope": "app_overview"
+    }
+  ],
   "instance_not_permitted": {
     "text": "You are not allowed to perform this action on this instance",
     "scope": "violations"
@@ -9121,10 +9155,16 @@
     "text": "Console output kept from earlier runs of this instance.",
     "scope": "instance_console"
   },
-  "workload": {
-    "text": "Workload",
-    "scope": "instance_console"
-  },
+  "workload": [
+    {
+      "text": "Workload",
+      "scope": "instance_console"
+    },
+    {
+      "text": "Workload",
+      "scope": "app_overview"
+    }
+  ],
   "instance_crashed": [
     {
       "text": "Instance {$name} needs attention",
@@ -9796,14 +9836,6 @@
   "checklist_deploy_detail": {
     "text": "Deploy starts the workload on its host.",
     "scope": "onboarding_checklist"
-  },
-  "deploy_blocked": {
-    "text": "This instance cannot start yet",
-    "scope": "instance_overview"
-  },
-  "deploy_blocked_fix": {
-    "text": "Fix this on host {$host}",
-    "scope": "instance_overview"
   },
   "deploy_blocked_delegated": {
     "text": "Its host is not accepting new workloads right now. Your operator has to clear this.",
@@ -11227,10 +11259,6 @@
   "volume_quota_invalid": {
     "text": "The size limit must be a positive number of megabytes",
     "scope": "violations"
-  },
-  "exposed_by": {
-    "text": "Exposed by",
-    "scope": "instance_overview"
   },
   "status_confirmed": {
     "text": "Status confirmed",
@@ -13015,11 +13043,17 @@
   "settings.spamservice.scoring.help": "Spam verdict thresholds",
   "settings.spamservice.reputation.help": "Downloadable IP intelligence databases; blank URLs disable that source",
   "settings.spamservice.events.help": "Ingested security-event retention",
-  "https_forced": {
-    "text": "HTTPS switched on",
-    "scope": "cms",
-    "target": "activity_action"
-  },
+  "https_forced": [
+    {
+      "text": "HTTPS switched on",
+      "scope": "cms",
+      "target": "activity_action"
+    },
+    {
+      "text": "HTTPS forced",
+      "scope": "app_overview"
+    }
+  ],
   "not_used": [
     {
       "text": "Not used",
@@ -13050,6 +13084,10 @@
     {
       "text": "HTTPS is forced, but this address has no working certificate yet.",
       "scope": "attention_detail"
+    },
+    {
+      "text": "HTTPS is forced, but {$host} has no working certificate, so every visit ends in an error.",
+      "scope": "app_health"
     }
   ],
   "get_certificate": {
@@ -13128,10 +13166,16 @@
     "text": "Host {$name} is not admitted yet. These checks must pass first: {$checks}. The host page lists what to do about each one.",
     "scope": "violations"
   },
-  "protection": {
-    "text": "Protection",
-    "scope": "protected_path"
-  },
+  "protection": [
+    {
+      "text": "Protection",
+      "scope": "protected_path"
+    },
+    {
+      "text": "Protection",
+      "scope": "app_overview"
+    }
+  ],
   "protected": {
     "text": "Protected",
     "scope": "protected_path"
@@ -13285,5 +13329,157 @@
   "fix_container_seccomp": {
     "text": "Run Incus containers with seccomp filtering enabled.",
     "scope": "server_overview"
+  },
+  "addresses": {
+    "text": "Addresses",
+    "scope": "app_overview"
+  },
+  "add_address": [
+    {
+      "text": "Add address",
+      "scope": "app_overview"
+    },
+    {
+      "text": "Add an address",
+      "scope": "app_health"
+    }
+  ],
+  "no_addresses": {
+    "text": "No address yet. Add one so visitors can reach it.",
+    "scope": "app_overview"
+  },
+  "protect_path": {
+    "text": "Protect a path",
+    "scope": "app_overview"
+  },
+  "resources": {
+    "text": "Resources",
+    "scope": "app_overview"
+  },
+  "details": {
+    "text": "Details",
+    "scope": "app_overview"
+  },
+  "recent": {
+    "text": "Recent",
+    "scope": "app_overview"
+  },
+  "main_address": {
+    "text": "Main address",
+    "scope": "app_overview"
+  },
+  "pattern_note": {
+    "text": "Matches several names",
+    "scope": "app_overview"
+  },
+  "pattern": {
+    "text": "Pattern",
+    "scope": "app_overview"
+  },
+  "list_admits_everyone": {
+    "text": "Access list {$list} lets everyone in",
+    "scope": "app_overview"
+  },
+  "by_list": {
+    "text": "Access list {$list}",
+    "scope": "app_overview"
+  },
+  "everything_else": {
+    "text": "Everything else",
+    "scope": "app_overview"
+  },
+  "switched_on": {
+    "text": "Switched on",
+    "scope": "app_overview"
+  },
+  "switched_off": [
+    {
+      "text": "Switched off",
+      "scope": "app_overview"
+    },
+    {
+      "text": "Switched off",
+      "scope": "app_health"
+    }
+  ],
+  "in_trash": {
+    "text": "In the trash",
+    "scope": "app_health"
+  },
+  "switched_off_detail": {
+    "text": "Visitors get no answer until it is switched on again.",
+    "scope": "app_health"
+  },
+  "no_address": {
+    "text": "No address yet",
+    "scope": "app_health"
+  },
+  "no_address_detail": {
+    "text": "Add an address so visitors can reach it.",
+    "scope": "app_health"
+  },
+  "error_page": {
+    "text": "Visitors get an error page",
+    "scope": "app_health"
+  },
+  "upstream_down": {
+    "text": "What it serves does not answer.",
+    "scope": "app_health"
+  },
+  "workload_not_running": {
+    "text": "Its workload {$name} is not running.",
+    "scope": "app_health"
+  },
+  "path_open": {
+    "text": "{$path} is open to everyone",
+    "scope": "app_health"
+  },
+  "path_open_detail": {
+    "text": "Its access list lets everyone in, so the path is not protected.",
+    "scope": "app_health"
+  },
+  "degraded_detail": {
+    "text": "Some requests to what it serves fail.",
+    "scope": "app_health"
+  },
+  "live_at": {
+    "text": "Live at {$address}",
+    "scope": "app_health"
+  },
+  "install_failed_detail": {
+    "text": "Install it again once the cause is fixed.",
+    "scope": "app_health"
+  },
+  "cannot_start": {
+    "text": "{$name} cannot start yet",
+    "scope": "app_health"
+  },
+  "status_unknown": {
+    "text": "Status unknown",
+    "scope": "app_health"
+  },
+  "stopped_after_error": {
+    "text": "Stopped after an error",
+    "scope": "app_health"
+  },
+  "not_running_detail": {
+    "text": "Deploy it to start it.",
+    "scope": "app_health"
+  },
+  "fix_https": {
+    "text": "Get a certificate",
+    "scope": "app_health"
+  },
+  "fix_protection": {
+    "text": "Fix protection",
+    "scope": "app_health"
+  },
+  "check_host": {
+    "text": "Check the host",
+    "scope": "app_health"
+  },
+  "on_host": {
+    "text": "on {$host}",
+    "scope": "app_overview"
   }
 }

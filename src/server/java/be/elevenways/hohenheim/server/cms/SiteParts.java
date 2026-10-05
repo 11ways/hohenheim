@@ -34,7 +34,9 @@ import be.elevenways.zenit.cms.common.resource.RelatedPage;
 import be.elevenways.zenit.cms.common.resource.ResourceArchive;
 import be.elevenways.zenit.cms.common.resource.ResourceAuthority;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
+import be.elevenways.zenit.cms.common.resource.RecordLead;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
+import be.elevenways.zenit.cms.common.resource.ResourceHealth;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
@@ -120,8 +122,11 @@ public final class SiteParts {
     /** @return the operator's site resource: every site, the full form, the trash and the history */
     public static @NonNull PanelResource<Row> admin() {
         return entry("site")
+            .health(AppHealth.sites(false))
             .list(adminList())
             .form(ResourceForm.<Row>of(SiteWrites.ADMIN_FORM)
+                .landingTab(AppOverview.SLUG)
+                .lead(SiteParts::lead)
                 // The instance pick shows only for the instance kind (SiteWrites.ADMIN_FORM's showWhen); switching a
                 // site away from that kind clears its link instead of leaving it unreachable.
                 .bindings(List.of())
@@ -141,7 +146,8 @@ public final class SiteParts {
             .archive(ResourceArchive.of(SiteWrites.RESTORE, SiteWrites.RESTORE_MANY, SiteWrites.PURGE,
                 SiteWrites.PURGE_MANY, ResourceAuthority.<Row>builder().delete(HohenheimPanel.ACCESS, null).build()))
             .actions(SiteActions.operator())
-            .tabs(ResourceTabs.<Row>of(List.of(DOMAINS, PROTECTED_PATHS, new SiteDevSessionsPage()))
+            .tabs(ResourceTabs.<Row>of(List.of(AppOverview.siteTab(), DOMAINS, PROTECTED_PATHS,
+                    new SiteDevSessionsPage()))
                 .withHistory().withContributions())
             .relatedPages(
                 // The hostname catalog itself: nav-hidden, so without this entry the only way to the cross-site
@@ -158,6 +164,7 @@ public final class SiteParts {
      */
     public static @NonNull PanelResource<Row> manage() {
         return entry("manage_site")
+            .health(AppHealth.sites(true))
             .scope(TenantScopes.SITES)
             // NAV-ONLY (zero granted sites hide the empty list); the route itself stays scoped.
             .hasInScopeRecords(ManagePanel::hasManageScope)
@@ -170,6 +177,8 @@ public final class SiteParts {
                 .search(SiteModel.NAME, SiteModel.SLUG, SiteModel.DESCRIPTION)
                 .build())
             .form(ResourceForm.<Row>of(SiteWrites.MANAGE_FORM)
+                .landingTab(AppOverview.SLUG)
+                .lead(SiteParts::lead)
                 .bindings(List.of(
                     ResourceFieldBinding.of(SiteModel.NAME.getName(), FieldAccess.ALWAYS_EDITABLE),
                     ResourceFieldBinding.of(SiteModel.ENABLED.getName(), FieldAccess.ALWAYS_EDITABLE),
@@ -181,7 +190,7 @@ public final class SiteParts {
             .actions(SiteActions.delegated())
             // The operator tabs a delegate needs plus the CONTRIBUTED ones (the generic access matrix, so a manage
             // holder can delegate from /manage); never the admin history.
-            .tabs(ResourceTabs.<Row>of(List.of(DOMAINS, PROTECTED_PATHS)).withContributions())
+            .tabs(ResourceTabs.<Row>of(List.of(AppOverview.siteTab(), DOMAINS, PROTECTED_PATHS)).withContributions())
             .build();
     }
 
@@ -211,6 +220,7 @@ public final class SiteParts {
             // The slug names this site in every generated path, container name and log line, so it reads under the
             // name instead of costing a column of its own.
             .column(ColumnSpec.fromField(SiteModel.NAME).filterable().subtext("slug").build())
+            .column(ResourceHealth.column())
             .column(ColumnSpec.fromField(SiteModel.SLUG).hidden().build())
             .column(ColumnSpec.virtual(HOSTNAMES_COLUMN, Microcopy.of("hostnames").withFilter("scope", "site"))
                 .renderer(HohenheimTemplateIds.CELL_SITE_HOSTNAMES).build())
@@ -262,6 +272,12 @@ public final class SiteParts {
      * render-time only, the submit still runs full coercion and the upstream-instance narrowing. A malformed prefill
      * reads as absent: the bare form renders.
      */
+    /** The line under a site's heading: what it serves; none on the create form. */
+    private static @Nullable RecordLead lead(@NonNull Row site, @NonNull AccessContext access) {
+        return site.get(SiteModel.ID) == null ? null
+            : new RecordLead(AppOverview.siteLead(site, access.conduit()), null);
+    }
+
     private static @NonNull Map<String, Object> createDefaults(@NonNull PanelRequest request) {
         Map<String, Object> values = new LinkedHashMap<>(SiteWrites.ADMIN_FORM.defaultValues());
         Conduit conduit = request.conduit();
@@ -324,7 +340,7 @@ public final class SiteParts {
         return Microcopy.of(key).withFilter("scope", "site").withArg("host", host);
     }
 
-    private static @NonNull List<Row> domainsOf(@NonNull Row site) {
+    static @NonNull List<Row> domainsOf(@NonNull Row site) {
         return Models.get(SiteDomainModel.class).findBySiteId(site.get(SiteModel.ID));
     }
 
@@ -350,19 +366,19 @@ public final class SiteParts {
             return new SiteTlsCell(SiteTlsCell.NOT_USED);
         }
         Set<String> working = CertificateCoverage.activeNames();
+        // The one red state is the health verdict's own rule, so this cell and the site's health can never disagree.
+        if (AppHealth.forcedWithoutCertificate(domains, working, false) != null) {
+            return new SiteTlsCell(SiteTlsCell.BROKEN);
+        }
         int exact = 0;
         int covered = 0;
         for (Row domain : domains) {
-            String hostname = domain.get(SiteDomainModel.HOSTNAME);
-            if (!SiteDomainModel.MATCH_EXACT.equals(
-                    SiteDomainModel.effectiveMatchType(hostname, domain.get(SiteDomainModel.MATCH_TYPE)))) {
+            if (!AppHealth.exact(domain)) {
                 continue;
             }
             exact++;
-            if (CertificateCoverage.covers(working, hostname)) {
+            if (CertificateCoverage.covers(working, domain.get(SiteDomainModel.HOSTNAME))) {
                 covered++;
-            } else if (Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL))) {
-                return new SiteTlsCell(SiteTlsCell.BROKEN);
             }
         }
         if (exact == 0) {
@@ -401,7 +417,7 @@ public final class SiteParts {
         return new SiteUpstreamCell(kindKey, label, icon, color, summary, instanceName, instanceUrl);
     }
 
-    private static boolean tlsPassthrough(@Nullable Row site) {
+    static boolean tlsPassthrough(@Nullable Row site) {
         return site != null && SiteModel.UPSTREAM_TLS_PASSTHROUGH.equals(site.get(SiteModel.UPSTREAM_KIND));
     }
 

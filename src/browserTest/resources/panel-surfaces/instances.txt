@@ -3,12 +3,13 @@ admission - verdict=admitted
 verb CREATE
 chrome - views=true advanced=true search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
 column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=kind relation=false
-column kind at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column server_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
-column status at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext=install_state relation=false
-column install_state at=4 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column managed_by at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column created_at at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column health at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column kind at=2 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column server_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column status at=4 shown=true hidden=false sortable=false filterable=true copyable=false subtext=install_state relation=false
+column install_state at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column managed_by at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 filter name at=0 kind=TEXT facet=false param=filter.name
 filter kind at=1 kind=SELECT facet=true param=filter.kind
 filter status at=2 kind=SELECT facet=true param=filter.status
@@ -173,12 +174,13 @@ verb UPDATE
 verb DELETE
 chrome - views=true advanced=true search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
 column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=kind relation=false
-column kind at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column server_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
-column status at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext=install_state relation=false
-column install_state at=4 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column managed_by at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column created_at at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column health at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column kind at=2 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column server_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column status at=4 shown=true hidden=false sortable=false filterable=true copyable=false subtext=install_state relation=false
+column install_state at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column managed_by at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 filter name at=0 kind=TEXT facet=false param=filter.name
 filter kind at=1 kind=SELECT facet=true param=filter.kind
 filter status at=2 kind=SELECT facet=true param=filter.status
@@ -192,13 +194,14 @@ row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= targe
 row hohenheim:start_instance at=1 verb=invoke band=inline style=DEFAULT disabled=host_not_admitted confirm= target=/{panel}/{entry}/invoke/hohenheim.start_instance?ids%3D{record}
 row hohenheim:expose_instance at=2 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/sites/new?upstream_kind%3Dhohenheim%253Ainstance&instance_id%3D{instance}
 row hohenheim:migrate_instance at=3 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/page/migrate
-row hohenheim:restart_instance at=4 verb=invoke band=overflow style=DEFAULT disabled=host_not_admitted confirm=style:DEFAULT,title:restart%252Cscope%3Dinstance,body:restart_confirm%252Cscope%3Dinstance,confirm:restart%252Cscope%3Dinstance,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/invoke/hohenheim.restart_instance?ids%3D{record}
-row hohenheim:snapshot_instance at=5 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:snapshot%252Cscope%3Dinstance,body:snapshot_confirm%252Cscope%3Dinstance,confirm:snapshot%252Cscope%3Dinstance,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/invoke/hohenheim.snapshot_instance?ids%3D{record}
-row hohenheim:backup_instance at=6 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:backup_now%252Cscope%3Dinstance,body:backup_confirm%252Cscope%3Dinstance,confirm:backup_now%252Cscope%3Dinstance,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/invoke/hohenheim.backup_instance?ids%3D{record}
-row hohenheim:install_instance at=7 verb=invoke band=overflow style=DEFAULT disabled=host_not_admitted confirm= target=/{panel}/{entry}/{record}/action/install_instance
-row hohenheim:reinstall_instance at=8 verb=invoke band=overflow style=DEFAULT disabled=host_not_admitted confirm=style:DEFAULT,title:reinstall%252Cscope%3Dinstance,body:reinstall_confirm%252Cscope%3Dinstance,confirm:reinstall%252Cscope%3Dinstance,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/reinstall_instance
-row hohenheim:destroy_instance_data at=9 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:delete_with_data%252Cscope%3Dinstance,body:delete_with_data_confirm%252Cscope%3Dinstance,confirm:delete_with_data%252Cscope%3Dinstance,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:%3Db14-instances-instance,input:false target=/{panel}/{entry}/{record}/action/destroy_instance_data
-row zenit:delete at=10 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dinstance,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row hohenheim:instance_check_host at=4 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/servers/1/page/overview
+row hohenheim:restart_instance at=5 verb=invoke band=overflow style=DEFAULT disabled=host_not_admitted confirm=style:DEFAULT,title:restart%252Cscope%3Dinstance,body:restart_confirm%252Cscope%3Dinstance,confirm:restart%252Cscope%3Dinstance,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/invoke/hohenheim.restart_instance?ids%3D{record}
+row hohenheim:snapshot_instance at=6 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:snapshot%252Cscope%3Dinstance,body:snapshot_confirm%252Cscope%3Dinstance,confirm:snapshot%252Cscope%3Dinstance,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/invoke/hohenheim.snapshot_instance?ids%3D{record}
+row hohenheim:backup_instance at=7 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:backup_now%252Cscope%3Dinstance,body:backup_confirm%252Cscope%3Dinstance,confirm:backup_now%252Cscope%3Dinstance,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/invoke/hohenheim.backup_instance?ids%3D{record}
+row hohenheim:install_instance at=8 verb=invoke band=overflow style=DEFAULT disabled=host_not_admitted confirm= target=/{panel}/{entry}/{record}/action/install_instance
+row hohenheim:reinstall_instance at=9 verb=invoke band=overflow style=DEFAULT disabled=host_not_admitted confirm=style:DEFAULT,title:reinstall%252Cscope%3Dinstance,body:reinstall_confirm%252Cscope%3Dinstance,confirm:reinstall%252Cscope%3Dinstance,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/reinstall_instance
+row hohenheim:destroy_instance_data at=10 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:delete_with_data%252Cscope%3Dinstance,body:delete_with_data_confirm%252Cscope%3Dinstance,confirm:delete_with_data%252Cscope%3Dinstance,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:%3Db14-instances-instance,input:false target=/{panel}/{entry}/{record}/action/destroy_instance_data
+row zenit:delete at=11 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dinstance,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
 inline name
 tab overview at=0 landing=true view=false
 tab console at=1 landing=false view=false

@@ -1,10 +1,12 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
@@ -14,12 +16,14 @@ import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.text.Slugs;
+import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Predicate;
 
 /**
  * THE site verbs, built once for both panels: the operator list and the delegated subset read the same builders, so
@@ -36,17 +40,54 @@ import java.util.Objects;
  */
 final class SiteActions {
 
+    /** The health band's fixes ({@link AppHealth}): each is offered exactly where its verdict says it applies. */
+    static final Identifier FIX_HTTPS = HohenheimIds.id("site_fix_https");
+    static final Identifier ADD_ADDRESS = HohenheimIds.id("site_add_address");
+    static final Identifier FIX_PROTECTION = HohenheimIds.id("site_fix_protection");
+
     private SiteActions() {
     }
 
-    /** The operator panel's placed operations, in the order the legacy row actions had. */
+    /** The operator panel's placed operations, in the order the legacy row actions had, then the health fixes. */
     static @NonNull List<PanelAction<Row>> operator() {
-        return List.of(enableAction(), disableAction(), cloneAction(), rollbackAction());
+        return List.of(enableAction(), disableAction(), cloneAction(), rollbackAction(), fixHttpsAction(),
+            addAddressAction(), fixProtectionAction());
     }
 
-    /** The delegated panel's subset: the two switches; the record-creating clone and the rollback stay operator acts. */
+    /**
+     * The delegated panel's subset: the two switches and the health fixes; the record-creating clone and the rollback
+     * stay operator acts.
+     */
     static @NonNull List<PanelAction<Row>> delegated() {
-        return List.of(enableAction(), disableAction());
+        return List.of(enableAction(), disableAction(), fixHttpsAction(), addAddressAction(), fixProtectionAction());
+    }
+
+    /** To the site's addresses, where each name forced without a certificate gets one. */
+    private static @NonNull PanelAction<Row> fixHttpsAction() {
+        return fixLink(FIX_HTTPS, "fix_https", "lock", SiteParts.DOMAINS_TAB, AppHealth::needsCertificate);
+    }
+
+    /** To the site's addresses, for a site visitors cannot reach because it answers on no name. */
+    private static @NonNull PanelAction<Row> addAddressAction() {
+        return fixLink(ADD_ADDRESS, "add_address", "plus", SiteParts.DOMAINS_TAB, AppHealth::needsAddress);
+    }
+
+    /** To the site's protected paths, for a path whose protection lets everyone in. */
+    private static @NonNull PanelAction<Row> fixProtectionAction() {
+        return fixLink(FIX_PROTECTION, "fix_protection", "lock", ProtectedPathParts.SLUG, AppHealth::hasOpenPath);
+    }
+
+    private static @NonNull PanelAction<Row> fixLink(@NonNull Identifier id, @NonNull String key, @NonNull String icon,
+                                                     @NonNull String tab, @NonNull Predicate<Row> applies) {
+        return PanelAction.<Row>link(id, ActionPlacement.ROW)
+            .label(Microcopy.of(key).withFilter("scope", "app_health"))
+            .icon(Icon.of(icon))
+            .inlineOnRecord(false)
+            .inlineInRow(false)
+            .shownWhen((site, access) -> applies.test(site))
+            .route((site, request) -> CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.SITES,
+                site.get(SiteModel.ID), tab))
+            .build();
     }
 
     private static @NonNull PanelAction<Row> enableAction() {

@@ -65,6 +65,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * (SiteWrites.ADMIN_FORM's showWhen). The page still renders it, wrapped as a conditional entry the browser toggles,
  * but the surface capture does not descend into conditional entries, so the admin site cases drop the
  * {@code instance_id} control and the later controls move up one place. Only those facts were re-recorded.
+ *
+ * AIDEV-NOTE: intended difference, app health (W3a, 2026-10-05): a site lands on its overview tab ({@code tab overview
+ * landing=true}, the app composition), the admin list gains the framework health column, and a site that answers on no
+ * name offers {@code site_add_address}, the health band's fix. Only those facts changed.
  */
 class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
 
