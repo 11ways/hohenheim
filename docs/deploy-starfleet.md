@@ -1631,3 +1631,47 @@ jar (a71787e8) expects the separate 011-017 rows. Stop the service, restore
 `tools/deploy-host.sh --rollback <target> --preflight <preflight dir>`.
 
 Pins stay at 010: test deploys never raise the mark (procedure step 8).
+
+
+## Deploy 2026-10-05: module-fit and the W1a HTTPS/certificate wave, starfleet and daystrom
+
+Jar: pushed build a357b201 (sha256 `8ce1a1d4...cf728bd5`, 15 stamp rows clean; zenit 5bab99b9,
+zenit-cms 0bd7529c). Both test installs had applied the 2026-09-30 M011 (checksum `d38f6fdb...`), and M011 has
+been EDITED since (module-fit: frozen instant scopes, schedule-step operation names, principal kinds, HostPattern
+respelling, target trust, lock versions, access-rule tree; W1a: `site_domains.force_ssl_auto`). Those edits are
+schema and data rewrites, so a ledger re-record (09-30 method) would leave the schema wrong.
+
+Replay instead, per host, with the old jar stopped: `sqlite3 .backup` to
+`/root/hohenheim-m011-replay-20261005/hohenheim.db.pre-revert`, then one guarded transaction returned the three
+additions the OLD M011 made to their M010 shape (drop `sites.trusted_upstream`, the `install_media_fetches` table
+and its index, `instances.workload_killed_at`; guarded to installs storing no trusted site and no fetch) and
+deleted the 011 ledger row (guarded by the old checksum). The old M011's data steps repeat safely. The boot then
+ran the NEW M011 whole, exactly the M010 upgrade path `HohenheimUpgradeJourneyTest` proves. starfleet's
+`sqlite3` is 3.34 (no DROP COLUMN), so its copy was reverted on the workstation and put back.
+
+starfleet also held 5 orphaned `auth_passwords` rows (deleted users 2-6, from before foreign keys were enforced);
+zenit-auth's `normalize_sqlite_instants` rebuild of that table refuses them, so the rehearsal failed on them. They
+were deleted in the same transaction, the delete `--foreign-key-orphans auth_passwords` performs (rows that only
+describe a gone parent). AN INSTALL WITH ORPHANS REFUSES THIS UPGRADE: run `--foreign-key-orphans` on a byte copy
+first and repair each table before a production deploy.
+
+Rehearsed before each live window: the reverted copy plus `--rehearse-migrations` green (26 applied), and its
+schema compared with a fresh install's: every column, type, nullability, default, foreign key and named index
+identical. Two framework-era differences predate this deploy and stay: six auth/microcopy timestamp columns keep
+the `CURRENT_TIMESTAMP` default (fresh installs: ISO `strftime`), and older tables carry sqlite autoindexes.
+
+starfleet: down 08:13:43-08:19 UTC, lane green (26 migrations at boot, 011 first), healthy after both restarts,
+`zenit-dev deployed` current, 0 journal errors. Verified: SOA from @starfleet.life, apex and www 200, `/admin`
+302 to `/login`, admin login, dashboard, activity (one row per action), certificates (4), sites, domains,
+settings render; all 7 domains keep their stored force_ssl (latch disarmed on stored rows). Preflight
+`/root/hohenheim-preflight-20261005-081431/`.
+
+daystrom: down 08:21:37-08:22 UTC, the same lane (no orphans), healthy after both restarts, current, 0 journal
+errors; nightstrom still admitted (vm_isolated) and seen after the restart; force_ssl unchanged. Preflight
+`/root/hohenheim-preflight-20261005-082141/`.
+
+ROLLBACK needs the PRE-REVERT database: the lane's preflight holds the reverted file, which the old jar
+(6564a495) cannot open. Stop the service, restore `/root/hohenheim-m011-replay-20261005/hohenheim.db.pre-revert`
+(remove `hohenheim.db-wal`/`-shm` first), then `tools/deploy-host.sh --rollback <target> --preflight <dir>`.
+
+Pins stay at 010.
