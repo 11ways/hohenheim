@@ -5639,7 +5639,7 @@
   },
   "host_not_admitted": [
     {
-      "text": "Host {$name} is niet toegelaten voor plaatsing; voer eerst preflight uit en laat hem toe",
+      "text": "Host {$name} is niet toegelaten voor plaatsing; gebruik eerst Controleren en toelaten op de host",
       "scope": "violations"
     },
     {
@@ -5647,7 +5647,7 @@
       "scope": "attention_title"
     },
     {
-      "text": "Voer de preflight uit en laat de host toe, anders kan er niets op uitgerold worden.",
+      "text": "Gebruik Controleren en toelaten op de host, anders kan er niets op uitgerold worden.",
       "scope": "attention_detail"
     }
   ],
@@ -5761,7 +5761,7 @@
       "scope": "field"
     },
     {
-      "text": "Of hier nieuwe workloads geplaatst mogen worden. Geblokkeerd tot een preflight slaagt; toegelaten aanvaardt plaatsing; afgegrendeld houdt wat al draait maar neemt niets nieuws aan. Wijzig dit met de acties Toelaten en Afgrendelen, nooit via dit formulier.",
+      "text": "Of hier nieuwe workloads geplaatst mogen worden. Geblokkeerd tot een preflight slaagt; toegelaten aanvaardt plaatsing; afgegrendeld houdt wat al draait maar neemt niets nieuws aan. Wijzig dit met de acties Controleren en toelaten en Afgrendelen, nooit via dit formulier.",
       "scope": "help"
     }
   ],
@@ -6022,7 +6022,7 @@
     "scope": "violations"
   },
   "backup_target_control_plane": {
-    "text": "Back-updoel {$name} is het back-updoel van het control plane; wijs de instelling database.control_plane_backup_target eerst elders toe",
+    "text": "Back-updoel {$name} ontvangt de eigen herstelarchieven van deze server; kies er eerst een ander doel voor in Instellingen, onder Database",
     "scope": "violations"
   },
   "backup_target_kind_unknown": {
@@ -9175,7 +9175,7 @@
       "scope": "attention_title"
     },
     {
-      "text": "Herstelarchieven van het controlevlak (database + versleutelingssleutels) kunnen nergens heen. Stel database.control_plane_backup_target in.",
+      "text": "De eigen herstelarchieven van deze server (de database en de versleutelingssleutels) kunnen nergens heen. Kies er een back-updoel voor in Instellingen, onder Database.",
       "scope": "attention_detail"
     }
   ],
@@ -9778,7 +9778,7 @@
     "scope": "onboarding_checklist"
   },
   "checklist_admit_detail": {
-    "text": "Voer de preflight uit en laat hem toe.",
+    "text": "Open de host en gebruik Controleren en toelaten.",
     "scope": "onboarding_checklist"
   },
   "checklist_create_instance": {
@@ -11245,7 +11245,7 @@
     "scope": "server_overview"
   },
   "volume_backend_none_body": {
-    "text": "De dataroot kan geen groottelimieten afdwingen of snapshots nemen, dus workspaces en applicaties kunnen niet op deze host geplaatst worden. Mount een btrfs-bestandssysteem op de volumes-map van het datapad en draai de preflight opnieuw.",
+    "text": "De dataroot kan geen groottelimieten afdwingen of snapshots nemen, dus workspaces en applicaties kunnen niet op deze host geplaatst worden. Mount een btrfs-bestandssysteem op de volumes-map van het datapad en controleer deze host daarna opnieuw.",
     "scope": "server_overview"
   },
   "create_title": {
@@ -11261,7 +11261,7 @@
     "scope": "server_overview"
   },
   "volume_backend_unsupported_body": {
-    "text": "De dataroot is {$backend}, waarop Hohenheim geen volumes kan beheren, dus workspaces en applicaties kunnen niet op deze host geplaatst worden. Alleen btrfs is vandaag geimplementeerd: mount een btrfs-bestandssysteem op de volumes-map van het datapad en draai de preflight opnieuw.",
+    "text": "De dataroot is {$backend}, waarop Hohenheim geen volumes kan beheren, dus workspaces en applicaties kunnen niet op deze host geplaatst worden. Alleen btrfs is vandaag geimplementeerd: mount een btrfs-bestandssysteem op de volumes-map van het datapad en controleer deze host daarna opnieuw.",
     "scope": "server_overview"
   },
   "volume_backend_no_snapshot_title": {
@@ -11353,7 +11353,7 @@
     "scope": "instance_shell"
   },
   "no_quota_capable_host": {
-    "text": "Geen enkele host draait een runtime die deze soort ondersteunt ({$runtimes}) en heeft tegelijk een dataroot die quota kan afdwingen. Mount onder Hosts de volumes-map van een host op btrfs en draai de preflight opnieuw.",
+    "text": "Geen enkele host draait een runtime die deze soort ondersteunt ({$runtimes}) en heeft tegelijk een dataroot die quota kan afdwingen. Mount onder Hosts de volumes-map van een host op btrfs en controleer die host opnieuw.",
     "scope": "instance"
   },
   "no_runtime_host": {

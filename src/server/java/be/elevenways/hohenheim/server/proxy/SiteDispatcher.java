@@ -353,9 +353,7 @@ public class SiteDispatcher implements HttpHandler {
         // AIDEV-NOTE: the global setting waits for a working certificate on an exact name (RouteEntry.globalForce):
         // forcing a name no certificate covers sent every visitor of a new domain to an error page. "Working" is an
         // ACTIVE certificate ROW, not the loaded TLS store, so a store that empties still fails closed here.
-        boolean forceSsl = entry.forceSsl || entry.globalForce && Boolean.TRUE.equals(
-            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
-        if (forceSsl && !ProxyScheme.isEffectivelyHttps(exchange)) {
+        if (forcesHttps(entry) && !ProxyScheme.isEffectivelyHttps(exchange)) {
             if (httpsAvailable) {
                 redirectToHttps(exchange, hostname);
             } else {
@@ -571,9 +569,15 @@ public class SiteDispatcher implements HttpHandler {
     public List<String> forceSslSiteNames() {
         Set<String> names = new TreeSet<>();
         for (RouteEntry entry : this.routes.entries()) {
-            if (entry.forceSsl) names.add(entry.siteName);
+            if (forcesHttps(entry)) names.add(entry.siteName);
         }
         return List.copyOf(names);
+    }
+
+    /** @return whether this route refuses plain HTTP: its own force_ssl, or the global force_https where it applies */
+    private static boolean forcesHttps(RouteEntry entry) {
+        return entry.forceSsl || entry.globalForce && Boolean.TRUE.equals(
+            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
     }
 
     /** The proxy-auth session store, shared with every per-site auth gate. */

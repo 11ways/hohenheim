@@ -183,15 +183,10 @@ public class ProxyServer {
      */
     private void warnIfForceSslRefusing() {
         if (httpsTerminationAddress != null || httpState != State.RUNNING) return;
-        boolean globalForce = Boolean.TRUE.equals(
-            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
         List<String> siteNames = dispatcher.forceSslSiteNames();
-        boolean anyRoutes = dispatcher.getExactRouteCount() + dispatcher.getWildcardRouteCount()
-            + dispatcher.getRegexRouteCount() > 0;
-        if (siteNames.isEmpty() && !(globalForce && anyRoutes)) return;
+        if (siteNames.isEmpty()) return;
         Blast.log("PROXY: HTTPS is UNAVAILABLE; force-SSL sites refuse plain HTTP (503):",
-            siteNames.isEmpty() ? "(none)" : String.join(", ", siteNames),
-            globalForce ? "-- proxy.force_https is on, so every routed name with a certificate refuses" : "");
+            String.join(", ", siteNames));
     }
 
     private void startHttpListener() {

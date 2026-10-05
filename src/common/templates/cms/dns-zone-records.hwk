@@ -1,7 +1,7 @@
 {#- Records tab on a DNS zone. The rows, their page window, their search, cells and row
     actions are the record RESOURCE's own (its listPage, rendered through the framework's
     shared row partial), so this page adds exactly what a generated list cannot know: the
-    zone scope and the zone the quick-add bar adds into. -#}
+    zone scope and the zone quick add adds into. -#}
 {% declare title: String %}
 {% declare zoneId: Integer %}
 {% declare origin: String %}
@@ -37,6 +37,15 @@
             <cms-list-search formId="dns-records-filter-form" paramName={% searchParam %} value={% searchValue %}></cms-list-search>
         </form>
         {% /if %}
+        {#- Quick add is the framework's header tool: a button opening the CREATE entries in a sheet. It adds
+            INTO this zone: the zone rides along as a preset, so nothing asks which zone this is. -#}
+        {% if quickAddEnabled %}
+        <cms-quick-add createForm={% quickAddForm %}
+                       values={% quickAddValues %}
+                       presets={% quickAddPresets %}
+                       refreshUrl={% quickAddRefreshUrl %}
+                       createUrl={% quickAddCreateUrl %}></cms-quick-add>
+        {% /if %}
         {% if addRecordTarget %}
         <pl-button variant="primary" use:Zenit.route={% addRecordTarget %} id="add-record-link">{{ t("add_record", scope: "dns_zone") }}</pl-button>
         {% /if %}
@@ -52,18 +61,6 @@
         split lane pinned over the columns scrolling under it. The card is the whole
         participation contract -- the row markup is already the shared partial. -#}
     <div class="cms-list-card" data-cms-list-card>
-    {#- The bar adds INTO this zone: the zone rides along as a preset, so nothing
-        asks the operator which zone they are looking at. -#}
-    {% if quickAddEnabled %}
-    <div class="cms-list-card-quick-add">
-        <cms-quick-add createForm={% quickAddForm %}
-                       values={% quickAddValues %}
-                       presets={% quickAddPresets %}
-                       refreshUrl={% quickAddRefreshUrl %}
-                       createUrl={% quickAddCreateUrl %}></cms-quick-add>
-    </div>
-    {% /if %}
-
     {% if table.rows %}
     {#- AIDEV-NOTE: the shared row partial renders its overflow/context menu items as
         native submit buttons associated by form= -- the dropdown content is PORTALLED
