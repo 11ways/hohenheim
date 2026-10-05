@@ -4,9 +4,12 @@ import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.edit.FieldOption;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -14,6 +17,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -185,6 +189,36 @@ public final class InstanceKinds {
             options.add(icon == null ? option : option.withIcon(icon.name()));
         }
 
+        return options;
+    }
+
+    /**
+     * The kinds a human may create, each card saying what it needs when no host of a runtime it supports exists yet:
+     * an LXC or VM card on an installation without an Incus host used to read like any other choice.
+     *
+     * AIDEV-NOTE: the card stays CHOOSABLE. The host pick's narrowing is the gate and explains an empty result itself
+     * ("No admitted host currently accepts this workload"), so a dead card would only hide kinds on a fresh install
+     * whose one host is not admitted yet, and a disabled value would also refuse the edit of a record that has it.
+     * Inventory, not admission, decides: an inventoried host that is not admitted yet is the host pick's story.
+     */
+    public static @NonNull List<FieldOption<String>> placeableOptions() {
+        Set<String> inventoried = new HashSet<>();
+        for (Row server : Models.get(ServerModel.class).find().all()) {
+            inventoried.add(ServerModel.runtimeOf(server));
+        }
+        List<FieldOption<String>> options = new ArrayList<>();
+        for (FieldOption<String> option : authorableOptions()) {
+            InstanceKindHandler handler = getHandler(option.value());
+            if (handler == null || handler.supportedRuntimes().stream().anyMatch(inventoried::contains)) {
+                options.add(option);
+                continue;
+            }
+            Set<String> runtimes = new TreeSet<>(handler.supportedRuntimes());
+            options.add(option.withDescription(runtimes.size() == 1
+                ? Microcopy.of("kind_needs_runtime_host").withFilter("scope", "instance")
+                    .withArg("runtime", ServerModel.RUNTIME.getValues().get(runtimes.iterator().next()).getLabel())
+                : Microcopy.of("kind_needs_host").withFilter("scope", "instance")));
+        }
         return options;
     }
 

@@ -13,13 +13,16 @@ import java.util.List;
  * The parts travel together because they are one reading: a check list without the
  * probe stamp cannot say how old it is, and a stamp without the checks says nothing.
  *
+ * @param mustPass    the required checks, the ones that did not pass first: they decide admission
+ * @param advice      the advisory checks, the ones that did not pass first: they never block
  * @param probedAtIso when the report was taken, null when the host was never probed
  * @param passed      the stored overall verdict
  */
 @HawkeyeClass
 public record HostPreflightReportView(
     @Nullable KernelIsolationView kernel,
-    @NonNull List<PreflightCheckView> checks,
+    @NonNull List<PreflightCheckView> mustPass,
+    @NonNull List<PreflightCheckView> advice,
     @NonNull List<HostFactView> facts,
     @Nullable String probedAtIso,
     boolean passed

@@ -5703,14 +5703,6 @@
     "text": "Leegmaken van {$name} ONVOLLEDIG: {$moved} verplaatst, {$refused} geweigerd ({$held})",
     "scope": "server"
   },
-  "preflight_passed": {
-    "text": "Preflight geslaagd op {$name}; de host kan toegelaten worden",
-    "scope": "server"
-  },
-  "preflight_failed": {
-    "text": "Preflight MISLUKT op {$name}; zie het opgeslagen rapport",
-    "scope": "server"
-  },
   "host_admitted": {
     "text": "Host {$name} is toegelaten voor plaatsing",
     "scope": "server"
@@ -9590,7 +9582,7 @@
     "scope": "server_overview"
   },
   "never_preflighted_hint": {
-    "text": "Voer preflight uit om deze host te meten; plaatsing weigert ongemeten hosts.",
+    "text": "Controleer deze host om hem op te meten; plaatsing weigert hosts die nooit gemeten werden.",
     "scope": "server_overview"
   },
   "check": {
@@ -13123,5 +13115,175 @@
   "cert_dns_records": {
     "text": "Te publiceren DNS-records",
     "scope": "field"
+  },
+  "access_list_admits_everyone": {
+    "text": "{$list} laat elke bezoeker door: geen van de regels staat aan. Voeg er eerst een regel aan toe en kies hem dan hier.",
+    "scope": "violations"
+  },
+  "access_list_would_open": {
+    "text": "Hierdoor zou {$list} elke bezoeker doorlaten, en die beschermt {$path}. Laat minstens een regel aan staan, of verwijder eerst de bescherming.",
+    "scope": "violations"
+  },
+  "host_check_failed": {
+    "text": "Host {$name} is nog niet toegelaten. Deze controles moeten eerst slagen: {$checks}. Op de pagina van de host staat wat je aan elk ervan doet.",
+    "scope": "violations"
+  },
+  "protection": {
+    "text": "Bescherming",
+    "scope": "protected_path"
+  },
+  "protected": {
+    "text": "Beschermd",
+    "scope": "protected_path"
+  },
+  "open_to_everyone": {
+    "text": "Open voor iedereen",
+    "scope": "protected_path"
+  },
+  "open_protected_path": [
+    {
+      "text": "{$path} op {$site} is open voor iedereen",
+      "scope": "attention_title"
+    },
+    {
+      "text": "De toegangslijst heeft geen regel die aan staat, dus ze beschermt niets. Voeg een regel toe aan de lijst, of verwijder de bescherming.",
+      "scope": "attention_detail"
+    }
+  ],
+  "check_and_admit": {
+    "text": "Controleren en toelaten",
+    "scope": "server"
+  },
+  "check_again": {
+    "text": "Opnieuw controleren",
+    "scope": "server"
+  },
+  "check_and_admit_hint": {
+    "text": "Voert elke controle uit op deze host. Een host die op toelating wacht, wordt toegelaten zodra alle vereiste controles slagen.",
+    "scope": "server"
+  },
+  "host_checked": {
+    "text": "Host {$name} gecontroleerd: elke vereiste controle slaagt",
+    "scope": "server"
+  },
+  "host_checked_failing": {
+    "text": "Host {$name} gecontroleerd; deze vereiste controles falen: {$checks}",
+    "scope": "server"
+  },
+  "host_checked_admitted": {
+    "text": "Host {$name} slaagde voor elke vereiste controle en is toegelaten",
+    "scope": "server"
+  },
+  "summary_network_missing": {
+    "text": "Nog geen adresbereik",
+    "scope": "access_rule"
+  },
+  "summary_basic_auth_missing": {
+    "text": "Nog geen gebruikersnaam",
+    "scope": "access_rule"
+  },
+  "must_pass": {
+    "text": "Moet slagen",
+    "scope": "server_overview"
+  },
+  "advice": {
+    "text": "Advies",
+    "scope": "server_overview"
+  },
+  "advice_never_blocks": {
+    "text": "Advies blokkeert de toelating nooit.",
+    "scope": "server_overview"
+  },
+  "how_to_fix": {
+    "text": "Oplossen:",
+    "scope": "server_overview"
+  },
+  "kind_needs_runtime_host": {
+    "text": "Vereist een host met {$runtime}. Voeg er eerst een toe onder Hosts.",
+    "scope": "instance"
+  },
+  "kind_needs_host": {
+    "text": "Vereist een host. Voeg er eerst een toe onder Hosts.",
+    "scope": "instance"
+  },
+  "fix_daemon": {
+    "text": "Start de container-daemon op de host en zorg dat Hohenheim zijn socket of endpoint bereikt.",
+    "scope": "server_overview"
+  },
+  "fix_api_version": {
+    "text": "Werk Docker bij naar 20.10 of nieuwer (API 1.41).",
+    "scope": "server_overview"
+  },
+  "fix_container_kernel": {
+    "text": "De testcontainer startte niet. Zorg dat de daemon images kan ophalen en starten (schijfruimte, toegang tot de registry).",
+    "scope": "server_overview"
+  },
+  "fix_cgroup_pids_controller": {
+    "text": "Start de host met cgroup v2 en de pids-controller ingeschakeld.",
+    "scope": "server_overview"
+  },
+  "fix_pids_limit_enforced": {
+    "text": "De kernel dwong de proceslimiet van een container niet af. Gebruik cgroup v2 met de pids-controller ingeschakeld.",
+    "scope": "server_overview"
+  },
+  "fix_seccomp": {
+    "text": "Draai containers met het standaard seccomp-profiel van Docker; verwijder elke unconfined-standaard uit de daemonconfiguratie.",
+    "scope": "server_overview"
+  },
+  "fix_no_new_privs": {
+    "text": "Zet \"no-new-privileges\": true in /etc/docker/daemon.json en herstart Docker.",
+    "scope": "server_overview"
+  },
+  "fix_userns_remap": {
+    "text": "Zet \"userns-remap\": \"default\" in /etc/docker/daemon.json en herstart Docker, zodat root in een container geen root op de host is.",
+    "scope": "server_overview"
+  },
+  "fix_lsm": {
+    "text": "Schakel AppArmor of SELinux in op de host, zodat containers afgeschermd draaien.",
+    "scope": "server_overview"
+  },
+  "fix_network_headroom": {
+    "text": "Verwijder ongebruikte containernetwerken, of verruim de standaard adrespools van de daemon.",
+    "scope": "server_overview"
+  },
+  "fix_nftables": {
+    "text": "Installeer nftables op de host; Hohenheim beheert zijn eigen tabel via zijn helper.",
+    "scope": "server_overview"
+  },
+  "fix_resources": {
+    "text": "Geef de Incus-host meer CPU of geheugen, of plaats workloads op een andere host.",
+    "scope": "server_overview"
+  },
+  "fix_trusted": {
+    "text": "Vertrouw het clientcertificaat van deze controller op de Incus-host.",
+    "scope": "server_overview"
+  },
+  "fix_driver_lxc": {
+    "text": "Installeer en activeer de LXC-driver voor Incus op de host.",
+    "scope": "server_overview"
+  },
+  "fix_storage_pool": {
+    "text": "Maak de Incus-storagepool aan die deze host volgens zijn instellingen gebruikt.",
+    "scope": "server_overview"
+  },
+  "fix_managed_network": {
+    "text": "Maak het beheerde Incus-netwerk aan dat deze host volgens zijn instellingen gebruikt.",
+    "scope": "server_overview"
+  },
+  "fix_network_acl": {
+    "text": "Gebruik een door Incus beheerd bridge-netwerk, dat netwerk-ACL's ondersteunt.",
+    "scope": "server_overview"
+  },
+  "fix_kernel_isolation_lane": {
+    "text": "Deze host geeft containers geen eigen, geisoleerde kernelbaan. Schakel die in, of draai workloads van klanten in virtuele machines.",
+    "scope": "server_overview"
+  },
+  "fix_container_userns": {
+    "text": "Draai Incus-containers zonder privileges, met een user-namespace-mapping.",
+    "scope": "server_overview"
+  },
+  "fix_container_seccomp": {
+    "text": "Draai Incus-containers met seccomp-filtering ingeschakeld.",
+    "scope": "server_overview"
   }
 }

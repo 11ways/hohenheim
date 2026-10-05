@@ -144,49 +144,112 @@ public final class AccessRuleTree {
      */
     public static @NonNull AccessRuleTree compile(@Nullable String satisfy, @NonNull List<Row> rules,
                                                   @NonNull LeafContext context) {
-        Map<Integer, Row> byId = new LinkedHashMap<>();
-        for (Row rule : rules) {
-            Integer id = rule.get(AccessRuleModel.ID);
-            if (id != null) {
-                byId.put(id, rule);
-            }
-        }
-
-        // Every row must hang off the root through a finite chain of rows in THIS list.
-        // A dangling parent or a cycle means the operator's policy cannot be reconstructed,
-        // so it cannot be honoured: refuse everything rather than silently enforcing a
-        // different tree (a dropped deny rule would WIDEN access). The schema's foreign key
-        // and the cascade delete make both unreachable through the admin surface.
-        for (Row rule : rules) {
-            Integer parent = rule.get(AccessRuleModel.PARENT_ID);
-            for (int steps = 0; parent != null; steps++) {
-                Row ancestor = byId.get(parent);
-                if (ancestor == null || steps > byId.size()) {
-                    Blast.log("AccessRuleTree: rule", rule.get(AccessRuleModel.ID),
-                        "has no usable parent chain (missing parent or cycle);",
-                        "DENYING the whole list.");
-                    return denyAll("rule " + rule.get(AccessRuleModel.ID) + " (no usable parent chain)");
-                }
-                parent = ancestor.get(AccessRuleModel.PARENT_ID);
-            }
-        }
-
-        Map<Integer, List<Row>> childrenByParent = new LinkedHashMap<>();
-        List<Row> rootRows = new ArrayList<>();
-        for (Row rule : rules) {
-            Integer parent = rule.get(AccessRuleModel.PARENT_ID);
-            if (parent == null) {
-                rootRows.add(rule);
-            } else {
-                childrenByParent.computeIfAbsent(parent, ignored -> new ArrayList<>()).add(rule);
-            }
+        Partition partition = Partition.of(rules);
+        if (partition.brokenRule() != null) {
+            Blast.log("AccessRuleTree: rule", partition.brokenRule(),
+                "has no usable parent chain (missing parent or cycle);",
+                "DENYING the whole list.");
+            return denyAll("rule " + partition.brokenRule() + " (no usable parent chain)");
         }
 
         List<SiteAuthGate> gates = new ArrayList<>();
         CompileFacts facts = new CompileFacts();
-        List<Node> children = build(rootRows, childrenByParent, context, gates, facts);
+        List<Node> children = build(partition.roots(), partition.childrenByParent(), context, gates, facts);
         boolean all = AccessListModel.SATISFY_ALL.equals(satisfy);
         return new AccessRuleTree(new GroupNode(all, children), gates, facts);
+    }
+
+    /**
+     * Whether the tree these rows compile to lets every request through unconditionally: its root
+     * group states no requirement once disabled rows are skipped, the case where a "protected" path
+     * is open to everyone.
+     *
+     * AIDEV-NOTE: answered from the ROWS with the compile's own partition and group modes, so a write
+     * hook can ask it without building leaves (provider gates are resources the route table owns). An
+     * enabled leaf of any type, an unknown one included, is a requirement: it compiles to a node that
+     * can FAIL. A broken parent chain compiles to a deny-all tree, which admits nobody.
+     *
+     * @param satisfy the list's satisfy column, the implicit root group's mode
+     * @param rules   every rule row of the list
+     */
+    public static boolean admitsEveryone(@Nullable String satisfy, @NonNull List<Row> rules) {
+        Partition partition = Partition.of(rules);
+        if (partition.brokenRule() != null) {
+            return false;
+        }
+        return statesNoRequirement(AccessListModel.SATISFY_ALL.equals(satisfy), partition.roots(),
+            partition.childrenByParent());
+    }
+
+    /** An empty group passes in both modes, an all-group passes when every child does, an any-group when one does. */
+    private static boolean statesNoRequirement(boolean all, @NonNull List<Row> rows,
+                                               @NonNull Map<Integer, List<Row>> childrenByParent) {
+        boolean anyChild = false;
+        for (Row row : rows) {
+            if (!Boolean.TRUE.equals(row.get(AccessRuleModel.ENABLED))) {
+                continue;
+            }
+            anyChild = true;
+            boolean vacuous = AccessRuleModel.TYPE_GROUP.equals(row.get(AccessRuleModel.TYPE))
+                && statesNoRequirement(groupAll(row), childrenByParent.getOrDefault(row.get(AccessRuleModel.ID),
+                    List.of()), childrenByParent);
+            if (all && !vacuous) {
+                return false;
+            }
+            if (!all && vacuous) {
+                return true;
+            }
+        }
+        return !anyChild || all;
+    }
+
+    /** @return whether a group row demands every child, read the one way compile reads it */
+    private static boolean groupAll(@NonNull Row group) {
+        return AccessListModel.SATISFY_ALL.equals(Texts.trimmedOrNull(
+            AccessRuleModel.dataOf(group).get(AccessRuleModel.GROUP_SATISFY.getName())));
+    }
+
+    /**
+     * One list's rows split into root rows and children per parent, or the first rule whose parent chain is unusable.
+     *
+     * Every row must hang off the root through a finite chain of rows in THIS list. A dangling parent or a cycle
+     * means the operator's policy cannot be reconstructed, so it cannot be honoured: refuse everything rather than
+     * silently enforcing a different tree (a dropped deny rule would WIDEN access). The schema's foreign key and the
+     * cascade delete make both unreachable through the admin surface.
+     */
+    private record Partition(@NonNull List<Row> roots, @NonNull Map<Integer, List<Row>> childrenByParent,
+                             @Nullable Object brokenRule) {
+
+        static @NonNull Partition of(@NonNull List<Row> rules) {
+            Map<Integer, Row> byId = new LinkedHashMap<>();
+            for (Row rule : rules) {
+                Integer id = rule.get(AccessRuleModel.ID);
+                if (id != null) {
+                    byId.put(id, rule);
+                }
+            }
+            for (Row rule : rules) {
+                Integer parent = rule.get(AccessRuleModel.PARENT_ID);
+                for (int steps = 0; parent != null; steps++) {
+                    Row ancestor = byId.get(parent);
+                    if (ancestor == null || steps > byId.size()) {
+                        return new Partition(List.of(), Map.of(), rule.get(AccessRuleModel.ID));
+                    }
+                    parent = ancestor.get(AccessRuleModel.PARENT_ID);
+                }
+            }
+            Map<Integer, List<Row>> childrenByParent = new LinkedHashMap<>();
+            List<Row> roots = new ArrayList<>();
+            for (Row rule : rules) {
+                Integer parent = rule.get(AccessRuleModel.PARENT_ID);
+                if (parent == null) {
+                    roots.add(rule);
+                } else {
+                    childrenByParent.computeIfAbsent(parent, ignored -> new ArrayList<>()).add(rule);
+                }
+            }
+            return new Partition(roots, childrenByParent, null);
+        }
     }
 
     /**
@@ -229,9 +292,7 @@ public final class AccessRuleTree {
         switch (type == null ? "" : type) {
             case AccessRuleModel.TYPE_GROUP -> {
                 List<Row> children = childrenByParent.getOrDefault(row.get(AccessRuleModel.ID), List.of());
-                boolean all = AccessListModel.SATISFY_ALL.equals(
-                    Texts.trimmedOrNull(data.get(AccessRuleModel.GROUP_SATISFY.getName())));
-                return new GroupNode(all,
+                return new GroupNode(groupAll(row),
                     build(children, childrenByParent, context, gates, facts));
             }
             case AccessRuleModel.TYPE_IP_ALLOW, AccessRuleModel.TYPE_IP_DENY -> {

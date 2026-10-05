@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -24,7 +25,9 @@ import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -226,10 +229,17 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
         return "/admin/sites/" + siteId + "/page/protected-paths";
     }
 
+    /** A list that guards what it protects: one rule, as ProtectedPathInvariant requires of a protected path's list. */
     private static int accessList() {
         Row row = Models.get(AccessListModel.class).createEmptyRow();
         row.set(AccessListModel.NAME, PREFIX + "list");
         Models.get(AccessListModel.class).save(row);
+        Row rule = Models.get(AccessRuleModel.class).createEmptyRow();
+        rule.set(AccessRuleModel.ACCESS_LIST_ID, row.get(AccessListModel.ID));
+        rule.set(AccessRuleModel.TYPE, AccessRuleModel.TYPE_IP_ALLOW);
+        rule.set(AccessRuleModel.DATA, new LinkedHashMap<>(Map.of("network", "10.0.0.0/8")));
+        rule.set(AccessRuleModel.ENABLED, true);
+        Models.get(AccessRuleModel.class).save(rule);
         return row.get(AccessListModel.ID);
     }
 

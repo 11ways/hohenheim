@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.instance.InstanceInstalls;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.instance.InstanceTemplateCapture;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.protoblast.common.http.Uri;
@@ -31,6 +32,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 
@@ -43,7 +45,7 @@ import java.util.List;
  * that draws the button and by the pipeline on invoke, for an admin and a /manage principal alike; a generated row is
  * outside every operation's {@code applies}, so it is hidden and its invoke reads as missing. Its
  * {@code hiddenWhen}/{@code disabledWhen} are presentation only (stop of a stopped instance is idempotent, start of an
- * instance whose database is not ready refuses with the same words). The operator verbs answer to an operator alone
+ * instance whose database is not ready, or whose host will refuse it, refuses with the same words). The operator verbs answer to an operator alone
  * through their authorizers (InstanceOperationHandlers.operatorOnly).
  *
  * @author Jelle De Loecker
@@ -59,8 +61,8 @@ final class InstanceActions {
      * inline band, and placed actions lead the declared row actions, so the first declared verb leads.
      */
     static @NonNull List<PanelAction<Row>> placedOperator() {
-        return List.of(deployAction(), stopAction(), restartAction(), snapshotAction(), backupAction(),
-            appUpdateAction(), consoleCommandAction(), exposeAction(), rollbackAction(),
+        return List.of(deployAction(false), stopAction(), restartAction(), snapshotAction(), backupAction(),
+            appUpdateAction(false), consoleCommandAction(), exposeAction(), rollbackAction(),
             installAction(), reinstallAction(), captureTemplateAction(), migrateAction(),
             destroyWithDataAction());
     }
@@ -70,7 +72,7 @@ final class InstanceActions {
      * console line.
      */
     static @NonNull List<PanelAction<Row>> placedDelegated() {
-        return List.of(deployAction(), stopAction(), snapshotAction(), backupAction(), appUpdateAction(),
+        return List.of(deployAction(true), stopAction(), snapshotAction(), backupAction(), appUpdateAction(true),
             consoleCommandAction());
     }
 
@@ -83,7 +85,7 @@ final class InstanceActions {
      * AIDEV-NOTE: deliberately NOT ActionStyle.PRIMARY (reverted 2026-08-22): the style renders the button FILLED, a
      * solid accent Deploy beside the red Delete on every row; it already leads as the first declared verb.
      */
-    private static @NonNull PanelAction<Row> deployAction() {
+    private static @NonNull PanelAction<Row> deployAction(boolean delegated) {
         return PanelAction.<Row, InstanceOperations.PowerResult>places(InstanceOperations.START, ActionPlacement.ROW,
                 (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("deployed")
                     .withFilter("scope", "instance").withArg("name", request.subject().get(InstanceModel.NAME))))
@@ -92,7 +94,8 @@ final class InstanceActions {
             .hiddenWhen(row -> !InstanceKinds.isUserDeployable(row.get(InstanceModel.KIND)))
             .disabledWhen(row -> {
                 Integer id = row.get(InstanceModel.ID);
-                return id == null ? null : InstanceDatabaseLinks.notReadyReason(id);
+                Microcopy database = id == null ? null : InstanceDatabaseLinks.notReadyReason(id);
+                return database != null ? database : hostRefusal(row, delegated);
             })
             .build();
     }
@@ -127,6 +130,7 @@ final class InstanceActions {
             .label(Microcopy.of("restart").withFilter("scope", "instance"))
             .icon(Icon.of("rotate-right"))
             .inlineInRow(false)
+            .disabledWhen(row -> hostRefusal(row, false))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("restart").withFilter("scope", "instance"))
                 .body(Microcopy.of("restart_confirm").withFilter("scope", "instance"))
@@ -207,6 +211,7 @@ final class InstanceActions {
                     Microcopy.of("rollback_done").withFilter("scope", "instance")
                         .withArg("name", request.subject().get(InstanceModel.NAME))))
             .inlineInRow(false)
+            .disabledWhen(row -> hostRefusal(row, false))
             .description(Microcopy.of("rollback_hint").withFilter("scope", "instance"))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("rollback").withFilter("scope", "instance"))
@@ -215,6 +220,18 @@ final class InstanceActions {
                 .style(ActionStyle.DESTRUCTIVE)
                 .build())
             .build();
+    }
+
+    /**
+     * Why the host will refuse this verb, as a dead button's words: the overview's "cannot start yet" notice and
+     * these buttons read ONE source ({@link OwnedInstances#placementRefusal}). Presentation only, like every
+     * disabledWhen here: a direct POST, the API and a schedule still meet the handler's own refusal, unchanged.
+     *
+     * @param delegated whether the button is drawn on /manage, where the host is operator inventory
+     */
+    private static @Nullable Microcopy hostRefusal(@NonNull Row row, boolean delegated) {
+        Microcopy refusal = OwnedInstances.placementRefusal(row);
+        return refusal == null ? null : OwnedInstances.placementReason(refusal, delegated);
     }
 
     /** Whether a site's instance upstream could serve this row's kind. */
@@ -230,6 +247,7 @@ final class InstanceActions {
                     Microcopy.of("installed_toast").withFilter("scope", "instance")
                         .withArg("name", request.subject().get(InstanceModel.NAME))))
             .inlineInRow(false)
+            .disabledWhen(row -> hostRefusal(row, false))
             .build();
     }
 
@@ -246,6 +264,7 @@ final class InstanceActions {
                         .withArg("name", request.subject().get(InstanceModel.NAME))))
             .inlineOnRecord(false)
             .inlineInRow(false)
+            .disabledWhen(row -> hostRefusal(row, false))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("reinstall").withFilter("scope", "instance"))
                 .body(Microcopy.of("reinstall_confirm").withFilter("scope", "instance"))
@@ -272,7 +291,7 @@ final class InstanceActions {
      * In-place app update: the template's update_script runs inside the RUNNING system. The operation's gate (config)
      * and its applies (no generated instance) decide who sees it; only an instance with an update script offers it.
      */
-    private static @NonNull PanelAction<Row> appUpdateAction() {
+    private static @NonNull PanelAction<Row> appUpdateAction(boolean delegated) {
         return PanelAction.<Row, String>places(InstanceOperations.APP_UPDATE, ActionPlacement.ROW,
                 (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("app_updated_toast")
                     .withFilter("scope", "instance").withArg("name", request.subject().get(InstanceModel.NAME))))
@@ -281,6 +300,7 @@ final class InstanceActions {
             .inlineOnRecord(false)
             .inlineInRow(false)
             .hiddenWhen(row -> !InstanceAppUpdates.hasUpdateScript(row))
+            .disabledWhen(row -> hostRefusal(row, delegated))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("app_update").withFilter("scope", "instance"))
                 .body(Microcopy.of("app_update_confirm").withFilter("scope", "instance"))

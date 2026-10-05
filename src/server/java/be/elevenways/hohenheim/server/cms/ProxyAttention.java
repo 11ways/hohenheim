@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
@@ -135,6 +136,25 @@ public final class ProxyAttention {
                 copy("forced_without_certificate", "attention_title", "hostname", hostname),
                 copy("forced_without_certificate", "attention_detail"),
                 CmsRoutes.detail(ADMIN, HohenheimSlugs.SITES, site.get(SiteModel.ID))));
+        }
+    }
+
+    /**
+     * Protected paths on live sites whose access list lets every visitor through: they read as protection and guard
+     * nothing. New writes cannot create one ({@link ProtectedPathInvariant}); these are the ones stored before.
+     */
+    public static void openProtectedPaths(List<AttentionItem> items) {
+        for (Row path : Models.get(ProtectedPathModel.class).find().all()) {
+            Row site = Models.get(SiteModel.class).findById(path.get(ProtectedPathModel.SITE_ID));
+            if (site == null || !Boolean.TRUE.equals(site.get(SiteModel.ENABLED))
+                    || site.get(SiteModel.DELETED_AT) != null || !ProtectedPathInvariant.isOpen(path)) {
+                continue;
+            }
+            items.add(item(AttentionSeverity.ERROR, "lock-open",
+                copy("open_protected_path", "attention_title", "path", path.get(ProtectedPathModel.PATH),
+                    "site", site.get(SiteModel.NAME)),
+                copy("open_protected_path", "attention_detail"),
+                CmsRoutes.detail(ADMIN, ProtectedPathParts.SLUG, path.get(ProtectedPathModel.ID))));
         }
     }
 

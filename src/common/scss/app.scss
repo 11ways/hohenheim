@@ -466,10 +466,21 @@
         margin-bottom: var(--pl-space-sm);
     }
 
-    .hh-facts-title {
+    .hh-facts-title,
+    .hh-checks-title {
         margin: var(--pl-space-md) 0 var(--pl-space-xs);
         font-size: var(--pl-font-size-sm);
         font-weight: var(--pl-font-weight-medium);
+    }
+
+    .hh-checks-note {
+        margin: 0 0 var(--pl-space-xs);
+        font-size: var(--pl-font-size-sm);
+        color: var(--pl-color-text-muted);
+    }
+
+    .hh-check-fix {
+        margin: var(--pl-space-xs) 0 0;
     }
 
 }

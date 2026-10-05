@@ -39,6 +39,11 @@ import java.util.Map;
  * {@code tab access} fact per record case, re-recorded beside the legacy capture, because zenit-auth's record access
  * page rides every parts entry over a grantable model (RecordTab#ridesEveryEntry). Every other fact is the legacy
  * capture as stored.
+ *
+ * AIDEV-NOTE: intended difference, host-bound verbs offered dead (W1b, 2026-10-05): the failed-install fixture sits on
+ * a host that is not admitted, so start, restart, install and reinstall carry {@code disabled=host_not_admitted} (the
+ * tenant's start {@code deploy_blocked_delegated}), the overview notice's own reason. Only those five facts were
+ * re-recorded.
  */
 class InstanceSurfacesBrowserTest extends HohenheimTestBase {
 

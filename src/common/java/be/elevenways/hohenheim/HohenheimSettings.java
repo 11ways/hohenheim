@@ -9,6 +9,7 @@ import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.zenit.common.validation.PathKind;
 import be.elevenways.zenit.common.validation.PrivateNetworkOptIn;
 import be.elevenways.zenit.common.validation.PrivateNetworkOptIn.Consumer;
+import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.net.IpLiterals;
 import be.elevenways.hohenheim.net.LegacyIpSpellings;
 import be.elevenways.protoblast.common.util.BlastString;
@@ -585,6 +586,9 @@ public class HohenheimSettings {
                     + "CLEAR and its manifest is unsigned -- whoever can read the destination "
                     + "can decrypt every secret in the database, so treat it exactly like the "
                     + "keyring file")
+                // A pick over the backup targets the editor may read; a name no target carries is refused, and a
+                // stored name whose target is gone shows as invalid instead of blank.
+                .references(BackupTargetModel.MODEL_ID, BackupTargetModel.NAME)
                 .build();
 
         public static final SettingDefinition<Integer> MAX_DUMP_MB = GROUP.buildSetting("max_dump_mb", Integer.class)

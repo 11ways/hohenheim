@@ -5703,14 +5703,6 @@
     "text": "Drain of {$name} INCOMPLETE: {$moved} moved, {$refused} refused ({$held})",
     "scope": "server"
   },
-  "preflight_passed": {
-    "text": "Preflight passed on {$name}; the host can be admitted",
-    "scope": "server"
-  },
-  "preflight_failed": {
-    "text": "Preflight FAILED on {$name}; see the stored report",
-    "scope": "server"
-  },
   "host_admitted": {
     "text": "Host {$name} is admitted for placement",
     "scope": "server"
@@ -9590,7 +9582,7 @@
     "scope": "server_overview"
   },
   "never_preflighted_hint": {
-    "text": "Run preflight to measure this host; placement refuses unmeasured hosts.",
+    "text": "Check this host to measure it; placement refuses hosts that were never measured.",
     "scope": "server_overview"
   },
   "check": {
@@ -13123,5 +13115,175 @@
   "cert_dns_records": {
     "text": "DNS records to publish",
     "scope": "field"
+  },
+  "access_list_admits_everyone": {
+    "text": "{$list} lets every visitor through: none of its rules is switched on. Add a rule to it first, then pick it here.",
+    "scope": "violations"
+  },
+  "access_list_would_open": {
+    "text": "This would leave {$list} letting every visitor through, and it protects {$path}. Keep at least one rule switched on, or remove the protection first.",
+    "scope": "violations"
+  },
+  "host_check_failed": {
+    "text": "Host {$name} is not admitted yet. These checks must pass first: {$checks}. The host page lists what to do about each one.",
+    "scope": "violations"
+  },
+  "protection": {
+    "text": "Protection",
+    "scope": "protected_path"
+  },
+  "protected": {
+    "text": "Protected",
+    "scope": "protected_path"
+  },
+  "open_to_everyone": {
+    "text": "Open to everyone",
+    "scope": "protected_path"
+  },
+  "open_protected_path": [
+    {
+      "text": "{$path} on {$site} is open to everyone",
+      "scope": "attention_title"
+    },
+    {
+      "text": "Its access list has no rule switched on, so it guards nothing. Add a rule to the list, or remove the protection.",
+      "scope": "attention_detail"
+    }
+  ],
+  "check_and_admit": {
+    "text": "Check and admit",
+    "scope": "server"
+  },
+  "check_again": {
+    "text": "Check again",
+    "scope": "server"
+  },
+  "check_and_admit_hint": {
+    "text": "Runs every check on this host. A host waiting for admission is admitted as soon as all required checks pass.",
+    "scope": "server"
+  },
+  "host_checked": {
+    "text": "Host {$name} checked: every required check passes",
+    "scope": "server"
+  },
+  "host_checked_failing": {
+    "text": "Host {$name} checked; these required checks fail: {$checks}",
+    "scope": "server"
+  },
+  "host_checked_admitted": {
+    "text": "Host {$name} passed every required check and is admitted",
+    "scope": "server"
+  },
+  "summary_network_missing": {
+    "text": "No address range yet",
+    "scope": "access_rule"
+  },
+  "summary_basic_auth_missing": {
+    "text": "No username yet",
+    "scope": "access_rule"
+  },
+  "must_pass": {
+    "text": "Must pass",
+    "scope": "server_overview"
+  },
+  "advice": {
+    "text": "Advice",
+    "scope": "server_overview"
+  },
+  "advice_never_blocks": {
+    "text": "Advice never blocks admission.",
+    "scope": "server_overview"
+  },
+  "how_to_fix": {
+    "text": "How to fix:",
+    "scope": "server_overview"
+  },
+  "kind_needs_runtime_host": {
+    "text": "Needs a host running {$runtime}. Add one under Hosts first.",
+    "scope": "instance"
+  },
+  "kind_needs_host": {
+    "text": "Needs a host. Add one under Hosts first.",
+    "scope": "instance"
+  },
+  "fix_daemon": {
+    "text": "Start the container daemon on the host and make sure Hohenheim can reach its socket or endpoint.",
+    "scope": "server_overview"
+  },
+  "fix_api_version": {
+    "text": "Upgrade Docker to 20.10 or newer (API 1.41).",
+    "scope": "server_overview"
+  },
+  "fix_container_kernel": {
+    "text": "The probe container did not run. Make sure the daemon can pull and start images (disk space, registry access).",
+    "scope": "server_overview"
+  },
+  "fix_cgroup_pids_controller": {
+    "text": "Boot the host with cgroup v2 and the pids controller enabled.",
+    "scope": "server_overview"
+  },
+  "fix_pids_limit_enforced": {
+    "text": "The kernel did not enforce a container's process limit. Use cgroup v2 with the pids controller enabled.",
+    "scope": "server_overview"
+  },
+  "fix_seccomp": {
+    "text": "Run containers with Docker's default seccomp profile; remove any unconfined default from the daemon configuration.",
+    "scope": "server_overview"
+  },
+  "fix_no_new_privs": {
+    "text": "Set \"no-new-privileges\": true in /etc/docker/daemon.json and restart Docker.",
+    "scope": "server_overview"
+  },
+  "fix_userns_remap": {
+    "text": "Set \"userns-remap\": \"default\" in /etc/docker/daemon.json and restart Docker, so root in a container is not root on the host.",
+    "scope": "server_overview"
+  },
+  "fix_lsm": {
+    "text": "Enable AppArmor or SELinux on the host so containers run confined.",
+    "scope": "server_overview"
+  },
+  "fix_network_headroom": {
+    "text": "Remove unused container networks, or widen the daemon's default address pools.",
+    "scope": "server_overview"
+  },
+  "fix_nftables": {
+    "text": "Install nftables on the host; Hohenheim manages its own table through its helper.",
+    "scope": "server_overview"
+  },
+  "fix_resources": {
+    "text": "Give the Incus host more CPU or memory, or place workloads on another host.",
+    "scope": "server_overview"
+  },
+  "fix_trusted": {
+    "text": "Trust this controller's client certificate on the Incus host.",
+    "scope": "server_overview"
+  },
+  "fix_driver_lxc": {
+    "text": "Install and enable the LXC driver for Incus on the host.",
+    "scope": "server_overview"
+  },
+  "fix_storage_pool": {
+    "text": "Create the Incus storage pool this host is configured to use.",
+    "scope": "server_overview"
+  },
+  "fix_managed_network": {
+    "text": "Create the Incus managed network this host is configured to use.",
+    "scope": "server_overview"
+  },
+  "fix_network_acl": {
+    "text": "Use an Incus-managed bridge network, which supports network ACLs.",
+    "scope": "server_overview"
+  },
+  "fix_kernel_isolation_lane": {
+    "text": "This host gives containers no isolated kernel lane. Enable it, or run tenant workloads in virtual machines.",
+    "scope": "server_overview"
+  },
+  "fix_container_userns": {
+    "text": "Run Incus containers unprivileged, with a user namespace mapping.",
+    "scope": "server_overview"
+  },
+  "fix_container_seccomp": {
+    "text": "Run Incus containers with seccomp filtering enabled.",
+    "scope": "server_overview"
   }
 }

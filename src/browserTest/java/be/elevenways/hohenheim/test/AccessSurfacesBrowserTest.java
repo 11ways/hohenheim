@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -40,6 +42,11 @@ import java.util.Set;
  * AccessListResource, ManageAccessListResource, ProtectedPathResource, ManageProtectedPathResource,
  * AuthProviderResource and ReleasedClaimResource. A failing comparison is a changed surface, never a file to refresh;
  * an accepted difference is declared as a move or a twin table entry.
+ *
+ * AIDEV-NOTE: intended difference, protection that guards (W1b, 2026-10-05): every protected-path list case carries
+ * the added {@code column protection} (Protected / Open to everyone) before the site column, and the operator's
+ * access-list pick on a protected path offers inline create ({@code creatable:true}; the tenant twin stays false).
+ * Only those facts were re-recorded; the fixture list carries one rule, as a protected path's list must.
  */
 class AccessSurfacesBrowserTest extends HohenheimTestBase {
 
@@ -180,6 +187,13 @@ class AccessSurfacesBrowserTest extends HohenheimTestBase {
     }
 
     private static int protectedPath(int site, String path, int list) {
+        // A path only points at a list that guards it (ProtectedPathInvariant): the list gets one rule first.
+        Row rule = Models.get(AccessRuleModel.class).createEmptyRow();
+        rule.set(AccessRuleModel.ACCESS_LIST_ID, list);
+        rule.set(AccessRuleModel.TYPE, AccessRuleModel.TYPE_IP_ALLOW);
+        rule.set(AccessRuleModel.DATA, new LinkedHashMap<>(Map.of("network", "10.0.0.0/8")));
+        rule.set(AccessRuleModel.ENABLED, true);
+        Models.get(AccessRuleModel.class).save(rule);
         Model paths = Models.get(ProtectedPathModel.class);
         Row row = paths.createEmptyRow();
         row.set(ProtectedPathModel.SITE_ID, site);

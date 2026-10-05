@@ -140,6 +140,12 @@ class TenantAccessListSecurityTest extends HohenheimTestBase {
 
     @Test
     void protectedPathsAnswerToTheSiteAndToTheListsUsability() {
+        // A path only points at a list that guards it (ProtectedPathInvariant), so each list gets a rule first; Bob's
+        // second rule also keeps his list guarded when a later write of his first one is judged.
+        rule(aliceListId);
+        rule(sharedListId);
+        rule(bobListId);
+
         // Positive anchors: an own list and a shared list both guard an own folder.
         refusalOf(alice, () -> protect(aliceSiteId, "/own", aliceListId), null);
         refusalOf(alice, () -> protect(aliceSiteId, "/shared", sharedListId), null);

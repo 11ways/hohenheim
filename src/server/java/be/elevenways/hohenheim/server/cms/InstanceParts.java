@@ -278,7 +278,7 @@ public final class InstanceParts {
             // makes a hand-posted generated-only kind fail at the form layer too. Every label path reads
             // EnumField.getValues() and still sees the whole registry, so existing generated rows keep their label.
             .add(Select.of(InstanceModel.KIND)
-                .options(OptionSource.supplied(InstanceKinds::authorableOptions))
+                .options(OptionSource.supplied(InstanceKinds::placeableOptions))
                 .presentation(Select.Presentation.CARDS)
                 .clearable(!Boolean.TRUE.equals(InstanceModel.KIND.getAttribute(FieldAttributes.REQUIRED)))
                 .build())

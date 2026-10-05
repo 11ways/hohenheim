@@ -40,10 +40,11 @@ final class AccessRuleSummaries {
                 AccessListModel.SATISFY_ALL.equals(
                     Texts.trimmedOrNull(data.get(AccessRuleModel.GROUP_SATISFY.getName())))
                     ? "summary_group_all" : "summary_group_any");
-            case AccessRuleModel.TYPE_IP_ALLOW, AccessRuleModel.TYPE_IP_DENY -> ruleText("summary_network")
-                .withArg("network", blank(data.get(AccessRuleModel.NETWORK.getName())));
-            case AccessRuleModel.TYPE_BASIC_AUTH -> ruleText("summary_basic_auth")
-                .withArg("username", blank(data.get(AccessRuleModel.BASIC_AUTH_USERNAME.getName())));
+            // A value the rule does not carry yet says so, never a label followed by nothing ("Password: Username").
+            case AccessRuleModel.TYPE_IP_ALLOW, AccessRuleModel.TYPE_IP_DENY -> valued("summary_network",
+                "network", data.get(AccessRuleModel.NETWORK.getName()), "summary_network_missing");
+            case AccessRuleModel.TYPE_BASIC_AUTH -> valued("summary_basic_auth",
+                "username", data.get(AccessRuleModel.BASIC_AUTH_USERNAME.getName()), "summary_basic_auth_missing");
             case AccessRuleModel.TYPE_AUTH_PROVIDER -> {
                 String permission = Texts.trimmedOrNull(
                     data.get(AccessRuleModel.PROVIDER_REQUIRED_PERMISSION.getName()));
@@ -102,6 +103,13 @@ final class AccessRuleSummaries {
         Row provider = Models.get(SiteAuthProviderModel.class).find()
             .where(SiteAuthProviderModel.ID.eq(number.intValue())).first();
         return provider != null ? blank(provider.get(SiteAuthProviderModel.NAME)) : "";
+    }
+
+    /** @return the summary carrying the value, or the missing-value sentence when the rule has none yet */
+    private static @NonNull Microcopy valued(@NonNull String key, @NonNull String arg, @Nullable Object value,
+                                             @NonNull String missingKey) {
+        String text = Texts.trimmedOrNull(value == null ? null : String.valueOf(value));
+        return text == null ? ruleText(missingKey) : ruleText(key).withArg(arg, text);
     }
 
     private static @NonNull String blank(@Nullable Object value) {

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
@@ -189,7 +190,12 @@ class B15BeforeSurfacesTest {
                 var placed = ServerParts.admin().actions().stream().map(action -> action.id()).toList();
                 moves = PlacedOperationMoves.of(stored.factsOf(SurfaceFact.Kind.ROW)
                     .stream().map(fact -> Identifier.tryParse(fact.name())).filter(placed::contains).toArray(Identifier[]::new))
-                    .synthesized(ServerParts.SLUG, ZenitIds.id("delete"), ServerParts.DELETE.id());
+                    .synthesized(ServerParts.SLUG, ZenitIds.id("delete"), ServerParts.DELETE.id())
+                    // AIDEV-NOTE: intended difference, W1b (2026-10-05): Admit and Preflight became ONE check_host
+                    // verb. It takes Admit's inline place exactly (band, style, offer state), and Preflight's overflow
+                    // fact is the retired duplicate of it.
+                    .split(HohenheimIds.id("admit_server"), Map.of(fixture.name(), HohenheimIds.id("check_host")))
+                    .retired(ServerParts.SLUG, HohenheimIds.id("preflight_server"), HohenheimIds.id("check_host"));
             }
             if (fixture.recordKey() != null && fixture.entrySlug().equals("instance-volumes")) {
                 moves = PlacedOperationMoves.of(VolumeOperations.DESTROY.id());

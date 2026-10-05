@@ -122,8 +122,8 @@ public final class SiteParts {
         return entry("site")
             .list(adminList())
             .form(ResourceForm.<Row>of(SiteWrites.ADMIN_FORM)
-                // The instance pick stays EDITABLE on both forms: its sibling narrowing keeps it inert until the
-                // instance kind is chosen, and hiding it on a non-instance site was a one-way door (2026-09-08).
+                // The instance pick shows only for the instance kind (SiteWrites.ADMIN_FORM's showWhen); switching a
+                // site away from that kind clears its link instead of leaving it unreachable.
                 .bindings(List.of())
                 // The create stages both without a form entry; a revision restore must still own them.
                 .restorableOutsideForm(Set.of(SiteModel.SLUG.getName(), SiteModel.STATUS.getName()))
