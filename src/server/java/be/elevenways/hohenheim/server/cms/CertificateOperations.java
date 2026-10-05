@@ -191,6 +191,11 @@ public final class CertificateOperations {
             .confirmation(ConfirmationSpec.generic(copy("reissue_notice"), false))
             .inSheet()
             .inputValues((cert, request) -> reorder(cert))
+            // A manual upload has no order to repeat, and the ACME account row is not a certificate at all: the
+            // handler refuses them, this only stops offering an action that could never succeed.
+            .hiddenWhen(cert -> !CertificateModel.PROVIDER_LETSENCRYPT.equals(cert.get(CertificateModel.PROVIDER)))
+            // A rare chore: it lives in the row's overflow menu, not in the row itself.
+            .inlineInRow(false)
             .build();
     }
 
