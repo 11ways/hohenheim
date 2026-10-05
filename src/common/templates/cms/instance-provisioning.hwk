@@ -11,19 +11,17 @@
 {% declare files: List %}
 {% declare addFileTarget: RouteTarget = null %}
 {% declare canAddFile: Boolean = false %}
-{% declare recordTabs: List<RecordTabState> %}
+{% declare head: RecordHeadState = null %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
 <section class="cms-resource-list-page">
-    <header class="cms-resource-list-header">
-        <h1>{{ instanceName }}</h1>
+    {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
+    <div class="hh-tab-tools">
         {% if canAddFile %}
         <pl-button variant="secondary" use:Zenit.route={% addFileTarget %} id="add-file-link">{{ t("add_file", scope: "template_contents") }}</pl-button>
         {% /if %}
-    </header>
-
-    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+    </div>
 
     <pl-card>
         <pl-card-content>

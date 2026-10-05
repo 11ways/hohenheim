@@ -393,7 +393,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
             .doesNotContain("No install step");
         assertThat(quietOverview)
             .as("step 2: the card itself still renders the states that DO say something")
-            .contains("data-app-card=\"details\"").contains("<pl-badge");
+            .contains("data-filter-scope=\"app_overview\">Details</pb-microcopy></pl-card-title>").contains("<pl-badge");
 
         try {
             // 3. FALSIFICATION: a pending install is a state an operator acts on, and it

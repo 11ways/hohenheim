@@ -64,7 +64,7 @@ public final class SiteDevSessionsPage implements RecordTab.Rendered<Row> {
             site.get(SiteModel.NAME)));
         vars.put("siteName", site.get(SiteModel.NAME));
         vars.put("sessions", sessions);
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("head", recordHead(conduit));
 
         return new RenderTemplateResult(HohenheimTemplateIds.SITE_DEV_SESSIONS, vars);
     }

@@ -10,16 +10,12 @@
 {% declare parentOptions: List<AccessRuleOption> %}
 {% declare typeOptions: List<AccessRuleOption> %}
 {% declare addTarget: RouteTarget %}
-{% declare recordTabs: List<RecordTabState> %}
+{% declare head: RecordHeadState = null %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
 <section class="cms-resource-list-page hh-access-rules">
-    <header class="cms-resource-list-header">
-        <h1>{{ listName }}</h1>
-    </header>
-
-    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+    {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
 
     <pl-card>
         <pl-card-header>

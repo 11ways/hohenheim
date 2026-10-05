@@ -135,7 +135,7 @@ public final class InstanceConsolePage implements ConsoleModes.Mode {
         // its own declaration here -- endpoint-derived, never concatenated.
         vars.put("consoleWsUrl", HohenheimEndpoints.INSTANCE_CONSOLE.toUrl(
             Map.of(HohenheimEndpoints.INSTANCE_ID, instanceId)));
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("head", recordHead(conduit));
         vars.put("consoleModes", this.modes.views(request, instance, SLUG));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_CONSOLE, vars);
     }

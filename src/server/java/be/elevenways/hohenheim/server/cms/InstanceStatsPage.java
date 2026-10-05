@@ -69,7 +69,7 @@ public final class InstanceStatsPage implements RecordTab.Rendered<Row> {
         // a live-only page that silently omits the one stored figure reads as "we measure
         // nothing", which is wrong in one direction and right in the other.
         vars.put("disk", InstanceOverview.diskViewOf(instance));
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_STATS, vars);
     }
 

@@ -4,10 +4,7 @@ import be.elevenways.hohenheim.CertCoverage;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.app.AppAddress;
-import be.elevenways.hohenheim.app.AppAddressesCard;
 import be.elevenways.hohenheim.app.AppProtection;
-import be.elevenways.hohenheim.app.AppProtectionCard;
-import be.elevenways.hohenheim.app.AppUsage;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -20,12 +17,7 @@ import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelRegistry;
-import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
-import be.elevenways.zenit.cms.common.widget.RecordActionsWidget;
-import be.elevenways.zenit.cms.server.render.action.RecordActionBands;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ActivityRules;
@@ -36,7 +28,12 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
+import be.elevenways.zenit.widget.common.builtin.CardWidget;
+import be.elevenways.zenit.widget.common.builtin.FactListWidget;
+import be.elevenways.zenit.widget.common.builtin.RecordsWidget;
 import be.elevenways.zenit.widget.common.builtin.SectionWidget;
+import be.elevenways.zenit.widget.common.builtin.UsageBarWidget;
+import be.elevenways.zenit.widget.common.data.UsageData;
 import be.elevenways.zenit.widget.common.data.WidgetBadge;
 import be.elevenways.zenit.widget.common.data.WidgetFact;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -50,9 +47,9 @@ import java.util.Set;
 
 /**
  * The ONE composition of an app's overview, drawn by both of its record pages (an instance's, and a site's when it
- * serves no workload of its own): the action row across the top, then Addresses, Protection and what the workload
- * uses in the wide column, Details and Recent in the narrow one. The verdict above it all is the resource's health
- * part ({@link AppHealth}), which the framework draws as the page's first band.
+ * serves no workload of its own): Addresses, Protection and what the workload uses in the wide column, Details and
+ * Recent in the narrow one, each a framework card ({@link CardWidget}). The record's actions are the record heading's
+ * (zenitcms:record-head) and the verdict is the resource's health part ({@link AppHealth}), the page's first band.
  *
  * AIDEV-NOTE: every card READS the facts other surfaces own (certificate coverage, the protected-path invariant, the
  * activity source), so the overview, the list columns and the health band say the same thing. The delegated panel
@@ -78,9 +75,6 @@ final class AppOverview {
     private static @NonNull WidgetTree siteWidgets(@NonNull Row site, @NonNull AccessContext access) {
         Conduit conduit = access.conduit();
         boolean delegated = CmsSupport.isDelegatedPanel(conduit);
-        List<WidgetInstance> top = new ArrayList<>();
-        addIfPresent(top, actions(access, HohenheimSlugs.SITES, site));
-
         List<WidgetInstance> main = new ArrayList<>();
         main.add(addresses(List.of(site), access));
         addIfPresent(main, protection(List.of(site), access));
@@ -90,12 +84,12 @@ final class AppOverview {
         if (!delegated) {
             side.add(recent(Models.get(SiteModel.class), site.get(SiteModel.ID)));
         }
-        return compose(top, main, side);
+        return compose(List.of(), main, side);
     }
 
     // -- composition ------------------------------------------------------------------
 
-    /** The overview's grid: a full-width row on top, a wide column and a narrow one below it. */
+    /** The overview's grid: an optional full-width row on top, a wide column and a narrow one below it. */
     static @NonNull WidgetTree compose(@NonNull List<WidgetInstance> top, @NonNull List<WidgetInstance> main,
                                        @NonNull List<WidgetInstance> side) {
         List<WidgetInstance> regions = new ArrayList<>();
@@ -107,18 +101,6 @@ final class AppOverview {
         return new WidgetTree(List.of(section("hh-app-overview", regions)));
     }
 
-    /** The entry's own row actions for this record, as the record band offers them; null outside a known panel. */
-    static @Nullable WidgetInstance actions(@NonNull AccessContext access, @NonNull String entrySlug,
-                                            @NonNull Row record) {
-        Conduit conduit = access.conduit();
-        Panel panel = PanelRegistry.getBySlug(CmsSupport.panelSlug(conduit));
-        if (panel == null) {
-            return null;
-        }
-        return new WidgetInstance(RecordActionsWidget.ID, Map.of())
-            .withData(RecordActionBands.forRecord(new PanelRequest(panel, conduit, access, null),
-                CmsSupport.rowEntry(panel, entrySlug), record));
-    }
 
     // -- cards ------------------------------------------------------------------------
 
@@ -142,8 +124,8 @@ final class AppOverview {
             ? CmsRoutes.subpage(panelSlug, HohenheimSlugs.SITES, sites.get(0).get(SiteModel.ID),
                 SiteParts.DOMAINS_TAB).toUrl()
             : null;
-        return new WidgetInstance(HohenheimWidgets.APP_ADDRESSES.id(), Map.of())
-            .withData(new AppAddressesCard(rows, addUrl));
+        return card(copy("addresses"), new WidgetInstance(HohenheimWidgets.APP_ADDRESSES.id(), Map.of()).withData(rows),
+            copy("add_address"), addUrl, "plus");
     }
 
     private static @NonNull AppAddress address(@NonNull Row domain, boolean passthrough, boolean main,
@@ -220,17 +202,23 @@ final class AppOverview {
             ? CmsRoutes.subpage(panelSlug, HohenheimSlugs.SITES, served.get(0).get(SiteModel.ID),
                 ProtectedPathParts.SLUG).toUrl()
             : null;
-        return new WidgetInstance(HohenheimWidgets.APP_PROTECTION.id(), Map.of())
-            .withData(new AppProtectionCard(rows, protectUrl));
+        return card(copy("protection"), new WidgetInstance(HohenheimWidgets.APP_PROTECTION.id(), Map.of()).withData(rows),
+            copy("protect_path"), protectUrl, "lock");
     }
 
-    /** The workload's measured resources, each a framework usage answer. */
-    static @NonNull WidgetInstance resources(@NonNull List<AppUsage> gauges) {
-        return new WidgetInstance(HohenheimWidgets.APP_RESOURCES.id(), Map.of()).withData(gauges);
+    /** The workload's measured resources, each the framework's usage gauge, so NOT MEASURED stays an answer. */
+    static @NonNull WidgetInstance resources(@NonNull List<WidgetInstance> gauges) {
+        return CardWidget.of(copy("resources"), new WidgetTree(gauges));
+    }
+
+    /** One measured resource under its label, for {@link #resources}. */
+    static @NonNull WidgetInstance gauge(@NonNull Microcopy label, @NonNull UsageData usage) {
+        return new WidgetInstance(UsageBarWidget.ID, Map.of("label", label)).withData(usage);
     }
 
     static @NonNull WidgetInstance details(@NonNull List<WidgetFact> facts) {
-        return new WidgetInstance(HohenheimWidgets.APP_DETAILS.id(), Map.of()).withData(facts);
+        return CardWidget.of(copy("details"),
+            new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(facts))));
     }
 
     /**
@@ -238,12 +226,23 @@ final class AppOverview {
      * InstanceOverview's note on the audit log's audience).
      */
     static @NonNull WidgetInstance recent(@NonNull Model model, @NonNull Integer id) {
-        return new WidgetInstance(HohenheimWidgets.APP_RECENT.id(), Map.of(
+        return CardWidget.of(copy("recent"), new WidgetTree(List.of(new WidgetInstance(RecordsWidget.ID, Map.of(
             "source", CmsSupport.ACTIVITY_SOURCE,
             "rules", ActivityRules.forRecord(model, id),
             "sort", ActivityModel.CREATED_AT.getName(),
             "descending", true,
-            "limit", 6));
+            "limit", 6)))));
+    }
+
+    /**
+     * A titled framework card around one widget, with its header link (Add address, Protect a path) only when the
+     * caller resolved a url: a reader who may not follow it is not shown a door that refuses.
+     */
+    private static @NonNull WidgetInstance card(@NonNull Microcopy title, @NonNull WidgetInstance body,
+                                                @NonNull Microcopy linkLabel, @Nullable String linkUrl,
+                                                @NonNull String linkIcon) {
+        return CardWidget.withLink(CardWidget.of(title, new WidgetTree(List.of(body))), linkLabel, linkUrl,
+            linkIcon);
     }
 
     /** The lead line under a site's heading: what it serves. */

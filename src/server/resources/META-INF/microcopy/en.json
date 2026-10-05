@@ -1853,16 +1853,10 @@
     "text": "Defaults to the first domain",
     "scope": "certificate_request"
   },
-  "domains": [
-    {
-      "text": "Domains",
-      "scope": "certificate_request"
-    },
-    {
-      "text": "Domains",
-      "scope": "site"
-    }
-  ],
+  "domains": {
+    "text": "Domains",
+    "scope": "certificate_request"
+  },
   "domains_help": {
     "text": "Add each hostname separately. Wildcards such as *.example.com require DNS-01 and do not cover the bare example.com name; include both when needed.",
     "scope": "certificate_request"
@@ -11583,10 +11577,6 @@
   "run_title": {
     "text": "Run #{$id} ({$status})",
     "scope": "instance_schedule"
-  },
-  "protected_paths": {
-    "text": "Protected paths",
-    "scope": "site"
   },
   "protected_path_prefix": {
     "text": "Requests whose path starts with this prefix must pass the access list, in addition to any site-wide list.",

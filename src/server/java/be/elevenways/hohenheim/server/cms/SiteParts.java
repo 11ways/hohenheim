@@ -85,23 +85,23 @@ public final class SiteParts {
     static final String UPSTREAM_COLUMN = "upstream";
     static final String TLS_COLUMN = "tls";
 
-    /** The Domains tab's slug, which the domain entries name as their parent tab. */
+    /** The Addresses tab's slug, which the domain entries name as their parent tab. */
     public static final String DOMAINS_TAB = DomainParts.SLUG;
 
-    /** The extra certificate coverage column of the Domains tab's section. */
+    /** The extra certificate coverage column of the Addresses tab's section. */
     static final String CERTIFICATE_COLUMN = "certificate";
 
     /**
-     * The Domains tab: the framework's child list over the panel's domain entry (its /manage twin there), narrowed to
-     * the site, without the site column every row would repeat, plus the certificate each hostname is covered by; a
-     * domain row's own action requests one.
+     * The Addresses tab, in the overview card's word: the framework's child list over the panel's domain entry (its
+     * /manage twin there), narrowed to the site, without the site column every row would repeat, plus the certificate
+     * each hostname is covered by; a domain row's own action requests one.
      *
      * AIDEV-NOTE: the rows, their edit and remove, the add link with its parent preset, the scope and a trashed site's
      * read-only state are the child list's own; what a hostless site's empty tab tells the reader is the domain list's
      * own empty description (DomainParts).
      */
     public static final ChildList<Row> DOMAINS = ChildList.<Row>sections(DOMAINS_TAB,
-            Microcopy.of("domains").withFilter("scope", "site"), DomainParts.SLUG)
+            AppOverview.copy("addresses"), DomainParts.SLUG)
         .hide(DomainParts.SLUG, SiteDomainModel.SITE_ID.getName())
         .column(DomainParts.SLUG, SubjectType.record(SiteDomainModel.MODEL_ID),
             ColumnSpec.virtual(CERTIFICATE_COLUMN, Microcopy.of("certificate").withFilter("scope", "site_domains"))
@@ -109,11 +109,12 @@ public final class SiteParts {
             SiteParts::certificateCell);
 
     /**
-     * The Protected paths tab: the framework's child list over the panel's protected-path entry (its /manage twin
-     * there), under the site. A TLS passthrough site terminates nothing here, so it has no paths to protect and no tab.
+     * The Protection tab, in the overview card's word: the framework's child list over the panel's protected-path entry
+     * (its /manage twin there), under the site. A TLS passthrough site terminates nothing here, so it has no paths to
+     * protect and no tab.
      */
     public static final ChildList<Row> PROTECTED_PATHS = ChildList.<Row>of(ProtectedPathParts.SLUG)
-        .label(Microcopy.of("protected_paths").withFilter("scope", "site"))
+        .label(AppOverview.copy("protection"))
         .visibleWhen((site, access) -> !tlsPassthrough(site));
 
     private SiteParts() {

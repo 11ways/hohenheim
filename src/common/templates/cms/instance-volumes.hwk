@@ -6,19 +6,17 @@
 {% declare instanceName: String %}
 {% declare volumes: List %}
 {% declare addVolumeTarget: RouteTarget = null %}
-{% declare recordTabs: List<RecordTabState> %}
+{% declare head: RecordHeadState = null %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
 <section class="cms-resource-list-page">
-    <header class="cms-resource-list-header">
-        <h1>{{ instanceName }}</h1>
+    {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
+    <div class="hh-tab-tools">
         {% if addVolumeTarget %}
         <pl-button variant="primary" use:Zenit.route={% addVolumeTarget %} id="add-volume-link">{{ t("add", scope: "instance_volume") }}</pl-button>
         {% /if %}
-    </header>
-
-    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+    </div>
 
     <p class="hh-tab-hint">{{ t("tab_hint", scope: "instance_volume") }}</p>
 

@@ -106,7 +106,7 @@ public final class AccessListRulesPage implements RecordTab.Rendered<Row> {
             ? HohenheimEndpoints.ACCESS_RULES_ADD
             : HohenheimEndpoints.MANAGE_ACCESS_RULES_ADD)
             .with(HohenheimEndpoints.ACCESS_LIST_ID, listId));
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.ACCESS_LIST_RULES, vars);
     }
 

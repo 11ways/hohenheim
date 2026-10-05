@@ -110,7 +110,7 @@ public final class InstanceMigratePage implements RecordTab.Rendered<Row> {
         vars.put("operable", operable);
         vars.put("status", instance.get(InstanceModel.STATUS));
         vars.put("targets", this.targetsFor(request, instance, operable));
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_MIGRATE, vars);
     }
 

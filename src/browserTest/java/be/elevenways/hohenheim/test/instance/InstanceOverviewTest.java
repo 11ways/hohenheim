@@ -362,7 +362,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
             String body = adminGet(overviewUrl()).body();
             assertThat(body)
                 .as("step 2: the overview carries a Recent card")
-                .contains("data-app-card=\"recent\"");
+                .contains("data-filter-scope=\"app_overview\">Recent</pb-microcopy></pl-card-title>");
             assertThat(body)
                 .as("step 2: it links this instance's own activity entry")
                 .contains("/admin/activity/" + mine);

@@ -1853,16 +1853,10 @@
     "text": "Standaard het eerste domein",
     "scope": "certificate_request"
   },
-  "domains": [
-    {
-      "text": "Domeinen",
-      "scope": "certificate_request"
-    },
-    {
-      "text": "Domeinen",
-      "scope": "site"
-    }
-  ],
+  "domains": {
+    "text": "Domeinen",
+    "scope": "certificate_request"
+  },
   "domains_help": {
     "text": "Voeg elke hostnaam afzonderlijk toe. Wildcards zoals *.example.com vereisen DNS-01 en dekken de kale naam example.com niet; voeg beide toe wanneer nodig.",
     "scope": "certificate_request"
@@ -11583,10 +11577,6 @@
   "run_title": {
     "text": "Run #{$id} ({$status})",
     "scope": "instance_schedule"
-  },
-  "protected_paths": {
-    "text": "Beschermde paden",
-    "scope": "site"
   },
   "protected_path_prefix": {
     "text": "Aanvragen waarvan het pad met deze prefix begint moeten de toegangslijst passeren, bovenop een eventuele sitebrede lijst.",

@@ -343,8 +343,9 @@
         min-width: 0;
     }
 
-    // An app's overview (AppOverview): the action row across the top, a wide column for what visitors reach and what
-    // the workload uses, a narrow one for its facts and history. One column on a narrow screen.
+    // An app's overview (AppOverview): an optional row on top (an instance's refresh and install error), a wide column
+    // for what visitors reach and what the workload uses, a narrow one for its facts and history. One column on a
+    // narrow screen. The record's actions are the record heading's, never a row here.
     .hh-app-overview {
         display: grid;
         grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
@@ -392,27 +393,24 @@
         color: var(--pl-color-text-muted);
     }
 
-    .hh-app-card-header {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        gap: var(--pl-space-sm);
-    }
-
     .hh-app-card-glyph {
         display: inline-flex;
         color: var(--pl-color-text-muted);
     }
 
-    .hh-app-card-stack {
+    // A Hohenheim record tab's own tools (search, Add record, Attach) under the record heading: one row at the
+    // tab's end, wrapping on a narrow screen.
+    .hh-tab-tools {
         display: flex;
-        flex-direction: column;
-        gap: var(--pl-space-md);
-    }
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: var(--pl-space-sm);
+        margin-block-end: var(--pl-space-md);
 
-    .hh-app-usage-label {
-        font-size: var(--pl-font-size-sm);
+        > .cms-list-search {
+            margin-inline-end: auto;
+        }
     }
 
     .hh-server-overview,

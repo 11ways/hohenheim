@@ -59,7 +59,7 @@ public final class ManageDatabaseCredentialsPage implements RecordTab.Rendered<R
         // never stored, so a redeployed engine never hands out a stale address.
         vars.put("containerHost", handle == null ? "" : handle);
         vars.put("port", live.port() == null ? "" : String.valueOf(live.port()));
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(
             HohenheimTemplateIds.DATABASE_CREDENTIALS, vars);
     }

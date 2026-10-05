@@ -9,16 +9,12 @@
 {% declare operable: Boolean = true %}
 {% declare status: String = "" %}
 {% declare targets: List<MigrationTargetView> %}
-{% declare recordTabs: List<RecordTabState> %}
+{% declare head: RecordHeadState = null %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
 <section class="cms-resource-list-page hh-instance-migrate">
-    <header class="cms-resource-list-header">
-        <h1>{{ instanceName }}</h1>
-    </header>
-
-    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+    {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
 
     <pl-card class="hh-overview-card">
         <pl-card-header>

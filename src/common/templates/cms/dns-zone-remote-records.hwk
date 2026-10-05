@@ -18,19 +18,17 @@
 {% declare editWeight: Double = null %}
 {% declare editPort: Double = null %}
 {% declare recordTypes: List %}
-{% declare recordTabs: List<RecordTabState> %}
+{% declare head: RecordHeadState = null %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
 <section class="cms-resource-list-page">
-    <header class="cms-resource-list-header">
-        <h1>{{ origin }}</h1>
+    {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
+    <div class="hh-tab-tools">
         {% if editable %}
         <pl-button variant="primary" use:Zenit.route={% addRecordTarget %} id="add-remote-record-link">{{ t("add_record", scope: "dns_zone") }}</pl-button>
         {% /if %}
-    </header>
-
-    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+    </div>
 
     {% if editable %}
     <pl-alert variant="default">{{ t("edits_forwarded", scope: "dns_remote", peer: peerName) }}</pl-alert>

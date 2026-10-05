@@ -10,22 +10,20 @@
 {% declare addFileTarget: RouteTarget %}
 {% declare addDatabaseTarget: RouteTarget %}
 {% declare addVolumeTarget: RouteTarget %}
-{% declare recordTabs: List<RecordTabState> %}
+{% declare head: RecordHeadState = null %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
 <section class="cms-resource-list-page">
-    <header class="cms-resource-list-header">
-        <h1>{{ templateName }}</h1>
+    {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
+    <div class="hh-tab-tools">
         <div>
             <pl-button variant="primary" use:Zenit.route={% addVariableTarget %} id="add-variable-link">{{ t("add_variable", scope: "template_contents") }}</pl-button>
             <pl-button variant="secondary" use:Zenit.route={% addFileTarget %} id="add-file-link">{{ t("add_file", scope: "template_contents") }}</pl-button>
             <pl-button variant="secondary" use:Zenit.route={% addDatabaseTarget %} id="add-database-link">{{ t("add_database", scope: "template_contents") }}</pl-button>
             <pl-button variant="secondary" use:Zenit.route={% addVolumeTarget %} id="add-volume-link">{{ t("add_volume", scope: "template_contents") }}</pl-button>
         </div>
-    </header>
-
-    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+    </div>
 
     <h2>{{ t("variables", scope: "template_contents") }}</h2>
     {% if variables %}

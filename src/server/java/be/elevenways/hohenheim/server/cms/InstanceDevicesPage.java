@@ -117,7 +117,7 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
             && (!DeviceType.CDROM.operatorOnly() || HohenheimAccess.isAdmin(accessContext));
         vars.put("addMediaTarget", canAttachMedia
             ? newDeviceTarget(panel, DeviceType.CDROM, instanceId) : null);
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_DEVICES, vars);
     }
 

@@ -454,6 +454,9 @@ public final class InstanceParts {
             .hide(InstanceBackupParts.SLUG, InstanceBackupModel.INSTANCE_ID.getName())
             .hide(InstanceSnapshotParts.SLUG, InstanceSnapshotModel.INSTANCE_ID.getName())
             .hide(InstanceScheduleParts.SLUG, RecordScheduleModel.RECORD_ID.getName())
+            // An empty section offers its making action instead of a dead end ("No backups yet" with Back up now).
+            .parentActions(InstanceBackupParts.SLUG, InstanceOperations.BACKUP.id())
+            .parentActions(InstanceSnapshotParts.SLUG, InstanceOperations.SNAPSHOT.id())
             .column(InstanceBackupParts.SLUG, SubjectType.record(InstanceBackupModel.MODEL_ID), failureColumn(),
                 (backup, request) -> WithheldFailure.of(request.conduit()).shown(backup.get(InstanceBackupModel.ERROR)))
             .column(InstanceSnapshotParts.SLUG, SubjectType.record(InstanceSnapshotModel.MODEL_ID), failureColumn(),

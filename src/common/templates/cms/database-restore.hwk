@@ -9,16 +9,12 @@
 {% declare dbName: String %}
 {% declare restoreUrl: String %}
 {% declare usedBy: List = null %}
-{% declare recordTabs: List<RecordTabState> %}
+{% declare head: RecordHeadState = null %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
 <section class="cms-resource-form-page">
-    <header class="cms-resource-list-header">
-        <h1>{{ title }}</h1>
-    </header>
-
-    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+    {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
 
     {% render "hohenheim:cms/database-connection" var:engine=engine var:status=status var:dbName=dbName var:dbUser=dbUser
         var:dbPassword=dbPassword var:usedBy=usedBy %}

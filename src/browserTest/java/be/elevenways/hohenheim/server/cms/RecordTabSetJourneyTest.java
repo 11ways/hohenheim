@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -10,6 +11,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -95,6 +97,52 @@ class RecordTabSetJourneyTest extends HohenheimTestBase {
     }
 
     @Test
+    void everyTabOfAnAppHeadsWithItsRecordAndASiteKeepsTheBoardsTabs() throws Exception {
+        Row instance = instance("tab-set-heading");
+        int id = instance.get(InstanceModel.ID);
+        String record = "/admin/instances/" + id;
+        Row site = site("tab-set-site");
+        String siteRecord = "/admin/sites/" + site.get(SiteModel.ID);
+        try {
+            // 1. Every tab Hohenheim draws itself heads with the record (title, lead, actions, then the strip), never
+            //    with a heading of its own.
+            for (String tab : List.of("overview", "console", "shell", "exec", "files", "stats", "backups",
+                    "provisioning", "migrate")) {
+                String body = adminGet(record + "/page/" + tab).body();
+                assertThat(body).as("step 1: the %s tab heads with the record", tab)
+                    .contains("data-cms-record-head")
+                    .contains("<h1>tab-set-heading</h1>");
+                assertThat(body.split("data-cms-record-head", -1).length - 1)
+                    .as("step 1: the %s tab draws ONE heading", tab).isEqualTo(1);
+                assertThat(body).as("step 1: the %s tab keeps no heading of its own", tab)
+                    .doesNotContain("cms-resource-list-header");
+            }
+
+            // 2. A site keeps the board's tabs: its overview, its addresses and protection in the overview's own
+            //    words, and the contributed Access tab once.
+            String overview = adminGet(siteRecord + "/page/overview").body();
+            String strip = overview.substring(overview.indexOf("cms-record-tabs"));
+            assertThat(strip).as("step 2: overview, addresses and protection, in that order")
+                .containsSubsequence(siteRecord + "/page/overview", siteRecord + "/page/" + SiteParts.DOMAINS_TAB,
+                    siteRecord + "/page/" + ProtectedPathParts.SLUG);
+            assertThat(strip).as("step 2: the tabs read as the overview's cards do")
+                .contains("Addresses").contains("Protection")
+                .doesNotContain(">Domains<").doesNotContain("Protected paths");
+            assertThat(strip.split(Pattern.quote(siteRecord + "/page/access\""), -1).length - 1)
+                .as("step 2: one Access tab, the contributed one").isEqualTo(1);
+
+            // 3. A site's own tab (Addresses) heads with the site too.
+            assertThat(adminGet(siteRecord + "/page/" + SiteParts.DOMAINS_TAB).body())
+                .as("step 3: the Addresses tab heads with the site")
+                .contains("data-cms-record-head")
+                .contains("<h1>tab-set-site</h1>");
+        } finally {
+            HardDeletes.row(Models.get(SiteModel.class), site);
+            HardDeletes.row(Models.get(InstanceModel.class), instance);
+        }
+    }
+
+    @Test
     void theDelegatedConsoleHasNoOneOffCommand() {
         // 1. The operator's console offers the command mode; the delegated one never does (exec is ADMIN-sensitivity).
         assertThat(ConsoleModes.operator().tabs()).as("step 1: the operator console carries the command mode")
@@ -118,6 +166,17 @@ class RecordTabSetJourneyTest extends HohenheimTestBase {
         row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
         instances.save(row);
         return row;
+    }
+
+    private static Row site(String name) {
+        Row site = Models.get(SiteModel.class).createEmptyRow();
+        site.set(SiteModel.NAME, name);
+        site.set(SiteModel.SLUG, name);
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
+        site.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
+        site.set(SiteModel.ENABLED, true);
+        Models.get(SiteModel.class).save(site);
+        return site;
     }
 
     private static Row snapshot(int instanceId, String note) {

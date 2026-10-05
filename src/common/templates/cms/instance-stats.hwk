@@ -10,16 +10,12 @@
 {% declare rxSeed: List %}
 {% declare txSeed: List %}
 {% declare disk: InstanceDiskView %}
-{% declare recordTabs: List<RecordTabState> %}
+{% declare head: RecordHeadState = null %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
 <section class="cms-resource-list-page">
-    <header class="cms-resource-list-header">
-        <h1>{{ instanceName }}</h1>
-    </header>
-
-    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+    {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
 
     {#- The CONTRACT, stated rather than implied: the rings below are live-only (nothing
         is stored, by decision), and the one PERSISTED figure -- the disk sweeper's

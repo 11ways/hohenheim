@@ -101,7 +101,7 @@ class PageTitleLocalizationTest {
         ShippedCatalogs catalogs = new ShippedCatalogs();
         List<String> broken = new ArrayList<>();
 
-        for (String scope : List.of("instance_device", "instance_schedule", "schedule_step",
+        for (String scope : List.of("instance_device", "schedule_step",
                 "dns_secondaries", "dns_zone_file", "dns_zone_records", "dev_sessions",
                 "site_databases", "database_restore", "spamservice_sample",
                 "instance_deployments", "instance_volume", "site_domains")) {

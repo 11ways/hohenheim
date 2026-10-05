@@ -8,13 +8,13 @@
 {% declare addNicTarget: RouteTarget = null %}
 {% declare addMediaTarget: RouteTarget = null %}
 {% declare canEdit: Boolean = true %}
-{% declare recordTabs: List<RecordTabState> %}
+{% declare head: RecordHeadState = null %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
 <section class="cms-resource-list-page">
-    <header class="cms-resource-list-header">
-        <h1>{{ instanceName }}</h1>
+    {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
+    <div class="hh-tab-tools">
         {% if canEdit %}
         <pl-button variant="primary" use:Zenit.route={% addDiskTarget %} id="add-disk-link">{{ t("add_disk", scope: "instance_device") }}</pl-button>
         <pl-button use:Zenit.route={% addNicTarget %} id="add-nic-link">{{ t("add_nic", scope: "instance_device") }}</pl-button>
@@ -22,9 +22,7 @@
         {% if addMediaTarget %}
         <pl-button use:Zenit.route={% addMediaTarget %} id="add-media-link">{{ t("add_media", scope: "instance_device") }}</pl-button>
         {% /if %}
-    </header>
-
-    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+    </div>
 
     {% if devices %}
     <pl-table>

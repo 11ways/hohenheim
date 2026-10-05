@@ -112,7 +112,7 @@ public final class StackServicesPage implements RecordTab.Rendered<Row> {
         vars.put("failureReason", failure != null ? failure : "");
         vars.put("deploymentsTarget", failure != null
             ? CmsRoutes.subpage(panel, StackParts.SLUG, stackId, StackDeploymentsPage.SLUG) : null);
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.STACK_SERVICES, vars);
     }
 

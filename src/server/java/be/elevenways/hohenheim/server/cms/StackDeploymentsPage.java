@@ -70,7 +70,7 @@ public final class StackDeploymentsPage implements RecordTab.Rendered<Row> {
         vars.put("title", stack.get(StackModel.NAME));
         vars.put("stackName", stack.get(StackModel.NAME));
         vars.put("deployments", deployments);
-        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("head", recordHead(conduit));
         vars.put("timeWording", RelativeTimeWording.resolve(
             conduit.getLocales(), conduit.getMessageResolver()));
         return new RenderTemplateResult(HohenheimTemplateIds.STACK_DEPLOYMENTS, vars);
