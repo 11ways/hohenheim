@@ -5,9 +5,10 @@ import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.channel.ChannelException;
 import be.elevenways.zenit.common.channel.ChannelHandler;
 import be.elevenways.zenit.common.channel.ChannelLink;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.websocket.WebSocketSession;
@@ -57,8 +58,9 @@ public final class InstanceStatsHandler implements ChannelHandler<Object, Object
         Integer instanceId = parseInstanceId(openData);
         if (instanceId == null || !this.permitted(instanceId)) {
             // The SAME refusal for "no such instance" and "not yours": naming the
-            // difference would make this an instance-existence oracle.
-            throw new ChannelException("Not permitted");
+            // difference would make this an instance-existence oracle. Typed, so the
+            // client ends the link instead of retrying a refusal no wait lifts.
+            throw new DomainRefusal(ZenitRefusalReason.PERMISSION_DENIED, "Not permitted");
         }
         this.instanceId = instanceId;
         this.lastChecked = Now.millis();
@@ -88,7 +90,7 @@ public final class InstanceStatsHandler implements ChannelHandler<Object, Object
             // InstanceOverview install_error rule. A delegated viewer is told there
             // is nothing to stream; the operator gets the reason, and the log keeps it.
             Blast.log("STATS: no live stats for instance", instanceId, "-", noStream.getMessage());
-            throw new ChannelException(this.isOperator()
+            throw new DomainRefusal(ZenitRefusalReason.OPERATION_UNAVAILABLE, this.isOperator()
                 ? "No live stats: " + noStream.getMessage()
                 : "No live stats");
         }
