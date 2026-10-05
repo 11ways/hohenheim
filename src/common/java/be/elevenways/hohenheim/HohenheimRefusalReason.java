@@ -22,11 +22,11 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 public enum HohenheimRefusalReason implements DomainRefusal.Reason {
 
     /** The caller lacks the instance capability; the same answer as for an instance it cannot see. */
-    INSTANCE_NOT_PERMITTED("instance_not_permitted", false,
+    INSTANCE_NOT_PERMITTED("instance_not_permitted", DomainRefusal.Recovery.NEVER,
         "You are not allowed to perform this action on this instance"),
 
     /** An attached managed database is not active yet; deploying now would start the workload without it. */
-    DATABASE_NOT_READY("database_not_ready", true,
+    DATABASE_NOT_READY("database_not_ready", DomainRefusal.Recovery.AFTER_WAIT,
         "A database this instance uses is not ready yet");
 
     static {
@@ -35,13 +35,13 @@ public enum HohenheimRefusalReason implements DomainRefusal.Reason {
 
     private final @NonNull Identifier id;
     private final @NonNull String code;
-    private final boolean retriable;
+    private final DomainRefusal.@NonNull Recovery recovery;
     private final @NonNull Microcopy message;
 
-    HohenheimRefusalReason(@NonNull String key, boolean retriable, @NonNull String fallback) {
+    HohenheimRefusalReason(@NonNull String key, DomainRefusal.@NonNull Recovery recovery, @NonNull String fallback) {
         this.id = HohenheimIds.id(key);
         this.code = key;
-        this.retriable = retriable;
+        this.recovery = recovery;
         this.message = HohenheimViolations.text(key).withFallback(fallback);
     }
 
@@ -67,7 +67,7 @@ public enum HohenheimRefusalReason implements DomainRefusal.Reason {
     }
 
     @Override
-    public boolean retriable() {
-        return this.retriable;
+    public DomainRefusal.@NonNull Recovery recovery() {
+        return this.recovery;
     }
 }
