@@ -563,7 +563,7 @@ public final class ApplicationReleases {
         if (cpu instanceof Number number && number.doubleValue() > 0) {
             desired.put("cpu_limit", number.doubleValue());
         }
-        desired.put("crash_policy", settings.getOrDefault("crash_policy", InstanceModel.CRASH_NONE));
+        desired.put("crash_policy", settings.getOrDefault("crash_policy", InstanceModel.CRASH_DEFAULT));
         return desired;
     }
 

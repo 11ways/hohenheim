@@ -30,8 +30,8 @@ import java.util.List;
  * AIDEV-NOTE: the defect this exists for (workspace-journey audit, defect 2). Nothing
  * else reconciles instance status: {@code InstanceConsoles.prepare} opens a supervising
  * watch ONLY for a template that declares a readiness line or a stop command, or for
- * {@code crash_policy == restart} -- and the DEFAULT workspace has no template and a
- * crash policy of {@code none}. Its status column is therefore whatever the last
+ * {@code crash_policy == restart} -- and a workspace without a template that opted out
+ * with crash policy {@code none} has no watch. Its status column is therefore whatever the last
  * operation stamped, forever, and the list pill and the Overview badge both render it.
  * A workspace whose start command died a minute after a successful build showed green
  * until someone pressed Deploy again.

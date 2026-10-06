@@ -138,7 +138,10 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         assertThat(answer.run()).as("step 3: the answer is a run, before the work").isNotNull();
         OperationRun run = ended(runOf(answer), operator, "step 3");
         assertThat(run.status()).as("step 3: the run succeeded (%s)", run.outcome()).isEqualTo(OperationRunStatus.SUCCEEDED);
-        assertThat(run.stepsDone()).as("step 3: every step done").isEqualTo(5L);
+        assertThat(run.stepsDone()).as("step 3: every step passed").isEqualTo(5L);
+        assertThat(run.skipped(3)).as("step 3: the certificate waits for the setting, so its step reads skipped")
+            .isTrue();
+        assertThat(run.skipped(2)).as("step 3: the website was made, so its step is done").isFalse();
         assertThat(Objects.requireNonNull(run.outcome()).key()).as("step 3: its words say HTTPS waits for the setting")
             .isEqualTo("outcome_https_off_note");
         Row app = Models.get(InstanceModel.class).find().where(InstanceModel.NAME.eq(PREFIX + "shop-app")).first();
@@ -169,6 +172,9 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
             .isEqualTo(OperationRunStatus.SUCCEEDED);
         assertThat(Objects.requireNonNull(redirected.outcome()).key()).as("step 4: HTTPS was asked for later")
             .isEqualTo("outcome_https_later_note");
+        assertThat(List.of(redirected.skipped(0), redirected.skipped(1)))
+            .as("step 4: the website is done and the certificate, left for later, is skipped")
+            .containsExactly(false, true);
         Row old = Models.get(SiteModel.class).find().where(SiteModel.NAME.eq(PREFIX + "old-shop")).first();
         assertThat(old).as("step 4: the redirect's website exists").isNotNull();
         assertThat(String.valueOf((Object) old.get(SiteModel.UPSTREAM_KIND))).as("step 4: and redirects")

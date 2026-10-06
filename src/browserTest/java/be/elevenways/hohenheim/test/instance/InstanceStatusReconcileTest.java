@@ -71,6 +71,8 @@ class InstanceStatusReconcileTest {
             InstanceService service = new InstanceService();
             InstanceStatusReconciler reconciler = new InstanceStatusReconciler();
             int id = BackupLaneFixture.instanceRecord("reconcile-crash", hostId);
+            // A workload that opted out of the restart default: its unobserved death must read as error.
+            crashPolicyNone(id);
             service.deploy(id);
 
             // 1. Deployed: the record says running, and NOTHING has confirmed that
@@ -250,6 +252,8 @@ class InstanceStatusReconcileTest {
         Db.run(datasource, () -> {
             InstanceStatusReconciler reconciler = new InstanceStatusReconciler();
             int id = BackupLaneFixture.instanceRecord("reconcile-inflight", hostId);
+            // A workload that opted out of the restart default: its unobserved death must read as error.
+            crashPolicyNone(id);
             new InstanceService().deploy(id);
 
             // 1. The record claims running and the daemon agrees, as after any deploy.
@@ -407,5 +411,11 @@ class InstanceStatusReconcileTest {
             .where(ActivityModel.ACTION.eq(action))
             .orderBy(ActivityModel.ID, SortOrder.DESC)
             .all();
+    }
+
+    private static void crashPolicyNone(int instanceId) {
+        Row row = Models.get(InstanceModel.class).findById(instanceId);
+        row.set(InstanceModel.CRASH_POLICY, InstanceModel.CRASH_NONE);
+        Models.get(InstanceModel.class).save(row);
     }
 }

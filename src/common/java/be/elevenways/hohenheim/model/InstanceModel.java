@@ -289,16 +289,24 @@ public class InstanceModel extends Model {
     public static final String CRASH_RESTART = "restart";
 
     /**
-     * What the console watcher does when the workload exits without an observed stop.
-     * Only enforced while a console session is attached (readiness/stop matcher, crash
-     * policy or an open admin console); without one, nothing observes the exit.
+     * The policy a workload gets unless someone chooses otherwise: restart, as the Node
+     * original restarted every app after a crash. Flap protection still suspends restarts
+     * after a crash loop ({@code InstanceConsoles.flapExceeded}).
+     */
+    public static final String CRASH_DEFAULT = CRASH_RESTART;
+
+    /**
+     * What happens when the workload exits without an observed stop. A restart-policy
+     * workload is watched through its console (an immediate restart); one nothing watches
+     * is caught by {@code InstanceStatusReconciler} at sweep cadence, so an unwatched
+     * crash and a host reboot are restarted too.
      */
     public static final EnumField CRASH_POLICY = SCHEMA.addField(EnumField.builder("crash_policy")
         .value(CRASH_NONE, v -> v.displayName("None")
             .label(Microcopy.of("none").withFilter("scope", "crash_policy")).color(ColorHue.GRAY))
         .value(CRASH_RESTART, v -> v.displayName("Restart on crash").icon("rotate")
             .label(Microcopy.of("restart").withFilter("scope", "crash_policy")).color(ColorHue.GREEN))
-        .defaultValue(CRASH_NONE)
+        .defaultValue(CRASH_DEFAULT)
         .label(HohenheimFormCopy.label("crash_policy"))
         .help(HohenheimFormCopy.help("crash_policy"))
         .build());

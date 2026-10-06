@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.security.HohenheimSecurity;
 import be.elevenways.hohenheim.server.security.IpLiterals;
 import be.elevenways.hohenheim.server.security.ReputationBanPolicy;
 import be.elevenways.hohenheim.server.security.ThreatScorer;
+import be.elevenways.hohenheim.server.sitetype.ProbeableUpstream;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.UpstreamTarget;
@@ -16,6 +17,7 @@ import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.SniKeyManager;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.security.SecurityEventTypes;
 import be.elevenways.zenit.common.session.SessionStore;
@@ -30,7 +32,10 @@ import io.undertow.util.AttachmentKey;
 import io.undertow.util.HttpString;
 import io.undertow.util.StatusCodes;
 
+import java.io.IOException;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
@@ -131,9 +136,18 @@ public class SiteDispatcher implements HttpHandler {
 
     private volatile boolean httpsAvailable;
 
-    // Whether each site's upstream answered the last dial a visitor's request made (true) or refused it (false).
-    // Passive: nothing probes, so a site nobody visited since the last route load has no entry.
+    // Whether each site's upstream answered the last dial (true) or refused it (false): a visitor's request, or the
+    // dispatcher's own probe of a fixed upstream (ProbeableUpstream), whichever came last.
     private final ConcurrentHashMap<Integer, Boolean> upstreamAnswered = new ConcurrentHashMap<>();
+
+    /** How often fixed upstreams are probed without a visitor. */
+    private static final long UPSTREAM_PROBE_INTERVAL_MS = 30_000;
+
+    /** How long one probe waits for a TCP connect before calling the upstream down. */
+    private static final int UPSTREAM_PROBE_TIMEOUT_MS = 2_000;
+
+    // One probe round at a time: a round of slow upstreams must not pile up behind the next tick.
+    private final AtomicBoolean probing = new AtomicBoolean();
 
     // The proxy route for unmatched hostnames, keyed by the fallback address it was built from.
     private volatile @Nullable FallbackRoute fallbackRoute;
@@ -152,6 +166,50 @@ public class SiteDispatcher implements HttpHandler {
             return thread;
         });
         this.proxyClient = new UpstreamProxyClient();
+        // The round itself blocks on connects, so it runs on a virtual thread and never on the delay scheduler.
+        this.delayScheduler.scheduleWithFixedDelay(() -> JobRunner.startVirtualThread(this::probeUpstreams),
+            UPSTREAM_PROBE_INTERVAL_MS, UPSTREAM_PROBE_INTERVAL_MS, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Probe every fixed upstream of the serving routes once, recording whether it accepts a connection.
+     *
+     * AIDEV-NOTE: this is what makes a proxy whose target never answers read as down before its first visitor
+     * (W5a2: a new Grafana app on a closed port showed green). It feeds the SAME record visitors' dials feed, so
+     * healthOf stays the one verdict. A round on an older route table writes nothing.
+     */
+    public void probeUpstreams() {
+        if (!this.probing.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            RouteTable generation = this.routes;
+            Map<Integer, ProbeableUpstream> targets = new LinkedHashMap<>();
+            for (RouteEntry entry : generation.entries()) {
+                if (entry.siteId > 0 && entry.handler instanceof ProbeableUpstream probeable
+                        && probeable.probeHost() != null) {
+                    targets.putIfAbsent(entry.siteId, probeable);
+                }
+            }
+            for (Map.Entry<Integer, ProbeableUpstream> target : targets.entrySet()) {
+                boolean answered = accepts(target.getValue().probeHost(), target.getValue().probePort());
+                if (this.routes == generation) {
+                    upstreamAnswered.put(target.getKey(), answered);
+                }
+            }
+        } finally {
+            this.probing.set(false);
+        }
+    }
+
+    /** Whether a TCP connect to the address succeeds within the probe timeout; an unresolvable name does not. */
+    private static boolean accepts(String host, int port) {
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress(host, port), UPSTREAM_PROBE_TIMEOUT_MS);
+            return true;
+        } catch (IOException | IllegalArgumentException refused) {
+            return false;
+        }
     }
 
     /**
@@ -187,6 +245,8 @@ public class SiteDispatcher implements HttpHandler {
         // A reload may carry a fixed upstream: an old refusal must not keep calling it down until the next visitor.
         upstreamAnswered.clear();
         destroyIfUnused(previous, false);
+        // A new or changed fixed upstream is checked now, not at the next tick.
+        JobRunner.startVirtualThread(this::probeUpstreams);
     }
 
     /**
@@ -323,9 +383,9 @@ public class SiteDispatcher implements HttpHandler {
             int threshold = Zenit.SETTINGS_VALUES.getValue(
                 HohenheimSettings.Security.DOMAIN_MISS_THRESHOLD);
             if (score >= threshold) {
-                // Threshold-gated like the old fail2ban log line; the in-process
-                // sink (HohenheimSecurity) lands it in security_events. The
-                // scorer was already fed above, so the sink skips domain misses.
+                // Threshold-gated like the original fail2ban log line, which is written
+                // too; the in-process sink (HohenheimSecurity) lands it in security_events.
+                // The scorer was already fed above, so the sink skips domain misses.
                 String userAgent = exchange.getRequestHeaders().getFirst(Headers.USER_AGENT);
                 Map<String, String> detail = new LinkedHashMap<>();
                 detail.put("domain", hostname);
@@ -334,6 +394,7 @@ public class SiteDispatcher implements HttpHandler {
                     detail.put("ua", userAgent);
                 }
                 SecurityEvents.report(SecurityEventTypes.DOMAIN_MISS, clientIp, detail);
+                DomainMissLog.record(clientIp, hostname, path.raw(), userAgent);
             }
         }
 
@@ -792,8 +853,8 @@ public class SiteDispatcher implements HttpHandler {
     }
 
     /**
-     * What visitors of this site get: its handler's own health, DOWN when the upstream refused the last dial a
-     * visitor's request made (a handler that never probes reports UP regardless).
+     * What visitors of this site get: its handler's own health, DOWN when the upstream refused the last dial, a
+     * visitor's or the dispatcher's own probe of a fixed upstream (a handler that never probes reports UP regardless).
      *
      * @return the site's health, null when no route serves it
      */

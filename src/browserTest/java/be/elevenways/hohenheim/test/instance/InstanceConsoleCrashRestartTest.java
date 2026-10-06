@@ -131,6 +131,8 @@ class InstanceConsoleCrashRestartTest {
         row.set(InstanceModel.KIND, FakeNativeDaemons.FakeNativeKind.ID.toString());
         row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image"));
         row.set(InstanceModel.SERVER_ID, hostId);
+        // This journey starts from a workload nobody watches: opt out of the restart default until step 2.
+        row.set(InstanceModel.CRASH_POLICY, InstanceModel.CRASH_NONE);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
     }

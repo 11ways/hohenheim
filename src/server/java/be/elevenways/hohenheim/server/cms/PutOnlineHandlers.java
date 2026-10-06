@@ -116,13 +116,16 @@ final class PutOnlineHandlers {
         call.attachSubject(InstanceOperations.INSTANCE, instance);
         progress.reportProgressPart();
 
-        // 2. Its install step, when the template declares one, as the system: it stamps pipeline-owned columns.
+        // 2. Its install step, when the template declares one, as the system: it stamps pipeline-owned columns. A
+        //    template without one passes the step, and the run page says so instead of calling it done.
         if (InstanceTemplates.hasInstallStep(template)) {
             ExecutionIdentity.runAsSystem("template-install", () -> new InstanceInstalls().install(instanceId));
+            progress.reportProgressPart();
+        } else {
+            call.reportStepSkipped();
         }
-        progress.reportProgressPart();
 
-        // 3 and 4. Its website and certificate, when an address was given.
+        // 3 and 4. Its website and certificate, when an address was given; each is skipped when there is none to make.
         String hostname = Texts.trimmedOrNull(input.hostname());
         Microcopy note = null;
         if (hostname != null) {
@@ -130,10 +133,11 @@ final class PutOnlineHandlers {
             createWebsite(name, hostname, InstanceUpstreamKind.ID.toString(), instanceId, Map.of());
             progress.reportProgressPart();
             note = certificate(hostname, input.https(), call.subjectAccess());
+            certificateStep(call, note);
         } else {
-            progress.reportProgressPart();
+            call.reportStepSkipped();
+            call.reportStepSkipped();
         }
-        progress.reportProgressPart();
 
         // 5. The first start. A refusal (no admitted host, databases still provisioning) leaves the app for its page.
         try {
@@ -163,8 +167,17 @@ final class PutOnlineHandlers {
         progress.reportProgressPart();
         Microcopy note = certificate(hostname, input.https(), call.subjectAccess());
         call.reportOutcome(note != null ? note : message("live").withArg("address", hostname));
-        progress.reportProgressPart();
+        certificateStep(call, note);
         return siteId;
+    }
+
+    /** The certificate step: done when the order went out, skipped when HTTPS waits ({@code note} says why). */
+    private static void certificateStep(@NonNull OperationCall<?, ?> call, @Nullable Microcopy note) {
+        if (note == null) {
+            call.progress().reportProgressPart();
+        } else {
+            call.reportStepSkipped();
+        }
     }
 
     /** The site and its first address, atomically: a refused address (a claimed name) rolls the site back. */
