@@ -11,7 +11,6 @@ import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.proxy.RoutingProblem;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
-import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -179,8 +178,7 @@ public final class ProxyAttention {
             if (siteId == null) {
                 continue;
             }
-            SiteRequestHandler handler = proxy.getDispatcher().findHandlerBySiteId(siteId);
-            SiteHealth health = handler != null ? handler.getHealth() : null;
+            SiteHealth health = proxy.getDispatcher().healthOf(siteId);
             if (health == SiteHealth.DOWN || health == SiteHealth.DEGRADED) {
                 items.add(item(health == SiteHealth.DOWN ? AttentionSeverity.ERROR : AttentionSeverity.WARNING,
                     "globe",

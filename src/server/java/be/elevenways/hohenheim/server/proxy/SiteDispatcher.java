@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.security.HohenheimSecurity;
 import be.elevenways.hohenheim.server.security.IpLiterals;
 import be.elevenways.hohenheim.server.security.ReputationBanPolicy;
 import be.elevenways.hohenheim.server.security.ThreatScorer;
+import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.hohenheim.server.tls.AcmeService;
@@ -125,6 +126,10 @@ public class SiteDispatcher implements HttpHandler {
 
     private volatile boolean httpsAvailable;
 
+    // Whether each site's upstream answered the last dial a visitor's request made (true) or refused it (false).
+    // Passive: nothing probes, so a site nobody visited since the last route load has no entry.
+    private final ConcurrentHashMap<Integer, Boolean> upstreamAnswered = new ConcurrentHashMap<>();
+
     public SiteDispatcher(AcmeService acmeService, SessionStore proxySessionStore) {
         this.acmeService = acmeService;
         this.proxySessionStore = proxySessionStore;
@@ -171,6 +176,8 @@ public class SiteDispatcher implements HttpHandler {
             this.routes = next;
             previous.retired = true;
         }
+        // A reload may carry a fixed upstream: an old refusal must not keep calling it down until the next visitor.
+        upstreamAnswered.clear();
         destroyIfUnused(previous, false);
     }
 
@@ -525,8 +532,10 @@ public class SiteDispatcher implements HttpHandler {
         exchange.addResponseCommitListener(ex -> ResponseMutations.apply(entry, ex));
 
         ProxyHandler timedProxyHandler = proxyHandlerFor(entry.requestTimeoutMs);
+        int siteId = entry.siteId;
         Runnable dispatch = () -> entry.handler.handleRequest(exchange, upstream -> {
             exchange.putAttachment(UpstreamProxyClient.UPSTREAM_URI, upstream);
+            exchange.putAttachment(UpstreamProxyClient.DIAL_OUTCOME, answered -> upstreamAnswered.put(siteId, answered));
             // Only the proxy path may commit early: ProxyHandler copies the upstream status
             // and headers before it acquires the response channel, so a flush can never
             // publish a half-built response. Handlers that build their OWN response (a
@@ -732,6 +741,28 @@ public class SiteDispatcher implements HttpHandler {
             if (entry.handler.getSiteId() == siteId) return entry.handler;
         }
         return null;
+    }
+
+    /**
+     * What visitors of this site get: its handler's own health, DOWN when the upstream refused the last dial a
+     * visitor's request made (a handler that never probes reports UP regardless).
+     *
+     * @return the site's health, null when no route serves it
+     */
+    public @Nullable SiteHealth healthOf(int siteId) {
+        // By the route's own site id, not the handler's: a lambda handler reports -1 and would never be found.
+        SiteRequestHandler handler = null;
+        for (RouteEntry entry : this.routes.entries()) {
+            if (entry.siteId == siteId) {
+                handler = entry.handler;
+                break;
+            }
+        }
+        if (handler == null) {
+            return null;
+        }
+        SiteHealth own = handler.getHealth();
+        return own == SiteHealth.UP && Boolean.FALSE.equals(upstreamAnswered.get(siteId)) ? SiteHealth.DOWN : own;
     }
 
     /**

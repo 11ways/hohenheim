@@ -22,6 +22,11 @@ final class RouteEntry {
     static final int DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
     final SiteRequestHandler handler;
+    /**
+     * The site this route serves, read from its domain row: a handler built as a lambda knows no site id of its own
+     * ({@link SiteRequestHandler#getSiteId()} is -1 there). -1 for a route without a domain row.
+     */
+    final int siteId;
     final String siteName;
     final @Nullable String hostPattern;
     final String path;
@@ -67,6 +72,8 @@ final class RouteEntry {
                Map<String, Object> siteSettings, @Nullable SiteAuthGate authGate,
                @Nullable String authProviderName, boolean globalForce) {
         this.handler = handler;
+        Integer domainSiteId = domain != null ? domain.get(SiteDomainModel.SITE_ID) : null;
+        this.siteId = domainSiteId != null ? domainSiteId : handler.getSiteId();
         this.globalForce = globalForce;
         this.siteName = siteName;
         this.hostPattern = domain != null ? domain.get(SiteDomainModel.HOSTNAME) : null;

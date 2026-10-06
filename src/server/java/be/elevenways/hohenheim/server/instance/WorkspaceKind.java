@@ -70,7 +70,8 @@ import java.util.Set;
 public final class WorkspaceKind implements InstanceKindHandler {
 
     public static final Identifier ID = HohenheimIds.id("workspace");
-    public static final Schema SETTINGS_SCHEMA = GitSourceSchema.addTo(new Schema());
+    // Previews build applications only (PreviewQuota refuses any other owner), so a workspace offers none.
+    public static final Schema SETTINGS_SCHEMA = GitSourceSchema.addTo(new Schema(), false);
 
     /** The one declared volume of every workspace, named in {@code instance_volumes}. */
     public static final String HOME_VOLUME = "home";

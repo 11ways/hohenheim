@@ -9,11 +9,11 @@ import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
-import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.cms.common.resource.HealthTone;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.cms.common.resource.ResourceHealth;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -62,8 +62,12 @@ final class AppHealth {
     static @NonNull ResourceHealth<Row> instances(boolean delegated) {
         return ResourceHealth.batch((instances, access) -> {
             Map<Integer, List<Row>> sitesByInstance = sitesServing(instances);
-            Set<String> working = CertificateCoverage.activeNames();
-            return instance -> instanceVerdict(instance, sitesByInstance, working, delegated);
+            List<Row> serving = new ArrayList<>();
+            for (List<Row> sites : sitesByInstance.values()) {
+                serving.addAll(sites);
+            }
+            SiteFacts facts = SiteFacts.of(serving);
+            return instance -> instanceVerdict(instance, sitesByInstance, facts, delegated);
         });
     }
 
@@ -145,7 +149,7 @@ final class AppHealth {
 
     private static @NonNull RecordHealth instanceVerdict(@NonNull Row instance,
                                                          @NonNull Map<Integer, List<Row>> sitesByInstance,
-                                                         @NonNull Set<String> working, boolean delegated) {
+                                                         @NonNull SiteFacts facts, boolean delegated) {
         String installError = instance.get(InstanceModel.INSTALL_ERROR);
         if (installError != null && !installError.isBlank()) {
             return RecordHealth.broken(copy("install_failed")).detail(copy("install_failed_detail"));
@@ -162,7 +166,7 @@ final class AppHealth {
             return RecordHealth.unknown(copy("status_unknown"));
         }
         return switch (status) {
-            case RUNNING -> RecordHealth.ok(liveHeadline(sitesByInstance.get(instance.get(InstanceModel.ID)), working));
+            case RUNNING -> runningVerdict(sitesByInstance.get(instance.get(InstanceModel.ID)), facts, delegated);
             case ERROR -> delegated
                 ? RecordHealth.broken(copy("stopped_after_error"))
                 : RecordHealth.broken(copy("stopped_after_error")).fixedBy(InstanceOperations.RESTART.id());
@@ -193,6 +197,32 @@ final class AppHealth {
         // Deploying, and any status a later version stores: nobody can tell yet.
         return RecordHealth.unknown(status == null ? copy("status_unknown")
             : Microcopy.of(status).withFilter("scope", "stack_status"));
+    }
+
+    /**
+     * A running workload is only as healthy as what its visitors get: the first serving site (switched on, with an
+     * address) whose own verdict is not OK speaks for it, broken before attention. Its words carry over and its fixes do
+     * not: they are the site page's actions.
+     */
+    private static @NonNull RecordHealth runningVerdict(@Nullable List<Row> sites, @NonNull SiteFacts facts,
+                                                        boolean delegated) {
+        RecordHealth attention = null;
+        if (sites != null) {
+            for (Row site : sites) {
+                if (site.get(SiteModel.DELETED_AT) != null || !Boolean.TRUE.equals(site.get(SiteModel.ENABLED))
+                        || facts.domains.getOrDefault(site.get(SiteModel.ID), List.of()).isEmpty()) {
+                    continue;
+                }
+                RecordHealth verdict = siteVerdict(site, facts, delegated);
+                if (verdict.tone() == HealthTone.BROKEN) {
+                    return new RecordHealth(verdict.tone(), verdict.headline(), verdict.detail(), List.of());
+                }
+                if (attention == null && verdict.tone() == HealthTone.ATTENTION) {
+                    attention = new RecordHealth(verdict.tone(), verdict.headline(), verdict.detail(), List.of());
+                }
+            }
+        }
+        return attention != null ? attention : RecordHealth.ok(liveHeadline(sites, facts.working));
     }
 
     private static @NonNull Microcopy liveHeadline(@Nullable List<Row> sites, @NonNull Set<String> working) {
@@ -362,9 +392,9 @@ final class AppHealth {
                 var proxy = ServerMain.getProxyServer();
                 if (proxy != null) {
                     for (Integer siteId : siteIds) {
-                        SiteRequestHandler handler = proxy.getDispatcher().findHandlerBySiteId(siteId);
-                        if (handler != null) {
-                            live.put(siteId, handler.getHealth());
+                        SiteHealth health = proxy.getDispatcher().healthOf(siteId);
+                        if (health != null) {
+                            live.put(siteId, health);
                         }
                     }
                 }

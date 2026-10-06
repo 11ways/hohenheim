@@ -56,11 +56,23 @@ public final class GitSourceSchema {
     private GitSourceSchema() {}
 
     /**
-     * Add the git-source fields to a kind's settings schema.
+     * Add the git-source fields to a kind's settings schema, the preview lane included.
      *
      * @return the same schema, so a kind can chain its own fields after
      */
     public static @NonNull Schema addTo(@NonNull Schema schema) {
+        return addTo(schema, true);
+    }
+
+    /**
+     * Add the git-source fields to a kind's settings schema.
+     *
+     * @param offersPreviews false for a kind the preview lane refuses (it only builds applications): its preview fields
+     *                       stay DECLARED, so a stored value reads and the closed-world coercion accepts an API request
+     *                       sending them, but no edit view offers a switch that cannot work
+     * @return the same schema, so a kind can chain its own fields after
+     */
+    public static @NonNull Schema addTo(@NonNull Schema schema, boolean offersPreviews) {
 
         // Deliberately NOT secret(): a credentialed https://user:TOKEN@host URL is REFUSED at
         // the write (InstanceDeclarations, GitRepository.embeddedCredential), and provider
@@ -136,28 +148,33 @@ public final class GitSourceSchema {
             .help(HohenheimFormCopy.help("build_environment_variables")).secret().build());
 
         /* Opt-in: pull-request webhook events create/update/destroy preview deployments. */
-        schema.addField(BooleanField.builder(PREVIEWS_ENABLED).defaultValue(false)
+        schema.addField(previewLane(BooleanField.builder(PREVIEWS_ENABLED).defaultValue(false)
             .label(HohenheimFormCopy.label("previews_enabled"))
-            .help(HohenheimFormCopy.help("previews_enabled")).build());
+            .help(HohenheimFormCopy.help("previews_enabled")), offersPreviews).build());
 
         // Per-BRANCH previews are opt-in PER PATTERN, never on by default: a default that
         // mints a preview per pushed branch is a build + container + hostname the owner
         // never asked for, charged against the same per-owner cap the pull-request lane
         // uses -- three stale branches would silently lock out the PR previews the owner
         // DID opt into. Empty list = pull-request previews only.
-        schema.addField(ListField.builder(StringField.builder().name("pattern").build())
+        schema.addField(previewLane(ListField.builder(StringField.builder().name("pattern").build())
             .name(PREVIEW_BRANCHES)
             .label(HohenheimFormCopy.label("preview_branches"))
-            .help(HohenheimFormCopy.help("preview_branches")).build());
+            .help(HohenheimFormCopy.help("preview_branches")), offersPreviews).build());
 
         // The ONLY runtime environment a preview receives. Previews deliberately inherit
         // NOTHING from the production runtime: not environment_variables, not injected
         // database credentials, not volumes -- a preview builds arbitrary branch code and
         // must never see production secrets or data by default.
-        schema.addField(StringMapField.builder(PREVIEW_ENVIRONMENT_VARIABLES)
+        schema.addField(previewLane(StringMapField.builder(PREVIEW_ENVIRONMENT_VARIABLES)
             .label(HohenheimFormCopy.label("preview_environment_variables"))
-            .help(HohenheimFormCopy.help("preview_environment_variables")).secret().build());
+            .help(HohenheimFormCopy.help("preview_environment_variables")).secret(), offersPreviews).build());
 
         return schema;
+    }
+
+    /** A preview field as declared: offered as is, or visible in no view where the kind has no preview lane. */
+    private static <B extends Field.Builder<?, ?, ?, B>> @NonNull B previewLane(@NonNull B builder, boolean offered) {
+        return offered ? builder : builder.attribute(FieldAttributes.VISIBLE_IN, EnumSet.noneOf(EditView.class));
     }
 }

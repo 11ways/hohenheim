@@ -58,6 +58,7 @@ class ManageScopeParityTest extends HohenheimTestBase {
     private static int generatedInstanceId;
     private static int deletedSiteDomainId;
     private static int liveSiteDomainId;
+    private static int servingSiteId;
 
     @BeforeAll
     static void seed() {
@@ -81,6 +82,17 @@ class ManageScopeParityTest extends HohenheimTestBase {
         deletedSiteDomainId = domain(deletedSite, PREFIX + "deleted.parity.test");
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, liveSite,
             HohenheimAccess.MANAGE, true);
+
+        // The site serving the authored instance, on which the tenant holds NOTHING (the Starfleet shape: a grant on the
+        // instance alone).
+        servingSiteId = site(PREFIX + "serving", false);
+        Model sites = Models.get(SiteModel.class);
+        Row serving = sites.findById(servingSiteId);
+        serving.set(SiteModel.UPSTREAM_KIND, "hohenheim:instance");
+        serving.set(SiteModel.SETTINGS, Map.of());
+        serving.set(SiteModel.INSTANCE_ID, authoredInstanceId);
+        sites.save(serving);
+        domain(servingSiteId, PREFIX + "served.parity.test");
     }
 
     @Test
@@ -150,6 +162,17 @@ class ManageScopeParityTest extends HohenheimTestBase {
         for (AppDirectory.App app : AppDirectory.read(manage, tenant)) {
             assertThat(app.host()).as("step 4: the delegated panel names no host").isNull();
         }
+
+        // 5. The tenant's workload is reached through a site the tenant holds no grant on: its row still names that
+        //    site's address (what its visitors type), while the site record itself stays out of the tenant's lists.
+        AppDirectory.App workload = AppDirectory.read(manage, tenant).stream()
+            .filter(app -> app.key().equals("workload-" + authoredInstanceId)).findFirst().orElseThrow();
+        assertThat(workload.addressText())
+            .as("step 5: the workload row names the address of the site serving it")
+            .isEqualTo(PREFIX + "served.parity.test");
+        assertThat(resourceIds(Projection.of(SiteParts.manage()), tenant))
+            .as("step 5: showing the address grants nothing: the serving site is not in the tenant's Sites list")
+            .doesNotContain(servingSiteId);
     }
 
     /** A /manage list's declared row scope and the entry whose admission guards that read. */
