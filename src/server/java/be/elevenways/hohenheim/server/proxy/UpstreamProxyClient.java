@@ -48,8 +48,17 @@ final class UpstreamProxyClient implements ProxyClient {
     static final AttachmentKey<UpstreamTarget> UPSTREAM_URI =
         AttachmentKey.create(UpstreamTarget.class);
 
+    /** Where the exchange's dial outcome is reported, so the site's health knows its upstream stopped answering. */
+    static final AttachmentKey<DialOutcome> DIAL_OUTCOME = AttachmentKey.create(DialOutcome.class);
+
     /** The exchange's dial progress, so a retry dials the next vetted address. */
     private static final AttachmentKey<DialPlan> DIAL_PLAN = AttachmentKey.create(DialPlan.class);
+
+    /** Receives whether a dial reached the upstream; a retry that reaches the next address reports again. */
+    @FunctionalInterface
+    interface DialOutcome {
+        void record(boolean answered);
+    }
 
     /**
      * Test-only override for the trusted upstream SSL context, so HTTPS-upstream tests can
@@ -98,9 +107,13 @@ final class UpstreamProxyClient implements ProxyClient {
                 .set(UndertowOptions.ENDPOINT_IDENTIFICATION_ALGORITHM, "").getMap()
             : plan.options();
 
+        DialOutcome outcome = exchange.getAttachment(DIAL_OUTCOME);
         client.connect(new ClientCallback<ClientConnection>() {
             @Override
             public void completed(ClientConnection connection) {
+                if (outcome != null) {
+                    outcome.record(true);
+                }
                 ServerConnection serverConn = exchange.getConnection();
                 serverConn.addCloseListener(sc -> IoUtils.safeClose(connection));
 
@@ -117,6 +130,9 @@ final class UpstreamProxyClient implements ProxyClient {
 
             @Override
             public void failed(IOException e) {
+                if (outcome != null) {
+                    outcome.record(false);
+                }
                 plan.advance();
                 callback.failed(exchange);
             }

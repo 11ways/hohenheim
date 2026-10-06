@@ -753,9 +753,15 @@ class AdminPagesTest extends HohenheimTestBase {
             assertThat(page.locator("pl-select[name='site_id'] .pl-select-value").textContent().trim())
                 .isEqualTo("Record Tabs Site");
 
-            // Each exact hostname's row offers "Get a certificate" for itself.
-            assertThat(adminGet("/admin/domains").body())
-                .contains("data-action-id=\"" + CertificateOperations.REQUEST_FOR_DOMAIN.id() + "\"");
+            // Each exact hostname's row offers "Get a certificate" for itself, unless a working certificate already
+            // covers it: on weave.example.test that offer only repeated an order that had succeeded. Read per row
+            // through the action's invoke target on this site's own Addresses tab (one short list, no paging).
+            String domains = adminGet("/admin/sites/" + siteId + "/page/domains").body();
+            String requestFor = CertificateOperations.REQUEST_FOR_DOMAIN.id().toString().replace(':', '.') + "?ids=";
+            assertThat(domains).as("a name without a working certificate is offered one")
+                .contains(requestFor + bare.get(SiteDomainModel.ID) + "&amp;");
+            assertThat(domains).as("a name a working certificate covers is not offered another")
+                .doesNotContain(requestFor + covered.get(SiteDomainModel.ID) + "&amp;");
         } finally {
             certModel.delete(cert);
             domainModel.delete(covered);

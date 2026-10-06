@@ -11,12 +11,14 @@ import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.orm.field.DoubleField;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.PathField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.StringMapField;
+import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.ui.BadgeColor;
 import be.elevenways.zenit.common.ui.ColorHue;
@@ -25,6 +27,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.validation.validator.Range;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 
@@ -121,14 +124,19 @@ public final class ApplicationKind implements InstanceKindHandler {
             .help(HohenheimFormCopy.help("environment_variables")).secret().build());
 
     /**
-     * How many release containers to retain; 2 = the serving one plus one rollback target,
-     * which is the policy {@code SiteReleases} already enforces.
+     * RETIRED: the release engine keeps exactly one release besides the serving one (its one-step rollback target), so
+     * this number never chose anything.
+     *
+     * AIDEV-NOTE: kept DECLARED, the poll_interval way (GitSourceSchema), so a stored value still reads and an API
+     * request still sending settings.keep_releases is still accepted (the settings schema is closed-world); visible in
+     * NO edit view, so no form offers a setting that does nothing.
      */
     public static final IntegerField KEEP_RELEASES = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("keep_releases").defaultValue(2)
             .validator(Range.of(1, 10))
             .label(HohenheimFormCopy.label("keep_releases"))
-            .help(HohenheimFormCopy.help("keep_releases")).build());
+            .help(HohenheimFormCopy.help("keep_releases"))
+            .attribute(FieldAttributes.VISIBLE_IN, EnumSet.noneOf(EditView.class)).build());
 
     public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("memory_limit_mb")

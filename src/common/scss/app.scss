@@ -447,6 +447,11 @@
         font-size: var(--pl-font-size-sm);
     }
 
+    // The note sits under the bare port on a line of its own, never run into it.
+    .hh-endpoint-noaddress {
+        display: block;
+    }
+
     .hh-disk-unmeasured {
         display: flex;
         flex-wrap: wrap;

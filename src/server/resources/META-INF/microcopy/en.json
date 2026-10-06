@@ -182,7 +182,7 @@
       "scope": "field"
     },
     {
-      "text": "Deploy when the repository webhook or polling detects a new revision.",
+      "text": "Deploy each new revision the repository's push webhook reports for this branch.",
       "scope": "help"
     }
   ],
@@ -9860,7 +9860,7 @@
     "scope": "instance_overview"
   },
   "endpoint_hint": {
-    "text": "Ports this instance holds in the ledger, joined to the host address they answer at.",
+    "text": "The ports this instance publishes, at the address of the host it runs on.",
     "scope": "instance_overview"
   },
   "address": [
@@ -9894,7 +9894,7 @@
     "scope": "instance_overview"
   },
   "no_public_address": {
-    "text": "the host declares no public address",
+    "text": "This host has no public address set, so only its own network reaches this port.",
     "scope": "instance_overview"
   },
   "no_endpoint": {
@@ -12700,6 +12700,14 @@
   },
   "instance_backup_unknown_body": {
     "text": "The scheduled backup of instance {$name} was interrupted before it recorded an outcome; it is not known whether the backup completed, so check the backup target",
+    "scope": "alert"
+  },
+  "deploy_failed_subject": {
+    "text": "Deploy failed: {$name}",
+    "scope": "alert"
+  },
+  "deploy_failed_body": {
+    "text": "A new release of {$name} failed and was not put live; the previous release keeps serving. Reason: {$reason}",
     "scope": "alert"
   },
   "database_backup_failed_subject": {

@@ -4,28 +4,31 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
-import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.build.BuildArtifacts;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
-import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.docker.ServerService;
-import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
+import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.instance.PublishedPortProbe;
+import be.elevenways.hohenheim.server.notification.Alerts;
+import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
@@ -1085,7 +1088,25 @@ public final class ReleaseEngine {
                 (int) (finished.toEpochMilli() - started.toEpochMilli()));
         }
         step(stamp, line);
+        if (ReleaseOperationModel.STATUS_FAILED.equals(status)) {
+            alertFailed(stamp.row(), failureReason);
+        }
         prune(stamp.row());
+    }
+
+    /**
+     * Tells the operator's channels a release or rollback failed: the event their subscription picker offers. The old
+     * release keeps serving, so this is news, not an outage; the reason is the operation's own stored one.
+     */
+    private static void alertFailed(@NonNull Row op, @Nullable String failureReason) {
+        Integer ownerId = op.get(ReleaseOperationModel.FOR_ID);
+        Row owner = ownerId != null && InstanceModel.MODEL_ID.toString().equals(op.get(ReleaseOperationModel.FOR_MODEL))
+            ? Models.get(InstanceModel.class).findById(ownerId) : null;
+        String name = owner != null ? owner.get(InstanceModel.NAME) : "#" + ownerId;
+        Alerts.trySend(NotificationEvents.DEPLOY_FAILED,
+            Microcopy.of("deploy_failed_subject").withFilter("scope", "alert").withArg("name", name),
+            Microcopy.of("deploy_failed_body").withFilter("scope", "alert").withArg("name", name)
+                .withArg("reason", failureReason == null || failureReason.isBlank() ? "-" : failureReason));
     }
 
     /** Keep the newest N operations per owning record; older rows go. */

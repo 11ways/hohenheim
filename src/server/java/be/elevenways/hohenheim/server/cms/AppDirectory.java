@@ -106,22 +106,26 @@ final class AppDirectory {
         }
         List<Row> stacks = listed(panel, StackParts.SLUG, access);
 
-        Map<Integer, List<Row>> domains = domainsBySite(sites);
         Set<String> working = CertificateCoverage.activeNames();
         Map<Integer, Row> workloads = new LinkedHashMap<>();
         for (Row instance : instances) {
             workloads.put(instance.get(InstanceModel.ID), instance);
         }
-        Map<Integer, List<Row>> servingSites = new HashMap<>();
         List<Row> websites = new ArrayList<>();
         for (Row site : sites) {
             Integer instanceId = site.get(SiteModel.INSTANCE_ID);
-            if (instanceId != null && workloads.containsKey(instanceId)) {
-                servingSites.computeIfAbsent(instanceId, id -> new ArrayList<>()).add(site);
-            } else {
+            if (instanceId == null || !workloads.containsKey(instanceId)) {
                 websites.add(site);
             }
         }
+        // AIDEV-NOTE: a workload's address is read from EVERY live site serving it, listed for this viewer or not.
+        // The names are the app's public face, which its visitors already type; reading them grants nothing on the
+        // site record, whose row and page stay hidden from a viewer the Sites entry does not list it for. Without this
+        // a tenant granted only the instance saw its bare port and "No address".
+        Map<Integer, List<Row>> servingSites = servingSitesOf(new ArrayList<>(workloads.keySet()));
+        List<Row> named = new ArrayList<>(websites);
+        servingSites.values().forEach(named::addAll);
+        Map<Integer, List<Row>> domains = domainsBySite(named);
 
         List<App> apps = new ArrayList<>();
         Function<Row, RecordHealth> workloadHealth = AppHealth.instances(delegated).read(instances, access);
@@ -194,6 +198,20 @@ final class AppDirectory {
     /** The name of the host a workload or stack runs on, the way its record page's lead line names it. */
     private static @NonNull String hostOf(@Nullable Integer serverId) {
         return ServerModel.nameOf(ServerModel.canonicalServerId(serverId));
+    }
+
+    /** The live (untrashed) sites serving each of these workloads, read once, in stored order. */
+    private static @NonNull Map<Integer, List<Row>> servingSitesOf(@NonNull List<Integer> workloadIds) {
+        Map<Integer, List<Row>> serving = new HashMap<>();
+        AppHealth.rowsByKey(Models.get(SiteModel.class), SiteModel.INSTANCE_ID, workloadIds)
+            .forEach((instanceId, sites) -> {
+                for (Row site : sites) {
+                    if (site.get(SiteModel.DELETED_AT) == null) {
+                        serving.computeIfAbsent(instanceId, id -> new ArrayList<>()).add(site);
+                    }
+                }
+            });
+        return serving;
     }
 
     /** Every name of these sites, read once, in each site's stored order. */

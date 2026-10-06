@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
@@ -181,6 +182,10 @@ public final class CertificateOperations {
             .confirmation(ConfirmationSpec.generic(copy("uses_production"), false))
             .inSheet()
             .inputValues((domain, request) -> prefill(domain))
+            // A name a working certificate already covers needs no new one: changing that certificate is its own
+            // reissue, on the certificate's row.
+            .hiddenWhen(domain -> CertificateCoverage.covers(CertificateCoverage.activeNames(),
+                domain.get(SiteDomainModel.HOSTNAME)))
             .build();
     }
 

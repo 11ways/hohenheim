@@ -182,7 +182,7 @@
       "scope": "field"
     },
     {
-      "text": "Rol uit wanneer de webhook of polling een nieuwe revisie vindt.",
+      "text": "Rol elke nieuwe revisie uit die de push-webhook van de repository voor deze branch meldt.",
       "scope": "help"
     }
   ],
@@ -9860,7 +9860,7 @@
     "scope": "instance_overview"
   },
   "endpoint_hint": {
-    "text": "Poorten die deze instantie in het grootboek houdt, samen met het hostadres waarop ze antwoorden.",
+    "text": "De poorten die deze instantie publiceert, op het adres van de host waarop ze draait.",
     "scope": "instance_overview"
   },
   "address": [
@@ -9894,7 +9894,7 @@
     "scope": "instance_overview"
   },
   "no_public_address": {
-    "text": "de host geeft geen publiek adres op",
+    "text": "Deze host heeft geen publiek adres, dus alleen zijn eigen netwerk bereikt deze poort.",
     "scope": "instance_overview"
   },
   "no_endpoint": {
@@ -12700,6 +12700,14 @@
   },
   "instance_backup_unknown_body": {
     "text": "De geplande back-up van instantie {$name} werd onderbroken voor er een resultaat was vastgelegd; het is niet bekend of de back-up voltooid is, controleer dus het back-updoel",
+    "scope": "alert"
+  },
+  "deploy_failed_subject": {
+    "text": "Uitrol mislukt: {$name}",
+    "scope": "alert"
+  },
+  "deploy_failed_body": {
+    "text": "Een nieuwe release van {$name} is mislukt en niet live gezet; de vorige release blijft draaien. Reden: {$reason}",
     "scope": "alert"
   },
   "database_backup_failed_subject": {

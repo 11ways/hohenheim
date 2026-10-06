@@ -4,13 +4,17 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
 
+import java.net.ServerSocket;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -170,11 +174,63 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             assertThat(siteOfFailed).as("step 3: nor does the site serving it, whose visitors get the error page")
                 .contains("data-cms-record-health=\"broken\"")
                 .doesNotContain("Open site");
+
+            // 4. A RUNNING workload is only as healthy as what its visitors get: once its address is forced to HTTPS
+            //    without a working certificate, the workload's page, its list row and the site all say error page.
+            instance.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
+            Models.get(InstanceModel.class).save(instance);
+            Row name = Models.get(SiteDomainModel.class).find()
+                .where(SiteDomainModel.SITE_ID.eq(site.get(SiteModel.ID))).first();
+            name.set(SiteDomainModel.FORCE_SSL, true);
+            Models.get(SiteDomainModel.class).save(name);
+            String forced = adminGet("/admin/instances/" + instance.get(InstanceModel.ID) + "/page/overview").body();
+            assertThat(forced).as("step 4: the running workload's verdict is the error page its visitors get")
+                .contains("data-cms-record-health=\"broken\"")
+                .contains("Visitors get an error page")
+                .doesNotContain("Live at");
+            assertThat(adminGet("/admin/instances?q=app-journey-served").body())
+                .as("step 4: and its list row carries the broken glyph").contains("data-cms-health=\"broken\"");
         } finally {
             localBefore.restore();
             HardDeletes.row(Models.get(SiteModel.class), site);
             HardDeletes.row(Models.get(InstanceModel.class), bare);
             HardDeletes.row(Models.get(InstanceModel.class), instance);
+        }
+    }
+
+    @Test
+    void aProxyWhoseUpstreamStopsAnsweringIsAnErrorPage() throws Exception {
+        int closedPort;
+        try (ServerSocket probe = new ServerSocket(0)) {
+            closedPort = probe.getLocalPort();
+        }
+        Row site = ProxyTestSupport.setupSite("hohenheim:address", "app-journey-refused", "app-journey-refused",
+            Map.of("forward_host", "127.0.0.1", "forward_port", closedPort));
+        ProxyTestSupport.addDomain(site, "refused.app-journey.test", "exact", null, false);
+        ProxyServer previous = ServerMain.getProxyServer();
+        ProxyServer proxy = ProxyTestSupport.startProxy();
+        ServerMain.adoptProxyServer(proxy);
+        try {
+            // 1. Nothing probes: before a visitor asks, the proxy knows of no refusal.
+            assertThat(adminGet(overview(site)).body()).as("step 1: no visitor has been refused yet")
+                .contains("data-cms-record-health=\"ok\"");
+
+            // 2. A visitor asks, and the upstream refuses the connection: they get an error page.
+            String answer = ProxyTestSupport.rawRequest(ProxyTestSupport.httpPort(proxy), "refused.app-journey.test", "/");
+            assertThat(answer).as("step 2: the visitor gets an error status").matches("(?s)HTTP/1\\.1 50[234].*");
+
+            // 3. The overview and the list now say what that visitor got.
+            String page = adminGet(overview(site)).body();
+            assertThat(page).as("step 3: the verdict is broken")
+                .contains("data-cms-record-health=\"broken\"")
+                .contains("Visitors get an error page")
+                .doesNotContain("Live at");
+            assertThat(adminGet("/admin/sites?q=app-journey-refused").body())
+                .as("step 3: and the list row agrees").contains("data-cms-health=\"broken\"");
+        } finally {
+            ServerMain.adoptProxyServer(previous);
+            proxy.stop();
+            HardDeletes.row(Models.get(SiteModel.class), site);
         }
     }
 

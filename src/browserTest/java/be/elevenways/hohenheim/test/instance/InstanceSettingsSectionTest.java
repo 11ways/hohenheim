@@ -251,5 +251,26 @@ class InstanceSettingsSectionTest {
                     .as("step 2: the %s view offers no poll_interval", view).isNull();
             }
         }
+
+        // 3. keep_releases is retired the same way: the engine keeps exactly one rollback target whatever it said. And a
+        //    workspace keeps its preview fields declared but offers none: the preview lane builds applications only.
+        FormSpec workspace = FieldFormEntryRegistry.INSTANCE.deriveSpec(WorkspaceKind.SETTINGS_SCHEMA);
+        for (String preview : GitSourceSchema.PREVIEWS) {
+            assertThat(workspace.findEntry(preview)).as("step 3: a workspace still declares %s", preview).isNotNull();
+            for (EditView view : EditView.values()) {
+                assertThat(workspace.forView(view).findEntry(preview))
+                    .as("step 3: the workspace %s view offers no %s", view, preview).isNull();
+            }
+        }
+        assertThat(FieldFormEntryRegistry.INSTANCE.deriveSpec(ApplicationKind.SETTINGS_SCHEMA)
+                .forView(EditView.EDIT).findEntry(GitSourceSchema.PREVIEWS_ENABLED))
+            .as("step 3: while an application still offers its previews").isNotNull();
+        FormSpec application = FieldFormEntryRegistry.INSTANCE.deriveSpec(ApplicationKind.SETTINGS_SCHEMA);
+        assertThat(application.findEntry(ApplicationKind.KEEP_RELEASES.getName()))
+            .as("step 3: the coercion spec still carries keep_releases").isNotNull();
+        for (EditView view : EditView.values()) {
+            assertThat(application.forView(view).findEntry(ApplicationKind.KEEP_RELEASES.getName()))
+                .as("step 3: the %s view offers no keep_releases", view).isNull();
+        }
     }
 }

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.application;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
@@ -18,6 +19,7 @@ import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
+import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.test.ApiSupport;
@@ -31,6 +33,10 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.comms.CommsChannel;
+import be.elevenways.zenit.comms.server.Comms;
+import be.elevenways.zenit.comms.server.CommsDispatcher;
+import be.elevenways.zenit.comms.server.transport.TransportTypes;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -40,14 +46,20 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
+import be.elevenways.zenit.test.support.OutboundFixture;
+import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -253,23 +265,63 @@ class ApplicationReleaseContractTest {
     }
 
     @Test
-    void anUnhealthyInitialReleaseNeverBecomesServing() {
-        Db.run(datasource, () -> {
-            int applicationId = application("initial-health-app");
-            try {
-                daemon.answerWithForNextWorkload(404);
-                assertThatThrownBy(() -> converge(applicationId, settingsFor("v1")))
-                    .isInstanceOf(Violations.class);
-                assertThat(servingOf(applicationId)).isNull();
-                Row operation = latestOp(applicationId);
-                assertThat(operation.get(ReleaseOperationModel.STATUS))
-                    .isEqualTo(ReleaseOperationModel.STATUS_FAILED);
-                assertThat(daemon.exists(FakeDockerDaemon.handleOf(
-                    operation.get(ReleaseOperationModel.CANDIDATE_INSTANCE_ID)))).isFalse();
-            } finally {
-                ApplicationReleases.destroyFor(applicationId);
-            }
+    void anUnhealthyInitialReleaseNeverBecomesServing() throws Exception {
+        // A channel subscribed to failed deploys, delivered inline so its hits are settled when the release returns.
+        List<String> delivered = new CopyOnWriteArrayList<>();
+        HttpServer receiver = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        receiver.createContext("/", exchange -> {
+            delivered.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            exchange.sendResponseHeaders(204, -1);
+            exchange.close();
         });
+        receiver.start();
+        int port = receiver.getAddress().getPort();
+        try (OutboundFixture destination = OutboundFixture.route("deploy-watch.example.test", port)) {
+            Comms.install(new CommsDispatcher(Map.of(
+                CommsChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
+            Db.run(datasource, () -> {
+                NotificationChannelModel channels = Models.get(NotificationChannelModel.class);
+                Row channel = channels.createEmptyRow();
+                channel.set(NotificationChannelModel.NAME, "deploy-watch");
+                channel.set(NotificationChannelModel.KIND, NotificationChannelModel.KIND_WEBHOOK);
+                channel.set(NotificationChannelModel.FORMAT, NotificationChannelModel.FORMAT_GENERIC);
+                channel.set(NotificationChannelModel.URL, "http://" + destination.host() + ":" + port + "/hook");
+                channel.set(NotificationChannelModel.EVENTS, List.of(NotificationEvents.DEPLOY_FAILED.token()));
+                channels.save(channel);
+                int applicationId = application("initial-health-app");
+                try {
+                    // 1. The first release of an application that answers 404 is refused at the health gate.
+                    daemon.answerWithForNextWorkload(404);
+                    assertThatThrownBy(() -> converge(applicationId, settingsFor("v1")))
+                        .as("step 1: the unhealthy release is refused")
+                        .isInstanceOf(Violations.class);
+
+                    // 2. Nothing serves, the operation says FAILED, and its candidate is gone.
+                    assertThat(servingOf(applicationId)).as("step 2: nothing serves").isNull();
+                    Row operation = latestOp(applicationId);
+                    assertThat(operation.get(ReleaseOperationModel.STATUS))
+                        .as("step 2: the operation is stored as failed")
+                        .isEqualTo(ReleaseOperationModel.STATUS_FAILED);
+                    assertThat(daemon.exists(FakeDockerDaemon.handleOf(
+                        operation.get(ReleaseOperationModel.CANDIDATE_INSTANCE_ID))))
+                        .as("step 2: the candidate container is removed").isFalse();
+
+                    // 3. The channel that subscribed to failed deploys was told, once, in the failed-deploy copy. This
+                    //    standalone JVM loads no microcopy catalogs, so the envelope carries the copy keys;
+                    //    DeclaredMicrocopyKeysTest proves those keys resolve to text.
+                    assertThat(delivered).as("step 3: one failed-deploy alert reached the channel").hasSize(1);
+                    assertThat(delivered.get(0)).as("step 3: the alert is the failed-deploy event in its own copy")
+                        .contains("\"event\":\"deploy_failed\"")
+                        .contains("\"subject\":\"deploy_failed_subject\"");
+                } finally {
+                    ApplicationReleases.destroyFor(applicationId);
+                    channels.delete(channel.get(NotificationChannelModel.ID));
+                }
+            });
+        } finally {
+            Comms.install(null);
+            receiver.stop(0);
+        }
     }
 
     /**
