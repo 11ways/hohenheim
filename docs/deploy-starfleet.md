@@ -1725,3 +1725,24 @@ daystrom: NOT deployed. This workstation (Darkshire) has no `daystrom` deploymen
 refused by root@10.47.1.99 (`Permission denied (publickey)`); daystrom still runs 27064da4.
 
 ROLLBACK: `tools/deploy-host.sh --rollback starfleet --preflight /root/hohenheim-preflight-20261006-193209`.
+
+## Deploy 2026-10-06 (starfleet, late): a48c7b19, defect wave D2 (one verdict per app, original sidebar ground)
+
+Swapped starfleet from a5c5c97d to the pushed hohenheim a48c7b19 (jar sha256 `97e9dd5f...d95e63b6`, 280024024
+bytes, 15 stamp rows clean; plumage 1b8e7615, zenit-auth 691a97cd, zenit-cms 5a501c81, protoblast 6c14736e, zenit
+b13654dd, spamservice still 6487880 from `module-fit`). Ships D2: the sidebar back on its own lightness stop (light
+0.962 beside the 0.975 page, dark 0.222), one health verdict per app (a running workload speaks for its serving
+sites; a refused proxy upstream is down), activity verbs as words, the tenant sees the address of an app it may
+view, "Get a certificate" hidden when a working certificate covers the name, the palette keeps out-of-nav pages,
+DEPLOY_FAILED raised. Lane `zenit-dev deploy starfleet --pushed`, rehearsal green, NO migrations (103 before and
+after).
+
+starfleet: healthy after both restarts (20:27 UTC), `zenit-dev deployed` current, 0 journal errors. Preflight
+`/root/hohenheim-preflight-20261006-202530/`. Logged-in pass: dashboard light and dark (sidebar computed
+`oklch(0.962 ...)` beside `oklch(0.975 ...)`), Apps list (alchemy-skeleton now red "Error page", agreeing with its
+overview band "Visitors get an error page"), tenant /manage Apps shows `skeleton.starfleet.life`. Remaining: the
+Recent card still appends `#3` (no captured record title), the Public endpoint table still says "Claim".
+
+daystrom: still NOT deployed from this workstation (no target, key refused); runs 27064da4.
+
+ROLLBACK: `tools/deploy-host.sh --rollback starfleet --preflight /root/hohenheim-preflight-20261006-202530`.
