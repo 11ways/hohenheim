@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
+import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -11,6 +12,7 @@ import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -69,6 +71,8 @@ public final class SecurityReportEnv {
     private static final ConcurrentHashMap<Integer, Boolean> pendingRetries = new ConcurrentHashMap<>();
     private static final long INITIAL_RETRY_MS = 5_000;
     private static final long MAX_RETRY_MS = 60_000;
+    private static final Backoff PROVISION_RETRY = Backoff.exponential(
+            Duration.ofMillis(INITIAL_RETRY_MS), 2, Duration.ofMillis(MAX_RETRY_MS));
 
     private SecurityReportEnv() {
     }
@@ -190,8 +194,7 @@ public final class SecurityReportEnv {
     }
 
     private static void scheduleAttempt(int siteId, int attempt) {
-        int shift = Math.min(Math.max(0, attempt - 1), 4);
-        long delay = Math.min(MAX_RETRY_MS, INITIAL_RETRY_MS << shift);
+        long delay = PROVISION_RETRY.delayAfter(attempt).toMillis();
         retryScheduler.schedule(() -> retryCurrentSite(siteId, attempt), delay);
     }
 
@@ -222,7 +225,7 @@ public final class SecurityReportEnv {
         } catch (RuntimeException e) {
             SpamserviceHealth.active().recordFailure(HEALTH_CAPABILITY, e.getMessage());
             logThrottled(siteId, e.getMessage());
-            scheduleAttempt(siteId, Math.min(attempt + 1, 5));
+            scheduleAttempt(siteId, attempt + 1);
         }
     }
 

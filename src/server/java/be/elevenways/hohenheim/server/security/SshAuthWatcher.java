@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.util.Pause;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
 import be.elevenways.protoblast.server.process.RunningProcess;
@@ -14,6 +16,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletionException;
@@ -70,8 +73,8 @@ public final class SshAuthWatcher {
         return List.copyOf(command);
     }
 
-    private static final long BACKOFF_MIN_MS = 1_000;
-    private static final long BACKOFF_MAX_MS = 60_000;
+    private static final Backoff SUPERVISION =
+            Backoff.exponential(Duration.ofSeconds(1), 2, Duration.ofSeconds(60));
 
     /** A run that lasted this long is a healthy one; the next failure restarts the ladder. */
     private static final long HEALTHY_RUN_MS = 60_000;
@@ -81,14 +84,9 @@ public final class SshAuthWatcher {
         @NonNull RunningProcess start() throws IOException;
     }
 
-    /** How the supervisor waits out a backoff; injectable so a test observes it instead of sleeping. */
-    interface Backoff {
-        void pause(long millis) throws InterruptedException;
-    }
-
     private final Journal journal;
     private final BiConsumer<String, String> sink;
-    private final Backoff backoff;
+    private final Pause pause;
     private final AtomicLong signals = new AtomicLong();
 
     private volatile boolean running;
@@ -104,15 +102,15 @@ public final class SshAuthWatcher {
 
     /** Test constructor: inject the child and the scoring sink. */
     SshAuthWatcher(@NonNull Journal journal, @NonNull BiConsumer<String, String> sink) {
-        this(journal, sink, Thread::sleep);
+        this(journal, sink, Pause.SLEEP);
     }
 
     /** Test constructor: additionally inject how a backoff is waited out. */
     SshAuthWatcher(@NonNull Journal journal, @NonNull BiConsumer<String, String> sink,
-                   @NonNull Backoff backoff) {
+                   @NonNull Pause pause) {
         this.journal = journal;
         this.sink = sink;
-        this.backoff = backoff;
+        this.pause = pause;
     }
 
     /** Whether an operator asked for SSH watching at all. */
@@ -164,7 +162,7 @@ public final class SshAuthWatcher {
     }
 
     private void supervise() {
-        long delay = BACKOFF_MIN_MS;
+        Backoff.Attempts restarts = SUPERVISION.attempts();
         while (this.running) {
             long startedAt = Now.millis();
             boolean clean = runOnce();
@@ -172,15 +170,14 @@ public final class SshAuthWatcher {
                 return;
             }
             if (clean && Now.millis() - startedAt >= HEALTHY_RUN_MS) {
-                delay = BACKOFF_MIN_MS;
+                restarts.reset();
             }
             try {
-                this.backoff.pause(delay);
+                this.pause.pause(restarts.next(null));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
             }
-            delay = Math.min(BACKOFF_MAX_MS, delay * 2);
         }
     }
 
