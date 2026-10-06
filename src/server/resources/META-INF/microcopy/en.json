@@ -252,7 +252,7 @@
       "scope": "field"
     },
     {
-      "text": "A single permission name, e.g. \"site.internal\", checked against the identity's permission claims. Only used by claims-based providers such as Proteus (HTTP Basic Auth ignores it). Leave blank to accept any authenticated identity.",
+      "text": "A single permission name, e.g. \"site.internal\", checked against the identity's permission claims. Only used by claims-based providers such as Proteus (HTTP Basic Auth ignores it). Leave blank to demand hohenheim.site.<slug>, the permission named after the protected site.",
       "scope": "help"
     }
   ],
@@ -9873,8 +9873,20 @@
     "text": "Protocol",
     "scope": "instance_overview"
   },
-  "claim": {
-    "text": "Claim",
+  "port_state": {
+    "text": "State",
+    "scope": "instance_overview"
+  },
+  "port_in_use": {
+    "text": "In use",
+    "scope": "instance_overview"
+  },
+  "port_freeing": {
+    "text": "Being freed",
+    "scope": "instance_overview"
+  },
+  "port_unknown": {
+    "text": "Unknown",
     "scope": "instance_overview"
   },
   "reserved": {
@@ -12851,7 +12863,7 @@
   "settings.hohenheim.proxy.connection_prologue_timeout_seconds.label": "Connection prologue timeout",
   "settings.hohenheim.proxy.connection_prologue_timeout_seconds.help": "Maximum time a public connection may take to send what Hohenheim reads before routing it: an optional PROXY v2 header and, on the HTTPS port, the TLS ClientHello.",
   "settings.hohenheim.proxy.fallback_address.label": "Fallback address",
-  "settings.hohenheim.proxy.fallback_address.help": "Address that receives requests matching no site.",
+  "settings.hohenheim.proxy.fallback_address.help": "Address Hohenheim forwards requests matching no site to, for example http://localhost:8080.",
   "settings.hohenheim.proxy.force_https.label": "Force HTTPS",
   "settings.hohenheim.proxy.force_https.help": "Sends visitors to HTTPS on every address with a working certificate.",
   "settings.hohenheim.proxy.http_port.label": "HTTP port",
@@ -13600,6 +13612,10 @@
   },
   "finish": {
     "text": "Put it online",
+    "scope": "put_online"
+  },
+  "address_help_required": {
+    "text": "The hostname visitors type. You can add more addresses later.",
     "scope": "put_online"
   },
   "address_help": {

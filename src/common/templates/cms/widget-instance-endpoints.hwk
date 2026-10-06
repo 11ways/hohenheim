@@ -8,7 +8,7 @@
     <pl-table-header><pl-table-row>
         <pl-table-head>{{ t("address", scope: "instance_overview") }}</pl-table-head>
         <pl-table-head>{{ t("protocol", scope: "instance_overview") }}</pl-table-head>
-        <pl-table-head>{{ t("claim", scope: "instance_overview") }}</pl-table-head>
+        <pl-table-head>{{ t("port_state", scope: "instance_overview") }}</pl-table-head>
     </pl-table-row></pl-table-header>
     <pl-table-body>
         {% each data as endpoint %}
@@ -24,11 +24,7 @@
             </pl-table-cell>
             <pl-table-cell>{{ endpoint.protocol }}</pl-table-cell>
             <pl-table-cell>
-                {% if endpoint.preallocated %}
-                <pl-badge variant="outline">{{ t("reserved", scope: "instance_overview") }}</pl-badge>
-                {% else %}
-                <pl-badge variant="secondary">{{ endpoint.status }}</pl-badge>
-                {% /if %}
+                <pl-badge variant={% endpoint.preallocated ? "outline" : "secondary" %} data-endpoint-state={% endpoint.stateKey %}>{{ endpoint.state }}</pl-badge>
             </pl-table-cell>
         </pl-table-row>
         {% /each %}

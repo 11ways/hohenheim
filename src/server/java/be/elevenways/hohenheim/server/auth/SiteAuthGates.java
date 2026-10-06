@@ -19,7 +19,18 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public final class SiteAuthGates {
 
+    /** The prefix of the permission a site demands when nothing names one. */
+    public static final String SITE_PERMISSION_PREFIX = "hohenheim.site.";
+
     private SiteAuthGates() {
+    }
+
+    /** @return the demanded permission, else {@code hohenheim.site.<slug>}, else null when the site has no slug */
+    public static @Nullable String effectivePermission(@Nullable String demanded, @Nullable String siteSlug) {
+        if (demanded != null && !demanded.isBlank()) {
+            return demanded;
+        }
+        return siteSlug != null && !siteSlug.isBlank() ? SITE_PERMISSION_PREFIX + siteSlug : null;
     }
 
     /**
@@ -33,12 +44,17 @@ public final class SiteAuthGates {
     }
 
     /**
+     * AIDEV-NOTE: a blank permission demands {@code hohenheim.site.<slug>}, as the Node original did; it used to
+     * admit any identity the realm authenticates. An explicit permission is used as is.
+     *
      * @param providerRow        the stored provider record, or null when it is gone
      * @param requiredPermission the permission the CALLER demands (a rule leaf may narrow
      *                           beyond the record's own column)
+     * @param siteSlug           the gated site's slug, which names the default permission
      */
     public static @NonNull Built build(@Nullable Row providerRow,
                                        @Nullable String requiredPermission,
+                                       @Nullable String siteSlug,
                                        @NonNull SessionStore sessionStore,
                                        int siteId,
                                        int providerId) {
@@ -53,7 +69,7 @@ public final class SiteAuthGates {
         }
 
         try {
-            return new Built(handler.createGate(new SiteAuthContext(providerRow, requiredPermission,
+            return new Built(handler.createGate(new SiteAuthContext(providerRow, effectivePermission(requiredPermission, siteSlug),
                 sessionStore, siteId, providerType, providerId)), null, null);
         } catch (Exception failure) {
             // createGate must be pure; if it throws anyway, the caller fails closed.

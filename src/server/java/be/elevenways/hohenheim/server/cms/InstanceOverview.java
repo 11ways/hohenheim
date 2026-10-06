@@ -267,14 +267,38 @@ public final class InstanceOverview {
             if (port == null) {
                 continue;
             }
+            PortState state = PortState.of(claim);
             endpoints.add(new InstanceEndpointView(
                 addressOf(claim),
                 port,
                 blankable(claim.get(PortAllocationModel.PROTOCOL)),
-                blankable(claim.get(PortAllocationModel.STATUS)),
+                state.key(),
+                state.words(),
                 PortLedger.isPreallocated(claim)));
         }
         return endpoints;
+    }
+
+    /** What a claim means to an operator, as a stable hook and in words; never the ledger's own status word. */
+    private record PortState(@NonNull String key, @NonNull Microcopy words) {
+
+        static @NonNull PortState of(@NonNull Row claim) {
+            if (PortLedger.isPreallocated(claim)) {
+                return new PortState("reserved",
+                    Microcopy.of("reserved").withFilter("scope", "instance_overview"));
+            }
+            String status = claim.get(PortAllocationModel.STATUS);
+            if (PortAllocationModel.STATUS_HELD.equals(status)) {
+                return new PortState("port_in_use",
+                    Microcopy.of("port_in_use").withFilter("scope", "instance_overview"));
+            }
+            if (PortAllocationModel.STATUS_RELEASING.equals(status)) {
+                return new PortState("port_freeing",
+                    Microcopy.of("port_freeing").withFilter("scope", "instance_overview"));
+            }
+            return new PortState("port_unknown",
+                Microcopy.of("port_unknown").withFilter("scope", "instance_overview"));
+        }
     }
 
     /**

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.instance;
 
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
@@ -10,6 +11,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * shows the port with an explicit "the host declares no public address" note rather than
  * inventing {@code localhost}, which would be a reachable-looking lie on a remote host.
  *
+ * @param stateKey     what the port is to an operator, as a stable hook
+ * @param state        the same, in words
  * @param preallocated a RESERVED number that survives a stop (DNS may point at it),
  *                     as opposed to an ephemeral observation of the running workload
  */
@@ -18,7 +21,8 @@ public record InstanceEndpointView(
     @NonNull String address,
     int port,
     @NonNull String protocol,
-    @NonNull String status,
+    @NonNull String stateKey,
+    @NonNull Microcopy state,
     boolean preallocated
 ) {
 }

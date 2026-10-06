@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.security.ReputationBanPolicy;
 import be.elevenways.hohenheim.server.security.ThreatScorer;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
+import be.elevenways.hohenheim.server.sitetype.UpstreamTarget;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.SniKeyManager;
@@ -30,10 +31,14 @@ import io.undertow.util.HttpString;
 import io.undertow.util.StatusCodes;
 
 import java.net.InetAddress;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.UnknownHostException;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
@@ -129,6 +134,9 @@ public class SiteDispatcher implements HttpHandler {
     // Whether each site's upstream answered the last dial a visitor's request made (true) or refused it (false).
     // Passive: nothing probes, so a site nobody visited since the last route load has no entry.
     private final ConcurrentHashMap<Integer, Boolean> upstreamAnswered = new ConcurrentHashMap<>();
+
+    // The proxy route for unmatched hostnames, keyed by the fallback address it was built from.
+    private volatile @Nullable FallbackRoute fallbackRoute;
 
     public SiteDispatcher(AcmeService acmeService, SessionStore proxySessionStore) {
         this.acmeService = acmeService;
@@ -337,15 +345,13 @@ public class SiteDispatcher implements HttpHandler {
                 ErrorPages.send404(exchange, hostname);
                 return;
             }
-            String fallback = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS);
-            if (fallback != null && !fallback.isEmpty()) {
-                exchange.setStatusCode(302);
-                exchange.getResponseHeaders().put(Headers.LOCATION, fallback);
-                exchange.endExchange();
-            } else {
+            // AIDEV-NOTE: the fallback address is PROXIED to, as the Node original did ("send everything else
+            // to the Apache on localhost:8080"); a 302 sent browsers to an address only this host can reach.
+            entry = fallbackRoute(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS));
+            if (entry == null) {
                 ErrorPages.send404(exchange, hostname);
+                return;
             }
-            return;
         }
 
         // --- Force SSL: redirect while HTTPS termination is up, REFUSE while it is not. ---
@@ -535,7 +541,9 @@ public class SiteDispatcher implements HttpHandler {
         int siteId = entry.siteId;
         Runnable dispatch = () -> entry.handler.handleRequest(exchange, upstream -> {
             exchange.putAttachment(UpstreamProxyClient.UPSTREAM_URI, upstream);
-            exchange.putAttachment(UpstreamProxyClient.DIAL_OUTCOME, answered -> upstreamAnswered.put(siteId, answered));
+            if (siteId > 0) {
+                exchange.putAttachment(UpstreamProxyClient.DIAL_OUTCOME, answered -> upstreamAnswered.put(siteId, answered));
+            }
             // Only the proxy path may commit early: ProxyHandler copies the upstream status
             // and headers before it acquires the response channel, so a flush can never
             // publish a half-built response. Handlers that build their OWN response (a
@@ -562,6 +570,46 @@ public class SiteDispatcher implements HttpHandler {
             }
         }, entry.requestDelayMs, TimeUnit.MILLISECONDS);
     }
+
+    /**
+     * The route unmatched hostnames take: a plain proxy to the fallback address, rebuilt only when the setting changes.
+     *
+     * @return null when no usable http(s) address is configured
+     */
+    private @Nullable RouteEntry fallbackRoute(@Nullable String address) {
+        FallbackRoute cached = this.fallbackRoute;
+        if (cached != null && Objects.equals(cached.address(), address)) {
+            return cached.entry();
+        }
+        RouteEntry entry = null;
+        URI upstream = fallbackUpstream(address);
+        if (upstream != null) {
+            UpstreamTarget target = new UpstreamTarget(upstream, false);
+            entry = new RouteEntry((exchange, forwarder) -> forwarder.forwardTo(target), "fallback address", null,
+                null, List.of(), null, null, null, false);
+        } else if (address != null && !address.isBlank()) {
+            Blast.log("SiteDispatcher: the fallback address is not an http(s) address, unmatched hosts get a 404:",
+                address);
+        }
+        this.fallbackRoute = new FallbackRoute(address, entry);
+        return entry;
+    }
+
+    /** @return the fallback address as an upstream origin, or null when it is not an absolute http(s) address */
+    static @Nullable URI fallbackUpstream(@Nullable String address) {
+        if (address == null || address.isBlank()) return null;
+        try {
+            URI parsed = new URI(address.trim());
+            String scheme = parsed.getScheme() != null ? parsed.getScheme().toLowerCase(Locale.ROOT) : null;
+            if (!"http".equals(scheme) && !"https".equals(scheme) || parsed.getHost() == null) return null;
+            int port = parsed.getPort() > 0 ? parsed.getPort() : "https".equals(scheme) ? 443 : 80;
+            return new URI(scheme, null, parsed.getHost(), port, "/", null, null);
+        } catch (URISyntaxException e) {
+            return null;
+        }
+    }
+
+    private record FallbackRoute(@Nullable String address, @Nullable RouteEntry entry) {}
 
     public void setHttpsAvailable(boolean httpsAvailable) {
         this.httpsAvailable = httpsAvailable;

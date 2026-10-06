@@ -372,6 +372,24 @@ class ProteusAuthGateTest {
             .as("step 11: the fresh login's return URL carries no stale rlid or code")
             .containsOnlyOnce("rlid=").containsOnlyOnce("code=");
 
+        // 12. A provider that names NO permission demands hohenheim.site.<slug> of the site it guards, as the Node
+        //     original did: a verified identity without it is refused, one holding it is admitted.
+        gatedSite("blank.test", provider("Proteus blank", "rc", null));
+        proxy.reload();
+        GRANTED.set(List.of(GATED, ADMIN));
+        Response blankCold = request("blank.test", "/");
+        Response blankDenied = request("blank.test", pathAndQuery(LAST_RETURN_URL.get()),
+            cookie("hh_site_login", blankCold.cookie("hh_site_login")));
+        assertThat(blankDenied.status()).as("step 12: a blank permission does not admit any identity of the realm")
+            .isEqualTo(403);
+        GRANTED.set(List.of("hohenheim.site.blank-test"));
+        Response blankRetry = request("blank.test", "/");
+        Response blankVerified = request("blank.test", pathAndQuery(LAST_RETURN_URL.get()),
+            cookie("hh_site_login", blankRetry.cookie("hh_site_login")));
+        assertThat(blankVerified.status()).as("step 12: the site's own permission is accepted").isEqualTo(302);
+        assertThat(request("blank.test", "/", cookie("hh_site_session_id", blankVerified.cookie("hh_site_session_id")))
+            .body()).as("step 12: and reaches the upstream").contains("upstream-ok");
+
         proxy.stop();
         proxy = null;
     }

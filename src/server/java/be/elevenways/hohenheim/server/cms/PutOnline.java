@@ -62,6 +62,13 @@ public final class PutOnline {
         .placeholder("shop.example.com")
         .build();
 
+    /** The same address for the address kinds, which have nothing to serve without one (so no "leave it empty"). */
+    public static final StringField ADDRESS_HOSTNAME = StringField.builder(SiteDomainModel.HOSTNAME.getName())
+        .label(copy("address"))
+        .help(copy("address_help_required"))
+        .placeholder("shop.example.com")
+        .build();
+
     public static final StringField HTTPS = StringField.builder("https").label(copy("https")).build();
 
     /** The run's steps for a template: the app, its install, its website, its certificate, then live. */
@@ -95,7 +102,7 @@ public final class PutOnline {
 
     private static final FormSpec ADDRESS_INPUT = FormSpec.builder()
         .add(SiteModel.NAME)
-        .add(HOSTNAME)
+        .add(ADDRESS_HOSTNAME)
         .add(Select.of(SiteModel.UPSTREAM_KIND)
             .options(OptionSource.dynamic(context -> FieldFormEntryDefaults.enumOptionSource(SiteModel.UPSTREAM_KIND)
                 .resolve(context).stream().filter(option -> offeredAsApp(option.value())).toList()))
@@ -104,7 +111,7 @@ public final class PutOnline {
             .build())
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SETTINGS))
         .add(httpsChoice())
-        .step(FormStep.of("where", copy("step_where"), SiteModel.NAME.getName(), HOSTNAME.getName(),
+        .step(FormStep.of("where", copy("step_where"), SiteModel.NAME.getName(), ADDRESS_HOSTNAME.getName(),
             SiteModel.UPSTREAM_KIND.getName(), SiteModel.SETTINGS.getName()).describe(copy("step_where_lead")))
         .step(FormStep.of("https", copy("step_https"), HTTPS.getName()).describe(copy("step_https_lead")))
         .build();
