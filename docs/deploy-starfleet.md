@@ -1702,3 +1702,26 @@ squeezes its activity row into a narrow column (word per line); the stored conso
 touches the cards below it; settings is one very long page (W5 regroups it).
 
 ROLLBACK: `tools/deploy-host.sh --rollback <target> --preflight <dir above>` (no migrations were applied).
+
+## Deploy 2026-10-06 (starfleet): a5c5c97d, W3d, FW3 and W4 (eight sidebar entries, one Apps list)
+
+Swapped starfleet from 27064da4 to the pushed hohenheim a5c5c97d (jar sha256 `ccf75e0d...57ab6ac1`, 280020196
+bytes, 15 stamp rows clean; zenit b13654dd, zenit-cms e6af0d55, plumage 9cc2e8ef, hawkeye 7f34022d). Ships W3d
+(Open site, overview landing links, console run times), FW3/PAD (tab strip fits its width, Configuration label)
+and W4 (8-entry sidebar with Domains/Access/Activity/Settings clusters, the Apps list and its /manage twin). Lane:
+`zenit-dev deploy starfleet --pushed` (`tools/deploy-host.sh`), rehearsal on a byte copy green, NO migrations
+applied (103 before and after). The bundled spamservice is now 6487880 from its `module-fit` branch (the local
+checkout's branch), not java-rewrite 3bb19466.
+
+starfleet: healthy after both restarts (19:34 UTC), `zenit-dev deployed` current, 0 journal errors. Preflight
+`/root/hohenheim-preflight-20261006-193209/`. Logged-in pass (dashboard, Apps, Domains cluster, an instance
+overview; tenant /manage and its Apps): all render, sidebar shows the eight entries. Found: alchemy-skeleton's
+health verdict is green ("Live at http://skeleton.starfleet.life") while its only address is forced HTTPS without
+a certificate (the Apps HTTPS cell and the dashboard say "Error page"); the overview's Recent card shows a raw
+`access_updated · #3`; the Public endpoint row reads `49182the host declares no public address`; the tenant's
+Apps row shows `:49182` / "No address" because the tenant holds no grant on the site.
+
+daystrom: NOT deployed. This workstation (Darkshire) has no `daystrom` deployment target and its ssh key is
+refused by root@10.47.1.99 (`Permission denied (publickey)`); daystrom still runs 27064da4.
+
+ROLLBACK: `tools/deploy-host.sh --rollback starfleet --preflight /root/hohenheim-preflight-20261006-193209`.
