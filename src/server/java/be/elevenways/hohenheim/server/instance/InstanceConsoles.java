@@ -121,6 +121,12 @@ public final class InstanceConsoles {
         if (readiness == null && stopCommand == null && !restartPolicy) {
             return null;
         }
+        if (!(resolved.runtime() instanceof ConsoleStreamSupport) && readiness == null && stopCommand == null) {
+            // AIDEV-NOTE: restart alone never demands a console: without a stream to watch, the status reconciler
+            // catches the unobserved exit at sweep cadence and redeploys it. Only a template's console contract
+            // (readiness line, stop command) cannot be honoured blind. Restart became the default on 2026-10-07.
+            return null;
+        }
         if (!(resolved.runtime() instanceof ConsoleStreamSupport support)) {
             throw Violations.ofForm(HohenheimViolations.text("console_unsupported")
                 .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME))));

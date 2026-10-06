@@ -8,13 +8,16 @@ import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
 
+import java.net.InetAddress;
 import java.net.ServerSocket;
+import java.time.Duration;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -199,7 +202,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
     }
 
     @Test
-    void aProxyWhoseUpstreamStopsAnsweringIsAnErrorPage() throws Exception {
+    void aProxyWhoseUpstreamDoesNotAnswerIsAnErrorPageBeforeAnyVisitor() throws Exception {
         int closedPort;
         try (ServerSocket probe = new ServerSocket(0)) {
             closedPort = probe.getLocalPort();
@@ -211,26 +214,44 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
         ProxyServer proxy = ProxyTestSupport.startProxy();
         ServerMain.adoptProxyServer(proxy);
         try {
-            // 1. Nothing probes: before a visitor asks, the proxy knows of no refusal.
-            assertThat(adminGet(overview(site)).body()).as("step 1: no visitor has been refused yet")
-                .contains("data-cms-record-health=\"ok\"");
-
-            // 2. A visitor asks, and the upstream refuses the connection: they get an error page.
-            String answer = ProxyTestSupport.rawRequest(ProxyTestSupport.httpPort(proxy), "refused.app-journey.test", "/");
-            assertThat(answer).as("step 2: the visitor gets an error status").matches("(?s)HTTP/1\\.1 50[234].*");
-
-            // 3. The overview and the list now say what that visitor got.
-            String page = adminGet(overview(site)).body();
-            assertThat(page).as("step 3: the verdict is broken")
-                .contains("data-cms-record-health=\"broken\"")
+            // 1. No visitor has asked yet, but the proxy probes the fixed upstream on its own: nothing listens there,
+            //    so the overview and the list already say visitors get an error page.
+            Poll.until("step 1: the proxy's own probe finds the closed upstream", Duration.ofSeconds(10), () -> {
+                proxy.getDispatcher().probeUpstreams();
+                return overviewHealth(site, "broken");
+            });
+            assertThat(adminGet(overview(site)).body()).as("step 1: the verdict names what visitors get")
                 .contains("Visitors get an error page")
                 .doesNotContain("Live at");
             assertThat(adminGet("/admin/sites?q=app-journey-refused").body())
-                .as("step 3: and the list row agrees").contains("data-cms-health=\"broken\"");
+                .as("step 1: and the list row agrees").contains("data-cms-health=\"broken\"");
+
+            // 2. The upstream comes up: the next probe finds it answering and the app is live again.
+            try (ServerSocket upstream = new ServerSocket(closedPort, 50, InetAddress.getLoopbackAddress())) {
+                Poll.until("step 2: the next probe finds the upstream answering", Duration.ofSeconds(10), () -> {
+                    proxy.getDispatcher().probeUpstreams();
+                    return overviewHealth(site, "ok");
+                });
+            }
+
+            // 3. It goes away again and a visitor asks first: their refused dial alone turns the verdict broken.
+            String answer = ProxyTestSupport.rawRequest(ProxyTestSupport.httpPort(proxy), "refused.app-journey.test", "/");
+            assertThat(answer).as("step 3: the visitor gets an error status").matches("(?s)HTTP/1\\.1 50[234].*");
+            assertThat(adminGet(overview(site)).body()).as("step 3: the verdict is broken")
+                .contains("data-cms-record-health=\"broken\"");
         } finally {
             ServerMain.adoptProxyServer(previous);
             proxy.stop();
             HardDeletes.row(Models.get(SiteModel.class), site);
+        }
+    }
+
+    /** Whether the site's overview states this health tone; for polling, so a failed request is a failure. */
+    private boolean overviewHealth(Row site, String tone) {
+        try {
+            return adminGet(overview(site)).body().contains("data-cms-record-health=\"" + tone + "\"");
+        } catch (Exception failed) {
+            throw new AssertionError("the overview of " + site.get(SiteModel.NAME) + " could not be read", failed);
         }
     }
 

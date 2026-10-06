@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.HohenheimPaths;
 import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
+import be.elevenways.hohenheim.server.sitetype.ProbeableUpstream;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.WebSocketUpgrades;
 import be.elevenways.hohenheim.server.upstream.TenantUpstreams;
@@ -214,15 +215,37 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
                 websocketEnabled, rewriteLocation);
         }
 
-        return (exchange, forwarder) -> {
-            if (WebSocketUpgrades.refuse(exchange, websocketEnabled)) {
+        return new FixedAddressHandler(new UpstreamTarget(upstream, protocol, ignoreCertificates), host, port,
+            websocketEnabled, rewriteLocation);
+    }
+
+    /**
+     * Forwards an operator-configured site to one fixed host and port, which the dispatcher also probes on its own
+     * so an upstream that does not answer shows as down before any visitor finds out.
+     */
+    private record FixedAddressHandler(UpstreamTarget target, String host, int port, boolean websocketEnabled,
+                                       boolean rewriteLocation) implements SiteRequestHandler, ProbeableUpstream {
+
+        @Override
+        public void handleRequest(HttpServerExchange exchange, UpstreamForwarder forwarder) {
+            if (WebSocketUpgrades.refuse(exchange, this.websocketEnabled)) {
                 return;
             }
-            if (rewriteLocation) {
+            if (this.rewriteLocation) {
                 exchange.putAttachment(SiteDispatcher.REWRITE_LOCATION, Boolean.TRUE);
             }
-            forwarder.forwardTo(new UpstreamTarget(upstream, protocol, ignoreCertificates));
-        };
+            forwarder.forwardTo(this.target);
+        }
+
+        @Override
+        public String probeHost() {
+            return this.host;
+        }
+
+        @Override
+        public int probePort() {
+            return this.port;
+        }
     }
 
     /**

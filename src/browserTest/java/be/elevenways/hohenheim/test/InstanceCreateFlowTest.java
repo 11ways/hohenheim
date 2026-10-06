@@ -250,18 +250,18 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         Row visibleOnly = findInstance("cf-visible-only");
         assertThat(visibleOnly).as("step 3: the record exists").isNotNull();
         assertThat((Object) visibleOnly.get(InstanceModel.CRASH_POLICY))
-            .as("step 3: an untouched folded field keeps its declared default")
-            .isEqualTo(InstanceModel.CRASH_NONE);
+            .as("step 3: an untouched folded field keeps its declared default: restart, as the Node original did")
+            .isEqualTo(InstanceModel.CRASH_RESTART);
 
         // 4. And a create that DID open the fold persists what was typed there.
         HttpResponse<String> folded = httpPostForm("/admin/instances/new",
             "name=cf-advanced-set&kind=hohenheim%3Adocker_container&server_id=" + dockerHostId
-                + "&crash_policy=" + InstanceModel.CRASH_RESTART,
+                + "&crash_policy=" + InstanceModel.CRASH_NONE,
             sessionToken, csrfToken);
         assertThat(folded.statusCode()).as("step 4: the create redirects").isIn(302, 303);
         assertThat((Object) findInstance("cf-advanced-set").get(InstanceModel.CRASH_POLICY))
-            .as("step 4: a folded input still posts, and still coerces")
-            .isEqualTo(InstanceModel.CRASH_RESTART);
+            .as("step 4: a folded input still posts, and still coerces: none opts out of the default")
+            .isEqualTo(InstanceModel.CRASH_NONE);
 
         // 5. FALSIFICATION: a refusal about a folded field re-renders the section OPEN.
         HttpResponse<String> refused = httpPostForm("/admin/instances/new",
@@ -312,8 +312,8 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         // 3. Folded is not absent: pl-collapsible keeps its content MOUNTED, so a folded
         //    input is in the DOM under its own name -- the whole difference between a
         //    disclosure and hiding a field, which would make it unwritable.
-        for (String folded : List.of("memory_limit_mb", "home_quota_mb", "build_timeout",
-                "preview_branches")) {
+        // (A workspace offers no preview fields since D2: previews only accept applications.)
+        for (String folded : List.of("memory_limit_mb", "home_quota_mb", "build_timeout")) {
             assertThat(page.locator(SETTINGS + " pl-card[data-section] [name='settings."
                 + folded + "']").count())
                 .as("step 3: " + folded + " is in the DOM, inside its fold").isGreaterThan(0);
@@ -427,7 +427,7 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
     private static final String QUOTA_REASON =
         "No host both runs a runtime this kind supports (docker, incus) and has a data"
             + " root that can enforce quotas. Under Hosts, mount a host's volumes"
-            + " directory on btrfs and re-run its preflight.";
+            + " directory on btrfs, then check that host again.";
 
     /**
      * pl-select keeps its empty row in the (portalled) popup whether or not the list came

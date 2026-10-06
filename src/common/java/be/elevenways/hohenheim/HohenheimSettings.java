@@ -399,6 +399,17 @@ public class HohenheimSettings {
             .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.FILE)
             .description("Access log file path")
             .build();
+
+        public static final SettingDefinition<Boolean> DOMAIN_MISSES_TO_FILE = GROUP.buildSetting("domain_misses_to_file", Boolean.class)
+            .defaultValue(true)
+            .description("Log suspicious unknown-domain requests to a file for fail2ban")
+            .build();
+
+        public static final SettingDefinition<String> DOMAIN_MISSES_PATH = GROUP.buildSetting("domain_misses_path", String.class)
+            .defaultValue("/var/log/hohenheim/domain-misses.log")
+            .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.FILE)
+            .description("Domain-miss log file path (the fail2ban jail's logpath)")
+            .build();
     }
 
     // --- Storage ---
