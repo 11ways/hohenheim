@@ -222,7 +222,7 @@ class SshAuthWatchTest {
     @Test
     void anUnreadableJournalDegradesInsteadOfCrashing() throws Exception {
         AtomicLong attempts = new AtomicLong();
-        List<Long> pauses = new CopyOnWriteArrayList<>();
+        List<Duration> pauses = new CopyOnWriteArrayList<>();
         CountDownLatch thirdPause = new CountDownLatch(1);
         // The backoff is observed, never slept: the first two pauses return at once, the
         // third parks the supervisor until stop() interrupts it, so the counts below are
@@ -233,8 +233,8 @@ class SshAuthWatchTest {
                 throw new java.io.IOException("Permission denied");
             },
             (type, ip) -> { },
-            millis -> {
-                pauses.add(millis);
+            delay -> {
+                pauses.add(delay);
                 if (pauses.size() == 3) {
                     thirdPause.countDown();
                     new CountDownLatch(1).await();
@@ -253,7 +253,7 @@ class SshAuthWatchTest {
             .isEqualTo(3L);
         assertThat(pauses)
             .as("step 1: the backoff starts at 1s and doubles")
-            .containsExactly(1_000L, 2_000L, 4_000L);
+            .containsExactly(Duration.ofSeconds(1), Duration.ofSeconds(2), Duration.ofSeconds(4));
         assertThat(watcher.snapshot().lastError())
             .as("step 2: the reason is retained for the dashboard")
             .contains("Permission denied");

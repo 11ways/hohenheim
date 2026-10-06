@@ -91,6 +91,23 @@ public final class FakeAcmeServer implements AutoCloseable {
     private volatile boolean refuseValidation;
     private volatile boolean refuseFinalize;
     private volatile int certificateDays = 90;
+    private volatile @Nullable String pollRetryAfter;
+    // Written by the test thread, read and decremented by the server's HTTP thread.
+    private final AtomicInteger heldAuthorizationPolls = new AtomicInteger();
+    private final AtomicInteger heldOrderPolls = new AtomicInteger();
+    private volatile int slowValidationPolls;
+
+    /** Every authorization validated from now on answers this many polls pending, naming no wait; 0 stops. */
+    public void validateSlowly(int polls) {
+        this.slowValidationPolls = polls;
+    }
+
+    /** Answers the next authorization poll and the next order poll pending, with this Retry-After; null stops. */
+    public void deferPolls(@Nullable String retryAfter) {
+        this.pollRetryAfter = retryAfter;
+        this.heldAuthorizationPolls.set(retryAfter == null ? 0 : 1);
+        this.heldOrderPolls.set(retryAfter == null ? 0 : 1);
+    }
 
     private static final class Order {
         final List<String> identifiers = new ArrayList<>();
@@ -106,6 +123,8 @@ public final class FakeAcmeServer implements AutoCloseable {
         String token = "";
         String status = "pending";
         @Nullable String error;
+        /** The polls this authorization still answers pending once valid; -1 until its first valid poll. */
+        int slowPollsLeft = -1;
     }
 
     public FakeAcmeServer() throws Exception {
@@ -282,7 +301,28 @@ public final class FakeAcmeServer implements AutoCloseable {
             problem(exchange, 404, "urn:ietf:params:acme:error:malformed", "no such authz");
             return;
         }
-        json(exchange, 200, authzBody(authzId, authz));
+        Map<String, Object> body = new LinkedHashMap<>(authzBody(authzId, authz));
+        if ("valid".equals(authz.status) && this.heldAuthorizationPolls.getAndUpdate(n -> Math.max(0, n - 1)) > 0) {
+            body.put("status", "pending");
+            exchange.getResponseHeaders().set("Retry-After", this.pollRetryAfter);
+        } else if ("valid".equals(authz.status) && this.validatingSlowly(authz)) {
+            body.put("status", "pending");
+        }
+        json(exchange, 200, body);
+    }
+
+    /** @return whether this poll of a valid authorization still answers pending under {@link #validateSlowly} */
+    private boolean validatingSlowly(Authz authz) {
+        synchronized (authz) {
+            if (authz.slowPollsLeft < 0) {
+                authz.slowPollsLeft = this.slowValidationPolls;
+            }
+            if (authz.slowPollsLeft == 0) {
+                return false;
+            }
+            authz.slowPollsLeft--;
+            return true;
+        }
     }
 
     private void triggerChallenge(HttpExchange exchange, String challengeId) throws Exception {
@@ -341,7 +381,11 @@ public final class FakeAcmeServer implements AutoCloseable {
         CERTIFICATES.put(certificateId, sign(csr, order.identifiers));
         order.certificateId = certificateId;
         order.status = "valid";
-        json(exchange, 200, orderBody(orderId, order));
+        Map<String, Object> body = new LinkedHashMap<>(orderBody(orderId, order));
+        if (this.heldOrderPolls.get() > 0) {
+            body.put("status", "processing");
+        }
+        json(exchange, 200, body);
     }
 
     private void order(HttpExchange exchange, String orderId) throws Exception {
@@ -350,7 +394,12 @@ public final class FakeAcmeServer implements AutoCloseable {
             problem(exchange, 404, "urn:ietf:params:acme:error:malformed", "no such order");
             return;
         }
-        json(exchange, 200, orderBody(orderId, order));
+        Map<String, Object> body = new LinkedHashMap<>(orderBody(orderId, order));
+        if ("valid".equals(order.status) && this.heldOrderPolls.getAndUpdate(n -> Math.max(0, n - 1)) > 0) {
+            body.put("status", "processing");
+            exchange.getResponseHeaders().set("Retry-After", this.pollRetryAfter);
+        }
+        json(exchange, 200, body);
     }
 
     private void certificate(HttpExchange exchange, String certificateId) throws Exception {

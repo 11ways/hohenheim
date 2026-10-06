@@ -1,0 +1,8 @@
+Presence of this file opts every Java source set, tests and testSupport included,
+into protoblast's checkPrivateRetryDelays compile gate. Waits after failed attempts
+come from Backoff: fixed/exponential, jittered/jitteredBelow/plusUpTo, a server wait
+as delayAfter's floor up to the ceiling honouringUpTo declares, Attempts for
+delay-only counters and nextAt for stored due times. The shared Java lexer ignores
+comments/literals and checks whole-file code, including split calls. The mechanism
+and its own proof are exempt by path; there is no per-line excuse. Renamed-local
+curves, lookup tables and non-Java bodies remain outside this guard's coverage.

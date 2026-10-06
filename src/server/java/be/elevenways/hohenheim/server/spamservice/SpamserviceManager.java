@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.SpamserviceInstallationModel;
 import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.host.PrivilegedHelper;
 import be.elevenways.hohenheim.server.security.SecurityReportEnv;
+import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
 import be.elevenways.protoblast.server.process.Subprocess;
@@ -67,6 +68,8 @@ public final class SpamserviceManager {
     static final long STOP_TIMEOUT_MS = 5_000;
     static final long INITIAL_BACKOFF_MS = 1_000;
     static final long MAX_BACKOFF_MS = 60_000;
+    static final Backoff RESTART = Backoff.exponential(
+            Duration.ofMillis(INITIAL_BACKOFF_MS), 2, Duration.ofMillis(MAX_BACKOFF_MS));
     static final long STABLE_RUNTIME_MS = 60_000;
     static final long OWNERSHIP_TIMEOUT_MS = 20_000;
 
@@ -509,8 +512,7 @@ public final class SpamserviceManager {
         if (crash) {
             this.consecutiveCrashes++;
         }
-        int shift = Math.min(Math.max(0, this.consecutiveCrashes - 1), 6);
-        long delay = Math.min(MAX_BACKOFF_MS, INITIAL_BACKOFF_MS << shift);
+        long delay = RESTART.delayAfter(Math.max(1, this.consecutiveCrashes)).toMillis();
         this.retry = this.lifecycle.schedule(() -> {
             synchronized (this.lock) {
                 if (this.generation != requested || !this.desiredRunning || this.shuttingDown) {
