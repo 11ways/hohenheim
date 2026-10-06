@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -196,6 +197,8 @@ public final class ApplicationKind implements InstanceKindHandler {
     }
 
     @Override public Icon getIcon() { return Icon.of("rocket"); }
+
+    @Override public PutOnlineGroup putOnlineGroup() { return PutOnlineGroup.OWN_CODE; }
 
     @Override public BadgeColor color() { return ColorHue.INDIGO; }
 

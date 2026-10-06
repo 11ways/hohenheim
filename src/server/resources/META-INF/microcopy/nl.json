@@ -1022,6 +1022,10 @@
     {
       "text": "TLS-certificaat voor deze hostnaam. Leeg laat het platform kiezen of er een aanvragen.",
       "scope": "help"
+    },
+    {
+      "text": "Certificaat",
+      "scope": "put_online"
     }
   ],
   "clients": {
@@ -2737,6 +2741,10 @@
   },
   "all_clear": {
     "text": "Alles in orde - niets vraagt aandacht.",
+    "scope": "dashboard"
+  },
+  "apps": {
+    "text": "Apps",
     "scope": "dashboard"
   },
   "recent_activity": [
@@ -8078,10 +8086,16 @@
     "text": "Gebundelde app-catalogus",
     "scope": "template_import"
   },
-  "catalog_help": {
-    "text": "Community-scripts-apps gebundeld op vastgezette revisie",
-    "scope": "template_import"
-  },
+  "catalog_help": [
+    {
+      "text": "Community-scripts-apps gebundeld op vastgezette revisie",
+      "scope": "template_import"
+    },
+    {
+      "text": "Alles in de sjablooncatalogus, ook je eigen sjablonen.",
+      "scope": "put_online"
+    }
+  ],
   "catalog_import_action": {
     "text": "Importeer {$app}",
     "scope": "template_import"
@@ -8126,10 +8140,16 @@
       "scope": "help"
     }
   ],
-  "catalog": {
-    "text": "Catalogus",
-    "scope": "image_origin"
-  },
+  "catalog": [
+    {
+      "text": "Catalogus",
+      "scope": "image_origin"
+    },
+    {
+      "text": "Andere sjablonen",
+      "scope": "put_online"
+    }
+  ],
   "prepared": {
     "text": "Voorbereid sjabloon",
     "scope": "image_origin"
@@ -13594,6 +13614,34 @@
     "text": "Wat wil je online zetten?",
     "scope": "put_online"
   },
+  "group_machine": {
+    "text": "Een eigen machine",
+    "scope": "put_online"
+  },
+  "continue": {
+    "text": "Verder",
+    "scope": "put_online"
+  },
+  "versions": {
+    "text": "Andere versies:",
+    "scope": "put_online"
+  },
+  "step_what": {
+    "text": "Wat",
+    "scope": "put_online"
+  },
+  "step_where": {
+    "text": "Waar",
+    "scope": "put_online"
+  },
+  "step_https": {
+    "text": "HTTPS",
+    "scope": "put_online"
+  },
+  "step_live": {
+    "text": "Online",
+    "scope": "put_online"
+  },
   "group_templates": {
     "text": "Vanuit een sjabloon",
     "scope": "put_online"
@@ -13602,16 +13650,8 @@
     "text": "Een adres ergens anders heen sturen",
     "scope": "put_online"
   },
-  "group_other": {
-    "text": "Je eigen code of machine",
-    "scope": "put_online"
-  },
-  "other": {
-    "text": "Een Git-app, een containerimage, een Linux-container, een virtuele machine of een werkruimte",
-    "scope": "put_online"
-  },
-  "other_help": {
-    "text": "Opent het instantieformulier; geef het daarna een adres.",
+  "group_code": {
+    "text": "Vanuit je eigen code of bestanden",
     "scope": "put_online"
   },
   "finish": {
@@ -13642,10 +13682,6 @@
     "text": "Het adres antwoordt via gewone HTTP tot je een certificaat toevoegt.",
     "scope": "put_online"
   },
-  "step_where": {
-    "text": "Waar",
-    "scope": "put_online"
-  },
   "step_where_lead": {
     "text": "De naam, het adres dat bezoekers gebruiken, en waar het draait.",
     "scope": "put_online"
@@ -13656,10 +13692,6 @@
   },
   "step_options_lead": {
     "text": "De waarden waarmee het start. Een leeg geheim behoudt de waarde van het sjabloon.",
-    "scope": "put_online"
-  },
-  "step_https": {
-    "text": "HTTPS",
     "scope": "put_online"
   },
   "step_https_lead": {
@@ -13725,5 +13757,17 @@
   "checklist_put_online_detail": {
     "text": "Een flow maakt de app, het adres en het certificaat aan, en start het.",
     "scope": "onboarding_checklist"
+  },
+  "checklist_backups": {
+    "text": "Kies waar back-ups heen gaan",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_backups_detail": {
+    "text": "Nu blijven ze op deze machine en gaan ze samen met haar verloren.",
+    "scope": "onboarding_checklist"
+  },
+  "point_address": {
+    "text": "Een adres ergens anders heen sturen",
+    "scope": "onboarding"
   }
 }

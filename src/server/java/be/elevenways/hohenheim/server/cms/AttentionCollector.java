@@ -203,11 +203,16 @@ public final class AttentionCollector {
             items.add(item(AttentionSeverity.ERROR, "box-archive",
                 copy("control_plane_backup", "attention_title"),
                 copy("control_plane_backup", "attention_detail"),
-                CmsRoutes.settingsSection(ADMIN, SettingsPage.DEFAULT_SLUG, CONTROL_PLANE_BACKUP_SECTION)
-                    .withFragment(CONTROL_PLANE_BACKUP_SECTION)));
+                controlPlaneBackupTarget()));
             return;
         }
         controlPlaneBackupFreshness(items);
+    }
+
+    /** Where the control-plane backup's destination is chosen: its settings group, scrolled to. */
+    static @NonNull RouteTarget controlPlaneBackupTarget() {
+        return CmsRoutes.settingsSection(ADMIN, SettingsPage.DEFAULT_SLUG, CONTROL_PLANE_BACKUP_SECTION)
+            .withFragment(CONTROL_PLANE_BACKUP_SECTION);
     }
 
     /** The nightly task runs at 02:30; two missed nights is an alarm, not scheduling jitter. */

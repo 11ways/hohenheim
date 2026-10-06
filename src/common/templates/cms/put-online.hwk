@@ -1,63 +1,60 @@
-{#- Put something online: without a choice, what to put online (a template, an address, or something of your own);
-    with one, the stepped wizard the framework draws for that PAGE action, submitted once to its run page. -#}
+{#- Put something online: without a choice, what to put online (board Online-1: a stepper over grouped cards and
+    Continue); with one, the stepped wizard the framework draws for that PAGE action, submitted once to its run page.
+    Its sections stand in plumage's page frame (pl-page), which spaces them; the shell does not frame a module page. -#}
 {% declare title: String %}
+{% declare lead: Microcopy %}
 {% declare document: PageFormState = null %}
 {% declare what: String = "" %}
 {% declare whatDescription: String = "" %}
-{% declare templates: List = null %}
-{% declare addresses: List = null %}
-{% declare otherTarget: RouteTarget = null %}
+{% declare versions: List = null %}
+{% declare groups: List = null %}
+{% declare chooseAction: String = "" %}
 {% declare cancelTarget: RouteTarget %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
-<section class="cms-resource-form-page hh-put-online" data-hh-put-online>
-    <header class="cms-page-header">
-        <h1>{{ title }}</h1>
-        <p>{{ t("lead", scope: "put_online") }}</p>
-    </header>
-    {% if document != null %}
-    <pl-list variant="card" class="hh-put-online-what">
-        <pl-list-item>
-            <pl-list-item-title>{{ what }}</pl-list-item-title>
-            {% if whatDescription != "" %}<pl-list-item-meta>{{ whatDescription }}</pl-list-item-meta>{% /if %}
-        </pl-list-item>
-    </pl-list>
-    {% render "zenitcms:form/page-action" var:page=document %}
-    {% else %}
-    <h2 class="hh-put-online-question">{{ t("what_question", scope: "put_online") }}</h2>
-    {% if templates != null && templates.size() > 0 %}
-    <pl-list variant="card" data-hh-put-online-group="templates">
-        <pl-list-header>{{ t("group_templates", scope: "put_online") }}</pl-list-header>
-        {% each templates as index, choice %}
-        <pl-list-item>
-            <pl-list-item-title><a use:Zenit.route={% choice.get("target") %} data-row-link>{{ choice.get("name") }}</a></pl-list-item-title>
-            {% if choice.get("description") != "" %}<pl-list-item-meta>{{ choice.get("description") }}</pl-list-item-meta>{% /if %}
-        </pl-list-item>
-        {% /each %}
-    </pl-list>
-    {% /if %}
-    {% if addresses != null && addresses.size() > 0 %}
-    <pl-list variant="card" data-hh-put-online-group="addresses">
-        <pl-list-header>{{ t("group_addresses", scope: "put_online") }}</pl-list-header>
-        {% each addresses as index, choice %}
-        <pl-list-item>
-            <pl-list-item-title><a use:Zenit.route={% choice.get("target") %} data-row-link>{{ choice.get("name") }}</a></pl-list-item-title>
-            <pl-list-item-meta>{{ choice.get("description") }}</pl-list-item-meta>
-        </pl-list-item>
-        {% /each %}
-    </pl-list>
-    {% /if %}
-    {% if otherTarget != null %}
-    <pl-list variant="card" data-hh-put-online-group="other">
-        <pl-list-header>{{ t("group_other", scope: "put_online") }}</pl-list-header>
-        <pl-list-item>
-            <pl-list-item-title><a use:Zenit.route={% otherTarget %} data-row-link>{{ t("other", scope: "put_online") }}</a></pl-list-item-title>
-            <pl-list-item-meta>{{ t("other_help", scope: "put_online") }}</pl-list-item-meta>
-        </pl-list-item>
-    </pl-list>
-    {% /if %}
-    {% /if %}
-    <pl-button variant="ghost" use:Zenit.route={% cancelTarget %}>{{ t("cancel", scope: "put_online") }}</pl-button>
-</section>
+<pl-page data-hh-put-online>
+{% render "zenitcms:page-header" var:title=title var:lead=lead %}
+{% if document != null %}
+<pl-list variant="card" data-hh-put-online-what>
+    <pl-list-item>
+        <pl-list-item-title>{{ what }}</pl-list-item-title>
+        {% if whatDescription != "" %}<pl-list-item-meta>{{ whatDescription }}</pl-list-item-meta>{% /if %}
+        {% if versions != null && versions.size() > 0 %}
+        <pl-list-item-meta data-hh-put-online-versions>
+            {{ t("versions", scope: "put_online") }}
+            {% each versions as index, version %}<a use:Zenit.route={% version.get("target") %}>{{ version.get("name") }}</a>{% if index < versions.size() - 1 %}, {% /if %}{% /each %}
+        </pl-list-item-meta>
+        {% /if %}
+    </pl-list-item>
+</pl-list>
+{% render "zenitcms:form/page-action" var:page=document %}
+{% else %}
+<pl-stepper totalSteps={% 4 %} data-hh-put-online-steps>
+    <pl-stepper-indicator totalSteps={% 4 %} labels={% [t("step_what", scope: "put_online"), t("step_where", scope: "put_online"), t("step_https", scope: "put_online"), t("step_live", scope: "put_online")] %}></pl-stepper-indicator>
+</pl-stepper>
+<form method="get" action={% chooseAction %} data-hh-put-online-chooser>
+    <pl-field required={% true %}>
+        <pl-label>{{ t("what_question", scope: "put_online") }}</pl-label>
+        <pl-choice-group name="choice" required={% true %}>
+            {% each groups as group %}
+            <pl-choice-section attr:id={% group.get("anchor") %} label={% group.get("heading") %} data-hh-put-online-group={% group.get("token") %}>
+                {% each group.get("choices") as choice %}
+                <pl-choice-card value={% choice.get("value") %} icon={% choice.get("icon") %}
+                                label={% choice.get("label") %} description={% choice.get("description") %}></pl-choice-card>
+                {% /each %}
+            </pl-choice-section>
+            {% /each %}
+        </pl-choice-group>
+    </pl-field>
+    <pl-form-actions>
+        <pl-button type="submit" variant="primary" data-hh-put-online-continue>
+            <pl-icon name="arrow-right"></pl-icon>
+            {{ t("continue", scope: "put_online") }}
+        </pl-button>
+        <pl-button variant="ghost" use:Zenit.route={% cancelTarget %}>{{ t("cancel", scope: "put_online") }}</pl-button>
+    </pl-form-actions>
+</form>
+{% /if %}
+</pl-page>
 {% /block %}

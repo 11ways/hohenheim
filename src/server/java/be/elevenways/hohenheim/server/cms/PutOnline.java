@@ -69,7 +69,7 @@ public final class PutOnline {
         .placeholder("shop.example.com")
         .build();
 
-    public static final StringField HTTPS = StringField.builder("https").label(copy("https")).build();
+    public static final StringField HTTPS = StringField.builder("https").label(copy("certificate")).build();
 
     /** The run's steps for a template: the app, its install, its website, its certificate, then live. */
     private static final OperationSteps APP_STEPS = OperationSteps.of(

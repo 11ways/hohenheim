@@ -1,10 +1,20 @@
 {% declare widget: WidgetInstance %}
-{#- The fresh install's lead: nothing is online yet, so the one way onward is "Put something online" (PutOnlinePage),
-    bound through the typed CMS route, never a path literal. -#}
-{% let putOnlineTarget = BoundEndpoint.with(Endpoint.with(Zenit.Endpoints.zenit.resource_list, Zenit.Params.zenit.panel, "admin"), Zenit.Params.zenit.resource, "put-online") %}
-<pl-empty-state>
+{% declare data: Map = null %}
+{#- The fresh install's lead (board Empty-Dashboard): nothing is online yet, so the ways onward are "Put something
+    online" and, straight to its address choices, "Point an address somewhere else". Both targets are bound by the
+    dashboard (AdminDashboard) through the typed CMS route, never a path literal. -#}
+<pl-empty-state data-hh-onboarding>
     <pl-icon name="rocket"></pl-icon>
     <pl-empty-state-title>{{ t("title", scope: "onboarding") }}</pl-empty-state-title>
     <pl-empty-state-description>{{ t("description", scope: "onboarding") }}</pl-empty-state-description>
-    <pl-button variant="primary" use:Zenit.route={% putOnlineTarget %}>{{ t("put_online", scope: "onboarding") }}</pl-button>
+    {% if data != null %}
+    <pl-button variant="primary" use:Zenit.route={% data.get("putOnline") %} data-hh-onboarding-put-online>
+        <pl-icon name="rocket"></pl-icon>
+        {{ t("put_online", scope: "onboarding") }}
+    </pl-button>
+    <pl-button variant="outline" use:Zenit.route={% data.get("pointAddress") %} data-hh-onboarding-address>
+        <pl-icon name="arrow-right"></pl-icon>
+        {{ t("point_address", scope: "onboarding") }}
+    </pl-button>
+    {% /if %}
 </pl-empty-state>

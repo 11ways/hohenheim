@@ -1022,6 +1022,10 @@
     {
       "text": "TLS certificate served for this hostname. Blank lets the platform pick or request one.",
       "scope": "help"
+    },
+    {
+      "text": "Certificate",
+      "scope": "put_online"
     }
   ],
   "clients": {
@@ -2737,6 +2741,10 @@
   },
   "all_clear": {
     "text": "All clear - nothing needs attention.",
+    "scope": "dashboard"
+  },
+  "apps": {
+    "text": "Apps",
     "scope": "dashboard"
   },
   "recent_activity": [
@@ -8078,10 +8086,16 @@
     "text": "Vendored app catalog",
     "scope": "template_import"
   },
-  "catalog_help": {
-    "text": "Community-scripts apps vendored at pinned revision",
-    "scope": "template_import"
-  },
+  "catalog_help": [
+    {
+      "text": "Community-scripts apps vendored at pinned revision",
+      "scope": "template_import"
+    },
+    {
+      "text": "Everything in the template catalogue, including your own.",
+      "scope": "put_online"
+    }
+  ],
   "catalog_import_action": {
     "text": "Import {$app}",
     "scope": "template_import"
@@ -8126,10 +8140,16 @@
       "scope": "help"
     }
   ],
-  "catalog": {
-    "text": "Catalog",
-    "scope": "image_origin"
-  },
+  "catalog": [
+    {
+      "text": "Catalog",
+      "scope": "image_origin"
+    },
+    {
+      "text": "Other templates",
+      "scope": "put_online"
+    }
+  ],
   "prepared": {
     "text": "Prepared template",
     "scope": "image_origin"
@@ -13594,6 +13614,34 @@
     "text": "What do you want to put online?",
     "scope": "put_online"
   },
+  "group_machine": {
+    "text": "A machine of your own",
+    "scope": "put_online"
+  },
+  "continue": {
+    "text": "Continue",
+    "scope": "put_online"
+  },
+  "versions": {
+    "text": "Other versions:",
+    "scope": "put_online"
+  },
+  "step_what": {
+    "text": "What",
+    "scope": "put_online"
+  },
+  "step_where": {
+    "text": "Where",
+    "scope": "put_online"
+  },
+  "step_https": {
+    "text": "HTTPS",
+    "scope": "put_online"
+  },
+  "step_live": {
+    "text": "Going live",
+    "scope": "put_online"
+  },
   "group_templates": {
     "text": "From a template",
     "scope": "put_online"
@@ -13602,16 +13650,8 @@
     "text": "Point an address somewhere else",
     "scope": "put_online"
   },
-  "group_other": {
-    "text": "Your own code or machine",
-    "scope": "put_online"
-  },
-  "other": {
-    "text": "A Git app, a container image, a Linux container, a virtual machine or a workspace",
-    "scope": "put_online"
-  },
-  "other_help": {
-    "text": "Opens the instance form; give it an address afterwards.",
+  "group_code": {
+    "text": "From your own code or files",
     "scope": "put_online"
   },
   "finish": {
@@ -13642,10 +13682,6 @@
     "text": "The address answers over plain HTTP until you add a certificate.",
     "scope": "put_online"
   },
-  "step_where": {
-    "text": "Where",
-    "scope": "put_online"
-  },
   "step_where_lead": {
     "text": "Its name, the address visitors use, and where it runs.",
     "scope": "put_online"
@@ -13656,10 +13692,6 @@
   },
   "step_options_lead": {
     "text": "The values it starts with. A secret left empty keeps the template's own value.",
-    "scope": "put_online"
-  },
-  "step_https": {
-    "text": "HTTPS",
     "scope": "put_online"
   },
   "step_https_lead": {
@@ -13725,5 +13757,17 @@
   "checklist_put_online_detail": {
     "text": "One flow creates the app, its address and its certificate, and starts it.",
     "scope": "onboarding_checklist"
+  },
+  "checklist_backups": {
+    "text": "Choose where backups go",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_backups_detail": {
+    "text": "Right now they stay on this machine and are lost with it.",
+    "scope": "onboarding_checklist"
+  },
+  "point_address": {
+    "text": "Point an address somewhere else",
+    "scope": "onboarding"
   }
 }

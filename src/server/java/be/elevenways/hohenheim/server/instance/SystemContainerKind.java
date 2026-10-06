@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -146,6 +147,8 @@ public final class SystemContainerKind implements InstanceKindHandler {
 
     @Override
     public Icon getIcon() { return Icon.of("cubes"); }
+
+    @Override public PutOnlineGroup putOnlineGroup() { return PutOnlineGroup.MACHINE; }
 
     @Override
     public BadgeColor color() { return ColorHue.GREEN; }

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.upstream.kinds;
 
+import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimFormCopy;
@@ -74,6 +75,10 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
 
     @Override
     public Icon getIcon() { return Icon.of("folder"); }
+
+    /** A folder of the operator's own files: offered beside their code, not among the addresses. */
+    @Override
+    public PutOnlineGroup putOnlineGroup() { return PutOnlineGroup.OWN_CODE; }
 
     @Override
     public BadgeColor color() { return ColorHue.TEAL; }

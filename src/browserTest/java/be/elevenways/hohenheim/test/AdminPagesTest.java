@@ -832,10 +832,10 @@ class AdminPagesTest extends HohenheimTestBase {
 
             // 3. Every stat tile sits in ONE grid: proxy and firewall no longer contribute
             //    a region each, which used to split four tiles across two grids.
-            assertThat(page.locator(".hh-dashboard-band .widget-columns").count())
+            assertThat(page.locator(".hh-dashboard-band .widget-columns:has(pl-stat-card)").count())
                 .as("step 3: exactly one stat grid on the dashboard")
                 .isEqualTo(1);
-            var grid = page.locator(".hh-dashboard-band .widget-columns").first();
+            var grid = page.locator(".hh-dashboard-band .widget-columns:has(pl-stat-card)").first();
             assertThat(grid.locator(".widget-stat-link a.stat-link[href='/admin/sites']").count())
                 .as("step 3: the sites tile is in it").isEqualTo(1);
             assertThat(grid.locator(".widget-stat-link a.stat-link[href='/admin/bans']").count())
@@ -873,6 +873,16 @@ class AdminPagesTest extends HohenheimTestBase {
     void theDashboardActivityBandSaysWhenRecordingIsSwitchedOff() throws Exception {
 
         Boolean before = Zenit.SETTINGS_VALUES.getValue(ActivityLog.ENABLED);
+        // The band belongs to the dashboard of an install with apps; a fresh one leads with "Put something online".
+        var siteModel = Models.get(SiteModel.class);
+        Row site = siteModel.createEmptyRow();
+        site.set(SiteModel.NAME, "Activity Band Site");
+        site.set(SiteModel.SLUG, "activity-band-site");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
+        site.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
+        site.set(SiteModel.STATUS, "active");
+        site.set(SiteModel.ENABLED, true);
+        siteModel.save(site);
 
         try {
             // 1. Recording off: the notice exists at all, and it is the framework
@@ -917,6 +927,7 @@ class AdminPagesTest extends HohenheimTestBase {
                 .isZero();
         } finally {
             Zenit.SETTINGS_VALUES.setValue(ActivityLog.ENABLED, before);
+            siteModel.delete(site);
         }
     }
 
