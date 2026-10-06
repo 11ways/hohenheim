@@ -47,7 +47,8 @@ import java.util.TreeSet;
  * and every stored host wildcard respelled into zenit's HostPattern grammar;
  * and the provenance mark of every operator-trustable target, set on the rows stored before it;
  * and the lock version of every game-domain mapping, whose writes became operations;
- * and the access-rule tree on core's TreeBehaviour: nullable positions, one tree index and dense sibling runs.
+ * and the access-rule tree on core's TreeBehaviour: nullable positions, one tree index and dense sibling runs;
+ * and every workload restarting after a crash, the stored ones and the column default.
  *
  * AIDEV-NOTE: this is ONE migration on purpose (2026-09-30). It replaced M011, M012, M015, M016 and M017,
  * which no production install (kuifje at 009, robbedoes at 010) had applied; the two test installs that
@@ -236,6 +237,32 @@ public class M011_ReviewHardening extends HohenheimMigration {
         });
         schema.data("renumber every access-rule sibling run dense from 0 in its stored order", "1",
             M011_ReviewHardening::densifyRulePositions);
+        // A workload restarts after a crash by default now, the stored ones included: 'none' was the old default,
+        // never an operator's choice on the installs this reaches (Jelle, 2026-10-07).
+        schema.alterTable("instances", table -> table.changeColumn("crash_policy", ColumnType.STRING,
+            column -> column.nullable(true).maxLength(50).defaultValue(CRASH_RESTART)));
+        schema.data("restart every stored workload after a crash, the new default", "1",
+            M011_ReviewHardening::restartStoredWorkloadsOnCrash);
+    }
+
+    /** The crash policy every stored workload gets, as InstanceModel.CRASH_DEFAULT spells it today. */
+    static final String CRASH_RESTART = "restart";
+
+    /** The crash policy the previous default stored, as production stored it. */
+    static final String CRASH_NONE = "none";
+
+    /**
+     * The data step giving every stored workload the restart crash policy, trashed rows included so one restored
+     * later behaves like a new one; a row already on restart is left as stored.
+     */
+    public static void restartStoredWorkloadsOnCrash(@NonNull Datasource datasource) {
+        Db.run(datasource, () -> {
+            IntegerField id = IntegerField.builder().name("id").build();
+            StringField crashPolicy = StringField.builder().name("crash_policy").build();
+            FrozenModel instances = new FrozenModel("instances", id, crashPolicy);
+            instances.find().where(crashPolicy.eq(CRASH_NONE)).assign(crashPolicy, CRASH_RESTART).updateAll();
+            instances.find().where(crashPolicy.isNull()).assign(crashPolicy, CRASH_RESTART).updateAll();
+        });
     }
 
     /** The M010 control-plane shape, frozen independently of the consolidated or removed migration classes. */

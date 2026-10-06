@@ -15,8 +15,10 @@ import be.elevenways.zenit.auth.AuthEndpoints;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelCluster;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.render.panel.PanelNavStates;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.cms.common.resource.ResourceVerb;
@@ -170,6 +172,13 @@ class EmptyDatabaseWalkthroughBrowserTest extends HawkeyeBrowserTestBase {
                 String owner = entry.id() + " / " + entry.getClass().getName();
                 String list = CmsRoutes.list(panel.slug(), entry.slug()).toUrl();
                 try {
+                    if (entry instanceof PanelCluster cluster) {
+                        // 5a. A cluster opens the first member this viewer may open, a choice made per viewer and so
+                        //     never a static landing target: it lands on one of its members. The members are entries
+                        //     of their own, so their records are crawled under them, never under the cluster.
+                        visitLanding(list, clusterLandings(panel, cluster), owner);
+                        continue;
+                    }
                     boolean hasList = !(entry instanceof PanelResource<?> parts) || parts.list() != null;
                     boolean creates = entry instanceof PanelResource<?> parts
                         && parts.form() != null && parts.offers(ResourceVerb.CREATE);
@@ -248,6 +257,16 @@ class EmptyDatabaseWalkthroughBrowserTest extends HawkeyeBrowserTestBase {
 
     private boolean visit(String path, String declaredRedirect, String owner) {
         return visitLanding(path, List.of(declaredRedirect == null ? path : declaredRedirect), owner);
+    }
+
+    /** Each member's own landing, the only places a cluster visit may land. */
+    private static List<String> clusterLandings(Panel panel, PanelCluster cluster) {
+        List<String> landings = new ArrayList<>();
+        for (String slug : cluster.members()) {
+            PanelEntry member = panel.entryBySlug(slug);
+            if (member != null) landings.add(PanelNavStates.peerUrl(panel, member));
+        }
+        return landings;
     }
 
     /** The record's own path and each of its declared tabs, the only places a record visit may land. */
