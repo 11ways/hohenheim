@@ -64,6 +64,9 @@ import java.util.Objects;
  */
 public final class NotificationChannelParts {
 
+    /** The notification channel entry's slug, which the panel's clusters name. */
+    public static final String SLUG = "notifications";
+
     /** The virtual column holding the subscribed events, and the name's subtext. */
     static final String EVENTS_COLUMN = "events";
 
@@ -132,7 +135,7 @@ public final class NotificationChannelParts {
                     .toList()))
                 .build())
             .build();
-        return PanelResource.builder(HohenheimIds.id("notification_channel"), "notifications", SUBJECT)
+        return PanelResource.builder(HohenheimIds.id("notification_channel"), SLUG, SUBJECT)
             .label(Microcopy.of("plural").withFilter("scope", "notification_channel"))
             .recordLabel(Microcopy.of("singular").withFilter("scope", "notification_channel"))
             .description(Microcopy.of("nav_hint").withFilter("scope", "notification_channel"))

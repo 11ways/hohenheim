@@ -63,6 +63,9 @@ import java.util.Objects;
  */
 public final class BanParts {
 
+    /** The IP ban entry's slug, which the panel's clusters name. */
+    public static final String SLUG = "bans";
+
     /** The list's state column: enforced, lifted or expired, derived from the stored facts. */
     static final String STATE_COLUMN = "state";
 
@@ -156,7 +159,7 @@ public final class BanParts {
             .add(BanModel.LIFTED_AT)
             .add(BanModel.LIFTED_BY)
             .build();
-        return PanelResource.builder(HohenheimIds.id("ban"), "bans", SUBJECT)
+        return PanelResource.builder(HohenheimIds.id("ban"), SLUG, SUBJECT)
             .label(Microcopy.of("plural").withFilter("scope", "ban"))
             .recordLabel(Microcopy.of("singular").withFilter("scope", "ban"))
             .description(Microcopy.of("nav_hint").withFilter("scope", "ban"))

@@ -123,10 +123,13 @@ public final class SiteParts {
     /** @return the operator's site resource: every site, the full form, the trash and the history */
     public static @NonNull PanelResource<Row> admin() {
         return entry("site")
+            // Reached through the Apps list, whose toolbar links this list (HohenheimPanel's sidebar note).
+            .showInNav(false)
             .health(AppHealth.sites(false))
             .list(adminList())
             .form(ResourceForm.<Row>of(SiteWrites.ADMIN_FORM)
                 .landingTab(AppOverview.SLUG)
+                .tabLabel(AppOverview.copy("configuration"))
                 .lead(SiteParts::lead)
                 // The instance pick shows only for the instance kind (SiteWrites.ADMIN_FORM's showWhen); switching a
                 // site away from that kind clears its link instead of leaving it unreachable.
@@ -149,7 +152,7 @@ public final class SiteParts {
             .actions(SiteActions.operator())
             .tabs(ResourceTabs.<Row>of(List.of(AppOverview.siteTab(), DOMAINS, PROTECTED_PATHS,
                     new SiteDevSessionsPage()))
-                .withHistory().withContributions())
+                .withHistory().historyInStrip().withContributions())
             .relatedPages(
                 // The hostname catalog itself: nav-hidden, so without this entry the only way to the cross-site
                 // domain list was a hand-typed URL.
@@ -179,6 +182,7 @@ public final class SiteParts {
                 .build())
             .form(ResourceForm.<Row>of(SiteWrites.MANAGE_FORM)
                 .landingTab(AppOverview.SLUG)
+                .tabLabel(AppOverview.copy("configuration"))
                 .lead(SiteParts::lead)
                 .bindings(List.of(
                     ResourceFieldBinding.of(SiteModel.NAME.getName(), FieldAccess.ALWAYS_EDITABLE),
@@ -354,7 +358,11 @@ public final class SiteParts {
     }
 
     static @NonNull SiteHostnamesCell hostnamesCellOf(@NonNull Row site) {
-        List<Row> domains = domainsOf(site);
+        return hostnamesCellOf(domainsOf(site));
+    }
+
+    /** The first of these names plus how many more there are. */
+    static @NonNull SiteHostnamesCell hostnamesCellOf(@NonNull List<Row> domains) {
         if (domains.isEmpty()) {
             return new SiteHostnamesCell(null, 0);
         }
@@ -367,14 +375,23 @@ public final class SiteParts {
      * name forced without a working certificate is the one red state.
      */
     static @NonNull SiteTlsCell tlsCellOf(@NonNull Row site) {
-        List<Row> domains = domainsOf(site);
+        return tlsCellOf(domainsOf(site), tlsPassthrough(site), CertificateCoverage.activeNames());
+    }
+
+    /**
+     * {@link #tlsCellOf(Row)} over names already read, so a list of apps reads its domains and the working
+     * certificates once.
+     *
+     * @param passthrough whether these names belong to a TLS passthrough site, which terminates nothing here
+     */
+    static @NonNull SiteTlsCell tlsCellOf(@NonNull List<Row> domains, boolean passthrough,
+                                          @NonNull Set<String> working) {
         if (domains.isEmpty()) {
             return new SiteTlsCell(SiteTlsCell.NONE);
         }
-        if (tlsPassthrough(site)) {
+        if (passthrough) {
             return new SiteTlsCell(SiteTlsCell.NOT_USED);
         }
-        Set<String> working = CertificateCoverage.activeNames();
         // The one red state is the health verdict's own rule, so this cell and the site's health can never disagree.
         if (AppHealth.forcedWithoutCertificate(domains, working, false) != null) {
             return new SiteTlsCell(SiteTlsCell.BROKEN);
@@ -397,11 +414,17 @@ public final class SiteParts {
             : covered > 0 ? SiteTlsCell.PARTIAL : SiteTlsCell.MISSING);
     }
 
+    /** What the site's upstream is, in the words its list cell, its overview and the Apps list use. */
+    static @NonNull Microcopy upstreamLabel(@NonNull Row site) {
+        UpstreamKindHandler handler = UpstreamKindHandlers.getHandler(
+            String.valueOf((Object) site.get(SiteModel.UPSTREAM_KIND)));
+        return handler != null ? handler.getLabel() : Microcopy.of("upstream").withFilter("scope", "site");
+    }
+
     static @NonNull SiteUpstreamCell upstreamCellOf(@NonNull Row site) {
         String kindKey = String.valueOf((Object) site.get(SiteModel.UPSTREAM_KIND));
         UpstreamKindHandler handler = UpstreamKindHandlers.getHandler(kindKey);
-        Microcopy label = handler != null ? handler.getLabel()
-            : Microcopy.of("upstream").withFilter("scope", "site");
+        Microcopy label = upstreamLabel(site);
         String icon = handler != null && handler.getIcon() != null ? handler.getIcon().name() : null;
         String color = handler != null ? BadgeColor.tokenOf(handler.color()) : null;
 

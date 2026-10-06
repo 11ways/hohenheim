@@ -21,6 +21,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
+import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
@@ -328,6 +329,9 @@ public final class DatabaseParts {
                 .label(FieldLabels.labelFor(DatabaseModel.STATUS)).build())
             .build();
         return entry("database")
+            // One of the admin sidebar's eight rows; the /manage twin keeps its group.
+            .navGroup(NavGroup.DEFAULT)
+            .navOrder(30)
             .list(ResourceList.rows(table).chrome(CmsSupport.WIDE_LIST).facets().ruleFilters()
                 // The managed name and the name inside the engine are different strings; a connection string only
                 // ever carries the second.

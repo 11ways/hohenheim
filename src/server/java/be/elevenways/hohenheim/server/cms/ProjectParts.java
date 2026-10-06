@@ -66,6 +66,8 @@ public final class ProjectParts {
 
     public static @NonNull PanelResource<Row> admin() {
         return entry("project", 10)
+            // Reached from the Apps list's toolbar (HohenheimPanel's sidebar note).
+            .showInNav(false)
             .form(ResourceForm.<Row>of(formSpec())
                 .quickCreate(QuickCreateSpec.of(ProjectModel.NAME.getName(), ProjectModel.DESCRIPTION.getName()))
                 .inlineEditable(ProjectModel.NAME, ProjectModel.DESCRIPTION).build())

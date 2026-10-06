@@ -139,6 +139,8 @@ public final class StackParts {
             .icon(Icon.of("layer-group"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(40)
+            // Reached through the Apps list, whose toolbar links this list (HohenheimPanel's sidebar note).
+            .showInNav(false)
             .reads(ResourceReads.rows())
             // Name and description are all a stack carries.
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()

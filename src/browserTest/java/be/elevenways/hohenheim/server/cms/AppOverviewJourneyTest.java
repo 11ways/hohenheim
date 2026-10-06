@@ -142,6 +142,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
         Models.get(SiteModel.class).save(site);
         domain(site, "served.app-journey.test", false);
         Row bare = instance("app-journey-unserved");
+        HostFixtures.LocalHostState localBefore = HostFixtures.captureLocal();
         try {
             // 1. The workload's heading leads with Open site, to the address of the site serving it.
             String served = adminGet("/admin/instances/" + instance.get(InstanceModel.ID) + "/page/overview").body();
@@ -153,7 +154,24 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             String unserved = adminGet("/admin/instances/" + bare.get(InstanceModel.ID) + "/page/overview").body();
             assertThat(unserved).as("step 2: no Open site without a serving site")
                 .doesNotContain("Open site");
+
+            // 3. A workload that stopped after an error is broken: its address answers with an error page, so neither
+            //    its page nor the site's offers Open site, and the health band carries the fix instead. The host is
+            //    admitted first: on a host that cannot place it, "cannot start" is the verdict that leads.
+            HostFixtures.admitLocal();
+            instance.set(InstanceModel.STATUS, InstanceModel.STATUS_ERROR);
+            Models.get(InstanceModel.class).save(instance);
+            String failed = adminGet("/admin/instances/" + instance.get(InstanceModel.ID) + "/page/overview").body();
+            assertThat(failed).as("step 3: the workload's verdict is broken")
+                .contains("data-cms-record-health=\"broken\"");
+            assertThat(failed).as("step 3: a broken workload offers no Open site")
+                .doesNotContain("Open site");
+            String siteOfFailed = adminGet(overview(site)).body();
+            assertThat(siteOfFailed).as("step 3: nor does the site serving it, whose visitors get the error page")
+                .contains("data-cms-record-health=\"broken\"")
+                .doesNotContain("Open site");
         } finally {
+            localBefore.restore();
             HardDeletes.row(Models.get(SiteModel.class), site);
             HardDeletes.row(Models.get(InstanceModel.class), bare);
             HardDeletes.row(Models.get(InstanceModel.class), instance);

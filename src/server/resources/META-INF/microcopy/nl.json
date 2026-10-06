@@ -910,6 +910,10 @@
     {
       "text": "De uitrol is mislukt; de reden staat op dit tabblad",
       "scope": "deployments"
+    },
+    {
+      "text": "De laatste deploy is mislukt",
+      "scope": "app_health"
     }
   ],
   "backup_failed": {
@@ -1220,6 +1224,10 @@
     {
       "text": "Geen gekoppelde databanken",
       "scope": "instance_database"
+    },
+    {
+      "text": "Er staat nog niets online. Zet iets online en het verschijnt hier.",
+      "scope": "app_list"
     }
   ],
   "empty_description": [
@@ -1847,6 +1855,10 @@
     {
       "text": "Naam",
       "scope": "template_contents"
+    },
+    {
+      "text": "App",
+      "scope": "app_list"
     }
   ],
   "name_placeholder": {
@@ -2104,11 +2116,11 @@
       "case": "sentence"
     },
     {
-      "text": "Sitedomeinen",
+      "text": "Adressen",
       "scope": "site_domain"
     },
     {
-      "text": "sitedomeinen",
+      "text": "adressen",
       "scope": "site_domain",
       "case": "sentence"
     },
@@ -2489,6 +2501,15 @@
       "text": "database-engines",
       "scope": "database_engine",
       "case": "sentence"
+    },
+    {
+      "text": "Apps",
+      "scope": "app_list"
+    },
+    {
+      "text": "apps",
+      "scope": "app_list",
+      "case": "sentence"
     }
   ],
   "dashboard": [
@@ -2761,10 +2782,20 @@
       "target": "activity_action"
     }
   ],
-  "settings": {
-    "text": "Instellingen",
-    "scope": "field"
-  },
+  "settings": [
+    {
+      "text": "Instellingen",
+      "scope": "field"
+    },
+    {
+      "text": "Instellingen",
+      "scope": "nav_cluster"
+    },
+    {
+      "text": "De instellingen van deze installatie, sjablonen, images, git-koppelingen, engines, meldingskanalen, back-updoelen en build.",
+      "scope": "nav_cluster_hint"
+    }
+  ],
   "source_settings": {
     "text": "Broninstellingen",
     "scope": "field"
@@ -5053,6 +5084,10 @@
     {
       "text": "Status",
       "scope": "app_overview"
+    },
+    {
+      "text": "Toestand",
+      "scope": "app_list"
     }
   ],
   "add_file": [
@@ -5473,6 +5508,10 @@
     {
       "text": "Soort",
       "scope": "app_overview"
+    },
+    {
+      "text": "Soort",
+      "scope": "app_list"
     }
   ],
   "instance_kind": {
@@ -6797,6 +6836,10 @@
     {
       "text": "Host",
       "scope": "instance_overview"
+    },
+    {
+      "text": "Host",
+      "scope": "app_list"
     }
   ],
   "unapproved_note": {
@@ -7226,7 +7269,7 @@
   ],
   "static": [
     {
-      "text": "Statisch",
+      "text": "Statische bestanden",
       "scope": "upstream_kind"
     },
     {
@@ -8904,11 +8947,11 @@
       "case": "sentence"
     },
     {
-      "text": "sitedomein",
+      "text": "adres",
       "scope": "site_domain"
     },
     {
-      "text": "sitedomein",
+      "text": "adres",
       "scope": "site_domain",
       "case": "sentence"
     },
@@ -9027,6 +9070,15 @@
     {
       "text": "database-engine",
       "scope": "database_engine",
+      "case": "sentence"
+    },
+    {
+      "text": "app",
+      "scope": "app_list"
+    },
+    {
+      "text": "app",
+      "scope": "app_list",
       "case": "sentence"
     }
   ],
@@ -9817,12 +9869,16 @@
       "scope": "instance_overview"
     },
     {
-      "text": "Adres",
+      "text": "Proxy naar een adres",
       "scope": "upstream_kind"
     },
     {
       "text": "Verzoeken doorsturen naar een adres dat je zelf opgeeft (host, poort of unix-socket)",
       "scope": "upstream_kind_description"
+    },
+    {
+      "text": "Adres",
+      "scope": "app_list"
     }
   ],
   "protocol": {
@@ -10171,6 +10227,14 @@
     {
       "text": "Gedeelde engineprocessen die op een host meerdere beheerde databases dragen.",
       "scope": "database_engine"
+    },
+    {
+      "text": "Alles wat bezoekers bedient of een workload draait: sites, instanties en stacks in een lijst.",
+      "scope": "app"
+    },
+    {
+      "text": "Elke naam waarop een site antwoordt, en of HTTPS ervoor werkt.",
+      "scope": "site_domain"
     }
   ],
   "slug": {
@@ -11155,7 +11219,7 @@
     "scope": "site"
   },
   "no_hostnames": {
-    "text": "Nog geen hostnaam",
+    "text": "Nog geen adres",
     "scope": "site"
   },
   "partial": {
@@ -11784,10 +11848,16 @@
     "text": "Nooit",
     "scope": "restart_policy"
   },
-  "https": {
-    "text": "HTTPS",
-    "scope": "upstream_scheme"
-  },
+  "https": [
+    {
+      "text": "HTTPS",
+      "scope": "upstream_scheme"
+    },
+    {
+      "text": "HTTPS",
+      "scope": "app_list"
+    }
+  ],
   "http1": {
     "text": "HTTP/1.1",
     "scope": "upstream_protocol"
@@ -13415,5 +13485,79 @@
   "failure": {
     "text": "Fout",
     "scope": "instance_artifacts"
+  },
+  "put_online": {
+    "text": "Zet iets online",
+    "scope": "app_list"
+  },
+  "stack_kind": {
+    "text": ".match {$count :number}\none {{Stack met 1 service}}\n* {{Stack met {$count} services}}",
+    "scope": "app_list"
+  },
+  "type_workload": {
+    "text": "Workload",
+    "scope": "app_list"
+  },
+  "type_website": {
+    "text": "Website",
+    "scope": "app_list"
+  },
+  "type_stack": {
+    "text": "Stack",
+    "scope": "app_list"
+  },
+  "state_ok": {
+    "text": "Werkt",
+    "scope": "app_list"
+  },
+  "state_attention": {
+    "text": "Vraagt aandacht",
+    "scope": "app_list"
+  },
+  "state_broken": {
+    "text": "Werkt niet",
+    "scope": "app_list"
+  },
+  "state_unknown": {
+    "text": "Onbekend",
+    "scope": "app_list"
+  },
+  "domain_names": [
+    {
+      "text": "Domeinen",
+      "scope": "nav_cluster"
+    },
+    {
+      "text": "Adressen, DNS-zones, certificaten en vrijgegeven hostnamen.",
+      "scope": "nav_cluster_hint"
+    }
+  ],
+  "access": [
+    {
+      "text": "Toegang",
+      "scope": "nav_cluster"
+    },
+    {
+      "text": "Toegangslijsten, gebruikers, rollen, bans en misbruikbescherming.",
+      "scope": "nav_cluster_hint"
+    }
+  ],
+  "activity": [
+    {
+      "text": "Activiteit",
+      "scope": "nav_cluster"
+    },
+    {
+      "text": "Wat mensen en Hohenheim deden, de meldingen aan jou, en of ze aankwamen.",
+      "scope": "nav_cluster_hint"
+    }
+  ],
+  "configuration": {
+    "text": "Configuratie",
+    "scope": "app_overview"
+  },
+  "stack_degraded_detail": {
+    "text": "Sommige services zijn niet gezond.",
+    "scope": "app_health"
   }
 }

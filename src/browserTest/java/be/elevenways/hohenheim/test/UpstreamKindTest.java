@@ -55,7 +55,7 @@ class UpstreamKindTest extends HohenheimTestBase {
         assertThat(cards.count()).as("step 1: six upstream kinds are offered").isEqualTo(6);
 
         String allText = cards.allTextContents().toString();
-        assertThat(allText).as("step 1: every member is named").contains("Address", "Static",
+        assertThat(allText).as("step 1: every member is named").contains("Proxy to an address", "Static files",
             "Redirect", "Instance", "Dev namespace", "TLS passthrough");
         assertThat(allText).as("step 1: every card explains itself in a sentence")
             .contains("Serve static files", "Redirect requests", "Forward requests");
@@ -119,23 +119,16 @@ class UpstreamKindTest extends HohenheimTestBase {
         navigateToApp("/admin/sites/new");
         waitForHydration();
 
-        // 1. Under a kind that serves no instance, the pick stays ENABLED and its
-        //    empty popup names the declared reason (the narrowing resolves to a
-        //    match-none rule with reasonNothingQualifies, not to a disabled control).
+        // 1. Under a kind that serves no instance, the pick is not shown at all (SiteWrites.ADMIN_FORM's showWhen):
+        //    a static site has no instance to name.
         selectUpstreamKind("hohenheim:static");
-        page.waitForCondition(() ->
-            page.locator("pl-select[name='instance_id'][disabled]").count() == 0);
-        openPlSelect("pl-select[name='instance_id']");
-        page.waitForSelector(OPEN_SELECT_POPUP);
-        assertThat(page.locator(OPEN_SELECT_POPUP).textContent())
-            .contains("does not serve an instance");
-        page.keyboard().press("Escape");
-        page.waitForCondition(() -> page.locator(OPEN_SELECT_POPUP).count() == 0);
+        page.waitForCondition(() -> !page.locator("pl-select[name='instance_id'] .pl-select-field").isVisible());
 
-        // 2. The instance card wakes it, still with no round trip.
+        // 2. The instance card shows it, still with no round trip.
         selectUpstreamKind("hohenheim:instance");
-        page.waitForCondition(() ->
-            page.locator("pl-select[name='instance_id'][disabled]").count() == 0);
+        page.waitForCondition(() -> page.locator("pl-select[name='instance_id'] .pl-select-field").isVisible());
+        assertThat(page.locator("pl-select[name='instance_id'][disabled]").count())
+            .as("step 2: the instance kind's pick is enabled").isZero();
 
         // 3. The application is offered; pick it.
         openPlSelect("pl-select[name='instance_id']");

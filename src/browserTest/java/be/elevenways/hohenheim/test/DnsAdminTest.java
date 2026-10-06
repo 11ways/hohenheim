@@ -118,10 +118,10 @@ class DnsAdminTest extends HohenheimTestBase {
             .where(DnsRecordModel.TYPE.eq(DnsRecordModel.TYPE_CNAME)).first())
             .as("no apex CNAME row was stored").isNull();
 
-        // The zone list carries the sidebar entry and the row link into the records tab.
+        // The zone list is a tab of the Domains cluster and carries the row link into the records tab.
         navigateToApp("/admin/dns-zones");
         waitForHydration();
-        assertThat(page.locator("pl-app-sidebar a[href='/admin/dns-zones']").count()).isEqualTo(1);
+        assertThat(page.locator("[data-cms-cluster-tabs] a[href='/admin/dns-zones']").count()).isGreaterThan(0);
         assertThat(page.locator("body").textContent()).contains("DNS zones");
         assertThat(page.locator(".cms-row-link[href='/admin/dns-zones/" + zoneId
             + "/page/records']").count()).isEqualTo(1);

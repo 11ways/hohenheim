@@ -13,6 +13,8 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.resource.HealthTone;
+import be.elevenways.zenit.cms.common.resource.ResourceHealth;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.UrlTarget;
@@ -53,7 +55,8 @@ final class SiteActions {
 
     /** The operator panel's placed operations, in the order the legacy row actions had, then the health fixes. */
     static @NonNull List<PanelAction<Row>> operator() {
-        return List.of(openSiteAction(OPEN_SITE, AppHealth::openUrl), enableAction(), disableAction(), cloneAction(),
+        return List.of(openSiteAction(OPEN_SITE, AppHealth::openUrl, AppHealth.sites(false)), enableAction(),
+            disableAction(), cloneAction(),
             rollbackAction(), fixHttpsAction(), addAddressAction(), fixProtectionAction());
     }
 
@@ -62,22 +65,30 @@ final class SiteActions {
      * stay operator acts.
      */
     static @NonNull List<PanelAction<Row>> delegated() {
-        return List.of(openSiteAction(OPEN_SITE, AppHealth::openUrl), enableAction(), disableAction(),
-            fixHttpsAction(), addAddressAction(), fixProtectionAction());
+        return List.of(openSiteAction(OPEN_SITE, AppHealth::openUrl, AppHealth.sites(true)), enableAction(),
+            disableAction(), fixHttpsAction(), addAddressAction(), fixProtectionAction());
     }
 
     /**
      * The app's own address in a new tab, the record heading's first action (the board's Open site), offered only
      * while visitors reach it: the instance's twin passes {@link AppHealth#openUrlOfInstance}.
+     *
+     * AIDEV-NOTE: hidden whenever the record's own health verdict is BROKEN (decided by Jelle, 2026-10-06): a link to
+     * the error page visitors get offers nothing, and the health band beside it carries the fix. It reads the
+     * resource's verdict producer, never a second check of what "broken" means.
+     *
+     * @param health the verdict producer of the resource this action is placed on
      */
     static @NonNull PanelAction<Row> openSiteAction(@NonNull Identifier id,
-                                                    @NonNull Function<Row, @Nullable String> url) {
+                                                    @NonNull Function<Row, @Nullable String> url,
+                                                    @NonNull ResourceHealth<Row> health) {
         return PanelAction.<Row>link(id, ActionPlacement.ROW)
             .label(Microcopy.of("open_site").withFilter("scope", "app_overview"))
             .icon(Icon.of("up-right-from-square"))
             .inlineInRow(false)
             .openInNewTab()
-            .shownWhen((row, access) -> url.apply(row) != null)
+            .shownWhen((row, access) -> url.apply(row) != null
+                && health.read(row, access).tone() != HealthTone.BROKEN)
             .route((row, request) -> new UrlTarget(Objects.requireNonNull(url.apply(row),
                 "Open site is shown only while the app has an address")))
             .build();

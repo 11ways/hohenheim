@@ -260,7 +260,7 @@ public final class InstanceOverview {
     // -- endpoints -------------------------------------------------------------------
 
     /** Every port claim this instance holds, joined to its host's declared address. */
-    private static @NonNull List<InstanceEndpointView> endpointsOf(int instanceId) {
+    static @NonNull List<InstanceEndpointView> endpointsOf(int instanceId) {
         List<InstanceEndpointView> endpoints = new ArrayList<>();
         for (Row claim : PortLedger.claimsOf(InstanceModel.MODEL_ID, instanceId)) {
             Integer port = claim.get(PortAllocationModel.PORT);

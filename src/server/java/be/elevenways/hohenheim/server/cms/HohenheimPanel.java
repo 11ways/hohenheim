@@ -10,6 +10,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.server.cms.AuthAdminParts;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelCluster;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.server.page.BuildInfoPage;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
@@ -41,53 +42,26 @@ public final class HohenheimPanel extends Panel {
     /** The panel's slug, aliased from the common declaring home so endpoint paths agree with it. */
     public static final String SLUG = HohenheimSlugs.ADMIN;
 
-    // AIDEV-NOTE: sidebar order is these weights, ASCENDING (PanelNav.sections). It is
-    // ordered by WHAT THIS PRODUCT IS FOR, not alphabetically and not by module: Deploy
-    // and Networking are the daily surfaces, and Security -- eleven items, eight of them
-    // contributed by the spamservice module -- is a background concern that used to open
-    // the sidebar and push the workload surfaces below the fold on a 1440x900 screen. Do
-    // not re-weight a group ANOTHER module declares by re-declaring its id here:
-    // NavGroup.equals is id-only and PanelNav keeps the first instance it sees, so the
-    // winner would depend on peer declaration order.
+    // AIDEV-NOTE: the sidebar is EIGHT entries in one unlabelled block, in the order of the 2026-09-30 boards:
+    // Dashboard, Apps, Databases, Hosts, Domains, Access, Activity, Settings (redesign plan, W4). It names what an
+    // operator comes to DO, never a table: Apps reads sites, instances and stacks as one list (AppDirectory), and
+    // Domains, Access, Activity and Settings are clusters (zenit-cms PanelCluster): one sidebar row each, their
+    // members drawn as the tabs of every member's page. A member keeps its own route, gates and breadcrumbs, and the
+    // command palette still lists it under its cluster.
     //
-    // AIDEV-NOTE: these groups are named after the OPERATOR'S JOB, not after the tiers the
-    // code is split into. The predecessors (Compute / Proxy / Infrastructure) were the
-    // module map read out loud: they told an operator which subsystem a resource belonged
-    // to, never which task it belonged to, and "Infrastructure" ended up meaning "the rest".
-    // Deploy = everything you create to make something RUN, Networking = how traffic
-    // reaches it, Security = who may act, System = the installation's own record. A new
-    // resource picks the group by the question its operator is asking, and a resource that
-    // fits none of the four is a signal the taxonomy is wrong -- not a reason for a fifth
-    // catch-all.
+    // AIDEV-NOTE: an entry that is neither one of the eight nor a cluster member is showInNav(false), which removes
+    // the sidebar row and NOTHING else, and it keeps a declared way in: Sites, Instances, Stacks and Projects from the
+    // Apps list's toolbar (and every app row opens its record), the rest from the list or overview that owns them
+    // (AdminNavigationJourneyTest pins both). A new admin entry therefore picks a cluster or a home that links it; a
+    // ninth sidebar row is a design decision, not a side effect.
     //
-    // AIDEV-NOTE: the sidebar is CURATED, not a schema dump. 39 visible entries became 20:
-    // a peer stays visible only when an operator would go LOOKING for it by name. Every
-    // demoted peer is showInNav(false) -- which removes the sidebar entry and NOTHING else,
-    // the route and the record stay live -- and each one has a declared home: a record tab
-    // on its parent (instance snapshots/backups), a HEADER link on the parent list
-    // (backup targets, quotas, game domains, auth providers, previews, build/release
-    // history, reconcile findings, environments, DNS peers), or a link on the surface that
-    // owns it (the spamservice sub-resources, off the abuse-protection overview). A peer
-    // whose demotion target does not exist stays VISIBLE with a description rather than
-    // becoming unreachable. Every visible peer carries a unique navOrder inside its group
-    // and a description() -- ties made the order depend on declaration order, and a bare
-    // label is what made this panel read as a table list.
+    // AIDEV-NOTE: membership is read from the entries this node actually registered (clusterOf): a node without a
+    // role drops that role's members, and a cluster left with none is not added at all, since the panel refuses a
+    // member slug naming no entry.
     //
-    // AIDEV-NOTE: the separator STAYS before SECURITY after the regrouping, and it is still
-    // the only one. Section headings now carry their own visual register (they share
-    // pl-nav-label's, with the icon gutter reserved), so a rule between EVERY group would be
-    // noise on top of a boundary the heading already draws; the one boundary a heading
-    // cannot express is the change of SUBJECT -- Deploy and Networking are what you operate,
-    // Security and System are the installation administering itself. It is declared on a
-    // group THIS class owns: NavGroup.SYSTEM is zenit-cms's constant, and re-declaring its
-    // id from here to add a fact would make the winning instance depend on peer declaration
-    // order, which the note above forbids.
-    //
-    // AIDEV-NOTE: the System section therefore renders WITHOUT an icon while the other three
-    // labelled groups carry one. That is the framework constant's shape, not an oversight --
-    // and it aligns correctly because the nav reserves the icon gutter for labelled groups
-    // either way. Giving it one means adding an Icon to NavGroup.SYSTEM in zenit-cms, never
-    // shadowing the id from here.
+    // AIDEV-NOTE: the three groups below no longer shape this panel's sidebar (everything visible here sits in the
+    // unlabelled default block), but the /manage panel's entries share their builders with the admin twins, and its
+    // sidebar is still grouped by them.
 
     /** Deploy group: everything an operator creates to make something RUN -- projects,
      *  sites, instances, stacks, databases, and the templates and git providers they are
@@ -203,7 +177,8 @@ public final class HohenheimPanel extends Panel {
         // comms' own permissions (other people's notification history), never the delegable panel grant; an operator
         // holding "*" sees it, a delegated admin only through an explicit comms.deliveries.* grant. Hohenheim is no
         // hub, so the hub's projects entry is not mounted.
-        peers.add(CommsHubAdmin.install(CommsHubAdmin.Permissions.MODULE).deliveryLog(NavGroup.SYSTEM, 93));
+        PanelEntry deliveries = CommsHubAdmin.install(CommsHubAdmin.Permissions.MODULE).deliveryLog(NavGroup.SYSTEM, 93);
+        peers.add(deliveries);
         addIf(peers, BanParts.admin(), Role.FIREWALL);
         // zenit-auth's generated admin resources, wired into THIS panel (the
         // module's own default panel is disabled via auth.cms.auto_panel).
@@ -222,17 +197,71 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, SpamserviceSecurityEventsResource.create(), Role.FIREWALL);
         addIf(peers, SpamserviceWordsResource.create(), Role.FIREWALL);
         addIf(peers, new SpamserviceReputationPage(), Role.FIREWALL);
-        peers.add(AdminActivityResource.admin());
+        PanelEntry activity = AdminActivityResource.admin();
+        peers.add(activity);
         // Where a platform alert lands with nothing configured: every administrator's
         // own inbox, the local channel Alerts always fans out to.
-        peers.add(new AdminInboxPage());
-        // What is this server running: every bundled module's git commit (System group).
-        peers.add(new BuildInfoPage());
+        PanelEntry inbox = new AdminInboxPage();
+        peers.add(inbox);
+        // What is this server running: every bundled module's git commit.
+        PanelEntry buildInfo = new BuildInfoPage();
+        peers.add(buildInfo);
         SettingsPage settings = settingsPage();
         if (settings != null) {
             peers.add(settings);
         }
+        peers.add(AppParts.admin(present(peers, HohenheimSlugs.SITES, InstanceParts.SLUG, StackParts.SLUG,
+                ProjectParts.SLUG),
+            present(peers, InstanceFromTemplatePage.SLUG).isEmpty() ? null : InstanceFromTemplatePage.SLUG));
+        addCluster(peers, cluster("domain_names", DOMAINS_CLUSTER, "globe", 50), DomainParts.SLUG,
+            HohenheimSlugs.DNS_ZONES, HohenheimSlugs.CERTIFICATES, ReleasedClaimParts.SLUG);
+        addCluster(peers, cluster("access", ACCESS_CLUSTER, "shield-halved", 60), HohenheimSlugs.ACCESS_LISTS,
+            AuthAdminParts.USERS_SLUG, AuthAdminParts.ROLES_SLUG, BanParts.SLUG, SpamserviceOverviewPage.SLUG);
+        addCluster(peers, cluster("activity", ACTIVITY_CLUSTER, "clock-rotate-left", 70),
+            activity.slug(), inbox.slug(), deliveries.slug());
+        addCluster(peers, cluster("settings", SETTINGS_CLUSTER, "gear", 80), SettingsPage.DEFAULT_SLUG,
+            HohenheimSlugs.INSTANCE_TEMPLATES, RuntimeImageParts.SLUG, HohenheimSlugs.GIT_PROVIDERS,
+            DatabaseParts.ENGINES_SLUG, NotificationChannelParts.SLUG, BackupTargetParts.SLUG, buildInfo.slug());
         return peers;
+    }
+
+    /** The cluster slugs: each is the sidebar row's URL, which lands on the first member the viewer may open. */
+    public static final String DOMAINS_CLUSTER = "domain-names";
+    public static final String ACCESS_CLUSTER = "access";
+    public static final String ACTIVITY_CLUSTER = "log";
+    public static final String SETTINGS_CLUSTER = "configure";
+
+    private static PanelCluster.@NonNull Builder cluster(@NonNull String key, @NonNull String slug,
+                                                         @NonNull String icon, int navOrder) {
+        return PanelCluster.builder(HohenheimIds.id("cluster_" + key), slug,
+                Microcopy.of(key).withFilter("scope", "nav_cluster"))
+            .description(Microcopy.of(key).withFilter("scope", "nav_cluster_hint"))
+            .icon(Icon.of(icon))
+            .navGroup(NavGroup.DEFAULT)
+            .navOrder(navOrder);
+    }
+
+    /** Adds the cluster over those of these members this node registered; nothing when it registered none. */
+    private static void addCluster(@NonNull List<PanelEntry> peers, PanelCluster.@NonNull Builder cluster,
+                                   @NonNull String... members) {
+        List<String> registered = present(peers, members);
+        if (!registered.isEmpty()) {
+            peers.add(cluster.members(registered.toArray(String[]::new)).build());
+        }
+    }
+
+    /** @return those of these slugs an entry of {@code peers} carries, in the order given */
+    private static @NonNull List<String> present(@NonNull List<PanelEntry> peers, @NonNull String... slugs) {
+        List<String> found = new ArrayList<>();
+        for (String slug : slugs) {
+            for (PanelEntry peer : peers) {
+                if (peer.slug().equals(slug)) {
+                    found.add(slug);
+                    break;
+                }
+            }
+        }
+        return found;
     }
 
     /**

@@ -133,6 +133,23 @@ class ManageScopeParityTest extends HohenheimTestBase {
                     .isEqualTo(resourceIds(resource, ctx));
             }
         }
+
+        // 4. The /manage Apps list is read from those same two lists: the tenant's authored instance and its live
+        //    site, never the generated instance it was granted too, nor the soft-deleted site.
+        Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(ManagePanel.SLUG));
+        Set<String> apps = new LinkedHashSet<>();
+        for (AppDirectory.App app : AppDirectory.read(manage, tenant)) {
+            if (app.name().startsWith(PREFIX)) {
+                apps.add(app.key());
+            }
+        }
+        Set<Object> liveSites = resourceIds(Projection.of(SiteParts.manage()), tenant);
+        assertThat(apps)
+            .as("step 4: the tenant's apps are its authored instance and the live site it manages")
+            .containsExactlyInAnyOrder("workload-" + authoredInstanceId, "website-" + liveSites.iterator().next());
+        for (AppDirectory.App app : AppDirectory.read(manage, tenant)) {
+            assertThat(app.host()).as("step 4: the delegated panel names no host").isNull();
+        }
     }
 
     /** A /manage list's declared row scope and the entry whose admission guards that read. */

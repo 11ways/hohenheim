@@ -102,8 +102,9 @@ public final class ServerParts {
                 ? FieldAccess.Decision.HIDDEN : FieldAccess.Decision.EDITABLE)));
         return PanelResource.builder(HohenheimIds.id("server"), SLUG, SubjectType.record(ServerModel.MODEL_ID))
             .label(serverCopy("plural")).recordLabel(serverCopy("singular")).description(serverCopy("nav_hint"))
-            .navGroup(NavGroup.DEFAULT).navOrder(10).icon(Icon.of("server"))
-            .form(ResourceForm.<Row>of(formSpec()).bindings(bindings).landingTab(ServerOverviewState.SLUG).build())
+            .navGroup(NavGroup.DEFAULT).navOrder(40).icon(Icon.of("server"))
+            .form(ResourceForm.<Row>of(formSpec()).bindings(bindings).landingTab(ServerOverviewState.SLUG)
+                .tabLabel(AppOverview.copy("configuration")).build())
             .list(ResourceList.rows(tableSpec()).chrome(ListChrome.MINIMAL).facets()
                 .search(ServerModel.NAME, ServerModel.SSH_TARGET, ServerModel.PUBLIC_IPV4, ServerModel.PUBLIC_IPV6).build())
             .reads(ResourceReads.rows().mapCells((row, column) -> "host_status".equals(column.name()) ? statusCellOf(row) : null))
@@ -114,7 +115,7 @@ public final class ServerParts {
             .actions(actions)
             .tabs(ResourceTabs.<Row>of(List.of(RecordOverview.<Row>fields(ServerOverviewState.SLUG, serverCopy("overview"))
                     .withoutFields().widgets(ServerOverviewState::widgets), new ServerMediaTab()))
-                .withHistory().withContributions())
+                .withHistory().historyInStrip().withContributions())
             .relatedPages(RelatedPage.toPeer("reconcile-findings")).build();
     }
 

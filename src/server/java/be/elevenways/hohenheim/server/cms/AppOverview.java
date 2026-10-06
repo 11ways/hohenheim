@@ -247,7 +247,7 @@ final class AppOverview {
 
     /** The lead line under a site's heading: what it serves. */
     static @NonNull String siteLead(@NonNull Row site, @NonNull Conduit conduit) {
-        String kind = upstreamLabel(site).resolve(conduit.getLocales(), conduit.getMessageResolver());
+        String kind = SiteParts.upstreamLabel(site).resolve(conduit.getLocales(), conduit.getMessageResolver());
         Integer instanceId = site.get(SiteModel.INSTANCE_ID);
         Row instance = instanceId == null ? null : Models.get(InstanceModel.class).findById(instanceId);
         if (instance == null) {
@@ -281,7 +281,7 @@ final class AppOverview {
             text(Boolean.TRUE.equals(site.get(SiteModel.ENABLED)) ? "switched_on" : "switched_off", locales,
                 resolver)));
         facts.add(WidgetFact.of(text("kind", locales, resolver),
-            upstreamLabel(site).resolve(locales, resolver)));
+            SiteParts.upstreamLabel(site).resolve(locales, resolver)));
         Integer instanceId = site.get(SiteModel.INSTANCE_ID);
         Row instance = instanceId == null ? null : Models.get(InstanceModel.class).findById(instanceId);
         if (instance != null) {
@@ -294,11 +294,6 @@ final class AppOverview {
             facts.add(WidgetFact.instant(text("created", locales, resolver), created.toString()));
         }
         return facts;
-    }
-
-    /** What the site's upstream is, in the words its list cell uses. */
-    private static @NonNull Microcopy upstreamLabel(@NonNull Row site) {
-        return SiteParts.upstreamCellOf(site).kindLabel();
     }
 
     // -- helpers ----------------------------------------------------------------------

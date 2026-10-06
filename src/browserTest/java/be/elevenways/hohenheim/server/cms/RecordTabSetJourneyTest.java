@@ -139,7 +139,9 @@ class RecordTabSetJourneyTest extends HohenheimTestBase {
             // 2. A site keeps the board's tabs: its overview, its addresses and protection in the overview's own
             //    words, and the contributed Access tab once.
             String overview = adminGet(siteRecord + "/page/overview").body();
-            String strip = overview.substring(overview.indexOf("cms-record-tabs"));
+            // Bounded to the strip itself: the command palette later in the page names the Domains cluster.
+            int stripStart = overview.indexOf("cms-record-tabs");
+            String strip = overview.substring(stripStart, overview.indexOf("</pl-scroll-nav>", stripStart));
             assertThat(strip).as("step 2: overview, addresses and protection, in that order")
                 .containsSubsequence(siteRecord + "/page/overview", siteRecord + "/page/" + SiteParts.DOMAINS_TAB,
                     siteRecord + "/page/" + ProtectedPathParts.SLUG);

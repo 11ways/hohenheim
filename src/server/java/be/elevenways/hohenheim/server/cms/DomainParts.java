@@ -98,6 +98,8 @@ public final class DomainParts {
     /** @return the /manage twin: the domains of the sites the caller manages, through the delegated form */
     public static @NonNull PanelResource<Row> manage() {
         return entry("manage_site_domain")
+            // Reached through a site's Addresses tab on this panel, which has no Domains cluster.
+            .showInNav(false)
             .scope(TenantScopes.DOMAINS)
             .form(form(manageFormSpec()))
             // NAV-ONLY (zero granted sites hide the empty list); the route itself stays scoped.
@@ -110,10 +112,10 @@ public final class DomainParts {
         return PanelResource.builder(HohenheimIds.id(id), SLUG, SUBJECT)
             .label(Microcopy.of("plural").withFilter("scope", "site_domain"))
             .recordLabel(Microcopy.of("singular").withFilter("scope", "site_domain"))
+            .description(Microcopy.of("nav_hint").withFilter("scope", "site_domain"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(20)
             .icon(Icon.of("at"))
-            .showInNav(false)
             .parent(ResourceParent.of(HohenheimSlugs.SITES, SiteDomainModel.SITE_ID).tab(SLUG))
             .list(list())
             .reads(ResourceReads.rows())
