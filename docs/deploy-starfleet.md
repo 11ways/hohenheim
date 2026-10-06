@@ -287,6 +287,7 @@ version = '011' AND checksum = '<old digest>'` and `UPDATE instances SET crash_p
 crash_policy IS NULL OR crash_policy = 'none'` (expect 1 + the instance count). The column default stays `'none'`
 on these two installs (SQLite cannot alter a default without a rebuild); every writer sets the policy explicitly,
 so only a raw insert would notice. Rollback: restore that backup, then the usual `--rollback`.
+DONE on starfleet 2026-10-07 (see that entry); still PENDING on daystrom.
 
 `/api/health` is public on every deployed jar today, which is why the script
 probes it. `/health` is an alias of the same endpoint and is public from the
@@ -1758,3 +1759,32 @@ Recent card still appends `#3` (no captured record title), the Public endpoint t
 daystrom: still NOT deployed from this workstation (no target, key refused); runs 27064da4.
 
 ROLLBACK: `tools/deploy-host.sh --rollback starfleet --preflight /root/hohenheim-preflight-20261006-202530`.
+
+## Deploy 2026-10-07 (starfleet): c34d9e79, W5a put-online, D3 defects, M011 crash-policy backfill
+
+Swapped starfleet from a48c7b19 to the pushed hohenheim c34d9e79 (jar sha256 `61a46f18...06d26e2a`, 280150536
+bytes, 15 stamp rows clean; plumage 948b4437 with the white sidebar rail back, zenit 45d0d5dd, zenit-cms 20519533,
+zenit-forms 43397696, protoblast 04f87e71, spamservice d0f18d63 now from `java-rewrite`). Ships W5a (Put something
+online chooser, wizard, run page, dashboard Apps band), D3a/D3b (amber seed removed, fallback proxies, blank Proteus
+permission means `hohenheim.site.<slug>`, crash restart by default, fail2ban and access-log lines, active upstream
+probes, skipped run steps), D4 (live run page, M011 crash-policy backfill).
+
+M011 step first, old jar still running: backup `/root/hohenheim-m011-crash-20261007/hohenheim.db` (integrity ok),
+new digest `51a4a79b...b6a852` from `--migration-checksums`, one transaction guarded by the old `85a7be57...297c05`:
+ledger 1 row, instances 4 rows (`none` 4 + `restart` 1 before, `restart` 5 after). Lane `zenit-dev deploy starfleet
+--pushed`: rehearsal green, boot applied zenit core `2026_10_07_010000 add_operation_run_skipped_parts` (103 before,
+104 after), healthy after both restarts (23:37 UTC). Step 10 first refused with seven repos `deployed-ahead`: the
+pushed workspace carried another session's guard commits the local checkouts had not pulled; after a workspace sync
+`zenit-dev deployed starfleet` = current, 15/15, no RESTART PENDING. 0 journal errors since the restart.
+Preflight `/root/hohenheim-preflight-20261006-233512/`. No site_auth_providers rows, so the Proteus default needs no
+grants here.
+
+Logged-in pass: dashboard (violet primary, sidebar `oklch(1 ...)` beside the `oklch(0.975 ...)` page, Apps band),
+the Put something online chooser (four card groups, named stepper), Apps list, alchemy-skeleton overview ("Visitors
+get an error page", endpoint state "In use"), tenant /manage. Remaining: tenant /manage keeps the old grouped
+sidebar and a plain "Your instances" list; dashboard app rows have no health glyph; template card copy is long.
+
+daystrom: still NOT deployed from this workstation (no target, key refused); runs 27064da4; M011 step still owed.
+
+ROLLBACK: restore `/root/hohenheim-m011-crash-20261007/hohenheim.db`, then `tools/deploy-host.sh --rollback starfleet
+--preflight /root/hohenheim-preflight-20261006-233512`.
