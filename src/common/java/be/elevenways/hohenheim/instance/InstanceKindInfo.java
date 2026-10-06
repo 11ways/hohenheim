@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.instance;
 
+import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.TypeDefinition;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Common instance-kind metadata (the UpstreamKindInfo shape): lives in src/common so the
@@ -21,4 +23,12 @@ public interface InstanceKindInfo extends TypeDefinition {
      * Short description shown in the kind selector UI.
      */
     @NonNull Microcopy getDescription();
+
+    /**
+     * The "Put something online" group this kind is created under from scratch (no template); null when it is never
+     * offered there, e.g. a kind only other machinery creates.
+     */
+    default @Nullable PutOnlineGroup putOnlineGroup() {
+        return null;
+    }
 }

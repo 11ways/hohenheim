@@ -1,9 +1,12 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimPickRules;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
+import be.elevenways.hohenheim.instance.InstanceKindInfo;
+import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.ManagedByCell;
 import be.elevenways.hohenheim.model.BackupTargetModel;
@@ -29,6 +32,7 @@ import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.page.CmsRecordLinks;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.ChildList;
@@ -81,6 +85,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -145,7 +150,7 @@ public final class InstanceParts {
                 .computed(Objects.requireNonNull(table.column(MANAGED_BY_COLUMN)),
                     (row, request) -> managedByCellOf(row))
                 .build())
-            .form(form(createForm()).build())
+            .form(form(createForm()).createDefaults(InstanceParts::createDefaults).build())
             .writes(ResourceMutations.rows()
                 .create()
                 .update()
@@ -288,6 +293,21 @@ public final class InstanceParts {
      * taken when the panel builds its entry; a test that replaces a kind delegates its facts to the real one, and the
      * kind options themselves are Supplied, so a registry entry arriving after the build still resolves on coercion.
      */
+    /**
+     * The create form's values: its defaults, plus the kind "Put something online" asked for ({@code ?kind=}) when it
+     * names a kind that page offers.
+     */
+    private static @NonNull Map<String, Object> createDefaults(@NonNull PanelRequest request) {
+        Map<String, Object> values = new LinkedHashMap<>(createForm().defaultValues());
+        String kind = CmsSupport.prefill(request.conduit(), HohenheimParams.PUT_ONLINE_KIND);
+        Identifier kindId = kind == null ? null : Identifier.tryParse(kind);
+        if (kindId != null && InstanceKindRegistry.REGISTRY.get(kindId) instanceof InstanceKindInfo info
+                && info.putOnlineGroup() != null) {
+            values.put(InstanceModel.KIND.getName(), kind);
+        }
+        return Map.copyOf(values);
+    }
+
     private static @NonNull FormSpec createForm() {
         return FormSpec.builder()
             // AIDEV-NOTE: a form page falls back to the RESOURCE label for its heading, and this label is the PLURAL

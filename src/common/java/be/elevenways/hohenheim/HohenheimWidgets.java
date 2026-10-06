@@ -79,6 +79,10 @@ public final class HohenheimWidgets {
         HohenheimTemplateIds.WIDGET_APP_PROTECTION,
         Microcopy.of("protection").withFilter("scope", "app_overview"), "lock");
 
+    /** The dashboard's Apps band (board Main): each app with what it is, where, and whether HTTPS works. */
+    public static final DisplayWidget APPS = register("apps", HohenheimTemplateIds.WIDGET_APPS,
+        Microcopy.of("apps").withFilter("scope", "dashboard"), "cubes");
+
     private HohenheimWidgets() {
     }
 

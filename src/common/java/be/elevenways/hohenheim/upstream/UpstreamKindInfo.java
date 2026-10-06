@@ -3,7 +3,9 @@ package be.elevenways.hohenheim.upstream;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.TypeDefinition;
+import be.elevenways.hohenheim.app.PutOnlineGroup;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Common upstream-kind metadata. Lives in src/common so the admin UI (client) can
@@ -39,5 +41,10 @@ public interface UpstreamKindInfo extends TypeDefinition {
      */
     default boolean offeredAsApp() {
         return !this.requiresInstance();
+    }
+
+    /** The "Put something online" group this kind is offered under; null when it is not {@link #offeredAsApp}. */
+    default @Nullable PutOnlineGroup putOnlineGroup() {
+        return this.offeredAsApp() ? PutOnlineGroup.ADDRESS : null;
     }
 }

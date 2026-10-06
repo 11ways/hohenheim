@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.OnboardingState;
 import be.elevenways.hohenheim.OnboardingStep;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
@@ -68,6 +69,7 @@ public final class OnboardingCollector {
             Microcopy placementRefusal = firstPlacementRefusal(servers);
             boolean placeable = !servers.isEmpty() && placementRefusal == null;
             steps.add(hostAcceptsWorkloads(placeable, placementRefusal));
+            steps.add(backupDestination());
         }
 
         if (HohenheimRoles.enabled(Role.INSTANCES)) {
@@ -118,6 +120,21 @@ public final class OnboardingCollector {
             // deploy would have produced, which is what makes this a route to the fix.
             refusal != null ? refusal : copy("checklist_admit_detail"),
             listTarget("servers"));
+    }
+
+    /**
+     * Done once the control-plane backup has an off-host destination: the same fact and the same place to fix it as the
+     * attention item (AttentionCollector.controlPlaneBackupDestination), so the two can never disagree. Offered with the
+     * host steps: a node with no workload tier keeps no checklist, and the attention item alone says it there.
+     */
+    private static OnboardingStep backupDestination() {
+        boolean chosen = ControlPlaneBackups.configuredDestinationName() != null;
+        return new OnboardingStep(
+            chosen ? OnboardingState.DONE : OnboardingState.TODO,
+            "box-archive",
+            copy("checklist_backups"),
+            copy("checklist_backups_detail"),
+            AttentionCollector.controlPlaneBackupTarget());
     }
 
     /**

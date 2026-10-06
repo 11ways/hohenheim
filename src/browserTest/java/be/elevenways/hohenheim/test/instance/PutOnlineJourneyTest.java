@@ -37,6 +37,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.net.http.HttpResponse;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -108,8 +109,18 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
             .contains("data-hh-put-online-group=\"templates\"").contains(PREFIX + "shop");
         assertThat(chooser).as("step 1: the address kinds are a group of their own")
             .contains("data-hh-put-online-group=\"addresses\"")
-            .contains("kind=hohenheim%3Aredirect").doesNotContain("kind=hohenheim%3Ainstance")
-            .doesNotContain("kind=hohenheim%3Adev_namespace");
+            .contains("kind:hohenheim:redirect").doesNotContain("kind:hohenheim:instance")
+            .doesNotContain("kind:hohenheim:dev_namespace");
+        assertThat(chooser).as("step 1: whole machines are a group, and static files sit with the operator's own code")
+            .contains("data-hh-put-online-group=\"machine\"").contains("instance:hohenheim:vm")
+            .contains("data-hh-put-online-group=\"code\"").contains("kind:hohenheim:static")
+            .contains("data-hh-put-online-steps");
+        HttpResponse<String> picked = adminGet("/admin/" + PutOnlinePage.SLUG + "?choice=kind:hohenheim:redirect");
+        assertThat(picked.headers().firstValue("location").orElse(""))
+            .as("step 1: Continue with a card opens that card's flow")
+            .contains(PutOnlinePage.SLUG).contains("kind=hohenheim%3Aredirect");
+        assertThat(adminGet("/admin/" + PutOnlinePage.SLUG + "?choice=https://elsewhere.example").body())
+            .as("step 1: a value the chooser did not draw only redraws the chooser").contains("data-hh-put-online-chooser");
 
         // 2. Choosing opens the stepped wizard: where, the template's options, HTTPS.
         String wizard = adminGet("/admin/" + PutOnlinePage.SLUG + "?template=" + template.get(InstanceTemplateModel.ID))

@@ -5,10 +5,12 @@ import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.render.action.LinkActionState;
+import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.OnboardingStep;
+import be.elevenways.hohenheim.app.AppSummary;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.model.CertificateModel;
@@ -20,10 +22,11 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.protoblast.common.typed.rule.Condition;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelDashboard;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
-import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.widget.common.WidgetInstance;
@@ -102,33 +105,73 @@ public final class AdminDashboard extends PanelDashboard {
         }
 
         List<WidgetInstance> widgets = new ArrayList<>();
+        Panel admin = PanelRegistry.getBySlug(ADMIN);
+        List<AppDirectory.App> apps = admin == null ? List.of() : AppDirectory.read(admin, accessContext);
 
-        // The readiness checklist leads, and RETIRES ITSELF: no dismissed flag, it is simply
-        // absent once every step is done. Before this the only onboarding was the site CTA,
-        // and nothing anywhere said a host must be preflighted and admitted before any
-        // instance can deploy -- so the first session's natural arc (create -> deploy ->
-        // silence) had no visible way forward.
+        // The readiness checklist RETIRES ITSELF: no dismissed flag, it is simply absent once every step is done.
+        // Before it, nothing said a host must be checked and admitted before anything can run, so the first session's
+        // natural arc (create -> deploy -> silence) had no visible way forward.
         List<OnboardingStep> onboarding = OnboardingCollector.collect();
-        if (OnboardingCollector.hasWork(onboarding)) {
-            widgets.add(section(new WidgetInstance(HohenheimWidgets.ONBOARDING_CHECKLIST.id(), Map.of())
-                .withData(onboarding)));
+        WidgetInstance checklist = OnboardingCollector.hasWork(onboarding)
+            ? new WidgetInstance(HohenheimWidgets.ONBOARDING_CHECKLIST.id(), Map.of()).withData(onboarding)
+            : null;
+
+        if (apps.isEmpty()) {
+            // A fresh install (board Empty-Dashboard): the way onward beside the steps still to take, and nothing that
+            // counts or lists what does not exist yet.
+            // AIDEV-NOTE: the attention band still shows whenever it holds items, unlike the board: a failing
+            // certificate or a stopped backup must never hide just because no app exists yet.
+            List<WidgetInstance> lead = new ArrayList<>(2);
+            lead.add(new WidgetInstance(HohenheimWidgets.ONBOARDING.id(), Map.of()).withData(Map.of(
+                "putOnline", CmsRoutes.list(ADMIN, PutOnlinePage.SLUG),
+                "pointAddress", CmsRoutes.list(ADMIN, PutOnlinePage.SLUG)
+                    .withFragment(PutOnlinePage.ADDRESSES_ANCHOR))));
+            if (checklist != null) {
+                lead.add(checklist);
+            }
+            widgets.add(section(columns(lead)));
+            List<AttentionItem> attention = AttentionCollector.collect();
+            if (!attention.isEmpty()) {
+                widgets.add(section(new WidgetInstance(HohenheimWidgets.ATTENTION.id(), Map.of())
+                    .withData(attention)));
+            }
+            return new WidgetTree(widgets);
         }
-        if (proxy && Models.get(SiteModel.class).findActive().isEmpty()) {
-            widgets.add(section(new WidgetInstance(HohenheimWidgets.ONBOARDING.id(), Map.of())));
+
+        if (checklist != null) {
+            widgets.add(section(checklist));
         }
         widgets.add(section(new WidgetInstance(HohenheimWidgets.ATTENTION.id(), Map.of())
             .withData(AttentionCollector.collect())));
         if (!tiles.isEmpty()) {
-            widgets.add(section(new WidgetInstance(ColumnsWidget.ID,
-                Map.of("column_count", Math.min(tiles.size(), 4)), new WidgetTree(tiles))));
+            widgets.add(section(columns(tiles)));
             // AIDEV-NOTE: the 30-day bans chart used to live beside these and is deliberately
             // gone. On any fleet that is not under attack it is an all-zero series, i.e. ~450px
             // of flat line above the content an operator opened the page for. The count itself
             // stays, as a tile. If the trend is wanted, it belongs on the firewall operator's
             // own overview page, which they open on purpose.
         }
-        widgets.add(section(new WidgetTree(recentActivity(accessContext))));
+        // The board's lower half: the apps, read from the one App directory, beside what happened lately.
+        widgets.add(section(columns(List.of(
+            new WidgetInstance(HohenheimWidgets.APPS.id(), Map.of()).withData(summaries(apps)),
+            new WidgetInstance(SectionWidget.ID, Map.of(), new WidgetTree(recentActivity(accessContext)))))));
         return new WidgetTree(widgets);
+    }
+
+    /** The dashboard's Apps band rows: name, what and where, and whether HTTPS works. */
+    private static @NonNull List<AppSummary> summaries(@NonNull List<AppDirectory.App> apps) {
+        List<AppSummary> summaries = new ArrayList<>(apps.size());
+        for (AppDirectory.App app : apps) {
+            String detail = app.addressText() == null || app.addressText().isBlank()
+                ? app.kind() : app.kind() + " · " + app.addressText();
+            summaries.add(new AppSummary(app.name(), detail, app.target().toUrl(), app.https()));
+        }
+        return summaries;
+    }
+
+    private static @NonNull WidgetInstance columns(@NonNull List<WidgetInstance> children) {
+        return new WidgetInstance(ColumnsWidget.ID, Map.of("column_count", Math.min(children.size(), 4)),
+            new WidgetTree(children));
     }
 
     /**

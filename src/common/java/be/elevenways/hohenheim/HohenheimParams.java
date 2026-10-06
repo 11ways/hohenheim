@@ -84,9 +84,17 @@ public final class HohenheimParams {
         ParameterDefinition.builder(Integer.class).name("template")
             .stringResolver(Integer::parseInt).build();
 
-    /** What "Put something online" opens its wizard for when it is no template: an upstream kind's id. */
+    /**
+     * The kind "Put something online" opens when it is no template: an upstream kind on that page, an instance kind as
+     * the instance create form's prefill.
+     */
     public static final ParameterDefinition<String> PUT_ONLINE_KIND =
         ParameterDefinition.builder(String.class).name("kind")
+            .stringResolver(value -> value).build();
+
+    /** The card "Put something online" was asked to open: a value the chooser itself drew. */
+    public static final ParameterDefinition<String> PUT_ONLINE_CHOICE =
+        ParameterDefinition.builder(String.class).name("choice")
             .stringResolver(value -> value).build();
 
     /** The directory the instance Files tab browses. */

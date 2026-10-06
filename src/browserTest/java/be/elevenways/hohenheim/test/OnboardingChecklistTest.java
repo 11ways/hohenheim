@@ -1,10 +1,13 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.OnboardingState;
 import be.elevenways.hohenheim.OnboardingStep;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.server.cms.OnboardingCollector;
+import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -12,8 +15,10 @@ import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -91,6 +96,38 @@ class OnboardingChecklistTest {
                     .as("step 2: an enabled website completes the put-online step").isEqualTo(OnboardingState.DONE);
             } finally {
                 sites.delete(site);
+            }
+        });
+    }
+
+    @Test
+    void theBackupsStepReadsTheAttentionItemsFact() {
+        Db.run(datasource, () -> {
+            // 1. Without an off-host destination the step is to do, before the first app, and it leads to the same
+            //    place as the attention item, so the two can never disagree.
+            List<OnboardingStep> steps = OnboardingCollector.collect();
+            OnboardingStep backups = steps.stream()
+                .filter(step -> "checklist_backups".equals(step.title().key()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("step 1: the checklist offers the backups step"));
+            assertThat(backups.state()).as("step 1: no destination is chosen on a fresh install")
+                .isEqualTo(ControlPlaneBackups.configuredDestinationName() == null
+                    ? OnboardingState.TODO : OnboardingState.DONE);
+            int putOnline = -1;
+            for (int i = 0; i < steps.size(); i++) {
+                if ("checklist_put_online".equals(steps.get(i).title().key())) {
+                    putOnline = i;
+                }
+            }
+            assertThat(putOnline).as("step 1: the checklist offers the put-online step").isNotNegative();
+            assertThat(steps.indexOf(backups)).as("step 1: before putting the first app online")
+                .isLessThan(putOnline);
+            List<AttentionItem> items = new ArrayList<>();
+            AttentionCollector.controlPlaneBackupDestination(items);
+            if (!items.isEmpty()) {
+                assertThat(Objects.requireNonNull(backups.target()).toUrl())
+                    .as("step 1: and leads where the attention item leads")
+                    .isEqualTo(Objects.requireNonNull(items.get(0).target()).toUrl());
             }
         });
     }

@@ -73,8 +73,8 @@ class DashboardRoleGatingTest {
                 //    the proxy tier's certificate failure all speak.
                 roles(EnumSet.allOf(Role.class));
                 assertThat(OnboardingCollector.collect())
-                    .as("step 1: a full node walks all three readiness steps")
-                    .hasSize(3);
+                    .as("step 1: a full node walks all four readiness steps")
+                    .hasSize(4);
                 assertThat(titleKeys(AttentionCollector.collect()))
                     .as("step 1: host-tier and proxy-tier items alike are collected")
                     .contains("docker_orphans", "host_not_admitted", "certificate");
@@ -104,7 +104,7 @@ class DashboardRoleGatingTest {
                 roles(EnumSet.of(Role.STACKS));
                 assertThat(titles(OnboardingCollector.collect()))
                     .as("step 3: the host steps belong to every workload tier")
-                    .containsExactly("checklist_host", "checklist_admit");
+                    .containsExactly("checklist_host", "checklist_admit", "checklist_backups");
                 assertThat(titleKeys(AttentionCollector.collect()))
                     .as("step 3: and the host-tier attention items come back with them")
                     .contains("docker_orphans", "host_not_admitted");
@@ -113,7 +113,7 @@ class DashboardRoleGatingTest {
                 roles(EnumSet.of(Role.INSTANCES));
                 assertThat(titles(OnboardingCollector.collect()))
                     .as("step 4: the put-online step is the instance role's")
-                    .containsExactly("checklist_host", "checklist_admit", "checklist_put_online");
+                    .containsExactly("checklist_host", "checklist_admit", "checklist_backups", "checklist_put_online");
 
                 // 5. A dead daemon is the instance tier's problem as much as the stack
                 //    tier's, and a proxy-only node never asks. The process-wide probe
