@@ -460,3 +460,23 @@ Tests:
 
 Order: W6 as planned. G5 needs nothing from W1-W5 except the `put_online` operation; the extraction of
 `PersistedProgress` can land earlier with its task-run regression proof.
+
+## 9. W4 decisions (forks W4 and W4b, 2026-10-06)
+
+- The sidebar is eight rows in one unlabelled block, in board order: Dashboard, Apps, Databases, Hosts, then four
+  `PanelCluster`s. Activity is a cluster too (Activity, Inbox, Deliveries), so the eight rows hold.
+- Cluster slugs: `domain-names` (Addresses, DNS zones, Certificates, Released hostnames), `access` (Access lists,
+  Users, Roles, IP bans, Abuse protection), `log` (Activity, Inbox, Deliveries), `configure` (Settings, Instance
+  templates, Runtime images, Git providers, Database engines, Notification channels, Backup targets, Build info).
+  Certificates is a tab of Domains, not a row of its own.
+- A cluster lists only the members the node registered; a cluster left with none is not added.
+- Sites, Instances, Stacks and Projects leave the sidebar and are linked from the Apps list's toolbar; every app
+  row opens its record page (J1). The command palette still finds every cluster member (zenit-cms
+  `NavItemState.members`).
+- The Apps list is a typed store over `AppDirectory`, read through each entry's own panel source. Generated
+  instances (database containers, engines, stack services) are never apps. The kind filter is the closed
+  Workload / Website / Stack set (`AppDirectory.Source`); the kind column shows the kind's label, not the template.
+  The state filter is the framework's `HealthTone`.
+- "Put something online" links to the from-template page until W5 builds the real flow.
+- "Open site" is hidden while the record's health verdict is BROKEN (Jelle, 2026-10-06).
+- The instance, site and host forms are labelled "Configuration"; History stays in the strip.

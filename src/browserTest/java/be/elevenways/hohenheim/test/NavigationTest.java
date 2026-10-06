@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -41,14 +42,18 @@ class NavigationTest extends HohenheimTestBase {
             .as("main content should sit on the same row as the sidebar")
             .isLessThan(sidebar.y + sidebar.height);
 
-        // Soft nav to a list page: the URL, the heading and the shell survive.
-        page.locator("pl-app-sidebar a[href='/admin/certificates']").click();
+        // Soft nav into a cluster: the Domains entry lands on its first member, Addresses, whose page heads with
+        // the cluster's tabs; a tab soft-navigates to a sibling member. The URL, the heading and the shell survive.
+        page.locator("pl-app-sidebar a[href='/admin/" + HohenheimPanel.DOMAINS_CLUSTER + "']").click();
+        waitForHeading("Addresses");
+        assertThat(page.url()).endsWith("/admin/domains");
+        page.locator("[data-cms-cluster-tabs] a[href='/admin/certificates']").first().click();
         waitForHeading("Certificates");
         assertThat(page.url()).endsWith("/admin/certificates");
         assertThat(page.locator("h1").first().textContent()).contains("Certificates");
         assertThat(page.locator(".cms-brand").textContent()).contains("Hohenheim");
-        // Every declared resource plus dashboard/settings renders a sidebar entry.
-        assertThat(page.locator("pl-app-sidebar a").count()).isGreaterThanOrEqualTo(10);
+        // The boards' eight sidebar entries, each a link.
+        assertThat(page.locator("pl-app-sidebar a").count()).isGreaterThanOrEqualTo(8);
 
         // Regression: after a soft nav the client renders the list footer itself;
         // filtered short keys ("none" scope=cms target=range) must resolve from
@@ -65,9 +70,9 @@ class NavigationTest extends HohenheimTestBase {
             t -> assertThat(t).contains("of"));
 
         // A second soft nav keeps the brand in place.
-        page.locator("pl-app-sidebar a[href='/admin/sites']").click();
-        waitForHeading("Sites");
-        assertThat(page.locator("h1").first().textContent()).contains("Sites");
+        page.locator("pl-app-sidebar a[href='/admin/apps']").click();
+        waitForHeading("Apps");
+        assertThat(page.locator("h1").first().textContent()).contains("Apps");
         assertThat(page.locator(".cms-brand").textContent()).contains("Hohenheim");
 
         // The browser back button restores the previous soft-navigated page.

@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.InstanceStatus;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
@@ -16,7 +17,10 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.cms.common.resource.ResourceHealth;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.IntegerField;
+import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.AccessContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -61,6 +65,14 @@ final class AppHealth {
             Set<String> working = CertificateCoverage.activeNames();
             return instance -> instanceVerdict(instance, sitesByInstance, working, delegated);
         });
+    }
+
+    /**
+     * A stack's verdict from its stored status, the one fact its list badge reads too. A status this method does not
+     * know reads as unknown, never as healthy.
+     */
+    static @NonNull ResourceHealth<Row> stacks() {
+        return ResourceHealth.of((stack, access) -> stackVerdict(stack));
     }
 
     // -- sites -----------------------------------------------------------------------
@@ -158,6 +170,29 @@ final class AppHealth {
                 .fixedBy(InstanceOperations.START.id());
             case STARTING, CAPTURING, RESTORING, MIGRATING -> RecordHealth.unknown(status.label());
         };
+    }
+
+    // -- stacks ----------------------------------------------------------------------
+
+    private static @NonNull RecordHealth stackVerdict(@NonNull Row stack) {
+        String status = stack.get(StackModel.STATUS);
+        if (StackModel.STATUS_ACTIVE.equals(status)) {
+            return RecordHealth.ok(copy("running"));
+        }
+        if (StackModel.STATUS_FAILED.equals(status)) {
+            String reason = StackFailures.reasonOf(stack);
+            return RecordHealth.broken(copy("deploy_failed"))
+                .detail(reason == null ? null : Microcopy.literal(reason));
+        }
+        if (StackModel.STATUS_DEGRADED.equals(status)) {
+            return RecordHealth.attention(copy("degraded")).detail(copy("stack_degraded_detail"));
+        }
+        if (StackModel.STATUS_STOPPED.equals(status) || StackModel.STATUS_INACTIVE.equals(status)) {
+            return RecordHealth.attention(copy("not_running")).detail(copy("not_running_detail"));
+        }
+        // Deploying, and any status a later version stores: nobody can tell yet.
+        return RecordHealth.unknown(status == null ? copy("status_unknown")
+            : Microcopy.of(status).withFilter("scope", "stack_status"));
     }
 
     private static @NonNull Microcopy liveHeadline(@Nullable List<Row> sites, @NonNull Set<String> working) {
@@ -279,14 +314,23 @@ final class AppHealth {
         for (Row instance : instances) {
             ids.add(instance.get(InstanceModel.ID));
         }
-        Map<Integer, List<Row>> byInstance = new HashMap<>();
+        return rowsByKey(Models.get(SiteModel.class), SiteModel.INSTANCE_ID, ids);
+    }
+
+    /**
+     * The rows of {@code model} whose {@code key} is one of these ids, read in one query and grouped by that key, each
+     * group in stored order: the one batch read a page of verdicts or the Apps list makes per related table.
+     */
+    static @NonNull Map<Integer, List<Row>> rowsByKey(@NonNull Model model, @NonNull IntegerField key,
+                                                      @NonNull List<Integer> ids) {
+        Map<Integer, List<Row>> byKey = new HashMap<>();
         if (ids.isEmpty()) {
-            return byInstance;
+            return byKey;
         }
-        for (Row site : Models.get(SiteModel.class).find().where(SiteModel.INSTANCE_ID.in(ids)).all()) {
-            byInstance.computeIfAbsent(site.get(SiteModel.INSTANCE_ID), id -> new ArrayList<>()).add(site);
+        for (Row row : model.find().where(key.in(ids)).orderBy(model.getPrimaryKeyField(), SortOrder.ASC).all()) {
+            byKey.computeIfAbsent(row.get(key), id -> new ArrayList<>()).add(row);
         }
-        return byInstance;
+        return byKey;
     }
 
     private static @NonNull Microcopy copy(@NonNull String key) {
@@ -308,19 +352,13 @@ final class AppHealth {
                     instanceIds.add(instanceId);
                 }
             }
-            Map<Integer, List<Row>> domains = new HashMap<>();
-            Map<Integer, List<Row>> paths = new HashMap<>();
+            Map<Integer, List<Row>> domains = rowsByKey(Models.get(SiteDomainModel.class), SiteDomainModel.SITE_ID,
+                siteIds);
+            Map<Integer, List<Row>> paths = rowsByKey(Models.get(ProtectedPathModel.class), ProtectedPathModel.SITE_ID,
+                siteIds);
             Map<Integer, Row> instances = new HashMap<>();
             Map<Integer, SiteHealth> live = new HashMap<>();
             if (!siteIds.isEmpty()) {
-                for (Row domain : Models.get(SiteDomainModel.class).find()
-                        .where(SiteDomainModel.SITE_ID.in(siteIds)).all()) {
-                    domains.computeIfAbsent(domain.get(SiteDomainModel.SITE_ID), id -> new ArrayList<>()).add(domain);
-                }
-                for (Row path : Models.get(ProtectedPathModel.class).find()
-                        .where(ProtectedPathModel.SITE_ID.in(siteIds)).all()) {
-                    paths.computeIfAbsent(path.get(ProtectedPathModel.SITE_ID), id -> new ArrayList<>()).add(path);
-                }
                 var proxy = ServerMain.getProxyServer();
                 if (proxy != null) {
                     for (Integer siteId : siteIds) {

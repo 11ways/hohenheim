@@ -120,6 +120,8 @@ public final class InstanceParts {
     public static @NonNull PanelResource<Row> admin() {
         TableSpec<Row> table = adminTable();
         return entry("instance")
+            // Reached through the Apps list, whose toolbar links this list (HohenheimPanel's sidebar note).
+            .showInNav(false)
             .health(AppHealth.instances(false))
             // Soft-deleted rows are invisible (the model's soft-delete behaviour hides them from every default find);
             // everything else is LISTED, generated rows included -- with a "Managed by" column instead of a hole in
@@ -160,7 +162,7 @@ public final class InstanceParts {
             // AIDEV-NOTE: no contributions, on purpose (decided 2026-10-03): the tab set is DECLARED, so zenit-auth's
             // contributed access tab does not appear on a live product surface as a side effect of this conversion.
             // Whether contributed access tabs belong on Hohenheim entities is an open product question.
-            .tabs(ResourceTabs.of(adminTabs()).withHistory())
+            .tabs(ResourceTabs.of(adminTabs()).withHistory().historyInStrip())
             // The instance tier's sibling catalogs, demoted out of the sidebar: where backups are written, who may
             // run how many instances, which public names route to which workload, and the build/release history.
             //
@@ -249,6 +251,8 @@ public final class InstanceParts {
     private static ResourceForm.@NonNull Builder<Row> form(@NonNull FormSpec spec) {
         return ResourceForm.<Row>of(spec)
             .landingTab(InstanceOverview.SLUG)
+            // The board's word for the form tab: what the app is set to, beside what it is doing (the overview).
+            .tabLabel(AppOverview.copy("configuration"))
             .lead((instance, access) -> instance.get(InstanceModel.ID) == null ? null
                 : new RecordLead(AppOverview.instanceLead(instance, access.conduit()), null))
             .inlineEditable(InstanceModel.NAME, InstanceModel.CRASH_POLICY)

@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class AdminInboxBadgeTest extends HohenheimTestBase {
 
-    private static final String BADGE = "pl-app-sidebar pl-nav-item[href='/admin/inbox'] pl-badge";
+    private static final String BADGE = "pl-app-sidebar pl-nav-item[href='/admin/log'] pl-badge";
 
     @Test
     void theInboxBadgeFollowsAnAlertWhileThePanelStaysOpen() throws Exception {

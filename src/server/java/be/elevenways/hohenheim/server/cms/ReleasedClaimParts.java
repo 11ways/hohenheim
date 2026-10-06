@@ -57,6 +57,9 @@ import java.util.Objects;
  */
 public final class ReleasedClaimParts {
 
+    /** The released hostname entry's slug, which the panel's clusters name. */
+    public static final String SLUG = "released-claims";
+
     /** Virtual column names (computed cells). */
     static final String FORMER_SITE_COLUMN = "former_site";
     static final String FORMER_OWNER_COLUMN = "former_owner";
@@ -118,7 +121,7 @@ public final class ReleasedClaimParts {
             .add(ReleasedRouteClaimModel.FORMER_SUBJECTS)
             .add(ReleasedRouteClaimModel.RELEASED_AT)
             .build();
-        return PanelResource.builder(HohenheimIds.id("released_claim"), "released-claims", SUBJECT)
+        return PanelResource.builder(HohenheimIds.id("released_claim"), SLUG, SUBJECT)
             .label(Microcopy.of("plural").withFilter("scope", "released_claim"))
             .recordLabel(Microcopy.of("singular").withFilter("scope", "released_claim"))
             .description(Microcopy.of("nav_hint").withFilter("scope", "released_claim"))

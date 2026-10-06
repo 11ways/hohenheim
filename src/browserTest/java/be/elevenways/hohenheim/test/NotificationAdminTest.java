@@ -31,9 +31,11 @@ class NotificationAdminTest extends HohenheimTestBase {
         String body = page.locator("body").textContent();
         assertThat(body).contains("Notification channels");
 
-        // The shell sidebar carries the notifications entry.
+        // The channels are a tab of the Settings cluster, which the sidebar carries.
         PlaywrightAssertions.assertThat(
-            page.locator("pl-app-sidebar a[href='/admin/notifications']")).hasCount(1);
+            page.locator("[data-cms-cluster-tabs] a[href='/admin/notifications']").first()).isVisible();
+        PlaywrightAssertions.assertThat(
+            page.locator("pl-app-sidebar a[href='/admin/configure']")).hasCount(1);
 
         navigateToApp("/admin/notifications/new");
         waitForHydration();

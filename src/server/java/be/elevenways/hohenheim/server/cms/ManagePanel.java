@@ -125,6 +125,8 @@ public final class ManagePanel extends Panel {
         // accessible dashboard entry, so the landing is a real page (what needs
         // attention, then the principal's instances), never a contentless card grid.
         peers.add(new ManageDashboard());
+        // The tenant's apps: its sites and instances read as one list, through the two entries below (AppDirectory).
+        HohenheimPanel.addIf(peers, AppParts.manage(), Role.PROXY, Role.INSTANCES);
         HohenheimPanel.addIf(peers, SiteParts.manage(), Role.PROXY);
         HohenheimPanel.addIf(peers, DomainParts.manage(), Role.PROXY);
         HohenheimPanel.addIf(peers, ManageDnsRecordParts.manage(), Role.DNS);

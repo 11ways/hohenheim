@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -19,37 +20,33 @@ class CmsAdminSmokeTest extends HohenheimTestBase {
         assertThat(content).contains("Hohenheim");
         assertThat(page.locator("pl-app-sidebar").count()).isEqualTo(1);
 
+        // The boards' eight entries; AdminNavigationJourneyTest owns the full inventory, the clusters' members and
+        // the reachability of everything demoted.
         String sidebar = page.locator("pl-app-sidebar").textContent();
-        assertThat(sidebar).contains("Sites");
-        assertThat(sidebar).contains("Certificates");
-        assertThat(sidebar).contains("Access lists");
-        // Auth providers is DEMOTED out of the sidebar (reached from the Sites list header);
-        // AdminNavigationJourneyTest owns the full curated inventory and its reachability.
-        assertThat(sidebar).doesNotContain("Auth providers");
-        assertThat(sidebar).contains("Databases");
-        assertThat(sidebar).contains("Hosts");
-        assertThat(sidebar).contains("Notification channels");
-        assertThat(sidebar).contains("Activity");
-        assertThat(sidebar).contains("Settings");
+        for (String entry : java.util.List.of("Dashboard", "Apps", "Databases", "Hosts", "Domains", "Access",
+                "Activity", "Settings")) {
+            assertThat(sidebar).as("the sidebar names " + entry).contains(entry);
+        }
+        assertThat(sidebar).as("what an app is made of is reached through Apps, not the sidebar")
+            .doesNotContain("Sites")
+            .doesNotContain("Instances")
+            .doesNotContain("Auth providers");
 
-        // The zenit-auth resources are wired into THIS panel's security group. Their own
-        // behaviour (create/edit/toggle/grants/roles journeys) is zenit-auth's to prove --
-        // AuthCmsResourcesIntegrationTest:194/292/382 -- and hohenheim used to re-prove all
-        // of it through the browser for 31.8s. What is hohenheim's is only the wiring.
-        assertThat(page.locator("pl-app-sidebar a[href='/admin/users']").count())
-            .as("zenit-auth's users resource is mounted in the hohenheim panel")
-            .isEqualTo(1);
-        assertThat(page.locator("pl-app-sidebar a[href='/admin/roles']").count())
+        // The zenit-auth resources are wired into THIS panel, as tabs of the Access cluster. Their own behaviour
+        // (create/edit/toggle/grants/roles journeys) is zenit-auth's to prove -- AuthCmsResourcesIntegrationTest.
+        page.locator("pl-app-sidebar a[href='/admin/" + HohenheimPanel.ACCESS_CLUSTER + "']").click();
+        page.waitForCondition(() -> page.locator("[data-cms-cluster-tabs] a[href='/admin/users']").count() > 0);
+        assertThat(page.locator("[data-cms-cluster-tabs] a[href='/admin/roles']").count())
             .as("zenit-auth's roles resource is mounted in the hohenheim panel")
-            .isEqualTo(1);
+            .isGreaterThan(0);
 
-        // Soft nav to the sites list keeps the page cost down.
-        page.locator("pl-app-sidebar a[href='/admin/sites']").click();
+        // Soft nav to the Apps list keeps the page cost down.
+        page.locator("pl-app-sidebar a[href='/admin/apps']").click();
         page.waitForCondition(() -> {
             var el = page.querySelector("h1");
-            return el != null && el.textContent().contains("Sites");
+            return el != null && el.textContent().contains("Apps");
         });
-        assertThat(page.content()).contains("Sites");
+        assertThat(page.content()).contains("Apps");
 
         navigateToApp("/admin/settings");
         waitForHydration();

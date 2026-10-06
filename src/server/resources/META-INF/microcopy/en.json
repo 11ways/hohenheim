@@ -910,6 +910,10 @@
     {
       "text": "The deploy failed; the reason is recorded on this tab",
       "scope": "deployments"
+    },
+    {
+      "text": "Its last deploy failed",
+      "scope": "app_health"
     }
   ],
   "backup_failed": {
@@ -1220,6 +1224,10 @@
     {
       "text": "No attached databases",
       "scope": "instance_database"
+    },
+    {
+      "text": "Nothing is online yet. Put something online and it shows up here.",
+      "scope": "app_list"
     }
   ],
   "empty_description": [
@@ -1847,6 +1855,10 @@
     {
       "text": "Name",
       "scope": "template_contents"
+    },
+    {
+      "text": "App",
+      "scope": "app_list"
     }
   ],
   "name_placeholder": {
@@ -2104,11 +2116,11 @@
       "case": "sentence"
     },
     {
-      "text": "Site domains",
+      "text": "Addresses",
       "scope": "site_domain"
     },
     {
-      "text": "site domains",
+      "text": "addresses",
       "scope": "site_domain",
       "case": "sentence"
     },
@@ -2489,6 +2501,15 @@
       "text": "database engines",
       "scope": "database_engine",
       "case": "sentence"
+    },
+    {
+      "text": "Apps",
+      "scope": "app_list"
+    },
+    {
+      "text": "apps",
+      "scope": "app_list",
+      "case": "sentence"
     }
   ],
   "dashboard": [
@@ -2761,10 +2782,20 @@
       "target": "activity_action"
     }
   ],
-  "settings": {
-    "text": "Settings",
-    "scope": "field"
-  },
+  "settings": [
+    {
+      "text": "Settings",
+      "scope": "field"
+    },
+    {
+      "text": "Settings",
+      "scope": "nav_cluster"
+    },
+    {
+      "text": "This installation's settings, templates, images, git connections, engines, notification channels, backup targets and build.",
+      "scope": "nav_cluster_hint"
+    }
+  ],
   "source_settings": {
     "text": "Source settings",
     "scope": "field"
@@ -5053,6 +5084,10 @@
     {
       "text": "Status",
       "scope": "app_overview"
+    },
+    {
+      "text": "State",
+      "scope": "app_list"
     }
   ],
   "add_file": [
@@ -5473,6 +5508,10 @@
     {
       "text": "Kind",
       "scope": "app_overview"
+    },
+    {
+      "text": "Kind",
+      "scope": "app_list"
     }
   ],
   "instance_kind": {
@@ -6797,6 +6836,10 @@
     {
       "text": "Host",
       "scope": "instance_overview"
+    },
+    {
+      "text": "Host",
+      "scope": "app_list"
     }
   ],
   "unapproved_note": {
@@ -7226,7 +7269,7 @@
   ],
   "static": [
     {
-      "text": "Static",
+      "text": "Static files",
       "scope": "upstream_kind"
     },
     {
@@ -8904,11 +8947,11 @@
       "case": "sentence"
     },
     {
-      "text": "site domain",
+      "text": "address",
       "scope": "site_domain"
     },
     {
-      "text": "site domain",
+      "text": "address",
       "scope": "site_domain",
       "case": "sentence"
     },
@@ -9027,6 +9070,15 @@
     {
       "text": "database engine",
       "scope": "database_engine",
+      "case": "sentence"
+    },
+    {
+      "text": "app",
+      "scope": "app_list"
+    },
+    {
+      "text": "app",
+      "scope": "app_list",
       "case": "sentence"
     }
   ],
@@ -9817,12 +9869,16 @@
       "scope": "instance_overview"
     },
     {
-      "text": "Address",
+      "text": "Proxy to an address",
       "scope": "upstream_kind"
     },
     {
       "text": "Forward requests to an address you name (host, port or unix socket)",
       "scope": "upstream_kind_description"
+    },
+    {
+      "text": "Address",
+      "scope": "app_list"
     }
   ],
   "protocol": {
@@ -10171,6 +10227,14 @@
     {
       "text": "Shared engine processes that host many managed databases on one host.",
       "scope": "database_engine"
+    },
+    {
+      "text": "Everything that serves visitors or runs a workload: sites, instances and stacks in one list.",
+      "scope": "app"
+    },
+    {
+      "text": "Every name a site answers on, and whether HTTPS works for it.",
+      "scope": "site_domain"
     }
   ],
   "slug": {
@@ -11155,7 +11219,7 @@
     "scope": "site"
   },
   "no_hostnames": {
-    "text": "No hostname yet",
+    "text": "No address yet",
     "scope": "site"
   },
   "partial": {
@@ -11784,10 +11848,16 @@
     "text": "Never",
     "scope": "restart_policy"
   },
-  "https": {
-    "text": "HTTPS",
-    "scope": "upstream_scheme"
-  },
+  "https": [
+    {
+      "text": "HTTPS",
+      "scope": "upstream_scheme"
+    },
+    {
+      "text": "HTTPS",
+      "scope": "app_list"
+    }
+  ],
   "http1": {
     "text": "HTTP/1.1",
     "scope": "upstream_protocol"
@@ -13415,5 +13485,79 @@
   "failure": {
     "text": "Failure",
     "scope": "instance_artifacts"
+  },
+  "put_online": {
+    "text": "Put something online",
+    "scope": "app_list"
+  },
+  "stack_kind": {
+    "text": ".match {$count :number}\none {{Stack with 1 service}}\n* {{Stack with {$count} services}}",
+    "scope": "app_list"
+  },
+  "type_workload": {
+    "text": "Workload",
+    "scope": "app_list"
+  },
+  "type_website": {
+    "text": "Website",
+    "scope": "app_list"
+  },
+  "type_stack": {
+    "text": "Stack",
+    "scope": "app_list"
+  },
+  "state_ok": {
+    "text": "Working",
+    "scope": "app_list"
+  },
+  "state_attention": {
+    "text": "Needs attention",
+    "scope": "app_list"
+  },
+  "state_broken": {
+    "text": "Not working",
+    "scope": "app_list"
+  },
+  "state_unknown": {
+    "text": "Unknown",
+    "scope": "app_list"
+  },
+  "domain_names": [
+    {
+      "text": "Domains",
+      "scope": "nav_cluster"
+    },
+    {
+      "text": "Addresses, DNS zones, certificates and released hostnames.",
+      "scope": "nav_cluster_hint"
+    }
+  ],
+  "access": [
+    {
+      "text": "Access",
+      "scope": "nav_cluster"
+    },
+    {
+      "text": "Access lists, users, roles, bans and abuse protection.",
+      "scope": "nav_cluster_hint"
+    }
+  ],
+  "activity": [
+    {
+      "text": "Activity",
+      "scope": "nav_cluster"
+    },
+    {
+      "text": "What people and Hohenheim did, the alerts sent to you, and whether they arrived.",
+      "scope": "nav_cluster_hint"
+    }
+  ],
+  "configuration": {
+    "text": "Configuration",
+    "scope": "app_overview"
+  },
+  "stack_degraded_detail": {
+    "text": "Some of its services are not healthy.",
+    "scope": "app_health"
   }
 }

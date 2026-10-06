@@ -61,7 +61,7 @@ class SessionLossLoginTest extends HohenheimTestBase {
         // extends the AUTH shell, and soft navigation into another document shell is
         // a FULL page load since hawkeye af7ac3ec -- so the admin sidebar is gone,
         // deliberately, instead of hosting a foreign shell's content.
-        page.locator("pl-app-sidebar a[href='/admin/sites']").click();
+        page.locator("pl-app-sidebar a[href='/admin/apps']").click();
         page.waitForSelector(LOGIN_FORM);
 
         // Submitting that form used to ALWAYS fail with CSRF_INVALID: the
@@ -71,9 +71,9 @@ class SessionLossLoginTest extends HohenheimTestBase {
         page.locator(LOGIN_FORM + " pl-button button").click();
 
         // Login succeeds AND returns to the page the user was headed to.
-        page.waitForURL("**/admin/sites");
+        page.waitForURL("**/admin/apps");
         waitForHydration();
-        assertThat(page.locator("h1").first().textContent()).contains("Sites");
+        assertThat(page.locator("h1").first().textContent()).contains("Apps");
         assertThat(page.locator("body").textContent()).doesNotContain("CSRF");
     }
 }
