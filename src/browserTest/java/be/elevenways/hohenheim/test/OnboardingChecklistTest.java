@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.OnboardingState;
 import be.elevenways.hohenheim.OnboardingStep;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.OnboardingCollector;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -65,5 +67,38 @@ class OnboardingChecklistTest {
                 servers.save(local);
             }
         });
+    }
+
+    @Test
+    void anAddressPutOnlineCompletesThePutOnlineStepWithoutAWorkload() {
+        Db.run(datasource, () -> {
+            // 1. Nothing runs and no website is enabled: putting the first app online is still to do.
+            assertThat(putOnlineStep().state())
+                .as("step 1: an empty install has nothing online").isEqualTo(OnboardingState.TODO);
+
+            // 2. A redirect or proxy put online is a website with no workload; it counts as something online.
+            SiteModel sites = Models.get(SiteModel.class);
+            Row site = sites.createEmptyRow();
+            site.set(SiteModel.NAME, "Checklist redirect");
+            site.set(SiteModel.SLUG, "checklist-redirect");
+            site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
+            site.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
+            site.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
+            site.set(SiteModel.ENABLED, true);
+            sites.save(site);
+            try {
+                assertThat(putOnlineStep().state())
+                    .as("step 2: an enabled website completes the put-online step").isEqualTo(OnboardingState.DONE);
+            } finally {
+                sites.delete(site);
+            }
+        });
+    }
+
+    private static OnboardingStep putOnlineStep() {
+        return OnboardingCollector.collect().stream()
+            .filter(step -> "checklist_put_online".equals(step.title().key()))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("the checklist offers the put-online step"));
     }
 }

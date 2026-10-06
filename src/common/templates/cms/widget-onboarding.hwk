@@ -1,10 +1,10 @@
 {% declare widget: WidgetInstance %}
-{#- The site resource lives on the admin panel; bound through the typed CMS route,
-    never a path literal. -#}
-{% let newSiteTarget = BoundEndpoint.with(Endpoint.with(Zenit.Endpoints.zenit.resource_create_form, Zenit.Params.zenit.panel, "admin"), Zenit.Params.zenit.resource, "sites") %}
+{#- The fresh install's lead: nothing is online yet, so the one way onward is "Put something online" (PutOnlinePage),
+    bound through the typed CMS route, never a path literal. -#}
+{% let putOnlineTarget = BoundEndpoint.with(Endpoint.with(Zenit.Endpoints.zenit.resource_list, Zenit.Params.zenit.panel, "admin"), Zenit.Params.zenit.resource, "put-online") %}
 <pl-empty-state>
     <pl-icon name="rocket"></pl-icon>
     <pl-empty-state-title>{{ t("title", scope: "onboarding") }}</pl-empty-state-title>
     <pl-empty-state-description>{{ t("description", scope: "onboarding") }}</pl-empty-state-description>
-    <pl-button variant="primary" use:Zenit.route={% newSiteTarget %}>{{ t("create_site", scope: "onboarding") }}</pl-button>
+    <pl-button variant="primary" use:Zenit.route={% putOnlineTarget %}>{{ t("put_online", scope: "onboarding") }}</pl-button>
 </pl-empty-state>

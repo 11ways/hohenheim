@@ -68,11 +68,15 @@ public final class InstanceTemplateHandlers {
     /** Background installs run here; the durable install_state is the progress record. */
     private static final JobRunner INSTALL_RUNNER = JobRunner.create("hh-template-install");
 
+    /** The templates a caller may create from: every operation over one selected template reads through it. */
+    private static final RecordSource<InstanceTemplateModel> SELECTABLE_TEMPLATES = RecordSource.of(InstanceTemplateModel.class)
+        .id(HohenheimIds.id("selectable_template"))
+        .project(InstanceTemplateModel.NAME, InstanceTemplateModel.KIND)
+        .scopedBy(TenantScopes.INSTANCE_TEMPLATES).build();
+
     static {
         OperationHandlers.attach(InstanceTemplateOperations.CREATE_INSTANCE_FROM_TEMPLATE)
-            .source(RecordSource.of(InstanceTemplateModel.class).id(HohenheimIds.id("selectable_template"))
-                .project(InstanceTemplateModel.NAME, InstanceTemplateModel.KIND)
-                .scopedBy(TenantScopes.INSTANCE_TEMPLATES).build())
+            .source(SELECTABLE_TEMPLATES)
             .inputScope(InstanceTemplateHandlers::inputScope)
             .handle(InstanceTemplateHandlers::createFromTemplate);
         OperationHandlers.attach(InstanceTemplateOperations.APPROVE_TEMPLATE)
@@ -86,6 +90,11 @@ public final class InstanceTemplateHandlers {
     }
 
     private InstanceTemplateHandlers() {
+    }
+
+    /** @return the source an operation over one selected template reads its subject through */
+    public static @NonNull RecordSource<InstanceTemplateModel> selectableTemplates() {
+        return SELECTABLE_TEMPLATES;
     }
 
     /** Forces the class to load, so the operation's handler is attached before boot verifies it. */
@@ -178,9 +187,15 @@ public final class InstanceTemplateHandlers {
 
     // -- the create-from-template operation ---------------------------------------------------------------------
 
-    /** The input one admitted template asks of this caller. */
-    private static @NonNull InputScope inputScope(@Nullable Row template, @NonNull FormSpec declared,
-                                                  @Nullable AccessContext access) {
+    /**
+     * The input one admitted template asks of this caller: its variable form, the host pick for an operator alone and
+     * the projects the caller may create into, each replacing the declared entry of the same name.
+     *
+     * AIDEV-NOTE: shared with "Put something online", whose input declares these entries under the same names; any
+     * other entry of {@code declared} is kept as it is.
+     */
+    public static @NonNull InputScope inputScope(@Nullable Row template, @NonNull FormSpec declared,
+                                                 @Nullable AccessContext access) {
         if (template == null) {
             return InputScope.of(declared);
         }

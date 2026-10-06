@@ -64,6 +64,10 @@ public class DevNamespaceUpstreamKind implements UpstreamKindHandler {
     @Override
     public Icon getIcon() { return Icon.of("flask"); }
 
+    /** A dev session creates its own namespace site; nobody puts one online by hand. */
+    @Override
+    public boolean offeredAsApp() { return false; }
+
     @Override
     public BadgeColor color() { return ColorHue.TEAL; }
 

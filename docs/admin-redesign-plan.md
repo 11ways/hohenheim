@@ -480,3 +480,30 @@ Order: W6 as planned. G5 needs nothing from W1-W5 except the `put_online` operat
 - "Put something online" links to the from-template page until W5 builds the real flow.
 - "Open site" is hidden while the record's health verdict is BROKEN (Jelle, 2026-10-06).
 - The instance, site and host forms are labelled "Configuration"; History stays in the strip.
+
+## 10. W5a decisions (fork W5a, 2026-10-06)
+
+- Two background operations behind one page (`PutOnlinePage`, slug `put-online`): `put_online` over the selected
+  template (its input is that template's own variables, resolved per subject by the create-from-template lane's
+  `InstanceTemplateHandlers.inputScope`) and `put_address_online` without a subject for an address that needs no
+  workload. Both share the website and certificate steps (`PutOnlineHandlers`); the website is the site create
+  (`SiteOperationHandlers.createSite`) in its own transaction, the certificate the certificate operation's own order,
+  the first start `InstanceService.deploy`. Nothing is a second writer.
+- Which upstream kinds are apps of their own is a fact on the kind: `UpstreamKindInfo.offeredAsApp()` (default: not
+  instance-backed; the dev namespace says no). The chooser and the address input both read it.
+- A run that succeeds says what is left in words: zenit `OperationCall.reportOutcome(Microcopy)` (new), so "live at
+  x over HTTP, Let's Encrypt is off" reads in the viewer's locale. Progress messages stay plain text.
+- The board's step "What" is the page's chooser, not a stepper step: the stepper is the framework's FormSteps of the
+  chosen operation (Where, Options, HTTPS); its "Going live" is the run page.
+- An address is an operator act: a tenant's put online has no address and no HTTPS step (fixed by the placement and
+  refused by the authorizer). The /manage panel carries the same page.
+- `InstanceFromTemplatePage` stays for now: ten test classes and the API-shaped no-script create submit through its
+  synchronous invoke route, and putting the same templates online is now `put-online`. The template catalogue's
+  "Create instance" row link, the Apps list's toolbar and the dashboard lead to `put-online`.
+- Workloads without a template (Git app, container image, Linux container, virtual machine, workspace) open the
+  instance create form from the chooser's "Your own code or machine" group until they get a flow of their own.
+- The dashboard header carries the primary link through zenit-cms `PanelDashboard.headerLinks(PanelRequest)` (new);
+  the onboarding checklist's "create an instance" and "deploy it" steps are one "put your first app online" step,
+  and the empty-install card leads to the flow instead of the site form.
+- Not built here: the automatic subdomain (Online-2), the live "points here" notice on the Where step (the reach is
+  checked by the certificate order itself), the dashboard's Apps mini-list.

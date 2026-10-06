@@ -84,6 +84,11 @@ public final class HohenheimParams {
         ParameterDefinition.builder(Integer.class).name("template")
             .stringResolver(Integer::parseInt).build();
 
+    /** What "Put something online" opens its wizard for when it is no template: an upstream kind's id. */
+    public static final ParameterDefinition<String> PUT_ONLINE_KIND =
+        ParameterDefinition.builder(String.class).name("kind")
+            .stringResolver(value -> value).build();
+
     /** The directory the instance Files tab browses. */
     public static final ParameterDefinition<String> FILES_PATH =
         ParameterDefinition.builder(String.class).name("path")

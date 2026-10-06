@@ -125,8 +125,9 @@ public final class InstanceTemplateOperations {
         }
     }
 
+    /** @return a coerced {@link #VARIABLES} value as its map, empty when absent */
     @SuppressWarnings("unchecked")
-    private static @NonNull Map<String, Object> variables(@Nullable Object value) {
+    public static @NonNull Map<String, Object> variables(@Nullable Object value) {
         return value instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
     }
 

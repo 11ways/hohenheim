@@ -90,8 +90,8 @@ final class CertificateOperationHandlers {
      * @return the certificate row the order wrote
      * @throws Violations a refusal the input form shows, the typed values kept
      */
-    private static int order(CertificateOperations.@NonNull Order order, @NonNull AccessContext access,
-                             @Nullable Row reissue) {
+    static int order(CertificateOperations.@NonNull Order order, @NonNull AccessContext access,
+                     @Nullable Row reissue) {
         String email = order.email() == null ? "" : order.email().trim();
         if (!email.isEmpty() && !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
             throw refused(error("invalid_email").withArg("email", email));

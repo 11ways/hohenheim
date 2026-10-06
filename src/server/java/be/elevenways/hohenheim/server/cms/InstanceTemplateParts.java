@@ -179,7 +179,7 @@ public final class InstanceTemplateParts {
             .label(Microcopy.of("create_instance").withFilter("scope", "instance_template"))
             .icon(Icon.of("plus"))
             .inlineInRow(true)
-            .route((template, request) -> CmsRoutes.list(request.panelSlug(), InstanceFromTemplatePage.SLUG)
+            .route((template, request) -> CmsRoutes.list(request.panelSlug(), PutOnlinePage.SLUG)
                 .with(HohenheimParams.FROM_TEMPLATE_TEMPLATE, template.get(InstanceTemplateModel.ID)));
         if (shown != null) {
             link.shownWhen((template, access) -> shown.test(access));

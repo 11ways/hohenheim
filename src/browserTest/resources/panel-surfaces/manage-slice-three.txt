@@ -425,7 +425,7 @@ filter name at=0 kind=TEXT facet=false param=filter.name
 filter kind at=1 kind=SELECT facet=true param=filter.kind
 link hohenheim:instance_templates_import at=0 lead=false target=/{panel}/instance-templates-import
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row hohenheim:template_create_instance at=1 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/instances-from-template?template%3D{approved_template}
+row hohenheim:template_create_instance at=1 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/put-online?template%3D{approved_template}
 row hohenheim:export_template at=2 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/export
 row hohenheim:unapprove_template at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:unapprove%252Cscope%3Dinstance_template,body:unapprove_confirm%252Cscope%3Dinstance_template,confirm:unapprove%252Cscope%3Dinstance_template,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/unapprove_template
 row zenit:delete at=4 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
@@ -708,7 +708,7 @@ filter name at=0 kind=TEXT facet=false param=filter.name
 filter kind at=1 kind=SELECT facet=true param=filter.kind
 link hohenheim:instance_templates_import at=0 lead=false target=/{panel}/instance-templates-import
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row hohenheim:template_create_instance at=1 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/instances-from-template?template%3D{unapproved_template}
+row hohenheim:template_create_instance at=1 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/put-online?template%3D{unapproved_template}
 row hohenheim:export_template at=2 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/export
 row hohenheim:approve_template at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:approve%252Cscope%3Dinstance_template,body:approve_confirm%252Cscope%3Dinstance_template,confirm:approve%252Cscope%3Dinstance_template,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/approve_template
 row zenit:delete at=4 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
