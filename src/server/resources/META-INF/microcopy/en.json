@@ -996,6 +996,10 @@
     {
       "text": "Cancel",
       "scope": "instance_from_template"
+    },
+    {
+      "text": "Cancel",
+      "scope": "put_online"
     }
   ],
   "captured": {
@@ -1708,7 +1712,7 @@
       "scope": "deployments"
     },
     {
-      "text": "Create your first site",
+      "text": "Nothing is online yet",
       "scope": "onboarding"
     },
     {
@@ -1738,7 +1742,7 @@
   ],
   "description": [
     {
-      "text": "Choose how the application runs, add a domain, then request a certificate. Hohenheim guides each step from the site page.",
+      "text": "Put a website, an app from a template, a game server or an address that points elsewhere online. Hohenheim creates it, gives it its address and gets its certificate.",
       "scope": "onboarding"
     },
     {
@@ -1767,10 +1771,6 @@
       "scope": "instance_shell"
     }
   ],
-  "create_site": {
-    "text": "Create site",
-    "scope": "onboarding"
-  },
   "publish_records": {
     "text": "Publish the DNS TXT records",
     "scope": "certificate_request"
@@ -9803,22 +9803,6 @@
     "text": "Open the host and use Check and admit.",
     "scope": "onboarding_checklist"
   },
-  "checklist_create_instance": {
-    "text": "Create an instance",
-    "scope": "onboarding_checklist"
-  },
-  "checklist_create_instance_detail": {
-    "text": "Pick a kind and a template; the form guides the rest.",
-    "scope": "onboarding_checklist"
-  },
-  "checklist_deploy": {
-    "text": "Deploy it",
-    "scope": "onboarding_checklist"
-  },
-  "checklist_deploy_detail": {
-    "text": "Deploy starts the workload on its host.",
-    "scope": "onboarding_checklist"
-  },
   "deploy_blocked_delegated": {
     "text": "Its host is not accepting new workloads right now. Your operator has to clear this.",
     "scope": "instance_overview"
@@ -9879,6 +9863,10 @@
     {
       "text": "Address",
       "scope": "app_list"
+    },
+    {
+      "text": "Address",
+      "scope": "put_online"
     }
   ],
   "protocol": {
@@ -11856,6 +11844,10 @@
     {
       "text": "HTTPS",
       "scope": "app_list"
+    },
+    {
+      "text": "HTTPS",
+      "scope": "put_online"
     }
   ],
   "http1": {
@@ -13494,10 +13486,20 @@
     "text": "Failure",
     "scope": "instance_artifacts"
   },
-  "put_online": {
-    "text": "Put something online",
-    "scope": "app_list"
-  },
+  "put_online": [
+    {
+      "text": "Put something online",
+      "scope": "app_list"
+    },
+    {
+      "text": "Put something online",
+      "scope": "put_online"
+    },
+    {
+      "text": "Put something online",
+      "scope": "onboarding"
+    }
+  ],
   "stack_kind": {
     "text": ".match {$count :number}\none {{Stack with 1 service}}\n* {{Stack with {$count} services}}",
     "scope": "app_list"
@@ -13567,5 +13569,141 @@
   "stack_degraded_detail": {
     "text": "Some of its services are not healthy.",
     "scope": "app_health"
+  },
+  "lead": {
+    "text": "Creates the app, its address and its certificate in one go.",
+    "scope": "put_online"
+  },
+  "what_question": {
+    "text": "What do you want to put online?",
+    "scope": "put_online"
+  },
+  "group_templates": {
+    "text": "From a template",
+    "scope": "put_online"
+  },
+  "group_addresses": {
+    "text": "Point an address somewhere else",
+    "scope": "put_online"
+  },
+  "group_other": {
+    "text": "Your own code or machine",
+    "scope": "put_online"
+  },
+  "other": {
+    "text": "A Git app, a container image, a Linux container, a virtual machine or a workspace",
+    "scope": "put_online"
+  },
+  "other_help": {
+    "text": "Opens the instance form; give it an address afterwards.",
+    "scope": "put_online"
+  },
+  "finish": {
+    "text": "Put it online",
+    "scope": "put_online"
+  },
+  "address_help": {
+    "text": "The hostname visitors type. Leave it empty for an app nobody reaches by name, like a game server. You can add more addresses later.",
+    "scope": "put_online"
+  },
+  "https_automatic": {
+    "text": "Automatic (Let's Encrypt)",
+    "scope": "put_online"
+  },
+  "https_automatic_help": {
+    "text": "A free certificate is requested once the address exists, and renewed on its own.",
+    "scope": "put_online"
+  },
+  "https_later": {
+    "text": "Not now",
+    "scope": "put_online"
+  },
+  "https_later_help": {
+    "text": "The address answers over plain HTTP until you add a certificate.",
+    "scope": "put_online"
+  },
+  "step_where": {
+    "text": "Where",
+    "scope": "put_online"
+  },
+  "step_where_lead": {
+    "text": "Its name, the address visitors use, and where it runs.",
+    "scope": "put_online"
+  },
+  "step_options": {
+    "text": "Options",
+    "scope": "put_online"
+  },
+  "step_options_lead": {
+    "text": "The values it starts with. A secret left empty keeps the template's own value.",
+    "scope": "put_online"
+  },
+  "step_https": {
+    "text": "HTTPS",
+    "scope": "put_online"
+  },
+  "step_https_lead": {
+    "text": "How visitors reach it securely.",
+    "scope": "put_online"
+  },
+  "run_app": {
+    "text": "Create the app",
+    "scope": "put_online"
+  },
+  "run_install": {
+    "text": "Install",
+    "scope": "put_online"
+  },
+  "run_website": {
+    "text": "Create the website",
+    "scope": "put_online"
+  },
+  "run_certificate": {
+    "text": "Get a certificate",
+    "scope": "put_online"
+  },
+  "run_live": {
+    "text": "Start it",
+    "scope": "put_online"
+  },
+  "outcome_live": {
+    "text": "Live at {$address}.",
+    "scope": "put_online"
+  },
+  "outcome_running": {
+    "text": "Created and started.",
+    "scope": "put_online"
+  },
+  "outcome_not_started": {
+    "text": "Created, but not started yet: open the app to see what it waits for.",
+    "scope": "put_online"
+  },
+  "outcome_https_later_note": {
+    "text": "Live at {$address} over HTTP. Add a certificate when you want HTTPS.",
+    "scope": "put_online"
+  },
+  "outcome_https_off_note": {
+    "text": "Live at {$address} over HTTP: Let's Encrypt is switched off in the settings.",
+    "scope": "put_online"
+  },
+  "outcome_https_refused_note": {
+    "text": "Live at {$address} over HTTP. The certificate request was refused; request it again from the address once it points here.",
+    "scope": "put_online"
+  },
+  "outcome_address_required": {
+    "text": "Give the address visitors type.",
+    "scope": "put_online"
+  },
+  "outcome_kind_not_offered": {
+    "text": "This kind of address is not put online on its own.",
+    "scope": "put_online"
+  },
+  "checklist_put_online": {
+    "text": "Put your first app online",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_put_online_detail": {
+    "text": "One flow creates the app, its address and its certificate, and starts it.",
+    "scope": "onboarding_checklist"
   }
 }

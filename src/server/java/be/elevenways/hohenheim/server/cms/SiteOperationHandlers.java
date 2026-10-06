@@ -228,7 +228,7 @@ public final class SiteOperationHandlers {
      * @return the new site's id
      * @throws Violations on the name when it is blank, form-level when its slug is already a site's
      */
-    private static @NonNull Integer createSite(SiteWrites.@NonNull CreateInput input) {
+    static @NonNull Integer createSite(SiteWrites.@NonNull CreateInput input) {
         String name = requiredName(input.name());
         SiteModel sites = Models.get(SiteModel.class);
         Row site = sites.createEmptyRow();

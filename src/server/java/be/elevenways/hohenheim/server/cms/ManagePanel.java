@@ -144,6 +144,7 @@ public final class ManagePanel extends Panel {
         HohenheimPanel.addIf(peers, InstanceBackupParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, InstanceTemplateParts.manage(), Role.INSTANCES);
         HohenheimPanel.addIf(peers, new InstanceFromTemplatePage(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, new PutOnlinePage(), Role.INSTANCES);
         // The managed-database tier's tenant projection: allocate, read credentials
         // (its own capability, its own tab), back up and destroy your OWN databases.
         HohenheimPanel.addIf(peers, DatabaseParts.manage(), Role.DATABASES);

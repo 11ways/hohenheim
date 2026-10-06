@@ -30,4 +30,14 @@ public interface UpstreamKindInfo extends TypeDefinition {
     default boolean requiresInstance() {
         return false;
     }
+
+    /**
+     * Whether "Put something online" offers this kind as an app of its own: an address that needs no workload.
+     *
+     * AIDEV-NOTE: a kind that serves an instance is put online through that instance's own flow, and a kind other
+     * machinery creates (a dev session's namespace) is never offered; both answer here, never in the page's list.
+     */
+    default boolean offeredAsApp() {
+        return !this.requiresInstance();
+    }
 }

@@ -34,6 +34,7 @@ public final class HohenheimTemplateIds {
     public static final Identifier INSTANCE_FILES = Identifier.of("hohenheim", "cms/instance-files");
     public static final Identifier INSTANCE_FRAMEBUFFER = Identifier.of("hohenheim", "cms/instance-framebuffer");
     public static final Identifier INSTANCE_FROM_TEMPLATE = Identifier.of("hohenheim", "cms/instance-from-template");
+    public static final Identifier PUT_ONLINE = Identifier.of("hohenheim", "cms/put-online");
     public static final Identifier INSTANCE_MIGRATE = Identifier.of("hohenheim", "cms/instance-migrate");
     public static final Identifier INSTANCE_PROVISIONING = Identifier.of("hohenheim", "cms/instance-provisioning");
     public static final Identifier INSTANCE_SCHEDULE_STEPS = Identifier.of("hohenheim", "cms/instance-schedule-steps");

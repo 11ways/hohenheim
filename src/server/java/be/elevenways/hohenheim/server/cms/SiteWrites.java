@@ -230,7 +230,7 @@ public final class SiteWrites {
     }
 
     @SuppressWarnings("unchecked")
-    private static @Nullable Map<String, Object> settings(@Nullable Object value) {
+    static @Nullable Map<String, Object> settings(@Nullable Object value) {
         return value instanceof Map<?, ?> map ? (Map<String, Object>) map : null;
     }
 }

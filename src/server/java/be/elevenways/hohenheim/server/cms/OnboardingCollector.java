@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.OnboardingStep;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.host.HostAdmission;
@@ -70,11 +71,7 @@ public final class OnboardingCollector {
         }
 
         if (HohenheimRoles.enabled(Role.INSTANCES)) {
-            List<Row> instances = Models.get(InstanceModel.class).find()
-                .limit(1)
-                .all();
-            steps.add(instanceCreated(!instances.isEmpty()));
-            steps.add(instanceRunning());
+            steps.add(firstAppOnline());
         }
 
         return steps;
@@ -123,26 +120,25 @@ public final class OnboardingCollector {
             listTarget("servers"));
     }
 
-    private static OnboardingStep instanceCreated(boolean any) {
-        return new OnboardingStep(
-            any ? OnboardingState.DONE : OnboardingState.TODO,
-            "cube",
-            copy("checklist_create_instance"),
-            copy("checklist_create_instance_detail"),
-            listTarget(HohenheimSlugs.INSTANCES));
-    }
-
-    private static OnboardingStep instanceRunning() {
-        long running = Models.get(InstanceModel.class).find()
+    /**
+     * Done once something is online: a running app, or an enabled website (a redirect or a proxy put online needs no
+     * workload). "Put something online" creates and starts it in one flow, so the former "create an instance" and
+     * "deploy it" steps are this one step.
+     */
+    private static OnboardingStep firstAppOnline() {
+        boolean online = Models.get(InstanceModel.class).find()
             .where(InstanceModel.STATUS.eq(InstanceModel.STATUS_RUNNING))
-            .count();
+            .count() > 0
+            || Models.get(SiteModel.class).find()
+            .where(SiteModel.ENABLED.eq(true))
+            .count() > 0;
 
         return new OnboardingStep(
-            running > 0 ? OnboardingState.DONE : OnboardingState.TODO,
+            online ? OnboardingState.DONE : OnboardingState.TODO,
             "rocket",
-            copy("checklist_deploy"),
-            copy("checklist_deploy_detail"),
-            listTarget(HohenheimSlugs.INSTANCES));
+            copy("checklist_put_online"),
+            copy("checklist_put_online_detail"),
+            listTarget(PutOnlinePage.SLUG));
     }
 
     /**

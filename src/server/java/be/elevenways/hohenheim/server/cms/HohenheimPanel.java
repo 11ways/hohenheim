@@ -137,6 +137,7 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, InstanceFileParts.admin(), Role.INSTANCES);
         addIf(peers, InstanceVariableParts.admin(), Role.INSTANCES);
         addIf(peers, new InstanceFromTemplatePage(), Role.INSTANCES);
+        addIf(peers, new PutOnlinePage(), Role.INSTANCES);
         addIf(peers, new InstanceTemplateImportPage(), Role.INSTANCES);
         addIf(peers, InstanceQuotaParts.admin(), Role.INSTANCES);
         addIf(peers, InstanceSnapshotParts.admin(), Role.INSTANCES);
@@ -212,7 +213,7 @@ public final class HohenheimPanel extends Panel {
         }
         peers.add(AppParts.admin(present(peers, HohenheimSlugs.SITES, InstanceParts.SLUG, StackParts.SLUG,
                 ProjectParts.SLUG),
-            present(peers, InstanceFromTemplatePage.SLUG).isEmpty() ? null : InstanceFromTemplatePage.SLUG));
+            present(peers, PutOnlinePage.SLUG).isEmpty() ? null : PutOnlinePage.SLUG));
         addCluster(peers, cluster("domain_names", DOMAINS_CLUSTER, "globe", 50), DomainParts.SLUG,
             HohenheimSlugs.DNS_ZONES, HohenheimSlugs.CERTIFICATES, ReleasedClaimParts.SLUG);
         addCluster(peers, cluster("access", ACCESS_CLUSTER, "shield-halved", 60), HohenheimSlugs.ACCESS_LISTS,

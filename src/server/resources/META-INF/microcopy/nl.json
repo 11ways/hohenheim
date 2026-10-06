@@ -996,6 +996,10 @@
     {
       "text": "Annuleren",
       "scope": "instance_from_template"
+    },
+    {
+      "text": "Annuleren",
+      "scope": "put_online"
     }
   ],
   "captured": {
@@ -1708,7 +1712,7 @@
       "scope": "deployments"
     },
     {
-      "text": "Maak je eerste site",
+      "text": "Er staat nog niets online",
       "scope": "onboarding"
     },
     {
@@ -1738,7 +1742,7 @@
   ],
   "description": [
     {
-      "text": "Kies hoe de applicatie draait, voeg een domein toe en vraag daarna een certificaat aan. Hohenheim begeleidt elke stap vanaf de sitepagina.",
+      "text": "Zet een website, een app uit een sjabloon, een gameserver of een adres dat ergens anders heen wijst online. Hohenheim maakt het aan, geeft het een adres en vraagt het certificaat aan.",
       "scope": "onboarding"
     },
     {
@@ -1767,10 +1771,6 @@
       "scope": "instance_shell"
     }
   ],
-  "create_site": {
-    "text": "Site maken",
-    "scope": "onboarding"
-  },
   "publish_records": {
     "text": "Publiceer de DNS TXT-records",
     "scope": "certificate_request"
@@ -9803,22 +9803,6 @@
     "text": "Open de host en gebruik Controleren en toelaten.",
     "scope": "onboarding_checklist"
   },
-  "checklist_create_instance": {
-    "text": "Maak een instantie",
-    "scope": "onboarding_checklist"
-  },
-  "checklist_create_instance_detail": {
-    "text": "Kies een soort en een sjabloon; het formulier leidt je verder.",
-    "scope": "onboarding_checklist"
-  },
-  "checklist_deploy": {
-    "text": "Deploy hem",
-    "scope": "onboarding_checklist"
-  },
-  "checklist_deploy_detail": {
-    "text": "Deploy start de workload op zijn host.",
-    "scope": "onboarding_checklist"
-  },
   "deploy_blocked_delegated": {
     "text": "De host neemt op dit moment geen nieuwe workloads aan. Je beheerder moet dit oplossen.",
     "scope": "instance_overview"
@@ -9879,6 +9863,10 @@
     {
       "text": "Adres",
       "scope": "app_list"
+    },
+    {
+      "text": "Adres",
+      "scope": "put_online"
     }
   ],
   "protocol": {
@@ -11856,6 +11844,10 @@
     {
       "text": "HTTPS",
       "scope": "app_list"
+    },
+    {
+      "text": "HTTPS",
+      "scope": "put_online"
     }
   ],
   "http1": {
@@ -13494,10 +13486,20 @@
     "text": "Fout",
     "scope": "instance_artifacts"
   },
-  "put_online": {
-    "text": "Zet iets online",
-    "scope": "app_list"
-  },
+  "put_online": [
+    {
+      "text": "Zet iets online",
+      "scope": "app_list"
+    },
+    {
+      "text": "Iets online zetten",
+      "scope": "put_online"
+    },
+    {
+      "text": "Iets online zetten",
+      "scope": "onboarding"
+    }
+  ],
   "stack_kind": {
     "text": ".match {$count :number}\none {{Stack met 1 service}}\n* {{Stack met {$count} services}}",
     "scope": "app_list"
@@ -13567,5 +13569,141 @@
   "stack_degraded_detail": {
     "text": "Sommige services zijn niet gezond.",
     "scope": "app_health"
+  },
+  "lead": {
+    "text": "Maakt de app, het adres en het certificaat in een keer aan.",
+    "scope": "put_online"
+  },
+  "what_question": {
+    "text": "Wat wil je online zetten?",
+    "scope": "put_online"
+  },
+  "group_templates": {
+    "text": "Vanuit een sjabloon",
+    "scope": "put_online"
+  },
+  "group_addresses": {
+    "text": "Een adres ergens anders heen sturen",
+    "scope": "put_online"
+  },
+  "group_other": {
+    "text": "Je eigen code of machine",
+    "scope": "put_online"
+  },
+  "other": {
+    "text": "Een Git-app, een containerimage, een Linux-container, een virtuele machine of een werkruimte",
+    "scope": "put_online"
+  },
+  "other_help": {
+    "text": "Opent het instantieformulier; geef het daarna een adres.",
+    "scope": "put_online"
+  },
+  "finish": {
+    "text": "Online zetten",
+    "scope": "put_online"
+  },
+  "address_help": {
+    "text": "De hostnaam die bezoekers typen. Laat leeg voor een app die niemand bij naam bereikt, zoals een gameserver. Je kunt later meer adressen toevoegen.",
+    "scope": "put_online"
+  },
+  "https_automatic": {
+    "text": "Automatisch (Let's Encrypt)",
+    "scope": "put_online"
+  },
+  "https_automatic_help": {
+    "text": "Een gratis certificaat wordt aangevraagd zodra het adres bestaat, en vanzelf vernieuwd.",
+    "scope": "put_online"
+  },
+  "https_later": {
+    "text": "Nu niet",
+    "scope": "put_online"
+  },
+  "https_later_help": {
+    "text": "Het adres antwoordt via gewone HTTP tot je een certificaat toevoegt.",
+    "scope": "put_online"
+  },
+  "step_where": {
+    "text": "Waar",
+    "scope": "put_online"
+  },
+  "step_where_lead": {
+    "text": "De naam, het adres dat bezoekers gebruiken, en waar het draait.",
+    "scope": "put_online"
+  },
+  "step_options": {
+    "text": "Opties",
+    "scope": "put_online"
+  },
+  "step_options_lead": {
+    "text": "De waarden waarmee het start. Een leeg geheim behoudt de waarde van het sjabloon.",
+    "scope": "put_online"
+  },
+  "step_https": {
+    "text": "HTTPS",
+    "scope": "put_online"
+  },
+  "step_https_lead": {
+    "text": "Hoe bezoekers het veilig bereiken.",
+    "scope": "put_online"
+  },
+  "run_app": {
+    "text": "De app aanmaken",
+    "scope": "put_online"
+  },
+  "run_install": {
+    "text": "Installeren",
+    "scope": "put_online"
+  },
+  "run_website": {
+    "text": "De website aanmaken",
+    "scope": "put_online"
+  },
+  "run_certificate": {
+    "text": "Een certificaat aanvragen",
+    "scope": "put_online"
+  },
+  "run_live": {
+    "text": "Starten",
+    "scope": "put_online"
+  },
+  "outcome_live": {
+    "text": "Online op {$address}.",
+    "scope": "put_online"
+  },
+  "outcome_running": {
+    "text": "Aangemaakt en gestart.",
+    "scope": "put_online"
+  },
+  "outcome_not_started": {
+    "text": "Aangemaakt, maar nog niet gestart: open de app om te zien waarop het wacht.",
+    "scope": "put_online"
+  },
+  "outcome_https_later_note": {
+    "text": "Online op {$address} via HTTP. Voeg een certificaat toe wanneer je HTTPS wilt.",
+    "scope": "put_online"
+  },
+  "outcome_https_off_note": {
+    "text": "Online op {$address} via HTTP: Let's Encrypt staat uit in de instellingen.",
+    "scope": "put_online"
+  },
+  "outcome_https_refused_note": {
+    "text": "Online op {$address} via HTTP. De certificaataanvraag werd geweigerd; vraag het opnieuw aan vanaf het adres zodra het hierheen wijst.",
+    "scope": "put_online"
+  },
+  "outcome_address_required": {
+    "text": "Geef het adres dat bezoekers typen.",
+    "scope": "put_online"
+  },
+  "outcome_kind_not_offered": {
+    "text": "Dit soort adres wordt niet op zichzelf online gezet.",
+    "scope": "put_online"
+  },
+  "checklist_put_online": {
+    "text": "Zet je eerste app online",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_put_online_detail": {
+    "text": "Een flow maakt de app, het adres en het certificaat aan, en start het.",
+    "scope": "onboarding_checklist"
   }
 }

@@ -88,7 +88,7 @@ public final class InstanceFromTemplatePage extends PanelPage {
             vars.put("approved", template.get(InstanceTemplateModel.APPROVED_AT) != null);
             vars.put("hasInstall", InstanceTemplates.hasInstallStep(template));
         } else {
-            vars.put("choices", choices(request));
+            vars.put("choices", choices(request, SLUG));
         }
         vars.put("cancelTarget", CmsRoutes.list(request.panelSlug(), HohenheimSlugs.INSTANCE_TEMPLATES));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_FROM_TEMPLATE, vars);
@@ -98,7 +98,7 @@ public final class InstanceFromTemplatePage extends PanelPage {
      * The entries this caller is never asked: no environment picker; the host for everyone but an operator; the
      * project when the caller may create into none.
      */
-    private static @NonNull Map<String, @Nullable Object> fixed(@NonNull AccessContext access) {
+    static @NonNull Map<String, @Nullable Object> fixed(@NonNull AccessContext access) {
         Map<String, @Nullable Object> fixed = new LinkedHashMap<>();
         fixed.put(InstanceTemplateOperations.ENVIRONMENT_ID.getName(), null);
         if (!HohenheimAccess.isAdmin(access)) {
@@ -110,8 +110,11 @@ public final class InstanceFromTemplatePage extends PanelPage {
         return fixed;
     }
 
-    /** The templates this caller may create from, each linking to its own document. */
-    private static @NonNull List<Map<String, Object>> choices(@NonNull PanelRequest request) {
+    /**
+     * The templates this caller may create from, each linking to its own document on the page {@code pageSlug} (this
+     * page, or "Put something online").
+     */
+    static @NonNull List<Map<String, Object>> choices(@NonNull PanelRequest request, @NonNull String pageSlug) {
         List<Map<String, Object>> choices = new ArrayList<>();
         Criteria scope = TenantScopes.INSTANCE_TEMPLATES.criteria(request.access());
         QueryBuilder<Row> query = Models.get(InstanceTemplateModel.class).find();
@@ -119,7 +122,9 @@ public final class InstanceFromTemplatePage extends PanelPage {
                 .orderBy(InstanceTemplateModel.NAME, SortOrder.ASC).all()) {
             Map<String, Object> choice = new HashMap<>();
             choice.put("name", String.valueOf((Object) template.get(InstanceTemplateModel.NAME)));
-            choice.put("target", CmsRoutes.list(request.panelSlug(), SLUG)
+            Object description = template.get(InstanceTemplateModel.DESCRIPTION);
+            choice.put("description", description == null ? "" : String.valueOf(description));
+            choice.put("target", CmsRoutes.list(request.panelSlug(), pageSlug)
                 .with(HohenheimParams.FROM_TEMPLATE_TEMPLATE, template.get(InstanceTemplateModel.ID)));
             choices.add(choice);
         }

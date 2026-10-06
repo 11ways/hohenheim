@@ -1,5 +1,10 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.protoblast.common.http.Uri;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.action.ActionStyle;
+import be.elevenways.zenit.cms.common.render.action.LinkActionState;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimWidgets;
@@ -56,6 +61,17 @@ public final class AdminDashboard extends PanelDashboard {
     public @Nullable Microcopy description() {
         return Microcopy.of("nav_hint").withFilter("scope", "admin");
     }
+    /** The board's primary way onward, offered where the instance tier can put something online. */
+    @Override
+    public @NonNull List<LinkActionState> headerLinks(@NonNull PanelRequest request) {
+        if (!HohenheimRoles.enabled(Role.INSTANCES) || !HohenheimAccess.isAdmin(request.access())) {
+            return List.of();
+        }
+        return List.of(new LinkActionState(HohenheimIds.id("dashboard_put_online"), PutOnline.copy("put_online"),
+            Icon.of("rocket"), ActionStyle.PRIMARY,
+            new Uri(CmsRoutes.list(request.panelSlug(), PutOnlinePage.SLUG).toUrl()), false, null));
+    }
+
     /** Role-gated bands: a tile must not link to a resource this install has no route for. */
     @Override
     public @NonNull WidgetTree widgets(@NonNull AccessContext accessContext) {

@@ -1,0 +1,63 @@
+{#- Put something online: without a choice, what to put online (a template, an address, or something of your own);
+    with one, the stepped wizard the framework draws for that PAGE action, submitted once to its run page. -#}
+{% declare title: String %}
+{% declare document: PageFormState = null %}
+{% declare what: String = "" %}
+{% declare whatDescription: String = "" %}
+{% declare templates: List = null %}
+{% declare addresses: List = null %}
+{% declare otherTarget: RouteTarget = null %}
+{% declare cancelTarget: RouteTarget %}
+{% extend "zenitcms:shell" var:title=title %}
+
+{% block "main" %}
+<section class="cms-resource-form-page hh-put-online" data-hh-put-online>
+    <header class="cms-page-header">
+        <h1>{{ title }}</h1>
+        <p>{{ t("lead", scope: "put_online") }}</p>
+    </header>
+    {% if document != null %}
+    <pl-list variant="card" class="hh-put-online-what">
+        <pl-list-item>
+            <pl-list-item-title>{{ what }}</pl-list-item-title>
+            {% if whatDescription != "" %}<pl-list-item-meta>{{ whatDescription }}</pl-list-item-meta>{% /if %}
+        </pl-list-item>
+    </pl-list>
+    {% render "zenitcms:form/page-action" var:page=document %}
+    {% else %}
+    <h2 class="hh-put-online-question">{{ t("what_question", scope: "put_online") }}</h2>
+    {% if templates != null && templates.size() > 0 %}
+    <pl-list variant="card" data-hh-put-online-group="templates">
+        <pl-list-header>{{ t("group_templates", scope: "put_online") }}</pl-list-header>
+        {% each templates as index, choice %}
+        <pl-list-item>
+            <pl-list-item-title><a use:Zenit.route={% choice.get("target") %} data-row-link>{{ choice.get("name") }}</a></pl-list-item-title>
+            {% if choice.get("description") != "" %}<pl-list-item-meta>{{ choice.get("description") }}</pl-list-item-meta>{% /if %}
+        </pl-list-item>
+        {% /each %}
+    </pl-list>
+    {% /if %}
+    {% if addresses != null && addresses.size() > 0 %}
+    <pl-list variant="card" data-hh-put-online-group="addresses">
+        <pl-list-header>{{ t("group_addresses", scope: "put_online") }}</pl-list-header>
+        {% each addresses as index, choice %}
+        <pl-list-item>
+            <pl-list-item-title><a use:Zenit.route={% choice.get("target") %} data-row-link>{{ choice.get("name") }}</a></pl-list-item-title>
+            <pl-list-item-meta>{{ choice.get("description") }}</pl-list-item-meta>
+        </pl-list-item>
+        {% /each %}
+    </pl-list>
+    {% /if %}
+    {% if otherTarget != null %}
+    <pl-list variant="card" data-hh-put-online-group="other">
+        <pl-list-header>{{ t("group_other", scope: "put_online") }}</pl-list-header>
+        <pl-list-item>
+            <pl-list-item-title><a use:Zenit.route={% otherTarget %} data-row-link>{{ t("other", scope: "put_online") }}</a></pl-list-item-title>
+            <pl-list-item-meta>{{ t("other_help", scope: "put_online") }}</pl-list-item-meta>
+        </pl-list-item>
+    </pl-list>
+    {% /if %}
+    {% /if %}
+    <pl-button variant="ghost" use:Zenit.route={% cancelTarget %}>{{ t("cancel", scope: "put_online") }}</pl-button>
+</section>
+{% /block %}
