@@ -119,6 +119,10 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         String addressWizard = adminGet("/admin/" + PutOnlinePage.SLUG + "?kind=hohenheim:redirect").body();
         assertThat(addressWizard).as("step 2: an address kind opens its own wizard")
             .contains("data-zf-step=\"where\"").contains("data-zf-step=\"https\"");
+        assertThat(wizard).as("step 2: a template may go online without an address, and its hint says so")
+            .contains("nobody reaches by name");
+        assertThat(addressWizard).as("step 2: an address kind has nothing to serve without one, so no such hint")
+            .doesNotContain("nobody reaches by name").contains("You can add more addresses later.");
 
         // 3. Putting the template online answers with a run at once; the run creates the app, its website and its
         //    address, starts it, and says HTTPS waits because Let's Encrypt is off.

@@ -233,7 +233,7 @@ public class ProteusAuthGate implements SiteAuthGate, CredentialOwner, SessionAu
 
     private boolean permitted(@Nullable Object permissionsClaim) {
         if (requiredPermission == null || requiredPermission.isBlank()) {
-            return true;  // null required permission = any authenticated identity
+            return true;  // only a site without a slug gets here; SiteAuthGates names hohenheim.site.<slug>
         }
         return ProteusPermissions.of(permissionsClaim).hasPermission(requiredPermission);
     }

@@ -223,6 +223,10 @@ class InstanceOverviewTest extends HohenheimTestBase {
             assertThat(page.body())
                 .withFailMessage("step 1: the instance's published port renders nowhere")
                 .contains("data-endpoint-port=\"25565\"");
+            assertThat(page.body())
+                .as("step 1: the port's state is said in operator words, never the ledger's own status")
+                .contains("data-endpoint-state=\"port_in_use\"").contains("In use")
+                .doesNotContain(">held<").doesNotContain(">Claim<");
 
             // 2. The host declares no public IP in this harness, so the page says so
             //    rather than printing a reachable-looking localhost. The precondition is

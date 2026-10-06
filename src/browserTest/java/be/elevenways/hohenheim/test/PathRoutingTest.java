@@ -106,8 +106,9 @@ class PathRoutingTest {
     @Test
     void knownHostnameWithoutMatchingPathIs404NotFallback() throws Exception {
         resetDatabase();
+        int fallbackPort = startUpstream("fallback-upstream", null);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS,
-            "https://fallback.example/");
+            "http://127.0.0.1:" + fallbackPort);
 
         int apiPort = startUpstream("api-upstream", null);
         Row apiSite = setupSite("hohenheim:address", "Api Only Site", "api-only-site",
@@ -120,15 +121,20 @@ class PathRoutingTest {
         // Path matches: proxied.
         assertThat(rawRequest(port, "apionly.test", "/api/x")).contains("api-upstream");
 
-        // Known hostname, wrong path: a real 404, never the catch-all fallback redirect.
+        // Known hostname, wrong path: a real 404, never the catch-all fallback.
         String miss = rawRequest(port, "apionly.test", "/nope");
         assertThat(miss).contains("404");
-        assertThat(miss).doesNotContain("fallback.example");
+        assertThat(miss).doesNotContain("fallback-upstream");
 
-        // Unknown hostname still falls back.
+        // Unknown hostname is PROXIED to the fallback address, as the Node original did; a 302
+        // sent the browser to an address only this host can reach.
         String unknown = rawRequest(port, "unknown.test", "/nope");
-        assertThat(unknown).contains("302");
-        assertThat(unknown).contains("fallback.example");
+        assertThat(unknown).as("an unknown hostname reaches the fallback upstream").contains("fallback-upstream");
+        assertThat(unknown).as("never a redirect to the fallback address").doesNotContain("302");
+
+        // A fallback that is not an http(s) address leaves unknown hostnames on the 404.
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FALLBACK_ADDRESS, "localhost:8080");
+        assertThat(rawRequest(port, "unknown.test", "/nope")).contains("404");
     }
 
     @Test

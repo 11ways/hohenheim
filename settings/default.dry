@@ -7,7 +7,6 @@
         "locales": "en"
     },
     "brand": {
-        "name": "Hohenheim",
-        "seed_color": "#b45309"
+        "name": "Hohenheim"
     }
 }

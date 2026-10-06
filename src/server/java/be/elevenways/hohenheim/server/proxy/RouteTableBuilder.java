@@ -221,8 +221,8 @@ final class RouteTableBuilder {
         // Compile the access list's rule tree ONCE per site: the leaves that need an identity
         // build their own gate from the same provider records, narrowed by the leaf's required
         // permission, and the route table owns them from here on.
-        SiteLeafContext leafContext = new SiteLeafContext(siteName, siteId, this.sessionStore,
-            inputs.authProviders());
+        SiteLeafContext leafContext = new SiteLeafContext(siteName, site.get(SiteModel.SLUG), siteId,
+            this.sessionStore, inputs.authProviders());
         List<SiteAuthGate> treeGates = new ArrayList<>();
         AccessRuleTree accessTree = null;
         if (accessList != null) {
@@ -281,7 +281,7 @@ final class RouteTableBuilder {
         Row providerRow = inputs.authProviders().get(authProviderId);
         SiteAuthGates.Built built = SiteAuthGates.build(providerRow,
             providerRow != null ? providerRow.get(SiteAuthProviderModel.REQUIRED_PERMISSION) : null,
-            this.sessionStore, siteId, authProviderId);
+            site.get(SiteModel.SLUG), this.sessionStore, siteId, authProviderId);
         SiteGate result;
         if (built.gate() == null) {
             // Site wants auth but the provider cannot be built: fail closed, never expose.
@@ -492,7 +492,7 @@ final class RouteTableBuilder {
      * "unbuildable" means -- and a leaf that cannot build one denies rather than degrading into
      * "no identity required".
      */
-    private record SiteLeafContext(String siteName, int siteId, SessionStore sessionStore,
+    private record SiteLeafContext(String siteName, @Nullable String siteSlug, int siteId, SessionStore sessionStore,
                                    Map<Integer, Row> providers) implements AccessRuleTree.LeafContext {
 
         @Override
@@ -513,7 +513,7 @@ final class RouteTableBuilder {
             String permission = requiredPermission != null && !requiredPermission.isBlank()
                 ? requiredPermission
                 : provider != null ? provider.get(SiteAuthProviderModel.REQUIRED_PERMISSION) : null;
-            SiteAuthGates.Built built = SiteAuthGates.build(provider, permission, sessionStore,
+            SiteAuthGates.Built built = SiteAuthGates.build(provider, permission, siteSlug, sessionStore,
                 siteId, providerId);
             if (built.gate() == null) {
                 Blast.log("SiteDispatcher: access rule on site", siteName,

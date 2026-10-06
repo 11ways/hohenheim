@@ -252,7 +252,7 @@
       "scope": "field"
     },
     {
-      "text": "Een enkele permissienaam, bv. \"site.internal\", vergeleken met de permissie-claims van de identiteit. Alleen gebruikt door claims-gebaseerde providers zoals Proteus (HTTP Basic Auth negeert dit). Leeg aanvaardt elke geauthenticeerde identiteit.",
+      "text": "Een enkele permissienaam, bv. \"site.internal\", vergeleken met de permissie-claims van de identiteit. Alleen gebruikt door claims-gebaseerde providers zoals Proteus (HTTP Basic Auth negeert dit). Leeg vraagt hohenheim.site.<slug>, de permissie genoemd naar de beschermde site.",
       "scope": "help"
     }
   ],
@@ -9873,8 +9873,20 @@
     "text": "Protocol",
     "scope": "instance_overview"
   },
-  "claim": {
-    "text": "Claim",
+  "port_state": {
+    "text": "Toestand",
+    "scope": "instance_overview"
+  },
+  "port_in_use": {
+    "text": "In gebruik",
+    "scope": "instance_overview"
+  },
+  "port_freeing": {
+    "text": "Wordt vrijgegeven",
+    "scope": "instance_overview"
+  },
+  "port_unknown": {
+    "text": "Onbekend",
     "scope": "instance_overview"
   },
   "reserved": {
@@ -12851,7 +12863,7 @@
   "settings.hohenheim.proxy.connection_prologue_timeout_seconds.label": "Time-out voor de verbindingsaanloop",
   "settings.hohenheim.proxy.connection_prologue_timeout_seconds.help": "Maximale tijd die een publieke verbinding krijgt om te sturen wat Hohenheim leest voor het routeren: een optionele PROXY v2-header en, op de HTTPS-poort, de TLS ClientHello.",
   "settings.hohenheim.proxy.fallback_address.label": "Terugvaladres",
-  "settings.hohenheim.proxy.fallback_address.help": "Adres dat de verzoeken ontvangt die bij geen enkele site horen.",
+  "settings.hohenheim.proxy.fallback_address.help": "Adres waar Hohenheim de verzoeken naartoe stuurt die bij geen enkele site horen, bijvoorbeeld http://localhost:8080.",
   "settings.hohenheim.proxy.force_https.label": "HTTPS afdwingen",
   "settings.hohenheim.proxy.force_https.help": "Stuurt bezoekers naar HTTPS op elk adres met een werkend certificaat.",
   "settings.hohenheim.proxy.http_port.label": "HTTP-poort",
@@ -13600,6 +13612,10 @@
   },
   "finish": {
     "text": "Online zetten",
+    "scope": "put_online"
+  },
+  "address_help_required": {
+    "text": "De hostnaam die bezoekers typen. Je kunt later meer adressen toevoegen.",
     "scope": "put_online"
   },
   "address_help": {
