@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.server.security.IpLiterals;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Backoff;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.BufferedInputStream;
@@ -14,6 +15,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketAddress;
 import java.net.SocketException;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -75,8 +77,9 @@ public final class PublicTcpListener implements AutoCloseable {
     private final AtomicInteger suppressedFailures = new AtomicInteger();
 
     private volatile int maxConsecutiveAcceptFailures = DEFAULT_MAX_CONSECUTIVE_ACCEPT_FAILURES;
-    private volatile long acceptBackoffInitialMillis = DEFAULT_ACCEPT_BACKOFF_INITIAL_MILLIS;
-    private volatile long acceptBackoffMaxMillis = DEFAULT_ACCEPT_BACKOFF_MAX_MILLIS;
+    private volatile Backoff acceptBackoff = Backoff.exponential(
+            Duration.ofMillis(DEFAULT_ACCEPT_BACKOFF_INITIAL_MILLIS), 2,
+            Duration.ofMillis(DEFAULT_ACCEPT_BACKOFF_MAX_MILLIS));
     private volatile ServerSocketFactory serverSocketFactory = ServerSocket::new;
 
     private volatile boolean running;
@@ -119,8 +122,7 @@ public final class PublicTcpListener implements AutoCloseable {
             throw new IllegalArgumentException("Invalid accept failure policy");
         }
         this.maxConsecutiveAcceptFailures = maxConsecutive;
-        this.acceptBackoffInitialMillis = initialMillis;
-        this.acceptBackoffMaxMillis = maxMillis;
+        this.acceptBackoff = Backoff.exponential(Duration.ofMillis(initialMillis), 2, Duration.ofMillis(maxMillis));
     }
 
     public synchronized void start() throws IOException {
@@ -285,10 +287,8 @@ public final class PublicTcpListener implements AutoCloseable {
      * @return false when the loop must exit (interrupted or no longer running)
      */
     private boolean sleepAcceptBackoff(int failureCount) {
-        int shift = Math.min(failureCount - 1, 20);
-        long delay = Math.min(acceptBackoffInitialMillis << shift, acceptBackoffMaxMillis);
         try {
-            Thread.sleep(delay);
+            Thread.sleep(acceptBackoff.delayAfter(failureCount));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return false;

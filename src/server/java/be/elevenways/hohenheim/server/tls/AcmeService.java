@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.tls;
 
+import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.Zenit;
@@ -12,6 +13,7 @@ import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.dns.InternalDnsTxtPublisher;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.notification.Alerts;
+import be.elevenways.hohenheim.server.util.Pause;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.server.http.HostPattern;
@@ -29,6 +31,7 @@ import java.io.StringReader;
 import java.io.StringWriter;
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -37,7 +40,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -52,8 +54,56 @@ public class AcmeService {
     private static final long RENEWAL_CHECK_HOURS = 6;
     private static final int RENEWAL_THRESHOLD_DAYS = 30;
     private static final int MAX_POLL_ATTEMPTS = 40;
-    private static final long POLL_INTERVAL_MS = 3000;
+    static final Backoff RENEWAL_RETRY =
+            Backoff.exponential(Duration.ofMinutes(30), 2, Duration.ofHours(32)).jittered(0.2);
+    private static final Duration POLL_CADENCE = Duration.ofSeconds(3);
+    /**
+     * How long, in total, one order attempt waits for polls the CA paces beyond the cadence; a CA asking for longer
+     * ends the attempt and RENEWAL_RETRY schedules the next instead of sleeping through it.
+     */
+    static final Duration POLL_BUDGET = Duration.ofMinutes(5);
+    private static final Backoff POLL = Backoff.fixed(POLL_CADENCE).honouringUpTo(POLL_BUDGET);
     private static final long MANUAL_DNS_ORDER_MINUTES = 30;
+
+    private volatile Pause pollPause = Pause.SLEEP;
+
+    /** Test seam: records each poll wait instead of sleeping through a CA delay. */
+    public void setPollPauseForTesting(Pause pause) {
+        this.pollPause = Objects.requireNonNull(pause);
+    }
+
+    /**
+     * One order attempt's budget for the poll waits a CA names beyond the three-second cadence.
+     *
+     * AIDEV-NOTE: only a CA-named wait longer than the cadence spends the budget. Cadence polling keeps
+     * MAX_POLL_ATTEMPTS per loop as its only bound, exactly as before CA pacing, so a multi-hostname HTTP-01
+     * order whose CA validates slowly still issues; the budget only stops a CA from parking the flight.
+     */
+    public static final class PollBudget {
+        private Duration left = POLL_BUDGET;
+
+        /**
+         * @param retryAt the CA's retry instant from the last poll, null when it named none
+         * @return the wait before the next poll: the cadence, floored by the CA's instant and charged to this budget
+         *         when the CA's wait is the longer
+         * @throws IllegalStateException when the CA's wait outlasts the cadence and what is left of the budget,
+         *                               which ends the order attempt
+         */
+        public synchronized Duration next(Instant now, @Nullable Instant retryAt) {
+            Duration named = retryAt == null ? null : Duration.between(now, retryAt);
+            Duration wait = POLL.delayAfter(1, named);
+            if (named != null && wait.compareTo(POLL_CADENCE) > 0) {
+                if (named.compareTo(this.left) > 0) {
+                    throw new IllegalStateException("The CA asked for the next poll in " + named.toSeconds()
+                        + "s, past the " + this.left.toSeconds() + "s left of this order attempt's "
+                        + POLL_BUDGET.toMinutes() + "-minute polling budget for CA-paced waits; the attempt ends "
+                        + "and the renewal retry schedules the next one");
+                }
+                this.left = this.left.minus(wait);
+            }
+            return wait;
+        }
+    }
 
     private final CertificateStore certificateStore;
     private final ScheduledExecutorService scheduler;
@@ -540,8 +590,9 @@ public class AcmeService {
             return -1;
         }
         try {
-            completeDnsAuthorizations(pending.order().authorizations());
-            OrderResult result = finalizeOrder(pending.order());
+            PollBudget polls = new PollBudget();
+            completeDnsAuthorizations(pending.order().authorizations(), polls);
+            OrderResult result = finalizeOrder(pending.order(), polls);
             applyIssuedMaterial(certRow, result);
             certModel.save(certRow);
             certificateStore.loadFromDatabase();
@@ -805,9 +856,7 @@ public class AcmeService {
      * back off from ~30 minutes up to ~32 hours instead of retrying every sweep.
      */
     public static Instant computeNextAttempt(int errorCount, Instant now) {
-        long baseSeconds = 15L * 60L * (1L << Math.min(errorCount, 7));
-        double jitter = 0.8 + ThreadLocalRandom.current().nextDouble() * 0.4;
-        return now.plusSeconds((long) (baseSeconds * jitter));
+        return now.plus(RENEWAL_RETRY.delayAfter(errorCount));
     }
 
     // -----------------------------------------------------------------------
@@ -885,8 +934,9 @@ public class AcmeService {
                 if (propagation > 0 && !publisher.servesImmediately()) {
                     Thread.sleep(TimeUnit.SECONDS.toMillis(propagation));
                 }
-                completeDnsAuthorizations(context.authorizations());
-                return finalizeOrder(context);
+                PollBudget polls = new PollBudget();
+                completeDnsAuthorizations(context.authorizations(), polls);
+                return finalizeOrder(context, polls);
             } finally {
                 Collections.reverse(published);
                 for (DnsAuthorization authorization : published) {
@@ -909,13 +959,14 @@ public class AcmeService {
         Set<String> hostnameSet = new HashSet<>();
         for (String h : hostnames) hostnameSet.add(h.toLowerCase(Locale.ROOT));
 
+        PollBudget polls = new PollBudget();
         for (Authorization auth : order.getAuthorizations()) {
             if (auth.getStatus() == Status.VALID) continue;
-            completeHttpChallenge(auth, hostnameSet);
+            completeHttpChallenge(auth, hostnameSet, polls);
         }
 
         return finalizeOrder(new DnsOrderContext(order, domainKeyPair, hostnames, List.of(),
-            declaring));
+            declaring), polls);
     }
 
     private static Order createOrder(Account account, List<String> hostnames) throws Exception {
@@ -971,34 +1022,35 @@ public class AcmeService {
             SiteDomainModel.MODEL_ID.toString(), domainId);
     }
 
-    private void completeDnsAuthorizations(List<DnsAuthorization> authorizations) throws Exception {
+    private void completeDnsAuthorizations(List<DnsAuthorization> authorizations, PollBudget polls)
+            throws Exception {
         for (DnsAuthorization pending : authorizations) {
             pending.challenge().trigger();
         }
         for (DnsAuthorization pending : authorizations) {
-            awaitAuthorization(pending.authorization(), pending.challenge());
+            awaitAuthorization(pending.authorization(), pending.challenge(), polls);
         }
     }
 
     // AIDEV-NOTE: poll BEFORE sleeping, in all three loops below. They used to sleep first,
-    // so a CA that had already validated still cost a full POLL_INTERVAL_MS per authorization
+    // so a CA that had already validated still cost a full POLL_CADENCE per authorization
     // -- 18 of AcmeIssuanceContractTest's 19.2s were this Thread.sleep against an in-process
     // fake that answers synchronously, and against a real CA it is a needless 3s on every
     // issuance. RFC 8555 polling starts immediately; the interval is the gap BETWEEN attempts.
-    private void awaitAuthorization(Authorization auth, Dns01Challenge challenge) throws Exception {
+    private void awaitAuthorization(Authorization auth, Dns01Challenge challenge, PollBudget polls) throws Exception {
         for (int i = 0; i < MAX_POLL_ATTEMPTS; i++) {
-            auth.update();
+            Instant retryAt = auth.fetch().orElse(null);
             if (auth.getStatus() == Status.VALID) return;
             if (auth.getStatus() == Status.INVALID) {
                 Challenge failed = auth.findChallenge(Dns01Challenge.class).orElse(challenge);
                 throw challengeFailure(auth.getIdentifier().getDomain(), failed);
             }
-            Thread.sleep(POLL_INTERVAL_MS);
+            this.pollPause.pause(polls.next(Now.instant(), retryAt));
         }
         throw new RuntimeException("Challenge timed out for " + auth.getIdentifier().getDomain());
     }
 
-    private OrderResult finalizeOrder(DnsOrderContext context) throws Exception {
+    private OrderResult finalizeOrder(DnsOrderContext context, PollBudget polls) throws Exception {
         CSRBuilder csrBuilder = new CSRBuilder();
         for (String hostname : context.hostnames()) {
             csrBuilder.addDomain(hostname);
@@ -1007,15 +1059,17 @@ public class AcmeService {
         context.order().execute(csrBuilder.getEncoded());
 
         Order order = context.order();
-        for (int i = 0; i < MAX_POLL_ATTEMPTS && order.getStatus() != Status.VALID; i++) {
-            order.update();
+        // AIDEV-NOTE: getStatus can lazily fetch after execute; that hidden poll would discard its Retry-After.
+        // Fetch explicitly first so every pending response earns its wait before the next request.
+        for (int i = 0; i < MAX_POLL_ATTEMPTS; i++) {
+            Instant retryAt = order.fetch().orElse(null);
             if (order.getStatus() == Status.INVALID) {
                 throw orderFailure(order);
             }
             if (order.getStatus() == Status.VALID) {
                 break;
             }
-            Thread.sleep(POLL_INTERVAL_MS);
+            this.pollPause.pause(polls.next(Now.instant(), retryAt));
         }
 
         if (order.getStatus() != Status.VALID) {
@@ -1037,7 +1091,8 @@ public class AcmeService {
     // HTTP-01 challenge handling
     // -----------------------------------------------------------------------
 
-    private void completeHttpChallenge(Authorization auth, Set<String> validHostnames) throws Exception {
+    private void completeHttpChallenge(Authorization auth, Set<String> validHostnames, PollBudget polls)
+            throws Exception {
         Http01Challenge challenge = auth.findChallenge(Http01Challenge.class)
             .orElseThrow(() -> new RuntimeException(
                 "No HTTP-01 challenge available for " + auth.getIdentifier().getDomain()));
@@ -1049,13 +1104,13 @@ public class AcmeService {
             challenge.trigger();
 
             for (int i = 0; i < MAX_POLL_ATTEMPTS; i++) {
-                auth.update();
+                Instant retryAt = auth.fetch().orElse(null);
                 if (auth.getStatus() == Status.VALID) return;
                 if (auth.getStatus() == Status.INVALID) {
                     Challenge failed = auth.findChallenge(Http01Challenge.class).orElse(challenge);
                     throw challengeFailure(auth.getIdentifier().getDomain(), failed);
                 }
-                Thread.sleep(POLL_INTERVAL_MS);
+                this.pollPause.pause(polls.next(Now.instant(), retryAt));
             }
 
             throw new RuntimeException("Challenge timed out for " + auth.getIdentifier().getDomain());

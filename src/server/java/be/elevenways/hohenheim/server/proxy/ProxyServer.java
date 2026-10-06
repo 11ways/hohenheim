@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.CertificateStore;
 import be.elevenways.hohenheim.server.tls.SniKeyManager;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.setting.SettingDefinition;
@@ -26,6 +27,7 @@ import javax.net.ssl.SSLContext;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
@@ -80,6 +82,8 @@ public class ProxyServer {
     // genuinely due, so a healthy tick can never tear down a listener mid-ACME-install.
     private static final long RESTART_BACKOFF_INITIAL_MILLIS = 30_000;
     private static final long RESTART_BACKOFF_MAX_MILLIS = 60L * 60 * 1000;
+    private static final Backoff RESTART = Backoff.exponential(
+            Duration.ofMillis(RESTART_BACKOFF_INITIAL_MILLIS), 2, Duration.ofMillis(RESTART_BACKOFF_MAX_MILLIS));
 
     private volatile int httpRestartAttempts;
     private volatile long httpNextRestartAttemptAt;
@@ -527,17 +531,12 @@ public class ProxyServer {
 
     private void recordHttpRestartFailure() {
         httpRestartAttempts++;
-        httpNextRestartAttemptAt = clock.getAsLong() + restartBackoffMillis(httpRestartAttempts);
+        httpNextRestartAttemptAt = clock.getAsLong() + RESTART.delayAfter(httpRestartAttempts).toMillis();
     }
 
     private void recordHttpsRestartFailure() {
         httpsRestartAttempts++;
-        httpsNextRestartAttemptAt = clock.getAsLong() + restartBackoffMillis(httpsRestartAttempts);
-    }
-
-    private static long restartBackoffMillis(int attempts) {
-        int shift = Math.min(Math.max(attempts - 1, 0), 12);
-        return Math.min(RESTART_BACKOFF_INITIAL_MILLIS << shift, RESTART_BACKOFF_MAX_MILLIS);
+        httpsNextRestartAttemptAt = clock.getAsLong() + RESTART.delayAfter(httpsRestartAttempts).toMillis();
     }
 
     /** Test seam: replaces the clock the restart backoff is computed against. */

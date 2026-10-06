@@ -102,9 +102,10 @@ class TlsResilienceTest {
     @Test
     void backoffDelayEscalatesWithJitterBounds() {
         Instant now = Now.instant();
-        // 15min * 2^min(count,7), +/-20% jitter
+        long[] expectedBaseSeconds = {1800, 7200, 115200, 115200};
+        int index = 0;
         for (int count : new int[]{1, 3, 7, 12}) {
-            long baseSeconds = 15L * 60L * (1L << Math.min(count, 7));
+            long baseSeconds = expectedBaseSeconds[index++];
             Instant next = AcmeService.computeNextAttempt(count, now);
             long delta = next.getEpochSecond() - now.getEpochSecond();
             assertThat(delta)

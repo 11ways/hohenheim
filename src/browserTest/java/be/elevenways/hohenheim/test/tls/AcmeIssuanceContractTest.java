@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.tls.CertificateAuthority;
 import be.elevenways.hohenheim.server.tls.CertificateStore;
 import be.elevenways.hohenheim.server.tls.DnsTxtPublishers;
 import be.elevenways.hohenheim.server.tls.DnsTxtRecord;
+import be.elevenways.hohenheim.server.util.Pause;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
@@ -28,6 +29,7 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -35,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * ACME certificate acquisition, hermetically: hohenheim's own acme4j client registers an
@@ -100,6 +103,168 @@ class AcmeIssuanceContractTest {
             savedDirectory);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.DNS_PROPAGATION_SECONDS,
             savedPropagation);
+    }
+
+    @Test
+    void authorizationAndOrderPollsHonourRetryAfter() {
+        Db.run(datasource, () -> {
+            int siteId = site("acme-poll-floor");
+            domain(siteId, "poll-floor.test");
+            ca.validateHttpWith((token, identifier) -> acme.getChallengeResponse(token, identifier) != null);
+            List<Duration> waits = new ArrayList<>();
+            acme.setPollPauseForTesting(waits::add);
+            ca.deferPolls("90");
+            try {
+                AcmeService.RequestOutcome ordered = acme.requestCertificate(List.of("poll-floor.test"),
+                        "ACME poll floor", null, CertificateAuthority.Requester.SYSTEM);
+                assertThat(ordered.issued()).as("step 1: Retry-After does not turn a pending poll into a failed order")
+                        .isTrue();
+                assertThat(waits).as("step 2: authorization and order both respect the CA pacing").hasSize(2);
+                for (Duration wait : waits) {
+                    // The exact floor is pinned by thePollBudgetDecidesEveryWait; acme4j stamps the CA's instant
+                    // on its own clock, so here only the floor winning over the cadence is observable.
+                    assertThat(wait).as("step 2: the CA wait floors the three-second cadence")
+                            .isGreaterThan(Duration.ofSeconds(3));
+                }
+                // 3. The DNS authorization path obeys the same CA pacing, without changing propagation policy.
+                domain(siteId, "*.poll-dns.test");
+                ca.validateDnsWith((token, identifier) ->
+                        publisher.valueOf("_acme-challenge." + identifier + ".") != null);
+                waits.clear();
+                ca.deferPolls("90");
+                AcmeService.RequestOutcome dns = acme.requestCertificate(List.of("*.poll-dns.test"),
+                        "ACME DNS poll floor", null, CertificateModel.CHALLENGE_DNS, publisher.id(),
+                        CertificateAuthority.Requester.SYSTEM);
+                assertThat(dns.issued()).as("step 3: pending DNS polling still issues the certificate").isTrue();
+                assertThat(waits).as("step 3: DNS authorization and order both pace their polls").hasSize(2);
+                for (Duration wait : waits) {
+                    assertThat(wait).as("step 3: DNS poll uses the CA floor").isGreaterThan(Duration.ofSeconds(3));
+                }
+            } finally {
+                acme.setPollPauseForTesting(Pause.SLEEP);
+                ca.deferPolls(null);
+            }
+        });
+    }
+
+    /** Every poll wait is the cadence floored by the CA; only the CA's longer waits spend the attempt's budget. */
+    @Test
+    void thePollBudgetDecidesEveryWait() {
+        Instant now = Instant.ofEpochSecond(1_700_000_000L);
+        AcmeService.PollBudget polls = new AcmeService.PollBudget();
+
+        // 1. No CA instant, one already past or one inside the cadence polls at the three-second cadence, however
+        //    often: cadence polling never spends the budget.
+        for (int poll = 0; poll < 1_000; poll++) {
+            assertThat(polls.next(now, null)).as("step 1: the cadence").isEqualTo(Duration.ofSeconds(3));
+        }
+        assertThat(polls.next(now, now.minusSeconds(10)))
+                .as("step 1: a past CA instant never shortens the cadence").isEqualTo(Duration.ofSeconds(3));
+        assertThat(polls.next(now, now.plusSeconds(2)))
+                .as("step 1: a CA instant inside the cadence keeps it").isEqualTo(Duration.ofSeconds(3));
+
+        // 2. A CA instant past the cadence floors the wait exactly and is charged: 90 of the 300 seconds.
+        assertThat(polls.next(now, now.plusSeconds(90))).as("step 2: ninety seconds, exactly")
+                .isEqualTo(Duration.ofSeconds(90));
+
+        // 3. A CA wait past what is left ends the attempt, a year away or just one second past the 210 left.
+        assertThatThrownBy(() -> polls.next(now, now.plus(Duration.ofDays(365))))
+                .as("step 3: a year-long CA wait ends the attempt").isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("polling budget");
+        assertThatThrownBy(() -> polls.next(now, now.plusSeconds(211)))
+                .as("step 3: just past what is left ends it too").isInstanceOf(IllegalStateException.class);
+
+        // 4. With 2 s left, a poll without a named wait still polls at the cadence; only a CA wait longer than the
+        //    cadence can be refused.
+        assertThat(polls.next(now, now.plusSeconds(208))).as("step 4: spends all but two seconds")
+                .isEqualTo(Duration.ofSeconds(208));
+        assertThat(polls.next(now, null)).as("step 4: no named wait with 2 s left still polls")
+                .isEqualTo(Duration.ofSeconds(3));
+        assertThat(polls.next(now, now.plusSeconds(2))).as("step 4: a named wait inside the cadence still polls")
+                .isEqualTo(Duration.ofSeconds(3));
+        assertThatThrownBy(() -> polls.next(now, now.plusSeconds(4)))
+                .as("step 4: a CA wait past the cadence and the 2 s left ends the attempt")
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    /**
+     * A multi-hostname HTTP-01 order whose CA validates each name slowly, naming no wait, polls far past the budget
+     * at the cadence and issues: the budget bounds only the waits a CA names.
+     */
+    @Test
+    void aSlowMultiHostnameHttpOrderPollsAtTheCadencePastTheBudget() {
+        Db.run(datasource, () -> {
+            int siteId = site("acme-slow-http");
+            List<String> hostnames = List.of("slow-a.test", "slow-b.test", "slow-c.test");
+            for (String hostname : hostnames) {
+                domain(siteId, hostname);
+            }
+            ca.validateHttpWith((token, identifier) -> acme.getChallengeResponse(token, identifier) != null);
+            List<Duration> waits = new ArrayList<>();
+            Duration offset = Now.offset();
+            // Each recorded wait moves the clock, so the order runs through the time a real CA would take.
+            acme.setPollPauseForTesting(wait -> {
+                waits.add(wait);
+                Now.setOffset(Now.offset().plus(wait));
+            });
+            ca.validateSlowly(35);
+            try {
+                // 1. Three names, each answered pending for 35 cadence polls: 315 s, past the 5-minute budget.
+                AcmeService.RequestOutcome ordered = acme.requestCertificate(hostnames, "ACME slow HTTP",
+                        null, CertificateAuthority.Requester.SYSTEM);
+                assertThat(ordered.issued()).as("step 1: slow validation still issues the certificate").isTrue();
+                assertThat(waits).as("step 1: every authorization poll waited the cadence").hasSize(105)
+                        .allMatch(Duration.ofSeconds(3)::equals);
+                assertThat(waits.stream().reduce(Duration.ZERO, Duration::plus))
+                        .as("step 1: the order outlasted the budget").isGreaterThan(Duration.ofMinutes(5));
+
+                // 2. The stored certificate is active.
+                Row row = latestCertificateNamed("ACME slow HTTP");
+                assertThat((String) row.get(CertificateModel.STATUS)).as("step 2: an active certificate")
+                        .isEqualTo(CertificateModel.STATUS_ACTIVE);
+            } finally {
+                acme.setPollPauseForTesting(Pause.SLEEP);
+                ca.validateSlowly(0);
+                Now.setOffset(offset);
+            }
+        });
+    }
+
+    /**
+     * A CA that asks for more than the order attempt's polling budget ends the attempt at once: nothing sleeps
+     * through the flight, and the renewal retry owns the next attempt.
+     */
+    @Test
+    void aCaWaitPastThePollBudgetEndsTheAttempt() {
+        Db.run(datasource, () -> {
+            int siteId = site("acme-poll-budget");
+            domain(siteId, "poll-budget.test");
+            ca.validateHttpWith((token, identifier) -> acme.getChallengeResponse(token, identifier) != null);
+            List<Duration> waits = new ArrayList<>();
+            acme.setPollPauseForTesting(waits::add);
+            ca.deferPolls("3600");
+            try {
+                // 1. The order attempt fails instead of sleeping an hour.
+                AcmeService.RequestOutcome ordered = acme.requestCertificate(List.of("poll-budget.test"),
+                        "ACME poll budget", null, CertificateAuthority.Requester.SYSTEM);
+                assertThat(ordered.issued()).as("step 1: the attempt ends").isFalse();
+                assertThat(waits).as("step 1: no poll wait was taken at all").isEmpty();
+
+                // 2. The row records why and hands the next attempt to the renewal retry.
+                Row row = latestCertificateNamed("ACME poll budget");
+                assertThat((String) row.get(CertificateModel.STATUS)).as("step 2: an error, not pending")
+                        .isEqualTo(CertificateModel.STATUS_ERROR);
+                assertThat((String) row.get(CertificateModel.RENEWAL_ERROR)).as("step 2: the reason names the budget")
+                        .contains("polling budget");
+                assertThat((Integer) row.get(CertificateModel.ERROR_COUNT)).as("step 2: one failure counted")
+                        .isEqualTo(1);
+                assertThat((Instant) row.get(CertificateModel.NEXT_ATTEMPT_AT)).as("step 2: the retry is scheduled")
+                        .isNotNull();
+            } finally {
+                acme.setPollPauseForTesting(Pause.SLEEP);
+                ca.deferPolls(null);
+            }
+        });
     }
 
     /**
