@@ -167,6 +167,8 @@ class HohenheimUpgradeJourneyTest {
 
         assertThat(scalar(url, "SELECT MAX(version) FROM zenit_migrations WHERE stream = 'be.elevenways.hohenheim'"))
             .as("step 0: the fixture is an install at Hohenheim's production level").isEqualTo("010");
+        // The fixture's workload carries the old default crash policy, as every production instance does.
+        execute(url, "UPDATE instances SET crash_policy = 'none' WHERE id = " + instanceId);
         // The fixture predates certificate owners, so two orders are written at their M010 shape: the operator's and
         // an unattended one (no requester).
         execute(url, "INSERT INTO certificates (id, nice_name, provider, status, domain_names_text,"
@@ -307,6 +309,13 @@ class HohenheimUpgradeJourneyTest {
             .as("step 4b: the route stored unforced stays unforced").isFalse();
         assertThat(List.of(wildcard.get(SiteDomainModel.FORCE_SSL_AUTO), plain.get(SiteDomainModel.FORCE_SSL_AUTO)))
             .as("step 4b: and neither is armed").containsOnly(false);
+
+        // 4c. Every stored workload restarts after a crash now, and a row written without a policy does too.
+        assertThat(scalar(url, "SELECT crash_policy FROM instances WHERE id = " + instanceId))
+            .as("step 4c: the workload stored with the old default restarts after a crash")
+            .isEqualTo(InstanceModel.CRASH_DEFAULT);
+        assertThat(scalar(url, "SELECT dflt_value FROM pragma_table_info('instances') WHERE name = 'crash_policy'"))
+            .as("step 4c: the column's default is the restart policy").isEqualTo("'" + InstanceModel.CRASH_DEFAULT + "'");
 
         // 5. The API key keeps its scopes, its zenit-auth model scope under today's spelling, and authenticates.
         Row key = AuthModels.apiKeys().find().noCache().where(ApiKeyModel.LABEL.eq("upgrade-key")).first();

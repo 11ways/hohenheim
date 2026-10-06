@@ -276,6 +276,18 @@ request that times out. No production deploy was performed for this review.
 The visual pass is still owed after any deploy touching plumage/zenit-cms
 chrome: a green suite is not a live check (2026-08-27).
 
+PENDING at the next starfleet/daystrom deploy (2026-10-07, M011 crash-policy edit): M011 gained a
+`changeColumn` of `instances.crash_policy` (default `'restart'`) and a data step setting every stored `'none'` or
+NULL policy to `'restart'`. Both test installs applied the previous M011, so the lane's rehearsal refuses the
+edited one. Before the lane, per host, with the old jar still running: `sqlite3 .backup` into
+`/root/hohenheim-m011-crash-<date>/hohenheim.db`, read the new digest with
+`java -jar <new jar> --migration-checksums | grep M011_ReviewHardening`, then ONE transaction guarded by the old
+checksum: `UPDATE zenit_migrations SET checksum = '<new digest>' WHERE stream = 'be.elevenways.hohenheim' AND
+version = '011' AND checksum = '<old digest>'` and `UPDATE instances SET crash_policy = 'restart' WHERE
+crash_policy IS NULL OR crash_policy = 'none'` (expect 1 + the instance count). The column default stays `'none'`
+on these two installs (SQLite cannot alter a default without a rebuild); every writer sets the policy explicitly,
+so only a raw insert would notice. Rollback: restore that backup, then the usual `--rollback`.
+
 `/api/health` is public on every deployed jar today, which is why the script
 probes it. `/health` is an alias of the same endpoint and is public from the
 NEXT deployed jar onward; until every box carries that jar, do not point a
