@@ -73,11 +73,13 @@ case admin.domains.operator admin domains operator
 admission - verdict=admitted
 verb CREATE
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
-column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
-column match_type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext=path relation=false
+column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=path relation=false
+column match_type at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column path at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column force_ssl at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column site_id at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column points_here at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column certificate at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column force_ssl at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 filter hostname at=0 kind=TEXT facet=false param=filter.hostname
 filter match_type at=1 kind=SELECT facet=true param=filter.match_type
 filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl
@@ -85,9 +87,9 @@ tab history at=0 landing=false view=false
 control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20match_type at=2 kind=zenitforms:form/select input=select required=false readonly=false options=exact,wildcard,regex binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20listen_on at=3 kind=zenitforms:form/select input=text required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20path at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
-control CREATE%20strip_path at=5 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
+control CREATE%20path at=3 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+control CREATE%20strip_path at=4 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
+control CREATE%20listen_on at=5 kind=zenitforms:form/select input=text required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20force_ssl at=6 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20certificate_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hsts_enabled at=8 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
@@ -368,25 +370,26 @@ verb CREATE
 verb UPDATE
 verb DELETE
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
-column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
-column match_type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext=path relation=false
+column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=path relation=false
+column match_type at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column path at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column force_ssl at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column site_id at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column points_here at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column certificate at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column force_ssl at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 filter hostname at=0 kind=TEXT facet=false param=filter.hostname
 filter match_type at=1 kind=SELECT facet=true param=filter.match_type
 filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row hohenheim:request_domain_certificate at=1 verb=invoke band=inline style=DEFAULT disabled= confirm=style:PRIMARY,title:confirm_title%252Cscope%3Dcms,body:uses_production%252Cscope%3Dcertificate_request,confirm:confirm%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_domain_certificate?ids%3D{record}
 row zenit:delete at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
-inline force_ssl
 tab history at=0 landing=false view=false
 control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20match_type at=2 kind=zenitforms:form/select input=select required=false readonly=false options=exact,wildcard,regex binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20listen_on at=3 kind=zenitforms:form/select input=text required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20path at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
-control CREATE%20strip_path at=5 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
+control CREATE%20path at=3 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+control CREATE%20strip_path at=4 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
+control CREATE%20listen_on at=5 kind=zenitforms:form/select input=text required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20force_ssl at=6 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20certificate_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hsts_enabled at=8 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
@@ -397,9 +400,9 @@ control CREATE%20response_headers at=12 kind=zenitforms:form/key-value input=tex
 control EDIT%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control EDIT%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control EDIT%20match_type at=2 kind=zenitforms:form/select input=select required=false readonly=false options=exact,wildcard,regex binding=searchable:false,clearable:true,presentation:DEFAULT
-control EDIT%20listen_on at=3 kind=zenitforms:form/select input=text required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
-control EDIT%20path at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
-control EDIT%20strip_path at=5 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
+control EDIT%20path at=3 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+control EDIT%20strip_path at=4 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
+control EDIT%20listen_on at=5 kind=zenitforms:form/select input=text required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20force_ssl at=6 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control EDIT%20certificate_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:,clearable:true,creatable:false
 control EDIT%20hsts_enabled at=8 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
@@ -1341,11 +1344,13 @@ admission - verdict=admitted
 record - found=false
 verb CREATE
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
-column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
-column match_type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext=path relation=false
+column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=path relation=false
+column match_type at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column path at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column force_ssl at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column site_id at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column points_here at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column certificate at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column force_ssl at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 filter hostname at=0 kind=TEXT facet=false param=filter.hostname
 filter match_type at=1 kind=SELECT facet=true param=filter.match_type
 filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl
@@ -1353,9 +1358,9 @@ tab history at=0 landing=false view=false
 control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20match_type at=2 kind=zenitforms:form/select input=select required=false readonly=false options=exact,wildcard,regex binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20listen_on at=3 kind=zenitforms:form/select input=text required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20path at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
-control CREATE%20strip_path at=5 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
+control CREATE%20path at=3 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+control CREATE%20strip_path at=4 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
+control CREATE%20listen_on at=5 kind=zenitforms:form/select input=text required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20force_ssl at=6 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20certificate_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hsts_enabled at=8 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
@@ -1368,11 +1373,13 @@ case admin.domains.operator.prefill admin domains operator
 admission - verdict=admitted
 verb CREATE
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
-column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
-column match_type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext=path relation=false
+column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=path relation=false
+column match_type at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column path at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column force_ssl at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column site_id at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column points_here at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column certificate at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column force_ssl at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 filter hostname at=0 kind=TEXT facet=false param=filter.hostname
 filter match_type at=1 kind=SELECT facet=true param=filter.match_type
 filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl
@@ -1380,9 +1387,9 @@ tab history at=0 landing=false view=false
 control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20match_type at=2 kind=zenitforms:form/select input=select required=false readonly=false options=exact,wildcard,regex binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20listen_on at=3 kind=zenitforms:form/select input=text required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20path at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
-control CREATE%20strip_path at=5 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
+control CREATE%20path at=3 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+control CREATE%20strip_path at=4 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
+control CREATE%20listen_on at=5 kind=zenitforms:form/select input=text required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20force_ssl at=6 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20certificate_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hsts_enabled at=8 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
@@ -1395,11 +1402,13 @@ case admin.domains.operator.sel admin domains operator
 admission - verdict=admitted
 verb CREATE
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
-column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
-column match_type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext=path relation=false
+column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=path relation=false
+column match_type at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column path at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column force_ssl at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column site_id at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column points_here at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column certificate at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column force_ssl at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 filter hostname at=0 kind=TEXT facet=false param=filter.hostname
 filter match_type at=1 kind=SELECT facet=true param=filter.match_type
 filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl
@@ -1407,9 +1416,9 @@ tab history at=0 landing=false view=false
 control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20match_type at=2 kind=zenitforms:form/select input=select required=false readonly=false options=exact,wildcard,regex binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20listen_on at=3 kind=zenitforms:form/select input=text required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
-control CREATE%20path at=4 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
-control CREATE%20strip_path at=5 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
+control CREATE%20path at=3 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
+control CREATE%20strip_path at=4 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
+control CREATE%20listen_on at=5 kind=zenitforms:form/select input=text required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
 control CREATE%20force_ssl at=6 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
 control CREATE%20certificate_id at=7 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.certificate,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hsts_enabled at=8 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
@@ -1581,11 +1590,13 @@ case manage.domains.tenant-one manage domains tenant-one
 admission - verdict=admitted
 verb CREATE
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
-column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
-column match_type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext=path relation=false
+column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=path relation=false
+column match_type at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column path at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column force_ssl at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column site_id at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column points_here at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column certificate at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column force_ssl at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 filter hostname at=0 kind=TEXT facet=false param=filter.hostname
 filter match_type at=1 kind=SELECT facet=true param=filter.match_type
 filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl
@@ -1635,17 +1646,18 @@ verb CREATE
 verb UPDATE
 verb DELETE
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
-column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
-column match_type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext=path relation=false
+column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=path relation=false
+column match_type at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column path at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column force_ssl at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column site_id at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column points_here at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column certificate at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column force_ssl at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 filter hostname at=0 kind=TEXT facet=false param=filter.hostname
 filter match_type at=1 kind=SELECT facet=true param=filter.match_type
 filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
-inline force_ssl
 control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20force_ssl at=2 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=
@@ -1722,11 +1734,13 @@ case manage.domains.tenant-one.prefill manage domains tenant-one
 admission - verdict=admitted
 verb CREATE
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
-column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
-column match_type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext=path relation=false
+column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=path relation=false
+column match_type at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column path at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column force_ssl at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column site_id at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column points_here at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column certificate at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column force_ssl at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 filter hostname at=0 kind=TEXT facet=false param=filter.hostname
 filter match_type at=1 kind=SELECT facet=true param=filter.match_type
 filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl
@@ -1741,11 +1755,13 @@ case manage.domains.tenant-one.sel manage domains tenant-one
 admission - verdict=admitted
 verb CREATE
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
-column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext= relation=false
-column match_type at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext=path relation=false
+column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=path relation=false
+column match_type at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column path at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column force_ssl at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column site_id at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column points_here at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column certificate at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column force_ssl at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 filter hostname at=0 kind=TEXT facet=false param=filter.hostname
 filter match_type at=1 kind=SELECT facet=true param=filter.match_type
 filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl

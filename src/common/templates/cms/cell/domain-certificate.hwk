@@ -4,10 +4,9 @@
 {% if value != null %}
 <span class="hh-cert-coverage" attr:data-cert-status={% value.status %}>
     {% if value.url != null %}<a href={% value.url %}><pl-badge variant={% value.variant %}>{{ value.name }}</pl-badge></a>{% else %}<pl-badge variant={% value.variant %}>{{ value.label }}</pl-badge>{% /if %}
-    {#- The badge and the expiry are two sentences in one cell: the newline between them is markup whitespace and
-        does not survive, so the separator is explicit. -#}
+    {#- The badge and the expiry are two lines of one cell (the cell stacks them). -#}
     {% if value.expiresIso != null %}
-    &nbsp;<span class="hh-cert-expiry">{{ t("expires", scope: "site_domains") }} <pl-relative-time datetime={% value.expiresIso %} title={% value.expiresIso %}></pl-relative-time></span>
+    <span class="hh-cert-expiry">{{ t("expires", scope: "site_domains") }} <pl-relative-time datetime={% value.expiresIso %} title={% value.expiresIso %}></pl-relative-time></span>
     {% /if %}
 </span>
 {% /if %}

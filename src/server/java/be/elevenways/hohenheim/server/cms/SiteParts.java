@@ -1,20 +1,16 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.CertCoverage;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.AccessListModel;
-import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
-import be.elevenways.hohenheim.site.DomainCertCell;
 import be.elevenways.hohenheim.site.SiteHostnamesCell;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.hohenheim.site.SiteTlsCell;
@@ -49,7 +45,6 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.RelationPick;
-import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.RouteTarget;
@@ -59,7 +54,6 @@ import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -88,13 +82,11 @@ public final class SiteParts {
     /** The Addresses tab's slug, which the domain entries name as their parent tab. */
     public static final String DOMAINS_TAB = DomainParts.SLUG;
 
-    /** The extra certificate coverage column of the Addresses tab's section. */
-    static final String CERTIFICATE_COLUMN = "certificate";
-
     /**
      * The Addresses tab, in the overview card's word: the framework's child list over the panel's domain entry (its
-     * /manage twin there), narrowed to the site, without the site column every row would repeat, plus the certificate
-     * each hostname is covered by; a domain row's own action requests one.
+     * /manage twin there), narrowed to the site, without the app column every row would repeat; whether each name
+     * points here and what HTTPS gives it are the address list's own columns, and a domain row's own action requests
+     * a certificate.
      *
      * AIDEV-NOTE: the rows, their edit and remove, the add link with its parent preset, the scope and a trashed site's
      * read-only state are the child list's own; what a hostless site's empty tab tells the reader is the domain list's
@@ -102,11 +94,7 @@ public final class SiteParts {
      */
     public static final ChildList<Row> DOMAINS = ChildList.<Row>sections(DOMAINS_TAB,
             AppOverview.copy("addresses"), DomainParts.SLUG)
-        .hide(DomainParts.SLUG, SiteDomainModel.SITE_ID.getName())
-        .column(DomainParts.SLUG, SubjectType.record(SiteDomainModel.MODEL_ID),
-            ColumnSpec.virtual(CERTIFICATE_COLUMN, Microcopy.of("certificate").withFilter("scope", "site_domains"))
-                .renderer(HohenheimTemplateIds.CELL_DOMAIN_CERTIFICATE).build(),
-            SiteParts::certificateCell);
+        .hide(DomainParts.SLUG, SiteDomainModel.SITE_ID.getName());
 
     /**
      * The Protection tab, in the overview card's word: the framework's child list over the panel's protected-path entry
@@ -451,39 +439,5 @@ public final class SiteParts {
 
     static boolean tlsPassthrough(@Nullable Row site) {
         return site != null && SiteModel.UPSTREAM_TLS_PASSTHROUGH.equals(site.get(SiteModel.UPSTREAM_KIND));
-    }
-
-    /**
-     * TLS coverage of an exact-match hostname: which certificate (if any) covers it, and in what state. A wildcard or
-     * regex entry has no single hostname to check, and a TLS passthrough site terminates none, so neither gets a
-     * verdict.
-     *
-     * AIDEV-NOTE: the certificate's NAME and link are set only for a reader the walk lets OPEN the certificate
-     * ({@code view}, the question the certificate resource's scope asks): the covering certificate is usually the
-     * operator's wildcard, and printing its name to a tenant for whom it is a 404 was a leak.
-     */
-    private static @Nullable DomainCertCell certificateCell(@NonNull Row domain, @NonNull PanelRequest request) {
-        if (tlsPassthrough(Models.get(SiteModel.class).findById(domain.get(SiteDomainModel.SITE_ID)))) {
-            CertCoverage notUsed = CertCoverage.NOT_USED;
-            return new DomainCertCell(notUsed.key(), notUsed.badgeVariant(), notUsed.label(), null, null, null);
-        }
-        if (!SiteDomainModel.MATCH_EXACT.equals(domain.get(SiteDomainModel.MATCH_TYPE))) {
-            return null;
-        }
-        Row cert = CertificateCoverage.coveringCertificate(domain.get(SiteDomainModel.HOSTNAME));
-        CertCoverage coverage = CertCoverage.ofCertificateStatus(
-            cert == null ? null : cert.get(CertificateModel.STATUS));
-        if (cert == null) {
-            return new DomainCertCell(coverage.key(), coverage.badgeVariant(), coverage.label(), null, null, null);
-        }
-        Instant expiresOn = cert.get(CertificateModel.EXPIRES_ON);
-        Integer certId = cert.get(CertificateModel.ID);
-        boolean canOpen = HohenheimAccess.reachesRecord(request.access(), CertificateModel.MODEL_ID, certId,
-            HohenheimAccess.VIEW);
-        // The panel this tab renders under carries a certificates entry on both faces.
-        return new DomainCertCell(coverage.key(), coverage.badgeVariant(), coverage.label(),
-            canOpen ? String.valueOf((Object) cert.get(CertificateModel.NICE_NAME)) : null,
-            canOpen ? CmsRoutes.detail(request.panelSlug(), HohenheimSlugs.CERTIFICATES, certId).toUrl() : null,
-            expiresOn != null ? expiresOn.toString() : null);
     }
 }

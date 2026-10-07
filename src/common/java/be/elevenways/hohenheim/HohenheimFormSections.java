@@ -57,6 +57,15 @@ public final class HohenheimFormSections {
     /** Where the code comes from and how it becomes a release: repository, branch, builder, deploy-on-push, previews. */
     public static final String SOURCE = "source";
 
+    /** Which requests an address answers: the name, how it matches, the path under it and the local address. */
+    public static final String ADDRESS_REQUESTS = "address_requests";
+
+    /** What an address does about HTTPS: forcing it, its certificate, HSTS and the Let's Encrypt opt-out. */
+    public static final String ADDRESS_HTTPS = "address_https";
+
+    /** The headers an address adds or removes on the way to the app and back to the visitor. */
+    public static final String ADDRESS_HEADERS = "address_headers";
+
     private HohenheimFormSections() {}
 
     /**

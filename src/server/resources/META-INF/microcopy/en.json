@@ -1008,10 +1008,6 @@
   },
   "certificate": [
     {
-      "text": "Certificate",
-      "scope": "site_domains"
-    },
-    {
       "text": "Certificate {$name}",
       "scope": "attention_title"
     },
@@ -14308,5 +14304,113 @@
   "listing": {
     "text": "Folder listings",
     "scope": "form_section"
+  },
+  "address_column": {
+    "text": "Address",
+    "scope": "site_domains"
+  },
+  "app_column": {
+    "text": "App",
+    "scope": "site_domains"
+  },
+  "points_here_column": {
+    "text": "Points here",
+    "scope": "site_domains"
+  },
+  "https_column": {
+    "text": "HTTPS",
+    "scope": "site_domains"
+  },
+  "points_here_yes": {
+    "text": "Yes",
+    "scope": "site_domains"
+  },
+  "points_here_no": {
+    "text": "No",
+    "scope": "site_domains"
+  },
+  "points_here_unresolved": {
+    "text": "Not yet",
+    "scope": "site_domains"
+  },
+  "points_here_unknown": {
+    "text": "Unknown",
+    "scope": "site_domains"
+  },
+  "points_elsewhere_detail": {
+    "text": "Points to {$addresses}, not to this proxy",
+    "scope": "site_domains"
+  },
+  "points_unresolved_detail": {
+    "text": "The name does not resolve yet",
+    "scope": "site_domains"
+  },
+  "points_unknown_detail": {
+    "text": "This host declares no public address to compare with",
+    "scope": "site_domains"
+  },
+  "address_requests": {
+    "text": "Which requests",
+    "scope": "form_section"
+  },
+  "address_https": {
+    "text": "HTTPS",
+    "scope": "form_section"
+  },
+  "address_headers": {
+    "text": "Headers",
+    "scope": "form_section"
+  },
+  "address_lead": {
+    "text": "Address of {$app} · points here: {$reach} · HTTPS: {$https}",
+    "scope": "site_domains"
+  },
+  "address_lead_pattern": {
+    "text": "Address of {$app} · a pattern, so no single name to check",
+    "scope": "site_domains"
+  },
+  "state_column": {
+    "text": "State",
+    "scope": "certificate"
+  },
+  "state_failing": {
+    "text": "Renewal failing",
+    "scope": "certificate"
+  },
+  "state_failing_detail": {
+    "text": "Failed {$count} times · valid for {$days} more days",
+    "scope": "certificate"
+  },
+  "state_failing_unissued": {
+    "text": "Failed {$count} times; not issued yet",
+    "scope": "certificate"
+  },
+  "state_waiting_dns": {
+    "text": "Waiting for a DNS record",
+    "scope": "certificate"
+  },
+  "state_waiting_dns_detail": {
+    "text": "Publish the TXT record, then verify DNS from the row's actions",
+    "scope": "certificate"
+  },
+  "state_issuing": {
+    "text": "Being issued",
+    "scope": "certificate"
+  },
+  "state_expired": {
+    "text": "Expired",
+    "scope": "certificate"
+  },
+  "state_works": {
+    "text": "Works",
+    "scope": "certificate"
+  },
+  "state_renews_detail": {
+    "text": "Valid for {$days} more days, renews itself",
+    "scope": "certificate"
+  },
+  "state_valid_detail": {
+    "text": "Valid for {$days} more days",
+    "scope": "certificate"
   }
 }

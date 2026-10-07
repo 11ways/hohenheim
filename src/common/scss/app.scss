@@ -102,6 +102,25 @@
         --pl-log-view-max-height: 24rem;
     }
 
+    // A word and a line in a list cell: the answer's badge, what it means underneath. An address's HTTPS cell
+    // stacks the same way: the badge, then when its certificate expires.
+    .hh-state-line,
+    .hh-cert-coverage {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--pl-space-xs);
+    }
+
+    .hh-state-line-detail,
+    .hh-cert-expiry {
+        color: var(--pl-color-text-muted);
+        font-size: var(--pl-font-size-sm);
+        // A renewal error or an expiry wraps inside its column instead of widening the table past the viewport.
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
     // Dashboard onboarding checklist
     .hh-onboarding-lead {
         margin: 0 0 var(--pl-space-md);

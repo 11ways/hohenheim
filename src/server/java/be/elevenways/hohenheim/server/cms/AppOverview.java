@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.app.AppAddress;
 import be.elevenways.hohenheim.app.AppProtection;
 import be.elevenways.hohenheim.model.AccessListModel;
-import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -43,6 +42,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -149,13 +149,7 @@ final class AppOverview {
         if (forced) {
             notes.add(text("https_forced", locales, resolver));
         }
-        Row cert = CertificateCoverage.coveringCertificate(hostname);
-        CertCoverage coverage = CertificateCoverage.covers(working, hostname) ? CertCoverage.ACTIVE
-            : CertCoverage.ofCertificateStatus(cert == null ? null : cert.get(CertificateModel.STATUS));
-        // A forced name no working certificate covers is the error page visitors get: always the red state.
-        if (forced && coverage != CertCoverage.ACTIVE) {
-            coverage = CertCoverage.ERROR;
-        }
+        CertCoverage coverage = Objects.requireNonNull(AppHealth.httpsOf(domain, false, working));
         return new AppAddress(hostname, url, coverage.label(), coverage.badgeVariant(), String.join(" · ", notes));
     }
 
