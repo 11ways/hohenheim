@@ -14309,10 +14309,16 @@
     "text": "Mapweergave",
     "scope": "form_section"
   },
-  "address_column": {
-    "text": "Adres",
-    "scope": "site_domains"
-  },
+  "address_column": [
+    {
+      "text": "Adres",
+      "scope": "site_domains"
+    },
+    {
+      "text": "Adres",
+      "scope": "ban"
+    }
+  ],
   "app_column": {
     "text": "App",
     "scope": "site_domains"
@@ -14424,5 +14430,69 @@
   "state_valid_detail": {
     "text": "Nog {$days} dagen geldig",
     "scope": "certificate"
+  },
+  "lets_in_column": {
+    "text": "Laat binnen",
+    "scope": "access_list"
+  },
+  "protects_column": {
+    "text": "Beschermt",
+    "scope": "access_list"
+  },
+  "protects_nothing": {
+    "text": "Nog niets",
+    "scope": "access_list"
+  },
+  "protects_count": {
+    "text": ".match {$count :number}\none {{1 plaats}}\n* {{{$count} plaatsen}}",
+    "scope": "access_list"
+  },
+  "protects_site": {
+    "text": "Alles op {$site}",
+    "scope": "access_list"
+  },
+  "protects_path": {
+    "text": "{$path} op {$site}",
+    "scope": "access_list"
+  },
+  "protects_none": {
+    "text": "Nog niets gebruikt deze lijst: koppel ze aan een app, of bescherm er een pad mee.",
+    "scope": "access_list"
+  },
+  "shared_note": {
+    "text": "Gedeeld: andere apps kunnen er een pad mee beschermen.",
+    "scope": "access_list"
+  },
+  "lets_in_nothing": {
+    "text": "Nog geen regels",
+    "scope": "access_rule"
+  },
+  "lets_in_rules": {
+    "text": ".match {$count :number}\none {{1 regel}}\n* {{{$count} regels}}",
+    "scope": "access_rule"
+  },
+  "by_column": {
+    "text": "Door",
+    "scope": "ban"
+  },
+  "until_column": {
+    "text": "Tot",
+    "scope": "ban"
+  },
+  "blocked_now": {
+    "text": "Nu geblokkeerd",
+    "scope": "ban"
+  },
+  "used_by_column": {
+    "text": "Gebruikt door",
+    "scope": "auth_provider"
+  },
+  "used_by_nothing": {
+    "text": "Nog niet gebruikt",
+    "scope": "auth_provider"
+  },
+  "used_by_count": {
+    "text": ".match {$count :number}\none {{1 plaats}}\n* {{{$count} plaatsen}}",
+    "scope": "auth_provider"
   }
 }

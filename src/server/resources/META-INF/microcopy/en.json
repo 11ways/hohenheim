@@ -14309,10 +14309,16 @@
     "text": "Folder listings",
     "scope": "form_section"
   },
-  "address_column": {
-    "text": "Address",
-    "scope": "site_domains"
-  },
+  "address_column": [
+    {
+      "text": "Address",
+      "scope": "site_domains"
+    },
+    {
+      "text": "Address",
+      "scope": "ban"
+    }
+  ],
   "app_column": {
     "text": "App",
     "scope": "site_domains"
@@ -14424,5 +14430,69 @@
   "state_valid_detail": {
     "text": "Valid for {$days} more days",
     "scope": "certificate"
+  },
+  "lets_in_column": {
+    "text": "Lets in",
+    "scope": "access_list"
+  },
+  "protects_column": {
+    "text": "Protects",
+    "scope": "access_list"
+  },
+  "protects_nothing": {
+    "text": "Nothing yet",
+    "scope": "access_list"
+  },
+  "protects_count": {
+    "text": ".match {$count :number}\none {{1 place}}\n* {{{$count} places}}",
+    "scope": "access_list"
+  },
+  "protects_site": {
+    "text": "Everything on {$site}",
+    "scope": "access_list"
+  },
+  "protects_path": {
+    "text": "{$path} on {$site}",
+    "scope": "access_list"
+  },
+  "protects_none": {
+    "text": "Nothing uses this list yet: attach it to an app, or protect a path with it.",
+    "scope": "access_list"
+  },
+  "shared_note": {
+    "text": "Shared: other apps can protect a path with this list.",
+    "scope": "access_list"
+  },
+  "lets_in_nothing": {
+    "text": "No rules yet",
+    "scope": "access_rule"
+  },
+  "lets_in_rules": {
+    "text": ".match {$count :number}\none {{1 rule}}\n* {{{$count} rules}}",
+    "scope": "access_rule"
+  },
+  "by_column": {
+    "text": "By",
+    "scope": "ban"
+  },
+  "until_column": {
+    "text": "Until",
+    "scope": "ban"
+  },
+  "blocked_now": {
+    "text": "Blocked now",
+    "scope": "ban"
+  },
+  "used_by_column": {
+    "text": "Used by",
+    "scope": "auth_provider"
+  },
+  "used_by_nothing": {
+    "text": "Not used yet",
+    "scope": "auth_provider"
+  },
+  "used_by_count": {
+    "text": ".match {$count :number}\none {{1 place}}\n* {{{$count} places}}",
+    "scope": "auth_provider"
   }
 }

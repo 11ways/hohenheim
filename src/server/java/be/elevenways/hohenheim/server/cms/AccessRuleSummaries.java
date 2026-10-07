@@ -160,6 +160,19 @@ final class AccessRuleSummaries {
         return null;
     }
 
+    /**
+     * How a list lets visitors in, for its row in the lists: the plain words of {@link #protectionOf} when its rules
+     * are one plain kind, else how many rules it holds.
+     */
+    static @NonNull Microcopy letsInOf(@Nullable Integer listId) {
+        Microcopy plain = protectionOf(listId);
+        if (plain != null) {
+            return plain;
+        }
+        long rules = DeleteImpact.rulesOfAccessList(listId);
+        return rules == 0 ? ruleText("lets_in_nothing") : ruleText("lets_in_rules").withArg("count", rules);
+    }
+
     static @NonNull Microcopy ruleText(@NonNull String key) {
         return Microcopy.of(key).withFilter("scope", "access_rule");
     }

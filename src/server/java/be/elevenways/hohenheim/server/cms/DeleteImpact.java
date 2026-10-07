@@ -236,24 +236,48 @@ final class DeleteImpact {
      */
     static @NonNull List<String> gatedByAccessList(@Nullable Integer accessListId) {
         List<String> gated = new ArrayList<>();
+        for (AccessListUse use : usesOfAccessList(accessListId)) {
+            gated.add(use.path() != null ? use.path() : use.site());
+        }
+        return gated;
+    }
+
+    /**
+     * One place an access list gates: a whole site ({@code path} null), or one protected path on a site.
+     *
+     * @param site the site's name (its id when it has none)
+     */
+    record AccessListUse(@Nullable String path, @NonNull String site) {
+    }
+
+    /** @return every place one access list gates: the sites naming it, then the protected paths naming it */
+    static @NonNull List<AccessListUse> usesOfAccessList(@Nullable Integer accessListId) {
+        List<AccessListUse> uses = new ArrayList<>();
         if (accessListId == null) {
-            return gated;
+            return uses;
         }
         for (Row site : sites()) {
             if (accessListId.equals(site.get(SiteModel.ACCESS_LIST_ID))) {
-                String name = site.get(SiteModel.NAME);
-                gated.add(name == null || name.isBlank() ? String.valueOf((Object) site.get(SiteModel.ID)) : name);
+                uses.add(new AccessListUse(null, siteName(site)));
             }
         }
         for (Row path : paths()) {
             if (accessListId.equals(path.get(ProtectedPathModel.ACCESS_LIST_ID))) {
                 String pattern = path.get(ProtectedPathModel.PATH);
                 if (pattern != null && !pattern.isBlank()) {
-                    gated.add(pattern);
+                    Integer siteId = path.get(ProtectedPathModel.SITE_ID);
+                    Row site = sites().stream().filter(row -> siteId != null && siteId.equals(row.get(SiteModel.ID)))
+                        .findFirst().orElse(null);
+                    uses.add(new AccessListUse(pattern, site == null ? String.valueOf(siteId) : siteName(site)));
                 }
             }
         }
-        return gated;
+        return uses;
+    }
+
+    private static @NonNull String siteName(@NonNull Row site) {
+        String name = site.get(SiteModel.NAME);
+        return name == null || name.isBlank() ? String.valueOf((Object) site.get(SiteModel.ID)) : name;
     }
 
     /** @return how many rules die with one access list, at any depth */
