@@ -1822,3 +1822,38 @@ daystrom: still NOT deployed from this workstation (no target, key refused); run
 
 ROLLBACK: restore `/root/hohenheim-dep6-20261007/hohenheim.db` (pre-reconcile ids), then `tools/deploy-host.sh
 --rollback starfleet --preflight /root/hohenheim-preflight-20261007-023728`.
+
+## Deploy 2026-10-07 (starfleet, morning): e94180a7, activity sentences, journey stepper, shipped defaults in the jar
+
+Swapped starfleet from 73e78352 to the pushed hohenheim e94180a7 (jar sha256 `481d7d98...a2986b6530bb`, 280275388
+bytes, 15 stamp rows clean; zenit a000071e, zenit-cms b9dd7178, zenit-forms 997b3f4f, zenit-auth f4d36148, plumage
+e70cd9dd, spamservice d0f18d63). Ships P1 (activity reads as sentences, one row per action; sign-in bookkeeping
+writes no activity) and P2 (journey stepper rendered without script and on the run page, protect a path lands on the
+app and the Protection card reads in words, Docker attention items say "Review them", stored-id payload schemas
+exempt from `columns_unbound`, and the shipped `settings/default.dry` rides the jar). No Hohenheim migration since
+73e78352; zenit_migrations 104 before and after.
+
+Before: own byte copies `/root/hohenheim-dep7-20261007/hohenheim.db` (integrity ok) and `local.dry`. Shipped
+defaults that newly take effect (local.dry does not set them): top-level `name: "Hohenheim"` and
+`content.locales: "en"`. `brand.name` and `activity.enabled` were already in local.dry. Nothing touching ports, TLS,
+auth, firewall or data paths. Lane `zenit-dev deploy starfleet --pushed`: rehearsal green, healthy after both
+restarts (04:38/04:39 UTC), `zenit-dev deployed starfleet` = current 15/15, no RESTART PENDING. Preflight
+`/root/hohenheim-preflight-20261007-043633/`.
+
+Journal since the restart: 0 `-p err` entries. `zenit.stored_ids.columns_unbound` is gone (logged at the 02:39 boot,
+not now); "Stored ids reconciled 0 rewritten". Still logged, harmless: `settings.source_missing` for
+`/opt/hohenheim/settings/default.dry` (the checkout-path source), and `settings.unknown_key` for local.dry's stale
+`hohenheim.proxy.first_port` and `hohenheim.database.engine`. Undertow/XNIO start lines arrive through JDKLogger
+tagged `[ERR]` although they are INFO (also at the previous boot).
+
+Logged-in pass: header reads "Hohenheim | Hohenheim admin"; dashboard attention items all carry an action (Docker
+items "Review them"); Activity reads as sentences, but old pre-P1 sign-in bookkeeping rows now read "Someone not
+signed in changed <user>", one system row ("Unattributed changed Dns zone peer #1") passes "People only", and
+zenit-auth verbs without a sentence read "Test Tenant: Password changed User #7"; Starfleet Apex overview shows
+Protect a path in heading and card; Settings Proxy section lists Proxy auth, Proteus SSO, Ports and routing (no
+doubled heading); Abuse protection "currently unavailable" (spamservice not running here). Tenant /manage still
+the old grouped sidebar and a plain "Your instances" list. Nothing was put online or protected.
+
+daystrom: still NOT deployed from this workstation; runs 27064da4; M011 step still owed.
+
+ROLLBACK: `tools/deploy-host.sh --rollback starfleet --preflight /root/hohenheim-preflight-20261007-043633`.
